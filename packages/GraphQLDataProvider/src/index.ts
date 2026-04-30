@@ -1,7 +1,7 @@
 export { gql } from 'graphql-request';
 export { setupGraphQLClient } from './config';
 export { GraphQLDataProvider, GraphQLProviderConfigData } from './graphQLDataProvider';
-export type { AuthenticationErrorCallback } from './graphQLDataProvider';
+export type { AuthenticationErrorCallback, SocketConnectionState } from './graphQLDataProvider';
 export * from './graphQLTransactionGroup';
 export { FieldMapper } from './FieldMapper';
 export * from './rolesAndUsersType';
@@ -78,5 +78,7 @@ export type {
     DefaultObjectConfigResult,
     DefaultConfigResult,
     ApplyAllEntityMapCreated,
-    ApplyAllResult
+    ApplyAllResult,
+    SourceObjectListItem,
+    SourceObjectSelectionInput
 } from './graphQLIntegrationClient';

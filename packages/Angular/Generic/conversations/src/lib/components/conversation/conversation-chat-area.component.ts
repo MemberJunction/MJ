@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ElementRef, AfterViewChecked } from '@angular/core';
-import { UserInfo, Metadata, CompositeKey, LogStatusEx, RunView } from '@memberjunction/core';
-import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ConversationEngine, ConversationDetailComplete, RatingJSON } from '@memberjunction/core-entities';
+import { UserInfo, RunView, RunQuery, Metadata, CompositeKey, LogStatusEx, TransformSimpleObjectToEntityObject, DataSnapshot } from '@memberjunction/core';
+import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, ConversationEngine, ConversationDetailComplete, RatingJSON } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AgentStateService } from '../../services/agent-state.service';
@@ -9,11 +9,15 @@ import { ActiveTasksService } from '../../services/active-tasks.service';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
 import { ConversationAttachmentService } from '../../services/conversation-attachment.service';
+import { MJResourcePermissionShareAdapter, ResourceShareContext } from '@memberjunction/ng-resource-permissions';
+
+/** `MJ: Resource Types.ID` for Conversations. */
+const CONVERSATIONS_RESOURCE_TYPE_ID = '81D4BC3D-9FEB-EF11-B01A-286B35C04427';
 import { MessageAttachment } from '../message/message-item.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MessageInputComponent } from '../message/message-input.component';
 import { PendingAttachment } from '../mention/mention-editor.component';
-import { ArtifactViewerPanelComponent, NavigationRequest } from '@memberjunction/ng-artifacts';
+import { ArtifactViewerPanelComponent, NavigationRequest, AnalyzeArtifactService } from '@memberjunction/ng-artifacts';
 import { ConversationEmptyStateComponent } from './conversation-empty-state.component';
 import { TestFeedbackDialogData, TestFeedbackDialogResult } from '@memberjunction/ng-testing';
 import { DialogService as ConversationsDialogService } from '../../services/dialog.service';
@@ -159,6 +163,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   public artifactCountDisplay: number = 0;
   public isShared: boolean = false;
   public showExportModal: boolean = false;
+  public showShareModal: boolean = false;
+  public shareContext: ResourceShareContext | null = null;
+  public shareAdapter = new MJResourcePermissionShareAdapter(CONVERSATIONS_RESOURCE_TYPE_ID);
   public showAgentPanel: boolean = false;
   public showMembersModal: boolean = false;
   public showProjectSelector: boolean = false;
@@ -272,15 +279,6 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   public isUploadingAttachments: boolean = false;
   public uploadingMessage: string = '';
 
-  // Artifact picker state
-  public showArtifactPickerPanel: boolean = false;
-  public artifactPickerItems: Array<{
-    artifactId: string; artifactVersionId: string; name: string; description: string;
-    contentMode: string; fileID: string | null; mimeType: string | null;
-    fileName: string | null; sizeBytes: number; typeName: string; updatedAt: string;
-  }> = [];
-  public isLoadingArtifactPicker: boolean = false;
-
   // Attachment support based on agent modalities
   // Computed from conversation manager (Sage) and any previous agent in conversation
   public enableAttachments: boolean = false;
@@ -302,7 +300,8 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     private attachmentService: ConversationAttachmentService,
     private streamingService: ConversationStreamingService,
     private confirmDialog: ConversationsDialogService,
-    private bridge: ConversationBridgeService
+    private bridge: ConversationBridgeService,
+    private analyzeArtifactService: AnalyzeArtifactService
   ) {}
 
   async ngOnInit() {
@@ -1484,8 +1483,60 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   }
 
   shareConversation(): void {
-    // TODO: Implement share functionality
-    LogStatusEx({message: 'Share conversation', verboseOnly: true});
+    if (!this.conversation) return;
+    this.shareContext = {
+      ResourceID: this.conversation.ID,
+      ResourceName: this.conversation.Name ?? 'Conversation',
+      OwnerUserID: this.conversation.UserID ?? null,
+      OwnerDisplayName: this.conversation.User ?? 'You',
+      CurrentUserID: this.currentUser?.ID ?? null
+    };
+    this.showShareModal = true;
+  }
+
+  onShareDialogResult(_result: { Action: 'save' | 'cancel' }): void {
+    this.showShareModal = false;
+  }
+
+  /**
+   * Display info for the header "Shared by {email}" badge. Returns `null`
+   * when the current user owns the conversation or when the share has no
+   * recorded grantor (legacy share pre-dating `SharedByUserID`).
+   */
+  public get sharedByBadge(): { display: string; fullTooltip: string } | null {
+    if (!this.conversation) return null;
+    const info = this.engine.GetSharedByInfo(this.conversation.ID);
+    if (!info || !info.UserID) return null;
+    const display = info.Email ?? info.Name ?? 'another user';
+    const tooltip = info.Email && info.Name ? `${info.Name} <${info.Email}>` : display;
+    return { display, fullTooltip: `Shared by ${tooltip}` };
+  }
+
+  /**
+   * `true` when the current user only has `View` access to this conversation
+   * (i.e., it was shared with them read-only). Gates the message input and
+   * any other write-capable UI.
+   */
+  public get isReadOnlyView(): boolean {
+    if (!this.conversation) return false;
+    const info = this.engine.GetSharedByInfo(this.conversation.ID);
+    return info?.Level === 'View';
+  }
+
+  /**
+   * `true` when the current user is allowed to create new shares on this
+   * conversation. Only the conversation's owner — or a user with an existing
+   * Owner-level grant — may do so. Matches the server-side gate in
+   * {@link MJResourcePermissionEntityExtended.callerMayGrantShare}, so the UI
+   * doesn't offer an action the save would refuse.
+   */
+  public get canShareConversation(): boolean {
+    if (!this.conversation || !this.currentUser) return false;
+    if (this.conversation.UserID && this.conversation.UserID.toLowerCase() === this.currentUser.ID.toLowerCase()) {
+      return true;
+    }
+    const info = this.engine.GetSharedByInfo(this.conversation.ID);
+    return info?.Level === 'Owner';
   }
 
   onReplyInThread(message: MJConversationDetailEntity): void {
@@ -1679,9 +1730,26 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       this.selectedImageAlt = attachment.fileName || 'Image attachment';
       this.selectedImageFileName = attachment.fileName || 'image';
       this.showImageViewer = true;
-    } else {
-      // For non-image attachments, could trigger download or other action
-      console.log('Non-image attachment clicked:', attachment);
+      return;
+    }
+
+    // Artifact-backed attachments open in the artifact viewer panel.
+    if (attachment.source === 'artifact' && attachment.artifactId) {
+      this.onArtifactClicked({
+        artifactId: attachment.artifactId,
+        versionId: attachment.artifactVersionId
+      });
+      return;
+    }
+
+    // Plain uploads: trigger a browser download if we have a usable content URL.
+    if (attachment.contentUrl) {
+      const a = document.createElement('a');
+      a.href = attachment.contentUrl;
+      a.download = attachment.fileName || 'download';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
     }
   }
 
@@ -2060,6 +2128,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
 
   onTestFeedbackDialogClosed(result: TestFeedbackDialogResult): void {
     this.showTestFeedbackDialog = false;
+    this.testFeedbackDialogData = null;
     if (result.success) {
       console.log('Test feedback saved successfully:', result.feedbackId);
     }
@@ -2109,91 +2178,6 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   }
 
   /**
-   * Handle artifact picker request from message input
-   */
-  async onArtifactPickerRequested(): Promise<void> {
-    this.showArtifactPickerPanel = true;
-    this.isLoadingArtifactPicker = true;
-    this.cdr.detectChanges();
-
-    try {
-      // Load user's recent artifact versions (both text and file-backed)
-      const rv = new RunView();
-      const result = await rv.RunView<{
-        ID: string; ArtifactID: string; VersionNumber: number;
-        Name: string; Description: string; ContentMode: string;
-        FileID: string | null; MimeType: string | null;
-        FileName: string | null; ContentSizeBytes: number;
-        Artifact: string; __mj_UpdatedAt: string;
-      }>({
-        EntityName: 'MJ: Artifact Versions',
-        ExtraFilter: `ArtifactID IN (SELECT ID FROM __mj.Artifact WHERE Visibility <> 'System Only')`,
-        OrderBy: '__mj_UpdatedAt DESC',
-        MaxRows: 50,
-        ResultType: 'simple'
-      });
-
-      if (result.Success && result.Results) {
-        this.artifactPickerItems = result.Results.map(r => ({
-          artifactId: r.ArtifactID,
-          artifactVersionId: r.ID,
-          name: r.Name || r.Artifact || 'Untitled',
-          description: r.Description || '',
-          contentMode: r.ContentMode || 'Text',
-          fileID: r.FileID,
-          mimeType: r.MimeType,
-          fileName: r.FileName,
-          sizeBytes: r.ContentSizeBytes || 0,
-          typeName: r.ContentMode === 'File' ? (r.MimeType || 'File') : 'Text',
-          updatedAt: r.__mj_UpdatedAt
-        }));
-      } else {
-        this.artifactPickerItems = [];
-      }
-    } catch (error) {
-      console.error('Failed to load artifacts for picker:', error);
-      this.artifactPickerItems = [];
-    } finally {
-      this.isLoadingArtifactPicker = false;
-      this.cdr.detectChanges();
-    }
-  }
-
-  /**
-   * Handle artifact selection from the picker panel.
-   * Adds the artifact as a pending attachment so it appears in the message input.
-   * The ConversationDetailArtifact with Direction='Input' is created when the message is sent.
-   */
-  OnArtifactSelected(item: {
-    artifactId: string; artifactVersionId: string; name: string;
-    contentMode: string; fileID: string | null; mimeType: string | null;
-    fileName: string | null; sizeBytes: number;
-  }): void {
-    const activeInput = this.messageInputComponents?.find(
-      (input: MessageInputComponent) => input.conversationId === this.conversationId
-    );
-    if (activeInput?.inputBox) {
-      activeInput.inputBox.AddArtifactAttachment({
-        fileID: item.fileID || item.artifactVersionId,
-        fileName: item.fileName || item.name,
-        mimeType: item.mimeType || 'text/plain',
-        sizeBytes: item.sizeBytes,
-        artifactVersionId: item.artifactVersionId
-      });
-    }
-    this.showArtifactPickerPanel = false;
-    this.cdr.detectChanges();
-  }
-
-  /**
-   * Close artifact picker panel
-   */
-  CloseArtifactPicker(): void {
-    this.showArtifactPickerPanel = false;
-    this.cdr.detectChanges();
-  }
-
-  /**
    * Handle share request from artifact viewer
    */
   async onArtifactShareRequested(artifactId: string): Promise<void> {
@@ -2206,6 +2190,69 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       this.artifactToShare = artifact;
       this.isArtifactShareModalOpen = true;
       this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * Handle Analyze button click from the artifact viewer panel.
+   * Creates a user message with the artifact attached as an input,
+   * then routes through the normal agent flow so the agent can
+   * explore the artifact via artifact tools.
+   */
+  /**
+   * Handle Analyze button click from the artifact viewer panel.
+   *
+   * Persists the captured snapshot as a new Data Snapshot artifact and attaches
+   * it to the user's in-progress message as a pending attachment chip (same UX
+   * as image/file uploads). On send, the existing attachment pipeline creates
+   * a `ConversationDetailArtifact` with Direction='Input'; AgentRunner then
+   * picks it up via `gatherConversationArtifacts` and resolves the
+   * DataSnapshotToolLibrary for tool calls.
+   *
+   * Falls back to plain message prefill if snapshot persistence fails — the
+   * user can still ask questions about the artifact that's already attached
+   * to the prior conversation turn.
+   */
+  async OnAnalyzeArtifact(event: { artifactId: string; snapshot: DataSnapshot }): Promise<void> {
+    if (!this.conversationId || !this.currentUser) return;
+
+    const messageInput = this.getActiveMessageInputComponent();
+    const snapshotTitle = event.snapshot.title || 'Untitled Snapshot';
+
+    try {
+      const result = await this.analyzeArtifactService.CreateSnapshotArtifact({
+        snapshot: event.snapshot,
+        currentUser: this.currentUser,
+        environmentId: this.environmentId,
+      });
+
+      if (messageInput) {
+        const rowCount = (event.snapshot.tables ?? []).reduce(
+          (sum, t) => sum + (t.rows?.length ?? 0),
+          0,
+        );
+        const serialized = JSON.stringify(event.snapshot);
+        messageInput.inputBox?.mentionEditor?.AddArtifactAttachment({
+          fileID: '',
+          fileName: rowCount > 0
+            ? `📸 ${result.title} · ${rowCount.toLocaleString()} rows`
+            : `📸 ${result.title}`,
+          mimeType: 'application/json',
+          sizeBytes: serialized.length,
+          artifactVersionId: result.artifactVersionId,
+        });
+        messageInput.messageText = `Analyze "${result.title}" — `;
+        messageInput.inputBox?.focus();
+      }
+    } catch (error) {
+      LogStatusEx({
+        message: `[OnAnalyzeArtifact] CreateSnapshotArtifact failed: ${error instanceof Error ? error.message : String(error)}`,
+        verboseOnly: false,
+      });
+      if (messageInput) {
+        messageInput.messageText = `Analyze "${snapshotTitle}" — `;
+        messageInput.inputBox?.focus();
+      }
     }
   }
 

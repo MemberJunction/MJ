@@ -1,9 +1,10 @@
 import { Resolver, Query, Mutation, Arg, Ctx, ObjectType, Field, InputType } from "type-graphql";
-import { CompositeKey, Metadata, RunView, UserInfo, LogError } from "@memberjunction/core";
+import { CompositeKey, LocalCacheManager, Metadata, RunView, UserInfo, LogError } from "@memberjunction/core";
 import { CronExpressionHelper } from "@memberjunction/scheduling-engine";
 import {
     MJCompanyIntegrationEntity,
     MJIntegrationEntity,
+    MJIntegrationObjectEntity,
     MJCredentialEntity,
     MJCompanyIntegrationEntityMapEntity,
     MJCompanyIntegrationFieldMapEntity,
@@ -24,8 +25,10 @@ import {
     ConnectionTestResult,
     IntegrationEngine,
     IntegrationSyncOptions,
-    SourceSchemaInfo
+    SourceSchemaInfo,
+    IntegrationSchemaSync
 } from "@memberjunction/integration-engine";
+import { IntegrationEngineBase } from "@memberjunction/integration-engine-base";
 import {
     SchemaBuilder,
     TypeMapper,
@@ -74,7 +77,8 @@ class ApplySchemaBatchItemInput {
 
 @InputType()
 class SourceObjectInput {
-    @Field({ description: 'Source object ID (IntegrationObject.ID)' }) SourceObjectID: string;
+    @Field({ nullable: true, description: 'Existing IntegrationObject.ID. Either SourceObjectID or SourceObjectName must be provided; if both, ID wins.' }) SourceObjectID?: string;
+    @Field({ nullable: true, description: 'External object name (e.g. "Account"). Use when the object has no IntegrationObject row yet — the server will create one via describe+persist.' }) SourceObjectName?: string;
     @Field(() => [String], { nullable: true, description: 'Optional field selection. Empty/null = all fields (including any new ones). Only specified fields get field maps.' }) Fields?: string[];
 }
 
@@ -87,6 +91,7 @@ class ApplyAllInput {
     @Field(() => Boolean, { nullable: true, defaultValue: true, description: 'If false, skips the sync step after schema + entity maps are created' }) StartSync?: boolean;
     @Field(() => Boolean, { nullable: true, defaultValue: false, description: 'If true, ignores watermarks and does a full re-fetch' }) FullSync?: boolean;
     @Field({ nullable: true, defaultValue: 'created', description: 'Sync scope: "created" = only newly created entity maps, "all" = all maps for the connector' }) SyncScope?: string;
+    @Field({ nullable: true, defaultValue: 'Pull', description: 'SyncDirection applied to all created entity maps: Pull | Push | Bidirectional. Defaults to Pull.' }) DefaultSyncDirection?: string;
 }
 
 @ObjectType()
@@ -137,6 +142,7 @@ class ApplyAllBatchConnectorInput {
     /** Optional per-connector schedule. Applied on success. */
     @Field({ nullable: true }) CronExpression?: string;
     @Field({ nullable: true }) ScheduleTimezone?: string;
+    @Field({ nullable: true, defaultValue: 'Pull', description: 'SyncDirection applied to all created entity maps for this connector: Pull | Push | Bidirectional. Defaults to Pull.' }) DefaultSyncDirection?: string;
 }
 
 @InputType()
@@ -145,6 +151,8 @@ class ApplyAllBatchInput {
     @Field(() => Boolean, { nullable: true, defaultValue: true, description: 'If false, skips sync after schema + entity maps' }) StartSync?: boolean;
     @Field(() => Boolean, { nullable: true, defaultValue: false, description: 'If true, ignores watermarks and does a full re-fetch' }) FullSync?: boolean;
     @Field({ nullable: true, defaultValue: 'created', description: 'Sync scope: "created" = only newly created entity maps, "all" = all maps for the connector' }) SyncScope?: string;
+    @Field({ nullable: true, description: 'Override sync direction for the initial sync: Pull | Push | Bidirectional. Defaults to entity map SyncDirection.' }) SyncDirection?: string;
+    @Field({ nullable: true, description: 'Override sync direction stored in the created schedule: Pull | Push | Bidirectional.' }) ScheduleSyncDirection?: string;
 }
 
 @ObjectType()
@@ -508,6 +516,14 @@ class StartSyncOutput {
     @Field({ nullable: true }) RunID?: string;
 }
 
+@ObjectType()
+class WriteRecordOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field({ nullable: true }) ExternalID?: string;
+    @Field({ nullable: true }) StatusCode?: number;
+}
+
 @InputType()
 class CreateScheduleInput {
     @Field() CompanyIntegrationID: string;
@@ -515,6 +531,8 @@ class CreateScheduleInput {
     @Field() CronExpression: string;
     @Field({ nullable: true }) Timezone?: string;
     @Field({ nullable: true }) Description?: string;
+    @Field({ nullable: true }) SyncDirection?: string;
+    @Field({ nullable: true }) FullSync?: boolean;
 }
 
 @ObjectType()
@@ -677,6 +695,34 @@ function isValidEntityMapStatus(value: string): value is EntityMapStatus {
     return (VALID_ENTITY_MAP_STATUSES as readonly string[]).includes(value);
 }
 
+// ─── List Source Objects (Full-Catalog Picker) ──────────────────────────────
+// Returns every object the source system exposes (e.g. all ~1,800 Salesforce
+// sobjects), merged with any existing IntegrationObject metadata so the UI
+// can show which objects are already registered versus newly discoverable.
+// Intentionally cheap: one global describe call, no per-object describes.
+
+@ObjectType()
+class ListSourceObjectsItem {
+    @Field() Name: string;
+    @Field() Label: string;
+    @Field({ nullable: true }) Description?: string;
+    @Field() SupportsIncrementalSync: boolean;
+    @Field() SupportsWrite: boolean;
+    /** True when an IntegrationObject row already exists for this object. */
+    @Field() AlreadyPersisted: boolean;
+    /** IntegrationObject.ID — populated only when AlreadyPersisted is true. */
+    @Field({ nullable: true }) IntegrationObjectID?: string;
+    /** True when the source system flags this as user/custom (e.g. SF __c names). */
+    @Field() IsCustom: boolean;
+}
+
+@ObjectType()
+class ListSourceObjectsOutput {
+    @Field() Success: boolean;
+    @Field() Message: string;
+    @Field(() => [ListSourceObjectsItem], { nullable: true }) Objects?: ListSourceObjectsItem[];
+}
+
 /**
  * GraphQL resolver for integration discovery operations.
  * Provides endpoints to test connections, discover objects, and discover fields
@@ -756,6 +802,109 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         } catch (e) {
             return this.handleDiscoveryError(e);
         }
+    }
+
+    /**
+     * Full-catalog picker endpoint: returns every object the source system
+     * exposes (e.g. all ~1,800 Salesforce sobjects) merged with flags showing
+     * which ones already have IntegrationObject rows in MJ. Cheap by design —
+     * one global discovery call per source, no per-object describes. Per-object
+     * describe runs later, at selection time, inside IntegrationApplyAllBatch.
+     */
+    @Query(() => ListSourceObjectsOutput)
+    async IntegrationListSourceObjects(
+        @Arg("companyIntegrationID") companyIntegrationID: string,
+        @Ctx() ctx: AppContext
+    ): Promise<ListSourceObjectsOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+            const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user);
+
+            // Use the engine cache for already-persisted IntegrationObject
+            // rows — single in-memory read instead of a per-call DB roundtrip.
+            await IntegrationEngine.Instance.Config(false, user);
+            const existingObjects = IntegrationEngineBase.Instance
+                .GetIntegrationObjectsByIntegrationID(companyIntegration.IntegrationID);
+
+            const discoverObjects = connector.DiscoverObjects.bind(connector) as
+                (ci: unknown, u: unknown) => Promise<ExternalObjectSchema[]>;
+            const liveObjects = await discoverObjects(companyIntegration, user);
+
+            const existingByName = new Map<string, { ID: string; IsCustom: boolean }>();
+            for (const row of existingObjects) {
+                existingByName.set(row.Name, { ID: row.ID, IsCustom: !!row.IsCustom });
+            }
+
+            // Live is SoT. When the probe succeeds, show only live objects
+            // (the persisted IntegrationObject ID is overlaid by name when
+            // there's a match). When the probe returns nothing (transient
+            // SI failure, rate limit, expired session), fall back to the
+            // engine cache so the user isn't stuck with an empty picker.
+            const sourceObjects = liveObjects.length > 0
+                ? liveObjects
+                : existingObjects.map(row => ({
+                    Name: row.Name,
+                    Label: row.Name,
+                    Description: undefined,
+                    SupportsIncrementalSync: true,
+                    SupportsWrite: true,
+                  }) as ExternalObjectSchema);
+
+            const merged: ListSourceObjectsItem[] = sourceObjects.map(o => {
+                const existing = existingByName.get(o.Name);
+                return {
+                    Name: o.Name,
+                    Label: o.Label,
+                    Description: o.Description,
+                    SupportsIncrementalSync: o.SupportsIncrementalSync,
+                    SupportsWrite: o.SupportsWrite,
+                    AlreadyPersisted: existing != null,
+                    IntegrationObjectID: existing?.ID,
+                    IsCustom: this.isCustomObjectName(o.Name, existing?.IsCustom),
+                };
+            });
+            merged.sort((a, b) => a.Name.localeCompare(b.Name));
+
+            return {
+                Success: true,
+                Message: `Listed ${merged.length} source objects (${liveObjects.length} from live probe, ${existingByName.size} already persisted)`,
+                Objects: merged,
+            };
+        } catch (e) {
+            LogError(`IntegrationListSourceObjects error: ${e}`);
+            return { Success: false, Message: this.formatError(e) };
+        }
+    }
+
+    private async loadIntegrationObjectsByIntegrationID(
+        integrationID: string,
+        user: UserInfo
+    ): Promise<Array<{ ID: string; Name: string; IsCustom: boolean }>> {
+        const rv = new RunView();
+        const result = await rv.RunView<MJIntegrationObjectEntity>({
+            EntityName: 'MJ: Integration Objects',
+            ExtraFilter: `IntegrationID='${integrationID}'`,
+            ResultType: 'entity_object',
+        }, user);
+        if (!result.Success) {
+            LogError(`loadIntegrationObjectsByIntegrationID failed: ${result.ErrorMessage}`);
+            return [];
+        }
+        return result.Results.map(r => ({
+            ID: r.ID,
+            Name: r.Name,
+            IsCustom: r.IsCustom === true,
+        }));
+    }
+
+    /**
+     * Heuristic for flagging custom objects in the UI. Existing rows carry an
+     * IsCustom column; newly-discovered ones don't, so fall back to the SF
+     * `__c` suffix convention (harmless on systems where it doesn't apply).
+     */
+    private isCustomObjectName(name: string, existingIsCustom: boolean | undefined): boolean {
+        if (existingIsCustom != null) return existingIsCustom;
+        return name.endsWith('__c');
     }
 
     /**
@@ -1008,45 +1157,113 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         // but the connector's GetIntegrationObjects() always has them.
         const connectorDescriptions = this.buildDescriptionLookup(connector);
 
-        return objects.map(obj => {
+        // Track all drop reasons so we can emit one summary line at the end
+        // instead of forcing the caller to scan O(N) LogError lines to figure
+        // out how many selections actually made it. The picker → ApplyAll →
+        // RSU pipeline already had three layers of silent O(N) drops; this
+        // makes them at least summarised.
+        const droppedNotInSchema: string[] = [];
+        const droppedNoFields: string[] = [];
+        const droppedNoPrimaryKey: string[] = [];
+
+        const results: TargetTableConfig[] = [];
+        for (const obj of objects) {
             const sourceObj = sourceSchema.Objects.find(o => o.ExternalName.toLowerCase() === obj.SourceObjectName.toLowerCase());
             const objDescriptions = connectorDescriptions.get(obj.SourceObjectName.toLowerCase());
+
+            // If the object wasn't discovered in IntrospectSchema (e.g. API error), skip it
+            // rather than generating a broken table with no columns and a fallback PK.
+            if (!sourceObj) {
+                droppedNotInSchema.push(obj.SourceObjectName);
+                LogError(`[buildTargetConfigs] Skipping "${obj.SourceObjectName}" — not found in source schema (IntrospectSchema may have failed for this object)`);
+                continue;
+            }
 
             // Filter fields if caller specified a subset
             const selectedFieldSet = obj.Fields?.length
                 ? new Set(obj.Fields.map(f => f.toLowerCase()))
                 : null;
-            const sourceFields = (sourceObj?.Fields ?? []).filter(f =>
+            const sourceFields = sourceObj.Fields.filter(f =>
                 !selectedFieldSet || selectedFieldSet.has(f.Name.toLowerCase()) || f.IsPrimaryKey
             );
 
-            const columns: TargetColumnConfig[] = sourceFields.map(f => ({
-                SourceFieldName: f.Name,
-                TargetColumnName: f.Name.replace(/[^A-Za-z0-9_]/g, '_'),
-                TargetSqlType: mapper.MapSourceType(f.SourceType, platform, f),
-                IsNullable: !f.IsRequired,
-                MaxLength: f.MaxLength,
-                Precision: f.Precision,
-                Scale: f.Scale,
-                DefaultValue: f.DefaultValue,
-                Description: f.Description ?? objDescriptions?.fields.get(f.Name.toLowerCase()),
-            }));
+            const columns: TargetColumnConfig[] = sourceFields.map(f => {
+                const targetSqlType = mapper.MapSourceType(f.SourceType, platform, f);
+                return {
+                    SourceFieldName: f.Name,
+                    TargetColumnName: f.Name.replace(/[^A-Za-z0-9_]/g, '_'),
+                    TargetSqlType: targetSqlType,
+                    // Synced shadow tables must NOT enforce NOT NULL on non-PK
+                    // columns. The external system (SF, HubSpot, etc.) is the
+                    // source of truth for business data, not for MJ's schema
+                    // constraints — and its describe output often declares
+                    // fields required when real records actually have nulls
+                    // (deprecated, calculated, or edge-case fields). Enforcing
+                    // NOT NULL here just aborts entire batches on one bad row.
+                    IsNullable: !f.IsPrimaryKey,
+                    MaxLength: f.MaxLength,
+                    Precision: f.Precision,
+                    Scale: f.Scale,
+                    DefaultValue: this.formatSqlDefault(f.DefaultValue, targetSqlType),
+                    Description: f.Description ?? objDescriptions?.fields.get(f.Name.toLowerCase()),
+                };
+            });
 
-            const primaryKeyFields = (sourceObj?.Fields ?? [])
+            const primaryKeyFields = sourceObj.Fields
                 .filter(f => f.IsPrimaryKey)
                 .map(f => f.Name.replace(/[^A-Za-z0-9_]/g, '_'));
 
-            return {
+            // If no columns were discovered, skip rather than generating a broken table
+            // (DDL with UNIQUE ([ID]) on a non-existent column will always fail).
+            if (columns.length === 0 && primaryKeyFields.length === 0) {
+                droppedNoFields.push(obj.SourceObjectName);
+                LogError(`[buildTargetConfigs] Skipping "${obj.SourceObjectName}" — 0 fields discovered (live API likely failed and no DB-cached fields available)`);
+                continue;
+            }
+
+            // If columns exist but no PK was found, log diagnostic info and skip rather than
+            // generating broken DDL with UNIQUE ([ID]) on a non-existent column.
+            if (primaryKeyFields.length === 0 && columns.length > 0) {
+                droppedNoPrimaryKey.push(obj.SourceObjectName);
+                const fieldNames = sourceObj.Fields.map(f => `${f.Name}(pk=${f.IsPrimaryKey})`).join(', ');
+                LogError(`[buildTargetConfigs] Skipping "${obj.SourceObjectName}" — ${columns.length} columns but NO primary key field found. Fields: [${fieldNames}]`);
+                continue;
+            }
+
+            results.push({
                 SourceObjectName: obj.SourceObjectName,
                 SchemaName: obj.SchemaName,
                 TableName: obj.TableName,
                 EntityName: obj.EntityName,
-                Description: sourceObj?.Description ?? objDescriptions?.objectDescription,
+                Description: sourceObj.Description ?? objDescriptions?.objectDescription,
                 Columns: columns,
-                PrimaryKeyFields: primaryKeyFields.length > 0 ? primaryKeyFields : ['ID'],
+                PrimaryKeyFields: primaryKeyFields,
                 SoftForeignKeys: []
-            };
-        });
+            });
+        }
+
+        // Single-line summary of every drop that happened during this call.
+        // Without this, callers see N individual LogError lines and have to
+        // count them by hand to know how much got lost. With it, the gap
+        // between "selections requested" and "tables generated" is a one-line
+        // grep target (`buildTargetConfigs summary`) that names which objects
+        // were lost and why.
+        const totalRequested = objects.length;
+        const totalAccepted = results.length;
+        const totalDropped = totalRequested - totalAccepted;
+        if (totalDropped > 0) {
+            const fmt = (arr: string[]): string =>
+                arr.length === 0
+                    ? '0'
+                    : `${arr.length} (${arr.slice(0, 5).join(', ')}${arr.length > 5 ? `, +${arr.length - 5} more` : ''})`;
+            console.warn(
+                `[buildTargetConfigs summary] requested=${totalRequested}, accepted=${totalAccepted}, dropped=${totalDropped} ` +
+                `(notInSchema=${fmt(droppedNotInSchema)}, noFields=${fmt(droppedNoFields)}, noPK=${fmt(droppedNoPrimaryKey)})`
+            );
+        } else {
+            console.log(`[buildTargetConfigs summary] requested=${totalRequested}, accepted=${totalAccepted} (all selections produced target configs)`);
+        }
+        return results;
     }
 
     /** Builds a lookup of object name → { objectDescription, fields: fieldName → description } from the connector's static metadata. */
@@ -1077,6 +1294,49 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         return result;
     }
 
+    /**
+     * Format a raw default-value from source schema (SF describe, etc.) into a
+     * SQL-literal string appropriate for the target column's SQL type.
+     *
+     * The DDLGenerator splats DefaultValue raw into `... DEFAULT ${value}`, so
+     * the caller MUST pre-quote/pre-coerce. Previously this layer passed SF's
+     * `String(defaultValue)` through unchanged, which produced invalid T-SQL
+     * like `DEFAULT false` on BIT columns and `DEFAULT Diagonal` on strings.
+     *
+     * Rules:
+     *  - null/undefined/empty → undefined (no DEFAULT clause emitted)
+     *  - Known SQL expressions (GETDATE(), CURRENT_TIMESTAMP, NEWID(), NULL) → pass through
+     *  - Numeric-looking strings → pass through
+     *  - Booleans on BIT/BOOLEAN columns → '1' / '0'
+     *  - Everything else → quoted string literal with single-quote escaping
+     */
+    private formatSqlDefault(raw: string | null | undefined, targetSqlType: string): string | undefined {
+        if (raw == null) return undefined;
+        const trimmed = String(raw).trim();
+        if (trimmed === '') return undefined;
+
+        const upperType = targetSqlType.toUpperCase();
+        const isBit = upperType.includes('BIT') || upperType.includes('BOOLEAN');
+
+        // Preserve SQL keywords / well-known function calls
+        const sqlFunctionRegex = /^(NULL|CURRENT_TIMESTAMP|CURRENT_DATE|CURRENT_TIME|GETDATE\(\)|GETUTCDATE\(\)|SYSUTCDATETIME\(\)|SYSDATETIME\(\)|NEWID\(\)|NEWSEQUENTIALID\(\))$/i;
+        if (sqlFunctionRegex.test(trimmed)) return trimmed.toUpperCase();
+
+        // Booleans
+        if (/^(true|false)$/i.test(trimmed)) {
+            const isTrue = trimmed.toLowerCase() === 'true';
+            if (isBit) return isTrue ? '1' : '0';
+            // Non-bit column holding a boolean word — quote it as a string
+            return isTrue ? "'true'" : "'false'";
+        }
+
+        // Numeric literal (int, decimal, scientific notation)
+        if (/^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(trimmed)) return trimmed;
+
+        // String literal — escape single quotes by doubling them
+        return `'${trimmed.replace(/'/g, "''")}'`;
+    }
+
     private buildDescriptionLookup(connector?: BaseIntegrationConnector): Map<string, { objectDescription?: string; fields: Map<string, string> }> {
         const result = new Map<string, { objectDescription?: string; fields: Map<string, string> }>();
         if (!connector) return result;
@@ -1093,6 +1353,73 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     }
 
     /**
+     * Decides whether an apply call should use the filtered-introspection flow.
+     * Salesforce has ~1,800 sobjects and the global describe is prohibitively
+     * expensive; other connectors have dozens and the legacy "describe all then
+     * pick" behavior is fine. The flow also engages when the client opts in by
+     * sending a SourceObjectName (which the SF full-catalog picker does).
+     */
+    private shouldUseFilteredIntrospection(
+        connector: BaseIntegrationConnector,
+        sourceObjects: SourceObjectInput[]
+    ): boolean {
+        const isSalesforce = connector.IntegrationName === 'Salesforce';
+        const clientSentNames = sourceObjects.some(so => !!so.SourceObjectName);
+        return isSalesforce && clientSentNames;
+    }
+
+    /**
+     * Builds a selection plan from SourceObjectInput[] for the filtered flow.
+     * Each entry resolves to { Name, Fields }, with Name coming from either:
+     *   - SourceObjectName directly (newly-picked from full-catalog picker), or
+     *   - A one-shot DB lookup of SourceObjectID → IntegrationObject.Name
+     * Never fails on missing rows — such entries are silently dropped (the
+     * caller raises on empty selection).
+     */
+    private async resolveSelectionPlan(
+        sourceObjects: SourceObjectInput[],
+        user: UserInfo
+    ): Promise<Array<{ Name: string; Fields?: string[] }>> {
+        const idsToLookup = sourceObjects
+            .filter(so => !so.SourceObjectName && so.SourceObjectID)
+            .map(so => so.SourceObjectID!);
+
+        const idToName = new Map<string, string>();
+        if (idsToLookup.length > 0) {
+            const rv = new RunView();
+            const result = await rv.RunView<{ ID: string; Name: string }>({
+                EntityName: 'MJ: Integration Objects',
+                ExtraFilter: idsToLookup.map(id => `ID='${id}'`).join(' OR '),
+                ResultType: 'simple',
+                Fields: ['ID', 'Name'],
+            }, user);
+            if (result.Success) {
+                for (const row of result.Results) {
+                    idToName.set(row.ID.toUpperCase(), row.Name);
+                }
+            }
+        }
+
+        const plan: Array<{ Name: string; Fields?: string[] }> = [];
+        for (const so of sourceObjects) {
+            const name = so.SourceObjectName
+                ?? (so.SourceObjectID ? idToName.get(so.SourceObjectID.toUpperCase()) : undefined);
+            if (name) plan.push({ Name: name, Fields: so.Fields });
+        }
+        return plan;
+    }
+
+    /**
+     * Aligns caller-supplied names to the source schema's ExternalName casing.
+     * Keeps the original when no match is found so downstream steps can still
+     * raise a targeted error rather than silently drop the object.
+     */
+    private normalizeNamesAgainstSchema(names: string[], sourceSchema: SourceSchemaInfo): string[] {
+        const map = new Map(sourceSchema.Objects.map(o => [o.ExternalName.toLowerCase(), o.ExternalName]));
+        return names.map(n => map.get(n.toLowerCase()) ?? n);
+    }
+
+    /**
      * Resolves source object IDs to exact names from the DB, and normalizes names
      * to match the source schema's ExternalName casing. Call once at each entry point.
      */
@@ -1103,7 +1430,12 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         integrationID: string,
         user: UserInfo
     ): Promise<string[]> {
-        // If IDs provided, resolve them to names from IntegrationObject records
+        // PRESERVED for backward compat with older call sites; new code should
+        // use resolveSourceObjectsToNames which handles per-item ID/Name fallback
+        // without silently dropping items that have a name but no ID (or an ID
+        // that doesn't match an IntegrationObject row yet — the picker can send
+        // newly-discovered objects with no persisted row).
+        void integrationID;
         if (ids && ids.length > 0) {
             const rv = new RunView();
             const result = await rv.RunView<{ ID: string; Name: string }>({
@@ -1116,14 +1448,88 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 return result.Results.map(r => r.Name);
             }
         }
-
-        // Otherwise normalize provided names against source schema casing
         if (names && names.length > 0) {
             const nameMap = new Map(sourceSchema.Objects.map(o => [o.ExternalName.toLowerCase(), o.ExternalName]));
             return names.map(n => nameMap.get(n.toLowerCase()) ?? n);
         }
-
         return [];
+    }
+
+    /**
+     * Per-item ID/name resolver for picker selections.
+     *
+     * Each `SourceObjectInput` from the picker may carry SourceObjectID
+     * (for objects with an existing IntegrationObject row), SourceObjectName
+     * (for newly-discovered objects with no persisted row yet), or both.
+     *
+     * The legacy `resolveSourceObjectNames` only honored the IDs path:
+     * `ids.map(...)` produced a SQL `WHERE ID IN (...)` and returned only
+     * the matched rows — name-only selections and ID-misses were silently
+     * dropped, with no surfaced log line. On real syncs this collapsed
+     * 1156 picker selections to 420 IntegrationObjects to 181 generated
+     * tables. Two silent O(N) data losses, invisible to users.
+     *
+     * This resolver:
+     *   - looks up names for selections that have an ID
+     *   - falls back to the SourceObjectName for selections without an ID
+     *     (or whose ID didn't match) — normalizing case against the source
+     *     schema when available
+     *   - LogErrors loudly when a selection truly can't be resolved (no ID
+     *     match AND no name) so the drop is visible in the run output
+     *   - returns names in the same order as the input, with the count of
+     *     dropped items so the caller can decide whether to abort or warn
+     */
+    private async resolveSourceObjectsToNames(
+        sourceObjects: SourceObjectInput[],
+        sourceSchema: SourceSchemaInfo,
+        user: UserInfo
+    ): Promise<{ names: string[]; droppedCount: number; sourceObjects: SourceObjectInput[] }> {
+        // Look up names for any selections with an ID
+        const idsToLookup = sourceObjects
+            .map(so => so.SourceObjectID)
+            .filter((id): id is string => typeof id === 'string' && id.length > 0);
+        const idToName = new Map<string, string>();
+        if (idsToLookup.length > 0) {
+            const rv = new RunView();
+            const result = await rv.RunView<{ ID: string; Name: string }>({
+                EntityName: 'MJ: Integration Objects',
+                ExtraFilter: idsToLookup.map(id => `ID='${id}'`).join(' OR '),
+                ResultType: 'simple',
+                Fields: ['ID', 'Name'],
+            }, user);
+            if (result.Success) {
+                for (const r of result.Results) idToName.set(r.ID, r.Name);
+            }
+        }
+
+        const schemaNameMap = new Map(sourceSchema.Objects.map(o => [o.ExternalName.toLowerCase(), o.ExternalName]));
+        const resolvedNames: string[] = [];
+        const resolvedSourceObjects: SourceObjectInput[] = [];
+        const dropped: SourceObjectInput[] = [];
+        for (const so of sourceObjects) {
+            let name: string | undefined;
+            if (so.SourceObjectID && idToName.has(so.SourceObjectID)) {
+                name = idToName.get(so.SourceObjectID);
+            } else if (so.SourceObjectName) {
+                // Normalize case against the schema when the connector reports it
+                name = schemaNameMap.get(so.SourceObjectName.toLowerCase()) ?? so.SourceObjectName;
+            }
+            if (name) {
+                resolvedNames.push(name);
+                resolvedSourceObjects.push(so);
+            } else {
+                dropped.push(so);
+            }
+        }
+        if (dropped.length > 0) {
+            const sample = dropped.slice(0, 5).map(d => `{id=${d.SourceObjectID ?? '∅'}, name=${d.SourceObjectName ?? '∅'}}`).join(', ');
+            LogError(
+                `[resolveSourceObjectsToNames] Dropped ${dropped.length} of ${sourceObjects.length} selection(s) ` +
+                `— neither SourceObjectID matched an IntegrationObject row nor was a SourceObjectName provided. ` +
+                `Sample: ${sample}${dropped.length > 5 ? ` (+${dropped.length - 5} more)` : ''}.`
+            );
+        }
+        return { names: resolvedNames, droppedCount: dropped.length, sourceObjects: resolvedSourceObjects };
     }
 
     /**
@@ -1818,21 +2224,87 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const { connector, companyIntegration } = await this.resolveConnector(input.CompanyIntegrationID, user);
             const schemaName = this.deriveSchemaName(companyIntegration.Integration);
 
-            // Step 2: Resolve object IDs to names, build inputs with per-object Fields
+            // Step 1b: Ensure IntegrationEngine cache is populated so IntrospectSchema's
+            // DB fallback (GetCachedObject/GetCachedFields) can find IntegrationObject records
+            await IntegrationEngine.Instance.Config(false, user);
+
+            // Step 2: Introspect source schema and persist discovered objects/fields
             const sourceSchema = await (connector.IntrospectSchema.bind(connector) as
                 (ci: unknown, u: unknown) => Promise<SourceSchemaInfo>)(companyIntegration, user);
-            const objectIDs = input.SourceObjects.map(so => so.SourceObjectID);
-            const resolvedNames = await this.resolveSourceObjectNames(objectIDs, undefined, sourceSchema, companyIntegration.IntegrationID, user);
 
-            // Build SchemaPreviewObjectInput with Fields carried from SourceObjectInput
-            const fieldsByID = new Map(input.SourceObjects.map(so => [so.SourceObjectID, so.Fields]));
+            // Step 2b: Persist discovered objects/fields to IntegrationObject/IntegrationObjectField.
+            // Static records (IsCustom=false) are preserved; new/custom records get IsCustom=true.
+            // This ensures custom objects are available for future sync runs, action generation, etc.
+            try {
+                const persistResult = await IntegrationSchemaSync.PersistDiscoveredSchema({
+                    IntegrationID: companyIntegration.IntegrationID,
+                    SourceSchema: sourceSchema,
+                    ContextUser: user,
+                });
+                if (persistResult.ObjectsCreated > 0 || persistResult.FieldsCreated > 0) {
+                    console.log(
+                        `[IntegrationApplyAll] Persisted discovered schema: ` +
+                        `${persistResult.ObjectsCreated} new objects, ${persistResult.FieldsCreated} new fields, ` +
+                        `${persistResult.ObjectsUpdated} updated objects, ${persistResult.FieldsUpdated} updated fields`
+                    );
+                }
+
+                // Step 2c: Generate CRUD actions for newly discovered custom objects.
+                // Uses the same ActionMetadataGenerator as the offline CLI, persisted via BaseEntity.Save().
+                if (persistResult.ObjectsCreated > 0) {
+                    try {
+                        const engineObjects = IntegrationEngine.Instance
+                            .GetIntegrationObjectsByIntegrationID(companyIntegration.IntegrationID);
+                        const customObjects = sourceSchema.Objects
+                            .filter(o => !engineObjects
+                                .some(ex => ex.Name.toLowerCase() === o.ExternalName.toLowerCase() && !ex.IsCustom))
+                            .map(o => ({
+                                Name: o.ExternalName,
+                                DisplayName: o.ExternalLabel || o.ExternalName,
+                                Description: o.Description,
+                                SupportsWrite: false,
+                                Fields: o.Fields.map(f => ({
+                                    Name: f.Name,
+                                    DisplayName: f.Label || f.Name,
+                                    Description: f.Description || '',
+                                    Type: f.SourceType || 'string',
+                                    IsRequired: f.IsRequired,
+                                    IsReadOnly: false,
+                                    IsPrimaryKey: f.IsPrimaryKey,
+                                })),
+                            }));
+                        await IntegrationSchemaSync.GenerateActionsForCustomObjects({
+                            IntegrationName: companyIntegration.Integration,
+                            CustomObjects: customObjects,
+                            SupportsSearch: connector.SupportsSearch,
+                            SupportsListing: connector.SupportsListing,
+                            ContextUser: user,
+                        });
+                    } catch (actionErr) {
+                        const msg = actionErr instanceof Error ? actionErr.message : String(actionErr);
+                        console.warn(`[IntegrationApplyAll] Action generation warning (non-fatal): ${msg}`);
+                    }
+                }
+            } catch (persistErr) {
+                // Non-fatal: schema persistence failure should not block table creation
+                const msg = persistErr instanceof Error ? persistErr.message : String(persistErr);
+                console.warn(`[IntegrationApplyAll] Schema persistence warning (non-fatal): ${msg}`);
+            }
+
+            const resolved = await this.resolveSourceObjectsToNames(input.SourceObjects, sourceSchema, user);
+            const resolvedNames = resolved.names;
+
+            // Build SchemaPreviewObjectInput with Fields from the matching
+            // SourceObjectInput (resolved.sourceObjects is order-aligned with names).
+            // Previously this stripped to IDs only, which silently dropped any
+            // selection without an IntegrationObject row yet (newly discovered).
             const objects = resolvedNames.map((name, i) => {
                 const obj = new SchemaPreviewObjectInput();
                 obj.SourceObjectName = name;
                 obj.SchemaName = schemaName;
                 obj.TableName = name.replace(/[^A-Za-z0-9_]/g, '_');
                 obj.EntityName = name.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ');
-                obj.Fields = fieldsByID.get(objectIDs[i]) ?? undefined;
+                obj.Fields = resolved.sourceObjects[i].Fields ?? undefined;
                 return obj;
             });
 
@@ -1847,11 +2319,13 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const pendingWorkDir = join(rsuWorkDir, '.rsu_pending');
             const pendingFilePath = join(pendingWorkDir, `${Date.now()}.json`);
 
-            // Build per-object field map for pending file (null = all fields)
+            // Build per-object field map for pending file (null = all fields).
+            // resolved.sourceObjects is order-aligned with resolvedNames after the
+            // resolveSourceObjectsToNames refactor — pair them directly instead
+            // of looking up by ID (which broke for name-only selections).
             const sourceObjectFields: Record<string, string[] | null> = {};
-            for (const so of input.SourceObjects) {
-                const resolvedName = resolvedNames[objectIDs.indexOf(so.SourceObjectID)];
-                if (resolvedName) sourceObjectFields[resolvedName] = so.Fields ?? null;
+            for (let i = 0; i < resolvedNames.length; i++) {
+                sourceObjectFields[resolvedNames[i]] = resolved.sourceObjects[i].Fields ?? null;
             }
 
             const pendingPayload = {
@@ -1896,11 +2370,18 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             if (skipRestart) {
                 await Metadata.Provider.Refresh();
                 const entityMapsCreated = await this.createEntityAndFieldMaps(
-                    input.CompanyIntegrationID, objects, connector, companyIntegration, schemaName, user
+                    input.CompanyIntegrationID, objects, connector, companyIntegration, schemaName, user,
+                    input.DefaultSyncDirection ?? 'Pull'
                 );
                 const createdMapIDs = entityMapsCreated.map(em => em.EntityMapID).filter(Boolean);
                 const scopedMapIDs = input.SyncScope === 'all' ? undefined : createdMapIDs;
-                const syncRunID = input.StartSync !== false
+                // Skip sync when SyncScope='created' but 0 new maps were
+                // created — otherwise empty EntityMapIDs falls through engine's
+                // `length > 0` gate and runs a full integration sync against
+                // every existing entity map (the 459-record-on-0-map-apply bug).
+                const shouldStartSync = input.StartSync !== false &&
+                    (input.SyncScope === 'all' || createdMapIDs.length > 0);
+                const syncRunID = shouldStartSync
                     ? await this.startSyncAfterApply(input.CompanyIntegrationID, user, scopedMapIDs, input.FullSync)
                     : null;
 
@@ -1978,14 +2459,15 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         connector: BaseIntegrationConnector,
         companyIntegration: MJCompanyIntegrationEntity,
         schemaName: string,
-        user: UserInfo
+        user: UserInfo,
+        defaultSyncDirection: string = 'Pull'
     ): Promise<ApplyAllEntityMapCreated[]> {
         const md = new Metadata();
         const results: ApplyAllEntityMapCreated[] = [];
 
         for (const obj of objects) {
             const entityMapResult = await this.createSingleEntityMap(
-                companyIntegrationID, obj, connector, companyIntegration, schemaName, user, md
+                companyIntegrationID, obj, connector, companyIntegration, schemaName, user, md, defaultSyncDirection
             );
             if (entityMapResult) {
                 results.push(entityMapResult);
@@ -2002,7 +2484,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         companyIntegration: MJCompanyIntegrationEntity,
         schemaName: string,
         user: UserInfo,
-        md: Metadata
+        md: Metadata,
+        defaultSyncDirection: string = 'Pull'
     ): Promise<ApplyAllEntityMapCreated | null> {
         // Find the entity by schema + table name
         const entityInfo = md.Entities.find(
@@ -2020,8 +2503,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         em.CompanyIntegrationID = companyIntegrationID;
         em.ExternalObjectName = obj.SourceObjectName;
         em.EntityID = entityInfo.ID;
-        em.SyncDirection = 'Pull';
-        em.Priority = 0;
+        em.SyncDirection = isValidSyncDirection(defaultSyncDirection) ? defaultSyncDirection : 'Pull';
+        em.Priority = obj.SourceObjectName.startsWith('assoc_') ? 10 : 0;
         em.Status = 'Active';
         em.SyncEnabled = true;
 
@@ -2125,13 +2608,26 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         platform: 'sqlserver' | 'postgresql',
         user: UserInfo,
         skipGitCommit: boolean,
-        skipRestart: boolean
+        skipRestart: boolean,
+        prefetchedSourceSchema?: SourceSchemaInfo
     ): Promise<{ schemaOutput: SchemaBuilderOutput; rsuInput: RSUPipelineInput }> {
         const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user);
 
-        const introspect = connector.IntrospectSchema.bind(connector) as
-            (ci: unknown, u: unknown) => Promise<SourceSchemaInfo>;
-        const sourceSchema = await introspect(companyIntegration, user);
+        // If the caller already ran IntrospectSchema (e.g. IntegrationApplyAllBatch),
+        // reuse it. The legacy path was running introspect TWICE per apply — once
+        // in the resolver and once here — which doubled probe time on connectors
+        // like Sage Intacct AND silently dropped selections when the second pass
+        // returned fewer objects than the first (rate limits, transient errors).
+        // The picked items would then fail to match `filteredSchema` below and
+        // get silently stripped before reaching buildTargetConfigs.
+        let sourceSchema: SourceSchemaInfo;
+        if (prefetchedSourceSchema) {
+            sourceSchema = prefetchedSourceSchema;
+        } else {
+            const introspect = connector.IntrospectSchema.bind(connector) as
+                (ci: unknown, u: unknown) => Promise<SourceSchemaInfo>;
+            sourceSchema = await introspect(companyIntegration, user);
+        }
 
         // Normalize names to match source schema casing
         const nameMap = new Map(sourceSchema.Objects.map(o => [o.ExternalName.toLowerCase(), o.ExternalName]));
@@ -2183,15 +2679,17 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         @Arg("webhookURL", { nullable: true }) webhookURL: string,
         @Arg("fullSync", () => Boolean, { defaultValue: false, description: 'If true, ignores watermarks and re-fetches all records from the source' }) fullSync: boolean,
         @Arg("entityMapIDs", () => [String], { nullable: true, description: 'Optional: sync only these entity maps. If omitted, syncs all maps for the connector.' }) entityMapIDs: string[],
+        @Arg("syncDirection", () => String, { nullable: true, description: 'Override sync direction: Pull | Push | Bidirectional. If omitted, each entity map\'s own SyncDirection is used.' }) syncDirection: 'Pull' | 'Push' | 'Bidirectional' | undefined,
         @Ctx() ctx: AppContext
     ): Promise<StartSyncOutput> {
         try {
             const user = this.getAuthenticatedUser(ctx);
             await IntegrationEngine.Instance.Config(false, user);
 
-            const syncOptions: { FullSync?: boolean; EntityMapIDs?: string[] } = {};
+            const syncOptions: { FullSync?: boolean; EntityMapIDs?: string[]; SyncDirection?: 'Pull' | 'Push' | 'Bidirectional' } = {};
             if (fullSync) syncOptions.FullSync = true;
             if (entityMapIDs?.length) syncOptions.EntityMapIDs = entityMapIDs;
+            if (syncDirection) syncOptions.SyncDirection = syncDirection;
 
             // Fire and forget — progress is tracked inside IntegrationEngine
             const syncPromise = IntegrationEngine.Instance.RunSync(
@@ -2280,6 +2778,85 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         }
     }
 
+    /**
+     * Writes a single record to an external system via the integration connector.
+     * Supports create, update, and delete operations.
+     */
+    @Mutation(() => WriteRecordOutput)
+    async IntegrationWriteRecord(
+        @Arg("companyIntegrationID") companyIntegrationID: string,
+        @Arg("objectName") objectName: string,
+        @Arg("operation", () => String, { description: 'create, update, or delete' }) operation: string,
+        @Arg("externalID", { nullable: true, description: 'Required for update/delete' }) externalID: string,
+        @Arg("attributes", () => String, { nullable: true, description: 'JSON object of field values for create/update' }) attributesJson: string,
+        @Ctx() ctx: AppContext
+    ): Promise<WriteRecordOutput> {
+        try {
+            const user = this.getAuthenticatedUser(ctx);
+            await IntegrationEngine.Instance.Config(false, user);
+
+            const rv = new RunView();
+            const ciResult = await rv.RunView<MJCompanyIntegrationEntity>({
+                EntityName: 'MJ: Company Integrations',
+                ExtraFilter: `ID='${companyIntegrationID}'`,
+                MaxRows: 1,
+                ResultType: 'entity_object',
+            }, user);
+
+            if (!ciResult.Success || ciResult.Results.length === 0) {
+                return { Success: false, Message: `Company Integration not found: ${companyIntegrationID}` };
+            }
+
+            const companyIntegration = ciResult.Results[0];
+
+            // Load the Integration entity to get the ClassName for connector resolution
+            const integResult = await rv.RunView<MJIntegrationEntity>({
+                EntityName: 'Integrations',
+                ExtraFilter: `ID='${companyIntegration.IntegrationID}'`,
+                MaxRows: 1,
+                ResultType: 'entity_object',
+            }, user);
+            if (!integResult.Success || integResult.Results.length === 0) {
+                return { Success: false, Message: `Integration not found: ${companyIntegration.IntegrationID}` };
+            }
+            const connector = ConnectorFactory.Resolve(integResult.Results[0]);
+
+            const attributes = attributesJson ? JSON.parse(attributesJson) as Record<string, unknown> : {};
+            const crudBase = { CompanyIntegration: companyIntegration, ObjectName: objectName, ContextUser: user };
+
+            let result: { Success: boolean; ExternalID?: string; ErrorMessage?: string; StatusCode: number };
+
+            switch (operation.toLowerCase()) {
+                case 'create':
+                    if (!connector.SupportsCreate) return { Success: false, Message: 'Connector does not support create' };
+                    result = await connector.CreateRecord({ ...crudBase, Attributes: attributes });
+                    break;
+                case 'update':
+                    if (!connector.SupportsUpdate) return { Success: false, Message: 'Connector does not support update' };
+                    if (!externalID) return { Success: false, Message: 'externalID is required for update' };
+                    result = await connector.UpdateRecord({ ...crudBase, ExternalID: externalID, Attributes: attributes });
+                    break;
+                case 'delete':
+                    if (!connector.SupportsDelete) return { Success: false, Message: 'Connector does not support delete' };
+                    if (!externalID) return { Success: false, Message: 'externalID is required for delete' };
+                    result = await connector.DeleteRecord({ ...crudBase, ExternalID: externalID });
+                    break;
+                default:
+                    return { Success: false, Message: `Invalid operation: ${operation}. Must be create, update, or delete` };
+            }
+
+            return {
+                Success: result.Success,
+                Message: result.Success ? `${operation} succeeded` : (result.ErrorMessage ?? `${operation} failed`),
+                ExternalID: result.ExternalID,
+                StatusCode: result.StatusCode,
+            };
+        } catch (e) {
+            LogError(`IntegrationWriteRecord error: ${e}`);
+            return { Success: false, Message: this.formatError(e) };
+        }
+    }
+
     // ── SCHEDULE ────────────────────────────────────────────────────────
 
     @Mutation(() => CreateScheduleOutput)
@@ -2314,7 +2891,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             job.Timezone = input.Timezone || 'UTC';
             job.Status = 'Active';
             job.OwnerUserID = user.ID;
-            job.Configuration = JSON.stringify({ CompanyIntegrationID: input.CompanyIntegrationID });
+            const jobConfig: Record<string, unknown> = { CompanyIntegrationID: input.CompanyIntegrationID };
+            if (input.SyncDirection) jobConfig.SyncDirection = input.SyncDirection;
+            if (input.FullSync) jobConfig.FullSync = input.FullSync;
+            job.Configuration = JSON.stringify(jobConfig);
             job.NextRunAt = CronExpressionHelper.GetNextRunTime(input.CronExpression, input.Timezone || 'UTC');
 
             if (!await job.Save()) return { Success: false, Message: 'Failed to create schedule' };
@@ -2884,38 +3464,150 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             const user = this.getAuthenticatedUser(ctx);
             const validatedPlatform = this.validatePlatform(platform);
 
+            // Bust RunView caches for integration metadata BEFORE Config(true).
+            // mj sync push writes records via stored procedures which do NOT fire
+            // BaseEntity change events, so the RunView cache is never auto-invalidated.
+            // Explicitly clearing these entries ensures Config(true) re-queries the DB.
+            await LocalCacheManager.Instance.InvalidateEntityCaches('MJ: Integration Objects');
+            await LocalCacheManager.Instance.InvalidateEntityCaches('MJ: Integration Object Fields');
+
+            // Force-refresh integration metadata cache so IntrospectSchema
+            // picks up any IntegrationObject/Field changes made via mj sync push
+            await IntegrationEngine.Instance.Config(true, user);
+
             // Phase 1: Build schema for each connector in parallel
             const buildResults = await Promise.allSettled(
                 input.Connectors.map(async (connInput) => {
                     const { connector, companyIntegration } = await this.resolveConnector(connInput.CompanyIntegrationID, user);
                     const schemaName = this.deriveSchemaName(companyIntegration.Integration);
+                    console.log(
+                        `[IntegrationApplyAllBatch] connector=${companyIntegration.Integration} ` +
+                        `received ${connInput.SourceObjects.length} selections: ` +
+                        connInput.SourceObjects.map(so =>
+                            `{id=${so.SourceObjectID ?? '∅'}, name=${so.SourceObjectName ?? '∅'}}`
+                        ).slice(0, 30).join(', ') +
+                        (connInput.SourceObjects.length > 30 ? `, ... (+${connInput.SourceObjects.length - 30} more)` : '')
+                    );
 
-                    // Resolve object IDs to names with per-object Fields
-                    const sourceSchema = await (connector.IntrospectSchema.bind(connector) as
-                        (ci: unknown, u: unknown) => Promise<SourceSchemaInfo>)(companyIntegration, user);
-                    const objectIDs = connInput.SourceObjects.map(so => so.SourceObjectID);
-                    const resolvedNames = await this.resolveSourceObjectNames(objectIDs, undefined, sourceSchema, companyIntegration.IntegrationID, user);
+                    // Branch: Salesforce's full-catalog picker sends SourceObjectName
+                    // for freshly-discovered objects and uses the filtered describe
+                    // path to avoid a ~70s global describe on every apply. Other
+                    // connectors (HubSpot, YourMembership, etc.) retain the legacy
+                    // ID-only flow that describes and persists the entire schema.
+                    const useFilteredFlow = this.shouldUseFilteredIntrospection(connector, connInput.SourceObjects);
 
-                    const fieldsByID = new Map(connInput.SourceObjects.map(so => [so.SourceObjectID, so.Fields]));
-                    const objects = resolvedNames.map((name, i) => {
+                    let sourceSchema: SourceSchemaInfo;
+                    let resolvedNames: string[];
+                    const fieldsByName = new Map<string, string[] | null | undefined>();
+
+                    if (useFilteredFlow) {
+                        // Salesforce path — describe only selected objects, persist only those
+                        const selectionPlan = await this.resolveSelectionPlan(connInput.SourceObjects, user);
+                        const selectionNames = selectionPlan.map(p => p.Name);
+                        if (selectionNames.length === 0) {
+                            throw new Error('No source objects selected — every SourceObject must have either SourceObjectID or SourceObjectName set');
+                        }
+
+                        sourceSchema = await (connector.IntrospectSchema.bind(connector) as
+                            (ci: unknown, u: unknown, opts: { ObjectNames?: string[] }) => Promise<SourceSchemaInfo>)(
+                                companyIntegration, user, { ObjectNames: selectionNames }
+                            );
+
+                        try {
+                            const persistResult = await IntegrationSchemaSync.PersistDiscoveredSchema({
+                                IntegrationID: companyIntegration.IntegrationID,
+                                SourceSchema: sourceSchema,
+                                ContextUser: user,
+                            });
+                            console.log(
+                                `[IntegrationApplyAllBatch] Persisted describe for ${companyIntegration.Integration} (${selectionNames.length} selected): ` +
+                                `${persistResult.ObjectsCreated} new, ${persistResult.FieldsCreated} new fields, ` +
+                                `${persistResult.ObjectsUpdated} updated, ${persistResult.FieldsUpdated} updated fields`
+                            );
+                        } catch (persistErr) {
+                            LogError(`IntegrationApplyAllBatch: PersistDiscoveredSchema failed for ${companyIntegration.Integration}: ${persistErr}`);
+                        }
+
+                        resolvedNames = this.normalizeNamesAgainstSchema(selectionNames, sourceSchema);
+                        for (const p of selectionPlan) {
+                            fieldsByName.set(p.Name.toLowerCase(), p.Fields);
+                        }
+                    } else {
+                        // Legacy path (HubSpot, YourMembership, Sage Intacct, etc.)
+                        // — describe all, persist all, then resolve by either
+                        // SourceObjectID (legacy clients) OR SourceObjectName
+                        // (newly-discovered objects from connectors that probe
+                        // their full catalog at picker time, e.g. SI's 666
+                        // candidates). Without this fallback, freshly-probed
+                        // selections silently drop.
+                        sourceSchema = await (connector.IntrospectSchema.bind(connector) as
+                            (ci: unknown, u: unknown) => Promise<SourceSchemaInfo>)(companyIntegration, user);
+
+                        try {
+                            const persistResult = await IntegrationSchemaSync.PersistDiscoveredSchema({
+                                IntegrationID: companyIntegration.IntegrationID,
+                                SourceSchema: sourceSchema,
+                                ContextUser: user,
+                            });
+                            console.log(
+                                `[IntegrationApplyAllBatch] Persisted discovered schema for ${companyIntegration.Integration}: ` +
+                                `${persistResult.ObjectsCreated} new objects, ${persistResult.FieldsCreated} new fields, ` +
+                                `${persistResult.ObjectsUpdated} updated objects, ${persistResult.FieldsUpdated} updated fields`
+                            );
+                        } catch (persistErr) {
+                            LogError(`IntegrationApplyAllBatch: PersistDiscoveredSchema failed for ${companyIntegration.Integration}: ${persistErr}`);
+                        }
+
+                        // Resolve names from BOTH ID lookups and direct names.
+                        // Direct names skip the IntegrationObject DB roundtrip
+                        // since the selection plan already has the API code.
+                        const idsOnly = connInput.SourceObjects.map(so => so.SourceObjectID).filter((x): x is string => !!x);
+                        const directNames = connInput.SourceObjects.map(so => so.SourceObjectName).filter((x): x is string => !!x);
+                        const namesFromIds = idsOnly.length > 0
+                            ? await this.resolveSourceObjectNames(idsOnly, undefined, sourceSchema, companyIntegration.IntegrationID, user)
+                            : [];
+                        const normalizedDirect = this.normalizeNamesAgainstSchema(directNames, sourceSchema);
+
+                        // Preserve original picker order while deduping
+                        const seen = new Set<string>();
+                        resolvedNames = [];
+                        const orderedSources: SourceObjectInput[] = [];
+                        let idCursor = 0;
+                        let nameCursor = 0;
+                        for (const so of connInput.SourceObjects) {
+                            const resolved = so.SourceObjectName
+                                ? normalizedDirect[nameCursor++]
+                                : (so.SourceObjectID ? namesFromIds[idCursor++] : undefined);
+                            if (!resolved) continue;
+                            const key = resolved.toLowerCase();
+                            if (seen.has(key)) continue;
+                            seen.add(key);
+                            resolvedNames.push(resolved);
+                            orderedSources.push(so);
+                        }
+                        for (let i = 0; i < resolvedNames.length; i++) {
+                            fieldsByName.set(resolvedNames[i].toLowerCase(), orderedSources[i].Fields);
+                        }
+                    }
+
+                    const objects = resolvedNames.map(name => {
                         const obj = new SchemaPreviewObjectInput();
                         obj.SourceObjectName = name;
                         obj.SchemaName = schemaName;
                         obj.TableName = name.replace(/[^A-Za-z0-9_]/g, '_');
                         obj.EntityName = name.replace(/([a-z])([A-Z])/g, '$1 $2').replace(/_/g, ' ');
-                        obj.Fields = fieldsByID.get(objectIDs[i]) ?? undefined;
+                        obj.Fields = fieldsByName.get(name.toLowerCase()) ?? undefined;
                         return obj;
                     });
 
                     const { schemaOutput, rsuInput } = await this.buildSchemaForConnector(
-                        connInput.CompanyIntegrationID, objects, validatedPlatform, user, skipGitCommit, skipRestart
+                        connInput.CompanyIntegrationID, objects, validatedPlatform, user, skipGitCommit, skipRestart, sourceSchema
                     );
 
                     // Build per-object field map for pending file
                     const sourceObjectFields: Record<string, string[] | null> = {};
-                    for (const so of connInput.SourceObjects) {
-                        const resolvedName = resolvedNames[objectIDs.indexOf(so.SourceObjectID)];
-                        if (resolvedName) sourceObjectFields[resolvedName] = so.Fields ?? null;
+                    for (const name of resolvedNames) {
+                        sourceObjectFields[name] = fieldsByName.get(name.toLowerCase()) ?? null;
                     }
 
                     // Inject post-restart pending work payload
@@ -2933,6 +3625,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                         StartSync: input.StartSync,
                         FullSync: input.FullSync ?? false,
                         SyncScope: input.SyncScope ?? 'created',
+                        SyncDirection: input.SyncDirection,
+                        ScheduleSyncDirection: input.ScheduleSyncDirection,
                         CreatedAt: new Date().toISOString(),
                     };
                     rsuInput.PostRestartFiles = [
@@ -3028,13 +3722,23 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     await Metadata.Provider.Refresh();
                     const entityMapsCreated = await this.createEntityAndFieldMaps(
                         build.connInput.CompanyIntegrationID, build.objects, build.connector,
-                        build.companyIntegration, build.schemaName, user
+                        build.companyIntegration, build.schemaName, user,
+                        build.connInput.DefaultSyncDirection ?? 'Pull'
                     );
                     connResult.EntityMapsCreated = entityMapsCreated;
 
                     const createdMapIDs = entityMapsCreated.map(em => em.EntityMapID).filter(Boolean);
                     const scopedMapIDs = input.SyncScope === 'all' ? undefined : createdMapIDs;
-                    const syncRunID = input.StartSync !== false
+
+                    // Skip sync entirely when SyncScope='created' (default) but
+                    // no new maps were created. Otherwise the engine sees an
+                    // empty EntityMapIDs array, falls through its `length > 0`
+                    // gate, and runs a FULL integration sync — silently re-
+                    // pulling every existing map. That's why a 0-new-map apply
+                    // could trigger a 459-record sync against the 71 existing.
+                    const shouldStartSync = input.StartSync !== false &&
+                        (input.SyncScope === 'all' || createdMapIDs.length > 0);
+                    const syncRunID = shouldStartSync
                         ? await this.startSyncAfterApply(build.connInput.CompanyIntegrationID, user, scopedMapIDs, input.FullSync)
                         : null;
                     if (syncRunID) connResult.SyncRunID = syncRunID;

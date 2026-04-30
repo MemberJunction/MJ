@@ -1,0 +1,10 @@
+phase	side	wallclock_seconds
+01-clean-install	next	84.13
+01-clean-install	branch	63.77
+02-association-db	next	97.27
+02-association-db	branch	82.55
+03-mutations	next	88.61
+03-mutations	branch	67.03
+04-new-entities	next	91.49
+04-new-entities	branch	68.16
+scoped-verify	branch-forced	101.82

@@ -1339,7 +1339,7 @@
                     @else if (FormMode === 'add-type') { Add Content Type }
                     @else if (FormMode === 'edit-type') { Edit Content Type }
                 </h3>
-                <button class="at-slide-close" (click)="CloseForm()"><i class="fa-solid fa-times"></i></button>
+                <button class="at-slide-close" aria-label="Close form" (click)="CloseForm()"><i class="fa-solid fa-times"></i></button>
             </div>
             <div class="at-slide-body">
 
@@ -1545,7 +1545,7 @@
         <div class="at-slide-panel at-detail-panel">
             <div class="at-slide-header">
                 <h3><i class="fa-solid fa-file-lines"></i> Content Item</h3>
-                <button class="at-slide-close" (click)="CloseItemDetail()"><i class="fa-solid fa-times"></i></button>
+                <button class="at-slide-close" aria-label="Close item detail" (click)="CloseItemDetail()"><i class="fa-solid fa-times"></i></button>
             </div>
             <div class="at-slide-body">
                 <!-- Header -->
@@ -1636,7 +1636,7 @@
         <div class="at-slide-panel at-detail-panel">
             <div class="at-slide-header">
                 <h3><i class="fa-solid fa-database"></i> Source Detail</h3>
-                <button class="at-slide-close" (click)="CloseSourceDetail()"><i class="fa-solid fa-times"></i></button>
+                <button class="at-slide-close" aria-label="Close source detail" (click)="CloseSourceDetail()"><i class="fa-solid fa-times"></i></button>
             </div>
             <div class="at-slide-body">
                 @if (SourceDetailLoading) {
@@ -2010,7 +2010,7 @@
             <div class="at-schedule-dialog" style="max-width: 440px; z-index: 10002;" (click)="$event.stopPropagation()">
                 <div class="at-schedule-dialog-header">
                     <span><i class="fa-solid fa-triangle-exclamation" style="color: var(--mj-status-warning); margin-right: 8px;"></i> Content Type Required</span>
-                    <button class="at-close-btn" (click)="ShowNoContentTypeWarning = false"><i class="fa-solid fa-xmark"></i></button>
+                    <button class="at-close-btn" aria-label="Close warning" (click)="ShowNoContentTypeWarning = false"><i class="fa-solid fa-xmark"></i></button>
                 </div>
                 <div class="at-schedule-dialog-body" style="text-align: center; padding: 24px;">
                     <p style="color: var(--mj-text-secondary); margin-bottom: 16px;">

@@ -1,0 +1,252 @@
+[
+  {
+    "_comments": [
+      "Runtime Actions demo #2 — permissioned metadata + view query.",
+      "Uses allowAnyEntity=true so the action can accept any entity name as",
+      "runtime input. Framework-authored and approved; agent-authored",
+      "Runtime actions should enumerate specific entities in allowedEntities",
+      "rather than set this flag."
+    ],
+    "fields": {
+      "Name": "Entity Data Quality Report",
+      "Description": "Scans a sample of records for a given entity and returns a data quality report: per-field null rates, distinct value counts, and an overall completeness score (0-1) that weights non-nullable fields 2x. Useful for data stewards triaging bad data. Exercises the `md` (entity introspection) and `rv` (RunView) bridge namespaces.",
+      "Type": "Runtime",
+      "Status": "Active",
+      "CodeApprovalStatus": "Approved",
+      "IconClass": "fa-solid fa-magnifying-glass-chart",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Data",
+      "Code": "@file:runtime/code/entity-data-quality-report.js",
+      "RuntimeActionConfiguration": {
+        "permissions": {
+          "allowedActions": [],
+          "allowedAgents": [],
+          "allowedEntities": [],
+          "allowAnyEntity": true
+        },
+        "limits": {
+          "maxMemoryMB": 256,
+          "maxBridgeCalls": 10
+        }
+      },
+      "MaxExecutionTimeMS": 60000
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "entityName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Name of the entity to analyze (e.g. 'Users', 'Customers').",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "E18B7E3C-FB52-43DE-AC07-80887B881757"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:46.932Z",
+            "checksum": "a379f5fcbc219067b497ac28b0ecc0b44bb47466a8491350de7d19e42ce7fc5d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "extraFilter",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional SQL WHERE clause fragment to narrow the scan (e.g. \"Status='Active'\").",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "75D2C7B1-AAFF-4E0D-B35F-24B50E95D7BC"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:46.962Z",
+            "checksum": "2f4163a3c33c87217f269dab421407800d0a0c677044f9a20237f78487b5c70d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "sampleSize",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Maximum number of records to scan. Default: 1000. TotalRowsInEntity reflects the true row count so the caller can tell whether the result is an estimate.",
+            "IsRequired": false,
+            "DefaultValue": "1000"
+          },
+          "primaryKey": {
+            "ID": "086AD02F-36BB-4740-855C-E7316BF76962"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:46.992Z",
+            "checksum": "d6243d1e4082c6ebd6169399a6574c5d2eb548ab4bba4923fb923462d08c8a3d"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "overallCompleteness",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Weighted completeness score in [0,1]. 1.0 = no missing values anywhere; non-nullable fields weight 2x."
+          },
+          "primaryKey": {
+            "ID": "E7D39997-92FA-488C-803C-AE4FAE8FF58B"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:47.023Z",
+            "checksum": "f03a4a5cf112db0ef05739b1b2cf709b5b45fc92573bf1dea4706d78a2af116e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "rowsAnalyzed",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Actual number of rows scanned (≤ sampleSize)."
+          },
+          "primaryKey": {
+            "ID": "777ECB31-AA36-4ECE-B16E-20EB76FA4622"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:47.054Z",
+            "checksum": "9d287178e5a3aeef5860b55e62b73913ef8d54efe773c54bcebdc06f9ff90568"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "totalRowsInEntity",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "IsRequired": false,
+            "Description": "Total row count in the entity (before MaxRows truncation)."
+          },
+          "primaryKey": {
+            "ID": "6FC0F3B3-8392-4DFD-910F-0766DF864AF3"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:47.084Z",
+            "checksum": "ce7372b423318c2e2ae8f170638293ced5a55c63bb4ce383f83d4b86115a72bc"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "worstFields",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "IsRequired": false,
+            "Description": "Top-10 fields with the highest null rate, sorted descending."
+          },
+          "primaryKey": {
+            "ID": "B11AC206-5E26-4D74-8BDE-E0B90A84E9A2"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:47.113Z",
+            "checksum": "1b6d783f53c16a877ef7da4101b0ad6e9d03422f151b51deedf9fa04ec26313e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "byField",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "IsRequired": false,
+            "Description": "Per-field analysis for every non-virtual field: nullCount, nullRate, distinctCount, distinctRatio, completeness, type, allowsNull."
+          },
+          "primaryKey": {
+            "ID": "FCFE3174-402F-4018-8454-4F5E81207767"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:47.143Z",
+            "checksum": "740d26b9d05536550065c8a9beb90aa6c318b725cf7f6613df38c496ecbcd7f1"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Report generated successfully."
+          },
+          "primaryKey": {
+            "ID": "AAA4F264-0FAA-407E-AE49-1F8527F03C3A"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:47.165Z",
+            "checksum": "ec2ee500647b810ae492ba770e63fe9832d61ad53b4e433c50d5d93ec18118af"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_ENTITY_NAME",
+            "IsSuccess": false,
+            "Description": "entityName parameter is required."
+          },
+          "primaryKey": {
+            "ID": "E3DE6915-51A0-4CD4-ACAD-B0FCD810D1A7"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:47.182Z",
+            "checksum": "fecf240f98d39e60331fcc9df8461944f3218cd12cec45213d61826f2e7042c9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "ENTITY_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "No field metadata returned for the given entity name — entity does not exist or the runtime action lacks permission."
+          },
+          "primaryKey": {
+            "ID": "EAE47D21-29D8-4E8A-8D91-A53D1ADF6C58"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:47.209Z",
+            "checksum": "41daf1fb616ac7251347f66a833fbf204c116a9a29f45ff097e46a61a60be47c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "RUNVIEW_FAILED",
+            "IsSuccess": false,
+            "Description": "RunView returned Success=false. See error for underlying cause."
+          },
+          "primaryKey": {
+            "ID": "E3144BB3-9DE5-4BF9-B4BB-CB2A7E0F36BB"
+          },
+          "sync": {
+            "lastModified": "2026-04-23T13:09:47.226Z",
+            "checksum": "9566d499ef2c33074395bcd40bbebfa01da3c986800e36222ced49f02c50c07c"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "1FA27C4C-34A7-4E1C-8134-6736F3781C8F"
+    },
+    "sync": {
+      "lastModified": "2026-04-23T13:09:46.864Z",
+      "checksum": "07e6f34b6e9c6d3afeec62c35bd4db08adc145b21abbdcca94dfd84cf76f63f6"
+    }
+  }
+]

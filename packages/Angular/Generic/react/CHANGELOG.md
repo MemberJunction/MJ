@@ -1,5 +1,97 @@
 # @memberjunction/ng-react
 
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ai-vectors-memory@5.30.1
+- @memberjunction/ng-notifications@5.30.1
+- @memberjunction/graphql-dataprovider@5.30.1
+- @memberjunction/interactive-component-types@5.30.1
+- @memberjunction/core@5.30.1
+- @memberjunction/core-entities@5.30.1
+- @memberjunction/global@5.30.1
+- @memberjunction/react-runtime@5.30.1
+
+## 5.30.0
+
+### Patch Changes
+
+- 00b5c26: Extract shared map-core library from Angular and React map components into a single source of truth. Add boundary render mode for per-record GeoJSON polygon rendering. Expose GeoDataEngine on React runtime utilities.
+- Updated dependencies [c2c5892]
+- Updated dependencies [68bf87f]
+- Updated dependencies [963f2df]
+- Updated dependencies [4729398]
+- Updated dependencies [9154ac7]
+- Updated dependencies [00b5c26]
+- Updated dependencies [b1f32a4]
+- Updated dependencies [c199f3b]
+  - @memberjunction/core-entities@5.30.0
+  - @memberjunction/core@5.30.0
+  - @memberjunction/graphql-dataprovider@5.30.0
+  - @memberjunction/interactive-component-types@5.30.0
+  - @memberjunction/ng-notifications@5.30.0
+  - @memberjunction/react-runtime@5.30.0
+  - @memberjunction/ai-vectors-memory@5.30.0
+  - @memberjunction/global@5.30.0
+
+## 5.29.0
+
+### Patch Changes
+
+- Updated dependencies [e02e24e]
+- Updated dependencies [7006276]
+  - @memberjunction/core@5.29.0
+  - @memberjunction/core-entities@5.29.0
+  - @memberjunction/ai-vectors-memory@5.29.0
+  - @memberjunction/ng-notifications@5.29.0
+  - @memberjunction/graphql-dataprovider@5.29.0
+  - @memberjunction/interactive-component-types@5.29.0
+  - @memberjunction/react-runtime@5.29.0
+  - @memberjunction/global@5.29.0
+
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [115e4da]
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/ai-vectors-memory@5.28.0
+  - @memberjunction/ng-notifications@5.28.0
+  - @memberjunction/graphql-dataprovider@5.28.0
+  - @memberjunction/interactive-component-types@5.28.0
+  - @memberjunction/react-runtime@5.28.0
+  - @memberjunction/global@5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- Updated dependencies [d18aa6c]
+- Updated dependencies [6c39ff0]
+  - @memberjunction/global@5.27.1
+  - @memberjunction/graphql-dataprovider@5.27.1
+  - @memberjunction/ai-vectors-memory@5.27.1
+  - @memberjunction/ng-notifications@5.27.1
+  - @memberjunction/core@5.27.1
+  - @memberjunction/core-entities@5.27.1
+  - @memberjunction/react-runtime@5.27.1
+  - @memberjunction/interactive-component-types@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- @memberjunction/ai-vectors-memory@5.27.0
+- @memberjunction/ng-notifications@5.27.0
+- @memberjunction/graphql-dataprovider@5.27.0
+- @memberjunction/interactive-component-types@5.27.0
+- @memberjunction/core@5.27.0
+- @memberjunction/core-entities@5.27.0
+- @memberjunction/global@5.27.0
+- @memberjunction/react-runtime@5.27.0
+
 ## 5.26.0
 
 ### Patch Changes

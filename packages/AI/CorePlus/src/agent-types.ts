@@ -507,6 +507,12 @@ export type BaseAgentNextStep<P = any, TContext = any> = {
      */
     scratchpad?: AgentScratchpad;
     /**
+     * Artifact tool calls from the agent's response.
+     * Each entry identifies an artifact and the tool to execute against it.
+     * Processed inline (zero turn cost) alongside payload and scratchpad changes.
+     */
+    artifactToolCalls?: { artifactId: string; tool: string; input: Record<string, unknown> }[];
+    /**
      * Media outputs to promote to the agent's final outputs.
      * When set, these media items will be added to the agent's mediaOutputs collection
      * and stored in AIAgentRunMedia.
@@ -1271,6 +1277,21 @@ export type ExecuteAgentParams<TContext = any, P = any, TAgentTypeParams = unkno
      * Takes precedence over the agent's DefaultClientToolTimeoutMs config.
      */
     clientToolTimeoutMs?: number;
+
+    /**
+     * Optional wall-clock timeout for the entire agent run, in milliseconds.
+     * When set, BaseAgent wraps the execution in an internal AbortController
+     * that fires after this many ms. The abort propagates through the existing
+     * `cancellationToken` chain — sub-agents, pending prompt calls, and
+     * actions (which carry their own `RunActionParams.AbortSignal`) all see
+     * the cancellation. On timeout, the run terminates with an Aborted result
+     * whose message identifies the timeout origin.
+     *
+     * When omitted, BaseAgent falls back to its `DefaultAgentTimeoutMS`
+     * (currently 2 hours) — generous by default because some Loop agents do
+     * legitimate long iteration; tighten per-run for anything interactive.
+     */
+    maxExecutionTimeMs?: number;
 
 }
 

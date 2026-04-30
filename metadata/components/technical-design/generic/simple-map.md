@@ -62,6 +62,17 @@ Returns first match or null.
 - Falls back entirely to spatial clustering if RunView fails
 - 15-color palette cycles for region distinction
 
+### Boundary Mode
+- Renders one GeoJSON polygon per record — no grouping, no external data loading
+- Reads GeoJSON from `config.boundaryField` (e.g. `"BoundaryGeoJSON"`) on each record
+- Each polygon gets a cycling color from the 15-color palette
+- Hover: increases fillOpacity + weight, calls bringToFront, resets on mouseout
+- Tooltip: record name (via getRecordName) bound with `sticky: true`
+- Click: fires `onMarkerClick` with the individual record (not onRegionClick)
+- Fallback: records without boundary data render as L.circleMarker at lat/lng centroid
+- Auto-fits bounds from all rendered polygon extents
+- Use case: entities carrying their own GeoJSON boundaries (states, counties, districts, territories)
+
 ## Popup System
 - All popups use BuildClusterPopup pattern: title, HR divider, up to maxPopupRecords clickable links, overflow text
 - Click handlers attached via map 'popupopen' event using class selector '.mj-map-popup-record'

@@ -104,6 +104,20 @@ Extends the Query entity with automatic Template management similar to AIPromptE
 - **Automatic Template Management**: Creates and updates Template records when saving
 - **Dynamic SQL Support**: Supports parameterized queries with Nunjucks templates
 
+### MJAIAgentNoteEntityServer (v5.30.x+)
+
+Extends the agent note entity to keep the in-process vector store in sync with persisted state:
+
+- **Vector Store Invariant**: Overrides `Save()` and `Delete()` so that `AIEngine.Instance._noteVectorService` contains an entry for a note iff its persisted `Status='Active'` and its `EmbeddingVector` is non-null
+- **Inline Maintenance**: When a note's Status flips between `Active` and any other value, or when a note is deleted, the corresponding vector store entry is added/removed in the same operation — eliminating the need for an MJAPI restart after note revocation (e.g., during MemoryManagerAgent consolidation or contradiction resolution)
+- **Consolidation Field Persistence**: New `AIAgentNote` columns introduced by `V202604260056__v5.30.x__Memory_Consolidation_Schema.sql` (`ConsolidatedIntoNoteID`, `ConsolidationCount`, `DerivedFromNoteIDs`, `ProtectionTier`, `ImportanceScore`) persist via the standard generated setters — no custom logic needed in this override
+
+See [`@memberjunction/aiengine` README](../AI/Engine/README.md#vector-store-invariant-preservation) for the read-side and the consuming code in [`@memberjunction/ai-agents`](../AI/Agents/README.md#consolidation-pipeline).
+
+### MJAIAgentExampleEntityServer
+
+Companion to `MJAIAgentNoteEntityServer` — maintains the parallel invariant for the agent example vector store on `Save`/`Delete`.
+
 ## Architecture
 
 ### Entity Registration

@@ -1,5 +1,140 @@
 # @memberjunction/ng-artifacts
 
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ng-base-types@5.30.1
+- @memberjunction/ng-code-editor@5.30.1
+- @memberjunction/ng-export-service@5.30.1
+- @memberjunction/ng-markdown@5.30.1
+- @memberjunction/ng-notifications@5.30.1
+- @memberjunction/ng-pagination@5.30.1
+- @memberjunction/ng-query-viewer@5.30.1
+- @memberjunction/ng-react@5.30.1
+- @memberjunction/ng-shared-generic@5.30.1
+- @memberjunction/ng-trees@5.30.1
+- @memberjunction/graphql-dataprovider@5.30.1
+- @memberjunction/interactive-component-types@5.30.1
+- @memberjunction/core@5.30.1
+- @memberjunction/core-entities@5.30.1
+- @memberjunction/global@5.30.1
+
+## 5.30.0
+
+### Patch Changes
+
+- a00af98: no migration/metadata
+- Updated dependencies [c2c5892]
+- Updated dependencies [68bf87f]
+- Updated dependencies [963f2df]
+- Updated dependencies [4729398]
+- Updated dependencies [9154ac7]
+- Updated dependencies [00b5c26]
+- Updated dependencies [b1f32a4]
+- Updated dependencies [c199f3b]
+  - @memberjunction/core-entities@5.30.0
+  - @memberjunction/core@5.30.0
+  - @memberjunction/graphql-dataprovider@5.30.0
+  - @memberjunction/ng-react@5.30.0
+  - @memberjunction/interactive-component-types@5.30.0
+  - @memberjunction/ng-base-types@5.30.0
+  - @memberjunction/ng-code-editor@5.30.0
+  - @memberjunction/ng-notifications@5.30.0
+  - @memberjunction/ng-query-viewer@5.30.0
+  - @memberjunction/ng-shared-generic@5.30.0
+  - @memberjunction/ng-trees@5.30.0
+  - @memberjunction/ng-export-service@5.30.0
+  - @memberjunction/ng-markdown@5.30.0
+  - @memberjunction/ng-pagination@5.30.0
+  - @memberjunction/global@5.30.0
+
+## 5.29.0
+
+### Patch Changes
+
+- Updated dependencies [e02e24e]
+- Updated dependencies [7006276]
+  - @memberjunction/core@5.29.0
+  - @memberjunction/ng-trees@5.29.0
+  - @memberjunction/core-entities@5.29.0
+  - @memberjunction/ng-base-types@5.29.0
+  - @memberjunction/ng-code-editor@5.29.0
+  - @memberjunction/ng-notifications@5.29.0
+  - @memberjunction/ng-query-viewer@5.29.0
+  - @memberjunction/ng-react@5.29.0
+  - @memberjunction/ng-shared-generic@5.29.0
+  - @memberjunction/graphql-dataprovider@5.29.0
+  - @memberjunction/interactive-component-types@5.29.0
+  - @memberjunction/ng-export-service@5.29.0
+  - @memberjunction/ng-markdown@5.29.0
+  - @memberjunction/ng-pagination@5.29.0
+  - @memberjunction/global@5.29.0
+
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [115e4da]
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/ng-base-types@5.28.0
+  - @memberjunction/ng-code-editor@5.28.0
+  - @memberjunction/ng-notifications@5.28.0
+  - @memberjunction/ng-query-viewer@5.28.0
+  - @memberjunction/ng-react@5.28.0
+  - @memberjunction/ng-shared-generic@5.28.0
+  - @memberjunction/ng-trees@5.28.0
+  - @memberjunction/graphql-dataprovider@5.28.0
+  - @memberjunction/interactive-component-types@5.28.0
+  - @memberjunction/ng-export-service@5.28.0
+  - @memberjunction/ng-markdown@5.28.0
+  - @memberjunction/ng-pagination@5.28.0
+  - @memberjunction/global@5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- Updated dependencies [d18aa6c]
+- Updated dependencies [6c39ff0]
+  - @memberjunction/global@5.27.1
+  - @memberjunction/graphql-dataprovider@5.27.1
+  - @memberjunction/ng-base-types@5.27.1
+  - @memberjunction/ng-code-editor@5.27.1
+  - @memberjunction/ng-notifications@5.27.1
+  - @memberjunction/ng-query-viewer@5.27.1
+  - @memberjunction/ng-react@5.27.1
+  - @memberjunction/ng-shared-generic@5.27.1
+  - @memberjunction/ng-trees@5.27.1
+  - @memberjunction/core@5.27.1
+  - @memberjunction/core-entities@5.27.1
+  - @memberjunction/interactive-component-types@5.27.1
+  - @memberjunction/ng-export-service@5.27.1
+  - @memberjunction/ng-markdown@5.27.1
+  - @memberjunction/ng-pagination@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- Updated dependencies [35cf7d4]
+  - @memberjunction/ng-trees@5.27.0
+  - @memberjunction/ng-base-types@5.27.0
+  - @memberjunction/ng-code-editor@5.27.0
+  - @memberjunction/ng-export-service@5.27.0
+  - @memberjunction/ng-markdown@5.27.0
+  - @memberjunction/ng-notifications@5.27.0
+  - @memberjunction/ng-pagination@5.27.0
+  - @memberjunction/ng-query-viewer@5.27.0
+  - @memberjunction/ng-react@5.27.0
+  - @memberjunction/ng-shared-generic@5.27.0
+  - @memberjunction/graphql-dataprovider@5.27.0
+  - @memberjunction/interactive-component-types@5.27.0
+  - @memberjunction/core@5.27.0
+  - @memberjunction/core-entities@5.27.0
+  - @memberjunction/global@5.27.0
+
 ## 5.26.0
 
 ### Patch Changes

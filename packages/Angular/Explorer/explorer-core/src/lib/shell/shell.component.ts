@@ -22,6 +22,7 @@ import { MJAuthBase } from '@memberjunction/ng-auth-services';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { UserAvatarService } from '@memberjunction/ng-user-avatar';
 import { SettingsDialogService } from './services/settings-dialog.service';
+import { UserSharingCenterDialogService } from './services/user-sharing-center-dialog.service';
 import { LoadingTheme, LoadingAnimationType, AnimationStep, getActiveTheme } from './loading-themes';
 import { AppAccessDialogComponent, AppAccessDialogConfig, AppAccessDialogResult } from './components/dialogs/app-access-dialog.component';
 import { TabContainerComponent } from './components/tabs/tab-container.component';
@@ -29,6 +30,7 @@ import { BaseUserMenu, UserMenuElement, UserMenuItem, UserMenuContext, isUserMen
 import { MJUserEntity, InstanceConfigEngine } from '@memberjunction/core-entities';
 import { CommandPaletteService } from '../command-palette/command-palette.service';
 import { FileOpenService } from '@memberjunction/ng-file-storage';
+import { FeedbackDialogService, FeedbackService } from '@memberjunction/ng-feedback';
 
 /**
  * Main shell component for the new Explorer UX.
@@ -155,13 +157,16 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     private cdr: ChangeDetectorRef,
     private userAvatarService: UserAvatarService,
     private settingsDialogService: SettingsDialogService,
+    private userSharingCenterDialogService: UserSharingCenterDialogService,
     private viewContainerRef: ViewContainerRef,
     private titleService: TitleService,
     public developerModeService: DeveloperModeService,
     private commandPaletteService: CommandPaletteService,
     private themeService: ThemeService,
     private homePinService: HomeAppPinService,
-    private fileOpenService: FileOpenService
+    private fileOpenService: FileOpenService,
+    private feedbackDialogService: FeedbackDialogService,
+    private feedbackService: FeedbackService
   ) {
     // Initialize theme immediately so loading UI shows correct colors from the start
     this.activeTheme = getActiveTheme();
@@ -1915,6 +1920,9 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       await this.developerModeService.Initialize(this.userEntity);
     }
 
+    // Check org-level feedback kill switch (defaults to enabled on error)
+    const feedbackEnabled = await this.feedbackService.IsEnabled();
+
     // Build context for the menu
     const context: UserMenuContext = {
       user: new Metadata().CurrentUser,
@@ -1930,7 +1938,8 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       openSettings: () => this.openSettingsDialog(),
       themePreference: this.themeService.Preference,
       availableThemes: this.themeService.AvailableThemes,
-      appliedTheme: this.themeService.AppliedTheme
+      appliedTheme: this.themeService.AppliedTheme,
+      feedbackEnabled
     };
 
     // Initialize menu
@@ -2023,6 +2032,18 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       await new Promise<void>(resolve => setTimeout(resolve, 0));
       await this.handlePinToHome();
       this.hidePinProgress();
+      return;
+    }
+
+    if (result.message === 'sharing-center') {
+      this.userMenuVisible = false;
+      this.userSharingCenterDialogService.open(this.viewContainerRef);
+      return;
+    }
+
+    if (result.message === 'submit-feedback') {
+      this.userMenuVisible = false;
+      this.ShowFeedbackDialog();
       return;
     }
 
@@ -2559,6 +2580,56 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       },
       IsPinned: false
     });
+  }
+
+  /**
+   * Open the feedback dialog with current workspace context.
+   * Captures a screenshot in the background and attaches it once ready.
+   */
+  async ShowFeedbackDialog(): Promise<void> {
+    // Check if feedback is enabled for this org
+    const enabled = await this.feedbackService.IsEnabled();
+    if (!enabled) {
+      return;
+    }
+
+    const config = this.workspaceManager.GetConfiguration();
+    const currentPage = config?.tabs
+      ?.map(t => t.title)
+      .filter(Boolean)
+      .join(' \u2192 ') || undefined;
+
+    // Open dialog immediately — screenshot loads in background
+    this.feedbackDialogService.OpenFeedbackDialog({ currentPage });
+
+    // Capture screenshot in background and attach when ready
+    this.captureAndAttachFeedbackScreenshot();
+  }
+
+  /**
+   * Capture a screenshot in the background and attach it to the open feedback dialog.
+   */
+  private async captureAndAttachFeedbackScreenshot(): Promise<void> {
+    try {
+      let screenshot: string | undefined;
+      if (this.tabContainerRef) {
+        screenshot = await this.tabContainerRef.CaptureActiveThumbnail();
+      }
+      if (!screenshot) {
+        const contentEl = document.querySelector('.shell-content') as HTMLElement
+          || document.querySelector('mj-tab-container') as HTMLElement;
+        if (contentEl) {
+          screenshot = await this.homePinService.CaptureThumbnail(contentEl);
+        }
+      }
+      if (screenshot) {
+        this.feedbackDialogService.AttachScreenshot(screenshot);
+      } else {
+        this.feedbackDialogService.StopScreenshotLoading();
+      }
+    } catch {
+      this.feedbackDialogService.StopScreenshotLoading();
+    }
   }
 
   // ========================================

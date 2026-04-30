@@ -1,5 +1,174 @@
 # @memberjunction/ng-conversations
 
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ai-agent-client@5.30.1
+- @memberjunction/ai-engine-base@5.30.1
+- @memberjunction/ai@5.30.1
+- @memberjunction/ai-core-plus@5.30.1
+- @memberjunction/ng-testing@5.30.1
+- @memberjunction/ng-agent-client@5.30.1
+- @memberjunction/ng-artifacts@5.30.1
+- @memberjunction/ng-base-types@5.30.1
+- @memberjunction/ng-code-editor@5.30.1
+- @memberjunction/ng-container-directives@5.30.1
+- @memberjunction/ng-forms@5.30.1
+- @memberjunction/ng-markdown@5.30.1
+- @memberjunction/ng-notifications@5.30.1
+- @memberjunction/ng-resource-permissions@5.30.1
+- @memberjunction/ng-shared-generic@5.30.1
+- @memberjunction/ng-tasks@5.30.1
+- @memberjunction/ng-ui-components@5.30.1
+- @memberjunction/graphql-dataprovider@5.30.1
+- @memberjunction/core@5.30.1
+- @memberjunction/core-entities@5.30.1
+- @memberjunction/global@5.30.1
+
+## 5.30.0
+
+### Patch Changes
+
+- c199f3b: Phase 2 of the unified permissions architecture: introduces the `IPermissionProvider` interface with 9 domain providers (Entity, Application Role, Dashboard, Resource, Artifact, AI Agent, Collection, Query, Access Control Rule) aggregated by a new `PermissionEngine` singleton, adds explicit Allow/Deny support to `EntityPermission`, and ships the Permissions admin dashboard. Includes migrations for the Permission Domain catalog, EntityPermission.Type column, Dashboard FK cascade delete, ResourcePermission.SharedByUserID, and UI role permission fixes.
+- 216ddc3: Wrap sequential Save/Delete looops in atomic transcatoins (TransactionGroup client-side BeginTransaction/Commit/Rollback server-side)
+- Updated dependencies [c2c5892]
+- Updated dependencies [68bf87f]
+- Updated dependencies [963f2df]
+- Updated dependencies [4729398]
+- Updated dependencies [9154ac7]
+- Updated dependencies [b1f32a4]
+- Updated dependencies [a00af98]
+- Updated dependencies [c199f3b]
+  - @memberjunction/core-entities@5.30.0
+  - @memberjunction/core@5.30.0
+  - @memberjunction/ai-core-plus@5.30.0
+  - @memberjunction/graphql-dataprovider@5.30.0
+  - @memberjunction/ai-engine-base@5.30.0
+  - @memberjunction/ng-artifacts@5.30.0
+  - @memberjunction/ng-resource-permissions@5.30.0
+  - @memberjunction/ng-testing@5.30.0
+  - @memberjunction/ng-base-types@5.30.0
+  - @memberjunction/ng-code-editor@5.30.0
+  - @memberjunction/ng-notifications@5.30.0
+  - @memberjunction/ng-shared-generic@5.30.0
+  - @memberjunction/ng-tasks@5.30.0
+  - @memberjunction/ai-agent-client@5.30.0
+  - @memberjunction/ng-container-directives@5.30.0
+  - @memberjunction/ng-forms@5.30.0
+  - @memberjunction/ng-agent-client@5.30.0
+  - @memberjunction/ai@5.30.0
+  - @memberjunction/ng-markdown@5.30.0
+  - @memberjunction/ng-ui-components@5.30.0
+  - @memberjunction/global@5.30.0
+
+## 5.29.0
+
+### Patch Changes
+
+- 98bad3a: Auto-populate ContentSizeBytes on artifact version saves; redesign non-image attachement tiles with type badge and restore click-to-open/download behavior
+- Updated dependencies [e02e24e]
+- Updated dependencies [7006276]
+  - @memberjunction/core@5.29.0
+  - @memberjunction/core-entities@5.29.0
+  - @memberjunction/ai-agent-client@5.29.0
+  - @memberjunction/ai-engine-base@5.29.0
+  - @memberjunction/ai-core-plus@5.29.0
+  - @memberjunction/ng-testing@5.29.0
+  - @memberjunction/ng-artifacts@5.29.0
+  - @memberjunction/ng-base-types@5.29.0
+  - @memberjunction/ng-code-editor@5.29.0
+  - @memberjunction/ng-container-directives@5.29.0
+  - @memberjunction/ng-notifications@5.29.0
+  - @memberjunction/ng-shared-generic@5.29.0
+  - @memberjunction/ng-tasks@5.29.0
+  - @memberjunction/graphql-dataprovider@5.29.0
+  - @memberjunction/ng-agent-client@5.29.0
+  - @memberjunction/ng-forms@5.29.0
+  - @memberjunction/ai@5.29.0
+  - @memberjunction/ng-markdown@5.29.0
+  - @memberjunction/ng-ui-components@5.29.0
+  - @memberjunction/global@5.29.0
+
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [115e4da]
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/ng-testing@5.28.0
+  - @memberjunction/ai-agent-client@5.28.0
+  - @memberjunction/ai-engine-base@5.28.0
+  - @memberjunction/ai-core-plus@5.28.0
+  - @memberjunction/ng-artifacts@5.28.0
+  - @memberjunction/ng-base-types@5.28.0
+  - @memberjunction/ng-code-editor@5.28.0
+  - @memberjunction/ng-container-directives@5.28.0
+  - @memberjunction/ng-notifications@5.28.0
+  - @memberjunction/ng-shared-generic@5.28.0
+  - @memberjunction/ng-tasks@5.28.0
+  - @memberjunction/graphql-dataprovider@5.28.0
+  - @memberjunction/ng-agent-client@5.28.0
+  - @memberjunction/ng-forms@5.28.0
+  - @memberjunction/ai@5.28.0
+  - @memberjunction/ng-markdown@5.28.0
+  - @memberjunction/ng-ui-components@5.28.0
+  - @memberjunction/global@5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- Updated dependencies [d18aa6c]
+- Updated dependencies [6c39ff0]
+  - @memberjunction/global@5.27.1
+  - @memberjunction/graphql-dataprovider@5.27.1
+  - @memberjunction/ai-agent-client@5.27.1
+  - @memberjunction/ai-engine-base@5.27.1
+  - @memberjunction/ai@5.27.1
+  - @memberjunction/ai-core-plus@5.27.1
+  - @memberjunction/ng-testing@5.27.1
+  - @memberjunction/ng-agent-client@5.27.1
+  - @memberjunction/ng-artifacts@5.27.1
+  - @memberjunction/ng-base-types@5.27.1
+  - @memberjunction/ng-code-editor@5.27.1
+  - @memberjunction/ng-container-directives@5.27.1
+  - @memberjunction/ng-notifications@5.27.1
+  - @memberjunction/ng-shared-generic@5.27.1
+  - @memberjunction/ng-tasks@5.27.1
+  - @memberjunction/core@5.27.1
+  - @memberjunction/core-entities@5.27.1
+  - @memberjunction/ng-forms@5.27.1
+  - @memberjunction/ng-markdown@5.27.1
+  - @memberjunction/ng-ui-components@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- 4357090: Repair three query composition pipeline regressions surfaced by Skip-Brain, clear test feedback dialog state when switching conversations, strip tag IDs from taxonomy context injected into LLM prompts, exclude in-progress runs from last-run-date lookups, and replace direct UUID equality checks with `UUIDsEqual()` in the AI analytics dashboards to comply with the cross-platform UUID compliance test.
+  - @memberjunction/ng-artifacts@5.27.0
+  - @memberjunction/ai-agent-client@5.27.0
+  - @memberjunction/ai-engine-base@5.27.0
+  - @memberjunction/ai@5.27.0
+  - @memberjunction/ai-core-plus@5.27.0
+  - @memberjunction/ng-testing@5.27.0
+  - @memberjunction/ng-agent-client@5.27.0
+  - @memberjunction/ng-base-types@5.27.0
+  - @memberjunction/ng-code-editor@5.27.0
+  - @memberjunction/ng-container-directives@5.27.0
+  - @memberjunction/ng-forms@5.27.0
+  - @memberjunction/ng-markdown@5.27.0
+  - @memberjunction/ng-notifications@5.27.0
+  - @memberjunction/ng-shared-generic@5.27.0
+  - @memberjunction/ng-tasks@5.27.0
+  - @memberjunction/ng-ui-components@5.27.0
+  - @memberjunction/graphql-dataprovider@5.27.0
+  - @memberjunction/core@5.27.0
+  - @memberjunction/core-entities@5.27.0
+  - @memberjunction/global@5.27.0
+
 ## 5.26.0
 
 ### Patch Changes

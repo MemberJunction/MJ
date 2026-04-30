@@ -122,7 +122,9 @@ export class AutotagEntity extends AutotagBase {
                 .filter((id): id is string => id != null);
             const taxonomyRoot = rootIDs.length === 1 ? rootIDs[0] : undefined;
             const tree = TagEngine.Instance.GetTaxonomyTree(taxonomyRoot);
-            this.engine.TaxonomyContext = JSON.stringify(tree, null, 2);
+            // Strip IDs from the tree before injecting into the LLM prompt.
+            // The LLM occasionally returns UUIDs as tag names when it sees them.
+            this.engine.TaxonomyContext = JSON.stringify(tree, (key, value) => key === 'ID' ? undefined : value, 2);
         }
 
         // Set up the bridge callback for tag taxonomy linking

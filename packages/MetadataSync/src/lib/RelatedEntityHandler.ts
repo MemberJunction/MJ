@@ -71,6 +71,119 @@ export class RelatedEntityHandler {
   }
 
   /**
+   * Batch-load related entities for multiple parent records at once.
+   * Uses a single IN query per chunk instead of N individual queries.
+   */
+  async batchQueryRelatedEntities(
+    parentPrimaryKeys: string[],
+    relationConfig: RelatedEntityConfig,
+    verbose?: boolean
+  ): Promise<Map<string, BaseEntity[]>> {
+    if (parentPrimaryKeys.length === 0) return new Map();
+
+    const CHUNK_SIZE = 1000;
+    const allResults = new Map<string, BaseEntity[]>();
+
+    for (let i = 0; i < parentPrimaryKeys.length; i += CHUNK_SIZE) {
+      const chunk = parentPrimaryKeys.slice(i, i + CHUNK_SIZE);
+      const inClause = chunk.map(id => `'${id.replace(/'/g, "''")}'`).join(', ');
+      let filter = `${relationConfig.foreignKey} IN (${inClause})`;
+      if (relationConfig.filter) {
+        filter += ` AND (${relationConfig.filter})`;
+      }
+
+      if (verbose) {
+        console.log(`Batch loading related entities: ${relationConfig.entity} (${chunk.length} parents)`);
+      }
+
+      const rv = new RunView();
+      const result = await rv.RunView({
+        EntityName: relationConfig.entity,
+        ExtraFilter: filter,
+        ResultType: 'entity_object'
+      }, this.contextUser);
+
+      if (result.Success) {
+        for (const record of result.Results) {
+          const parentId = this.getFieldValue(record, relationConfig.foreignKey);
+          if (parentId) {
+            const parentKey = parentId.toString();
+            if (!allResults.has(parentKey)) {
+              allResults.set(parentKey, []);
+            }
+            allResults.get(parentKey)!.push(record);
+          }
+        }
+
+        if (verbose) {
+          console.log(`Batch loaded ${result.Results.length} related records for ${relationConfig.entity}`);
+        }
+      } else if (verbose) {
+        console.warn(`Batch load failed for ${relationConfig.entity}: ${result.ErrorMessage}`);
+      }
+    }
+
+    return allResults;
+  }
+
+  /**
+   * Load related entities from pre-fetched batch data instead of querying per-parent.
+   * Falls back gracefully when no batch data is available for a given parent.
+   */
+  async loadRelatedEntitiesFromBatch(
+    parentRecord: BaseEntity,
+    relationConfig: RelatedEntityConfig,
+    parentEntityConfig: EntityConfig,
+    existingRelatedEntities: RecordData[],
+    processRecordData: (
+      record: BaseEntity,
+      primaryKey: Record<string, any>,
+      targetDir: string,
+      entityConfig: EntityConfig,
+      verbose?: boolean,
+      isNewRecord?: boolean,
+      existingRecordData?: RecordData,
+      currentDepth?: number,
+      ancestryPath?: Set<string>,
+      fieldOverrides?: Record<string, any>
+    ) => Promise<RecordData>,
+    currentDepth: number,
+    ancestryPath: Set<string>,
+    batchedRelatedRecords: Map<string, BaseEntity[]>,
+    verbose?: boolean
+  ): Promise<RecordData[]> {
+    try {
+      const parentPrimaryKey = this.getRecordPrimaryKey(parentRecord);
+      if (!parentPrimaryKey) {
+        this.logWarning('Unable to determine primary key for parent record', verbose);
+        return [];
+      }
+
+      const relatedRecords = batchedRelatedRecords.get(parentPrimaryKey) || [];
+
+      if (verbose) {
+        console.log(`Using batch data: ${relatedRecords.length} related ${relationConfig.entity} records for parent ${parentPrimaryKey}`);
+      }
+
+      const relatedEntityConfig = this.createRelatedEntityConfig(relationConfig, parentEntityConfig);
+
+      return await this.processRelatedRecords(
+        relatedRecords,
+        relationConfig,
+        relatedEntityConfig,
+        existingRelatedEntities,
+        processRecordData,
+        currentDepth,
+        ancestryPath,
+        verbose
+      );
+    } catch (error) {
+      this.logError(`Error loading related entities from batch for ${relationConfig.entity}`, error, verbose);
+      return [];
+    }
+  }
+
+  /**
    * Queries the database for related entities
    */
   private async queryRelatedEntities(

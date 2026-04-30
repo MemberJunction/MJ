@@ -103,8 +103,20 @@ vi.mock('@memberjunction/core', () => {
             ID = 'user-1';
         },
         BaseEnginePropertyConfig: class MockConfig {},
+        RegisterForStartup: () => () => {},
     };
 });
+
+// ConversationEngine imports ResourcePermissionEngine to pull in shared conversation IDs.
+// Mock it so the engine can be constructed without touching the real cache.
+vi.mock('../custom/ResourcePermissions/ResourcePermissionEngine', () => ({
+    ResourcePermissionEngine: {
+        Instance: {
+            Config: vi.fn().mockResolvedValue(undefined),
+            GetUserAvailableResources: vi.fn().mockReturnValue([]),
+        },
+    },
+}));
 
 vi.mock('../generated/entity_subclasses', () => ({
     MJConversationEntity: class MockConversation {},

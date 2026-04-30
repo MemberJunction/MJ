@@ -21,7 +21,9 @@ import {
   SchemaPreviewObjectInput,
   SchemaPreviewResult,
   DefaultConfigResult,
-  ApplyAllResult
+  ApplyAllResult,
+  SourceObjectListItem,
+  SourceObjectSelectionInput
 } from '@memberjunction/graphql-dataprovider';
 
 /**
@@ -490,6 +492,14 @@ export class IntegrationDataService {
     return em.Save();
   }
 
+  async UpdateSyncDirection(entityMapID: string, direction: 'Pull' | 'Push' | 'Bidirectional'): Promise<boolean> {
+    const md = new Metadata();
+    const em = await md.GetEntityObject<MJCompanyIntegrationEntityMapEntity>('MJ: Company Integration Entity Maps');
+    await em.Load(entityMapID);
+    em.SyncDirection = direction;
+    return em.Save();
+  }
+
   // --- Field Map CRUD ---
 
   async CreateFieldMap(params: {
@@ -646,6 +656,24 @@ export class IntegrationDataService {
     return client.ApplySchemaBatch(items);
   }
 
+  /** Batch Apply All: schema + entity maps + field maps + sync via IntegrationApplyAllBatch */
+  async ApplyAllBatch(
+    companyIntegrationID: string,
+    sourceObjects: SourceObjectSelectionInput[]
+  ): Promise<ApplyAllResult> {
+    const client = this.getIntegrationClient();
+    return client.ApplyAllBatch([{ CompanyIntegrationID: companyIntegrationID, SourceObjects: sourceObjects }]);
+  }
+
+  /**
+   * Lists every source object the external system exposes — thin catalog for
+   * the picker. No per-object describe; that runs later in ApplyAllBatch.
+   */
+  async ListSourceObjects(companyIntegrationID: string): Promise<DiscoveryResult<SourceObjectListItem[]>> {
+    const client = this.getIntegrationClient();
+    return client.ListSourceObjects(companyIntegrationID);
+  }
+
   /** Full automatic "Apply All" flow: pipeline + entity maps + field maps + sync */
   async ApplyAll(
     companyIntegrationID: string,
@@ -787,8 +815,19 @@ export class IntegrationDataService {
     };
   }
 
+  /** Run a directional sync directly via the GraphQL StartSync mutation. */
+  async StartSyncWithDirection(
+    companyIntegrationID: string,
+    fullSync: boolean,
+    syncDirection: 'Pull' | 'Push' | 'Bidirectional'
+  ): Promise<{ Success: boolean; Message: string }> {
+    const provider = Metadata.Provider as GraphQLDataProvider;
+    const client = new GraphQLIntegrationClient(provider);
+    return client.StartSync(companyIntegrationID, undefined, fullSync, syncDirection);
+  }
+
   /** Run an integration sync via the "Run Integration Sync" action */
-  async RunSync(companyIntegrationID: string): Promise<{ Success: boolean; Message: string }> {
+  async RunSync(companyIntegrationID: string, fullSync = false): Promise<{ Success: boolean; Message: string }> {
     const actionID = await this.lookupActionID('Run Integration Sync');
     if (!actionID) {
       return {
@@ -799,9 +838,11 @@ export class IntegrationDataService {
 
     const provider = Metadata.Provider as GraphQLDataProvider;
     const actionClient = new GraphQLActionClient(provider);
-    const result = await actionClient.RunAction(actionID, [
-      { Name: 'CompanyIntegrationID', Value: companyIntegrationID, Type: 'Input' }
-    ]);
+    const params = [
+      { Name: 'CompanyIntegrationID', Value: companyIntegrationID, Type: 'Input' as const },
+      { Name: 'FullSync', Value: fullSync ? 'true' : 'false', Type: 'Input' as const },
+    ];
+    const result = await actionClient.RunAction(actionID, params);
     return { Success: result.Success, Message: result.Message ?? '' };
   }
 

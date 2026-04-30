@@ -13,8 +13,8 @@
  */
 
 import { DataContext } from '@memberjunction/data-context';
+import type { EntityInfo } from '@memberjunction/core';
 import type { SkipMessage } from './conversation-types';
-import type { SkipEntityInfo } from './entity-metadata-types';
 import type { SkipQueryInfo, SkipQueryCatalogEntry } from './query-types';
 import type { SkipAPIRequestAPIKey } from './auth-types';
 import type { SkipAPIArtifact } from './artifact-types';
@@ -139,9 +139,11 @@ export class SkipAPIRequest {
      */
     dataContext?: DataContext;
     /**
-     * Summary entity metadata that is passed into the Skip Server so that Skip has knowledge of the schema of the calling MJAPI environment
+     * Summary entity metadata that is passed into the Skip Server so that Skip has knowledge of the schema of the calling MJAPI environment.
+     * Uses MemberJunction's native EntityInfo type directly — no intermediate conversion needed.
+     * Serialized via EntityInfo.toJSON() and reconstructed via new EntityInfo(data) on the receiving side.
      */
-    entities: SkipEntityInfo[];
+    entities: EntityInfo[];
     /**
      * Stored queries in the MJ metadata that Skip can use and learn from
      */

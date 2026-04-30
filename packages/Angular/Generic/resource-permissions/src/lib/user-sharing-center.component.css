@@ -1,0 +1,218 @@
+.user-sharing-center {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-width: 480px;
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-primary);
+}
+
+.tabs {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface-card);
+}
+
+.tabs .tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border: none;
+    background: transparent;
+    color: var(--mj-text-secondary);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.tabs .tab:hover {
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-primary);
+}
+
+.tabs .tab.active {
+    background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
+}
+
+.tabs .spacer {
+    flex: 1;
+}
+
+.tabs .close {
+    border: none;
+    background: transparent;
+    color: var(--mj-text-muted);
+    cursor: pointer;
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    font-size: 16px;
+}
+
+.tabs .close:hover {
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-primary);
+}
+
+.loading,
+.empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 16px;
+    gap: 12px;
+    color: var(--mj-text-muted);
+    font-size: 14px;
+}
+
+.loading i,
+.empty i {
+    font-size: 28px;
+}
+
+.error {
+    margin: 12px;
+    padding: 10px 12px;
+    border-radius: 4px;
+    background: var(--mj-status-error-bg);
+    color: var(--mj-status-error-text);
+    border: 1px solid var(--mj-status-error-border);
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.group {
+    border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+.group:last-child {
+    border-bottom: none;
+}
+
+.group-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 16px;
+    background: transparent;
+    border: none;
+    color: var(--mj-text-primary);
+    font-weight: 600;
+    font-size: 13px;
+    cursor: pointer;
+    text-align: left;
+}
+
+.group-header:hover {
+    background: var(--mj-bg-surface-hover);
+}
+
+.group-header i:first-child {
+    color: var(--mj-brand-primary);
+    width: 18px;
+    text-align: center;
+}
+
+.group-header .group-name {
+    flex: 1;
+}
+
+.group-header .count {
+    padding: 2px 8px;
+    background: var(--mj-bg-surface-sunken);
+    border-radius: 10px;
+    font-size: 11px;
+    color: var(--mj-text-secondary);
+    font-weight: 600;
+}
+
+.group-header .chevron {
+    color: var(--mj-text-muted);
+    font-size: 12px;
+}
+
+.rows {
+    display: flex;
+    flex-direction: column;
+}
+
+.row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto auto;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 16px 8px 44px;
+    background: transparent;
+    border: none;
+    color: var(--mj-text-primary);
+    cursor: pointer;
+    text-align: left;
+    font-size: 13px;
+    border-top: 1px solid var(--mj-border-subtle);
+}
+
+.row:hover {
+    background: var(--mj-bg-surface-hover);
+}
+
+.row.editable {
+    grid-template-columns: minmax(0, 1fr) auto auto auto auto auto;
+    cursor: default;
+}
+
+.row.editable:hover {
+    background: transparent;
+}
+
+.row .resource {
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.row .resource-type,
+.row .grantee,
+.row .actions,
+.row .expires {
+    color: var(--mj-text-secondary);
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.row .grantee i {
+    margin-right: 4px;
+}
+
+.row .actions {
+    padding: 2px 8px;
+    background: var(--mj-bg-surface-sunken);
+    border-radius: 4px;
+    font-family: var(--mj-font-mono, monospace);
+    font-size: 11px;
+}
+
+.row .revoke {
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    border: none;
+    background: transparent;
+    color: var(--mj-status-error);
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.row .revoke:hover {
+    background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
+}

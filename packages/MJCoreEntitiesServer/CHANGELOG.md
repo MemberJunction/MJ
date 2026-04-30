@@ -1,5 +1,182 @@
 # @memberjunction/core-entities-server
 
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.30.1
+- @memberjunction/ai@5.30.1
+- @memberjunction/ai-core-plus@5.30.1
+- @memberjunction/aiengine@5.30.1
+- @memberjunction/tag-engine@5.30.1
+- @memberjunction/ai-prompts@5.30.1
+- @memberjunction/ai-provider-bundle@5.30.1
+- @memberjunction/ai-vectordb@5.30.1
+- @memberjunction/ai-vector-dupe@5.30.1
+- @memberjunction/ai-vectors-memory@5.30.1
+- @memberjunction/actions-base@5.30.1
+- @memberjunction/doc-utils@5.30.1
+- @memberjunction/generic-database-provider@5.30.1
+- @memberjunction/core@5.30.1
+- @memberjunction/core-entities@5.30.1
+- @memberjunction/global@5.30.1
+- @memberjunction/sql-converter@5.30.1
+- @memberjunction/sql-dialect@5.30.1
+- @memberjunction/sql-parser@5.30.1
+- @memberjunction/sqlserver-dataprovider@5.30.1
+- @memberjunction/skip-types@5.30.1
+
+## 5.30.0
+
+### Minor Changes
+
+- c2c5892: Activate Memory Manager consolidation pipeline with drift prevention, entity-attribute contradiction detection, Ebbinghaus decay-based archival, protection tiers, and composite importance scoring. Adds the `AIAgentNote` consolidation schema (`ConsolidatedIntoNoteID`, `ConsolidationCount`, `DerivedFromNoteIDs`, `ProtectionTier`, `ImportanceScore`) and enforces the vector-store Status invariant write-side in `MJAIAgentNoteEntityServer.Save()` / `.Delete()` so revoked notes are removed from retrieval without an MJAPI restart. Expands Memory Manager observability with per-phase run-step payloads: `scoreDistribution`, `entityTriplesExtracted`, `decayScoreDistribution`, `protectedPreserved`, `ephemeralAccelerated`, consolidation `triggerType` (forced/time/event/count), a new `Verify Consolidation Output` phase-level run step, and per-cluster `Process Consolidation Cluster` child steps. Adds 95th-percentile uniqueness outlier auto-protection in importance scoring. Deprecates the Memory Cleanup Agent in favor of the unified Memory Manager pipeline.
+
+### Patch Changes
+
+- Updated dependencies [c2c5892]
+- Updated dependencies [68bf87f]
+- Updated dependencies [70c054d]
+- Updated dependencies [963f2df]
+- Updated dependencies [4729398]
+- Updated dependencies [4e2da93]
+- Updated dependencies [b1f32a4]
+- Updated dependencies [c199f3b]
+  - @memberjunction/aiengine@5.30.0
+  - @memberjunction/core-entities@5.30.0
+  - @memberjunction/core@5.30.0
+  - @memberjunction/ai-provider-bundle@5.30.0
+  - @memberjunction/actions-base@5.30.0
+  - @memberjunction/ai-core-plus@5.30.0
+  - @memberjunction/ai-engine-base@5.30.0
+  - @memberjunction/tag-engine@5.30.0
+  - @memberjunction/ai-prompts@5.30.0
+  - @memberjunction/ai-vector-dupe@5.30.0
+  - @memberjunction/generic-database-provider@5.30.0
+  - @memberjunction/sqlserver-dataprovider@5.30.0
+  - @memberjunction/doc-utils@5.30.0
+  - @memberjunction/ai-vectordb@5.30.0
+  - @memberjunction/ai-vectors-memory@5.30.0
+  - @memberjunction/skip-types@5.30.0
+  - @memberjunction/ai@5.30.0
+  - @memberjunction/global@5.30.0
+  - @memberjunction/sql-converter@5.30.0
+  - @memberjunction/sql-dialect@5.30.0
+  - @memberjunction/sql-parser@5.30.0
+
+## 5.29.0
+
+### Patch Changes
+
+- e02e24e: Query rendering pipeline redesign: fix Bug D (Nunjucks expression inside SQL string literal breaks ORDER BY detection), consolidate duplicated ORDER BY logic into shared analyzer, add RenderPipeline entry point with diagnostic tracing, introduce structural parser and symbol table for composition IR, and integrate SQL dialect objects throughout the parser removing all hardcoded dialect switch statements. SQL comments are now stripped before template evaluation instead of escaped. Production callers (RunQuery, TestQuerySQL) delegate to RenderPipeline. 65+ new tests including recursive CTEs, PostgreSQL dialect variants, and comment-stripping coverage.
+
+  Query dashboard and form UI improvements: replace flat category dropdowns with hierarchical tree dropdowns, default new query category to active folder context, add per-folder create buttons, expose Reusable/CacheEnabled/AuditQueryRuns fields in entity form Details panel, add saving indicator with spinner overlay, fix sub-entity delete by reloading fresh entity copies, and fix tree dropdown not showing pre-selected text for branch-only configurations. Fix extraction pipeline not cleaning up stale Query Fields and Query Entities when extraction produces no results, with 9 regression tests.
+
+- 98bad3a: Auto-populate ContentSizeBytes on artifact version saves; redesign non-image attachement tiles with type badge and restore click-to-open/download behavior
+- Updated dependencies [e02e24e]
+- Updated dependencies [7006276]
+  - @memberjunction/core@5.29.0
+  - @memberjunction/sql-dialect@5.29.0
+  - @memberjunction/sql-parser@5.29.0
+  - @memberjunction/generic-database-provider@5.29.0
+  - @memberjunction/core-entities@5.29.0
+  - @memberjunction/ai-engine-base@5.29.0
+  - @memberjunction/ai-core-plus@5.29.0
+  - @memberjunction/aiengine@5.29.0
+  - @memberjunction/tag-engine@5.29.0
+  - @memberjunction/ai-prompts@5.29.0
+  - @memberjunction/ai-vectordb@5.29.0
+  - @memberjunction/ai-vector-dupe@5.29.0
+  - @memberjunction/ai-vectors-memory@5.29.0
+  - @memberjunction/actions-base@5.29.0
+  - @memberjunction/doc-utils@5.29.0
+  - @memberjunction/sqlserver-dataprovider@5.29.0
+  - @memberjunction/skip-types@5.29.0
+  - @memberjunction/sql-converter@5.29.0
+  - @memberjunction/ai-provider-bundle@5.29.0
+  - @memberjunction/ai@5.29.0
+  - @memberjunction/global@5.29.0
+
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [fdab4bb]
+- Updated dependencies [115e4da]
+  - @memberjunction/ai-prompts@5.28.0
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/tag-engine@5.28.0
+  - @memberjunction/ai-engine-base@5.28.0
+  - @memberjunction/ai-core-plus@5.28.0
+  - @memberjunction/aiengine@5.28.0
+  - @memberjunction/ai-vectordb@5.28.0
+  - @memberjunction/ai-vector-dupe@5.28.0
+  - @memberjunction/ai-vectors-memory@5.28.0
+  - @memberjunction/actions-base@5.28.0
+  - @memberjunction/doc-utils@5.28.0
+  - @memberjunction/generic-database-provider@5.28.0
+  - @memberjunction/sqlserver-dataprovider@5.28.0
+  - @memberjunction/skip-types@5.28.0
+  - @memberjunction/ai-provider-bundle@5.28.0
+  - @memberjunction/ai@5.28.0
+  - @memberjunction/global@5.28.0
+  - @memberjunction/sql-converter@5.28.0
+  - @memberjunction/sql-parser@5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- Updated dependencies [d18aa6c]
+  - @memberjunction/global@5.27.1
+  - @memberjunction/ai-engine-base@5.27.1
+  - @memberjunction/ai@5.27.1
+  - @memberjunction/ai-core-plus@5.27.1
+  - @memberjunction/aiengine@5.27.1
+  - @memberjunction/tag-engine@5.27.1
+  - @memberjunction/ai-prompts@5.27.1
+  - @memberjunction/ai-vectordb@5.27.1
+  - @memberjunction/ai-vector-dupe@5.27.1
+  - @memberjunction/ai-vectors-memory@5.27.1
+  - @memberjunction/actions-base@5.27.1
+  - @memberjunction/doc-utils@5.27.1
+  - @memberjunction/generic-database-provider@5.27.1
+  - @memberjunction/core@5.27.1
+  - @memberjunction/core-entities@5.27.1
+  - @memberjunction/sqlserver-dataprovider@5.27.1
+  - @memberjunction/skip-types@5.27.1
+  - @memberjunction/ai-provider-bundle@5.27.1
+  - @memberjunction/sql-converter@5.27.1
+  - @memberjunction/sql-parser@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- 4357090: Repair three query composition pipeline regressions surfaced by Skip-Brain, clear test feedback dialog state when switching conversations, strip tag IDs from taxonomy context injected into LLM prompts, exclude in-progress runs from last-run-date lookups, and replace direct UUID equality checks with `UUIDsEqual()` in the AI analytics dashboards to comply with the cross-platform UUID compliance test.
+- Updated dependencies [4357090]
+  - @memberjunction/generic-database-provider@5.27.0
+  - @memberjunction/sql-parser@5.27.0
+  - @memberjunction/sqlserver-dataprovider@5.27.0
+  - @memberjunction/ai-engine-base@5.27.0
+  - @memberjunction/ai@5.27.0
+  - @memberjunction/ai-core-plus@5.27.0
+  - @memberjunction/aiengine@5.27.0
+  - @memberjunction/tag-engine@5.27.0
+  - @memberjunction/ai-prompts@5.27.0
+  - @memberjunction/ai-provider-bundle@5.27.0
+  - @memberjunction/ai-vectordb@5.27.0
+  - @memberjunction/ai-vector-dupe@5.27.0
+  - @memberjunction/ai-vectors-memory@5.27.0
+  - @memberjunction/actions-base@5.27.0
+  - @memberjunction/doc-utils@5.27.0
+  - @memberjunction/core@5.27.0
+  - @memberjunction/core-entities@5.27.0
+  - @memberjunction/global@5.27.0
+  - @memberjunction/sql-converter@5.27.0
+  - @memberjunction/skip-types@5.27.0
+
 ## 5.26.0
 
 ### Patch Changes

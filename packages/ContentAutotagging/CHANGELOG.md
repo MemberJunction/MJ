@@ -1,5 +1,139 @@
 # Change Log - @memberjunction/content-autotagging
 
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.30.1
+- @memberjunction/ai-core-plus@5.30.1
+- @memberjunction/aiengine@5.30.1
+- @memberjunction/tag-engine@5.30.1
+- @memberjunction/tag-engine-base@5.30.1
+- @memberjunction/ai-prompts@5.30.1
+- @memberjunction/ai-provider-bundle@5.30.1
+- @memberjunction/ai-vectors@5.30.1
+- @memberjunction/ai-vectordb@5.30.1
+- @memberjunction/ai-vector-sync@5.30.1
+- @memberjunction/core@5.30.1
+- @memberjunction/core-entities@5.30.1
+- @memberjunction/global@5.30.1
+- @memberjunction/storage@5.30.1
+- @memberjunction/templates@5.30.1
+
+## 5.30.0
+
+### Patch Changes
+
+- Updated dependencies [c2c5892]
+- Updated dependencies [68bf87f]
+- Updated dependencies [70c054d]
+- Updated dependencies [963f2df]
+- Updated dependencies [4729398]
+- Updated dependencies [4e2da93]
+- Updated dependencies [b1f32a4]
+- Updated dependencies [c199f3b]
+  - @memberjunction/aiengine@5.30.0
+  - @memberjunction/core-entities@5.30.0
+  - @memberjunction/core@5.30.0
+  - @memberjunction/ai-provider-bundle@5.30.0
+  - @memberjunction/ai-core-plus@5.30.0
+  - @memberjunction/tag-engine@5.30.0
+  - @memberjunction/ai-prompts@5.30.0
+  - @memberjunction/ai-vectors@5.30.0
+  - @memberjunction/ai-vector-sync@5.30.0
+  - @memberjunction/templates@5.30.0
+  - @memberjunction/tag-engine-base@5.30.0
+  - @memberjunction/storage@5.30.0
+  - @memberjunction/ai-vectordb@5.30.0
+  - @memberjunction/ai@5.30.0
+  - @memberjunction/global@5.30.0
+
+## 5.29.0
+
+### Patch Changes
+
+- Updated dependencies [e02e24e]
+- Updated dependencies [7006276]
+  - @memberjunction/core@5.29.0
+  - @memberjunction/core-entities@5.29.0
+  - @memberjunction/ai-core-plus@5.29.0
+  - @memberjunction/aiengine@5.29.0
+  - @memberjunction/tag-engine@5.29.0
+  - @memberjunction/tag-engine-base@5.29.0
+  - @memberjunction/ai-prompts@5.29.0
+  - @memberjunction/ai-vectors@5.29.0
+  - @memberjunction/ai-vectordb@5.29.0
+  - @memberjunction/ai-vector-sync@5.29.0
+  - @memberjunction/storage@5.29.0
+  - @memberjunction/templates@5.29.0
+  - @memberjunction/ai-provider-bundle@5.29.0
+  - @memberjunction/ai@5.29.0
+  - @memberjunction/global@5.29.0
+
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [fdab4bb]
+- Updated dependencies [115e4da]
+  - @memberjunction/ai-prompts@5.28.0
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/tag-engine@5.28.0
+  - @memberjunction/ai-vector-sync@5.28.0
+  - @memberjunction/ai-core-plus@5.28.0
+  - @memberjunction/aiengine@5.28.0
+  - @memberjunction/tag-engine-base@5.28.0
+  - @memberjunction/ai-vectors@5.28.0
+  - @memberjunction/ai-vectordb@5.28.0
+  - @memberjunction/storage@5.28.0
+  - @memberjunction/templates@5.28.0
+  - @memberjunction/ai-provider-bundle@5.28.0
+  - @memberjunction/ai@5.28.0
+  - @memberjunction/global@5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- Updated dependencies [d18aa6c]
+  - @memberjunction/global@5.27.1
+  - @memberjunction/ai@5.27.1
+  - @memberjunction/ai-core-plus@5.27.1
+  - @memberjunction/aiengine@5.27.1
+  - @memberjunction/tag-engine@5.27.1
+  - @memberjunction/tag-engine-base@5.27.1
+  - @memberjunction/ai-prompts@5.27.1
+  - @memberjunction/ai-vectors@5.27.1
+  - @memberjunction/ai-vectordb@5.27.1
+  - @memberjunction/ai-vector-sync@5.27.1
+  - @memberjunction/core@5.27.1
+  - @memberjunction/core-entities@5.27.1
+  - @memberjunction/storage@5.27.1
+  - @memberjunction/templates@5.27.1
+  - @memberjunction/ai-provider-bundle@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- 4357090: Repair three query composition pipeline regressions surfaced by Skip-Brain, clear test feedback dialog state when switching conversations, strip tag IDs from taxonomy context injected into LLM prompts, exclude in-progress runs from last-run-date lookups, and replace direct UUID equality checks with `UUIDsEqual()` in the AI analytics dashboards to comply with the cross-platform UUID compliance test.
+  - @memberjunction/ai@5.27.0
+  - @memberjunction/ai-core-plus@5.27.0
+  - @memberjunction/aiengine@5.27.0
+  - @memberjunction/tag-engine@5.27.0
+  - @memberjunction/tag-engine-base@5.27.0
+  - @memberjunction/ai-prompts@5.27.0
+  - @memberjunction/ai-provider-bundle@5.27.0
+  - @memberjunction/ai-vectors@5.27.0
+  - @memberjunction/ai-vectordb@5.27.0
+  - @memberjunction/ai-vector-sync@5.27.0
+  - @memberjunction/core@5.27.0
+  - @memberjunction/core-entities@5.27.0
+  - @memberjunction/global@5.27.0
+  - @memberjunction/storage@5.27.0
+  - @memberjunction/templates@5.27.0
+
 ## 5.26.0
 
 ### Patch Changes

@@ -1,5 +1,80 @@
 # @memberjunction/ng-search
 
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ng-shared-generic@5.30.1
+- @memberjunction/graphql-dataprovider@5.30.1
+- @memberjunction/core@5.30.1
+- @memberjunction/core-entities@5.30.1
+- @memberjunction/global@5.30.1
+
+## 5.30.0
+
+### Patch Changes
+
+- 901e81b: Add ARIA labels to icon-only buttons in search components (clear search, hide filters, pagination, expand details, open record/file) to improve screen reader accessibility.
+- Updated dependencies [c2c5892]
+- Updated dependencies [68bf87f]
+- Updated dependencies [963f2df]
+- Updated dependencies [4729398]
+- Updated dependencies [9154ac7]
+- Updated dependencies [b1f32a4]
+- Updated dependencies [c199f3b]
+  - @memberjunction/core-entities@5.30.0
+  - @memberjunction/core@5.30.0
+  - @memberjunction/graphql-dataprovider@5.30.0
+  - @memberjunction/ng-shared-generic@5.30.0
+  - @memberjunction/global@5.30.0
+
+## 5.29.0
+
+### Patch Changes
+
+- Updated dependencies [e02e24e]
+- Updated dependencies [7006276]
+  - @memberjunction/core@5.29.0
+  - @memberjunction/core-entities@5.29.0
+  - @memberjunction/ng-shared-generic@5.29.0
+  - @memberjunction/graphql-dataprovider@5.29.0
+  - @memberjunction/global@5.29.0
+
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [115e4da]
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/ng-shared-generic@5.28.0
+  - @memberjunction/graphql-dataprovider@5.28.0
+  - @memberjunction/global@5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- d18aa6c: Fix XSS vulnerability in highlight match bindings by escaping HTML entities via centralized EscapeHTML utility.
+- Updated dependencies [d18aa6c]
+- Updated dependencies [6c39ff0]
+  - @memberjunction/global@5.27.1
+  - @memberjunction/graphql-dataprovider@5.27.1
+  - @memberjunction/ng-shared-generic@5.27.1
+  - @memberjunction/core@5.27.1
+  - @memberjunction/core-entities@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- a642e3f: Increase search debounce from 200ms to 400ms, add distinctUntilChanged, and add stale-request guards to reduce excessive API calls during typing
+  - @memberjunction/ng-shared-generic@5.27.0
+  - @memberjunction/graphql-dataprovider@5.27.0
+  - @memberjunction/core@5.27.0
+  - @memberjunction/core-entities@5.27.0
+  - @memberjunction/global@5.27.0
+
 ## 5.26.0
 
 ### Patch Changes

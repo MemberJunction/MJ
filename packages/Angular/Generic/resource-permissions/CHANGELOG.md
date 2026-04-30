@@ -1,5 +1,100 @@
 # Change Log - @memberjunction/ng-resource-permissions
 
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ng-base-types@5.30.1
+- @memberjunction/ng-container-directives@5.30.1
+- @memberjunction/ng-generic-dialog@5.30.1
+- @memberjunction/ng-notifications@5.30.1
+- @memberjunction/ng-shared-generic@5.30.1
+- @memberjunction/ng-ui-components@5.30.1
+- @memberjunction/core@5.30.1
+- @memberjunction/core-entities@5.30.1
+- @memberjunction/global@5.30.1
+
+## 5.30.0
+
+### Patch Changes
+
+- c199f3b: Phase 2 of the unified permissions architecture: introduces the `IPermissionProvider` interface with 9 domain providers (Entity, Application Role, Dashboard, Resource, Artifact, AI Agent, Collection, Query, Access Control Rule) aggregated by a new `PermissionEngine` singleton, adds explicit Allow/Deny support to `EntityPermission`, and ships the Permissions admin dashboard. Includes migrations for the Permission Domain catalog, EntityPermission.Type column, Dashboard FK cascade delete, ResourcePermission.SharedByUserID, and UI role permission fixes.
+- Updated dependencies [c2c5892]
+- Updated dependencies [68bf87f]
+- Updated dependencies [963f2df]
+- Updated dependencies [4729398]
+- Updated dependencies [b1f32a4]
+- Updated dependencies [c199f3b]
+  - @memberjunction/core-entities@5.30.0
+  - @memberjunction/core@5.30.0
+  - @memberjunction/ng-base-types@5.30.0
+  - @memberjunction/ng-notifications@5.30.0
+  - @memberjunction/ng-shared-generic@5.30.0
+  - @memberjunction/ng-container-directives@5.30.0
+  - @memberjunction/ng-generic-dialog@5.30.0
+  - @memberjunction/ng-ui-components@5.30.0
+  - @memberjunction/global@5.30.0
+
+## 5.29.0
+
+### Patch Changes
+
+- Updated dependencies [e02e24e]
+- Updated dependencies [7006276]
+  - @memberjunction/core@5.29.0
+  - @memberjunction/core-entities@5.29.0
+  - @memberjunction/ng-base-types@5.29.0
+  - @memberjunction/ng-container-directives@5.29.0
+  - @memberjunction/ng-notifications@5.29.0
+  - @memberjunction/ng-shared-generic@5.29.0
+  - @memberjunction/ng-generic-dialog@5.29.0
+  - @memberjunction/ng-ui-components@5.29.0
+  - @memberjunction/global@5.29.0
+
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [115e4da]
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/ng-base-types@5.28.0
+  - @memberjunction/ng-container-directives@5.28.0
+  - @memberjunction/ng-notifications@5.28.0
+  - @memberjunction/ng-shared-generic@5.28.0
+  - @memberjunction/ng-generic-dialog@5.28.0
+  - @memberjunction/ng-ui-components@5.28.0
+  - @memberjunction/global@5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- Updated dependencies [d18aa6c]
+  - @memberjunction/global@5.27.1
+  - @memberjunction/ng-base-types@5.27.1
+  - @memberjunction/ng-container-directives@5.27.1
+  - @memberjunction/ng-notifications@5.27.1
+  - @memberjunction/ng-shared-generic@5.27.1
+  - @memberjunction/core@5.27.1
+  - @memberjunction/core-entities@5.27.1
+  - @memberjunction/ng-generic-dialog@5.27.1
+  - @memberjunction/ng-ui-components@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- @memberjunction/ng-base-types@5.27.0
+- @memberjunction/ng-container-directives@5.27.0
+- @memberjunction/ng-generic-dialog@5.27.0
+- @memberjunction/ng-notifications@5.27.0
+- @memberjunction/ng-shared-generic@5.27.0
+- @memberjunction/ng-ui-components@5.27.0
+- @memberjunction/core@5.27.0
+- @memberjunction/core-entities@5.27.0
+- @memberjunction/global@5.27.0
+
 ## 5.26.0
 
 ### Patch Changes

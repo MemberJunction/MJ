@@ -155,6 +155,30 @@ MemberJunction supports both standalone and NgModule-declared components. Choose
   ```
 - **Known weak singletons** that need migration: ~26 classes across the codebase including `GraphQLDataProvider`, `UserCache`, `StartupManager`, `RunQuerySQLFilterManager`, `QueueManager`, `SQLExpressionValidator`, `WarningManager`, `AuthProviderFactory`, `MCPClientManager`, `AgentDataPreloader`, and Angular/React services. See GitHub issue tracking this migration.
 
+### 8. NO DYNAMIC `import()` UNLESS NARROWLY JUSTIFIED
+- **Default to static `import ... from '...'` at the top of the file.** Never use `await import('pkg')` or `import('pkg')` inside a function body as a shortcut.
+- **Why**: Dynamic imports hide the dependency from npm, bundlers, and readers. This caused a real shipping bug: MJCLI's `mj app *` commands dynamic-imported `@memberjunction/open-app-engine`, which was never declared in MJCLI's `package.json` — `npm install -g @memberjunction/cli` worked but every `mj app` invocation crashed with `ERR_MODULE_NOT_FOUND` in production. Static imports would have failed the TypeScript build immediately.
+- **Additional problems with dynamic imports**:
+  - Break tree-shaking and bundle analysis
+  - Defeat IDE "Find References" / rename refactors
+  - Obscure circular dependencies (make them silent instead of loud)
+  - Turn compile-time errors into runtime errors
+  - Create confusion about when a module actually loads
+
+#### The ONLY acceptable reasons for dynamic `import()`
+1. **Angular lazy-loaded routes / `loadComponent()`** — framework-required for code splitting.
+2. **Optional peer dependencies** — e.g. cloud SDKs (`@aws-sdk/client-kms`, `@azure/keyvault-keys`) loaded only when that provider is configured. Must be declared in `optionalDependencies` or `peerDependenciesMeta`.
+3. **Genuine bundle-size deferral** — a single heavy module (e.g. `xlsx` in MJExportEngine) loaded only on the code path that needs it, where loading it eagerly measurably hurts startup. Rare.
+4. **Breaking a hard circular dependency** — last resort after you've tried restructuring. Add a comment explaining the cycle and why it can't be untangled.
+5. **Runtime plugin discovery from config/glob** — loading user-supplied resolver/middleware modules whose paths aren't known at build time.
+
+**If your reason isn't on this list, use a static import.** "It's only used in one method" is not a reason. "The package is big" is not a reason unless you've measured the startup cost. "It avoids a dependency declaration" is the exact bug we're trying to prevent.
+
+#### When you do need a dynamic import
+- Add a comment explaining *which* category above it falls under and why a static import won't work.
+- **Still declare the package in `dependencies`** (or `optionalDependencies` / `peerDependencies`). Dynamic import does not exempt you from the dep graph.
+- Prefer a single top-of-module dynamic load behind a memoized promise over repeated `await import()` inside every method.
+
 ---
 
 ## 📚 Development Guides
@@ -686,6 +710,65 @@ protected generateSingleOperation(operation: Operation): string {
 - Use for entity object creation: `const entity = await md.GetEntityObject<EntityType>('Entity Name')`
 - **NEVER** directly instantiate entity classes with `new EntityClass()`
 - **NEVER** look up entity names at runtime - they are fixed in the schema
+
+### Looking Up an EntityInfo by Name — ALWAYS use `EntityByName`
+
+When you need to find an `EntityInfo` from the metadata, **always use `md.EntityByName(name)`**, never `md.Entities.find(...)`.
+
+```typescript
+// ✅ CORRECT — case-insensitive, trim-handling, O(1) lookup via the entity-by-name map
+const entity = new Metadata().EntityByName(params.EntityName);
+if (entity && !this.IsCachingEnabledForEntity(entity)) { ... }
+
+// ❌ WRONG — case-sensitive, whitespace-sensitive, O(N) array scan
+const entity = md.Entities.find(e => e.Name === params.EntityName);
+```
+
+**Why:**
+- `Entities.find(e => e.Name === ...)` is **case-sensitive** and **whitespace-sensitive** by string equality. Real-world callers pass `'channel actions'`, `'Channel Actions'`, or `' Channel Actions '` interchangeably; `find` only matches the exact registered casing. Bugs from this skew slip through code review easily.
+- `EntityByName` lowercases and trims internally, then uses the pre-populated `_entityMapByName` for O(1) resolution. It also handles the unset-Provider case (returns `undefined`) so your code can fail-open on boot.
+- `EntityByName` returns `EntityInfo | undefined`, so always guard with `if (entity)` before dereferencing.
+
+This rule applies to any code that needs to look up a single entity by name. Use `Entities` (the array) only when you genuinely need to iterate over all entities (e.g. to filter by `SchemaName`).
+
+### 🚨 CRITICAL: Don't Reach for the Global `Metadata` Provider in Per-Provider Code Paths
+
+`new Metadata()` and the static `Metadata.Provider` both resolve to the **process-global default provider**. That's fine in single-provider apps, but **wrong** in any code path that may run under a non-default provider — most importantly:
+
+- **Multi-provider client setups** (a client connecting to multiple MJ servers in parallel — each server is a separate `IMetadataProvider` with its own entities, roles, AllowCaching flags, and CurrentUser).
+- **Server-side code servicing multiple tenants/connections** where the active provider is bound to the request, not to the process.
+
+The rule:
+
+1. **If a class instance already owns a provider** (e.g. `ProviderBase`, `BaseEngine`, `BaseEntity`), use **`this`** / **`this.ProviderToUse`** — never `new Metadata()`.
+2. **If a function/method receives a provider via parameter or event**, use **that** provider — never `new Metadata()`. Examples: cache writes pass the provider that produced the data; `BaseEntityEvent.provider` carries the publishing provider for `remote-invalidate` events.
+3. **If neither of the above applies**, accept an optional `provider?: IMetadataProvider` parameter and fall back to the global only as a last resort:
+   ```typescript
+   public DoThing(name: string, provider?: IMetadataProvider) {
+       const md = provider ?? Metadata.Provider;     // explicit fallback
+       const entity = md?.EntityByName(name);
+       // ...
+   }
+   ```
+
+```typescript
+// ❌ WRONG — silently uses the global provider, even if the caller is on a different one
+const md = new Metadata();
+const entity = md.EntityByName(name);
+
+// ✅ CORRECT (inside a provider class) — use `this`, which IS an IMetadataProvider
+const entity = this.EntityByName(name);
+
+// ✅ CORRECT (helper that doesn't own a provider) — accept it as a parameter
+function gateCacheWrite(name: string, provider?: IMetadataProvider) {
+    const md = provider ?? Metadata.Provider;
+    return md?.EntityByName(name);
+}
+```
+
+**Why this matters**: `LocalCacheManager.SetRunViewResult`, `BaseEntityEvent` consumers, `AuthorizationEvaluator`, and `BaseEngine.applyRemoteRecordData` all read per-provider state (entity flags, roles, current user). When they reach for `new Metadata()` in a multi-provider client, they read the wrong server's metadata and produce subtly wrong cache decisions, role evaluations, or entity instances. These are latent bugs that don't surface until parallel-server scenarios exist.
+
+**When `new Metadata()` IS fine**: methods that genuinely operate on the global default — e.g., a one-off CLI script, application bootstrap, a singleton initializer that explicitly registers itself as the global provider.
 
 ### 🚨 CRITICAL: Entity Naming Convention Warning
 
@@ -1587,10 +1670,13 @@ export class EntityFormComponentExtended extends EntityFormComponent {
 
 **Why this works**: The `@RegisterClass` system uses registration order for priority. Since your custom form imports and extends the generated form, it creates a dependency that ensures it compiles AFTER the generated form, giving it higher priority.
 
+**Toolbar pattern**: Entity forms must wrap their content in `<mj-record-form-container>` — NOT `<mj-form-toolbar>` directly. The container owns the panels that the History / Tags / Add-to-List buttons open; a raw toolbar only emits events and those features silently break without the container to handle them. See the toolbar section in the Angular guide below for the exact pattern.
+
 **See [packages/Angular/CLAUDE.md](packages/Angular/CLAUDE.md)** for complete custom form documentation including:
 - Full checklist for creating custom forms
 - Module registration requirements
 - Tree-shaking prevention patterns
+- **Toolbar pattern — `<mj-record-form-container>` vs. `<mj-form-toolbar>`**
 - Examples of existing custom forms
 
 ## Metadata Files and mj-sync

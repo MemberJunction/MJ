@@ -1,5 +1,303 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.30.1
+- @memberjunction/ai-core-plus@5.30.1
+- @memberjunction/ng-auth-services@5.30.1
+- @memberjunction/ng-base-application@5.30.1
+- @memberjunction/ng-dashboards@5.30.1
+- @memberjunction/ng-entity-form-dialog@5.30.1
+- @memberjunction/ng-entity-permissions@5.30.1
+- @memberjunction/ng-explorer-settings@5.30.1
+- @memberjunction/ng-list-detail-grid@5.30.1
+- @memberjunction/ng-shared@5.30.1
+- @memberjunction/ng-ai-test-harness@5.30.1
+- @memberjunction/ng-artifacts@5.30.1
+- @memberjunction/ng-base-forms@5.30.1
+- @memberjunction/ng-container-directives@5.30.1
+- @memberjunction/ng-conversations@5.30.1
+- @memberjunction/ng-dashboard-viewer@5.30.1
+- @memberjunction/ng-entity-viewer@5.30.1
+- @memberjunction/ng-export-service@5.30.1
+- @memberjunction/ng-feedback@5.30.1
+- @memberjunction/ng-file-storage@5.30.1
+- @memberjunction/ng-generic-dialog@5.30.1
+- @memberjunction/ng-notifications@5.30.1
+- @memberjunction/ng-query-viewer@5.30.1
+- @memberjunction/ng-record-changes@5.30.1
+- @memberjunction/ng-record-selector@5.30.1
+- @memberjunction/ng-record-tags@5.30.1
+- @memberjunction/ng-resource-permissions@5.30.1
+- @memberjunction/ng-search@5.30.1
+- @memberjunction/ng-shared-generic@5.30.1
+- @memberjunction/ng-ui-components@5.30.1
+- @memberjunction/ng-user-avatar@5.30.1
+- @memberjunction/ng-word-cloud@5.30.1
+- @memberjunction/communication-types@5.30.1
+- @memberjunction/entity-communications-client@5.30.1
+- @memberjunction/graphql-dataprovider@5.30.1
+- @memberjunction/core@5.30.1
+- @memberjunction/core-entities@5.30.1
+- @memberjunction/export-engine@5.30.1
+- @memberjunction/global@5.30.1
+- @memberjunction/templates-base-types@5.30.1
+
+## 5.30.0
+
+### Patch Changes
+
+- c199f3b: Phase 2 of the unified permissions architecture: introduces the `IPermissionProvider` interface with 9 domain providers (Entity, Application Role, Dashboard, Resource, Artifact, AI Agent, Collection, Query, Access Control Rule) aggregated by a new `PermissionEngine` singleton, adds explicit Allow/Deny support to `EntityPermission`, and ships the Permissions admin dashboard. Includes migrations for the Permission Domain catalog, EntityPermission.Type column, Dashboard FK cascade delete, ResourcePermission.SharedByUserID, and UI role permission fixes.
+- Updated dependencies [901e81b]
+- Updated dependencies [735a618]
+- Updated dependencies [c2c5892]
+- Updated dependencies [11df18d]
+- Updated dependencies [68bf87f]
+- Updated dependencies [963f2df]
+- Updated dependencies [4729398]
+- Updated dependencies [9154ac7]
+- Updated dependencies [b1f32a4]
+- Updated dependencies [a00af98]
+- Updated dependencies [c199f3b]
+- Updated dependencies [216ddc3]
+  - @memberjunction/ng-search@5.30.0
+  - @memberjunction/ng-dashboards@5.30.0
+  - @memberjunction/core-entities@5.30.0
+  - @memberjunction/ng-dashboard-viewer@5.30.0
+  - @memberjunction/core@5.30.0
+  - @memberjunction/ai-core-plus@5.30.0
+  - @memberjunction/graphql-dataprovider@5.30.0
+  - @memberjunction/ai-engine-base@5.30.0
+  - @memberjunction/ng-artifacts@5.30.0
+  - @memberjunction/ng-conversations@5.30.0
+  - @memberjunction/ng-resource-permissions@5.30.0
+  - @memberjunction/ng-explorer-settings@5.30.0
+  - @memberjunction/ng-base-application@5.30.0
+  - @memberjunction/ng-entity-form-dialog@5.30.0
+  - @memberjunction/ng-entity-permissions@5.30.0
+  - @memberjunction/ng-list-detail-grid@5.30.0
+  - @memberjunction/ng-shared@5.30.0
+  - @memberjunction/ng-ai-test-harness@5.30.0
+  - @memberjunction/ng-base-forms@5.30.0
+  - @memberjunction/ng-entity-viewer@5.30.0
+  - @memberjunction/ng-file-storage@5.30.0
+  - @memberjunction/ng-notifications@5.30.0
+  - @memberjunction/ng-query-viewer@5.30.0
+  - @memberjunction/ng-record-changes@5.30.0
+  - @memberjunction/ng-record-selector@5.30.0
+  - @memberjunction/ng-record-tags@5.30.0
+  - @memberjunction/ng-shared-generic@5.30.0
+  - @memberjunction/ng-user-avatar@5.30.0
+  - @memberjunction/communication-types@5.30.0
+  - @memberjunction/entity-communications-client@5.30.0
+  - @memberjunction/templates-base-types@5.30.0
+  - @memberjunction/ng-auth-services@5.30.0
+  - @memberjunction/ng-container-directives@5.30.0
+  - @memberjunction/ng-feedback@5.30.0
+  - @memberjunction/ng-export-service@5.30.0
+  - @memberjunction/ng-generic-dialog@5.30.0
+  - @memberjunction/ng-ui-components@5.30.0
+  - @memberjunction/ng-word-cloud@5.30.0
+  - @memberjunction/export-engine@5.30.0
+  - @memberjunction/global@5.30.0
+
+## 5.29.0
+
+### Patch Changes
+
+- 5c7a57f: Add in-app feedback system with mj-dialog UI, GitHub App authentication for issue creation, and shell header integration. Feedback submissions create formatted GitHub issues with labels, severity, environment info, and browser details.
+- Updated dependencies [e77233c]
+- Updated dependencies [5c7a57f]
+- Updated dependencies [e02e24e]
+- Updated dependencies [5585961]
+- Updated dependencies [7006276]
+- Updated dependencies [90a0fec]
+- Updated dependencies [98bad3a]
+  - @memberjunction/ng-ai-test-harness@5.29.0
+  - @memberjunction/ng-feedback@5.29.0
+  - @memberjunction/core@5.29.0
+  - @memberjunction/ng-dashboards@5.29.0
+  - @memberjunction/ng-file-storage@5.29.0
+  - @memberjunction/core-entities@5.29.0
+  - @memberjunction/ng-conversations@5.29.0
+  - @memberjunction/ai-engine-base@5.29.0
+  - @memberjunction/ai-core-plus@5.29.0
+  - @memberjunction/ng-auth-services@5.29.0
+  - @memberjunction/ng-base-application@5.29.0
+  - @memberjunction/ng-entity-form-dialog@5.29.0
+  - @memberjunction/ng-entity-permissions@5.29.0
+  - @memberjunction/ng-explorer-settings@5.29.0
+  - @memberjunction/ng-list-detail-grid@5.29.0
+  - @memberjunction/ng-shared@5.29.0
+  - @memberjunction/ng-artifacts@5.29.0
+  - @memberjunction/ng-base-forms@5.29.0
+  - @memberjunction/ng-container-directives@5.29.0
+  - @memberjunction/ng-dashboard-viewer@5.29.0
+  - @memberjunction/ng-entity-viewer@5.29.0
+  - @memberjunction/ng-notifications@5.29.0
+  - @memberjunction/ng-query-viewer@5.29.0
+  - @memberjunction/ng-record-changes@5.29.0
+  - @memberjunction/ng-record-selector@5.29.0
+  - @memberjunction/ng-record-tags@5.29.0
+  - @memberjunction/ng-resource-permissions@5.29.0
+  - @memberjunction/ng-search@5.29.0
+  - @memberjunction/ng-shared-generic@5.29.0
+  - @memberjunction/ng-user-avatar@5.29.0
+  - @memberjunction/communication-types@5.29.0
+  - @memberjunction/entity-communications-client@5.29.0
+  - @memberjunction/graphql-dataprovider@5.29.0
+  - @memberjunction/templates-base-types@5.29.0
+  - @memberjunction/ng-export-service@5.29.0
+  - @memberjunction/ng-generic-dialog@5.29.0
+  - @memberjunction/ng-ui-components@5.29.0
+  - @memberjunction/ng-word-cloud@5.29.0
+  - @memberjunction/export-engine@5.29.0
+  - @memberjunction/global@5.29.0
+
+## 5.28.0
+
+### Patch Changes
+
+- Updated dependencies [2542615]
+- Updated dependencies [115e4da]
+  - @memberjunction/ng-dashboards@5.28.0
+  - @memberjunction/ng-shared@5.28.0
+  - @memberjunction/core@5.28.0
+  - @memberjunction/core-entities@5.28.0
+  - @memberjunction/ng-entity-form-dialog@5.28.0
+  - @memberjunction/ng-entity-permissions@5.28.0
+  - @memberjunction/ng-explorer-settings@5.28.0
+  - @memberjunction/ng-list-detail-grid@5.28.0
+  - @memberjunction/ng-ai-test-harness@5.28.0
+  - @memberjunction/ng-file-storage@5.28.0
+  - @memberjunction/ng-record-selector@5.28.0
+  - @memberjunction/ai-engine-base@5.28.0
+  - @memberjunction/ai-core-plus@5.28.0
+  - @memberjunction/ng-auth-services@5.28.0
+  - @memberjunction/ng-base-application@5.28.0
+  - @memberjunction/ng-artifacts@5.28.0
+  - @memberjunction/ng-base-forms@5.28.0
+  - @memberjunction/ng-container-directives@5.28.0
+  - @memberjunction/ng-conversations@5.28.0
+  - @memberjunction/ng-dashboard-viewer@5.28.0
+  - @memberjunction/ng-entity-viewer@5.28.0
+  - @memberjunction/ng-notifications@5.28.0
+  - @memberjunction/ng-query-viewer@5.28.0
+  - @memberjunction/ng-record-changes@5.28.0
+  - @memberjunction/ng-record-tags@5.28.0
+  - @memberjunction/ng-resource-permissions@5.28.0
+  - @memberjunction/ng-search@5.28.0
+  - @memberjunction/ng-shared-generic@5.28.0
+  - @memberjunction/ng-user-avatar@5.28.0
+  - @memberjunction/communication-types@5.28.0
+  - @memberjunction/entity-communications-client@5.28.0
+  - @memberjunction/graphql-dataprovider@5.28.0
+  - @memberjunction/templates-base-types@5.28.0
+  - @memberjunction/ng-export-service@5.28.0
+  - @memberjunction/ng-generic-dialog@5.28.0
+  - @memberjunction/ng-ui-components@5.28.0
+  - @memberjunction/ng-word-cloud@5.28.0
+  - @memberjunction/export-engine@5.28.0
+  - @memberjunction/global@5.28.0
+
+## 5.27.1
+
+### Patch Changes
+
+- 6c39ff0: Replace 30s polling heartbeat with socket-primary server connectivity, using /healthcheck only as a fallback when the GraphQL socket is disconnected. Fix CORS on the /healthcheck route and derive the health URL via `new URL('/healthcheck', base)` so it resolves correctly regardless of the GRAPHQL_URI suffix.
+- Updated dependencies [d18aa6c]
+- Updated dependencies [6c39ff0]
+  - @memberjunction/global@5.27.1
+  - @memberjunction/ng-search@5.27.1
+  - @memberjunction/ng-dashboard-viewer@5.27.1
+  - @memberjunction/graphql-dataprovider@5.27.1
+  - @memberjunction/ai-engine-base@5.27.1
+  - @memberjunction/ai-core-plus@5.27.1
+  - @memberjunction/ng-auth-services@5.27.1
+  - @memberjunction/ng-base-application@5.27.1
+  - @memberjunction/ng-dashboards@5.27.1
+  - @memberjunction/ng-entity-form-dialog@5.27.1
+  - @memberjunction/ng-entity-permissions@5.27.1
+  - @memberjunction/ng-explorer-settings@5.27.1
+  - @memberjunction/ng-list-detail-grid@5.27.1
+  - @memberjunction/ng-shared@5.27.1
+  - @memberjunction/ng-ai-test-harness@5.27.1
+  - @memberjunction/ng-artifacts@5.27.1
+  - @memberjunction/ng-base-forms@5.27.1
+  - @memberjunction/ng-container-directives@5.27.1
+  - @memberjunction/ng-conversations@5.27.1
+  - @memberjunction/ng-entity-viewer@5.27.1
+  - @memberjunction/ng-file-storage@5.27.1
+  - @memberjunction/ng-notifications@5.27.1
+  - @memberjunction/ng-query-viewer@5.27.1
+  - @memberjunction/ng-record-changes@5.27.1
+  - @memberjunction/ng-record-selector@5.27.1
+  - @memberjunction/ng-record-tags@5.27.1
+  - @memberjunction/ng-resource-permissions@5.27.1
+  - @memberjunction/ng-shared-generic@5.27.1
+  - @memberjunction/ng-user-avatar@5.27.1
+  - @memberjunction/communication-types@5.27.1
+  - @memberjunction/entity-communications-client@5.27.1
+  - @memberjunction/core@5.27.1
+  - @memberjunction/core-entities@5.27.1
+  - @memberjunction/templates-base-types@5.27.1
+  - @memberjunction/ng-export-service@5.27.1
+  - @memberjunction/ng-generic-dialog@5.27.1
+  - @memberjunction/ng-ui-components@5.27.1
+  - @memberjunction/ng-word-cloud@5.27.1
+  - @memberjunction/export-engine@5.27.1
+
+## 5.27.0
+
+### Patch Changes
+
+- 6fd2886: Add server connectivity heartbeat service with warning banner that alerts users when the API connection is lost.
+- Updated dependencies [a642e3f]
+- Updated dependencies [348decb]
+- Updated dependencies [4357090]
+- Updated dependencies [6fd2886]
+  - @memberjunction/ng-search@5.27.0
+  - @memberjunction/ng-dashboards@5.27.0
+  - @memberjunction/ng-conversations@5.27.0
+  - @memberjunction/ng-artifacts@5.27.0
+  - @memberjunction/ng-dashboard-viewer@5.27.0
+  - @memberjunction/ai-engine-base@5.27.0
+  - @memberjunction/ai-core-plus@5.27.0
+  - @memberjunction/ng-auth-services@5.27.0
+  - @memberjunction/ng-base-application@5.27.0
+  - @memberjunction/ng-entity-form-dialog@5.27.0
+  - @memberjunction/ng-entity-permissions@5.27.0
+  - @memberjunction/ng-explorer-settings@5.27.0
+  - @memberjunction/ng-list-detail-grid@5.27.0
+  - @memberjunction/ng-shared@5.27.0
+  - @memberjunction/ng-ai-test-harness@5.27.0
+  - @memberjunction/ng-base-forms@5.27.0
+  - @memberjunction/ng-container-directives@5.27.0
+  - @memberjunction/ng-entity-viewer@5.27.0
+  - @memberjunction/ng-export-service@5.27.0
+  - @memberjunction/ng-file-storage@5.27.0
+  - @memberjunction/ng-generic-dialog@5.27.0
+  - @memberjunction/ng-notifications@5.27.0
+  - @memberjunction/ng-query-viewer@5.27.0
+  - @memberjunction/ng-record-changes@5.27.0
+  - @memberjunction/ng-record-selector@5.27.0
+  - @memberjunction/ng-record-tags@5.27.0
+  - @memberjunction/ng-resource-permissions@5.27.0
+  - @memberjunction/ng-shared-generic@5.27.0
+  - @memberjunction/ng-ui-components@5.27.0
+  - @memberjunction/ng-user-avatar@5.27.0
+  - @memberjunction/ng-word-cloud@5.27.0
+  - @memberjunction/communication-types@5.27.0
+  - @memberjunction/entity-communications-client@5.27.0
+  - @memberjunction/graphql-dataprovider@5.27.0
+  - @memberjunction/core@5.27.0
+  - @memberjunction/core-entities@5.27.0
+  - @memberjunction/export-engine@5.27.0
+  - @memberjunction/global@5.27.0
+  - @memberjunction/templates-base-types@5.27.0
+
 ## 5.26.0
 
 ### Patch Changes

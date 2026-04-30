@@ -1,0 +1,37 @@
+[
+  {
+    "fields": {
+      "Name": "Archiving",
+      "Description": "Manage database archiving configurations, view run history, and restore archived records.",
+      "Icon": "fa-solid fa-box-archive",
+      "DefaultForNewUser": false,
+      "DefaultSequence": 1050,
+      "Status": "Active",
+      "DefaultNavItems": [
+        {
+          "Label": "Configuration",
+          "Icon": "fa-solid fa-sliders",
+          "ResourceType": "Custom",
+          "DriverClass": "ArchiveConfigResource",
+          "isDefault": true
+        },
+        {
+          "Label": "Run History",
+          "Icon": "fa-solid fa-clock-rotate-left",
+          "ResourceType": "Custom",
+          "DriverClass": "ArchiveRunsResource"
+        }
+      ]
+    },
+    "relatedEntities": {
+      "MJ: Application Entities": []
+    },
+    "primaryKey": {
+      "ID": "87B3923D-6505-4E5C-A486-CA554CB6A0F0"
+    },
+    "sync": {
+      "lastModified": "2026-04-22T21:09:51.288Z",
+      "checksum": "a3564c416b7840f1c5f325f8d6115f0425c5f793fbbb0aaf817b59036f96bec4"
+    }
+  }
+]

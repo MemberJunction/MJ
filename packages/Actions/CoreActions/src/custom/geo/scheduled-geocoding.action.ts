@@ -3,7 +3,7 @@ import { BaseAction } from '@memberjunction/actions';
 import { RegisterClass, MJGlobal, MJEventType } from '@memberjunction/global';
 import {
     RunView, Metadata, LogStatus, LogError, UserInfo, EntityInfo,
-    CompositeKey, BaseEntity, BaseEntityEvent
+    CompositeKey, BaseEntity, BaseEntityEvent, IMetadataProvider
 } from '@memberjunction/core';
 import { MJRecordGeoCodeEntity } from '@memberjunction/core-entities';
 import { GeoCodeSyncService } from '@memberjunction/geo-core';
@@ -430,6 +430,9 @@ export class ScheduledGeocodingAction extends BaseAction {
         event.type = 'save';
         event.saveSubType = 'update';
         event.baseEntity = entity;
+        // Match BaseEntity.RaiseEvent() contract: include the entity's bound provider so
+        // multi-provider listeners (LocalCacheManager, BaseEngine, …) scope correctly.
+        event.provider = entity.ProviderToUse as unknown as IMetadataProvider | undefined;
         event.payload = null;
 
         MJGlobal.Instance.RaiseEvent({

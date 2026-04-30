@@ -145,6 +145,28 @@ export class BaseUserMenu {
                 enabled: true,
                 tooltip: 'Pin the current resource to your Home dashboard'
             },
+            {
+                id: 'sharing-center',
+                label: 'Sharing Center',
+                icon: 'fa-solid fa-share-nodes',
+                group: 'primary',
+                order: 25,
+                developerOnly: false,
+                visible: true,
+                enabled: true,
+                tooltip: "See what you've shared and what's been shared with you"
+            },
+            {
+                id: 'submit-feedback',
+                label: 'Submit Feedback',
+                icon: 'fa-solid fa-comment-dots',
+                group: 'primary',
+                order: 30,
+                developerOnly: false,
+                visible: this._context?.feedbackEnabled !== false,
+                enabled: true,
+                tooltip: 'Report a bug or request a feature'
+            },
 
             // === DEVELOPER GROUP (Only visible to developers) ===
             {
@@ -436,6 +458,28 @@ export class BaseUserMenu {
             success: true,
             closeMenu: true,
             message: 'pin-to-home'
+        };
+    }
+
+    /**
+     * Handle "Sharing Center" click — signals the shell to open the dialog.
+     * The shell has access to `ViewContainerRef` and the dialog service; the
+     * menu only needs to report the intent.
+     */
+    protected async Handle_sharing_center(): Promise<UserMenuActionResult> {
+        return {
+            success: true,
+            closeMenu: true,
+            message: 'sharing-center'
+        };
+    }
+
+    /** Signal the shell to open the feedback dialog */
+    protected async Handle_submit_feedback(): Promise<UserMenuActionResult> {
+        return {
+            success: true,
+            closeMenu: true,
+            message: 'submit-feedback'
         };
     }
 
