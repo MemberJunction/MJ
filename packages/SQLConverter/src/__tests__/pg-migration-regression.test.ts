@@ -235,16 +235,17 @@ describe.skipIf(!hasMigrations || !hasPGMigrations)('v5 migration regression —
 
   /**
    * Real coverage debt — recent v5.30 T-SQL migrations that need PG ports.
-   * Two of the original six are already converted and committed in the
-   * migrations PR (Runtime_Actions_Schema, Archive_Codegen). The remaining
-   * four hit converter gaps and need either toolchain fixes or hand-ports.
-   * Tracked for v5.30.1; once those land, remove the entry from this set.
+   * Five of the original six are now converted and committed in the migrations
+   * PR (Runtime_Actions_Schema, Archive_Codegen, Memory_Consolidation_Schema,
+   * Unified_Permissions_Phase_2, Scoped_EntityField_SPs — the last 3 verified
+   * functionally equivalent against SQL Server via schema-delta diffing). The
+   * remaining one (Metadata_Sync) is the 964k-line auto-generated metadata dump
+   * that hit a string-literal escaping bug; will be regenerated via mj-sync push
+   * from a known-correct state in v5.30.1 rather than chase escape bugs in
+   * generated content.
    */
   const PENDING_V5_30_PORTS = new Set<string>([
-    'V202604241700__v5.30.x__Unified_Permissions_Phase_2',          // converter MERGE-statement bug
-    'V202604260056__v5.30.x__Memory_Consolidation_Schema',          // sys.check_constraints translation gap
-    'V202604261352__v5.30.x__Scoped_EntityField_SPs',               // hand-port (temp tables + table variables)
-    'V202604271430__v5.30.x__Metadata_Sync',                        // string-literal escaping with embedded ${...}
+    'V202604271430__v5.30.x__Metadata_Sync',                        // 964k-line generated content; regenerate via mj-sync push in v5.30.1
   ]);
 
   // SKIPPED while the PG migration files are split across two PRs (this PG
