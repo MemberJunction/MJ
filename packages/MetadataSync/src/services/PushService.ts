@@ -808,13 +808,20 @@ export class PushService {
 
     let entity: BaseEntity;
 
-    // Record-level skip: if the record has a stored checksum and it matches
-    // the current fields, nothing changed — skip without touching the DB.
-    // The checksum is embedded in the JSON (record.sync.checksum) and was
-    // stored after the last successful save, so a match means fields are identical.
-    // We still add a lightweight stub to the batch context so child records at
-    // later dependency levels can resolve @parent:ID references.
-    if (record.sync?.checksum && record.fields && record.primaryKey && !record.deleteRecord) {
+    // Record-level skip (--incremental only): if the record has a stored
+    // checksum and it matches the current fields, nothing changed — skip
+    // without touching the DB. The checksum is embedded in the JSON
+    // (record.sync.checksum) and was stored after the last successful save,
+    // so a match means fields are identical. We still add a lightweight stub
+    // to the batch context so child records at later dependency levels can
+    // resolve @parent:ID references.
+    //
+    // Gated on options.incremental so non-incremental pushes still load the
+    // entity and reassert JSON values over the DB. This preserves the implicit
+    // drift-correction behavior single-env workflows rely on, and prevents
+    // silent no-ops when seeding a fresh DB from JSON files that already
+    // carry stored checksums from another environment.
+    if (options.incremental && record.sync?.checksum && record.fields && record.primaryKey && !record.deleteRecord) {
       // Use calculateChecksumWithFileContent so @file: reference changes are detected.
       // This reads local files (fast) rather than hitting the DB (slow). The stored
       // checksum was also computed with file content, so the comparison is apples-to-apples.
