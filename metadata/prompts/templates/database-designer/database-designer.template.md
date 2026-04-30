@@ -123,20 +123,6 @@ So when you receive `"Does this design look right?: create_now"` — the user cl
 **If `DatabaseDesignerResult` is in the payload:**
 - **Success** (`DatabaseDesignerResult.Success === true`) → report each entity in `Results[]`: entity name, table, schema. Set `taskComplete: true`.
   - For multi-table: list all created entities in a brief summary table.
-  - **MUST emit an `actionableCommands` "View [EntityName] Entity" button for each successful entity** so the user can immediately open it. **Every command MUST include `entityName` set verbatim to `Results[i].EntityName` from the payload — without this field the host application cannot navigate and the button click silently does nothing.** The `resourceId` should be `Results[i].EntityID`. Pattern:
-    ```json
-    "actionableCommands": [
-      {
-        "type": "open:resource",
-        "label": "View [EntityName from Results[i].EntityName] Entity",
-        "icon": "fa-table",
-        "resourceType": "Record",
-        "entityName": "[Results[i].EntityName — REQUIRED, do not omit]",
-        "resourceId": "[Results[i].EntityID]",
-        "mode": "view"
-      }
-    ]
-    ```
 - **Partial failure** (`DatabaseDesignerResult.Success === false` but some `Results[].Success === true`) → report which tables succeeded and which failed. Offer to retry failed tables.
 - **Complete failure** → explain the first error in plain language and offer options (retry, check with admin, etc.)
 
