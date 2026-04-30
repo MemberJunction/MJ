@@ -240,9 +240,18 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
         _contextUser?: UserInfo
     ): Promise<Array<T>> {
         const processedParams = PGQueryParameterProcessor.ProcessParameters(parameters);
+        // Auto-quote PascalCase identifiers in raw SQL. MJ has lots of hand-written
+        // SQL across resolvers, engines, and dashboard components that uses
+        // unquoted PascalCase identifiers (e.g. `FROM __mj.vwAIAgentRuns`,
+        // `WHERE TestRun IS NULL`). On SQL Server those work because it folds
+        // case-insensitively; on PG they fail because PG folds unquoted
+        // identifiers to lowercase and the actual columns/views are mixed-case.
+        // Tokenizer-based quoting matches what PostgreSQLCodeGenProvider already
+        // does for codegen-time SQL — runtime gets the same treatment.
+        const quotedQuery = this.autoQuoteIdentifiers(query);
         try {
             const source = this._transaction ?? this._connectionManager.Pool;
-            const result = await source.query(query, processedParams);
+            const result = await source.query(quotedQuery, processedParams);
             return result.rows as T[];
         } catch (err) {
             const desc = options?.description ? ` [${options.description}]` : '';
@@ -749,6 +758,239 @@ SELECT
     'Complete'
 FROM ${pgDialect.QuoteSchema(schema, view)} r
 WHERE ${pgDialect.QuoteIdentifier(pkName)} = '${safePKValue}';`;
+    }
+
+    // ─── SQL Auto-Quoting (runtime PG identifier safety) ─────────────
+    //
+    // MJ has many hand-written SQL strings across resolvers, engines, and
+    // dashboard components that use unquoted PascalCase identifiers. On PG,
+    // unquoted identifiers fold to lowercase, which doesn't match the
+    // PascalCase columns/views that codegen creates. We auto-quote those
+    // identifiers at runtime so existing SQL works on both dialects.
+    //
+    // The tokenizer mirrors PostgreSQLCodeGenProvider.quoteSQLForExecution
+    // so codegen-time and runtime apply the same rules. If the codegen
+    // tokenizer changes, this should change too (or be refactored to share).
+
+    private static readonly _SQL_KEYWORDS = new Set([
+        // DML/DDL keywords
+        'SELECT', 'INSERT', 'INTO', 'UPDATE', 'DELETE', 'FROM', 'WHERE', 'AND', 'OR', 'NOT',
+        'JOIN', 'LEFT', 'RIGHT', 'INNER', 'OUTER', 'CROSS', 'FULL', 'ON', 'AS', 'SET',
+        'VALUES', 'NULL', 'LIKE', 'IN', 'EXISTS', 'BETWEEN', 'CASE', 'WHEN', 'THEN',
+        'ELSE', 'END', 'ORDER', 'BY', 'GROUP', 'HAVING', 'LIMIT', 'OFFSET', 'UNION',
+        'ALL', 'CREATE', 'ALTER', 'DROP', 'TABLE', 'INDEX', 'VIEW', 'EXEC', 'DECLARE',
+        'BEGIN', 'COMMIT', 'ROLLBACK', 'TRANSACTION', 'TRUE', 'FALSE', 'IS', 'ASC', 'DESC',
+        'DISTINCT', 'PRIMARY', 'KEY', 'FOREIGN', 'REFERENCES', 'CONSTRAINT', 'DEFAULT',
+        'IF', 'OBJECT', 'TOP', 'WITH', 'OVER', 'PARTITION', 'ROW_NUMBER', 'RANK',
+        'DENSE_RANK', 'LAG', 'LEAD', 'FIRST_VALUE', 'LAST_VALUE', 'ROWS', 'RANGE',
+        'PRECEDING', 'FOLLOWING', 'UNBOUNDED', 'CURRENT', 'ROW', 'FETCH', 'NEXT', 'ONLY',
+        'SCHEMA', 'CASCADE', 'RESTRICT', 'NO', 'ACTION', 'TRIGGER', 'FUNCTION', 'PROCEDURE',
+        'RETURNS', 'RETURN', 'RETURNING', 'EXECUTE', 'CALL', 'RAISE', 'NOTICE', 'EXCEPTION', 'PERFORM',
+        'GRANT', 'REVOKE', 'TO', 'USAGE', 'PRIVILEGES', 'OWNER',
+        'WINDOW', 'FILTER', 'EXCEPT', 'INTERSECT', 'COLLATE', 'TABLESAMPLE',
+        // DDL sub-keywords
+        'ADD', 'COLUMN', 'DO', 'RENAME', 'COMMENT', 'UNIQUE', 'CHECK',
+        'CONFLICT', 'NOTHING', 'EXCLUDED', 'ZONE', 'AT', 'FOR', 'EACH', 'OF',
+        'BEFORE', 'AFTER', 'INSTEAD', 'USING', 'ANY', 'SOME',
+        'ENABLE', 'DISABLE', 'GENERATED', 'ALWAYS', 'IDENTITY',
+        'SECURITY', 'DEFINER', 'INVOKER', 'FORCE', 'COPY',
+        'TEMPORARY', 'TEMP', 'RECURSIVE', 'MATERIALIZED', 'CONCURRENTLY',
+        // PL/pgSQL control flow
+        'NEW', 'OLD', 'FOUND', 'LOOP', 'WHILE', 'EXIT', 'CONTINUE',
+        'ELSIF', 'ELSEIF', 'STRICT',
+        // SQL Server types (still appear in raw SQL fragments at runtime)
+        'NVARCHAR', 'VARCHAR', 'UNIQUEIDENTIFIER', 'DATETIMEOFFSET', 'DATETIME', 'DATETIME2',
+        'BIGINT', 'SMALLINT', 'TINYINT', 'FLOAT', 'REAL', 'DECIMAL', 'NUMERIC', 'MONEY',
+        'BIT', 'INT', 'TEXT', 'NTEXT', 'IMAGE', 'BINARY', 'VARBINARY', 'CHAR', 'NCHAR',
+        'XML', 'GEOGRAPHY', 'GEOMETRY', 'HIERARCHYID', 'SQL_VARIANT', 'SYSNAME',
+        'NEWSEQUENTIALID', 'NEWID', 'GETUTCDATE', 'GETDATE', 'SYSDATETIMEOFFSET',
+        'OBJECT_ID', 'SCOPE_IDENTITY',
+        // Aggregate / scalar functions
+        'COUNT', 'MAX', 'MIN', 'SUM', 'AVG', 'COALESCE', 'CAST', 'CONVERT', 'ISNULL',
+        'LEN', 'LENGTH', 'DATALENGTH', 'LOWER', 'UPPER', 'LTRIM', 'RTRIM', 'TRIM', 'REPLACE',
+        'SUBSTRING', 'CHARINDEX', 'PATINDEX', 'STUFF', 'CONCAT', 'FORMAT',
+        'POSITION', 'OVERLAY', 'EXTRACT', 'GREATEST', 'LEAST',
+        'DATEADD', 'DATEDIFF', 'DATEPART', 'YEAR', 'MONTH', 'DAY', 'HOUR', 'MINUTE',
+        'SECOND', 'NOW', 'CURRENT_TIMESTAMP',
+        // PostgreSQL specific
+        'BOOLEAN', 'SERIAL', 'BIGSERIAL', 'UUID', 'JSONB', 'JSON', 'ARRAY', 'TIMESTAMPTZ',
+        'TIMESTAMP', 'DATE', 'TIME', 'INTERVAL', 'CITEXT', 'INET', 'MACADDR',
+        'GEN_RANDOM_UUID', 'TO_CHAR', 'TO_DATE', 'TO_TIMESTAMP', 'TO_NUMBER',
+        'STRING_AGG', 'ARRAY_AGG', 'UNNEST', 'LATERAL', 'ILIKE',
+        'LANGUAGE', 'PLPGSQL', 'VOLATILE', 'STABLE', 'IMMUTABLE', 'SETOF', 'RECORD',
+        'INOUT', 'OUT', 'VARIADIC', 'PARALLEL', 'SAFE', 'UNSAFE',
+        // information_schema column names
+        'TABLE_SCHEMA', 'TABLE_NAME', 'TABLE_CATALOG', 'COLUMN_NAME', 'DATA_TYPE',
+        'IS_NULLABLE', 'COLUMN_DEFAULT', 'CHARACTER_MAXIMUM_LENGTH', 'NUMERIC_PRECISION',
+        'NUMERIC_SCALE', 'ORDINAL_POSITION', 'COLUMN_COMMENT',
+        // MJ SQL constructs
+        'INFORMATION_SCHEMA', 'COLUMNS', 'TABLES', 'ROUTINES',
+    ]);
+
+    /**
+     * Quotes mixed-case identifiers in a raw SQL string for PostgreSQL.
+     * Walks the string token by token, skipping string literals, dollar-quoted
+     * blocks, already-quoted identifiers, square-bracketed identifiers, and
+     * @-prefixed parameters. Any remaining word that starts with uppercase and
+     * isn't a known SQL keyword gets wrapped in double quotes so PG preserves
+     * the case when resolving it against the schema.
+     *
+     * Idempotent — safe to call on already-quoted SQL (those identifiers are
+     * skipped by `skipDoubleQuotedIdentifier`).
+     */
+    public autoQuoteIdentifiers(sql: string): string {
+        const result: string[] = [];
+        let i = 0;
+        const len = sql.length;
+
+        while (i < len) {
+            const ch = sql[i];
+
+            if (ch === "'") {
+                i = this.skipSingleQuotedString(sql, i, len, result);
+                continue;
+            }
+            if (ch === '$') {
+                i = this.skipDollarQuotedBlock(sql, i, len, result);
+                continue;
+            }
+            if (ch === '"') {
+                i = this.skipDoubleQuotedIdentifier(sql, i, len, result);
+                continue;
+            }
+            if (ch === '[') {
+                i = this.skipBracketedIdentifier(sql, i, len, result);
+                continue;
+            }
+            if (ch === '@') {
+                i = this.skipAtParameter(sql, i, len, result);
+                continue;
+            }
+            if (/[a-zA-Z_]/.test(ch)) {
+                i = this.processWord(sql, i, len, result);
+                continue;
+            }
+
+            result.push(ch);
+            i++;
+        }
+
+        return result.join('');
+    }
+
+    /** Skips a single-quoted string literal, handling escaped quotes ('') */
+    private skipSingleQuotedString(sql: string, start: number, len: number, result: string[]): number {
+        let j = start + 1;
+        while (j < len) {
+            if (sql[j] === "'" && j + 1 < len && sql[j + 1] === "'") {
+                j += 2;
+            } else if (sql[j] === "'") {
+                j++;
+                break;
+            } else {
+                j++;
+            }
+        }
+        result.push(sql.substring(start, j));
+        return j;
+    }
+
+    /**
+     * Skips a dollar-quoted block ($$ ... $$ or $tag$ ... $tag$).
+     * Falls through to literal `$` for PG positional params ($1, $2, etc.):
+     * those start with `$` followed by a digit then a non-`$` character, so
+     * the tag-detection scan finds no closing `$` and we push the lone `$`.
+     */
+    private skipDollarQuotedBlock(sql: string, start: number, len: number, result: string[]): number {
+        let tagEnd = start + 1;
+        if (tagEnd < len && sql[tagEnd] === '$') {
+            // Simple $$ tag
+            tagEnd = start + 2;
+        } else {
+            // Look for $identifier$ pattern
+            while (tagEnd < len && /[a-zA-Z0-9_]/.test(sql[tagEnd])) tagEnd++;
+            if (tagEnd < len && sql[tagEnd] === '$') {
+                tagEnd++;
+            } else {
+                // Not a dollar-quote, just a $ character (e.g. PG positional param $1)
+                result.push(sql[start]);
+                return start + 1;
+            }
+        }
+        const tag = sql.substring(start, tagEnd);
+        const closePos = sql.indexOf(tag, tagEnd);
+        if (closePos !== -1) {
+            const blockEnd = closePos + tag.length;
+            result.push(sql.substring(start, blockEnd));
+            return blockEnd;
+        }
+        // No closing tag found, pass through rest of string
+        result.push(sql.substring(start));
+        return len;
+    }
+
+    /** Skips an already double-quoted identifier */
+    private skipDoubleQuotedIdentifier(sql: string, start: number, len: number, result: string[]): number {
+        let j = start + 1;
+        while (j < len && sql[j] !== '"') j++;
+        if (j < len) j++;
+        result.push(sql.substring(start, j));
+        return j;
+    }
+
+    /** Skips a square-bracketed identifier (SQL Server style; passed through verbatim) */
+    private skipBracketedIdentifier(sql: string, start: number, len: number, result: string[]): number {
+        let j = start + 1;
+        while (j < len && sql[j] !== ']') j++;
+        if (j < len) j++;
+        result.push(sql.substring(start, j));
+        return j;
+    }
+
+    /** Skips an @-prefixed parameter (e.g. @userId for legacy SQL Server-style params) */
+    private skipAtParameter(sql: string, start: number, len: number, result: string[]): number {
+        let j = start + 1;
+        while (j < len && /[a-zA-Z0-9_]/.test(sql[j])) j++;
+        result.push(sql.substring(start, j));
+        return j;
+    }
+
+    /**
+     * Processes a word token — quotes it if it's a mixed-case identifier likely
+     * to be a column or object reference.
+     *
+     * Quoting rules:
+     *  - PascalCase (starts with uppercase) → quote (e.g. `TestRun`, `UserID`)
+     *  - lowercase-first BUT preceded by `.` → quote (e.g. `vwAIAgentRuns`
+     *    in `__mj.vwAIAgentRuns`). MJ's view convention is `vwXxxYyy` —
+     *    we have to recognize them as identifiers even though they don't
+     *    start with uppercase. The `.` prefix tells us we're looking at a
+     *    column/object ref, not an alias.
+     *
+     * camelCase tokens NOT preceded by `.` are left bare so column aliases
+     * (`SELECT count(*) AS myCount`) keep their existing case-folded behavior.
+     * SQL keywords and MJ-internal `__mj_*` names are also passed through.
+     */
+    private processWord(sql: string, start: number, len: number, result: string[]): number {
+        let j = start + 1;
+        while (j < len && /[a-zA-Z0-9_]/.test(sql[j])) j++;
+        const word = sql.substring(start, j);
+
+        const isKeyword = PostgreSQLDataProvider._SQL_KEYWORDS.has(word.toUpperCase());
+        const isAllLower = word === word.toLowerCase();
+        const isMJInternal = word.startsWith('__mj_');
+        const startsUpper = /^[A-Z]/.test(word);
+        const precededByDot = start > 0 && sql[start - 1] === '.';
+
+        const isQuotableIdentifier = !isKeyword && !isAllLower && !isMJInternal
+            && (startsUpper || precededByDot);
+
+        if (isQuotableIdentifier) {
+            result.push(pgDialect.QuoteIdentifier(word));
+        } else {
+            result.push(word);
+        }
+        return j;
     }
 
 }
