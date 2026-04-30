@@ -1,5 +1,5 @@
 import { Injectable, EventEmitter } from '@angular/core';
-import { RunView, CompositeKey, Metadata } from '@memberjunction/core';
+import { RunView, CompositeKey, Metadata, IMetadataProvider } from '@memberjunction/core';
 import { MJComponentEntityExtended } from '@memberjunction/core-entities';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
@@ -189,7 +189,20 @@ export class ComponentStudioStateService {
   /** Emitted when a component spec is updated (e.g. by AI) */
   SpecUpdated = new EventEmitter<ComponentSpec>();
 
-  private metadata: Metadata = new Metadata();
+  private _provider: IMetadataProvider | null = null;
+
+  /** Set the metadata provider this service should use. Components should call this after injection. */
+  public set Provider(value: IMetadataProvider | null) {
+      this._provider = value;
+  }
+
+  public get Provider(): IMetadataProvider {
+      return this._provider ?? Metadata.Provider;
+  }
+
+  private get metadata(): IMetadataProvider {
+    return this.Provider;
+  }
 
   // ============================================================
   // DATA LOADING
@@ -200,7 +213,7 @@ export class ComponentStudioStateService {
     this.StateChanged.emit();
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.Provider);
       const result = await rv.RunView<MJComponentEntityExtended>({
         EntityName: 'MJ: Components',
         ExtraFilter: 'HasRequiredCustomProps = 0',
@@ -415,7 +428,8 @@ export class ComponentStudioStateService {
         currentUserId,
         'MJ: Components',
         CompositeKey.FromID(componentId),
-        !isFavorite
+        !isFavorite,
+        this.metadata.CurrentUser
       );
 
       if (isFavorite) {

@@ -6,6 +6,7 @@ import { MJAIAgentTypeEntity } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
 import { UUIDsEqual } from '@memberjunction/global';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface SubAgentSelectorResult {
   selectedAgents: MJAIAgentEntityExtended[];
   createNew: boolean;
@@ -34,7 +35,7 @@ export interface AgentDisplayItem extends MJAIAgentEntityExtended {
   templateUrl: './sub-agent-selector-dialog.component.html',
   styleUrls: ['./sub-agent-selector-dialog.component.css']
 })
-export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
+export class SubAgentSelectorDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   
   // Input properties set by service
   config!: SubAgentSelectorConfig;
@@ -71,7 +72,8 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
 
   constructor(
     private cdr: ChangeDetectorRef
-  ) {}
+  ) {
+    super();}
 
   ngOnInit() {
     this.initializeData();
@@ -97,7 +99,7 @@ export class SubAgentSelectorDialogComponent implements OnInit, OnDestroy {
   }
 
   private async loadAgentsAndTypes() {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     
     // Load both agents and types in a single batch for better performance
     const results = await rv.RunViews([

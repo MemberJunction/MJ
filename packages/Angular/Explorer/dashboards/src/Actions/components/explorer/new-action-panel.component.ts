@@ -11,11 +11,12 @@ import {
 import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { Metadata, LogError, CompositeKey } from '@memberjunction/core';
+import { LogError, CompositeKey } from '@memberjunction/core';
 import { MJActionCategoryEntity, MJActionEntity } from '@memberjunction/core-entities';
 import { NavigationService } from '@memberjunction/ng-shared';
 import { ActionExplorerStateService } from '../../services/action-explorer-state.service';
 import { UUIDsEqual } from '@memberjunction/global';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 type ActionType = 'Custom' | 'Generated';
 
@@ -37,7 +38,7 @@ type ActionType = 'Custom' | 'Generated';
     ])
   ]
 })
-export class NewActionPanelComponent implements OnInit, OnDestroy {
+export class NewActionPanelComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   @Input() Categories: MJActionCategoryEntity[] = [];
   @Input() PreselectedCategoryId: string | null = null;
   @Output() ActionCreated = new EventEmitter<MJActionEntity>();
@@ -76,7 +77,7 @@ export class NewActionPanelComponent implements OnInit, OnDestroy {
     public StateService: ActionExplorerStateService,
     private navigationService: NavigationService,
     private cdr: ChangeDetectorRef
-  ) {}
+  ) { super(); }
 
   ngOnInit(): void {
     this.StateService.NewActionPanelOpen$.pipe(
@@ -145,7 +146,7 @@ export class NewActionPanelComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const action = await md.GetEntityObject<MJActionEntity>('MJ: Actions');
 
       action.Name = this.Name.trim();

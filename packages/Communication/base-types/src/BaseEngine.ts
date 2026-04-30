@@ -101,7 +101,7 @@ export class CommunicationEngineBase extends BaseEngine<CommunicationEngineBase>
    * Starts a communication run
    */
    protected async StartRun(): Promise<MJCommunicationRunEntity> {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const run = await md.GetEntityObject<MJCommunicationRunEntity>('MJ: Communication Runs', this.ContextUser);
       run.Status = 'Pending';
       run.Direction = 'Sending';
@@ -142,7 +142,7 @@ export class CommunicationEngineBase extends BaseEngine<CommunicationEngineBase>
    * @param run 
    */
    protected async StartLog(processedMessage: ProcessedMessage, run?: MJCommunicationRunEntity): Promise<MJCommunicationLogEntity> {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const log = await md.GetEntityObject<MJCommunicationLogEntity>('MJ: Communication Logs', this.ContextUser);
       log.CommunicationRunID = run?.ID;
       log.Status = 'Pending';

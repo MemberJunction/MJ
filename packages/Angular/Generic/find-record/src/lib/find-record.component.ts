@@ -1,5 +1,6 @@
 import { Component,  EventEmitter,  Input, OnDestroy, OnInit, Output } from '@angular/core';
-import { BaseEntity, EntityFieldInfo, EntityInfo, LogError, Metadata, RunView } from '@memberjunction/core';
+import { BaseEntity, EntityFieldInfo, EntityInfo, LogError, RunView } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { Subject, Subscription } from 'rxjs';
 import { debounceTime, distinctUntilChanged, switchMap } from 'rxjs/operators';
 import {
@@ -24,7 +25,7 @@ ModuleRegistry.registerModules([AllCommunityModule]);
   templateUrl: './find-record.component.html',
   styleUrls: ['./find-record.component.css']
 })
-export class FindRecordComponent implements OnInit, OnDestroy {
+export class FindRecordComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   /**
    * The name of the entity to show records for.
    */
@@ -74,7 +75,7 @@ export class FindRecordComponent implements OnInit, OnDestroy {
  
   ngOnInit() {
     // Fetch the entity metadata based on EntityName
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     this.entityInfo = md.EntityByName(this.EntityName);
     if (!this.entityInfo) {
       LogError(`Entity ${this.EntityName} not found`);

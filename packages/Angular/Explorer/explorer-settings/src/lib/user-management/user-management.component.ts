@@ -85,8 +85,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   };
   
   protected override destroy$ = new Subject<void>();
-  private metadata = new Metadata();
-
+  private get metadata() { return this.ProviderToUse; }
   constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {
     super();
   }
@@ -142,7 +141,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   }
 
   private async loadUsers(): Promise<MJUserEntity[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<MJUserEntity>({
       EntityName: 'MJ: Users',
       ResultType: 'entity_object'
@@ -152,7 +151,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   }
   
   private async loadRoles(): Promise<MJRoleEntity[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<MJRoleEntity>({
       EntityName: 'MJ: Roles',
       ResultType: 'entity_object',
@@ -163,7 +162,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   }
 
   private async loadUserRoles(): Promise<MJUserRoleEntity[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<MJUserRoleEntity>({
       EntityName: 'MJ: User Roles',
       ResultType: 'entity_object'
@@ -549,7 +548,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   private async bulkSetUserStatus(users: MJUserEntity[], isActive: boolean): Promise<void> {
     if (users.length === 0) return;
 
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const tg = await md.CreateTransactionGroup();
     for (const user of users) {
       user.IsActive = isActive;
@@ -568,7 +567,7 @@ export class UserManagementComponent extends BaseDashboard implements OnDestroy 
   private async bulkDeleteUsers(users: MJUserEntity[]): Promise<void> {
     if (users.length === 0) return;
 
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const tg = await md.CreateTransactionGroup();
     for (const user of users) {
       user.TransactionGroup = tg;

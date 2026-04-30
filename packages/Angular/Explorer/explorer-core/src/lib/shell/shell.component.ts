@@ -15,7 +15,8 @@ import {
 } from '@memberjunction/ng-base-application';
 import { Metadata, EntityInfo, LogStatus, StartupManager, CompositeKey } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 , UUIDsEqual } from '@memberjunction/global';
-import { EventCodes, NavigationService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService } from '@memberjunction/ng-shared';
+import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService } from '@memberjunction/ng-shared';
+import { StartupValidationService } from '../services/startup-validation.service';
 import { LogoGradient } from '@memberjunction/ng-shared-generic';
 import { NavItemClickEvent } from './components/header/app-nav.component';
 import { MJAuthBase } from '@memberjunction/ng-auth-services';
@@ -32,6 +33,7 @@ import { CommandPaletteService } from '../command-palette/command-palette.servic
 import { FileOpenService } from '@memberjunction/ng-file-storage';
 import { FeedbackDialogService, FeedbackService } from '@memberjunction/ng-feedback';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 /**
  * Main shell component for the new Explorer UX.
  *
@@ -46,7 +48,7 @@ import { FeedbackDialogService, FeedbackService } from '@memberjunction/ng-feedb
   templateUrl: './shell.component.html',
   styleUrls: ['./shell.component.css']
 })
-export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
+export class ShellComponent extends BaseAngularComponent implements OnInit, OnDestroy, AfterViewInit {
   private subscriptions: Subscription[] = [];
   private urlBasedNavigation = false; // Track if we're loading from a URL
   private initialNavigationComplete = false; // Track if initial navigation has completed
@@ -161,6 +163,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     private viewContainerRef: ViewContainerRef,
     private titleService: TitleService,
     public developerModeService: DeveloperModeService,
+    private startupValidationService: StartupValidationService,
     private commandPaletteService: CommandPaletteService,
     private themeService: ThemeService,
     private homePinService: HomeAppPinService,
@@ -168,6 +171,19 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     private feedbackDialogService: FeedbackDialogService,
     private feedbackService: FeedbackService
   ) {
+    super();
+
+    // Thread the active provider into the bootstrap services that need provider
+    // context. They each fall back to Metadata.Provider when no explicit provider
+    // is set, so this is a no-op for single-provider apps but enables correct
+    // behavior in multi-provider setups.
+    const providerForServices = this.ProviderToUse;
+    this.appManager.Provider = providerForServices;
+    this.workspaceManager.Provider = providerForServices;
+    this.developerModeService.Provider = providerForServices;
+    this.startupValidationService.Provider = providerForServices;
+    if (SharedService.Instance) SharedService.Instance.Provider = providerForServices;
+
     // Initialize theme immediately so loading UI shows correct colors from the start
     this.activeTheme = getActiveTheme();
 
@@ -237,7 +253,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     });
 
     // Get current user
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const user = md.CurrentUser;
     if (!user) {
       throw new Error('No current user found');
@@ -412,7 +428,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.subscriptions.push(
       MJGlobal.Instance.GetEventListener(false).subscribe(async (updateEvent) => {
         if (updateEvent.eventCode === EventCodes.AvatarUpdated) {
-          const md = new Metadata();
+          const md = this.ProviderToUse;
           const currentUserInfo = md.CurrentUser;
           const userEntity = await md.GetEntityObject<any>('MJ: Users');
           await userEntity.Load(currentUserInfo.ID);
@@ -1925,7 +1941,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Build context for the menu
     const context: UserMenuContext = {
-      user: new Metadata().CurrentUser,
+      user: this.ProviderToUse.CurrentUser,
       userEntity: this.userEntity!,
       shell: this as unknown as Record<string, unknown>,
       viewContainerRef: this.viewContainerRef,
@@ -2195,7 +2211,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       const recordId = config['recordId'] as string;
       if (!entityName || !recordId) return null;
 
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const entityInfo = md.Entities.find(e => e.Name === entityName);
       if (!entityInfo) return null;
 
@@ -2348,7 +2364,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   private async loadUserAvatar(currentUserInfo: { ID: string; FirstLast?: string; Name?: string; Email?: string }): Promise<void> {
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       this.userName = currentUserInfo.FirstLast || currentUserInfo.Name || 'User';
       this.userEmail = currentUserInfo.Email || '';
 
@@ -2446,7 +2462,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    * Load searchable entities from metadata
    */
   private async loadSearchableEntities(): Promise<void> {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     this.searchableEntities = md.Entities.filter((e) => e.AllowUserSearchAPI).sort((a, b) => a.Name.localeCompare(b.Name));
     if (this.searchableEntities.length > 0) {
       this.selectedEntity = this.searchableEntities[0];

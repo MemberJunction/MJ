@@ -7,7 +7,7 @@
  * @module @memberjunction/ai-mcp-client/oauth/TokenManager
  */
 
-import { Metadata, RunView, UserInfo, LogError, LogStatus, BaseEntity, CompositeKey } from '@memberjunction/core';
+import { Metadata, RunView, UserInfo, LogError, LogStatus, BaseEntity, CompositeKey, IMetadataProvider } from '@memberjunction/core';
 import { CredentialEngine } from '@memberjunction/credentials';
 import type {
     OAuthTokenSet,
@@ -77,14 +77,15 @@ export class TokenManager {
     public async storeTokens(
         connectionId: string,
         tokens: OAuthTokenSet,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<void> {
         try {
             // Ensure CredentialEngine is loaded
             await CredentialEngine.Instance.Config(false, contextUser);
 
-            const md = new Metadata();
-            const rv = new RunView();
+            const md = provider ?? (new Metadata() as unknown as IMetadataProvider);
+            const rv = RunView.FromMetadataProvider(md);
 
             // Check if OAuthToken record already exists
             const existing = await rv.RunView<{ ID: string; CredentialID: string | null }>({
@@ -571,10 +572,10 @@ export class TokenManager {
      * @param connectionId - MCP Server Connection ID
      * @param contextUser - User context
      */
-    public async revokeCredentials(connectionId: string, contextUser: UserInfo): Promise<void> {
+    public async revokeCredentials(connectionId: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<void> {
         try {
-            const md = new Metadata();
-            const rv = new RunView();
+            const md = provider ?? (new Metadata() as unknown as IMetadataProvider);
+            const rv = RunView.FromMetadataProvider(md);
 
             const existing = await rv.RunView<{ ID: string; CredentialID: string | null }>({
                 EntityName: ENTITY_OAUTH_TOKENS,

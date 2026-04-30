@@ -2459,7 +2459,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
         // first, let's check to see if we have an existing Metadata.Provider registered, if so
         // unless our data.IgnoreExistingMetadata is set to true, we will not refresh the metadata
-        if (Metadata.Provider && !data.IgnoreExistingMetadata) {
+        if (Metadata.Provider && !data.IgnoreExistingMetadata) { // global-provider-ok: bootstrap checks for an existing global registration
             // we have an existing globally registered provider AND we are not
             // requested to ignore the existing metadata, so we will not refresh it
             if (this.CopyMetadataFromGlobalProvider()) {
@@ -2619,8 +2619,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     protected CopyMetadataFromGlobalProvider(): boolean {
         try {
-            if (Metadata.Provider && Metadata.Provider !== this && Metadata.Provider.AllMetadata) { 
-                this._localMetadata = this.CloneAllMetadata(Metadata.Provider.AllMetadata);
+            if (Metadata.Provider && Metadata.Provider !== this && Metadata.Provider.AllMetadata) { // global-provider-ok: this method literally clones FROM the global provider on bootstrap
+                this._localMetadata = this.CloneAllMetadata(Metadata.Provider.AllMetadata); // global-provider-ok: bootstrap clone path
                 return true;
             }
             return false;

@@ -81,7 +81,7 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
     async loadTemplateContents() {
         if (this.record && this.record.ID) {
             try {
-                const rv = new RunView();
+                const rv = RunView.FromMetadataProvider(this.ProviderToUse);
                 const results = await rv.RunView<MJTemplateContentEntity>({
                     EntityName: 'MJ: Template Contents',
                     ExtraFilter: `TemplateID='${this.record.ID}'`,
@@ -112,7 +112,7 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
     }
 
     async createDefaultTemplateContent() {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const defaultContent = await md.GetEntityObject<MJTemplateContentEntity>('MJ: Template Contents');
         defaultContent.TemplateID = this.record.ID;
         defaultContent.Priority = 1;
@@ -151,7 +151,7 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
 
     async loadCategories() {
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const results = await rv.RunView({
                 EntityName: 'MJ: Template Categories' 
             });
@@ -213,7 +213,7 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
 
             try {
                 // Create new category with trimmed name
-                const md = new Metadata();
+                const md = this.ProviderToUse;
                 const newCategory = await md.GetEntityObject<MJTemplateCategoryEntity>('MJ: Template Categories');
                 newCategory.Name = value.trim();
                 newCategory.UserID = this.record.UserID || md.CurrentUser.ID;
@@ -247,7 +247,7 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
     }
 
     async addNewTemplateContent() {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         this.newTemplateContent = await md.GetEntityObject<MJTemplateContentEntity>('MJ: Template Contents');
         this.newTemplateContent.TemplateID = this.record.ID;
         this.newTemplateContent.Priority = this.templateContents.length + 1;
@@ -443,7 +443,7 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
             } else {
                 try {
                     // Create new category with trimmed name
-                    const md = new Metadata();
+                    const md = this.ProviderToUse;
                     const newCategory = await md.GetEntityObject<MJTemplateCategoryEntity>('MJ: Template Categories');
                     newCategory.Name = this.record.CategoryID.trim(); // CategoryID contains the new category name, trim it
                     newCategory.UserID = this.record.UserID || md.CurrentUser.ID;  
@@ -478,7 +478,7 @@ export class MJTemplateFormComponentExtended extends MJTemplateFormComponent imp
         // Call the parent save method to save the template
         // Before saving, if a new record, make sure the UserID is set
         if (!this.record.IsSaved && !this.record.UserID) {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             this.record.UserID = md.CurrentUser.ID;
         }
         const templateSaved = await super.SaveRecord(StopEditModeAfterSave);

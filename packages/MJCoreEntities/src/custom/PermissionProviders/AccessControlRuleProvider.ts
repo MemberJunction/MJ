@@ -1,5 +1,6 @@
 import {
     GranteeType,
+    IMetadataProvider,
     Metadata,
     NormalizedPermission,
     PermissionAction,
@@ -53,15 +54,17 @@ export class AccessControlRuleProvider extends PermissionProviderBase {
     readonly SupportsDeny = false;
     readonly SupportsExpiration = true;
 
-    override GetResourceTypes(): string[] {
-        return new Metadata().Entities.map((e) => e.Name).sort((a, b) => a.localeCompare(b));
+    override GetResourceTypes(provider?: IMetadataProvider): string[] {
+        const md = provider ?? new Metadata();
+        return md.Entities.map((e) => e.Name).sort((a, b) => a.localeCompare(b));
     }
 
     async CheckPermission(
         user: UserInfo,
         resourceType: string,
         resourceId: string | null,
-        action: PermissionAction
+        action: PermissionAction,
+        provider?: IMetadataProvider
     ): Promise<PermissionCheckResult> {
         if (!resourceId) {
             return {
@@ -70,7 +73,7 @@ export class AccessControlRuleProvider extends PermissionProviderBase {
                 Reason: 'ACRs require a specific record ID',
             };
         }
-        const entityId = this.resolveEntityId(resourceType);
+        const entityId = this.resolveEntityId(resourceType, provider);
         if (!entityId) {
             return {
                 Allowed: false,
@@ -91,8 +94,8 @@ export class AccessControlRuleProvider extends PermissionProviderBase {
         };
     }
 
-    async GetEffectivePermissions(user: UserInfo, resourceType: string, resourceId: string): Promise<NormalizedPermission[]> {
-        const entityId = this.resolveEntityId(resourceType);
+    async GetEffectivePermissions(user: UserInfo, resourceType: string, resourceId: string, provider?: IMetadataProvider): Promise<NormalizedPermission[]> {
+        const entityId = this.resolveEntityId(resourceType, provider);
         if (!entityId) return [];
 
         const rows = await this.fetchActiveRules(entityId, resourceId);
@@ -105,7 +108,7 @@ export class AccessControlRuleProvider extends PermissionProviderBase {
         })];
     }
 
-    async GetUserResources(user: UserInfo, resourceType?: string): Promise<NormalizedPermission[]> {
+    async GetUserResources(user: UserInfo, resourceType?: string, provider?: IMetadataProvider): Promise<NormalizedPermission[]> {
         const userRoleIds = (user.UserRoles ?? []).map((ur) => `'${ur.RoleID}'`);
 
         const granteeClauses: string[] = [
@@ -119,7 +122,7 @@ export class AccessControlRuleProvider extends PermissionProviderBase {
 
         let filter = `(${granteeFilter}) AND (ExpiresAt IS NULL OR ExpiresAt > GETUTCDATE())`;
         if (resourceType) {
-            const entityId = this.resolveEntityId(resourceType);
+            const entityId = this.resolveEntityId(resourceType, provider);
             if (!entityId) return [];
             filter = `(${filter}) AND EntityID='${entityId}'`;
         }
@@ -158,8 +161,8 @@ export class AccessControlRuleProvider extends PermissionProviderBase {
         return results;
     }
 
-    async GetResourcePermissions(resourceType: string, resourceId: string): Promise<NormalizedPermission[]> {
-        const entityId = this.resolveEntityId(resourceType);
+    async GetResourcePermissions(resourceType: string, resourceId: string, provider?: IMetadataProvider): Promise<NormalizedPermission[]> {
+        const entityId = this.resolveEntityId(resourceType, provider);
         if (!entityId) return [];
 
         const rows = await this.fetchActiveRules(entityId, resourceId);
@@ -171,7 +174,7 @@ export class AccessControlRuleProvider extends PermissionProviderBase {
                 resourceType, resourceId,
                 granteeType: row.GranteeType as GranteeType,
                 granteeId: row.GranteeID,
-                granteeName: this.resolveGranteeName(row),
+                granteeName: this.resolveGranteeName(row, provider),
                 actions,
                 sourceRecordId: row.ID,
                 expiresAt: row.ExpiresAt ? new Date(row.ExpiresAt) : undefined,
@@ -241,8 +244,8 @@ export class AccessControlRuleProvider extends PermissionProviderBase {
         return results;
     }
 
-    private resolveEntityId(entityName: string): string | null {
-        const md = new Metadata();
+    private resolveEntityId(entityName: string, provider?: IMetadataProvider): string | null {
+        const md = provider ?? new Metadata();
         const entity = md.EntityByName(entityName);
         return entity?.ID ?? null;
     }
@@ -256,11 +259,11 @@ export class AccessControlRuleProvider extends PermissionProviderBase {
         );
     }
 
-    private resolveGranteeName(row: AccessControlRuleRow): string | undefined {
+    private resolveGranteeName(row: AccessControlRuleRow, provider?: IMetadataProvider): string | undefined {
         switch (row.GranteeType) {
             case 'Role':
                 if (!row.GranteeID) return undefined;
-                return new Metadata().Roles.find((r) => UUIDsEqual(r.ID, row.GranteeID!))?.Name;
+                return (provider ?? new Metadata()).Roles.find((r) => UUIDsEqual(r.ID, row.GranteeID!))?.Name;
             case 'Everyone':
                 return 'All authenticated users';
             case 'Public':

@@ -62,10 +62,8 @@ export class GetEntityDetailsAction extends BaseAction {
             const includeRelatedEntityInfo = this.getBooleanParam(params, "includerelatedentityinfo", true);
 
             // Get entity metadata
-            const md = new Metadata();
-            const entity = md.Entities.find(e =>
-                e.Name.toLowerCase() === entityName.toLowerCase()
-            );
+            const md = params.Provider ?? new Metadata();
+            const entity = md.EntityByName(entityName);
 
             if (!entity) {
                 return {

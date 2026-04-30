@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { Metadata } from '@memberjunction/core';
+import { IMetadataProvider, Metadata } from '@memberjunction/core';
 import { MJUserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import {
   EvaluationPreferences,
@@ -12,6 +12,10 @@ import {
  * Service for managing user evaluation display preferences.
  * Persists preferences to MJ: User Settings entity.
  */
+/**
+ * Multi-provider note: callers under a non-default provider should set
+ * `service.Provider = component.ProviderToUse` before invoking any methods.
+ */
 @Injectable({
   providedIn: 'root'
 })
@@ -20,6 +24,14 @@ export class EvaluationPreferencesService {
   private _settingEntity: MJUserSettingEntity | null = null;
   private _loaded = false;
   private _saving = false;
+
+  private _provider: IMetadataProvider | null = null;
+  public get Provider(): IMetadataProvider {
+    return this._provider ?? Metadata.Provider;
+  }
+  public set Provider(value: IMetadataProvider | null) {
+    this._provider = value;
+  }
 
   /** Observable of current evaluation preferences */
   get preferences$(): Observable<EvaluationPreferences> {
@@ -140,7 +152,7 @@ export class EvaluationPreferencesService {
     this._saving = true;
 
     try {
-      const md = new Metadata();
+      const md = this.Provider;
       const userId = md.CurrentUser?.ID;
       if (!userId) {
         this._saving = false;
@@ -155,7 +167,7 @@ export class EvaluationPreferencesService {
         if (existing) {
           this._settingEntity = existing;
         } else {
-          this._settingEntity = await md.GetEntityObject<MJUserSettingEntity>('MJ: User Settings');
+          this._settingEntity = await md.GetEntityObject<MJUserSettingEntity>('MJ: User Settings', md.CurrentUser);
           this._settingEntity.UserID = userId;
           this._settingEntity.Setting = EVALUATION_PREFS_SETTING_KEY;
         }

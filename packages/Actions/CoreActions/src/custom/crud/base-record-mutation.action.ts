@@ -1,6 +1,6 @@
 import { ActionResultSimple, RunActionParams, ActionParam } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
-import { BaseEntity, Metadata, LogError, CompositeKey } from "@memberjunction/core";
+import { BaseEntity, IMetadataProvider, Metadata, LogError, CompositeKey } from "@memberjunction/core";
 
 /**
  * Abstract base class for record mutation actions (Create, Update, Delete).
@@ -70,12 +70,12 @@ export abstract class BaseRecordMutationAction extends BaseAction {
     /**
      * Get entity metadata and create entity object
      */
-    protected async getEntityObject(entityName: string, contextUser: any): Promise<{ 
-        entity?: BaseEntity; 
+    protected async getEntityObject(entityName: string, contextUser: any, provider?: IMetadataProvider): Promise<{
+        entity?: BaseEntity;
         entityInfo?: any;
-        error?: ActionResultSimple 
+        error?: ActionResultSimple
     }> {
-        const md = new Metadata();
+        const md = provider ?? new Metadata();
         const entityInfo = md.EntityByName(entityName);
         
         if (!entityInfo) {

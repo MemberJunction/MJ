@@ -1,7 +1,7 @@
 import { RegisterClass, UUIDsEqual, NormalizeUUID } from "@memberjunction/global";
 import { AutotagBase, AutotagProgressCallback } from "../../Core";
 import { AutotagBaseEngine, ContentSourceParams } from "../../Engine";
-import { UserInfo, Metadata, RunView, LogStatus, LogError } from "@memberjunction/core";
+import { IMetadataProvider, UserInfo, Metadata, RunView, LogStatus, LogError } from "@memberjunction/core";
 import {
     MJContentSourceEntity, MJContentItemEntity, MJContentItemTagEntity,
     MJEntityDocumentEntity, MJEntityRecordDocumentEntity,
@@ -36,7 +36,8 @@ export class AutotagEntity extends AutotagBase {
     /** Cached content source entities keyed by normalized source ID for ERD lookups */
     private contentSourceMap = new Map<string, MJContentSourceEntity>();
 
-    public async Autotag(contextUser: UserInfo, onProgress?: AutotagProgressCallback, contentSourceIDs?: string[]): Promise<number> {
+    public async Autotag(contextUser: UserInfo, onProgress?: AutotagProgressCallback, contentSourceIDs?: string[], provider?: IMetadataProvider): Promise<number> {
+        if (provider) this._provider = provider;
         this.contextUser = contextUser;
         this.engine = AutotagBaseEngine.Instance;
         this.contentSourceTypeID = this.engine.SetSubclassContentSourceType('Entity');
@@ -279,8 +280,8 @@ export class AutotagEntity extends AutotagBase {
         }
 
         // Resolve the entity name from metadata
-        const md = new Metadata();
-        const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityID));
+        const md = this.ProviderToUse;
+        const entityInfo = md.EntityByID(entityID);
         if (!entityInfo) {
             LogError(`AutotagEntity: entity with ID ${entityID} not found in metadata`);
             return [];
@@ -479,7 +480,7 @@ export class AutotagEntity extends AutotagBase {
         documentText: string,
         existingERDs: Map<string, MJEntityRecordDocumentEntity>
     ): Promise<MJEntityRecordDocumentEntity> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         let erd = existingERDs.get(recordID);
 
         if (erd) {
@@ -521,7 +522,7 @@ export class AutotagEntity extends AutotagBase {
         record: Record<string, unknown>,
         existingContentItems: Map<string, MJContentItemEntity>
     ): Promise<MJContentItemEntity | null> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const erdNormalizedID = NormalizeUUID(erd.ID);
         const existing = existingContentItems.get(erdNormalizedID);
 

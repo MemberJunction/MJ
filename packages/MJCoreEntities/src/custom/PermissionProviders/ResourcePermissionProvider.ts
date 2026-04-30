@@ -1,5 +1,6 @@
 import {
     GranteeType,
+    IMetadataProvider,
     Metadata,
     NormalizedPermission,
     PermissionAction,
@@ -43,7 +44,8 @@ export class ResourcePermissionProvider extends PermissionProviderBase {
         user: UserInfo,
         resourceType: string,
         resourceId: string | null,
-        action: PermissionAction
+        action: PermissionAction,
+        _provider?: IMetadataProvider
     ): Promise<PermissionCheckResult> {
         if (!resourceId) {
             return {
@@ -73,7 +75,7 @@ export class ResourcePermissionProvider extends PermissionProviderBase {
         };
     }
 
-    async GetEffectivePermissions(user: UserInfo, resourceType: string, resourceId: string): Promise<NormalizedPermission[]> {
+    async GetEffectivePermissions(user: UserInfo, resourceType: string, resourceId: string, _provider?: IMetadataProvider): Promise<NormalizedPermission[]> {
         const resourceTypeId = this.resolveResourceTypeId(resourceType);
         if (!resourceTypeId) return [];
 
@@ -87,7 +89,7 @@ export class ResourcePermissionProvider extends PermissionProviderBase {
         })];
     }
 
-    async GetUserResources(user: UserInfo, resourceType?: string): Promise<NormalizedPermission[]> {
+    async GetUserResources(user: UserInfo, resourceType?: string, _provider?: IMetadataProvider): Promise<NormalizedPermission[]> {
         const engine = ResourcePermissionEngine.Instance;
 
         let resourceTypeId: string | undefined;
@@ -114,12 +116,12 @@ export class ResourcePermissionProvider extends PermissionProviderBase {
         return results;
     }
 
-    async GetResourcePermissions(resourceType: string, resourceId: string): Promise<NormalizedPermission[]> {
+    async GetResourcePermissions(resourceType: string, resourceId: string, provider?: IMetadataProvider): Promise<NormalizedPermission[]> {
         const resourceTypeId = this.resolveResourceTypeId(resourceType);
         if (!resourceTypeId) return [];
 
         const engine = ResourcePermissionEngine.Instance;
-        const md = new Metadata();
+        const md = provider ?? new Metadata();
         const rows = engine.GetResourcePermissions(resourceTypeId, resourceId);
         const results: NormalizedPermission[] = [];
         for (const p of rows) {

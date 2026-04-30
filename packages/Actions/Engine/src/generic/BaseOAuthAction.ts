@@ -1,16 +1,29 @@
 import { BaseAction } from './BaseAction';
-import { ActionParam } from '@memberjunction/actions-base';
+import { ActionParam, RunActionParams } from '@memberjunction/actions-base';
 import { MJCompanyIntegrationEntity, MJCompanyIntegrationEntityType, MJIntegrationEntity } from '@memberjunction/core-entities';
-import { Metadata, RunView, LogError, LogStatus } from '@memberjunction/core';
+import { IMetadataProvider, Metadata, RunView, LogError, LogStatus } from '@memberjunction/core';
 import { ActionResultSimple } from '@memberjunction/actions-base';
 
 /**
  * Base class for actions that require OAuth authentication.
  * Provides common OAuth token management functionality including retrieval,
  * refresh, and error handling.
+ *
+ * **Multi-provider note:** OAuth actions run server-side and must respect the per-request
+ * provider passed in `RunActionParams.Provider`. Subclasses pass their `params` to
+ * {@link initializeOAuth}; the base class stores the resolved provider on `this` so all
+ * subsequent entity loads (`_companyIntegration.Save()`, etc.) bind to the same connection.
  */
 export abstract class BaseOAuthAction extends BaseAction {
-    private _metadata: Metadata = new Metadata();
+    /**
+     * The metadata provider used for entity operations on this action instance. Set by
+     * `initializeOAuth` from `params.Provider`, falling back to the global default when no
+     * provider was supplied (e.g., legacy callers or non-server contexts).
+     */
+    private _provider?: IMetadataProvider;
+    private get providerToUse(): IMetadataProvider {
+        return this._provider ?? (new Metadata() as unknown as IMetadataProvider);
+    }
     protected _companyIntegration: MJCompanyIntegrationEntity | null = null;
     protected _integration: MJIntegrationEntity | null = null;
 
@@ -28,12 +41,24 @@ export abstract class BaseOAuthAction extends BaseAction {
     }
 
     /**
-     * Initialize OAuth connection by loading integration details
+     * Initialize OAuth connection by loading integration details.
+     *
+     * @param companyIntegrationId - the MJ Company Integration ID to load
+     * @param params - the running action's params; `params.Provider` is captured so all
+     *   subsequent entity loads/saves bind to the per-request provider (multi-tenant
+     *   correctness). When omitted, falls back to the global default Metadata provider.
      */
-    protected async initializeOAuth(companyIntegrationId: string): Promise<boolean> {
+    protected async initializeOAuth(
+        companyIntegrationId: string,
+        params?: RunActionParams
+    ): Promise<boolean> {
         try {
+            // Capture the per-request provider for this action instance — every subsequent
+            // entity operation (load + save) routes through it instead of the global default.
+            this._provider = params?.Provider ?? this._provider;
+
             // Load company integration
-            const ci = await this._metadata.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
+            const ci = await this.providerToUse.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', params?.ContextUser);
             if (!ci) {
                 throw new Error('Failed to create CompanyIntegration entity object');
             }
@@ -45,7 +70,7 @@ export abstract class BaseOAuthAction extends BaseAction {
             this._companyIntegration = ci;
 
             // Load integration details
-            const integration = await this._metadata.GetEntityObject<MJIntegrationEntity>('MJ: Integrations');
+            const integration = await this.providerToUse.GetEntityObject<MJIntegrationEntity>('MJ: Integrations', params?.ContextUser);
             if (!integration || !await integration.Load(ci.IntegrationID)) {
                 throw new Error(`Integration not found: ${ci.IntegrationID}`);
             }

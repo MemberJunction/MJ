@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
-import { RunView, UserInfo } from '@memberjunction/core';
+import { RunView, UserInfo, Metadata, IMetadataProvider } from '@memberjunction/core';
 
 export type ExportFormat = 'json' | 'markdown' | 'html' | 'text';
 
@@ -15,6 +15,19 @@ export interface ExportOptions {
   providedIn: 'root'
 })
 export class ExportService {
+  private _provider: IMetadataProvider | null = null;
+
+  /**
+   * Set the metadata provider this service should use. When unset, falls back to Metadata.Provider.
+   */
+  public set Provider(value: IMetadataProvider | null) {
+      this._provider = value;
+  }
+
+  public get Provider(): IMetadataProvider {
+      return this._provider ?? Metadata.Provider;
+  }
+
   async exportConversation(
     conversationId: string,
     format: ExportFormat,
@@ -67,7 +80,7 @@ export class ExportService {
     conversationId: string,
     currentUser: UserInfo
   ): Promise<{ conversation: MJConversationEntity; details: MJConversationDetailEntity[] }> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
 
     // Load conversation and details in parallel
     const [conversationResult, detailsResult] = await rv.RunViews([

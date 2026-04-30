@@ -128,7 +128,7 @@ export class WatermarkService {
         contextUser: UserInfo,
         direction: 'Pull' | 'Push' = 'Pull'
     ): Promise<void> {
-        const md = new Metadata();
+        const md = new Metadata();  // global-provider-ok: watermark service — single-provider context
         const watermark = await md.GetEntityObject<MJCompanyIntegrationSyncWatermarkEntity>(
             'MJ: Company Integration Sync Watermarks',
             contextUser

@@ -75,6 +75,7 @@ export class ActivityComponent extends BaseResourceComponent implements OnInit {
 
   async ngOnInit(): Promise<void> {
     super.ngOnInit();
+    this.dataService.Provider = this.ProviderToUse;
     await this.LoadData();
     this.NotifyLoadComplete();
   }

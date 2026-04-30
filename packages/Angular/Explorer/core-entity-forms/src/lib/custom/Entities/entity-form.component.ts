@@ -264,8 +264,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
 
     private destroy$ = new Subject<void>();
     private stateChange$ = new Subject<void>();
-    private _metadata = new Metadata();
-
+    private get _metadata() { return this.ProviderToUse; }
     override async ngOnInit(): Promise<void> {
         await super.ngOnInit();
         this.setupStateManagement();
@@ -340,7 +339,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
         this.cdr.markForCheck();
 
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView({
                 EntityName: this.entity.Name,
                 ResultType: 'count_only'
@@ -563,7 +562,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
         this.cdr.markForCheck();
 
         // Load counts in parallel using count_only for efficiency
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const countPromises = this.ChildEntities.map(async (child, index) => {
             const result = await rv.RunView({
                 EntityName: child.Name,
@@ -1001,7 +1000,7 @@ export class MJEntityFormComponentExtended extends MJEntityFormComponent impleme
     /** All entities available as potential IS-A parents (excluding self and descendants) */
     public get AvailableParentEntities(): EntityInfo[] {
         if (!this.entity) return [];
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const descendantIds = new Set<string>();
         const collectDescendants = (e: EntityInfo): void => {
             descendantIds.add(e.ID);

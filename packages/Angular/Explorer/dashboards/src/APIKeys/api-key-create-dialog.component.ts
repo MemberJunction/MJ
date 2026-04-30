@@ -1,7 +1,7 @@
 import { Component, EventEmitter, HostListener, Input, OnInit, Output } from '@angular/core';
-import { Metadata } from '@memberjunction/core';
 import { MJAPIScopeEntity } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, GraphQLEncryptionClient } from '@memberjunction/graphql-dataprovider';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { APIKeysEngineBase, parseAPIScopeUIConfig } from '@memberjunction/api-keys-base';
 
 /** Scope selection item */
@@ -37,7 +37,7 @@ export interface APIKeyCreateResult {
     templateUrl: './api-key-create-dialog.component.html',
     styleUrls: ['./api-key-create-dialog.component.css']
 })
-export class APIKeyCreateDialogComponent implements OnInit {
+export class APIKeyCreateDialogComponent extends BaseAngularComponent implements OnInit {
     @Input() Visible = false;
     @Output() VisibleChange = new EventEmitter<boolean>();
     @Output() Created = new EventEmitter<APIKeyCreateResult>();
@@ -239,7 +239,7 @@ export class APIKeyCreateDialogComponent implements OnInit {
                 .map(s => s.scope.ID);
 
             // Get the GraphQL provider and create the encryption client
-            const provider = Metadata.Provider as GraphQLDataProvider;
+            const provider = this.ProviderToUse as GraphQLDataProvider;
             const encryptionClient = new GraphQLEncryptionClient(provider);
 
             // Call the server to create the API key with proper crypto hashing

@@ -153,8 +153,7 @@ export class UserViewResource extends BaseResourceComponent {
     public isExporting: boolean = false;
 
     private dataLoaded = false;
-    private metadata = new Metadata();
-
+    private get metadata() { return this.ProviderToUse; }
     constructor(
         private cdr: ChangeDetectorRef,
         private exportService: ExportService
@@ -405,7 +404,7 @@ export class UserViewResource extends BaseResourceComponent {
             throw new Error('No entity selected for export');
         }
 
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         let filter = '';
         if (this.viewEntity?.WhereClause) {
             filter = this.viewEntity.WhereClause;

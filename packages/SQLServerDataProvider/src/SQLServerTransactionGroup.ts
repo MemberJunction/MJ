@@ -10,7 +10,7 @@ export class SQLServerTransactionGroup extends TransactionGroupBase {
     protected async HandleSubmit(): Promise<TransactionResult[]> {
         const returnResults: TransactionResult[] = [];
         const items = this.PendingTransactions;
-        const sqlProvider = <SQLServerDataProvider>Metadata.Provider;
+        const sqlProvider = <SQLServerDataProvider>Metadata.Provider; // global-provider-ok: data provider implementation, owns its provider context
         if (items.length > 0) {
             const pool: sql.ConnectionPool = items[0].ExtraData.dataSource; // Now expects a ConnectionPool
             // start a transaction, if anything fails we'll handle the rollback

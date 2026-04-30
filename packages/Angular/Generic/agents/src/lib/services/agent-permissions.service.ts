@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Metadata, RoleInfo, RunView } from '@memberjunction/core';
+import { IMetadataProvider, Metadata, RoleInfo, RunView } from '@memberjunction/core';
 import { MJAIAgentPermissionEntity, MJUserEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
@@ -32,6 +32,9 @@ export interface PermissionRow {
  * Service for loading and managing AI Agent permission data.
  * Decoupled from UI components so it can be reused across
  * panel, dialog, and slideover variants.
+ *
+ * Multi-provider note: callers under a non-default provider should set
+ * `service.Provider = component.ProviderToUse` before invoking any methods.
  */
 @Injectable()
 export class AgentPermissionsService {
@@ -42,6 +45,15 @@ export class AgentPermissionsService {
     public get Users(): MJUserEntity[] { return this.users; }
     public get Roles(): RoleInfo[] { return this.roles; }
     public get Permissions(): MJAIAgentPermissionEntity[] { return this.permissions; }
+
+    private _provider: IMetadataProvider | null = null;
+
+    public get Provider(): IMetadataProvider {
+        return this._provider ?? Metadata.Provider;
+    }
+    public set Provider(value: IMetadataProvider | null) {
+        this._provider = value;
+    }
 
     /**
      * Load all data needed for the permissions panel.
@@ -79,9 +91,9 @@ export class AgentPermissionsService {
         comments: string | null,
         existingEntity?: MJAIAgentPermissionEntity
     ): Promise<boolean> {
-        const md = new Metadata();
+        const md = this.Provider;
         const entity = existingEntity ||
-            await md.GetEntityObject<MJAIAgentPermissionEntity>('MJ: AI Agent Permissions');
+            await md.GetEntityObject<MJAIAgentPermissionEntity>('MJ: AI Agent Permissions', md.CurrentUser);
 
         entity.AgentID = agent.ID;
         entity.UserID = grantType === 'user' ? granteeId : null;
@@ -109,14 +121,14 @@ export class AgentPermissionsService {
         if (!ownerUserId) return 'Not Set';
         const cached = this.users.find(u => UUIDsEqual(u.ID, ownerUserId));
         if (cached) return cached.Name;
-        const md = new Metadata();
-        const userEntity = await md.GetEntityObject<MJUserEntity>('MJ: Users');
+        const md = this.Provider;
+        const userEntity = await md.GetEntityObject<MJUserEntity>('MJ: Users', md.CurrentUser);
         const loaded = await userEntity.Load(ownerUserId);
         return loaded ? userEntity.Name : 'Unknown';
     }
 
     private async loadPermissions(agentId: string): Promise<MJAIAgentPermissionEntity[]> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.Provider);
         const result = await rv.RunView<MJAIAgentPermissionEntity>({
             EntityName: 'MJ: AI Agent Permissions',
             ExtraFilter: `AgentID='${agentId}'`,
@@ -126,7 +138,7 @@ export class AgentPermissionsService {
     }
 
     private async loadUsers(): Promise<void> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.Provider);
         const result = await rv.RunView<MJUserEntity>({
             EntityName: 'MJ: Users',
             ExtraFilter: 'IsActive=1',
@@ -139,7 +151,7 @@ export class AgentPermissionsService {
     }
 
     private async loadRoles(): Promise<void> {
-        const md = new Metadata();
+        const md = this.Provider;
         this.roles = md.Roles;
     }
 

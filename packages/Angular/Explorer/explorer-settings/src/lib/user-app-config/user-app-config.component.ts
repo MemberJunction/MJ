@@ -1,10 +1,11 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectorRef, NgZone, ElementRef, inject } from '@angular/core';
-import { Metadata, RunView, LogError, LogStatus } from '@memberjunction/core';
+import { Metadata, RunView, LogError, LogStatus, IMetadataProvider } from '@memberjunction/core';
 import { MJUserApplicationEntity } from '@memberjunction/core-entities';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
 import { SharedService } from '@memberjunction/ng-shared';
 import { UUIDsEqual } from '@memberjunction/global';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 /**
  * Represents an app item in the configuration UI
  */
@@ -39,7 +40,7 @@ interface UserAppRow {
   templateUrl: './user-app-config.component.html',
   styleUrls: ['./user-app-config.component.css']
 })
-export class UserAppConfigComponent {
+export class UserAppConfigComponent extends BaseAngularComponent {
   private appManager = inject(ApplicationManager);
   private sharedService = inject(SharedService);
   private cdr = inject(ChangeDetectorRef);
@@ -169,7 +170,7 @@ export class UserAppConfigComponent {
     this.ErrorMessage = '';
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
 
       for (const item of this.AllApps) {
         if (!item.isDirty) continue;
@@ -353,8 +354,8 @@ export class UserAppConfigComponent {
     this.ErrorMessage = '';
 
     try {
-      const md = new Metadata();
-      const rv = new RunView();
+      const md = this.ProviderToUse;
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const systemApps = this.appManager.GetAuthorizedSystemApps();
 
       const userAppsResult = await rv.RunView<UserAppRow>({
@@ -423,7 +424,7 @@ export class UserAppConfigComponent {
     b.isDirty = true;
   }
 
-  private async updateUserApplication(md: Metadata, item: AppConfigItem): Promise<void> {
+  private async updateUserApplication(md: IMetadataProvider, item: AppConfigItem): Promise<void> {
     const userApp = await md.GetEntityObject<MJUserApplicationEntity>('MJ: User Applications');
     await userApp.Load(item.userAppId!);
 
@@ -439,7 +440,7 @@ export class UserAppConfigComponent {
     LogStatus(`Updated UserApplication for ${item.app.Name}: sequence=${item.sequence}, isActive=${item.isActive}`);
   }
 
-  private async createUserApplication(md: Metadata, item: AppConfigItem): Promise<void> {
+  private async createUserApplication(md: IMetadataProvider, item: AppConfigItem): Promise<void> {
     const userApp = await md.GetEntityObject<MJUserApplicationEntity>('MJ: User Applications');
     userApp.NewRecord();
 

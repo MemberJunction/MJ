@@ -79,7 +79,7 @@ export class CredentialsAuditResourceComponent extends BaseResourceComponent imp
             this.isLoading = true;
             this.cdr.markForCheck();
 
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
             // Calculate date filter
             const startDate = new Date();

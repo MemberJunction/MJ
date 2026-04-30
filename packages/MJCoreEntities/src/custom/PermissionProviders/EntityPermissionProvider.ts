@@ -2,6 +2,7 @@ import {
     EntityPermissionInfo,
     EntityUserPermissionInfo,
     GranteeType,
+    IMetadataProvider,
     Metadata,
     NormalizedPermission,
     PermissionAction,
@@ -28,8 +29,9 @@ export class EntityPermissionProvider extends PermissionProviderBase {
     readonly SupportedActions: PermissionAction[] = ['Read', 'Create', 'Update', 'Delete'];
     readonly SupportsDeny = true;
 
-    override GetResourceTypes(): string[] {
-        return new Metadata().Entities.map((e) => e.Name).sort((a, b) => a.localeCompare(b));
+    override GetResourceTypes(provider?: IMetadataProvider): string[] {
+        const md = provider ?? new Metadata();
+        return md.Entities.map((e) => e.Name).sort((a, b) => a.localeCompare(b));
     }
 
 
@@ -37,9 +39,10 @@ export class EntityPermissionProvider extends PermissionProviderBase {
         user: UserInfo,
         resourceType: string,
         _resourceId: string | null,
-        action: PermissionAction
+        action: PermissionAction,
+        provider?: IMetadataProvider
     ): Promise<PermissionCheckResult> {
-        const md = new Metadata();
+        const md = provider ?? new Metadata();
         const entity = md.EntityByName(resourceType);
         if (!entity) {
             return {
@@ -60,8 +63,8 @@ export class EntityPermissionProvider extends PermissionProviderBase {
         };
     }
 
-    async GetEffectivePermissions(user: UserInfo, resourceType: string, _resourceId: string): Promise<NormalizedPermission[]> {
-        const md = new Metadata();
+    async GetEffectivePermissions(user: UserInfo, resourceType: string, _resourceId: string, provider?: IMetadataProvider): Promise<NormalizedPermission[]> {
+        const md = provider ?? new Metadata();
         const entity = md.EntityByName(resourceType);
         if (!entity) return [];
 
@@ -74,8 +77,8 @@ export class EntityPermissionProvider extends PermissionProviderBase {
         })];
     }
 
-    async GetUserResources(user: UserInfo, resourceType?: string): Promise<NormalizedPermission[]> {
-        const md = new Metadata();
+    async GetUserResources(user: UserInfo, resourceType?: string, provider?: IMetadataProvider): Promise<NormalizedPermission[]> {
+        const md = provider ?? new Metadata();
         const entities = resourceType
             ? md.Entities.filter((e) => e.Name === resourceType)
             : md.Entities;
@@ -92,8 +95,8 @@ export class EntityPermissionProvider extends PermissionProviderBase {
         return results;
     }
 
-    async GetResourcePermissions(resourceType: string, _resourceId: string): Promise<NormalizedPermission[]> {
-        const md = new Metadata();
+    async GetResourcePermissions(resourceType: string, _resourceId: string, provider?: IMetadataProvider): Promise<NormalizedPermission[]> {
+        const md = provider ?? new Metadata();
         const entity = md.EntityByName(resourceType);
         if (!entity) return [];
 

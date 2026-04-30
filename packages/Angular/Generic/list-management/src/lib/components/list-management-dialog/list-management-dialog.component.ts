@@ -8,6 +8,7 @@ import {
   ChangeDetectorRef
 } from '@angular/core';
 import { Subject } from 'rxjs';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { Metadata } from '@memberjunction/core';
 import { MJListEntity, MJListCategoryEntity } from '@memberjunction/core-entities';
@@ -40,7 +41,7 @@ import {
   templateUrl: './list-management-dialog.component.html',
   styleUrls: ['./list-management-dialog.component.css']
 })
-export class ListManagementDialogComponent implements OnInit, OnDestroy {
+export class ListManagementDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy  {
   /**
    * Configuration for the dialog
    */
@@ -102,7 +103,8 @@ export class ListManagementDialogComponent implements OnInit, OnDestroy {
   constructor(
     private listService: ListManagementService,
     private cdr: ChangeDetectorRef
-  ) {}
+  ) {
+  super();}
 
   ngOnInit(): void {
     this.setupSearchDebounce();
@@ -217,7 +219,7 @@ export class ListManagementDialogComponent implements OnInit, OnDestroy {
     this.cdr.detectChanges();
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
 
       // Load lists and membership in parallel
       const [lists, membership, categories] = await Promise.all([

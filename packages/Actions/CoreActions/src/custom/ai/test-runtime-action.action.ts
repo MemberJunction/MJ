@@ -153,7 +153,7 @@ export class TestRuntimeActionAction extends BaseAction {
         code: string,
         config: Record<string, unknown>
     ): Promise<MJActionEntity | null> {
-        const md = new Metadata();
+        const md = params.Provider ?? new Metadata();
         // Entity is registered as 'MJ: Actions' (see entity_subclasses.ts —
         // all newer MJ core entities use the 'MJ: ' prefix). Passing 'Actions'
         // silently returned null, which then crashed ActionEngine downstream.

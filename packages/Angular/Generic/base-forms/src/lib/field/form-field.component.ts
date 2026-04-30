@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, ChangeDetectorRef, inject, OnChanges, SimpleChanges, OnDestroy } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { BaseEntity, EntityFieldInfo, Metadata, CompositeKey, KeyValuePair, RunView } from '@memberjunction/core';
 import { ValidationErrorInfo } from '@memberjunction/global';
 import { FormContext } from '../types/form-types';
@@ -46,7 +47,7 @@ export interface FKSuggestion {
   templateUrl: './form-field.component.html',
   styleUrls: ['./form-field.component.css']
 })
-export class MjFormFieldComponent implements OnChanges, OnDestroy {
+export class MjFormFieldComponent extends BaseAngularComponent implements OnChanges, OnDestroy  {
   private cdr = inject(ChangeDetectorRef);
 
   /** The entity record containing this field */
@@ -364,7 +365,7 @@ export class MjFormFieldComponent implements OnChanges, OnDestroy {
       Value: fkValue
     }]);
 
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     md.GetEntityRecordName(fieldInfo.RelatedEntity, pk)
       .then(name => {
         this._resolvedFKName = name || null;
@@ -588,7 +589,7 @@ export class MjFormFieldComponent implements OnChanges, OnDestroy {
     const fieldInfo = this.FieldInfo;
     if (!fieldInfo?.RelatedEntity) return;
 
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const relatedEntity = md.Entities.find(e => e.Name === fieldInfo.RelatedEntity);
     if (!relatedEntity) return;
 
@@ -610,7 +611,7 @@ export class MjFormFieldComponent implements OnChanges, OnDestroy {
 
     const escapedQuery = query.replace(/'/g, "''");
 
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<Record<string, unknown>>({
       EntityName: fieldInfo.RelatedEntity,
       ExtraFilter: `[${nameFieldName}] LIKE '%${escapedQuery}%'`,

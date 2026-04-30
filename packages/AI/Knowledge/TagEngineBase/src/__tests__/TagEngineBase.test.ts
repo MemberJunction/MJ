@@ -22,10 +22,16 @@ vi.mock('@memberjunction/core', () => {
             });
         }
     }
+    const sharedMockProvider = new MockMetadata();
+    const sharedMockRunViewProvider = {
+        RunView: vi.fn().mockResolvedValue({ Success: true, Results: [] })
+    };
     return {
         BaseEngine: class BaseEngine<T> {
             public static getInstance<T>(): T { return new (this as unknown as new () => T)(); }
             protected async Load(): Promise<void> {}
+            public get ProviderToUse() { return sharedMockProvider; }
+            public get RunViewProviderToUse() { return sharedMockRunViewProvider; }
         },
         BaseEnginePropertyConfig: class {},
         IMetadataProvider: class {},

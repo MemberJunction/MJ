@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, Metadata } from '@memberjunction/core';
 import { MJCollectionEntity } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
@@ -128,7 +129,7 @@ import { UUIDsEqual } from '@memberjunction/global';
     }
   `]
 })
-export class CollectionFormModalComponent implements OnChanges {
+export class CollectionFormModalComponent extends BaseAngularComponent implements OnChanges  {
   @Input() isOpen: boolean = false;
   @Input() collection?: MJCollectionEntity;
   @Input() parentCollection?: MJCollectionEntity;
@@ -149,9 +150,13 @@ export class CollectionFormModalComponent implements OnChanges {
   constructor(
     private toastService: ToastService,
     private permissionService: CollectionPermissionService
-  ) {}
+  ) {
+  super();}
 
   ngOnChanges(changes: SimpleChanges) {
+    // Bind provider-aware service to this component's provider on every input change pass.
+    this.permissionService.Provider = this.ProviderToUse;
+
     if (changes['collection'] || changes['isOpen']) {
       if (this.isOpen && this.collection) {
         this.formData.name = this.collection.Name || '';
@@ -206,7 +211,7 @@ export class CollectionFormModalComponent implements OnChanges {
         }
       }
 
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const collection = this.collection ||
         await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
 
