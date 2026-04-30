@@ -12,9 +12,11 @@ This is a hard rule, not a guideline. Breaking it forces a major version bump (1
 
 ## What "published" means
 
-An OpenApp version is **published** the moment the migrations for that version land on a long-lived branch (`next`, `main`, a release branch — anywhere a customer database might end up replaying them). After that, the migrations are part of the historical migration stream forever, and any subsequent change inside the same major version must respect the rule.
+An OpenApp version is **published** the moment migrations for that version are part of a release that has gone out — i.e., a tagged release that any customer database, anywhere, might replay. After that point, those migrations are part of the historical migration stream forever, and any subsequent change inside the same major version must respect the rule.
 
-A version that's still on a feature branch and hasn't been merged yet is not "published" — you're free to revise its migrations until merge.
+A version that's still pre-release — on a feature branch, on `next` waiting for a release cut, or in any state where it could still be revised before going to customers — is not "published." You're free to fix up migrations within it until release.
+
+Practically: if you discover a mistake in a migration on `next` *before* the next release tag goes out, you can correct it. If you discover the same mistake *after* the release ships, the migration is now historical and must be fixed by an additive follow-up migration, not by editing the original.
 
 ## What's not allowed within a published major version
 
@@ -22,12 +24,12 @@ A version that's still on a feature branch and hasn't been merged yet is not "pu
 |---|---|
 | Dropping a table | Downstream apps may have foreign keys to it; dropping breaks their migrations |
 | Dropping a column | Downstream code may read or write it; codegen will also regenerate SPs without that column's parameter, breaking historical `EXEC` calls |
-| Renaming a column | Equivalent to dropping the old name and adding a new one — both halves are forbidden by the rules above and below |
+| Renaming a column | The old name disappears (same blast radius as dropping the column — see above), and any view, custom SQL, or downstream code that referenced it by name silently breaks |
 | Narrowing a column's type (`nvarchar(100)` → `nvarchar(50)`, `bigint` → `int`, `decimal(18,4)` → `decimal(10,2)`) | Existing data may not fit; downstream callers may pass values that no longer round-trip |
 | Removing or renaming an entity | Same reasoning as dropping a table, plus metadata-level breakage |
 | Removing or renaming a stored-procedure parameter | Historical `EXEC` calls in migration history will fail because they reference the dropped/renamed parameter by name |
 | Adding a *required* (NOT NULL, no database default) column or stored-procedure parameter | Pillar 1 (tolerant SP signatures) makes additive changes safe *only* when the new parameter is optional. A required addition breaks every historical `EXEC` that doesn't pass it |
-| Dropping a foreign key or `EntityRelationship` row that downstream code depends on | Breaks downstream entity navigation, view JOINs, and any code that traverses the relationship via metadata |
+| Dropping an `EntityRelationship` row that downstream code or UI depends on | Removes a documented navigation path; downstream code that traverses the relationship via metadata (entity navigation, related-data resolvers, generated UI links) stops finding it |
 
 ## What IS allowed
 
@@ -38,7 +40,7 @@ A version that's still on a feature branch and hasn't been merged yet is not "pu
 | Widening a column's type (`nvarchar(50)` → `nvarchar(100)`, `int` → `bigint`) | Existing data still fits |
 | Adding a new SP parameter (with a default) | Pillar 1 codegen makes this safe by default — every non-required param gets `= NULL` and is wrapped with `ISNULL(@Param, <db_default>)` in the body |
 | Adding a new entity | Same as adding a table at the metadata layer |
-| Adding new relationships | Pure addition |
+| Adding a new `EntityRelationship` row, or adding a foreign key to a column that doesn't already have one | Adds a navigation path or constraint; existing callers that didn't reference the relationship aren't affected. Caveat: adding a foreign key that's actually violated by existing data will fail at migration time — check first |
 | Marking an entity or column as **deprecated** at the metadata level | The recommended replacement for "I want to retire this." See § "Deprecation" below |
 
 ## Deprecation
@@ -120,7 +122,7 @@ Two reasons:
 1. Downstream apps may have read or written `OldName` directly (in views, in custom SQL, in entity-field references). Renaming silently breaks them.
 2. Historical `spUpdateMyTable @OldName=...` calls become invalid because the SP parameter no longer exists.
 
-**Correct path:** add `NewName` as a new column, mark `OldName` as deprecated at the metadata level, populate `NewName` from `OldName` going forward, and physically remove `OldName` in v2.0.
+**Correct path:** add `NewName` as a new column, mark `OldName` as deprecated at the metadata level, populate `NewName` from `OldName` going forward. `OldName` stays physically present until the app eventually bumps a major version — at which point the deprecated column can be dropped.
 
 ### Example 4: Narrowing a column's type
 
@@ -138,7 +140,7 @@ Existing rows may have values longer than 50 characters; the migration would fai
 
 ### Example 5: Removing an SP parameter (by dropping its underlying column)
 
-**Not allowed within the same major version.** SP parameters in MJ aren't authored by hand — codegen emits them from the schema. So you don't remove a parameter directly; you remove it indirectly by dropping the column the parameter is bound to. Both the column drop and the resulting SP parameter loss are forbidden, for the same reason: historical `EXEC` calls in the migration stream reference that parameter by name, and they'll fail forever once it's gone.
+**Not allowed within the same major version.** SP parameters in MJ aren't authored by hand — codegen emits them from the schema. So removing a parameter is really a side effect of dropping its underlying column, and that's what's forbidden: historical `EXEC` calls in the migration stream reference the parameter by name, and they'll fail forever once codegen regenerates the SP without it.
 
 ```sql
 -- ❌ FORBIDDEN within v1.x — drops the LegacyFlag column.
@@ -149,7 +151,7 @@ ALTER TABLE ${flyway:defaultSchema}.MyTable DROP COLUMN LegacyFlag;
 
 Historical migration `EXEC __mj.spCreateMyTable @Name='X', @LegacyFlag=1` will fail with "could not find @LegacyFlag" against the regenerated SP. The historical EXEC sits in the migration stream forever, so this is a permanent break.
 
-**Correct path:** mark the `LegacyFlag` column as deprecated at the metadata level. The column stays physically present, codegen continues to emit `@LegacyFlag` as an optional parameter on `spCreateMyTable` / `spUpdateMyTable`, and historical `EXEC` calls keep working. New code stops using it. Physically remove the column in v2.0 along with any other accumulated deprecations.
+**Correct path:** mark the `LegacyFlag` column as deprecated at the metadata level. The column stays physically present, codegen continues to emit `@LegacyFlag` as an optional parameter on `spCreateMyTable` / `spUpdateMyTable`, and historical `EXEC` calls keep working. New code stops using it. If the app eventually does a major version bump, that's the moment to physically remove the deprecated column — until then, it's harmless dead weight.
 
 ### Example 6: Adding a NEW required SP parameter
 

@@ -62,7 +62,7 @@ flowchart TD
     style Output fill:#2d8659,stroke:#1a5c3a,color:#fff
 ```
 
-> **Authoring constraint:** the SQL CodeGen emits ships in Flyway migrations that customer databases will replay forever. When you author a schema change that CodeGen will regenerate from, the [Publish-Then-No-Breaking-Changes Policy](../../guides/PUBLISH_NO_BREAK_POLICY.md) governs what's safe — within a published OpenApp major version, only additive schema changes are allowed (new tables, new optional columns, widened types, new optional SP parameters). Dropping or renaming columns, narrowing types, and adding required parameters break historical migrations and are not allowed without a major version bump. Tolerant SP signatures (Pillar 1) make additive SP changes safe by default; the policy is what forbids the breaking variants.
+> **Authoring constraint:** every SQL artifact CodeGen emits ships in a Flyway migration that customer databases will replay forever. The [Publish-Then-No-Breaking-Changes Policy](../../guides/PUBLISH_NO_BREAK_POLICY.md) governs what schema changes are safe to feed into CodeGen: within a published OpenApp major version, only additive changes are allowed (new tables, new optional columns, widened types, new optional SP parameters). Dropping or renaming columns, narrowing types, and adding required parameters break historical migrations and require a major version bump.
 
 ## Key Features
 
