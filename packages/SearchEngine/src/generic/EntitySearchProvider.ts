@@ -40,7 +40,20 @@ export class EntitySearchProvider extends BaseSearchProvider {
     ): Promise<SearchResultItem[]> {
         try {
             // Honor per-provider query transform (e.g., FTS keyword extraction, AI rewrite)
-            const effectiveQuery = scopeConstraints?.QueryTransforms?.[this.SourceType] ?? query;
+            const rawQuery = scopeConstraints?.QueryTransforms?.[this.SourceType] ?? query;
+            // Strip SQL LIKE wildcards (`%`, `_`, `[`, `]`) before passing through to
+            // RunView's UserSearchString. The downstream `GenericDatabaseProvider`
+            // builds `LIKE '%${input}%'` clauses with only single-quote escaping —
+            // unstripped `%` would silently match every row, and `[abc]` would
+            // become a LIKE character-class. We treat these characters as
+            // not-meaningful for entity LIKE search rather than offering a
+            // user-facing "match wildcard" feature.
+            const effectiveQuery = this.sanitizeUserSearchString(rawQuery);
+            if (!effectiveQuery) {
+                // Query was entirely wildcard chars — nothing meaningful to match
+                LogStatus('EntitySearchProvider: Query reduced to empty after wildcard strip — returning no results');
+                return [];
+            }
 
             const md = new Metadata();
             // Build the scoped subset: if scopeConstraints.Entities is provided, use those
@@ -291,5 +304,27 @@ export class EntitySearchProvider extends BaseSearchProvider {
         }
 
         return entityInfo ? `Matched in ${entityInfo.Name}` : 'Matched record';
+    }
+
+    /**
+     * Remove SQL LIKE wildcard characters from a user-supplied search string.
+     *
+     * The downstream `GenericDatabaseProvider.createViewUserSearchSQL`
+     * interpolates user input directly into `LIKE '%${input}%'`, only
+     * escaping single quotes. Unstripped LIKE wildcards (`%`, `_`, `[`, `]`)
+     * would either match too much (e.g. `Query="%"` matches every row) or
+     * trigger LIKE character-class parsing (`Query="[abc]"`).
+     *
+     * Behavior intent: these characters are treated as not-meaningful for
+     * entity LIKE search. A query containing literal `%` (e.g. `100%`) will
+     * not find records that contain `100%` — the trade-off is documented
+     * to keep the behavior predictable and safe.
+     *
+     * Trailing/leading whitespace is collapsed; an all-wildcard query
+     * returns empty and the caller short-circuits to zero results.
+     */
+    private sanitizeUserSearchString(input: string): string {
+        if (input == null) return '';
+        return input.replace(/[%_[\]]/g, '').trim();
     }
 }

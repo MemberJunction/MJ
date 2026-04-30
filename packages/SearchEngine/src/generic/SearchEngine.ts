@@ -242,11 +242,15 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         let invocationRerankerName: string | null = null;
 
         try {
-            if (!params.Query.trim()) {
+            // Defensive null-check: `params.Query.trim()` throws on null/undefined,
+            // and Sage's LLM has been observed to emit empty/missing tool args.
+            // Coerce to string before validating so we surface a clean error
+            // instead of a TypeError that would also skip the audit-log row.
+            if (params.Query == null || typeof params.Query !== 'string' || !params.Query.trim()) {
                 this.logSearchExecution({
                     Status: 'Failure',
                     FailureReason: 'Query cannot be empty',
-                    Query: params.Query,
+                    Query: typeof params.Query === 'string' ? params.Query : '',
                     ScopeIDs: params.ScopeIDs,
                     StartTime: startTime,
                     ResultCount: 0,

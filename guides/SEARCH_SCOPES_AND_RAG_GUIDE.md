@@ -613,4 +613,42 @@ When an agent needs to refer back to a result row in a tool call, use
 waste tokens, are noisy in tool-call output, and tempt the model to
 hallucinate them. The artifact tool library maps alpha-sequence IDs back
 to internal UUIDs without leaking those UUIDs to the prompt.
+
+### Embedding regeneration contract (operations note)
+
+Several entities (`MJ: AI Agent Notes`, `MJ: AI Agent Examples`,
+`MJ: Queries`) maintain `EmbeddingVector` + `EmbeddingModelID` columns
+that the Vector search provider consumes. Embeddings are regenerated
+inside the entity's server-side `Save()` override **only when the
+fields they're derived from are dirty**:
+
+| Entity | Composite text source | Regenerates when dirty |
+|---|---|---|
+| `MJ: AI Agent Notes` | `Note` | `Note` |
+| `MJ: AI Agent Examples` | `ExampleInput` | `ExampleInput` |
+| `MJ: Queries` | `Name + UserQuestion + Description` | any of those three |
+
+**Implication for ops**: any code path that bypasses `BaseEntity.Save()`
+— direct `INSERT`/`UPDATE` SQL, raw `mj sync` of pre-computed metadata,
+restoration from a logical backup that doesn't replay through entity
+saves — will produce records whose `EmbeddingVector` is stale or
+missing. Vector search will then return outdated matches (or skip the
+record entirely if the column is `NULL`).
+
+**Operational guidance**:
+- For bulk imports, prefer running through `BaseEntity.Save()` (e.g.
+  `mj sync push --all`) so the embedding hook fires.
+- After any direct SQL mutation, queue a re-embed by re-saving the
+  affected records through the entity API (e.g. set `Note = Note + ' '`
+  to mark the field dirty, then `Save()`).
+- A future enhancement could add an `EmbeddingRegeneratedAt` column and
+  a maintenance action that re-embeds rows where
+  `__mj_UpdatedAt > EmbeddingRegeneratedAt`. Not yet implemented.
+
+The shipped tests (`s16-sage-vector-end-to-end`,
+`SimpleVectorDatabase.QueryIndex.test.ts`) implicitly cover the
+fire-on-dirty path — they all save through `Metadata.GetEntityObject`
+and assert that downstream Vector search finds the newly-embedded
+records.
+
 - Re-ranker catalog entity + visual configuration UI.
