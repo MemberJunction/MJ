@@ -147,19 +147,15 @@ describe.skipIf(!hasPGMigrations)('v5 migration regression — committed PG file
     expect(baselines.length).toBeGreaterThan(0);
   });
 
-  // KNOWN DEBT: ~30 v5.1–v5.11 files committed in March (commit a864a46b8f)
-  // were converted with a converter that emitted the pg_cast header by default.
-  // The header runs `UPDATE pg_cast SET castcontext = 'i'` which requires
-  // superuser — managed PG (RDS, Aurora, Cloud SQL, Azure flexible) blocks it,
-  // so those files won't apply on managed PG today.
+  // The migrations PR (`pg-migration-files` branch) has rewritten all 50
+  // affected files to be managed-PG safe — no pg_cast UPDATE, BOOLEAN values
+  // use TRUE/FALSE directly. This main repo branch still has the legacy ~40
+  // files inherited from origin/next, which the migrations PR will replace on
+  // merge.
   //
-  // Rewriting them invalidates Flyway checksums for any environment that
-  // already applied them. Proper fix is option-3 from the PR review: wrap the
-  // pg_cast UPDATE in `IF current_setting('is_superuser') = 'on'` so it's a
-  // no-op on managed PG. Tracked for v5.30.1.
-  //
-  // Until then, exempt the committed v5.1–v5.11 files explicitly so the gate
-  // still catches *new* conversions that introduce pg_cast.
+  // Until the merge, exempt the legacy v5.0–v5.11 files explicitly so the gate
+  // still catches *new* conversions that introduce pg_cast. After both PRs
+  // merge to next, this exemption set should be deleted along with this comment.
   // Older v5.1–v5.4 filenames use `__v5.1__` (no `.x` suffix); v5.5+ use `__v5.8.x__`.
   // Allow either `_` or `.` after the version digits.
   // Timestamp is 12 digits (YYYYMMDDHHMM); after "20260[23]" we have 6 more.
@@ -169,8 +165,6 @@ describe.skipIf(!hasPGMigrations)('v5 migration regression — committed PG file
       const content = readFileSync(join(PG_MIGRATIONS_DIR, file), 'utf-8');
       const hasPgCast = content.includes('UPDATE pg_cast SET castcontext');
       if (hasPgCast) {
-        // Only the baseline and restored v5.0.x files from origin/next should have this.
-        // New conversions should NOT include pg_cast.
         const isLegacy = file.startsWith('B') || file.includes('v5.0.x') || file.includes('v5.0__');
         const isPgCastDebt = PG_CAST_LEGACY_EXEMPTIONS.test(file);
         if (!isLegacy && !isPgCastDebt) {

@@ -17,10 +17,23 @@ Quick reference for what landed in this release for PG and what's deferred.
   All 5 verified equivalent to their SQL Server sources by applying both files to fresh DBs at v5.30 pre-test baseline and diffing schema deltas (tables, columns, constraints, indexes, routines, views) — see `scripts/snapshot-{ss,pg}.sh` + `scripts/README-migration-equivalence.md`.
 - **PG-only fix migration** — `V202604282300__v5.30.x__Fix_vwEntityPermissions_RoleName_Alias.pg-only.sql` recreates the v5.0 baseline view that had an unquoted `as RoleName` alias case-folding to `rolename` on PG.
 
-## What's deferred to v5.30.1
+## Managed PostgreSQL (RDS/Aurora/Cloud SQL/Azure)
 
-### Critical for managed PG (RDS/Aurora/Cloud SQL/Azure)
-- **`pg_cast` manipulation in v5.1–v5.11 baseline files** — the `UPDATE pg_cast SET castcontext = 'i'` header in those migrations requires real superuser, which managed PG services don't grant. **Hard blocker for any RDS install today.** See `plans/pg-migration-architecture/DEV_ON_PG_GUIDE.md` "Managed PostgreSQL — current limitations".
+As of v5.30, MJ migrations install on managed PG without superuser. The
+`pg_cast` UPDATE that used to require catalog-modify privileges has been
+stripped from all 50 affected files. Bulk metadata INSERTs now use
+`TRUE/FALSE` for BOOLEAN columns directly. See the commit message of
+`v5.30: managed-PG support — strip pg_cast UPDATE …` for the full breakdown.
+
+Verification: applied 107/107 migrations cleanly to a fresh PG database
+with zero `pg_cast` manipulation. Schema parity with the prior pg_cast-
+dependent state confirmed.
+
+**Existing PG dev environments**: pulling this change invalidates Flyway
+checksums — run `flyway repair` once. The actual schema effects are
+identical so no schema drift; just history-row hash updates.
+
+## What's deferred to v5.30.1
 
 ### v5.30 coverage
 - **`V202604271430__v5.30.x__Metadata_Sync.sql`** — 964k-line auto-generated metadata dump. Hits a converter string-literal escape bug at the `${formatted}` JS template literal pattern in stored Query SQL. Right fix is to regenerate via `mj-sync push` from a known-correct state rather than repair generated content.

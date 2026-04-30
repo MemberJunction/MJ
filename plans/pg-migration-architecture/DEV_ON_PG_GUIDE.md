@@ -156,21 +156,23 @@ Override the platform with `--platform sqlserver` if you want to scaffold the T-
 
 ---
 
-## Managed PostgreSQL (RDS / Aurora / Cloud SQL / Azure) — current limitations
+## Managed PostgreSQL (RDS / Aurora / Cloud SQL / Azure)
 
-The flow above works on **self-hosted PG** (local, Docker, EC2-Postgres). It does **not** yet work on managed PG services. Specifically:
+As of v5.30, MJ migrations run on managed PG without superuser privileges. The previous `pg_cast` dependency has been removed, and all BOOLEAN-column INSERT VALUES, WHERE/UPDATE comparisons, CHECK constraints, and DEFAULT clauses now use `TRUE/FALSE` directly.
 
-### Hard blocker: `pg_cast` superuser requirement
-Many of the v5.1–v5.11 migration files (and the v5.0 baseline) emit a header containing:
+### What changed in v5.30
+The converter previously emitted a header containing `UPDATE pg_cast SET castcontext = 'i'` to make the implicit `INT → BOOLEAN` cast available. Customer accounts on managed PG don't have catalog-modify privileges (RDS provides `rds_superuser` which has restricted access), so the migration would fail on first apply. The fix:
 
-```sql
-UPDATE pg_cast SET castcontext = 'i'
-WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
-```
+- **All `pg_cast` UPDATE statements stripped** from the 50 affected `.pg.sql` files
+- **10,967 INSERT VALUES tuples** had their `0`/`1` BOOLEAN-column literals rewritten to `FALSE`/`TRUE`
+- **3,510 WHERE/UPDATE/SET comparisons** of the form `"BoolCol" = 0/1` rewritten to `= TRUE/FALSE`
+- **9 CHECK constraint expressions** repaired (pre-existing converter bug that wrote `>=TRUE` for INTEGER columns)
+- **3 hand-fixes** for specific BOOLEAN constructs (one DEFAULT clause, two view/function predicates)
 
-This makes the implicit `INT → BOOLEAN` cast available so `INSERT VALUES` with `0/1` into BOOLEAN columns works the same way SQL Server's BIT does. Manipulating `pg_cast` requires real superuser privileges. AWS RDS, Aurora PostgreSQL, GCP Cloud SQL, and Azure Database for PostgreSQL all withhold real superuser from customer accounts (RDS provides `rds_superuser` which has restricted system-catalog access). Any attempt to run `mj migrate` on those services fails on the first migration that ships with the pg_cast header.
+See `migrations-pg/V5_30_NOTES.md` for details. The tooling lives in `scripts/fix-pg-cast-and-booleans.mjs`, `scripts/fix-bool-comparisons.mjs`, and `scripts/fix-bool-constraint-bug.mjs`.
 
-**Tracked for v5.30.1.** Likely fix: wrap the `UPDATE pg_cast` in `IF current_setting('is_superuser') = 'on'` so it silently no-ops on managed PG, paired with an audit pass that converts every `INSERT VALUES (… 0 …, … 1 …)` into BOOLEAN columns to use explicit `TRUE/FALSE`. The strict regression test `should not contain pg_cast manipulation (breaks managed PG)` in `packages/SQLConverter/src/__tests__/pg-migration-regression.test.ts` is currently scoped to allow the legacy v5.1–v5.11 files via an exemption regex; the test fails for any *new* conversion that emits `pg_cast`.
+### Operational note for existing PG dev environments
+Because we modified Flyway-tracked migration files, existing PG dev environments need a one-time `flyway repair` after pulling these changes — the file checksums have changed but the actual schema effects are identical (the previous `pg_cast` UPDATE was a no-op on environments that already had it).
 
 ### Other things to validate before the first managed-PG install
 - **Extension allowlist**: We use `pgcrypto` and `uuid-ossp` (both on every major managed-PG allowlist). Audit before adding any new extension.
