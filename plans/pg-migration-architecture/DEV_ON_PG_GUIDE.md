@@ -151,4 +151,37 @@ Override the platform with `--platform sqlserver` if you want to scaffold the T-
 
 - `scripts/validate-pg-codegen.mjs` — Provider-level PG syntax check for `PostgreSQLCodeGenProvider` (26 generation + 3 execution tests). Run against a local `mj_pg_codegen_test` DB to verify the CodeGen provider produces PG that actually parses and executes.
 - `scripts/pg-install-fresh.mjs` — Full install pipeline: drop DB → migrate → CodeGen → seed → ready for `npm start`. Use this to reproduce the end-to-end flow on demand.
+- `scripts/snapshot-ss.sh` and `scripts/snapshot-pg.sh` — Capture sorted lists of tables/columns/constraints/indexes/routines/views from each platform; diffing per-platform deltas across platforms verifies that a hand-fixed PG migration produces the same logical schema state as its SQL Server source. See `scripts/README-migration-equivalence.md` for the workflow.
 - `packages/CodeGenLib/src/__tests__/integration/` — 59+ integration tests covering CodeGen sprocs, view regeneration safety, `pg_depend`/`pg_rewrite` capture functions, the fallback orchestrator, and phased execution. Gated on `MJ_TEST_PG_URL`; run locally to audit any change to the PG CodeGen provider.
+
+---
+
+## Managed PostgreSQL (RDS / Aurora / Cloud SQL / Azure) — current limitations
+
+The flow above works on **self-hosted PG** (local, Docker, EC2-Postgres). It does **not** yet work on managed PG services. Specifically:
+
+### Hard blocker: `pg_cast` superuser requirement
+Many of the v5.1–v5.11 migration files (and the v5.0 baseline) emit a header containing:
+
+```sql
+UPDATE pg_cast SET castcontext = 'i'
+WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
+```
+
+This makes the implicit `INT → BOOLEAN` cast available so `INSERT VALUES` with `0/1` into BOOLEAN columns works the same way SQL Server's BIT does. Manipulating `pg_cast` requires real superuser privileges. AWS RDS, Aurora PostgreSQL, GCP Cloud SQL, and Azure Database for PostgreSQL all withhold real superuser from customer accounts (RDS provides `rds_superuser` which has restricted system-catalog access). Any attempt to run `mj migrate` on those services fails on the first migration that ships with the pg_cast header.
+
+**Tracked for v5.30.1.** Likely fix: wrap the `UPDATE pg_cast` in `IF current_setting('is_superuser') = 'on'` so it silently no-ops on managed PG, paired with an audit pass that converts every `INSERT VALUES (… 0 …, … 1 …)` into BOOLEAN columns to use explicit `TRUE/FALSE`. The strict regression test `should not contain pg_cast manipulation (breaks managed PG)` in `packages/SQLConverter/src/__tests__/pg-migration-regression.test.ts` is currently scoped to allow the legacy v5.1–v5.11 files via an exemption regex; the test fails for any *new* conversion that emits `pg_cast`.
+
+### Other things to validate before the first managed-PG install
+- **Extension allowlist**: We use `pgcrypto` and `uuid-ossp` (both on every major managed-PG allowlist). Audit before adding any new extension.
+- **Role hierarchy**: We `CREATE ROLE cdp_Developer/Integration/UI` — works on RDS as a regular user. Don't grant `SUPERUSER` to any role; managed PG won't allow it.
+- **SSL**: RDS forces TLS by default. The `DatabaseConnectionOptions.SSL` field on `PostgresProvider` config exists but the default has not been validated against RDS's certificate chain.
+- **Connection pool sizing**: RDS instance classes have hard `max_connections` ceilings. Audit `databaseSettings.connectionPool.max` in `mj.config.cjs` against the chosen instance.
+- **Performance tuning**: `work_mem`, `shared_buffers`, `effective_cache_size` etc. need RDS-parameter-group adjustments for production workloads.
+- **PG version**: We test against PG 16 + 18. RDS supports both; pick a version with our minimum (14+) headroom.
+
+### What's known to work on managed PG today
+- Application-level PG (everything past `mj migrate` finishing) — the runtime, MJAPI, MJExplorer, CodeGen — uses only application-grade SQL that managed PG accepts.
+- Schema introspection, view regeneration, function compilation, GRANT statements — all standard operations.
+
+So once the `pg_cast` blocker lifts, the runtime should "just work" against RDS modulo standard ops hardening.

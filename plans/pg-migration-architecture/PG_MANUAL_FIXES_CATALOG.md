@@ -31,6 +31,36 @@ Each fix is categorized by whether it should be automated in the pipeline, inclu
 **Pipeline fix:** **DONE** — DeclareDmlBlockRule detects this pattern and simplifies to direct `ALTER COLUMN SET DEFAULT`.
 **Status:** ✅ Fixed in this PR.
 
+### A5. `sys.check_constraints` + `sys.columns` dynamic-name lookup
+**What:** T-SQL block declaring a `NVARCHAR` variable, populating it via `SELECT @x = cc.name FROM sys.check_constraints cc JOIN sys.columns c ON ...`, then dynamically dropping the resulting constraint. SQL Server uses this when CHECK constraint names are auto-generated (no explicit `CONSTRAINT name` in the original ADD).
+**Manual fix applied:** In `V202604260056__v5.30.x__Memory_Consolidation_Schema.pg.sql`, hand-translated 2 such blocks to `pg_constraint` + `pg_class` + `pg_attribute` joins inside `DO $$ DECLARE … BEGIN`. Documented inline in the converted file.
+**Pipeline fix needed:** SQLConverter rule that detects the `DECLARE @x NVARCHAR + SELECT @x = cc.name FROM sys.check_constraints + IF @x IS NOT NULL EXEC ALTER TABLE DROP CONSTRAINT` pattern and emits the PG equivalent. Spans multiple statements with a local variable, so requires a multi-statement DSL match rather than a single regex.
+**Status:** ⚠️ Open. Affected files: 1 (Memory_Consolidation_Schema). v5.30.1 follow-up.
+
+### A6. `MERGE INTO ... USING (VALUES) AS src` + `WHEN MATCHED/NOT MATCHED`
+**What:** T-SQL upsert pattern using `MERGE INTO target AS tgt USING (VALUES (...)) AS src ON tgt.x = src.x WHEN MATCHED THEN UPDATE ... WHEN NOT MATCHED THEN INSERT ...`. The converter currently leaves `MERGE`, `USING`, `MATCHED` as bare keywords which then get mis-interpreted as identifiers (wrapped in double quotes), and doesn't translate the structure.
+**Manual fix applied:** In `V202604241700__v5.30.x__Unified_Permissions_Phase_2.pg.sql`, hand-rewrote the §4 block (UI role permissions + RLS filters) to use `INSERT INTO … VALUES … ON CONFLICT (x) DO UPDATE SET …`. Documented inline.
+**Pipeline fix needed:** SQLConverter rule for `MERGE INTO`. PG 15+ has its own `MERGE` syntax (slightly different from SS), or it can be lowered to `INSERT ... ON CONFLICT`. Either is correct; ON CONFLICT is more broadly supported.
+**Status:** ⚠️ Open. Affected files: 1 (Unified_Permissions_Phase_2). v5.30.1 follow-up.
+
+### A7. `DECLARE @x type = value` (variable initialization with default)
+**What:** T-SQL `DECLARE @FilterAgentRunsID UNIQUEIDENTIFIER = 'E1AF0001-...';` (single-statement declare-and-assign). The converter currently emits `-- Could not parse: …` comments and leaves the declarations broken.
+**Manual fix applied:** Replaced with PG `DECLARE v_filter_agent_runs_id UUID := 'E1AF0001-...';` in the hand-fixed Unified_Permissions_Phase_2.
+**Pipeline fix needed:** Extend the DECLARE statement parser in DeclareDmlBlockRule to recognize the `= value` initializer and translate to PG's `:=` syntax.
+**Status:** ⚠️ Open. Recurs anywhere T-SQL initializes locals at declare time. v5.30.1.
+
+### A8. Constraint names not quoted (case-folded on PG)
+**What:** Generated PG output writes `CONSTRAINT PK_FooBar PRIMARY KEY (...)` unquoted. PG case-folds unquoted identifiers, so the constraint actually lands as `pk_foobar`. SS preserves `PK_FooBar`. The constraint exists with the same scope and behavior; only the *name* differs from SS.
+**Manual fix applied:** None (functional, but cosmetic mismatch with SS).
+**Pipeline fix needed:** Same fix-class as A5/A6 — teach SQLConverter to quote `CONSTRAINT` names. Probably a small extension to the existing `quoteAsAliases` work that already handles `AS` aliases.
+**Status:** ⚠️ Open, low-priority. Apps don't reference these names. v5.30.1.
+
+### A9. SQL Server scratch DB application requires `SET QUOTED_IDENTIFIER ON`
+**What:** Migrations like `Runtime_Actions_Schema.sql` reference computed-column expressions and indexed views that fail with `Msg 1934` unless `QUOTED_IDENTIFIER ON` is set. The migration files don't include this `SET` themselves; Flyway ships with it on by default but ad-hoc `sqlcmd` runs don't.
+**Manual fix applied:** Prepend `SET QUOTED_IDENTIFIER ON; SET ANSI_NULLS ON; GO` when applying via sqlcmd directly (used during equivalence verification tonight).
+**Pipeline fix needed:** None — Flyway and the standard MJ migrate path set this correctly. Document for devs running migrations manually.
+**Status:** ✅ Documented (this entry). No code change needed.
+
 ---
 
 ## Category B: PG baseline should include (missing from migrations)
