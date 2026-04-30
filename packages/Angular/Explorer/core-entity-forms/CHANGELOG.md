@@ -1,5 +1,100 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.30.1
+- @memberjunction/ai@5.30.1
+- @memberjunction/ai-core-plus@5.30.1
+- @memberjunction/actions-base@5.30.1
+- @memberjunction/ng-base-application@5.30.1
+- @memberjunction/ng-link-directives@5.30.1
+- @memberjunction/ng-shared@5.30.1
+- @memberjunction/ng-testing@5.30.1
+- @memberjunction/ng-action-gallery@5.30.1
+- @memberjunction/ng-actions@5.30.1
+- @memberjunction/ng-agents@5.30.1
+- @memberjunction/ng-ai-test-harness@5.30.1
+- @memberjunction/ng-base-forms@5.30.1
+- @memberjunction/ng-code-editor@5.30.1
+- @memberjunction/ng-deep-diff@5.30.1
+- @memberjunction/ng-entity-relationship-diagram@5.30.1
+- @memberjunction/ng-entity-viewer@5.30.1
+- @memberjunction/ng-flow-editor@5.30.1
+- @memberjunction/ng-join-grid@5.30.1
+- @memberjunction/ng-list-management@5.30.1
+- @memberjunction/ng-markdown@5.30.1
+- @memberjunction/ng-notifications@5.30.1
+- @memberjunction/ng-shared-generic@5.30.1
+- @memberjunction/ng-tabstrip@5.30.1
+- @memberjunction/ng-timeline@5.30.1
+- @memberjunction/ng-trees@5.30.1
+- @memberjunction/ng-ui-components@5.30.1
+- @memberjunction/ng-versions@5.30.1
+- @memberjunction/graphql-dataprovider@5.30.1
+- @memberjunction/core@5.30.1
+- @memberjunction/core-entities@5.30.1
+- @memberjunction/global@5.30.1
+- @memberjunction/templates-base-types@5.30.1
+
+## 5.30.0
+
+### Minor Changes
+
+- c2c5892: Activate Memory Manager consolidation pipeline with drift prevention, entity-attribute contradiction detection, Ebbinghaus decay-based archival, protection tiers, and composite importance scoring. Adds the `AIAgentNote` consolidation schema (`ConsolidatedIntoNoteID`, `ConsolidationCount`, `DerivedFromNoteIDs`, `ProtectionTier`, `ImportanceScore`) and enforces the vector-store Status invariant write-side in `MJAIAgentNoteEntityServer.Save()` / `.Delete()` so revoked notes are removed from retrieval without an MJAPI restart. Expands Memory Manager observability with per-phase run-step payloads: `scoreDistribution`, `entityTriplesExtracted`, `decayScoreDistribution`, `protectedPreserved`, `ephemeralAccelerated`, consolidation `triggerType` (forced/time/event/count), a new `Verify Consolidation Output` phase-level run step, and per-cluster `Process Consolidation Cluster` child steps. Adds 95th-percentile uniqueness outlier auto-protection in importance scoring. Deprecates the Memory Cleanup Agent in favor of the unified Memory Manager pipeline.
+- 4729398: Runtime Actions — Phase 1 complete. Introduces `Action.Type='Runtime'`, a new action type where agents dynamically generate, test, and persist JavaScript actions that execute in MJ's isolated-vm sandbox with a permissioned bridge to metadata, views, queries, entity CRUD, other actions, agents, and AI prompts. Ships the v5.29.x migration (new `RuntimeActionConfiguration`, universal `MaxExecutionTimeMS`, and `CreatedByAgentID` columns on `Action`), the JSONType-authored config interface, the Zod validator with drift detection, the bidirectional IPC bridge in WorkerPool, the full `utilities.*` handler surface, the ActionSmith meta-agent with `Create Runtime Action` / `Test Runtime Action` helpers, Agent Manager wiring, the generic `Execute Agent` action, and Runtime-aware approval UI enhancements. Minor bumps across all touched packages because the schema migration + metadata records are coupled surface changes.
+
+### Patch Changes
+
+- 8980b38: fix(codegen): native geo-field detection ignores virtual fields; relax strictTemplates on generated forms
+  1. **Native geo-field detection now excludes virtual fields.** The view-introspection pass synthesizes virtual `__mj_Latitude`/`__mj_Longitude` EntityField rows that an in-file UPDATE intentionally tags with `ExtendedType=GeoLatitude/Longitude` (so downstream consumers can introspect them as geo data — by design). Without this fix, the native-vs-JOIN view-shape detector mistook those tags for real native table columns on the next CodeGen run, switched to native-path DDL, and tried to `SELECT e.__mj_Longitude FROM dbo.<Table> e` — column doesn't exist on the table, view CREATE fails. Because CodeGen drops the existing view before recreating, the failed CREATE left the entity with no view at all, cascading into broken stored procs. Detection now enforces the precondition the native path requires: `ExtendedType=Geo*` AND `IsVirtual=false`. Virtual rows stay tagged for downstream consumers; they just no longer mislead the table-vs-JOIN switch, so geo-eligible entities correctly fall through to the LEFT JOIN against `vwRecordGeoCodes`.
+  2. **`strictTemplates: false` on `@memberjunction/ng-core-entity-forms`.** Forms in that package are emitted by CodeGen, one per entity. Supertype entities with many inbound FKs (Salesforce User, Account, Contact frequently exceed 1000) generate a single template with one `<mj-collapsible-panel>` per related entity. With `strictTemplates: true`, Angular generates a Type Check Block representing the whole template as one TypeScript expression — at ~150+ panels the TCB exceeds TypeScript's expression-complexity limit (TS2563 "Excessive complexity in this expression"), failing the build. Type safety on these templates is guaranteed by CodeGen construction (bindings come from the same metadata that generates the component class), so the trade is acceptable to remove the form-generator's hard scale ceiling. Runtime behavior, render perf, and bundle size are unchanged.
+
+- 68bf87f: Archive entity CodeGen migration with updated views/SPs, field display name corrections, and RuntimeActionConfiguration type fix
+- 216ddc3: Wrap sequential Save/Delete looops in atomic transcatoins (TransactionGroup client-side BeginTransaction/Commit/Rollback server-side)
+- Updated dependencies [c2c5892]
+- Updated dependencies [68bf87f]
+- Updated dependencies [963f2df]
+- Updated dependencies [4729398]
+- Updated dependencies [9154ac7]
+- Updated dependencies [b1f32a4]
+- Updated dependencies [c199f3b]
+- Updated dependencies [216ddc3]
+  - @memberjunction/core-entities@5.30.0
+  - @memberjunction/core@5.30.0
+  - @memberjunction/actions-base@5.30.0
+  - @memberjunction/ai-core-plus@5.30.0
+  - @memberjunction/graphql-dataprovider@5.30.0
+  - @memberjunction/ai-engine-base@5.30.0
+  - @memberjunction/ng-flow-editor@5.30.0
+  - @memberjunction/ng-base-application@5.30.0
+  - @memberjunction/ng-shared@5.30.0
+  - @memberjunction/ng-testing@5.30.0
+  - @memberjunction/ng-action-gallery@5.30.0
+  - @memberjunction/ng-actions@5.30.0
+  - @memberjunction/ng-agents@5.30.0
+  - @memberjunction/ng-ai-test-harness@5.30.0
+  - @memberjunction/ng-base-forms@5.30.0
+  - @memberjunction/ng-code-editor@5.30.0
+  - @memberjunction/ng-entity-viewer@5.30.0
+  - @memberjunction/ng-join-grid@5.30.0
+  - @memberjunction/ng-list-management@5.30.0
+  - @memberjunction/ng-notifications@5.30.0
+  - @memberjunction/ng-shared-generic@5.30.0
+  - @memberjunction/ng-trees@5.30.0
+  - @memberjunction/ng-versions@5.30.0
+  - @memberjunction/templates-base-types@5.30.0
+  - @memberjunction/ng-link-directives@5.30.0
+  - @memberjunction/ng-deep-diff@5.30.0
+  - @memberjunction/ng-entity-relationship-diagram@5.30.0
+  - @memberjunction/ng-timeline@5.30.0
+  - @memberjunction/ng-tabstrip@5.30.0
+  - @memberjunction/ai@5.30.0
+  - @memberjunction/ng-markdown@5.30.0
+  - @memberjunction/ng-ui-components@5.30.0
+  - @memberjunction/global@5.30.0
+
 ## 5.29.0
 
 ### Patch Changes

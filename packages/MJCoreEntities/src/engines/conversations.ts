@@ -11,6 +11,30 @@ import {
     MJConversationDetailArtifactEntityType
 } from "../generated/entity_subclasses";
 import { ArtifactMetadataEngine } from "./artifacts";
+import { ResourcePermissionEngine } from "../custom/ResourcePermissions/ResourcePermissionEngine";
+
+/**
+ * `MJ: Resource Types.ID` for Conversations. Conversations that the current
+ * user doesn't own but has been granted access to (via `MJ: Resource Permissions`)
+ * are folded into the list by `LoadConversations` using this ID.
+ */
+const CONVERSATIONS_RESOURCE_TYPE_ID = '81D4BC3D-9FEB-EF11-B01A-286B35C04427';
+
+/**
+ * Display info about the user who shared a conversation with the current user,
+ * plus the `PermissionLevel` the grantee was granted. Exposed via
+ * {@link ConversationEngine.GetSharedByInfo} for UI surfaces that render
+ * "Shared by {email}" badges and gate actions (e.g., View-only recipients
+ * can't send messages).
+ */
+export interface SharedByInfo {
+    /** Grantor user ID. Null when the share predates the `SharedByUserID` column. */
+    UserID: string | null;
+    Name: string | null;
+    Email: string | null;
+    /** Level the current user was granted on this conversation. */
+    Level: 'View' | 'Edit' | 'Owner';
+}
 
 // ========================================================================
 // QUERY RESULT TYPES (from GetConversationComplete stored query)
@@ -190,6 +214,23 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
     private _lastEnvironmentId: string | null = null;
 
     /**
+     * For conversations the current user *received* via sharing, this map goes
+     * from `conversationId` to the grantor's display info. Populated by
+     * {@link LoadConversations} using the `SharedByUserID` column on the
+     * `MJ: Resource Permissions` row. Used by the chat UI to render
+     * "Shared by {email}" next to the title and a share icon in the sidebar.
+     */
+    private _sharedByByConversationId = new Map<string, SharedByInfo>();
+
+    /**
+     * Look up grantor info for a conversation the current user was shared into.
+     * Returns `null` for conversations the user owns (not shared with them).
+     */
+    public GetSharedByInfo(conversationId: string): SharedByInfo | null {
+        return this._sharedByByConversationId.get(NormalizeUUID(conversationId)) ?? null;
+    }
+
+    /**
      * Guard flag: set true while the engine itself is performing a mutation.
      * Prevents the entity event handler from re-processing our own saves/deletes,
      * which would cause redundant cache updates or infinite loops.
@@ -242,8 +283,27 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
 
         this._lastEnvironmentId = environmentId;
 
+        // Include conversations the user has been granted access to via
+        // `MJ: Resource Permissions`. ResourcePermissionEngine caches the full
+        // permission table; GetUserAvailableResources filters it to approved
+        // grants (direct + role-inherited) for this user + resource type.
+        await ResourcePermissionEngine.Instance.Config(false, contextUser);
+        const sharedPermissions = ResourcePermissionEngine.Instance
+            .GetUserAvailableResources(contextUser, CONVERSATIONS_RESOURCE_TYPE_ID);
+        const sharedConversationIds = sharedPermissions.map((p) => p.ResourceRecordID);
+
+        // Build the "shared by" map for the sidebar/header UI. Requires one
+        // extra query to fetch grantor emails (the ResourcePermission view
+        // only denormalizes Name, not Email).
         const rv = new RunView();
-        const filter = `EnvironmentID='${environmentId}' AND UserID='${contextUser.ID}' AND (IsArchived IS NULL OR IsArchived=0)`;
+        await this.rebuildSharedByMap(rv, sharedPermissions, contextUser);
+
+        const ownershipClause = `UserID='${contextUser.ID}'`;
+        const sharedClause =
+            sharedConversationIds.length > 0
+                ? ` OR ID IN (${sharedConversationIds.map((id) => `'${id}'`).join(',')})`
+                : '';
+        const filter = `EnvironmentID='${environmentId}' AND (${ownershipClause}${sharedClause}) AND (IsArchived IS NULL OR IsArchived=0)`;
 
         const result = await rv.RunView<MJConversationEntity>(
             {
@@ -261,6 +321,64 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         } else {
             console.error('[ConversationEngine] Failed to load conversations:', result.ErrorMessage);
             this._conversations$.next([]);
+        }
+    }
+
+    /**
+     * Populates {@link _sharedByByConversationId}. Resolves grantor emails via
+     * one `MJ: Users` query keyed on the unique set of `SharedByUserID`s.
+     * Rows without a `SharedByUserID` (legacy shares predating the column)
+     * are skipped — the UI degrades to no badge for those.
+     */
+    private async rebuildSharedByMap(
+        rv: RunView,
+        sharedPermissions: Array<{
+            ResourceRecordID: string;
+            SharedByUserID: string | null;
+            SharedByUser: string | null;
+            PermissionLevel: 'View' | 'Edit' | 'Owner' | null;
+        }>,
+        contextUser: UserInfo
+    ): Promise<void> {
+        this._sharedByByConversationId.clear();
+        if (sharedPermissions.length === 0) return;
+
+        const grantorIds = Array.from(
+            new Set(
+                sharedPermissions
+                    .map((p) => p.SharedByUserID)
+                    .filter((id): id is string => !!id)
+            )
+        );
+
+        const emailByUserId = new Map<string, string | null>();
+        if (grantorIds.length > 0) {
+            const inClause = grantorIds.map((id) => `'${id}'`).join(',');
+            const result = await rv.RunView<{ ID: string; Email: string | null }>(
+                {
+                    EntityName: 'MJ: Users',
+                    ExtraFilter: `ID IN (${inClause})`,
+                    Fields: ['ID', 'Email'],
+                    ResultType: 'simple'
+                },
+                contextUser
+            );
+            if (result.Success) {
+                for (const u of result.Results ?? []) {
+                    emailByUserId.set(NormalizeUUID(u.ID), u.Email ?? null);
+                }
+            }
+        }
+
+        for (const perm of sharedPermissions) {
+            this._sharedByByConversationId.set(NormalizeUUID(perm.ResourceRecordID), {
+                UserID: perm.SharedByUserID ?? null,
+                Name: perm.SharedByUser ?? null,
+                Email: perm.SharedByUserID
+                    ? emailByUserId.get(NormalizeUUID(perm.SharedByUserID)) ?? null
+                    : null,
+                Level: perm.PermissionLevel ?? 'View'
+            });
         }
     }
 
@@ -740,26 +858,38 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
 
             const parsed = parseConversationDetailComplete(row);
 
-            // Merge agent runs: update in-place or add
+            // Merge agent runs: update in-place or add.
+            //
+            // Important: `existingRun` may be a plain JSON object rather than a BaseEntity.
+            // Progress-update events from the agent runner stream deserialized JSON via
+            // `SetAgentRunForDetail()`; those objects have no prototype methods. Duck-type
+            // check for `LoadFromData` before calling it, and hydrate a real entity when
+            // we only have plain data. Mirrors the pattern in
+            // `conversation-chat-area.component.ts#onMessageComplete` (line ~909).
             if (parsed.agentRuns.length > 0) {
                 const agentRunData = parsed.agentRuns[0];
+                const mergeFields = {
+                    ID: agentRunData.ID,
+                    AgentID: agentRunData.AgentID,
+                    Agent: agentRunData.Agent,
+                    Status: agentRunData.Status,
+                    __mj_CreatedAt: agentRunData.__mj_CreatedAt,
+                    __mj_UpdatedAt: agentRunData.__mj_UpdatedAt,
+                    TotalPromptTokensUsed: agentRunData.TotalPromptTokensUsed,
+                    TotalCompletionTokensUsed: agentRunData.TotalCompletionTokensUsed,
+                    TotalCost: agentRunData.TotalCost,
+                    ConversationDetailID: agentRunData.ConversationDetailID
+                };
+
                 const existingRun = existing.AgentRunsByDetailId.get(row.ID);
-                if (existingRun) {
-                    existingRun.LoadFromData({
-                        ID: agentRunData.ID,
-                        AgentID: agentRunData.AgentID,
-                        Agent: agentRunData.Agent,
-                        Status: agentRunData.Status,
-                        __mj_CreatedAt: agentRunData.__mj_CreatedAt,
-                        __mj_UpdatedAt: agentRunData.__mj_UpdatedAt,
-                        TotalPromptTokensUsed: agentRunData.TotalPromptTokensUsed,
-                        TotalCompletionTokensUsed: agentRunData.TotalCompletionTokensUsed,
-                        TotalCost: agentRunData.TotalCost,
-                        ConversationDetailID: agentRunData.ConversationDetailID
-                    });
+                const existingRunIsEntity = !!existingRun && typeof (existingRun as { LoadFromData?: unknown }).LoadFromData === 'function';
+
+                if (existingRunIsEntity) {
+                    existingRun!.LoadFromData(mergeFields);
                 } else {
+                    // Either no existing run, or existing value is plain JSON — hydrate fresh.
                     const newRun = await md.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', contextUser);
-                    newRun.LoadFromData(agentRunData);
+                    newRun.LoadFromData(existingRun ? { ...existingRun, ...mergeFields } : agentRunData);
                     existing.AgentRunsByDetailId.set(row.ID!, newRun);
                 }
             }
