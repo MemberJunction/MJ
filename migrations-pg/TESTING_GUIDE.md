@@ -123,7 +123,19 @@ The audit produces a per-migration report: which file, which categories missing,
 
 The third row is critical for trusting the audit. Running it against the OLD baseline source flagged exactly the 26 v5.30 objects we knew were missing (PermissionDomain table + 5 Memory_Consolidation columns + 3 Runtime_Actions columns + 17 supporting indexes/views/functions/constraints), proving the audit catches real gaps and isn't just returning 0 for everything.
 
-**Run:** `PG_DATABASE=<db> node scripts/audit-baseline-completeness.mjs`
+**Run:**
+```bash
+# Audit a baseline-applied DB against migrations in the worktree:
+MIGRATIONS_DIR=../MJ-pg-migrations-worktree/migrations-pg/v5 \
+  PG_DATABASE=mj_pg_baseline_test \
+  PG_PASSWORD=... \
+  node scripts/audit-baseline-completeness.mjs
+
+# Or on a checkout that has the V*.pg.sql files in-tree:
+PG_DATABASE=mj_pg_baseline_test PG_PASSWORD=... \
+  node scripts/audit-baseline-completeness.mjs
+```
+Defaults to `MIGRATIONS_DIR=migrations-pg/v5`. On the baseline-only branch, point at the historical-migrations checkout via `MIGRATIONS_DIR=...`.
 
 ### 2.2 Schema dump diff
 

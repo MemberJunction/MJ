@@ -10,8 +10,13 @@
  * Usage: node scripts/test-pg-autoquoter-coverage.mjs
  */
 
-const ENDPOINT = 'http://localhost:4001/';
-const API_KEY = process.env.MJ_API_KEY ?? 'dev_pg_test_local_only';
+const ENDPOINT = process.env.MJ_API_ENDPOINT ?? 'http://localhost:4001/';
+const API_KEY = process.env.MJ_API_KEY;
+
+if (!API_KEY) {
+  console.error('MJ_API_KEY env var is required (use the value from your MJAPI .env).');
+  process.exit(1);
+}
 
 async function gql(query, label) {
   const res = await fetch(ENDPOINT, {

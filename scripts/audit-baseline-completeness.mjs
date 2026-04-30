@@ -1,16 +1,32 @@
 /**
  * Per-migration baseline-completeness audit.
  *
- * For each .pg.sql / .pg-only.sql migration in the worktree, parse the file for
- * CREATE TABLE, ALTER TABLE ADD COLUMN, CREATE INDEX, CREATE VIEW, CREATE
- * FUNCTION, CREATE TYPE, ALTER TABLE ADD CONSTRAINT statements. For each named
- * object, query the target PG database to verify it exists. Report per-migration
- * whether every object the migration adds is present in the database.
+ * For each .pg.sql / .pg-only.sql migration found in MIGRATIONS_DIR, parse the
+ * file for CREATE TABLE, ALTER TABLE ADD COLUMN, CREATE INDEX, CREATE VIEW,
+ * CREATE FUNCTION, ADD CONSTRAINT statements. For each named object, query the
+ * target PG database to verify it exists. Report per-migration whether every
+ * object the migration adds is present in the database.
  *
  * Usage:
- *   PG_DATABASE=mj_pg_baseline_test node scripts/audit-baseline-completeness.mjs
+ *   # Audit a baseline-applied DB against migrations in the worktree
+ *   MIGRATIONS_DIR=../MJ-pg-migrations-worktree/migrations-pg/v5 \
+ *     PG_DATABASE=mj_pg_baseline_test \
+ *     PG_PASSWORD=...                  \
+ *     node scripts/audit-baseline-completeness.mjs
  *
- * Pass — every migration's objects are present.
+ *   # Or, on the historical-migrations branch where files are in-tree:
+ *   PG_DATABASE=mj_pg_baseline_test PG_PASSWORD=... \
+ *     node scripts/audit-baseline-completeness.mjs
+ *
+ * Defaults to the local `migrations-pg/v5` directory. On the baseline path
+ * branch (where only the baseline file lives), point MIGRATIONS_DIR at a
+ * checkout of the historical-migrations branch (or any directory with the
+ * V*.pg.sql files) to verify the baseline contains all of their content.
+ *
+ * All PG connection settings come from PG_* env vars (no hardcoded defaults
+ * for password). Set PG_PASSWORD before running.
+ *
+ * Pass — every migration's objects are present in the database.
  * Fail — list of missing objects per migration.
  */
 
@@ -18,14 +34,19 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import pg from 'pg';
 
-const MIGRATIONS_DIR = process.env.MIGRATIONS_DIR ?? 'C:/Dev/MJ/MJ-pg-migrations-worktree/migrations-pg/v5';
+const MIGRATIONS_DIR = process.env.MIGRATIONS_DIR ?? 'migrations-pg/v5';
 const DB_CONFIG = {
   host: process.env.PG_HOST ?? 'localhost',
   port: parseInt(process.env.PG_PORT ?? '5432', 10),
   database: process.env.PG_DATABASE ?? 'mj_pg_baseline_test',
   user: process.env.PG_USERNAME ?? 'postgres',
-  password: process.env.PG_PASSWORD ?? 'z2qXgNvvstcc',
+  password: process.env.PG_PASSWORD,
 };
+
+if (!DB_CONFIG.password) {
+  console.error('PG_PASSWORD env var is required.');
+  process.exit(1);
+}
 
 // Match `CREATE TABLE [IF NOT EXISTS] [schema.]"TableName"` (or unquoted)
 const RE_CREATE_TABLE = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:[\w.${}]+\.)?["[]?(\w+)["\]]?\s*\(/gi;
