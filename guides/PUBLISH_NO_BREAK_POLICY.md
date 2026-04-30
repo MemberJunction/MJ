@@ -22,7 +22,7 @@ Practically: if you discover a mistake in a migration on `next` *before* the nex
 
 | Forbidden | Why |
 |---|---|
-| Dropping a table | Downstream apps may have foreign keys to it; dropping breaks their migrations |
+| Dropping a table | Both internal callers (views, SPs, code in the same app) and downstream apps with foreign keys to it are broken; the cross-app foreign-key case is the motivating one for this policy |
 | Dropping a column | Downstream code may read or write it; codegen will also regenerate SPs without that column's parameter, breaking historical `EXEC` calls |
 | Renaming a column | The old name disappears (same blast radius as dropping the column — see above), and any view, custom SQL, or downstream code that referenced it by name silently breaks |
 | Narrowing a column's type (`nvarchar(100)` → `nvarchar(50)`, `bigint` → `int`, `decimal(18,4)` → `decimal(10,2)`) | Existing data may not fit; downstream callers may pass values that no longer round-trip |
@@ -53,9 +53,9 @@ A deprecated entity or column:
 - **Continues to function** at runtime. Reads, writes, and SP calls behave identically.
 - **Is flagged as not-for-new-use.** Tooling, documentation, and developer awareness should steer new code away from it.
 
-Deprecation does NOT mean "scheduled for deletion in version X.Y." Once deprecated within a published major version, a thing stays present until the next major version bump. It's a soft-removal that preserves backwards compatibility.
+Deprecation does NOT mean "scheduled for deletion in version X.Y." Once deprecated within a published major version, a thing stays present indefinitely. If the app eventually bumps a major version, that's the moment when accumulated deprecations can be physically removed; some apps may never bump major, and that's fine — the deprecated columns are harmless dead weight.
 
-To physically remove a deprecated entity or column, ship a new major version (see below).
+To physically remove a deprecated entity or column, you need a major version bump (see below).
 
 ## Breaking changes force a major version bump
 
