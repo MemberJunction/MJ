@@ -12,8 +12,8 @@ Each fix is categorized by whether it should be automated in the pipeline, inclu
 **What:** 35 rows in `DatasetItem` had `"__mj_UpdatedAt"` (with literal `"` chars) instead of `__mj_UpdatedAt`. Caused `zero-length delimited identifier` errors on every MJAPI request, including auth middleware → "Authentication failed" on every login attempt.
 **Manual fix applied:** `UPDATE __mj."DatasetItem" SET "DateFieldToCheck" = REPLACE("DateFieldToCheck", '"', '') WHERE "DateFieldToCheck" LIKE '%"%'`
 **Root cause:** The T-SQL→PG converter's InsertRule converted `[bracket-quoted]` identifiers to `"double-quoted"` — including inside data VALUES where brackets were literal text, not identifiers. E.g., `[__mj_UpdatedAt]` in a WHERE clause value became `"__mj_UpdatedAt"`.
-**Pipeline fix:** Already fixed in current converter — `InsertRule` uses `transformCodeOnly` to protect string literals from `__mj_` quoting. The contaminated data in the existing baseline is from an older conversion run. Reconverting the baseline with the current converter produces clean output.
-**Status:** ✅ Converter is correct. Baseline needs reconversion (included in the migration files PR when all files are regenerated).
+**Pipeline fix:** Already fixed in current converter — `InsertRule` uses `transformCodeOnly` to protect string literals from `__mj_` quoting. The contaminated data was in the legacy v5.0 baseline; the new v5.30 baseline (`B202604301800__v5.30__PG_Baseline.pg.sql`) is dumped from a clean canonical PG state and contains no such contamination.
+**Status:** ✅ Converter is correct. New baseline is clean.
 
 ### A2. EntityField Sequence collisions across migrations
 **What:** Two migrations inserting EntityField rows for the same entity both used Sequence=100048, violating `UQ_EntityField_EntityID_Sequence`.
@@ -67,9 +67,8 @@ Each fix is categorized by whether it should be automated in the pipeline, inclu
 
 ### B1. Database roles: `cdp_UI`, `cdp_Developer`, `cdp_Integration`
 **What:** GRANT statements in migrations and CodeGen reference these roles. They don't exist on a fresh PG install.
-**Manual fix applied:** `CREATE ROLE "cdp_UI" NOLOGIN; CREATE ROLE "cdp_Developer" NOLOGIN; CREATE ROLE "cdp_Integration" NOLOGIN;` + GRANT statements.
-**Where it should live:** PG baseline migration (`B202602151200__v5.0__Baseline.pg.sql`) or a dedicated `pg-only` bootstrap migration.
-**Status:** Not yet in baseline. Currently in `scripts/pg-bootstrap-helpers.sql`.
+**Pipeline fix:** **DONE** — the new v5.30 baseline (`B202604301800__v5.30__PG_Baseline.pg.sql`) creates all three roles in its prelude via idempotent `DO $$ ... CREATE ROLE IF NOT EXISTS ... $$` blocks. No bootstrap script needed.
+**Status:** ✅ Shipped.
 
 ### B2. `spGetPrimaryKeyForTable` function
 **What:** CodeGen calls this during entity validation. Exists on SQL Server but was never ported to PG baseline.
@@ -83,9 +82,8 @@ Each fix is categorized by whether it should be automated in the pipeline, inclu
 
 ### B4. `UQ_User_Email` unique index
 **What:** SQL Server baseline has a unique index on `User.Email`. PG baseline doesn't. Without it, every auth provider login can create a duplicate user row.
-**Manual fix applied:** `CREATE UNIQUE INDEX IF NOT EXISTS "UQ_User_Email" ON __mj."User" ("Email")`.
-**Where it should live:** PG baseline migration.
-**Status:** Not yet in baseline.
+**Pipeline fix:** **DONE** — present in the new v5.30 baseline (`B202604301800__v5.30__PG_Baseline.pg.sql`). Verified via direct query against a fresh apply.
+**Status:** ✅ Shipped.
 
 ### B5. `BaseViewGenerated = false` on custom views
 **What:** 5+ entities (Entity Fields, Company Integrations, User Views, Company Integration Runs, AI Models) had `BaseViewGenerated = false` in the PG metadata. CodeGen skips view regeneration for these. When new columns are added by migrations, the views become stale.
