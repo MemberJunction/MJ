@@ -14,13 +14,6 @@ SET search_path TO __mj, public;
 -- Ensure backslashes in string literals are treated literally (not as escape sequences)
 SET standard_conforming_strings = on;
 
--- Implicit INTEGER -> BOOLEAN cast (SQL Server BIT columns accept 0/1 in INSERTs)
--- PostgreSQL has a built-in explicit-only INTEGER->bool cast. We upgrade it to implicit
--- so INSERT VALUES with 0/1 for BOOLEAN columns work like SQL Server BIT.
-UPDATE pg_cast SET castcontext = 'i'
-WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
-
-
 -- ===================== DDL: Tables, PKs, Indexes =====================
 
 -- PR #2209 Part 3.6: MCP Tool Favorites
@@ -274,16 +267,16 @@ INSERT INTO __mj."Entity" (
          'MCPToolFavorite',
          'vwMCPToolFavorites',
          '__mj',
-         1,
-         1,
-         1
-         , 1
-         , 0
-         , 0
-         , 0
-         , 1
-         , 1
-         , 1
+         TRUE,
+         TRUE,
+         TRUE
+         , TRUE
+         , FALSE
+         , FALSE
+         , FALSE
+         , TRUE
+         , TRUE
+         , TRUE
          , 1000
          , NOW()
          , NOW()
@@ -297,17 +290,17 @@ INSERT INTO __mj."ApplicationEntity"
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('3fe3016c-1e34-4510-9a68-7b1664f58217', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, NOW(), NOW());
+                                                   ('3fe3016c-1e34-4510-9a68-7b1664f58217', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, FALSE, FALSE, FALSE, NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: MCP Tool Favorites for role Developer */
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('3fe3016c-1e34-4510-9a68-7b1664f58217', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0, NOW(), NOW());
+                                                   ('3fe3016c-1e34-4510-9a68-7b1664f58217', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, FALSE, NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: MCP Tool Favorites for role Integration */
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('3fe3016c-1e34-4510-9a68-7b1664f58217', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, NOW(), NOW());
+                                                   ('3fe3016c-1e34-4510-9a68-7b1664f58217', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, TRUE, NOW(), NOW());
 /* SQL text to add special date field __mj_CreatedAt to entity __mj."MCPToolFavorite" */
 
 /* SQL text to add special date field __mj_CreatedAt to entity __mj."MCPToolFavorite" */
@@ -374,19 +367,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         'gen_random_uuid()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        1,
-        0,
-        0,
-        1,
-        1,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        TRUE,
+        TRUE,
         'Search',
         NOW(),
         NOW()
@@ -440,19 +433,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         'E1238F34-2837-EF11-86D4-6045BDEE16E6',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        TRUE,
         'Search',
         NOW(),
         NOW()
@@ -506,19 +499,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         '36ECEE63-1EDD-4BF0-8EF1-DCFDF2794F4D',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        TRUE,
         'Search',
         NOW(),
         NOW()
@@ -572,19 +565,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -638,19 +631,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -664,7 +657,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '7c449931-da64-438c-944b-72042e7da3de'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('7c449931-da64-438c-944b-72042e7da3de', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', '3FE3016C-1E34-4510-9A68-7B1664F58217', 'UserID', 'One To Many', 1, 1, 1, NOW(), NOW());
+        VALUES ('7c449931-da64-438c-944b-72042e7da3de', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', '3FE3016C-1E34-4510-9A68-7B1664F58217', 'UserID', 'One To Many', TRUE, TRUE, 1, NOW(), NOW());
     END IF;
 END $$;
 
@@ -674,7 +667,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '07619957-d9d6-4355-9bb2-607020be47de'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('07619957-d9d6-4355-9bb2-607020be47de', '36ECEE63-1EDD-4BF0-8EF1-DCFDF2794F4D', '3FE3016C-1E34-4510-9A68-7B1664F58217', 'MCPServerToolID', 'One To Many', 1, 1, 2, NOW(), NOW());
+        VALUES ('07619957-d9d6-4355-9bb2-607020be47de', '36ECEE63-1EDD-4BF0-8EF1-DCFDF2794F4D', '3FE3016C-1E34-4510-9A68-7B1664F58217', 'MCPServerToolID', 'One To Many', TRUE, TRUE, 2, NOW(), NOW());
     END IF;
 END $$;
 
@@ -724,19 +717,19 @@ BEGIN
         200,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -790,19 +783,19 @@ BEGIN
         510,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -811,29 +804,29 @@ BEGIN
 END $$;
 
 UPDATE __mj."EntityField"
-               SET "IsNameField" = 1
+               SET "IsNameField" = TRUE
                WHERE "ID" = 'BDAC7CF2-574E-4FC4-8D36-AFF8FFA5A867'
-               AND "AutoUpdateIsNameField" = 1;
+               AND "AutoUpdateIsNameField" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = 'C9583CF3-453B-4378-AABB-3E3AE1E9717B'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '92729D70-C7C8-4714-9BA9-4F78341982C2'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = 'BDAC7CF2-574E-4FC4-8D36-AFF8FFA5A867'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = 'BDAC7CF2-574E-4FC4-8D36-AFF8FFA5A867'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 /* Set categories for 7 fields */
 -- UPDATE Entity Field Category Info MJ: MCP Tool Favorites."ID"
 
@@ -844,7 +837,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'EE48E505-794C-48C8-A8FC-6EC31794FD7B' AND "AutoUpdateCategory" = 1;
+   "ID" = 'EE48E505-794C-48C8-A8FC-6EC31794FD7B' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: MCP Tool Favorites."UserID"
 
 UPDATE __mj."EntityField"
@@ -855,7 +848,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '969AB93C-41AF-4BA8-8A3A-682286E8F7B5' AND "AutoUpdateCategory" = 1;
+   "ID" = '969AB93C-41AF-4BA8-8A3A-682286E8F7B5' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: MCP Tool Favorites."MCPServerToolID"
 
 UPDATE __mj."EntityField"
@@ -866,7 +859,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'F1687507-AEFF-424E-8E03-6135528A1FED' AND "AutoUpdateCategory" = 1;
+   "ID" = 'F1687507-AEFF-424E-8E03-6135528A1FED' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: MCP Tool Favorites."User"
 
 UPDATE __mj."EntityField"
@@ -877,7 +870,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '92729D70-C7C8-4714-9BA9-4F78341982C2' AND "AutoUpdateCategory" = 1;
+   "ID" = '92729D70-C7C8-4714-9BA9-4F78341982C2' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: MCP Tool Favorites."MCPServerTool"
 
 UPDATE __mj."EntityField"
@@ -888,7 +881,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'BDAC7CF2-574E-4FC4-8D36-AFF8FFA5A867' AND "AutoUpdateCategory" = 1;
+   "ID" = 'BDAC7CF2-574E-4FC4-8D36-AFF8FFA5A867' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: MCP Tool Favorites.__mj_CreatedAt
 
 UPDATE __mj."EntityField"
@@ -898,7 +891,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'C9583CF3-453B-4378-AABB-3E3AE1E9717B' AND "AutoUpdateCategory" = 1;
+   "ID" = 'C9583CF3-453B-4378-AABB-3E3AE1E9717B' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: MCP Tool Favorites.__mj_UpdatedAt
 
 UPDATE __mj."EntityField"
@@ -908,7 +901,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'CF0AB335-C73E-40F9-8709-3CDCD43E7FF3' AND "AutoUpdateCategory" = 1;
+   "ID" = 'CF0AB335-C73E-40F9-8709-3CDCD43E7FF3' AND "AutoUpdateCategory" = TRUE;
 /* Set entity icon to fa fa-star */
 
 UPDATE __mj."Entity"
@@ -925,7 +918,7 @@ INSERT INTO __mj."EntitySetting" ("ID", "EntityID", "Name", "Value", "__mj_Creat
 /* Set DefaultForNewUser=0 for NEW entity (category: junction, confidence: high) */
 
 UPDATE __mj."ApplicationEntity"
-         SET "DefaultForNewUser" = 0, "__mj_UpdatedAt" = NOW()
+         SET "DefaultForNewUser" = FALSE, "__mj_UpdatedAt" = NOW()
          WHERE "EntityID" = '3FE3016C-1E34-4510-9A68-7B1664F58217';
 
 

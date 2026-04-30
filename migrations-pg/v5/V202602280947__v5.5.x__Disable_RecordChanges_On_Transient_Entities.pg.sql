@@ -9,7 +9,7 @@
 --   4. High-volume linking/tagging (frequent churn, low audit value)
 
 UPDATE __mj."Entity"
-SET "TrackRecordChanges" = 0
+SET "TrackRecordChanges" = FALSE
 WHERE "Name" IN (
     -- User State / Preferences
     'MJ: User Settings',

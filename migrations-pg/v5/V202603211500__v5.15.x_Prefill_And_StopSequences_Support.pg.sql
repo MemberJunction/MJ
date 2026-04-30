@@ -2237,19 +2237,19 @@ BEGIN
         -1,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -2303,19 +2303,19 @@ BEGIN
         40,
         0,
         0,
-        0,
+        FALSE,
         'Ignore',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -2369,19 +2369,19 @@ BEGIN
         1,
         1,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -2435,19 +2435,19 @@ BEGIN
         -1,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -2501,19 +2501,19 @@ BEGIN
         1,
         1,
         0,
-        0,
+        FALSE,
         '(0)',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Dropdown',
         NOW(),
         NOW()
@@ -2567,19 +2567,19 @@ BEGIN
         -1,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Dropdown',
         NOW(),
         NOW()
@@ -2633,19 +2633,19 @@ BEGIN
         1,
         1,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -2699,19 +2699,19 @@ BEGIN
         -1,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -2750,72 +2750,72 @@ UPDATE __mj."EntityField" SET "ValueListType"='List' WHERE "ID"='52BC694C-B043-4
 -- Index for foreign key DefaultInputModalityID in table AIModelType
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '5EC9D425-B9DA-4FED-ACC9-596859658679'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 /* Set field properties for entity */
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '7D3C2217-5058-478B-B3EE-3AAF168B4018'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-                  SET "IncludeInUserSearchAPI" = 1
+                  SET "IncludeInUserSearchAPI" = TRUE
                   WHERE "ID" = '8B74433E-F36B-1410-883E-00D02208DC50'
-                  AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+                  AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
-                  SET "IncludeInUserSearchAPI" = 1
+                  SET "IncludeInUserSearchAPI" = TRUE
                   WHERE "ID" = '8F74433E-F36B-1410-883E-00D02208DC50'
-                  AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+                  AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
-                  SET "IncludeInUserSearchAPI" = 1
+                  SET "IncludeInUserSearchAPI" = TRUE
                   WHERE "ID" = '9374433E-F36B-1410-883E-00D02208DC50'
-                  AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+                  AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
-                  SET "IncludeInUserSearchAPI" = 1
+                  SET "IncludeInUserSearchAPI" = TRUE
                   WHERE "ID" = '9AEEBDE0-1200-48A2-83FE-58A9A566E57A'
-                  AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+                  AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 /* Set field properties for entity */
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = 'E98DA083-3098-48C8-80E2-A6D0BF54D56E'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 /* Set field properties for entity */
 
 UPDATE __mj."EntityField"
-            SET "IsNameField" = 1
+            SET "IsNameField" = TRUE
             WHERE "ID" = 'FBEE7EC7-7AD6-45D1-874B-CAAE97C51B22'
-            AND "AutoUpdateIsNameField" = 1;
+            AND "AutoUpdateIsNameField" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = 'FBEE7EC7-7AD6-45D1-874B-CAAE97C51B22'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-                  SET "IncludeInUserSearchAPI" = 1
+                  SET "IncludeInUserSearchAPI" = TRUE
                   WHERE "ID" = 'BF1B7891-03FE-4B11-ABE7-4BDF4C832A56'
-                  AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+                  AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
-                  SET "IncludeInUserSearchAPI" = 1
+                  SET "IncludeInUserSearchAPI" = TRUE
                   WHERE "ID" = 'FBEE7EC7-7AD6-45D1-874B-CAAE97C51B22'
-                  AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+                  AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
-                  SET "IncludeInUserSearchAPI" = 1
+                  SET "IncludeInUserSearchAPI" = TRUE
                   WHERE "ID" = 'EA94D7B8-080D-4525-B0E9-6E620B3E901E'
-                  AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+                  AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
-                  SET "IncludeInUserSearchAPI" = 1
+                  SET "IncludeInUserSearchAPI" = TRUE
                   WHERE "ID" = 'FBD754C7-2336-494C-9E4F-F3A6EADDB575'
-                  AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+                  AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 /* Set categories for 23 fields */
 -- UPDATE Entity Field Category Info MJ: AI Models."ID"
 
@@ -2825,7 +2825,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'F94217F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'F94217F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Models."Name"
 
 UPDATE __mj."EntityField"
@@ -2834,7 +2834,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'FA4217F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'FA4217F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Models."Description"
 
 UPDATE __mj."EntityField"
@@ -2843,7 +2843,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'FB4217F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'FB4217F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Models."AIModelTypeID"
 
 UPDATE __mj."EntityField"
@@ -2852,7 +2852,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '024317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '024317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Models."IsActive"
 
 UPDATE __mj."EntityField"
@@ -2861,7 +2861,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '064317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '064317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Models."ModelSelectionInsights"
 
 UPDATE __mj."EntityField"
@@ -2870,7 +2870,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '309321B0-2443-47A1-85E6-A134664B4AAB' AND "AutoUpdateCategory" = 1;
+   "ID" = '309321B0-2443-47A1-85E6-A134664B4AAB' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Models."InheritTypeModalities"
 
 UPDATE __mj."EntityField"
@@ -2879,7 +2879,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'A6755DF4-8B80-4E06-9D3F-B02188DB8A12' AND "AutoUpdateCategory" = 1;
+   "ID" = 'A6755DF4-8B80-4E06-9D3F-B02188DB8A12' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Models."PriorVersionID"
 
 UPDATE __mj."EntityField"
@@ -2888,7 +2888,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '9C2DD641-F764-4C55-8527-FD5E37BD1895' AND "AutoUpdateCategory" = 1;
+   "ID" = '9C2DD641-F764-4C55-8527-FD5E37BD1895' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Models."AIModelType"
 
 UPDATE __mj."EntityField"
@@ -2898,7 +2898,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'AF5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'AF5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Models."Vendor"
 
 UPDATE __mj."EntityField"
@@ -2907,7 +2907,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '014317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '014317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Models."PowerRank"
 
 UPDATE __mj."EntityField"
@@ -2916,7 +2916,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '284F17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '284F17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Models."SpeedRank"
 
 UPDATE __mj."EntityField"
@@ -2925,7 +2925,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '5B8E8CA9-7728-455A-A528-0F13782242C0' AND "AutoUpdateCategory" = 1;
+   "ID" = '5B8E8CA9-7728-455A-A528-0F13782242C0' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Models."CostRank"
 
 UPDATE __mj."EntityField"
@@ -2934,7 +2934,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '2ED7BE95-4E39-439B-8152-D0A6516C1398' AND "AutoUpdateCategory" = 1;
+   "ID" = '2ED7BE95-4E39-439B-8152-D0A6516C1398' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Models."DriverClass"
 
 UPDATE __mj."EntityField"
@@ -2943,7 +2943,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'FC4217F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'FC4217F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Models."DriverImportPath"
 
 UPDATE __mj."EntityField"
@@ -2952,7 +2952,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '094317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '094317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Models."APIName"
 
 UPDATE __mj."EntityField"
@@ -2961,7 +2961,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '274F17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '274F17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Models."InputTokenLimit"
 
 UPDATE __mj."EntityField"
@@ -2970,7 +2970,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '5EC9D425-B9DA-4FED-ACC9-596859658679' AND "AutoUpdateCategory" = 1;
+   "ID" = '5EC9D425-B9DA-4FED-ACC9-596859658679' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Models."SupportedResponseFormats"
 
 UPDATE __mj."EntityField"
@@ -2979,7 +2979,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '8B0575EC-3B6E-4F64-B9AC-052B44127021' AND "AutoUpdateCategory" = 1;
+   "ID" = '8B0575EC-3B6E-4F64-B9AC-052B44127021' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Models."SupportsEffortLevel"
 
 UPDATE __mj."EntityField"
@@ -2988,7 +2988,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'A7850674-D31F-4669-8F25-30D9F581E873' AND "AutoUpdateCategory" = 1;
+   "ID" = 'A7850674-D31F-4669-8F25-30D9F581E873' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Models."SupportsPrefill"
 
 UPDATE __mj."EntityField"
@@ -2998,7 +2998,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '5CEB95A4-E2B8-43DF-A3F0-10C996BE0F2F' AND "AutoUpdateCategory" = 1;
+   "ID" = '5CEB95A4-E2B8-43DF-A3F0-10C996BE0F2F' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Models."PrefillFallbackText"
 
 UPDATE __mj."EntityField"
@@ -3008,7 +3008,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'E8CB6D77-91C1-449F-951C-FDFD423DBEC6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'E8CB6D77-91C1-449F-951C-FDFD423DBEC6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Models.__mj_CreatedAt
 
 UPDATE __mj."EntityField"
@@ -3017,7 +3017,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'AD5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'AD5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Models.__mj_UpdatedAt
 
 UPDATE __mj."EntityField"
@@ -3026,7 +3026,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'AE5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'AE5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 /* Set categories for 21 fields */
 -- UPDATE Entity Field Category Info MJ: AI Model Vendors."ID"
 
@@ -3036,7 +3036,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '4536A71E-5AD6-4F8C-A663-21F3CEF4831A' AND "AutoUpdateCategory" = 1;
+   "ID" = '4536A71E-5AD6-4F8C-A663-21F3CEF4831A' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Model Vendors."ModelID"
 
 UPDATE __mj."EntityField"
@@ -3046,7 +3046,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'C7583B81-0BC4-4302-98ED-BE6E5DD22D50' AND "AutoUpdateCategory" = 1;
+   "ID" = 'C7583B81-0BC4-4302-98ED-BE6E5DD22D50' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Model Vendors."VendorID"
 
 UPDATE __mj."EntityField"
@@ -3056,7 +3056,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'B30005CE-FA92-4DEE-8F56-BEFC7D5E2AAE' AND "AutoUpdateCategory" = 1;
+   "ID" = 'B30005CE-FA92-4DEE-8F56-BEFC7D5E2AAE' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Model Vendors."Priority"
 
 UPDATE __mj."EntityField"
@@ -3065,7 +3065,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '37BFE134-5935-4863-8B22-29EFE58B2150' AND "AutoUpdateCategory" = 1;
+   "ID" = '37BFE134-5935-4863-8B22-29EFE58B2150' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Model Vendors."Status"
 
 UPDATE __mj."EntityField"
@@ -3074,7 +3074,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '1B9F8D2C-F8B4-45D1-B45C-2E946B0C9429' AND "AutoUpdateCategory" = 1;
+   "ID" = '1B9F8D2C-F8B4-45D1-B45C-2E946B0C9429' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Model Vendors."TypeID"
 
 UPDATE __mj."EntityField"
@@ -3084,7 +3084,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '1A83EAF3-4F88-48BA-8B4B-BA7E0A4AB513' AND "AutoUpdateCategory" = 1;
+   "ID" = '1A83EAF3-4F88-48BA-8B4B-BA7E0A4AB513' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Model Vendors."Model"
 
 UPDATE __mj."EntityField"
@@ -3094,7 +3094,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'EA94D7B8-080D-4525-B0E9-6E620B3E901E' AND "AutoUpdateCategory" = 1;
+   "ID" = 'EA94D7B8-080D-4525-B0E9-6E620B3E901E' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Model Vendors."Vendor"
 
 UPDATE __mj."EntityField"
@@ -3104,7 +3104,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'FBD754C7-2336-494C-9E4F-F3A6EADDB575' AND "AutoUpdateCategory" = 1;
+   "ID" = 'FBD754C7-2336-494C-9E4F-F3A6EADDB575' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Model Vendors."Type"
 
 UPDATE __mj."EntityField"
@@ -3114,7 +3114,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '0A17D759-76BD-4954-8851-86F14EAEB203' AND "AutoUpdateCategory" = 1;
+   "ID" = '0A17D759-76BD-4954-8851-86F14EAEB203' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Model Vendors."DriverClass"
 
 UPDATE __mj."EntityField"
@@ -3123,7 +3123,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'BF1B7891-03FE-4B11-ABE7-4BDF4C832A56' AND "AutoUpdateCategory" = 1;
+   "ID" = 'BF1B7891-03FE-4B11-ABE7-4BDF4C832A56' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Model Vendors."DriverImportPath"
 
 UPDATE __mj."EntityField"
@@ -3132,7 +3132,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'D57079F0-0DE2-45D8-8ECB-4DC006888664' AND "AutoUpdateCategory" = 1;
+   "ID" = 'D57079F0-0DE2-45D8-8ECB-4DC006888664' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Model Vendors."APIName"
 
 UPDATE __mj."EntityField"
@@ -3141,7 +3141,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'FBEE7EC7-7AD6-45D1-874B-CAAE97C51B22' AND "AutoUpdateCategory" = 1;
+   "ID" = 'FBEE7EC7-7AD6-45D1-874B-CAAE97C51B22' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Model Vendors."MaxInputTokens"
 
 UPDATE __mj."EntityField"
@@ -3150,7 +3150,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '20E5AFFE-1F52-478D-AD83-C5A0A90A2C4E' AND "AutoUpdateCategory" = 1;
+   "ID" = '20E5AFFE-1F52-478D-AD83-C5A0A90A2C4E' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Model Vendors."MaxOutputTokens"
 
 UPDATE __mj."EntityField"
@@ -3159,7 +3159,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'C5799595-5330-4762-BD3C-12F9CD02E933' AND "AutoUpdateCategory" = 1;
+   "ID" = 'C5799595-5330-4762-BD3C-12F9CD02E933' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Model Vendors."SupportedResponseFormats"
 
 UPDATE __mj."EntityField"
@@ -3168,7 +3168,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '1099A0DE-EEE4-4D04-B0F6-AC9ED896690D' AND "AutoUpdateCategory" = 1;
+   "ID" = '1099A0DE-EEE4-4D04-B0F6-AC9ED896690D' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Model Vendors."SupportsEffortLevel"
 
 UPDATE __mj."EntityField"
@@ -3177,7 +3177,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'B36B3620-899F-4851-AD2A-ED14F2D22A4C' AND "AutoUpdateCategory" = 1;
+   "ID" = 'B36B3620-899F-4851-AD2A-ED14F2D22A4C' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Model Vendors."SupportsStreaming"
 
 UPDATE __mj."EntityField"
@@ -3186,7 +3186,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '2E9DA543-3A02-4695-A96C-3017025842CE' AND "AutoUpdateCategory" = 1;
+   "ID" = '2E9DA543-3A02-4695-A96C-3017025842CE' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Model Vendors."SupportsPrefill"
 
 UPDATE __mj."EntityField"
@@ -3196,7 +3196,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '339BDDF1-0070-409B-9F57-EE8780E05DA9' AND "AutoUpdateCategory" = 1;
+   "ID" = '339BDDF1-0070-409B-9F57-EE8780E05DA9' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Model Vendors."PrefillFallbackText"
 
 UPDATE __mj."EntityField"
@@ -3206,7 +3206,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '8EEF536D-4AE4-4AB8-9C11-4E47E69F2214' AND "AutoUpdateCategory" = 1;
+   "ID" = '8EEF536D-4AE4-4AB8-9C11-4E47E69F2214' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Model Vendors.__mj_CreatedAt
 
 UPDATE __mj."EntityField"
@@ -3215,7 +3215,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'C8EA3975-296E-4432-A2CF-78BA773F7CD0' AND "AutoUpdateCategory" = 1;
+   "ID" = 'C8EA3975-296E-4432-A2CF-78BA773F7CD0' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Model Vendors.__mj_UpdatedAt
 
 UPDATE __mj."EntityField"
@@ -3224,7 +3224,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '0199799B-8D89-4306-AA33-67D7A326165A' AND "AutoUpdateCategory" = 1;
+   "ID" = '0199799B-8D89-4306-AA33-67D7A326165A' AND "AutoUpdateCategory" = TRUE;
 /* Set categories for 11 fields */
 -- UPDATE Entity Field Category Info MJ: AI Model Types."ID"
 
@@ -3234,7 +3234,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '034317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '034317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Model Types."Name"
 
 UPDATE __mj."EntityField"
@@ -3243,7 +3243,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '044317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '044317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Model Types."Description"
 
 UPDATE __mj."EntityField"
@@ -3252,7 +3252,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '054317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '054317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Model Types.__mj_CreatedAt
 
 UPDATE __mj."EntityField"
@@ -3261,7 +3261,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '585817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '585817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Model Types.__mj_UpdatedAt
 
 UPDATE __mj."EntityField"
@@ -3270,7 +3270,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '595817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '595817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Model Types."DefaultInputModalityID"
 
 UPDATE __mj."EntityField"
@@ -3279,7 +3279,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'C0BAE356-2818-4B55-9737-5BFA97225462' AND "AutoUpdateCategory" = 1;
+   "ID" = 'C0BAE356-2818-4B55-9737-5BFA97225462' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Model Types."DefaultOutputModalityID"
 
 UPDATE __mj."EntityField"
@@ -3288,7 +3288,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '5E5F9F7F-708F-4595-9F32-5F0574F25F01' AND "AutoUpdateCategory" = 1;
+   "ID" = '5E5F9F7F-708F-4595-9F32-5F0574F25F01' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Model Types."SupportsPrefill"
 
 UPDATE __mj."EntityField"
@@ -3298,7 +3298,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'E98DA083-3098-48C8-80E2-A6D0BF54D56E' AND "AutoUpdateCategory" = 1;
+   "ID" = 'E98DA083-3098-48C8-80E2-A6D0BF54D56E' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Model Types."PrefillFallbackText"
 
 UPDATE __mj."EntityField"
@@ -3308,7 +3308,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'E902ACEB-B25A-4A67-916C-BDF4A75D9517' AND "AutoUpdateCategory" = 1;
+   "ID" = 'E902ACEB-B25A-4A67-916C-BDF4A75D9517' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Model Types."DefaultInputModality"
 
 UPDATE __mj."EntityField"
@@ -3318,7 +3318,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'B35C64CB-7EC6-4396-BDA1-59F9F28EED58' AND "AutoUpdateCategory" = 1;
+   "ID" = 'B35C64CB-7EC6-4396-BDA1-59F9F28EED58' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Model Types."DefaultOutputModality"
 
 UPDATE __mj."EntityField"
@@ -3328,7 +3328,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '6D6D28B3-C88C-40BD-ABE8-A30D2A81420A' AND "AutoUpdateCategory" = 1;
+   "ID" = '6D6D28B3-C88C-40BD-ABE8-A30D2A81420A' AND "AutoUpdateCategory" = TRUE;
 /* Update FieldCategoryInfo setting for entity */
 
 UPDATE __mj."EntitySetting"
@@ -3348,7 +3348,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'EF73433E-F36B-1410-883E-00D02208DC50' AND "AutoUpdateCategory" = 1;
+   "ID" = 'EF73433E-F36B-1410-883E-00D02208DC50' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."Name"
 
 UPDATE __mj."EntityField"
@@ -3357,7 +3357,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'F073433E-F36B-1410-883E-00D02208DC50' AND "AutoUpdateCategory" = 1;
+   "ID" = 'F073433E-F36B-1410-883E-00D02208DC50' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."Description"
 
 UPDATE __mj."EntityField"
@@ -3366,7 +3366,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'F173433E-F36B-1410-883E-00D02208DC50' AND "AutoUpdateCategory" = 1;
+   "ID" = 'F173433E-F36B-1410-883E-00D02208DC50' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."TemplateID"
 
 UPDATE __mj."EntityField"
@@ -3376,7 +3376,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'F273433E-F36B-1410-883E-00D02208DC50' AND "AutoUpdateCategory" = 1;
+   "ID" = 'F273433E-F36B-1410-883E-00D02208DC50' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."CategoryID"
 
 UPDATE __mj."EntityField"
@@ -3386,7 +3386,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'F373433E-F36B-1410-883E-00D02208DC50' AND "AutoUpdateCategory" = 1;
+   "ID" = 'F373433E-F36B-1410-883E-00D02208DC50' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."TypeID"
 
 UPDATE __mj."EntityField"
@@ -3396,7 +3396,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'F473433E-F36B-1410-883E-00D02208DC50' AND "AutoUpdateCategory" = 1;
+   "ID" = 'F473433E-F36B-1410-883E-00D02208DC50' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."Status"
 
 UPDATE __mj."EntityField"
@@ -3405,7 +3405,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'F573433E-F36B-1410-883E-00D02208DC50' AND "AutoUpdateCategory" = 1;
+   "ID" = 'F573433E-F36B-1410-883E-00D02208DC50' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."ResponseFormat"
 
 UPDATE __mj."EntityField"
@@ -3414,7 +3414,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '4EBEB02B-AC46-4440-948F-0FCD6C6C26DE' AND "AutoUpdateCategory" = 1;
+   "ID" = '4EBEB02B-AC46-4440-948F-0FCD6C6C26DE' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."ModelSpecificResponseFormat"
 
 UPDATE __mj."EntityField"
@@ -3423,7 +3423,7 @@ SET
    "ExtendedType" = 'Code',
    "CodeType" = 'Other'
 WHERE 
-   "ID" = 'DAC94188-E300-4AF8-9CD1-7ED8AFF561BF' AND "AutoUpdateCategory" = 1;
+   "ID" = 'DAC94188-E300-4AF8-9CD1-7ED8AFF561BF' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."AIModelTypeID"
 
 UPDATE __mj."EntityField"
@@ -3433,7 +3433,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'CDA86CD9-BE45-45BE-8D10-643F8F1EDAAD' AND "AutoUpdateCategory" = 1;
+   "ID" = 'CDA86CD9-BE45-45BE-8D10-643F8F1EDAAD' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."ResultSelectorPromptID"
 
 UPDATE __mj."EntityField"
@@ -3443,7 +3443,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'CB91DE8E-B02C-42DD-9252-44D3905A5B9E' AND "AutoUpdateCategory" = 1;
+   "ID" = 'CB91DE8E-B02C-42DD-9252-44D3905A5B9E' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."PromptRole"
 
 UPDATE __mj."EntityField"
@@ -3452,7 +3452,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '7D3C2217-5058-478B-B3EE-3AAF168B4018' AND "AutoUpdateCategory" = 1;
+   "ID" = '7D3C2217-5058-478B-B3EE-3AAF168B4018' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."PromptPosition"
 
 UPDATE __mj."EntityField"
@@ -3461,7 +3461,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'DFFD6A70-101A-4CA0-AD9F-BDD9CD93F6E7' AND "AutoUpdateCategory" = 1;
+   "ID" = 'DFFD6A70-101A-4CA0-AD9F-BDD9CD93F6E7' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."Template"
 
 UPDATE __mj."EntityField"
@@ -3471,7 +3471,7 @@ SET
    "ExtendedType" = 'Code',
    "CodeType" = 'Other'
 WHERE 
-   "ID" = '8B74433E-F36B-1410-883E-00D02208DC50' AND "AutoUpdateCategory" = 1;
+   "ID" = '8B74433E-F36B-1410-883E-00D02208DC50' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."Category"
 
 UPDATE __mj."EntityField"
@@ -3481,7 +3481,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '8F74433E-F36B-1410-883E-00D02208DC50' AND "AutoUpdateCategory" = 1;
+   "ID" = '8F74433E-F36B-1410-883E-00D02208DC50' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."Type"
 
 UPDATE __mj."EntityField"
@@ -3491,7 +3491,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '9374433E-F36B-1410-883E-00D02208DC50' AND "AutoUpdateCategory" = 1;
+   "ID" = '9374433E-F36B-1410-883E-00D02208DC50' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."AIModelType"
 
 UPDATE __mj."EntityField"
@@ -3501,7 +3501,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '9AEEBDE0-1200-48A2-83FE-58A9A566E57A' AND "AutoUpdateCategory" = 1;
+   "ID" = '9AEEBDE0-1200-48A2-83FE-58A9A566E57A' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."ResultSelectorPrompt"
 
 UPDATE __mj."EntityField"
@@ -3511,7 +3511,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '10EEE5B8-B577-4F8B-9102-AFCCE345086A' AND "AutoUpdateCategory" = 1;
+   "ID" = '10EEE5B8-B577-4F8B-9102-AFCCE345086A' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."RootResultSelectorPromptID"
 
 UPDATE __mj."EntityField"
@@ -3521,7 +3521,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '4B2F08BC-1733-4447-B9F2-43A73026D68E' AND "AutoUpdateCategory" = 1;
+   "ID" = '4B2F08BC-1733-4447-B9F2-43A73026D68E' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."AssistantPrefill"
 
 UPDATE __mj."EntityField"
@@ -3531,7 +3531,7 @@ SET
    "ExtendedType" = 'Code',
    "CodeType" = 'Other'
 WHERE 
-   "ID" = '83D5418E-4E0B-4847-97F0-E1CFB0587B5E' AND "AutoUpdateCategory" = 1;
+   "ID" = '83D5418E-4E0B-4847-97F0-E1CFB0587B5E' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."PrefillFallbackMode"
 
 UPDATE __mj."EntityField"
@@ -3541,7 +3541,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '52BC694C-B043-4426-A79B-AF3B22C6C58A' AND "AutoUpdateCategory" = 1;
+   "ID" = '52BC694C-B043-4426-A79B-AF3B22C6C58A' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts.__mj_CreatedAt
 
 UPDATE __mj."EntityField"
@@ -3550,7 +3550,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'F873433E-F36B-1410-883E-00D02208DC50' AND "AutoUpdateCategory" = 1;
+   "ID" = 'F873433E-F36B-1410-883E-00D02208DC50' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts.__mj_UpdatedAt
 
 UPDATE __mj."EntityField"
@@ -3559,7 +3559,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'F973433E-F36B-1410-883E-00D02208DC50' AND "AutoUpdateCategory" = 1;
+   "ID" = 'F973433E-F36B-1410-883E-00D02208DC50' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."MinPowerRank"
 
 UPDATE __mj."EntityField"
@@ -3569,7 +3569,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '351F6694-A797-4177-A8DD-9EA4CB2FACBC' AND "AutoUpdateCategory" = 1;
+   "ID" = '351F6694-A797-4177-A8DD-9EA4CB2FACBC' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."SelectionStrategy"
 
 UPDATE __mj."EntityField"
@@ -3578,7 +3578,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'A014DE78-5FB6-4114-AC50-40739A24E122' AND "AutoUpdateCategory" = 1;
+   "ID" = 'A014DE78-5FB6-4114-AC50-40739A24E122' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."PowerPreference"
 
 UPDATE __mj."EntityField"
@@ -3587,7 +3587,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '3A0FD2B4-C4DB-4E4B-B971-1C0F319DFA5A' AND "AutoUpdateCategory" = 1;
+   "ID" = '3A0FD2B4-C4DB-4E4B-B971-1C0F319DFA5A' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."ParallelizationMode"
 
 UPDATE __mj."EntityField"
@@ -3596,7 +3596,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'A93C0CBB-A329-4E92-90D8-471FF627D055' AND "AutoUpdateCategory" = 1;
+   "ID" = 'A93C0CBB-A329-4E92-90D8-471FF627D055' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."ParallelCount"
 
 UPDATE __mj."EntityField"
@@ -3605,7 +3605,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '4C01FB80-4497-4547-B0AA-411163649A40' AND "AutoUpdateCategory" = 1;
+   "ID" = '4C01FB80-4497-4547-B0AA-411163649A40' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."ParallelConfigParam"
 
 UPDATE __mj."EntityField"
@@ -3615,7 +3615,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'B44041FC-9647-4A7D-A985-E2A22A733E26' AND "AutoUpdateCategory" = 1;
+   "ID" = 'B44041FC-9647-4A7D-A985-E2A22A733E26' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."Temperature"
 
 UPDATE __mj."EntityField"
@@ -3624,7 +3624,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '8EF6CA12-C07E-4FB3-83A8-A05D6729A112' AND "AutoUpdateCategory" = 1;
+   "ID" = '8EF6CA12-C07E-4FB3-83A8-A05D6729A112' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."TopP"
 
 UPDATE __mj."EntityField"
@@ -3633,7 +3633,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '922935E9-659F-4269-9EA6-959F09635A0E' AND "AutoUpdateCategory" = 1;
+   "ID" = '922935E9-659F-4269-9EA6-959F09635A0E' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."TopK"
 
 UPDATE __mj."EntityField"
@@ -3642,7 +3642,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '3AE83D23-0D11-4D7F-AFCE-6DA5125B729D' AND "AutoUpdateCategory" = 1;
+   "ID" = '3AE83D23-0D11-4D7F-AFCE-6DA5125B729D' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."MinP"
 
 UPDATE __mj."EntityField"
@@ -3651,7 +3651,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'F9B94902-AE17-4926-B313-CCE5BF1AAF16' AND "AutoUpdateCategory" = 1;
+   "ID" = 'F9B94902-AE17-4926-B313-CCE5BF1AAF16' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."FrequencyPenalty"
 
 UPDATE __mj."EntityField"
@@ -3660,7 +3660,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '9032E4D9-3FD3-4AE2-8547-34E5764DECD6' AND "AutoUpdateCategory" = 1;
+   "ID" = '9032E4D9-3FD3-4AE2-8547-34E5764DECD6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."PresencePenalty"
 
 UPDATE __mj."EntityField"
@@ -3669,7 +3669,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'F84B8FF8-BB66-48AB-B182-A314AF5D9777' AND "AutoUpdateCategory" = 1;
+   "ID" = 'F84B8FF8-BB66-48AB-B182-A314AF5D9777' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."Seed"
 
 UPDATE __mj."EntityField"
@@ -3678,7 +3678,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'D872353C-01BD-42A4-901B-003664E51F8C' AND "AutoUpdateCategory" = 1;
+   "ID" = 'D872353C-01BD-42A4-901B-003664E51F8C' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."StopSequences"
 
 UPDATE __mj."EntityField"
@@ -3687,7 +3687,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'EC6AE13E-4162-4A41-840A-70AFC92FB3A9' AND "AutoUpdateCategory" = 1;
+   "ID" = 'EC6AE13E-4162-4A41-840A-70AFC92FB3A9' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."IncludeLogProbs"
 
 UPDATE __mj."EntityField"
@@ -3697,7 +3697,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'E766FB1D-F25A-4852-88FC-36C3C1F0E654' AND "AutoUpdateCategory" = 1;
+   "ID" = 'E766FB1D-F25A-4852-88FC-36C3C1F0E654' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."TopLogProbs"
 
 UPDATE __mj."EntityField"
@@ -3707,7 +3707,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'AB2E1067-5397-446D-9551-D3838D36CEDF' AND "AutoUpdateCategory" = 1;
+   "ID" = 'AB2E1067-5397-446D-9551-D3838D36CEDF' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."EffortLevel"
 
 UPDATE __mj."EntityField"
@@ -3716,7 +3716,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'DAFA54D5-F48A-499F-8F4E-E329AF0B5B6B' AND "AutoUpdateCategory" = 1;
+   "ID" = 'DAFA54D5-F48A-499F-8F4E-E329AF0B5B6B' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."OutputType"
 
 UPDATE __mj."EntityField"
@@ -3725,7 +3725,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '45F16173-581A-4383-BCBA-61538C5747D6' AND "AutoUpdateCategory" = 1;
+   "ID" = '45F16173-581A-4383-BCBA-61538C5747D6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."OutputExample"
 
 UPDATE __mj."EntityField"
@@ -3734,7 +3734,7 @@ SET
    "ExtendedType" = 'Code',
    "CodeType" = 'Other'
 WHERE 
-   "ID" = 'D23659B1-735A-4943-8BCA-3C6827F576DC' AND "AutoUpdateCategory" = 1;
+   "ID" = 'D23659B1-735A-4943-8BCA-3C6827F576DC' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."ValidationBehavior"
 
 UPDATE __mj."EntityField"
@@ -3743,7 +3743,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '2A15842A-B85B-450F-ACD2-65E3DF0B29F2' AND "AutoUpdateCategory" = 1;
+   "ID" = '2A15842A-B85B-450F-ACD2-65E3DF0B29F2' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."MaxRetries"
 
 UPDATE __mj."EntityField"
@@ -3752,7 +3752,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'B651F87E-4F28-4076-987F-D62E0976377F' AND "AutoUpdateCategory" = 1;
+   "ID" = 'B651F87E-4F28-4076-987F-D62E0976377F' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."RetryDelayMS"
 
 UPDATE __mj."EntityField"
@@ -3762,7 +3762,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'C5605BDA-0E1E-4F0D-B12B-6851A6B048F8' AND "AutoUpdateCategory" = 1;
+   "ID" = 'C5605BDA-0E1E-4F0D-B12B-6851A6B048F8' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."RetryStrategy"
 
 UPDATE __mj."EntityField"
@@ -3771,7 +3771,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '0049EE44-5535-4D29-9CE2-2522E5BCD811' AND "AutoUpdateCategory" = 1;
+   "ID" = '0049EE44-5535-4D29-9CE2-2522E5BCD811' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."FailoverStrategy"
 
 UPDATE __mj."EntityField"
@@ -3780,7 +3780,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'F9C62D4B-92AB-45B3-B870-F3060054493E' AND "AutoUpdateCategory" = 1;
+   "ID" = 'F9C62D4B-92AB-45B3-B870-F3060054493E' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."FailoverMaxAttempts"
 
 UPDATE __mj."EntityField"
@@ -3789,7 +3789,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '53B481B2-BD69-4BF0-AC27-E0CB78F311CA' AND "AutoUpdateCategory" = 1;
+   "ID" = '53B481B2-BD69-4BF0-AC27-E0CB78F311CA' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."FailoverDelaySeconds"
 
 UPDATE __mj."EntityField"
@@ -3799,7 +3799,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'C60ED7E9-60E1-4955-AA36-BC25D0EC64B8' AND "AutoUpdateCategory" = 1;
+   "ID" = 'C60ED7E9-60E1-4955-AA36-BC25D0EC64B8' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."FailoverModelStrategy"
 
 UPDATE __mj."EntityField"
@@ -3808,7 +3808,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '3E98B899-C100-450E-864A-AB108923A721' AND "AutoUpdateCategory" = 1;
+   "ID" = '3E98B899-C100-450E-864A-AB108923A721' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."FailoverErrorScope"
 
 UPDATE __mj."EntityField"
@@ -3817,7 +3817,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '58591F07-7E15-4F0D-987D-A5B09351E4E0' AND "AutoUpdateCategory" = 1;
+   "ID" = '58591F07-7E15-4F0D-987D-A5B09351E4E0' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."EnableCaching"
 
 UPDATE __mj."EntityField"
@@ -3826,7 +3826,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '758D2C13-2CE3-466A-9FBD-CBE8A2691DFE' AND "AutoUpdateCategory" = 1;
+   "ID" = '758D2C13-2CE3-466A-9FBD-CBE8A2691DFE' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."CacheTTLSeconds"
 
 UPDATE __mj."EntityField"
@@ -3836,7 +3836,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '32FC4550-A54F-453A-9855-65760AD3C4A8' AND "AutoUpdateCategory" = 1;
+   "ID" = '32FC4550-A54F-453A-9855-65760AD3C4A8' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."CacheMatchType"
 
 UPDATE __mj."EntityField"
@@ -3845,7 +3845,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'B007D2D5-549E-4688-B48D-8EDD2C5075D4' AND "AutoUpdateCategory" = 1;
+   "ID" = 'B007D2D5-549E-4688-B48D-8EDD2C5075D4' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."CacheSimilarityThreshold"
 
 UPDATE __mj."EntityField"
@@ -3854,7 +3854,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'F8C70016-D404-4D8F-BBFB-F36D62CD1FE3' AND "AutoUpdateCategory" = 1;
+   "ID" = 'F8C70016-D404-4D8F-BBFB-F36D62CD1FE3' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."CacheMustMatchModel"
 
 UPDATE __mj."EntityField"
@@ -3863,7 +3863,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '8DFDF996-6CB2-4943-BE6B-329AB6F36576' AND "AutoUpdateCategory" = 1;
+   "ID" = '8DFDF996-6CB2-4943-BE6B-329AB6F36576' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."CacheMustMatchVendor"
 
 UPDATE __mj."EntityField"
@@ -3872,7 +3872,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '0A990225-81CB-4355-909E-BC018EABDBD7' AND "AutoUpdateCategory" = 1;
+   "ID" = '0A990225-81CB-4355-909E-BC018EABDBD7' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."CacheMustMatchAgent"
 
 UPDATE __mj."EntityField"
@@ -3881,7 +3881,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '45E6FC9C-7ECD-42D9-AA6A-CDEFBDC97F26' AND "AutoUpdateCategory" = 1;
+   "ID" = '45E6FC9C-7ECD-42D9-AA6A-CDEFBDC97F26' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Prompts."CacheMustMatchConfig"
 
 UPDATE __mj."EntityField"
@@ -3891,7 +3891,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '2861D3B4-040E-48D0-907E-C42ED42BD3AB' AND "AutoUpdateCategory" = 1;
+   "ID" = '2861D3B4-040E-48D0-907E-C42ED42BD3AB' AND "AutoUpdateCategory" = TRUE;
 /* Refresh custom base views for modified entities so schema changes are picked up */
 
 

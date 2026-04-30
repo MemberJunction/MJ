@@ -685,7 +685,7 @@ $$ LANGUAGE plpgsql;
 -- behavior (previously granted by the removed cacheSettings.enableForSchemas
 -- runtime override) is preserved after this migration.
 UPDATE __mj."Entity"
-SET "AllowCaching" = 1
+SET "AllowCaching" = TRUE
 WHERE "SchemaName" = '__mj';
 
 DO $$
@@ -730,17 +730,17 @@ BEGIN
         1,
         1,
         0,
-        0, -- "AllowsNull"
+        FALSE, -- "AllowsNull"
         '((0))',
-        0, -- "AutoIncrement"
-        1, -- "AllowUpdateAPI"
-        0, -- "IsVirtual"
-        0, -- "IsNameField"
-        0, -- "IncludeInUserSearchAPI"
-        0, -- "IncludeRelatedEntityNameFieldInBaseView"
-        0, -- "DefaultInView"
-        0, -- "IsPrimaryKey"
-        0, -- "IsUnique"
+        FALSE, -- "AutoIncrement"
+        TRUE, -- "AllowUpdateAPI"
+        FALSE, -- "IsVirtual"
+        FALSE, -- "IsNameField"
+        FALSE, -- "IncludeInUserSearchAPI"
+        FALSE, -- "IncludeRelatedEntityNameFieldInBaseView"
+        FALSE, -- "DefaultInView"
+        FALSE, -- "IsPrimaryKey"
+        FALSE, -- "IsUnique"
         'Search'
         );
     END IF;
@@ -788,17 +788,17 @@ BEGIN
         1,
         1,
         0,
-        0, -- "AllowsNull"
+        FALSE, -- "AllowsNull"
         '((0))',
-        0, -- "AutoIncrement"
-        1, -- "AllowUpdateAPI"
-        0, -- "IsVirtual"
-        0, -- "IsNameField"
-        0, -- "IncludeInUserSearchAPI"
-        0, -- "IncludeRelatedEntityNameFieldInBaseView"
-        0, -- "DefaultInView"
-        0, -- "IsPrimaryKey"
-        0, -- "IsUnique"
+        FALSE, -- "AutoIncrement"
+        TRUE, -- "AllowUpdateAPI"
+        FALSE, -- "IsVirtual"
+        FALSE, -- "IsNameField"
+        FALSE, -- "IncludeInUserSearchAPI"
+        FALSE, -- "IncludeRelatedEntityNameFieldInBaseView"
+        FALSE, -- "DefaultInView"
+        FALSE, -- "IsPrimaryKey"
+        FALSE, -- "IsUnique"
         'Search'
         );
     END IF;

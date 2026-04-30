@@ -504,7 +504,7 @@ SELECT
 FROM
     __mj.vwUsers u
 WHERE
-    u."IsActive" = 1
+    u."IsActive" = TRUE
 ';
   p_TechnicalDescription_7070b756 := 'Simple base query selecting active users from vwUsers. Marked as Reusable so other queries can reference it via {{query:"Demos/Active Users"}} composition syntax.';
   p_Status_7070b756 := 'Approved';

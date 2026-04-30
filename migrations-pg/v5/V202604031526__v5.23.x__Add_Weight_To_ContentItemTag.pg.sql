@@ -249,19 +249,19 @@ BEGIN
         5,
         5,
         4,
-        0,
+        FALSE,
         '(1.0)',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -270,24 +270,24 @@ BEGIN
 END $$;
 
 UPDATE __mj."EntityField"
-            SET "IsNameField" = 1
+            SET "IsNameField" = TRUE
             WHERE "ID" = '33B9433E-F36B-1410-867F-007B559E242F'
-            AND "AutoUpdateIsNameField" = 1;
+            AND "AutoUpdateIsNameField" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '2EF1276A-D856-4408-A72A-BE0907ABCA75'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-                  SET "IncludeInUserSearchAPI" = 1
+                  SET "IncludeInUserSearchAPI" = TRUE
                   WHERE "ID" = '33B9433E-F36B-1410-867F-007B559E242F'
-                  AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+                  AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
-                  SET "IncludeInUserSearchAPI" = 1
+                  SET "IncludeInUserSearchAPI" = TRUE
                   WHERE "ID" = '8D73962B-3D7D-489E-837F-732C90578325'
-                  AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+                  AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 /* Set categories for 7 fields */
 -- UPDATE Entity Field Category Info MJ: Content Item Tags."ItemID"
 
@@ -298,7 +298,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '2DB9433E-F36B-1410-867F-007B559E242F' AND "AutoUpdateCategory" = 1;
+   "ID" = '2DB9433E-F36B-1410-867F-007B559E242F' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Content Item Tags."Item"
 
 UPDATE __mj."EntityField"
@@ -307,7 +307,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '8D73962B-3D7D-489E-837F-732C90578325' AND "AutoUpdateCategory" = 1;
+   "ID" = '8D73962B-3D7D-489E-837F-732C90578325' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Content Item Tags."Tag"
 
 UPDATE __mj."EntityField"
@@ -317,7 +317,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '33B9433E-F36B-1410-867F-007B559E242F' AND "AutoUpdateCategory" = 1;
+   "ID" = '33B9433E-F36B-1410-867F-007B559E242F' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Content Item Tags."Weight"
 
 UPDATE __mj."EntityField"
@@ -327,7 +327,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '2EF1276A-D856-4408-A72A-BE0907ABCA75' AND "AutoUpdateCategory" = 1;
+   "ID" = '2EF1276A-D856-4408-A72A-BE0907ABCA75' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Content Item Tags."ID"
 
 UPDATE __mj."EntityField"
@@ -337,7 +337,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '27B9433E-F36B-1410-867F-007B559E242F' AND "AutoUpdateCategory" = 1;
+   "ID" = '27B9433E-F36B-1410-867F-007B559E242F' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Content Item Tags.__mj_CreatedAt
 
 UPDATE __mj."EntityField"
@@ -347,7 +347,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '39B9433E-F36B-1410-867F-007B559E242F' AND "AutoUpdateCategory" = 1;
+   "ID" = '39B9433E-F36B-1410-867F-007B559E242F' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Content Item Tags.__mj_UpdatedAt
 
 UPDATE __mj."EntityField"
@@ -357,7 +357,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '3FB9433E-F36B-1410-867F-007B559E242F' AND "AutoUpdateCategory" = 1;
+   "ID" = '3FB9433E-F36B-1410-867F-007B559E242F' AND "AutoUpdateCategory" = TRUE;
 /* Insert FieldCategoryInfo setting for entity */
 
 INSERT INTO __mj."EntitySetting" ("ID", "EntityID", "Name", "Value", "__mj_CreatedAt", "__mj_UpdatedAt")

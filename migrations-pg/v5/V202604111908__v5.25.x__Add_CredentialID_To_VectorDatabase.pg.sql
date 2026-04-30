@@ -277,19 +277,19 @@ BEGIN
         16,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         '7E023DDF-82C6-4B0C-9650-8D35699B9FD0',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Dropdown',
         NOW(),
         NOW()
@@ -303,7 +303,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '6b154175-cb08-4d0b-b443-ed51f38185f2'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('6b154175-cb08-4d0b-b443-ed51f38185f2', '7E023DDF-82C6-4B0C-9650-8D35699B9FD0', '20248F34-2837-EF11-86D4-6045BDEE16E6', 'CredentialID', 'One To Many', 1, 1, 3, NOW(), NOW());
+        VALUES ('6b154175-cb08-4d0b-b443-ed51f38185f2', '7E023DDF-82C6-4B0C-9650-8D35699B9FD0', '20248F34-2837-EF11-86D4-6045BDEE16E6', 'CredentialID', 'One To Many', TRUE, TRUE, 3, NOW(), NOW());
     END IF;
 END $$;
 
@@ -353,19 +353,19 @@ BEGIN
         400,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Dropdown',
         NOW(),
         NOW()
@@ -374,9 +374,9 @@ BEGIN
 END $$;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '1A404106-4589-4BCB-B254-541252E1A4F5'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 /* Set categories for 10 fields */
 -- UPDATE Entity Field Category Info MJ: Vector Databases."ID"
 
@@ -386,7 +386,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'E64317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'E64317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Vector Databases."Name"
 
 UPDATE __mj."EntityField"
@@ -395,7 +395,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'E74317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'E74317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Vector Databases."Description"
 
 UPDATE __mj."EntityField"
@@ -404,7 +404,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'E84317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'E84317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Vector Databases."DefaultURL"
 
 UPDATE __mj."EntityField"
@@ -413,7 +413,7 @@ SET
    "ExtendedType" = 'URL',
    "CodeType" = NULL
 WHERE 
-   "ID" = 'E94317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'E94317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Vector Databases."ClassKey"
 
 UPDATE __mj."EntityField"
@@ -422,7 +422,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'EA4317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'EA4317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Vector Databases."Configuration"
 
 UPDATE __mj."EntityField"
@@ -431,7 +431,7 @@ SET
    "ExtendedType" = 'Code',
    "CodeType" = 'Other'
 WHERE 
-   "ID" = '2C4F4B15-7A37-49FA-87D5-6EF9D5B66699' AND "AutoUpdateCategory" = 1;
+   "ID" = '2C4F4B15-7A37-49FA-87D5-6EF9D5B66699' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Vector Databases."CredentialID"
 
 UPDATE __mj."EntityField"
@@ -442,7 +442,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'CD29CEAE-E2B8-4A61-9603-AC7A08756751' AND "AutoUpdateCategory" = 1;
+   "ID" = 'CD29CEAE-E2B8-4A61-9603-AC7A08756751' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Vector Databases."Credential"
 
 UPDATE __mj."EntityField"
@@ -453,7 +453,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '1A404106-4589-4BCB-B254-541252E1A4F5' AND "AutoUpdateCategory" = 1;
+   "ID" = '1A404106-4589-4BCB-B254-541252E1A4F5' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Vector Databases.__mj_CreatedAt
 
 UPDATE __mj."EntityField"
@@ -462,7 +462,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'C85817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'C85817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Vector Databases.__mj_UpdatedAt
 
 UPDATE __mj."EntityField"
@@ -471,7 +471,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'C95817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'C95817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 /* Insert FieldCategoryInfo setting for entity */
 
 INSERT INTO __mj."EntitySetting" ("ID", "EntityID", "Name", "Value", "__mj_CreatedAt", "__mj_UpdatedAt")

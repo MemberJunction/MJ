@@ -14,13 +14,6 @@ SET search_path TO __mj, public;
 -- Ensure backslashes in string literals are treated literally (not as escape sequences)
 SET standard_conforming_strings = on;
 
--- Implicit INTEGER -> BOOLEAN cast (SQL Server BIT columns accept 0/1 in INSERTs)
--- PostgreSQL has a built-in explicit-only INTEGER->bool cast. We upgrade it to implicit
--- so INSERT VALUES with 0/1 for BOOLEAN columns work like SQL Server BIT.
-UPDATE pg_cast SET castcontext = 'i'
-WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
-
-
 -- ===================== Views =====================
 
 DO $do$
@@ -313,19 +306,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -336,7 +329,7 @@ END $$;
 UPDATE __mj."EntityField"
                SET "UserSearchPredicateAPI" = 'Contains'
                WHERE "ID" = '2CD99CC3-14AC-466E-B9D1-CE5E050B58AA'
-               AND "AutoUpdateUserSearchPredicate" = 1;
+               AND "AutoUpdateUserSearchPredicate" = TRUE;
 /* Set categories for 15 fields */
 -- UPDATE Entity Field Category Info MJ: Archive Run Details."ID"
 
@@ -346,7 +339,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '79525349-F1A7-45CD-BDDB-15D45E1EA4D5' AND "AutoUpdateCategory" = 1;
+   "ID" = '79525349-F1A7-45CD-BDDB-15D45E1EA4D5' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Archive Run Details.__mj_CreatedAt
 
 UPDATE __mj."EntityField"
@@ -355,7 +348,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'B90E24FD-D3A9-4D00-A94B-17E2B1FB2FE3' AND "AutoUpdateCategory" = 1;
+   "ID" = 'B90E24FD-D3A9-4D00-A94B-17E2B1FB2FE3' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Archive Run Details.__mj_UpdatedAt
 
 UPDATE __mj."EntityField"
@@ -364,7 +357,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'EB7FEB68-C246-4B48-9518-B8BCF5793611' AND "AutoUpdateCategory" = 1;
+   "ID" = 'EB7FEB68-C246-4B48-9518-B8BCF5793611' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Archive Run Details."ArchiveRunID"
 
 UPDATE __mj."EntityField"
@@ -373,7 +366,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '0C1AE9BD-D895-4ECF-B65B-43EA80D9949C' AND "AutoUpdateCategory" = 1;
+   "ID" = '0C1AE9BD-D895-4ECF-B65B-43EA80D9949C' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Archive Run Details."EntityID"
 
 UPDATE __mj."EntityField"
@@ -383,7 +376,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '6170C43C-462B-42B1-972B-1D8B7789682B' AND "AutoUpdateCategory" = 1;
+   "ID" = '6170C43C-462B-42B1-972B-1D8B7789682B' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Archive Run Details."RecordID"
 
 UPDATE __mj."EntityField"
@@ -392,7 +385,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '2CD99CC3-14AC-466E-B9D1-CE5E050B58AA' AND "AutoUpdateCategory" = 1;
+   "ID" = '2CD99CC3-14AC-466E-B9D1-CE5E050B58AA' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Archive Run Details."Entity"
 
 UPDATE __mj."EntityField"
@@ -402,7 +395,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '0A500C87-F127-4776-8EEF-7ECA8E7A414C' AND "AutoUpdateCategory" = 1;
+   "ID" = '0A500C87-F127-4776-8EEF-7ECA8E7A414C' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Archive Run Details."ArchiveRun"
 
 UPDATE __mj."EntityField"
@@ -413,7 +406,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'EC2A696B-ACB1-4B02-BC57-10C5DAC8DBC7' AND "AutoUpdateCategory" = 1;
+   "ID" = 'EC2A696B-ACB1-4B02-BC57-10C5DAC8DBC7' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Archive Run Details."Status"
 
 UPDATE __mj."EntityField"
@@ -422,7 +415,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'B67B2260-8850-40F9-8902-5D91D0159FE7' AND "AutoUpdateCategory" = 1;
+   "ID" = 'B67B2260-8850-40F9-8902-5D91D0159FE7' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Archive Run Details."StoragePath"
 
 UPDATE __mj."EntityField"
@@ -431,7 +424,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '2A48A363-DC62-4DD2-833B-EB7CFBABB283' AND "AutoUpdateCategory" = 1;
+   "ID" = '2A48A363-DC62-4DD2-833B-EB7CFBABB283' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Archive Run Details."BytesArchived"
 
 UPDATE __mj."EntityField"
@@ -440,7 +433,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '5B53CD8F-01E4-41C3-A6E3-313A83103ECF' AND "AutoUpdateCategory" = 1;
+   "ID" = '5B53CD8F-01E4-41C3-A6E3-313A83103ECF' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Archive Run Details."ErrorMessage"
 
 UPDATE __mj."EntityField"
@@ -449,7 +442,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '0823FBF5-191B-4799-A64E-778C6AF033A1' AND "AutoUpdateCategory" = 1;
+   "ID" = '0823FBF5-191B-4799-A64E-778C6AF033A1' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Archive Run Details."ArchivedAt"
 
 UPDATE __mj."EntityField"
@@ -458,7 +451,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'BFCCF263-AF8A-405C-B57D-473AAC8A9E90' AND "AutoUpdateCategory" = 1;
+   "ID" = 'BFCCF263-AF8A-405C-B57D-473AAC8A9E90' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Archive Run Details."VersionStamp"
 
 UPDATE __mj."EntityField"
@@ -467,7 +460,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '07F192B4-3A6D-4FEB-869B-6ED067BB82F0' AND "AutoUpdateCategory" = 1;
+   "ID" = '07F192B4-3A6D-4FEB-869B-6ED067BB82F0' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Archive Run Details."IsRecordChangeArchive"
 
 UPDATE __mj."EntityField"
@@ -476,7 +469,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '4959B7F3-AD32-40DD-8E3F-8DF97E4C6844' AND "AutoUpdateCategory" = 1;
+   "ID" = '4959B7F3-AD32-40DD-8E3F-8DF97E4C6844' AND "AutoUpdateCategory" = TRUE;
 
 
 -- ===================== Grants =====================

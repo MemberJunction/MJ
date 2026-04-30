@@ -26,7 +26,7 @@ BEGIN
   RETURN;
   END IF;
   -- Grant Create + Update for all affected entities
-  UPDATE __mj."EntityPermission" SET "CanCreate" = 1, "CanUpdate" = 1
+  UPDATE __mj."EntityPermission" SET "CanCreate" = TRUE, "CanUpdate" = TRUE
   FROM __mj."Entity" e
   WHERE __mj."EntityPermission"."EntityID" = e."ID"
   AND __mj."EntityPermission"."RoleID" = v_UIRoleID

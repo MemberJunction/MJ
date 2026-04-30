@@ -318,8 +318,8 @@ BEGIN
             fromSQL."AllowsNull"                       AS "AllowsNull",
             fromSQL."DefaultValue"::TEXT               AS "DefaultValue",
             -- AutoIncrement: vwSQLColumnsAndEntityFields returns 0/1 INT
-            (fromSQL."AutoIncrement" = 1)              AS "AutoIncrement",
-            (fromSQL."IsVirtual" = 1)                  AS "IsVirtual",
+            (fromSQL."AutoIncrement" = TRUE)              AS "AutoIncrement",
+            (fromSQL."IsVirtual" = TRUE)                  AS "IsVirtual",
             fromSQL."Sequence"::INTEGER                AS "Sequence",
             re."ID"                                    AS "RelatedEntityID",
             fk."referenced_column"::VARCHAR            AS "RelatedEntityFieldName",
@@ -382,8 +382,8 @@ BEGIN
                 OR ef."AllowsNull" <> fromSQL."AllowsNull"
                 OR COALESCE(BTRIM(ef."DefaultValue"), '')
                         <> COALESCE(BTRIM(fromSQL."DefaultValue"), '')
-                OR ef."AutoIncrement" <> (fromSQL."AutoIncrement" = 1)
-                OR ef."IsVirtual"     <> (fromSQL."IsVirtual"     = 1)
+                OR ef."AutoIncrement" <> (fromSQL."AutoIncrement" = TRUE)
+                OR ef."IsVirtual"     <> (fromSQL."IsVirtual" = TRUE)
                 OR ef."Sequence"      <> fromSQL."Sequence"
                 OR COALESCE(ef."RelatedEntityID",
                             '00000000-0000-0000-0000-000000000000'::uuid)

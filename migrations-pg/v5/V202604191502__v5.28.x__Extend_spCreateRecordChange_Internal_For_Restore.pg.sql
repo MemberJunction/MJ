@@ -590,34 +590,34 @@ CREATE TRIGGER "trgUpdateVersionLabelItem"
 -- ===================== Data (INSERT/UPDATE/DELETE) =====================
 
 UPDATE __mj."EntityField"
-               SET "IsNameField" = 1
+               SET "IsNameField" = TRUE
                WHERE "ID" = 'CE4660A4-75E6-4CC9-914F-3F3573BC2903'
-               AND "AutoUpdateIsNameField" = 1;
+               AND "AutoUpdateIsNameField" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = 'B6273D3C-06FC-4763-AB79-7C08C08839E7'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
                SET "UserSearchPredicateAPI" = 'BeginsWith'
                WHERE "ID" = '880C53E3-358B-4134-9584-C38C65C8C689'
-               AND "AutoUpdateUserSearchPredicate" = 1;
+               AND "AutoUpdateUserSearchPredicate" = TRUE;
 
 UPDATE __mj."EntityField"
                SET "UserSearchPredicateAPI" = 'BeginsWith'
                WHERE "ID" = 'CE4660A4-75E6-4CC9-914F-3F3573BC2903'
-               AND "AutoUpdateUserSearchPredicate" = 1;
+               AND "AutoUpdateUserSearchPredicate" = TRUE;
 
 UPDATE __mj."EntityField"
                SET "UserSearchPredicateAPI" = 'Exact'
                WHERE "ID" = '48626253-5497-4805-A944-8726264F9B9A'
-               AND "AutoUpdateUserSearchPredicate" = 1;
+               AND "AutoUpdateUserSearchPredicate" = TRUE;
 
 UPDATE __mj."Entity"
-            SET "AllowUserSearchAPI" = 1
+            SET "AllowUserSearchAPI" = TRUE
             WHERE "ID" = '37F31DED-1186-46E6-B3A5-052CB31A8651'
-            AND "AutoUpdateAllowUserSearchAPI" = 1;
+            AND "AutoUpdateAllowUserSearchAPI" = TRUE;
 
 
 -- ===================== Grants =====================

@@ -14,16 +14,9 @@ SET search_path TO __mj, public;
 -- Ensure backslashes in string literals are treated literally (not as escape sequences)
 SET standard_conforming_strings = on;
 
--- Implicit INTEGER -> BOOLEAN cast (SQL Server BIT columns accept 0/1 in INSERTs)
--- PostgreSQL has a built-in explicit-only INTEGER->bool cast. We upgrade it to implicit
--- so INSERT VALUES with 0/1 for BOOLEAN columns work like SQL Server BIT.
-UPDATE pg_cast SET castcontext = 'i'
-WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
-
-
 -- ===================== Data (INSERT/UPDATE/DELETE) =====================
 
-UPDATE __mj."Entity" SET "AllowAllRowsAPI" = 1 WHERE "Name" LIKE 'MJ: Archive%';
+UPDATE __mj."Entity" SET "AllowAllRowsAPI" = TRUE WHERE "Name" LIKE 'MJ: Archive%';
 
 -- 1. Record Changes - 12 Month
 
@@ -38,7 +31,7 @@ BEGIN
         ('C510C95C-8477-468C-A2E1-CA90B40743D3',
         'Record Changes - 12 Month',
         'Archives Record Changes data older than 12 months. Strips ChangesJSON, FullRecordJSON, and ChangesDescription fields to reclaim storage while preserving row skeletons.',
-        '/archives', 'JSON', 0, 365, 'StripFields', 100, 0, 'Disabled',
+        '/archives', 'JSON', FALSE, 365, 'StripFields', 100, FALSE, 'Disabled',
         'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E');
         
         INSERT INTO __mj."ArchiveConfigurationEntity"
@@ -49,7 +42,7 @@ BEGIN
         'F5238F34-2837-EF11-86D4-6045BDEE16E6', -- "MJ": "Record" "Changes"
         'StripFields', 365, 'ChangedAt', 100, 1,
         '{"Fields":[{"FieldName":"ChangesJSON","IsActive":true},{"FieldName":"FullRecordJSON","IsActive":true},{"FieldName":"ChangesDescription","IsActive":true}],"ArchiveFullRecord":true,"SkipIfAllNullFields":["ChangesJSON","FullRecordJSON","ChangesDescription"]}',
-        0, 1);
+        FALSE, TRUE);
     END IF;
 END $$;
 
@@ -64,7 +57,7 @@ BEGIN
         ('E62D1C73-4194-4370-98DF-20227CF39478',
         'AI Prompt Runs - 6 Month',
         'Archives AI Prompt Runs data older than 6 months. Strips Messages, Result, ErrorMessage, and ValidationAttempts fields.',
-        '/archives', 'JSON', 0, 180, 'StripFields', 100, 1, 'Disabled',
+        '/archives', 'JSON', FALSE, 180, 'StripFields', 100, TRUE, 'Disabled',
         'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E');
         
         INSERT INTO __mj."ArchiveConfigurationEntity"
@@ -75,7 +68,7 @@ BEGIN
         '7C1C98D0-3978-4CE8-8E3F-C90301E59767', -- "MJ": "AI" "Prompt" "Runs"
         'StripFields', 180, '__mj_CreatedAt', 100, 1,
         '{"Fields":[{"FieldName":"Messages","IsActive":true},{"FieldName":"Result","IsActive":true},{"FieldName":"ErrorMessage","IsActive":true},{"FieldName":"ValidationAttempts","IsActive":true}],"ArchiveFullRecord":true,"SkipIfAllNullFields":["Messages","Result"]}',
-        1, 1);
+        TRUE, TRUE);
     END IF;
 END $$;
 
@@ -90,7 +83,7 @@ BEGIN
         ('1826C646-0293-4724-AB1E-84EF683C00A5',
         'AI Agent Run Steps - 6 Month',
         'Archives AI Agent Run Steps data older than 6 months. Strips InputData, OutputData, PayloadAtStart, PayloadAtEnd, ErrorMessage, and Comments fields.',
-        '/archives', 'JSON', 0, 180, 'StripFields', 100, 1, 'Disabled',
+        '/archives', 'JSON', FALSE, 180, 'StripFields', 100, TRUE, 'Disabled',
         'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E');
         
         INSERT INTO __mj."ArchiveConfigurationEntity"
@@ -101,7 +94,7 @@ BEGIN
         '99273DAD-560E-4ABC-8332-C97AB58B7463', -- "MJ": "AI" "Agent" "Run" "Steps"
         'StripFields', 180, '__mj_CreatedAt', 100, 1,
         '{"Fields":[{"FieldName":"InputData","IsActive":true},{"FieldName":"OutputData","IsActive":true},{"FieldName":"PayloadAtStart","IsActive":true},{"FieldName":"PayloadAtEnd","IsActive":true},{"FieldName":"ErrorMessage","IsActive":true},{"FieldName":"Comments","IsActive":true}],"ArchiveFullRecord":true,"SkipIfAllNullFields":["InputData","OutputData"]}',
-        1, 1);
+        TRUE, TRUE);
     END IF;
 END $$;
 
@@ -116,7 +109,7 @@ BEGIN
         ('48AC178D-4C4B-4C3E-9F07-FB6774B3D624',
         'AI Agent Runs - 6 Month',
         'Archives AI Agent Runs data older than 6 months. Strips Result, FinalPayload, StartingPayload, Data, Message, ErrorMessage, and AgentState fields.',
-        '/archives', 'JSON', 0, 180, 'StripFields', 100, 1, 'Disabled',
+        '/archives', 'JSON', FALSE, 180, 'StripFields', 100, TRUE, 'Disabled',
         'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E');
         
         INSERT INTO __mj."ArchiveConfigurationEntity"
@@ -127,7 +120,7 @@ BEGIN
         '5190AF93-4C39-4429-BDAA-0AEB492A0256', -- "MJ": "AI" "Agent" "Runs"
         'StripFields', 180, '__mj_CreatedAt', 100, 2,
         '{"Fields":[{"FieldName":"Result","IsActive":true},{"FieldName":"FinalPayload","IsActive":true},{"FieldName":"StartingPayload","IsActive":true},{"FieldName":"Data","IsActive":true},{"FieldName":"Message","IsActive":true},{"FieldName":"ErrorMessage","IsActive":true},{"FieldName":"AgentState","IsActive":true}],"ArchiveFullRecord":true,"SkipIfAllNullFields":["Result","FinalPayload"]}',
-        1, 1);
+        TRUE, TRUE);
     END IF;
 END $$;
 
@@ -142,7 +135,7 @@ BEGIN
         ('769134EB-D384-48CE-915F-5836E9009A6C',
         'Audit Logs - 18 Month',
         'Archives Audit Logs data older than 18 months. Strips Details and Description fields.',
-        '/archives', 'JSON', 0, 540, 'StripFields', 100, 0, 'Disabled',
+        '/archives', 'JSON', FALSE, 540, 'StripFields', 100, FALSE, 'Disabled',
         'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E');
         
         INSERT INTO __mj."ArchiveConfigurationEntity"
@@ -153,7 +146,7 @@ BEGIN
         'F8238F34-2837-EF11-86D4-6045BDEE16E6', -- "MJ": "Audit" "Logs"
         'StripFields', 540, '__mj_CreatedAt', 100, 1,
         '{"Fields":[{"FieldName":"Details","IsActive":true},{"FieldName":"Description","IsActive":true}],"ArchiveFullRecord":true,"SkipIfAllNullFields":["Details","Description"]}',
-        0, 1);
+        FALSE, TRUE);
     END IF;
 END $$;
 
@@ -168,7 +161,7 @@ BEGIN
         ('12D1DBB2-B2DE-4F8B-985A-839E0D21FE62',
         'Action Execution Logs - 12 Month',
         'Archives Action Execution Logs data older than 12 months. Archives the full record to external storage then deletes the source row.',
-        '/archives', 'JSON', 0, 365, 'HardDelete', 100, 0, 'Disabled',
+        '/archives', 'JSON', FALSE, 365, 'HardDelete', 100, FALSE, 'Disabled',
         'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E');
         
         INSERT INTO __mj."ArchiveConfigurationEntity"
@@ -179,7 +172,7 @@ BEGIN
         '3E248F34-2837-EF11-86D4-6045BDEE16E6', -- "MJ": "Action" "Execution" "Logs"
         'HardDelete', 365, '__mj_CreatedAt', 100, 1,
         '{"Fields":[],"ArchiveFullRecord":true}',
-        0, 1);
+        FALSE, TRUE);
     END IF;
 END $$;
 
@@ -194,7 +187,7 @@ BEGIN
         ('4FFE84AA-617B-4E88-AB81-C0EB412E9426',
         'Scheduled Job Runs - 12 Month',
         'Archives Scheduled Job Runs data older than 12 months. Archives the full record to external storage then deletes the source row.',
-        '/archives', 'JSON', 0, 365, 'HardDelete', 100, 0, 'Disabled',
+        '/archives', 'JSON', FALSE, 365, 'HardDelete', 100, FALSE, 'Disabled',
         'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E');
         
         INSERT INTO __mj."ArchiveConfigurationEntity"
@@ -205,7 +198,7 @@ BEGIN
         '05853432-5E13-4F2A-8618-77857ADF17FA', -- "MJ": "Scheduled" "Job" "Runs"
         'HardDelete', 365, '__mj_CreatedAt', 100, 1,
         '{"Fields":[],"ArchiveFullRecord":true}',
-        0, 1);
+        FALSE, TRUE);
     END IF;
 END $$;
 
@@ -220,7 +213,7 @@ BEGIN
         ('8C3AD877-0BAE-4CC6-970D-9249BAABCE53',
         'Communication Logs - 12 Month',
         'Archives Communication Logs data older than 12 months. Archives the full record to external storage then deletes the source row.',
-        '/archives', 'JSON', 0, 365, 'HardDelete', 100, 0, 'Disabled',
+        '/archives', 'JSON', FALSE, 365, 'HardDelete', 100, FALSE, 'Disabled',
         'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E');
         
         INSERT INTO __mj."ArchiveConfigurationEntity"
@@ -231,7 +224,7 @@ BEGIN
         '46248F34-2837-EF11-86D4-6045BDEE16E6', -- "MJ": "Communication" "Logs"
         'HardDelete', 365, '__mj_CreatedAt', 100, 1,
         '{"Fields":[],"ArchiveFullRecord":true}',
-        0, 1);
+        FALSE, TRUE);
     END IF;
 END $$;
 

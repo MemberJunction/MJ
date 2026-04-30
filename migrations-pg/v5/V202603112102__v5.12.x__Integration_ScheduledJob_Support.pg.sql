@@ -510,19 +510,19 @@ BEGIN
         16,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         'F48D2E6C-61C8-46B8-A617-C8228601EB3C',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -576,19 +576,19 @@ BEGIN
         16,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         '05853432-5E13-4F2A-8618-77857ADF17FA',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -611,7 +611,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = 'f63d8578-c310-4de2-9bf2-15b047c0397f'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('f63d8578-c310-4de2-9bf2-15b047c0397f', '05853432-5E13-4F2A-8618-77857ADF17FA', 'E5238F34-2837-EF11-86D4-6045BDEE16E6', 'ScheduledJobRunID', 'One To Many', 1, 1, 4, NOW(), NOW());
+        VALUES ('f63d8578-c310-4de2-9bf2-15b047c0397f', '05853432-5E13-4F2A-8618-77857ADF17FA', 'E5238F34-2837-EF11-86D4-6045BDEE16E6', 'ScheduledJobRunID', 'One To Many', TRUE, TRUE, 4, NOW(), NOW());
     END IF;
 END $$;
 
@@ -621,19 +621,19 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '10b4a3f3-9b46-4fa9-ae66-eef4a3c43d2f'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('10b4a3f3-9b46-4fa9-ae66-eef4a3c43d2f', 'F48D2E6C-61C8-46B8-A617-C8228601EB3C', 'DE238F34-2837-EF11-86D4-6045BDEE16E6', 'ScheduledJobID', 'One To Many', 1, 1, 6, NOW(), NOW());
+        VALUES ('10b4a3f3-9b46-4fa9-ae66-eef4a3c43d2f', 'F48D2E6C-61C8-46B8-A617-C8228601EB3C', 'DE238F34-2837-EF11-86D4-6045BDEE16E6', 'ScheduledJobID', 'One To Many', TRUE, TRUE, 6, NOW(), NOW());
     END IF;
 END $$;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '4D811E36-6C67-4927-957C-CF3692941C43'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-                  SET "IncludeInUserSearchAPI" = 1
+                  SET "IncludeInUserSearchAPI" = TRUE
                   WHERE "ID" = '385817F0-6F36-EF11-86D4-6045BDEE16E6'
-                  AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+                  AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 /* Set categories for 16 fields */
 -- UPDATE Entity Field Category Info MJ: Company Integration Runs."ID"
 
@@ -643,7 +643,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '6C4D17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '6C4D17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integration Runs."CompanyIntegrationID"
 
 UPDATE __mj."EntityField"
@@ -652,7 +652,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '6D4D17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '6D4D17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integration Runs."RunByUserID"
 
 UPDATE __mj."EntityField"
@@ -662,7 +662,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '6E4D17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '6E4D17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integration Runs."Integration"
 
 UPDATE __mj."EntityField"
@@ -671,7 +671,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '1C2E756D-4457-495D-B7BF-43402A1E4E4E' AND "AutoUpdateCategory" = 1;
+   "ID" = '1C2E756D-4457-495D-B7BF-43402A1E4E4E' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integration Runs."Company"
 
 UPDATE __mj."EntityField"
@@ -680,7 +680,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '2C8D1AD8-7743-46C2-9B40-A7C6C9F0765B' AND "AutoUpdateCategory" = 1;
+   "ID" = '2C8D1AD8-7743-46C2-9B40-A7C6C9F0765B' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integration Runs."RunByUser"
 
 UPDATE __mj."EntityField"
@@ -689,7 +689,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'C55717F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'C55717F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integration Runs."ScheduledJobRunID"
 
 UPDATE __mj."EntityField"
@@ -700,7 +700,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '98758B73-BCF9-4F1D-84D2-5C897F46EFF3' AND "AutoUpdateCategory" = 1;
+   "ID" = '98758B73-BCF9-4F1D-84D2-5C897F46EFF3' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integration Runs."StartedAt"
 
 UPDATE __mj."EntityField"
@@ -709,7 +709,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '6F4D17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '6F4D17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integration Runs."EndedAt"
 
 UPDATE __mj."EntityField"
@@ -718,7 +718,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '704D17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '704D17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integration Runs."TotalRecords"
 
 UPDATE __mj."EntityField"
@@ -727,7 +727,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '714D17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '714D17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integration Runs."Status"
 
 UPDATE __mj."EntityField"
@@ -736,7 +736,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '7D91381D-ABC9-46DD-AA66-3E1909BE1CB2' AND "AutoUpdateCategory" = 1;
+   "ID" = '7D91381D-ABC9-46DD-AA66-3E1909BE1CB2' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integration Runs."Comments"
 
 UPDATE __mj."EntityField"
@@ -745,7 +745,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '724D17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '724D17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integration Runs."ErrorLog"
 
 UPDATE __mj."EntityField"
@@ -754,7 +754,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '429C9B37-8575-4F2D-9E19-F39378EC3A12' AND "AutoUpdateCategory" = 1;
+   "ID" = '429C9B37-8575-4F2D-9E19-F39378EC3A12' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integration Runs."ConfigData"
 
 UPDATE __mj."EntityField"
@@ -764,7 +764,7 @@ SET
    "ExtendedType" = 'Code',
    "CodeType" = 'Other'
 WHERE 
-   "ID" = 'CB3F1399-7741-4882-99D6-F6CDE80E3897' AND "AutoUpdateCategory" = 1;
+   "ID" = 'CB3F1399-7741-4882-99D6-F6CDE80E3897' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integration Runs.__mj_CreatedAt
 
 UPDATE __mj."EntityField"
@@ -773,7 +773,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '4B5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '4B5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integration Runs.__mj_UpdatedAt
 
 UPDATE __mj."EntityField"
@@ -782,7 +782,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '4C5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '4C5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 /* Set categories for 37 fields */
 -- UPDATE Entity Field Category Info MJ: Company Integrations."ID"
 
@@ -792,7 +792,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '115817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '115817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."CompanyID"
 
 UPDATE __mj."EntityField"
@@ -801,7 +801,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '125817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '125817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."IntegrationID"
 
 UPDATE __mj."EntityField"
@@ -810,7 +810,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '135817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '135817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."IsActive"
 
 UPDATE __mj."EntityField"
@@ -819,7 +819,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '145817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '145817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."Name"
 
 UPDATE __mj."EntityField"
@@ -828,7 +828,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '64799DD4-A537-4B9C-897F-EC2AFE9A28D0' AND "AutoUpdateCategory" = 1;
+   "ID" = '64799DD4-A537-4B9C-897F-EC2AFE9A28D0' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."SourceTypeID"
 
 UPDATE __mj."EntityField"
@@ -837,7 +837,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'F647023E-D909-4ECB-B59D-EE477C274827' AND "AutoUpdateCategory" = 1;
+   "ID" = 'F647023E-D909-4ECB-B59D-EE477C274827' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."IsExternalSystemReadOnly"
 
 UPDATE __mj."EntityField"
@@ -847,7 +847,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'B24217F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'B24217F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."Company"
 
 UPDATE __mj."EntityField"
@@ -857,7 +857,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '365817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '365817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."Integration"
 
 UPDATE __mj."EntityField"
@@ -867,7 +867,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '375817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '375817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."AccessToken"
 
 UPDATE __mj."EntityField"
@@ -876,7 +876,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '155817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '155817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."RefreshToken"
 
 UPDATE __mj."EntityField"
@@ -885,7 +885,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '165817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '165817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."TokenExpirationDate"
 
 UPDATE __mj."EntityField"
@@ -894,7 +894,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '175817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '175817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."APIKey"
 
 UPDATE __mj."EntityField"
@@ -903,7 +903,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '185817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '185817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."ClientID"
 
 UPDATE __mj."EntityField"
@@ -912,7 +912,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'B34217F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'B34217F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."ClientSecret"
 
 UPDATE __mj."EntityField"
@@ -921,7 +921,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'B44217F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'B44217F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."CredentialID"
 
 UPDATE __mj."EntityField"
@@ -930,7 +930,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '131B9CC4-3755-46F6-925A-7E3A13BCDFD6' AND "AutoUpdateCategory" = 1;
+   "ID" = '131B9CC4-3755-46F6-925A-7E3A13BCDFD6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."ExternalSystemID"
 
 UPDATE __mj."EntityField"
@@ -939,7 +939,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '425817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '425817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."CustomAttribute1"
 
 UPDATE __mj."EntityField"
@@ -948,7 +948,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'C44217F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'C44217F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."Configuration"
 
 UPDATE __mj."EntityField"
@@ -957,7 +957,7 @@ SET
    "ExtendedType" = 'Code',
    "CodeType" = 'Other'
 WHERE 
-   "ID" = '987EAF20-227F-4043-BD87-06C9E01598F4' AND "AutoUpdateCategory" = 1;
+   "ID" = '987EAF20-227F-4043-BD87-06C9E01598F4' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."DriverClassName"
 
 UPDATE __mj."EntityField"
@@ -966,7 +966,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '385817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '385817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."DriverImportPath"
 
 UPDATE __mj."EntityField"
@@ -975,7 +975,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '395817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '395817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."ScheduleEnabled"
 
 UPDATE __mj."EntityField"
@@ -984,7 +984,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '4D811E36-6C67-4927-957C-CF3692941C43' AND "AutoUpdateCategory" = 1;
+   "ID" = '4D811E36-6C67-4927-957C-CF3692941C43' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."ScheduleType"
 
 UPDATE __mj."EntityField"
@@ -993,7 +993,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '91E87B89-A40E-49CE-8464-75EC06BFF1A7' AND "AutoUpdateCategory" = 1;
+   "ID" = '91E87B89-A40E-49CE-8464-75EC06BFF1A7' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."ScheduleIntervalMinutes"
 
 UPDATE __mj."EntityField"
@@ -1002,7 +1002,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '801D0E7D-4FCB-4249-9052-4E929307F070' AND "AutoUpdateCategory" = 1;
+   "ID" = '801D0E7D-4FCB-4249-9052-4E929307F070' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."CronExpression"
 
 UPDATE __mj."EntityField"
@@ -1011,7 +1011,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'FA43CB1D-7A04-40D8-AC9A-2036E3F06252' AND "AutoUpdateCategory" = 1;
+   "ID" = 'FA43CB1D-7A04-40D8-AC9A-2036E3F06252' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."NextScheduledRunAt"
 
 UPDATE __mj."EntityField"
@@ -1020,7 +1020,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '45E7C880-19C4-45FB-BA3C-9FFD9533FB12' AND "AutoUpdateCategory" = 1;
+   "ID" = '45E7C880-19C4-45FB-BA3C-9FFD9533FB12' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."LastScheduledRunAt"
 
 UPDATE __mj."EntityField"
@@ -1029,7 +1029,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'CAC39331-FA43-46BD-ABC0-11AE683EA5EC' AND "AutoUpdateCategory" = 1;
+   "ID" = 'CAC39331-FA43-46BD-ABC0-11AE683EA5EC' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."ScheduledJobID"
 
 UPDATE __mj."EntityField"
@@ -1040,7 +1040,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'DF93B894-B6DB-4928-825F-3EC8EFBC9521' AND "AutoUpdateCategory" = 1;
+   "ID" = 'DF93B894-B6DB-4928-825F-3EC8EFBC9521' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."IsLocked"
 
 UPDATE __mj."EntityField"
@@ -1049,7 +1049,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '6E0A21B0-0039-4ACC-B40A-3B8E1767D4D4' AND "AutoUpdateCategory" = 1;
+   "ID" = '6E0A21B0-0039-4ACC-B40A-3B8E1767D4D4' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."LockedAt"
 
 UPDATE __mj."EntityField"
@@ -1058,7 +1058,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '8B9EDF01-96FE-4506-97D8-1971830F101E' AND "AutoUpdateCategory" = 1;
+   "ID" = '8B9EDF01-96FE-4506-97D8-1971830F101E' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."LockedByInstance"
 
 UPDATE __mj."EntityField"
@@ -1067,7 +1067,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '186EB537-B916-46AC-82F3-DCE1789B572F' AND "AutoUpdateCategory" = 1;
+   "ID" = '186EB537-B916-46AC-82F3-DCE1789B572F' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."LockExpiresAt"
 
 UPDATE __mj."EntityField"
@@ -1076,7 +1076,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'F9E35F33-7ED2-4413-922F-12BA98E60355' AND "AutoUpdateCategory" = 1;
+   "ID" = 'F9E35F33-7ED2-4413-922F-12BA98E60355' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."LastRunID"
 
 UPDATE __mj."EntityField"
@@ -1086,7 +1086,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '3A5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '3A5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."LastRunStartedAt"
 
 UPDATE __mj."EntityField"
@@ -1095,7 +1095,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '3B5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '3B5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."LastRunEndedAt"
 
 UPDATE __mj."EntityField"
@@ -1104,7 +1104,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '3C5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '3C5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations.__mj_CreatedAt
 
 UPDATE __mj."EntityField"
@@ -1113,7 +1113,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '0D5917F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '0D5917F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations.__mj_UpdatedAt
 
 UPDATE __mj."EntityField"
@@ -1122,7 +1122,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'E85817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'E85817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 
 
 -- ===================== FK & CHECK Constraints =====================

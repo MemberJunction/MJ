@@ -1952,19 +1952,19 @@ BEGIN
         40,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -2003,9 +2003,9 @@ UPDATE __mj."EntityField" SET "ValueListType"='List' WHERE "ID"='39CCC9E3-D229-4
 -- Index for foreign key AgentID in table AIAgentRequest
 
 UPDATE __mj."EntityField"
-                  SET "IncludeInUserSearchAPI" = 1
+                  SET "IncludeInUserSearchAPI" = TRUE
                   WHERE "ID" = '9087F477-068B-4F38-9EE4-2C0B7BC65A90'
-                  AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+                  AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 /* Set categories for 28 fields */
 -- UPDATE Entity Field Category Info MJ: AI Agent Requests."ID"
 
@@ -2015,7 +2015,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '2AEC7EF2-934A-4296-BF14-F98C9F9B5357' AND "AutoUpdateCategory" = 1;
+   "ID" = '2AEC7EF2-934A-4296-BF14-F98C9F9B5357' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Requests."AgentID"
 
 UPDATE __mj."EntityField"
@@ -2024,7 +2024,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '7825BE5D-B314-4D44-9145-E8641009AA85' AND "AutoUpdateCategory" = 1;
+   "ID" = '7825BE5D-B314-4D44-9145-E8641009AA85' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Requests."RequestedAt"
 
 UPDATE __mj."EntityField"
@@ -2033,7 +2033,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '949E0012-3ECD-4DBF-B66F-8A560DA01DA3' AND "AutoUpdateCategory" = 1;
+   "ID" = '949E0012-3ECD-4DBF-B66F-8A560DA01DA3' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Requests."RequestForUserID"
 
 UPDATE __mj."EntityField"
@@ -2042,7 +2042,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '4DACDDC8-2461-4995-A2CA-469250521F44' AND "AutoUpdateCategory" = 1;
+   "ID" = '4DACDDC8-2461-4995-A2CA-469250521F44' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Requests."Status"
 
 UPDATE __mj."EntityField"
@@ -2051,7 +2051,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '49218650-7B04-4C4C-B109-A255D6627EAB' AND "AutoUpdateCategory" = 1;
+   "ID" = '49218650-7B04-4C4C-B109-A255D6627EAB' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Requests."Request"
 
 UPDATE __mj."EntityField"
@@ -2061,7 +2061,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '50DA67D1-BF71-4E90-9F16-74D359285CE5' AND "AutoUpdateCategory" = 1;
+   "ID" = '50DA67D1-BF71-4E90-9F16-74D359285CE5' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Requests."Response"
 
 UPDATE __mj."EntityField"
@@ -2071,7 +2071,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'FA548A7C-380A-41D7-8E62-1A43376F34F8' AND "AutoUpdateCategory" = 1;
+   "ID" = 'FA548A7C-380A-41D7-8E62-1A43376F34F8' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Requests."ResponseByUserID"
 
 UPDATE __mj."EntityField"
@@ -2081,7 +2081,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '3D9F4176-C838-47F2-8E96-E3D45B588FE6' AND "AutoUpdateCategory" = 1;
+   "ID" = '3D9F4176-C838-47F2-8E96-E3D45B588FE6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Requests."RespondedAt"
 
 UPDATE __mj."EntityField"
@@ -2090,7 +2090,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '8AE9367C-44FF-4D15-84F9-8742882C3706' AND "AutoUpdateCategory" = 1;
+   "ID" = '8AE9367C-44FF-4D15-84F9-8742882C3706' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Requests."Comments"
 
 UPDATE __mj."EntityField"
@@ -2100,7 +2100,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '9087F477-068B-4F38-9EE4-2C0B7BC65A90' AND "AutoUpdateCategory" = 1;
+   "ID" = '9087F477-068B-4F38-9EE4-2C0B7BC65A90' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Requests.__mj_CreatedAt
 
 UPDATE __mj."EntityField"
@@ -2109,7 +2109,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '75A2E62E-3914-48B6-9A31-E7728A1B92B0' AND "AutoUpdateCategory" = 1;
+   "ID" = '75A2E62E-3914-48B6-9A31-E7728A1B92B0' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Requests.__mj_UpdatedAt
 
 UPDATE __mj."EntityField"
@@ -2118,7 +2118,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '2BC4635D-0F49-43B5-8E7C-FB57C0D4F6B8' AND "AutoUpdateCategory" = 1;
+   "ID" = '2BC4635D-0F49-43B5-8E7C-FB57C0D4F6B8' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Requests."RequestTypeID"
 
 UPDATE __mj."EntityField"
@@ -2127,7 +2127,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'A3E5AD0C-1968-467E-96FF-41D2B0D9358B' AND "AutoUpdateCategory" = 1;
+   "ID" = 'A3E5AD0C-1968-467E-96FF-41D2B0D9358B' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Requests."ResponseSchema"
 
 UPDATE __mj."EntityField"
@@ -2137,7 +2137,7 @@ SET
    "ExtendedType" = 'Code',
    "CodeType" = 'Other'
 WHERE 
-   "ID" = '5810273C-6DCB-4772-B0CD-7B989B387103' AND "AutoUpdateCategory" = 1;
+   "ID" = '5810273C-6DCB-4772-B0CD-7B989B387103' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Requests."ResponseData"
 
 UPDATE __mj."EntityField"
@@ -2146,7 +2146,7 @@ SET
    "ExtendedType" = 'Code',
    "CodeType" = 'Other'
 WHERE 
-   "ID" = '5F756FFD-34B0-462D-97D3-D4237FDA6C73' AND "AutoUpdateCategory" = 1;
+   "ID" = '5F756FFD-34B0-462D-97D3-D4237FDA6C73' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Requests."Priority"
 
 UPDATE __mj."EntityField"
@@ -2155,7 +2155,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '4FEA225C-8D62-4C2B-B8E6-DB2869A59BDC' AND "AutoUpdateCategory" = 1;
+   "ID" = '4FEA225C-8D62-4C2B-B8E6-DB2869A59BDC' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Requests."ExpiresAt"
 
 UPDATE __mj."EntityField"
@@ -2164,7 +2164,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '0567323B-A358-4DD9-B3F3-81C0A94C4BC6' AND "AutoUpdateCategory" = 1;
+   "ID" = '0567323B-A358-4DD9-B3F3-81C0A94C4BC6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Requests."OriginatingAgentRunID"
 
 UPDATE __mj."EntityField"
@@ -2173,7 +2173,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '7C9DB7FC-90B2-4ECF-B82A-70A97AE1F796' AND "AutoUpdateCategory" = 1;
+   "ID" = '7C9DB7FC-90B2-4ECF-B82A-70A97AE1F796' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Requests."OriginatingAgentRunStepID"
 
 UPDATE __mj."EntityField"
@@ -2183,7 +2183,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '1529BD25-4AD9-4888-8687-A926959493D9' AND "AutoUpdateCategory" = 1;
+   "ID" = '1529BD25-4AD9-4888-8687-A926959493D9' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Requests."ResumingAgentRunID"
 
 UPDATE __mj."EntityField"
@@ -2192,7 +2192,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'B78B06D4-671A-4CE5-A9B9-CABD224B2A08' AND "AutoUpdateCategory" = 1;
+   "ID" = 'B78B06D4-671A-4CE5-A9B9-CABD224B2A08' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Requests."ResponseSource"
 
 UPDATE __mj."EntityField"
@@ -2202,7 +2202,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '39CCC9E3-D229-4282-8FAD-52F2CD82E53D' AND "AutoUpdateCategory" = 1;
+   "ID" = '39CCC9E3-D229-4282-8FAD-52F2CD82E53D' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Requests."Agent"
 
 UPDATE __mj."EntityField"
@@ -2211,7 +2211,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'A41E6BF9-7CC3-4B3A-AA78-A2C82DE6EE75' AND "AutoUpdateCategory" = 1;
+   "ID" = 'A41E6BF9-7CC3-4B3A-AA78-A2C82DE6EE75' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Requests."RequestForUser"
 
 UPDATE __mj."EntityField"
@@ -2220,7 +2220,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '99AD5962-A952-4D4A-9B43-10AAAE11A448' AND "AutoUpdateCategory" = 1;
+   "ID" = '99AD5962-A952-4D4A-9B43-10AAAE11A448' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Requests."ResponseByUser"
 
 UPDATE __mj."EntityField"
@@ -2230,7 +2230,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '206573B2-F307-4269-A4E9-196753CA82C0' AND "AutoUpdateCategory" = 1;
+   "ID" = '206573B2-F307-4269-A4E9-196753CA82C0' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Requests."RequestType"
 
 UPDATE __mj."EntityField"
@@ -2239,7 +2239,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'B8A7BA61-A0DE-461B-AF00-A83D51B7BFA3' AND "AutoUpdateCategory" = 1;
+   "ID" = 'B8A7BA61-A0DE-461B-AF00-A83D51B7BFA3' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Requests."OriginatingAgentRun"
 
 UPDATE __mj."EntityField"
@@ -2249,7 +2249,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '91461548-61C8-4D64-8E95-CF809A82E9E1' AND "AutoUpdateCategory" = 1;
+   "ID" = '91461548-61C8-4D64-8E95-CF809A82E9E1' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Requests."OriginatingAgentRunStep"
 
 UPDATE __mj."EntityField"
@@ -2259,7 +2259,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '5038DE6B-9E95-46FD-9784-9D95066D3135' AND "AutoUpdateCategory" = 1;
+   "ID" = '5038DE6B-9E95-46FD-9784-9D95066D3135' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Requests."ResumingAgentRun"
 
 UPDATE __mj."EntityField"
@@ -2269,7 +2269,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'FED675FA-60FE-47ED-AC35-221CB7797CA4' AND "AutoUpdateCategory" = 1;
+   "ID" = 'FED675FA-60FE-47ED-AC35-221CB7797CA4' AND "AutoUpdateCategory" = TRUE;
 
 
 -- ===================== Grants =====================

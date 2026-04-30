@@ -274,15 +274,15 @@ INSERT INTO __mj."Entity" (
          'ApplicationRole',
          'vwApplicationRoles',
          '__mj',
-         1,
-         0
-         , 1
-         , 0
-         , 0
-         , 0
-         , 1
-         , 1
-         , 1
+         TRUE,
+         FALSE
+         , TRUE
+         , FALSE
+         , FALSE
+         , FALSE
+         , TRUE
+         , TRUE
+         , TRUE
          , 1000
          , NOW()
          , NOW()
@@ -296,17 +296,17 @@ INSERT INTO __mj."ApplicationEntity"
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('6d3d08a7-12f2-42ea-bd15-128fbe4a4259', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, NOW(), NOW());
+                                                   ('6d3d08a7-12f2-42ea-bd15-128fbe4a4259', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, FALSE, FALSE, FALSE, NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: Application Roles for role Developer */
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('6d3d08a7-12f2-42ea-bd15-128fbe4a4259', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0, NOW(), NOW());
+                                                   ('6d3d08a7-12f2-42ea-bd15-128fbe4a4259', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, FALSE, NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: Application Roles for role Integration */
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('6d3d08a7-12f2-42ea-bd15-128fbe4a4259', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, NOW(), NOW());
+                                                   ('6d3d08a7-12f2-42ea-bd15-128fbe4a4259', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, TRUE, NOW(), NOW());
 /* SQL text to add special date field __mj_CreatedAt to entity __mj."ApplicationRole" */
 
 UPDATE __mj."ApplicationRole" SET "__mj_CreatedAt" = NOW() WHERE "__mj_CreatedAt" IS NULL;
@@ -369,19 +369,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         'gen_random_uuid()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        1,
-        0,
-        0,
-        1,
-        1,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        TRUE,
+        TRUE,
         'Search',
         NOW(),
         NOW()
@@ -435,19 +435,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         'E8238F34-2837-EF11-86D4-6045BDEE16E6',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        TRUE,
         'Search',
         NOW(),
         NOW()
@@ -501,19 +501,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         'DA238F34-2837-EF11-86D4-6045BDEE16E6',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        TRUE,
         'Search',
         NOW(),
         NOW()
@@ -567,19 +567,19 @@ BEGIN
         1,
         1,
         0,
-        0,
+        FALSE,
         '(1)',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -633,19 +633,19 @@ BEGIN
         1,
         1,
         0,
-        0,
+        FALSE,
         '(0)',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -699,19 +699,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -765,19 +765,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -791,7 +791,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = 'f8e3068c-b7ff-4d1a-89f3-e261945fd0b4'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('f8e3068c-b7ff-4d1a-89f3-e261945fd0b4', 'DA238F34-2837-EF11-86D4-6045BDEE16E6', '6D3D08A7-12F2-42EA-BD15-128FBE4A4259', 'RoleID', 'One To Many', 1, 1, 1, NOW(), NOW());
+        VALUES ('f8e3068c-b7ff-4d1a-89f3-e261945fd0b4', 'DA238F34-2837-EF11-86D4-6045BDEE16E6', '6D3D08A7-12F2-42EA-BD15-128FBE4A4259', 'RoleID', 'One To Many', TRUE, TRUE, 1, NOW(), NOW());
     END IF;
 END $$;
 
@@ -801,7 +801,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = 'f30a95e9-87af-41f7-ad0f-c92f167e43e7'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('f30a95e9-87af-41f7-ad0f-c92f167e43e7', 'E8238F34-2837-EF11-86D4-6045BDEE16E6', '6D3D08A7-12F2-42EA-BD15-128FBE4A4259', 'ApplicationID', 'One To Many', 1, 1, 2, NOW(), NOW());
+        VALUES ('f30a95e9-87af-41f7-ad0f-c92f167e43e7', 'E8238F34-2837-EF11-86D4-6045BDEE16E6', '6D3D08A7-12F2-42EA-BD15-128FBE4A4259', 'ApplicationID', 'One To Many', TRUE, TRUE, 2, NOW(), NOW());
     END IF;
 END $$;
 
@@ -851,19 +851,19 @@ BEGIN
         200,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -917,19 +917,19 @@ BEGIN
         100,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -938,34 +938,34 @@ BEGIN
 END $$;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = 'E76A4F1E-353A-4B03-AFBD-C01D89CD6826'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = 'C85AF0D2-0087-4B0B-9B42-4CEA052151CD'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = 'D8FDE076-8709-484A-BEB7-6F8E104F9C52'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '6FD232D0-501B-4B50-9161-220F43381DE9'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-                  SET "IncludeInUserSearchAPI" = 1
+                  SET "IncludeInUserSearchAPI" = TRUE
                   WHERE "ID" = 'D8FDE076-8709-484A-BEB7-6F8E104F9C52'
-                  AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+                  AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
-                  SET "IncludeInUserSearchAPI" = 1
+                  SET "IncludeInUserSearchAPI" = TRUE
                   WHERE "ID" = '6FD232D0-501B-4B50-9161-220F43381DE9'
-                  AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+                  AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 /* Set categories for 9 fields */
 -- UPDATE Entity Field Category Info MJ: Application Roles."ID"
 
@@ -976,7 +976,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'DA036F52-2ADE-46A5-8F59-B0DC5B585604' AND "AutoUpdateCategory" = 1;
+   "ID" = 'DA036F52-2ADE-46A5-8F59-B0DC5B585604' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Application Roles."ApplicationID"
 
 UPDATE __mj."EntityField"
@@ -987,7 +987,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'FF3A1A6B-FE9A-4CAB-91DF-5B31B7163B24' AND "AutoUpdateCategory" = 1;
+   "ID" = 'FF3A1A6B-FE9A-4CAB-91DF-5B31B7163B24' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Application Roles."Application"
 
 UPDATE __mj."EntityField"
@@ -998,7 +998,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'D8FDE076-8709-484A-BEB7-6F8E104F9C52' AND "AutoUpdateCategory" = 1;
+   "ID" = 'D8FDE076-8709-484A-BEB7-6F8E104F9C52' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Application Roles."RoleID"
 
 UPDATE __mj."EntityField"
@@ -1009,7 +1009,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '11AEBE82-D291-41BA-8D4A-B82269D19A47' AND "AutoUpdateCategory" = 1;
+   "ID" = '11AEBE82-D291-41BA-8D4A-B82269D19A47' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Application Roles."Role"
 
 UPDATE __mj."EntityField"
@@ -1020,7 +1020,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '6FD232D0-501B-4B50-9161-220F43381DE9' AND "AutoUpdateCategory" = 1;
+   "ID" = '6FD232D0-501B-4B50-9161-220F43381DE9' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Application Roles."CanAccess"
 
 UPDATE __mj."EntityField"
@@ -1030,7 +1030,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'E76A4F1E-353A-4B03-AFBD-C01D89CD6826' AND "AutoUpdateCategory" = 1;
+   "ID" = 'E76A4F1E-353A-4B03-AFBD-C01D89CD6826' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Application Roles."CanAdmin"
 
 UPDATE __mj."EntityField"
@@ -1040,7 +1040,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'C85AF0D2-0087-4B0B-9B42-4CEA052151CD' AND "AutoUpdateCategory" = 1;
+   "ID" = 'C85AF0D2-0087-4B0B-9B42-4CEA052151CD' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Application Roles.__mj_CreatedAt
 
 UPDATE __mj."EntityField"
@@ -1050,7 +1050,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '8ED625B3-C9A0-4FE5-BF9B-0A3B2BA878DF' AND "AutoUpdateCategory" = 1;
+   "ID" = '8ED625B3-C9A0-4FE5-BF9B-0A3B2BA878DF' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Application Roles.__mj_UpdatedAt
 
 UPDATE __mj."EntityField"
@@ -1060,7 +1060,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '0DDB6E26-63B2-493A-8A06-A5CD09E0FE7B' AND "AutoUpdateCategory" = 1;
+   "ID" = '0DDB6E26-63B2-493A-8A06-A5CD09E0FE7B' AND "AutoUpdateCategory" = TRUE;
 /* Set entity icon to fa fa-shield-alt */
 
 UPDATE __mj."Entity"
@@ -1077,7 +1077,7 @@ INSERT INTO __mj."EntitySetting" ("ID", "EntityID", "Name", "Value", "__mj_Creat
 /* Set DefaultForNewUser=0 for NEW entity (category: junction, confidence: high) */
 
 UPDATE __mj."ApplicationEntity"
-         SET "DefaultForNewUser" = 0, "__mj_UpdatedAt" = NOW()
+         SET "DefaultForNewUser" = FALSE, "__mj_UpdatedAt" = NOW()
          WHERE "EntityID" = '6D3D08A7-12F2-42EA-BD15-128FBE4A4259';
 
 

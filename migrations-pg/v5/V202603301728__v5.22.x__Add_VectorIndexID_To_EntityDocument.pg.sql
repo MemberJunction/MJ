@@ -331,19 +331,19 @@ BEGIN
         16,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         '1D248F34-2837-EF11-86D4-6045BDEE16E6',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -357,7 +357,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '21a7bb14-7550-40ab-b17c-771bd9e3a2aa'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('21a7bb14-7550-40ab-b17c-771bd9e3a2aa', '1D248F34-2837-EF11-86D4-6045BDEE16E6', '22248F34-2837-EF11-86D4-6045BDEE16E6', 'VectorIndexID', 'One To Many', 1, 1, 4, NOW(), NOW());
+        VALUES ('21a7bb14-7550-40ab-b17c-771bd9e3a2aa', '1D248F34-2837-EF11-86D4-6045BDEE16E6', '22248F34-2837-EF11-86D4-6045BDEE16E6', 'VectorIndexID', 'One To Many', TRUE, TRUE, 4, NOW(), NOW());
     END IF;
 END $$;
 
@@ -407,19 +407,19 @@ BEGIN
         510,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -428,39 +428,39 @@ BEGIN
 END $$;
 
 UPDATE __mj."EntityField"
-                  SET "IncludeInUserSearchAPI" = 1
+                  SET "IncludeInUserSearchAPI" = TRUE
                   WHERE "ID" = 'F74317F0-6F36-EF11-86D4-6045BDEE16E6'
-                  AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+                  AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
-                  SET "IncludeInUserSearchAPI" = 1
+                  SET "IncludeInUserSearchAPI" = TRUE
                   WHERE "ID" = 'EA4E17F0-6F36-EF11-86D4-6045BDEE16E6'
-                  AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+                  AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
-                  SET "IncludeInUserSearchAPI" = 1
+                  SET "IncludeInUserSearchAPI" = TRUE
                   WHERE "ID" = '024F17F0-6F36-EF11-86D4-6045BDEE16E6'
-                  AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+                  AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
-                  SET "IncludeInUserSearchAPI" = 1
+                  SET "IncludeInUserSearchAPI" = TRUE
                   WHERE "ID" = 'CCADD97E-8E07-4B42-A16F-ADCFF9F9B385'
-                  AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+                  AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
-                  SET "IncludeInUserSearchAPI" = 1
+                  SET "IncludeInUserSearchAPI" = TRUE
                   WHERE "ID" = 'AF9D284C-DA9C-409B-ABB0-4BB4AA1F778F'
-                  AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+                  AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
-                  SET "IncludeInUserSearchAPI" = 1
+                  SET "IncludeInUserSearchAPI" = TRUE
                   WHERE "ID" = 'EAE4FA06-2E28-4959-9179-7C6420F7FE60'
-                  AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+                  AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
-                  SET "IncludeInUserSearchAPI" = 1
+                  SET "IncludeInUserSearchAPI" = TRUE
                   WHERE "ID" = 'BAC4C88D-29FE-46E9-9BC4-37B473206A08'
-                  AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+                  AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 /* Set categories for 19 fields */
 -- UPDATE Entity Field Category Info MJ: Entity Documents."ID"
 
@@ -470,7 +470,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'F34317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'F34317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Entity Documents."Name"
 
 UPDATE __mj."EntityField"
@@ -479,7 +479,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'F44317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'F44317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Entity Documents."Type"
 
 UPDATE __mj."EntityField"
@@ -489,7 +489,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'EA4E17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'EA4E17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Entity Documents."TypeID"
 
 UPDATE __mj."EntityField"
@@ -499,7 +499,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'F64317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'F64317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Entity Documents."EntityID"
 
 UPDATE __mj."EntityField"
@@ -509,7 +509,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'F54317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'F54317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Entity Documents."Entity"
 
 UPDATE __mj."EntityField"
@@ -519,7 +519,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '024F17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '024F17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Entity Documents."VectorDatabaseID"
 
 UPDATE __mj."EntityField"
@@ -529,7 +529,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '2A4F17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '2A4F17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Entity Documents."VectorDatabase"
 
 UPDATE __mj."EntityField"
@@ -539,7 +539,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'CCADD97E-8E07-4B42-A16F-ADCFF9F9B385' AND "AutoUpdateCategory" = 1;
+   "ID" = 'CCADD97E-8E07-4B42-A16F-ADCFF9F9B385' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Entity Documents."TemplateID"
 
 UPDATE __mj."EntityField"
@@ -549,7 +549,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'B0EB26E0-3E3B-EF11-86D4-0022481D1B23' AND "AutoUpdateCategory" = 1;
+   "ID" = 'B0EB26E0-3E3B-EF11-86D4-0022481D1B23' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Entity Documents."Template"
 
 UPDATE __mj."EntityField"
@@ -559,7 +559,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'AF9D284C-DA9C-409B-ABB0-4BB4AA1F778F' AND "AutoUpdateCategory" = 1;
+   "ID" = 'AF9D284C-DA9C-409B-ABB0-4BB4AA1F778F' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Entity Documents."AIModelID"
 
 UPDATE __mj."EntityField"
@@ -569,7 +569,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '2B4F17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '2B4F17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Entity Documents."AIModel"
 
 UPDATE __mj."EntityField"
@@ -579,7 +579,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'EAE4FA06-2E28-4959-9179-7C6420F7FE60' AND "AutoUpdateCategory" = 1;
+   "ID" = 'EAE4FA06-2E28-4959-9179-7C6420F7FE60' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Entity Documents."VectorIndexID"
 
 UPDATE __mj."EntityField"
@@ -590,7 +590,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '7EC088B4-C4AA-4E8F-841B-1650720C4FD7' AND "AutoUpdateCategory" = 1;
+   "ID" = '7EC088B4-C4AA-4E8F-841B-1650720C4FD7' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Entity Documents."VectorIndex"
 
 UPDATE __mj."EntityField"
@@ -601,7 +601,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'BAC4C88D-29FE-46E9-9BC4-37B473206A08' AND "AutoUpdateCategory" = 1;
+   "ID" = 'BAC4C88D-29FE-46E9-9BC4-37B473206A08' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Entity Documents."Status"
 
 UPDATE __mj."EntityField"
@@ -610,7 +610,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'F74317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'F74317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Entity Documents."PotentialMatchThreshold"
 
 UPDATE __mj."EntityField"
@@ -619,7 +619,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '264417F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '264417F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Entity Documents."AbsoluteMatchThreshold"
 
 UPDATE __mj."EntityField"
@@ -628,7 +628,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '274417F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '274417F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Entity Documents.__mj_CreatedAt
 
 UPDATE __mj."EntityField"
@@ -638,7 +638,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '144D17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '144D17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Entity Documents.__mj_UpdatedAt
 
 UPDATE __mj."EntityField"
@@ -648,7 +648,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '154D17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '154D17F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 
 
 -- ===================== FK & CHECK Constraints =====================

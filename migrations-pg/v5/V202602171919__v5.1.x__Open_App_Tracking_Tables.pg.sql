@@ -914,15 +914,15 @@ INSERT INTO "__mj"."Entity" (
          'OpenApp',
          'vwOpenApps',
          '__mj',
-         1,
-         0
-         , 1
-         , 0
-         , 0
-         , 0
-         , 1
-         , 1
-         , 1
+         TRUE,
+         FALSE
+         , TRUE
+         , FALSE
+         , FALSE
+         , FALSE
+         , TRUE
+         , TRUE
+         , TRUE
          , 1000
       );
 /* SQL generated to add new entity MJ: Open Apps to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
@@ -934,17 +934,17 @@ INSERT INTO __mj."ApplicationEntity"
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
-                                                   ('ac4a2799-454b-4395-aa56-a42241f32c12', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0);
+                                                   ('ac4a2799-454b-4395-aa56-a42241f32c12', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, FALSE, FALSE, FALSE);
 /* SQL generated to add new permission for entity MJ: Open Apps for role Developer */
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
-                                                   ('ac4a2799-454b-4395-aa56-a42241f32c12', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0);
+                                                   ('ac4a2799-454b-4395-aa56-a42241f32c12', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, FALSE);
 /* SQL generated to add new permission for entity MJ: Open Apps for role Integration */
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
-                                                   ('ac4a2799-454b-4395-aa56-a42241f32c12', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1);
+                                                   ('ac4a2799-454b-4395-aa56-a42241f32c12', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, TRUE);
 /* SQL generated to create new entity MJ: Open App Install Histories */
 
 INSERT INTO "__mj"."Entity" (
@@ -976,15 +976,15 @@ INSERT INTO "__mj"."Entity" (
          'OpenAppInstallHistory',
          'vwOpenAppInstallHistories',
          '__mj',
-         1,
-         0
-         , 1
-         , 0
-         , 0
-         , 0
-         , 1
-         , 1
-         , 1
+         TRUE,
+         FALSE
+         , TRUE
+         , FALSE
+         , FALSE
+         , FALSE
+         , TRUE
+         , TRUE
+         , TRUE
          , 1000
       );
 /* SQL generated to add new entity MJ: Open App Install Histories to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
@@ -996,17 +996,17 @@ INSERT INTO __mj."ApplicationEntity"
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
-                                                   ('0fcff292-3e37-42bb-b5c3-e7751ef9b875', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0);
+                                                   ('0fcff292-3e37-42bb-b5c3-e7751ef9b875', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, FALSE, FALSE, FALSE);
 /* SQL generated to add new permission for entity MJ: Open App Install Histories for role Developer */
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
-                                                   ('0fcff292-3e37-42bb-b5c3-e7751ef9b875', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0);
+                                                   ('0fcff292-3e37-42bb-b5c3-e7751ef9b875', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, FALSE);
 /* SQL generated to add new permission for entity MJ: Open App Install Histories for role Integration */
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
-                                                   ('0fcff292-3e37-42bb-b5c3-e7751ef9b875', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1);
+                                                   ('0fcff292-3e37-42bb-b5c3-e7751ef9b875', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, TRUE);
 /* SQL generated to create new entity MJ: Open App Dependencies */
 
 INSERT INTO "__mj"."Entity" (
@@ -1038,15 +1038,15 @@ INSERT INTO "__mj"."Entity" (
          'OpenAppDependency',
          'vwOpenAppDependencies',
          '__mj',
-         1,
-         0
-         , 1
-         , 0
-         , 0
-         , 0
-         , 1
-         , 1
-         , 1
+         TRUE,
+         FALSE
+         , TRUE
+         , FALSE
+         , FALSE
+         , FALSE
+         , TRUE
+         , TRUE
+         , TRUE
          , 1000
       );
 /* SQL generated to add new entity MJ: Open App Dependencies to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
@@ -1058,17 +1058,17 @@ INSERT INTO __mj."ApplicationEntity"
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
-                                                   ('57a740fa-ce0f-440b-8b90-6bf2bb9440de', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0);
+                                                   ('57a740fa-ce0f-440b-8b90-6bf2bb9440de', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, FALSE, FALSE, FALSE);
 /* SQL generated to add new permission for entity MJ: Open App Dependencies for role Developer */
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
-                                                   ('57a740fa-ce0f-440b-8b90-6bf2bb9440de', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0);
+                                                   ('57a740fa-ce0f-440b-8b90-6bf2bb9440de', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, FALSE);
 /* SQL generated to add new permission for entity MJ: Open App Dependencies for role Integration */
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
-                                                   ('57a740fa-ce0f-440b-8b90-6bf2bb9440de', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1);
+                                                   ('57a740fa-ce0f-440b-8b90-6bf2bb9440de', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, TRUE);
 /* SQL text to add special date field __mj_CreatedAt to entity __mj."OpenAppDependency" */
 
 DO $$
@@ -1118,19 +1118,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         'gen_random_uuid()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        1,
-        0,
-        0,
-        1,
-        1,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        TRUE,
+        TRUE,
         'Search'
         );
     END IF;
@@ -1183,19 +1183,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         'AC4A2799-454B-4395-AA56-A42241F32C12',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        TRUE,
         'Search'
         );
     END IF;
@@ -1248,19 +1248,19 @@ BEGIN
         128,
         0,
         0,
-        0,
+        FALSE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        TRUE,
         'Search'
         );
     END IF;
@@ -1313,19 +1313,19 @@ BEGIN
         16,
         0,
         0,
-        1,
+        TRUE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         'AC4A2799-454B-4395-AA56-A42241F32C12',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -1378,19 +1378,19 @@ BEGIN
         200,
         0,
         0,
-        0,
+        FALSE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -1443,19 +1443,19 @@ BEGIN
         100,
         0,
         0,
-        1,
+        TRUE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -1508,19 +1508,19 @@ BEGIN
         40,
         0,
         0,
-        0,
+        FALSE,
         'Satisfied',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -1573,19 +1573,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -1638,19 +1638,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -1703,19 +1703,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         'gen_random_uuid()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        1,
-        0,
-        0,
-        1,
-        1,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        TRUE,
+        TRUE,
         'Search'
         );
     END IF;
@@ -1768,19 +1768,19 @@ BEGIN
         128,
         0,
         0,
-        0,
+        FALSE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        1,
-        1,
-        0,
-        1,
-        0,
-        1,
+        TRUE,
+        TRUE,
+        FALSE,
+        TRUE,
+        FALSE,
+        TRUE,
         'Search'
         );
     END IF;
@@ -1833,19 +1833,19 @@ BEGIN
         400,
         0,
         0,
-        0,
+        FALSE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -1898,19 +1898,19 @@ BEGIN
         -1,
         0,
         0,
-        1,
+        TRUE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -1963,19 +1963,19 @@ BEGIN
         100,
         0,
         0,
-        0,
+        FALSE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -2028,19 +2028,19 @@ BEGIN
         400,
         0,
         0,
-        0,
+        FALSE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -2093,19 +2093,19 @@ BEGIN
         510,
         0,
         0,
-        1,
+        TRUE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -2158,19 +2158,19 @@ BEGIN
         1000,
         0,
         0,
-        1,
+        TRUE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -2223,19 +2223,19 @@ BEGIN
         1000,
         0,
         0,
-        0,
+        FALSE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -2288,19 +2288,19 @@ BEGIN
         256,
         0,
         0,
-        1,
+        TRUE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        TRUE,
         'Search'
         );
     END IF;
@@ -2353,19 +2353,19 @@ BEGIN
         200,
         0,
         0,
-        0,
+        FALSE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -2418,19 +2418,19 @@ BEGIN
         100,
         0,
         0,
-        1,
+        TRUE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -2483,19 +2483,19 @@ BEGIN
         200,
         0,
         0,
-        1,
+        TRUE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -2548,19 +2548,19 @@ BEGIN
         40,
         0,
         0,
-        1,
+        TRUE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -2613,19 +2613,19 @@ BEGIN
         -1,
         0,
         0,
-        0,
+        FALSE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -2678,19 +2678,19 @@ BEGIN
         -1,
         0,
         0,
-        1,
+        TRUE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -2743,19 +2743,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         'E1238F34-2837-EF11-86D4-6045BDEE16E6',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -2808,19 +2808,19 @@ BEGIN
         40,
         0,
         0,
-        0,
+        FALSE,
         'Active',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -2873,19 +2873,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -2938,19 +2938,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -3003,19 +3003,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         'gen_random_uuid()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        1,
-        0,
-        0,
-        1,
-        1,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        TRUE,
+        TRUE,
         'Search'
         );
     END IF;
@@ -3068,19 +3068,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         'AC4A2799-454B-4395-AA56-A42241F32C12',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -3133,19 +3133,19 @@ BEGIN
         100,
         0,
         0,
-        0,
+        FALSE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -3198,19 +3198,19 @@ BEGIN
         100,
         0,
         0,
-        1,
+        TRUE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -3263,19 +3263,19 @@ BEGIN
         40,
         0,
         0,
-        0,
+        FALSE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -3328,19 +3328,19 @@ BEGIN
         -1,
         0,
         0,
-        0,
+        FALSE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -3393,19 +3393,19 @@ BEGIN
         -1,
         0,
         0,
-        1,
+        TRUE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -3458,19 +3458,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         'E1238F34-2837-EF11-86D4-6045BDEE16E6',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -3523,19 +3523,19 @@ BEGIN
         4,
         10,
         0,
-        1,
+        TRUE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -3588,19 +3588,19 @@ BEGIN
         10,
         34,
         7,
-        1,
+        TRUE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -3653,19 +3653,19 @@ BEGIN
         10,
         34,
         7,
-        1,
+        TRUE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -3718,19 +3718,19 @@ BEGIN
         1,
         1,
         0,
-        0,
+        FALSE,
         '(1)',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -3783,19 +3783,19 @@ BEGIN
         -1,
         0,
         0,
-        1,
+        TRUE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -3848,19 +3848,19 @@ BEGIN
         100,
         0,
         0,
-        1,
+        TRUE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -3913,19 +3913,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -3978,19 +3978,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -4130,7 +4130,7 @@ BEGIN
         WHERE "ID" = 'cf8ada7c-2030-49a6-83d4-a3bd68f09dac'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "DisplayName", "Sequence")
-        VALUES ('cf8ada7c-2030-49a6-83d4-a3bd68f09dac', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', 'AC4A2799-454B-4395-AA56-A42241F32C12', 'InstalledByUserID', 'One To Many', 1, 1, 'MJ: Open Apps', 1);
+        VALUES ('cf8ada7c-2030-49a6-83d4-a3bd68f09dac', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', 'AC4A2799-454B-4395-AA56-A42241F32C12', 'InstalledByUserID', 'One To Many', TRUE, TRUE, 'MJ: Open Apps', 1);
     END IF;
 END $$;
 
@@ -4142,7 +4142,7 @@ BEGIN
         WHERE "ID" = '8c1f3348-0bda-4949-a1b8-81bc51b238f2'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "DisplayName", "Sequence")
-        VALUES ('8c1f3348-0bda-4949-a1b8-81bc51b238f2', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', '0FCFF292-3E37-42BB-B5C3-E7751EF9B875', 'ExecutedByUserID', 'One To Many', 1, 1, 'MJ: Open App Install Histories', 1);
+        VALUES ('8c1f3348-0bda-4949-a1b8-81bc51b238f2', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', '0FCFF292-3E37-42BB-B5C3-E7751EF9B875', 'ExecutedByUserID', 'One To Many', TRUE, TRUE, 'MJ: Open App Install Histories', 1);
     END IF;
 END $$;
 
@@ -4154,7 +4154,7 @@ BEGIN
         WHERE "ID" = '5ac78474-4f4d-479f-8db0-46cb0cd78442'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "DisplayName", "Sequence")
-        VALUES ('5ac78474-4f4d-479f-8db0-46cb0cd78442', 'AC4A2799-454B-4395-AA56-A42241F32C12', '57A740FA-CE0F-440B-8B90-6BF2BB9440DE', 'OpenAppID', 'One To Many', 1, 1, 'MJ: Open App Dependencies', 1);
+        VALUES ('5ac78474-4f4d-479f-8db0-46cb0cd78442', 'AC4A2799-454B-4395-AA56-A42241F32C12', '57A740FA-CE0F-440B-8B90-6BF2BB9440DE', 'OpenAppID', 'One To Many', TRUE, TRUE, 'MJ: Open App Dependencies', 1);
     END IF;
 END $$;
 
@@ -4166,7 +4166,7 @@ BEGIN
         WHERE "ID" = '6157799d-72af-43c6-8512-3bc8c9663ba5'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "DisplayName", "Sequence")
-        VALUES ('6157799d-72af-43c6-8512-3bc8c9663ba5', 'AC4A2799-454B-4395-AA56-A42241F32C12', '57A740FA-CE0F-440B-8B90-6BF2BB9440DE', 'DependsOnAppID', 'One To Many', 1, 1, 'MJ: Open App Dependencies', 2);
+        VALUES ('6157799d-72af-43c6-8512-3bc8c9663ba5', 'AC4A2799-454B-4395-AA56-A42241F32C12', '57A740FA-CE0F-440B-8B90-6BF2BB9440DE', 'DependsOnAppID', 'One To Many', TRUE, TRUE, 'MJ: Open App Dependencies', 2);
     END IF;
 END $$;
 
@@ -4178,7 +4178,7 @@ BEGIN
         WHERE "ID" = 'a87478ba-99ad-48b8-a2f7-eddfeb989222'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "DisplayName", "Sequence")
-        VALUES ('a87478ba-99ad-48b8-a2f7-eddfeb989222', 'AC4A2799-454B-4395-AA56-A42241F32C12', '0FCFF292-3E37-42BB-B5C3-E7751EF9B875', 'OpenAppID', 'One To Many', 1, 1, 'MJ: Open App Install Histories', 2);
+        VALUES ('a87478ba-99ad-48b8-a2f7-eddfeb989222', 'AC4A2799-454B-4395-AA56-A42241F32C12', '0FCFF292-3E37-42BB-B5C3-E7751EF9B875', 'OpenAppID', 'One To Many', TRUE, TRUE, 'MJ: Open App Install Histories', 2);
     END IF;
 END $$;
 
@@ -4229,19 +4229,19 @@ BEGIN
         128,
         0,
         0,
-        0,
+        FALSE,
         'null',
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -4294,19 +4294,19 @@ BEGIN
         128,
         0,
         0,
-        1,
+        TRUE,
         'null',
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -4359,19 +4359,19 @@ BEGIN
         200,
         0,
         0,
-        0,
+        FALSE,
         'null',
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -4424,19 +4424,19 @@ BEGIN
         128,
         0,
         0,
-        0,
+        FALSE,
         'null',
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -4489,19 +4489,19 @@ BEGIN
         200,
         0,
         0,
-        0,
+        FALSE,
         'null',
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;

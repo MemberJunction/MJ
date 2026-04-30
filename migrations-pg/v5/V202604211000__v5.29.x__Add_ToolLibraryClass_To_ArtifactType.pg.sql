@@ -14,13 +14,6 @@ SET search_path TO __mj, public;
 -- Ensure backslashes in string literals are treated literally (not as escape sequences)
 SET standard_conforming_strings = on;
 
--- Implicit INTEGER -> BOOLEAN cast (SQL Server BIT columns accept 0/1 in INSERTs)
--- PostgreSQL has a built-in explicit-only INTEGER->bool cast. We upgrade it to implicit
--- so INSERT VALUES with 0/1 for BOOLEAN columns work like SQL Server BIT.
-UPDATE pg_cast SET castcontext = 'i'
-WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
-
-
 -- ===================== DDL: Tables, PKs, Indexes =====================
 
 -- Add ToolLibraryClass column to ArtifactType entity.
@@ -340,19 +333,19 @@ BEGIN
         200,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -363,12 +356,12 @@ END $$;
 UPDATE __mj."EntityField"
                SET "UserSearchPredicateAPI" = 'BeginsWith'
                WHERE "ID" = '79A9CC18-2F29-4D9C-93CB-82D9ED497B05'
-               AND "AutoUpdateUserSearchPredicate" = 1;
+               AND "AutoUpdateUserSearchPredicate" = TRUE;
 
 UPDATE __mj."Entity"
-            SET "AllowUserSearchAPI" = 1
+            SET "AllowUserSearchAPI" = TRUE
             WHERE "ID" = '91797885-7128-4B71-8C4B-81C5FEE24F38'
-            AND "AutoUpdateAllowUserSearchAPI" = 1;
+            AND "AutoUpdateAllowUserSearchAPI" = TRUE;
 /* Set categories for 15 fields */
 -- UPDATE Entity Field Category Info MJ: Artifact Types."ID"
 
@@ -378,7 +371,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'E3C8A690-7E75-499E-B603-3F900AB94704' AND "AutoUpdateCategory" = 1;
+   "ID" = 'E3C8A690-7E75-499E-B603-3F900AB94704' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Artifact Types."Name"
 
 UPDATE __mj."EntityField"
@@ -387,7 +380,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '79A9CC18-2F29-4D9C-93CB-82D9ED497B05' AND "AutoUpdateCategory" = 1;
+   "ID" = '79A9CC18-2F29-4D9C-93CB-82D9ED497B05' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Artifact Types."Description"
 
 UPDATE __mj."EntityField"
@@ -396,7 +389,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '874E9B47-A201-4C78-896A-D41A607B1840' AND "AutoUpdateCategory" = 1;
+   "ID" = '874E9B47-A201-4C78-896A-D41A607B1840' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Artifact Types."ContentType"
 
 UPDATE __mj."EntityField"
@@ -405,7 +398,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'B7B428EF-DE10-4882-8517-28636332C6DB' AND "AutoUpdateCategory" = 1;
+   "ID" = 'B7B428EF-DE10-4882-8517-28636332C6DB' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Artifact Types."IsEnabled"
 
 UPDATE __mj."EntityField"
@@ -414,7 +407,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'A0B16E34-7C24-4811-84E6-75CCA5C499FB' AND "AutoUpdateCategory" = 1;
+   "ID" = 'A0B16E34-7C24-4811-84E6-75CCA5C499FB' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Artifact Types."DriverClass"
 
 UPDATE __mj."EntityField"
@@ -423,7 +416,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '2FEDE9AF-F0FE-438C-A369-93AC24A882C1' AND "AutoUpdateCategory" = 1;
+   "ID" = '2FEDE9AF-F0FE-438C-A369-93AC24A882C1' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Artifact Types."Icon"
 
 UPDATE __mj."EntityField"
@@ -432,7 +425,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '011BB58C-1187-4107-A82E-D8C676A2A983' AND "AutoUpdateCategory" = 1;
+   "ID" = '011BB58C-1187-4107-A82E-D8C676A2A983' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Artifact Types."ContentCategory"
 
 UPDATE __mj."EntityField"
@@ -441,7 +434,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '2492DE21-A1E2-497B-9B47-96CC61A08164' AND "AutoUpdateCategory" = 1;
+   "ID" = '2492DE21-A1E2-497B-9B47-96CC61A08164' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Artifact Types."ToolLibraryClass"
 
 UPDATE __mj."EntityField"
@@ -451,7 +444,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'D7EE9CD5-DA00-4D5C-AD67-A54B0AB7048B' AND "AutoUpdateCategory" = 1;
+   "ID" = 'D7EE9CD5-DA00-4D5C-AD67-A54B0AB7048B' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Artifact Types."ParentID"
 
 UPDATE __mj."EntityField"
@@ -460,7 +453,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '02B6383F-BAE6-465C-BBB4-652E6F75A74C' AND "AutoUpdateCategory" = 1;
+   "ID" = '02B6383F-BAE6-465C-BBB4-652E6F75A74C' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Artifact Types."ExtractRules"
 
 UPDATE __mj."EntityField"
@@ -470,7 +463,7 @@ SET
    "ExtendedType" = 'Code',
    "CodeType" = 'TypeScript'
 WHERE 
-   "ID" = '6CACE3BF-BDF2-4443-9D2C-E28E4FE4E489' AND "AutoUpdateCategory" = 1;
+   "ID" = '6CACE3BF-BDF2-4443-9D2C-E28E4FE4E489' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Artifact Types."Parent"
 
 UPDATE __mj."EntityField"
@@ -479,7 +472,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '63D25BCF-550E-4013-AB1F-03657369B0E9' AND "AutoUpdateCategory" = 1;
+   "ID" = '63D25BCF-550E-4013-AB1F-03657369B0E9' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Artifact Types."RootParentID"
 
 UPDATE __mj."EntityField"
@@ -488,7 +481,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '6C369578-B099-4E25-98B5-8218CE90A432' AND "AutoUpdateCategory" = 1;
+   "ID" = '6C369578-B099-4E25-98B5-8218CE90A432' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Artifact Types.__mj_CreatedAt
 
 UPDATE __mj."EntityField"
@@ -497,7 +490,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'A8CC25C6-C9DE-4726-9BA5-81E0C4749281' AND "AutoUpdateCategory" = 1;
+   "ID" = 'A8CC25C6-C9DE-4726-9BA5-81E0C4749281' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Artifact Types.__mj_UpdatedAt
 
 UPDATE __mj."EntityField"
@@ -506,7 +499,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '6AE8938F-5656-4CC8-89BC-1CCAAC9DF213' AND "AutoUpdateCategory" = 1;
+   "ID" = '6AE8938F-5656-4CC8-89BC-1CCAAC9DF213' AND "AutoUpdateCategory" = TRUE;
 
 
 -- ===================== Grants =====================
