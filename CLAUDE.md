@@ -9,6 +9,10 @@ See **[claude-full-auto.md](claude-full-auto.md)** for the full-autonomy develop
 
 # MemberJunction Development Guide
 
+## 📜 Project-Wide Standards
+
+- **[Publish-Then-No-Breaking-Changes Policy](guides/PUBLISH_NO_BREAK_POLICY.md)** — Once an OpenApp version is published, within that major version no dropping tables/columns, no narrowing types, no removing/renaming SP parameters or entities. Only additive changes. Breaking changes force a major version bump. Read this before authoring any migration that modifies an existing schema.
+
 ## 🚨 CRITICAL RULES - VIOLATIONS ARE UNACCEPTABLE 🚨
 
 ### 1. NO COMMITS WITHOUT EXPLICIT APPROVAL

@@ -548,6 +548,8 @@ forceRegeneration: {
 
 Only the intersection of matched entities and enabled object types gets regenerated.
 
+> **Authoring guidance:** the SQL emitted by force-regen ships in a normal Flyway migration that customer databases will replay. Before flipping any of these flags on, read the [Publish-Then-No-Breaking-Changes Policy](../../guides/PUBLISH_NO_BREAK_POLICY.md) — within a published OpenApp major version, your regen output must remain strictly additive (new optional SP parameters, widened columns, new tables) and never remove or rename anything. Tolerant SP signatures (Pillar 1) make additive SP changes safe by default; the policy is what forbids the breaking variants.
+
 ## SQL Migration Logging
 
 All SQL generated during metadata management and object generation is logged to a Flyway-compatible migration file. The `SQLOutput` configuration controls this behavior:
