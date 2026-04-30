@@ -206,11 +206,11 @@ export class ViewRule implements IConversionRule {
     return result.join('\n');
   }
 
-  /** Quote AS aliases: AS PascalAlias → AS "PascalAlias" */
+  /** Quote AS aliases: AS PascalAlias → AS "PascalAlias" (case-insensitive on the AS keyword) */
   private quoteAsAliases(sql: string): string {
-    return sql.replace(/\bAS\s+(?!")([A-Z][a-zA-Z]\w*)\b/g, (_match, alias: string) => {
-      if (SQL_KEYWORDS.has(alias.toUpperCase())) return `AS ${alias}`;
-      return `AS "${alias}"`;
+    return sql.replace(/\b(AS)\s+(?!")([A-Z][a-zA-Z]\w*)\b/gi, (_match, asKw: string, alias: string) => {
+      if (SQL_KEYWORDS.has(alias.toUpperCase())) return `${asKw} ${alias}`;
+      return `${asKw} "${alias}"`;
     });
   }
 

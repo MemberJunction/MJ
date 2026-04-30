@@ -158,6 +158,21 @@ FROM [__mj].[Foo]`;
       expect(result).toContain('AS COUNT');
       expect(result).not.toContain('AS "COUNT"');
     });
+
+    it('should also quote lowercase "as PascalAlias" (regression: vwEntityPermissions had "as RoleName")', () => {
+      // SQL Server source for vwEntityPermissions used lowercase "as RoleName".
+      // Pre-fix: the regex was case-sensitive on the AS keyword and missed this,
+      // so PG ended up with `"Role_RoleName"."Name" as RoleName` — PG case-folded
+      // RoleName to rolename, breaking every runtime query against the view.
+      const sql = `CREATE VIEW [__mj].[vwEntityPermissions] AS
+SELECT
+    Role_RoleName.Name as RoleName,
+    Role_RoleName.[SQLName] as [RoleSQLName]
+FROM [__mj].[EntityPermission]`;
+      const result = convert(sql);
+      expect(result).toContain('as "RoleName"');
+      expect(result).not.toMatch(/\bas RoleName\b/);
+    });
   });
 
   describe('flyway references', () => {
