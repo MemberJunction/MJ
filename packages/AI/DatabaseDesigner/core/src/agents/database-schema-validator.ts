@@ -97,7 +97,7 @@ export class DatabaseDesignerSchemaValidator extends BaseDatabaseDesignerCodeAge
      * means the schema-management metadata was not pushed.
      */
     private assertAuthorizationsExist(): void {
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: MJAPI server-side, single-provider deployment
         for (const authName of Object.values(AUTHORIZATIONS)) {
             if (!md.Authorizations.find(a => a.Name === authName)) {
                 LogError(
@@ -120,7 +120,7 @@ export class DatabaseDesignerSchemaValidator extends BaseDatabaseDesignerCodeAge
         payload: DatabaseDesignerPayload,
         params: ExecuteAgentParams
     ): Promise<string | null> {
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: MJAPI server-side, single-provider deployment
 
         const authName = await this.resolveRequiredAuthorizationForEntry(entry, payload, params);
         if (!authName) {

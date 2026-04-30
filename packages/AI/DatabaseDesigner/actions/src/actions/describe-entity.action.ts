@@ -98,7 +98,7 @@ export class DescribeEntityAction extends BaseDatabaseDesignerAction {
         schemaName: string | undefined,
         params: RunActionParams
     ): Promise<EntityInfo | null> {
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: MJAPI server-side, single-provider deployment
 
         // Fast path: look up by ID or name in the in-memory metadata cache.
         let entity = entityID

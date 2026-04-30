@@ -96,7 +96,7 @@ export abstract class BaseDatabaseDesignerAction extends BaseAction {
         contextUser: UserInfo
     ): Promise<string | null> {
         const authName = this.resolveAuthorizationName(tableDefinition, modificationType);
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: MJAPI server-side, single-provider deployment
         const auth = md.Authorizations.find(a => a.Name === authName);
 
         if (!auth) {

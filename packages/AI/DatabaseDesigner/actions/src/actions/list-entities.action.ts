@@ -92,7 +92,7 @@ export class ListMyEntitiesAction extends BaseDatabaseDesignerAction {
         entityIDs: string[],
         contextUser: UserInfo
     ): EntitySummary[] {
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: MJAPI server-side, single-provider deployment
         return entityIDs.reduce<EntitySummary[]>((acc, id) => {
             const info = md.Entities.find(e => UUIDsEqual(e.ID, id));
             if (info) {

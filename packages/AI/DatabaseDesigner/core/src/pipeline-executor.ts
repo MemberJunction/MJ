@@ -356,7 +356,7 @@ export class DatabaseDesignerPipelineExecutor {
 
         // Refresh metadata once for all successful migrations
         const warnings: string[] = [];
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: MJAPI server-side, single-provider deployment
         try {
             await md.Refresh();
         } catch (refreshErr) {
@@ -675,7 +675,7 @@ export class DatabaseDesignerPipelineExecutor {
         // Refresh metadata so the newly created entity is immediately visible.
         // A refresh failure is non-fatal — the entity exists in the DB; it will
         // appear after the next server restart or explicit refresh.
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: MJAPI server-side, single-provider deployment
         try {
             await md.Refresh();
         } catch (refreshErr) {
@@ -755,7 +755,7 @@ export class DatabaseDesignerPipelineExecutor {
             { name: UDT_SETTINGS.SOURCE_KEY, value: source },
         ];
 
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: MJAPI server-side, single-provider deployment
         for (const entry of entries) {
             try {
                 const setting = await md.GetEntityObject<MJEntitySettingEntity>(
