@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, Metadata, RunView } from '@memberjunction/core';
 import { MJArtifactEntity, MJArtifactTypeEntity, MJArtifactVersionEntity, MJCollectionEntity } from '@memberjunction/core-entities';
 import { ToastService } from '../../services/toast.service';
@@ -156,7 +157,7 @@ import { UUIDsEqual } from '@memberjunction/global';
     }
   `]
 })
-export class ArtifactCreateModalComponent implements OnChanges {
+export class ArtifactCreateModalComponent extends BaseAngularComponent implements OnChanges  {
   @Input() isOpen: boolean = false;
   @Input() collectionId!: string;
   @Input() environmentId!: string;
@@ -181,9 +182,11 @@ export class ArtifactCreateModalComponent implements OnChanges {
     private toastService: ToastService,
     private permissionService: CollectionPermissionService,
     private cdr: ChangeDetectorRef
-  ) {}
+  ) {
+  super();}
 
   ngOnChanges(changes: SimpleChanges) {
+    this.permissionService.Provider = this.ProviderToUse;
     if (changes['isOpen'] && this.isOpen) {
       this.resetForm();
       this.loadArtifactTypes();
@@ -199,7 +202,7 @@ export class ArtifactCreateModalComponent implements OnChanges {
   private async loadArtifactTypes(): Promise<void> {
     this.isLoadingTypes = true;
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJArtifactTypeEntity>(
         {
           EntityName: 'MJ: Artifact Types',
@@ -242,7 +245,7 @@ export class ArtifactCreateModalComponent implements OnChanges {
 
     try {
       // Validate permission to add artifacts to collection
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const collection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
       await collection.Load(this.collectionId);
 

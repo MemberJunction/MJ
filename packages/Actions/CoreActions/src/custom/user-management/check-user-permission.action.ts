@@ -64,7 +64,7 @@ export class CheckUserPermissionAction extends BaseAction {
                     const authRv = new RunView();
                     const authResult = await authRv.RunView({
                         EntityName: 'MJ: Authorization Roles',
-                        ExtraFilter: `RoleID IN (SELECT RoleID FROM ${Metadata.Provider.ConfigData.MJCoreSchemaName}.vwUserRoles WHERE UserID='${userID}') AND AuthorizationID IN (SELECT ID FROM ${Metadata.Provider.ConfigData.MJCoreSchemaName}.vwAuthorizations WHERE Name='${permissionName}')`,
+                        ExtraFilter: `RoleID IN (SELECT RoleID FROM ${(params.Provider ?? Metadata.Provider).ConfigData.MJCoreSchemaName}.vwUserRoles WHERE UserID='${userID}') AND AuthorizationID IN (SELECT ID FROM ${(params.Provider ?? Metadata.Provider).ConfigData.MJCoreSchemaName}.vwAuthorizations WHERE Name='${permissionName}')`,
                         ResultType: 'simple'
                     }, currentUser);
 
@@ -74,7 +74,7 @@ export class CheckUserPermissionAction extends BaseAction {
 
                 case 'EntityPermission':
                     // Use the Metadata API to check entity permissions properly
-                    const md = new Metadata();
+                    const md = params.Provider ?? new Metadata();
                     const entityInfo = md.EntityByName(permissionName);
                     
                     if (!entityInfo) {

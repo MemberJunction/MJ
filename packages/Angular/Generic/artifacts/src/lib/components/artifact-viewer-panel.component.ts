@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, OnDestroy, SimpleChanges, ViewChild, ViewContainerRef, ComponentRef, Type, ChangeDetectorRef } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { UserInfo, Metadata, RunView, LogError, CompositeKey, DataSnapshot } from '@memberjunction/core';
 import { ParseJSONRecursive, ParseJSONOptions , UUIDsEqual } from '@memberjunction/global';
@@ -17,7 +18,7 @@ import { RecentAccessService } from '@memberjunction/ng-shared-generic';
   templateUrl: './artifact-viewer-panel.component.html',
   styleUrls: ['./artifact-viewer-panel.component.css']
 })
-export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestroy {
+export class ArtifactViewerPanelComponent extends BaseAngularComponent implements OnInit, OnChanges, OnDestroy  {
   @Input() artifactId!: string;
   @Input() currentUser!: UserInfo;
   @Input() environmentId!: string;
@@ -207,6 +208,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     private sanitizer: DomSanitizer,
     private artifactIconService: ArtifactIconService
   ) {
+    super();
     this.recentAccessService = new RecentAccessService();
   }
 
@@ -283,7 +285,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       // Clear links data from previous artifact to prevent stale Links tab
       this.clearLinksData();
 
-      const md = new Metadata();
+      const md = this.ProviderToUse;
 
       // Load artifact — assign to local first to avoid mid-cycle icon flicker
       const artifactEntity = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', this.currentUser);
@@ -297,7 +299,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
 
       // PERF: Batch load version metadata, collection associations, and conversation links
       // in a single RunViews call. Content is excluded here — loaded on-demand for the selected version.
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const batchResults = await rv.RunViews([
         {
           // [0] Version metadata (lightweight — no Content field)
@@ -387,7 +389,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
    */
   private async loadVersionContent(versionId: string): Promise<MJArtifactVersionEntity | null> {
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const versionEntity = await md.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions', this.currentUser);
       const loaded = await versionEntity.Load(versionId);
       return loaded ? versionEntity : null;
@@ -435,7 +437,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     if (!this.artifactVersion) return;
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJArtifactVersionAttributeEntity>({
         EntityName: 'MJ: Artifact Version Attributes',
         ExtraFilter: `ArtifactVersionID='${this.artifactVersion.ID}'`,
@@ -628,7 +630,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       if (collectionsResult?.Success && collectionsResult.Results) {
         collectionRows = collectionsResult.Results;
       } else {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<{ ID: string; CollectionID: string; ArtifactVersionID: string; Sequence: number }>({
           EntityName: 'MJ: Collection Artifacts',
           ExtraFilter: `ArtifactVersionID IN (
@@ -660,7 +662,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
         const collectionId = (collectionRows[0] as Record<string, unknown>).CollectionID as string ||
                              (this.artifactCollections[0] as unknown as Record<string, unknown>).CollectionID as string;
         if (collectionId) {
-          const md = new Metadata();
+          const md = this.ProviderToUse;
           this.primaryCollection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
           await this.primaryCollection.Load(collectionId);
         }
@@ -814,7 +816,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     }
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       let successCount = 0;
 
       // Get current version ID - save the version being viewed
@@ -831,7 +833,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
       // Save artifact version to each selected collection
       for (const collectionId of collectionIds) {
         // Double check this exact version doesn't already exist in the collection
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const existingResult = await rv.RunView<MJCollectionArtifactEntity>({
           EntityName: 'MJ: Collection Artifacts',
           ExtraFilter: `CollectionID='${collectionId}' AND ArtifactVersionID='${currentVersionId}'`,
@@ -898,8 +900,8 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
     this.clearLinksData();
 
     try {
-      const md = new Metadata();
-      const rv = new RunView();
+      const md = this.ProviderToUse;
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
       // Use pre-fetched collection data or fetch if not provided
       let collectionRows: Record<string, unknown>[] = [];
@@ -1116,7 +1118,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
    */
   private async getArtifactTypeById(id: string): Promise<MJArtifactTypeEntity | null> {
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const artifactType = await md.GetEntityObject<MJArtifactTypeEntity>('MJ: Artifact Types', this.currentUser);
       const loaded = await artifactType.Load(id);
 
@@ -1206,7 +1208,7 @@ export class ArtifactViewerPanelComponent implements OnInit, OnChanges, OnDestro
         return;
       }
 
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const usage = await md.GetEntityObject<MJArtifactUseEntity>('MJ: Artifact Uses');
 
       usage.ArtifactVersionID = this.artifactVersion.ID;

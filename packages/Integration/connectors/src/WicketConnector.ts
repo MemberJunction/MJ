@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, type UserInfo } from '@memberjunction/core';
+import { Metadata, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJCompanyIntegrationEntity, MJCredentialEntity, MJIntegrationObjectEntity } from '@memberjunction/core-entities';
 import {
     BaseIntegrationConnector,
@@ -770,8 +770,8 @@ export class WicketConnector extends BaseRESTIntegrationConnector {
     }
 
     /** Loads credentials from a Credential entity by ID. */
-    private async LoadFromCredentialEntity(credentialID: string, contextUser?: UserInfo): Promise<WicketCredentials | null> {
-        const md = new Metadata();
+    private async LoadFromCredentialEntity(credentialID: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<WicketCredentials | null> {
+        const md = provider ?? new Metadata();
         const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
         const loaded = await credential.Load(credentialID);
         if (!loaded || !credential.Values) return null;

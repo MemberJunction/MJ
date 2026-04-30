@@ -1,6 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, ChangeDetectorRef, ChangeDetectionStrategy, HostListener } from '@angular/core';
-import { RunView, Metadata, EntityInfo, CompositeKey } from '@memberjunction/core';
+import { RunView, EntityInfo, CompositeKey } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MicroViewData } from '../types';
 
 interface FieldDisplay {
@@ -42,7 +43,7 @@ export interface EntityLinkClickEvent {
     styleUrls: ['./record-micro-view.component.css'],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class MjRecordMicroViewComponent implements OnInit {
+export class MjRecordMicroViewComponent extends BaseAngularComponent implements OnInit {
     @Input() Data!: MicroViewData;
     @Input() Inline = false;
     @Output() Close = new EventEmitter<void>();
@@ -64,9 +65,9 @@ export class MjRecordMicroViewComponent implements OnInit {
     /** Icon CSS class from EntityInfo.Icon, falls back to 'fa-solid fa-table' */
     public EntityIcon = 'fa-solid fa-table';
 
-    private metadata = new Metadata();
+    private get metadata() { return this.ProviderToUse; }
 
-    constructor(private cdr: ChangeDetectorRef) {}
+    constructor(private cdr: ChangeDetectorRef) { super(); }
 
     ngOnInit(): void {
         if (this.Inline) {
@@ -204,7 +205,7 @@ export class MjRecordMicroViewComponent implements OnInit {
     }
 
     private async loadRecordChangeJson(changeId: string): Promise<Record<string, unknown> | null> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<RecordChangeSimple>({
             EntityName: 'MJ: Record Changes',
             ExtraFilter: `ID = '${changeId}'`,

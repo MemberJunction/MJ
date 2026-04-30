@@ -1,0 +1,82 @@
+.preview-pane {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    background: var(--mj-bg-surface-card);
+    border-left: 1px solid var(--mj-border-default);
+}
+
+/* ── Tab switcher ────────────────────────────────────────────────────── */
+
+.preview-tabs {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface);
+    flex-shrink: 0;
+}
+
+.preview-tab {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--mj-text-secondary);
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 120ms, color 120ms, border-color 120ms;
+}
+
+.preview-tab:hover {
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-primary);
+}
+
+.preview-tab.active {
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
+    border-color: color-mix(in srgb, var(--mj-brand-primary) 20%, transparent);
+}
+
+.preview-tab i {
+    font-size: 12px;
+}
+
+.preview-tabs-spacer {
+    flex: 1;
+}
+
+.preview-tabs-hint {
+    font-size: 11px;
+    color: var(--mj-text-muted);
+    letter-spacing: 0.02em;
+}
+
+/* ── Body (ERD / SQL) ────────────────────────────────────────────────── */
+
+.preview-body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.preview-erd {
+    flex: 1;
+    min-height: 0;
+    min-width: 0;
+}
+
+.preview-sql {
+    display: block;
+    flex: 1;
+    min-height: 0;
+}

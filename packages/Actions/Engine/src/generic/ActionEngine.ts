@@ -368,7 +368,8 @@ export class ActionEngineServer extends ActionEngineBase {
                action: params.Action,
                config,
                contextUser: params.ContextUser,
-               abortSignal: params.AbortSignal
+               abortSignal: params.AbortSignal,
+               provider: params.Provider
             });
             preamble = builder.GetPreamble();
          }
@@ -417,7 +418,7 @@ export class ActionEngineServer extends ActionEngineBase {
 
    protected async StartActionLog(params: RunActionParams, saveRecord: boolean = true): Promise<MJActionExecutionLogEntity> {
       // this is where the log entry for the action run will be created
-      const md = new Metadata();
+      const md = params.Provider ?? new Metadata();
       const logEntity = await md.GetEntityObject<MJActionExecutionLogEntity>('MJ: Action Execution Logs', this.ContextUser);
       logEntity.NewRecord();
       logEntity.ActionID = params.Action.ID;

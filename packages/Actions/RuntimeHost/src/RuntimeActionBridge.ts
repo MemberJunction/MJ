@@ -210,7 +210,7 @@ interface SimpleEntityInfo {
 }
 
 function handleListEntities(ctx: BridgeContext): SimpleEntityInfo[] {
-    const md = new Metadata();
+    const md = ctx.provider ?? new Metadata();
     const allowAny = (ctx.config.permissions as { allowAnyEntity?: boolean }).allowAnyEntity === true;
     const allowedNames = new Set(
         ctx.config.permissions.allowedEntities.map((e) => e.name.trim().toLowerCase())
@@ -229,7 +229,7 @@ function handleListEntities(ctx: BridgeContext): SimpleEntityInfo[] {
 
 function handleGetEntity(ctx: BridgeContext, args: { name: string }): SimpleEntityInfo {
     assertEntityAllowed(ctx, args.name);
-    const md = new Metadata();
+    const md = ctx.provider ?? new Metadata();
     const entity = md.EntityByName(args.name);
     if (!entity) {
         throw new Error(`Entity '${args.name}' not found in metadata.`);
@@ -262,7 +262,7 @@ function handleGetEntityFields(
     args: { name: string }
 ): SimpleEntityField[] {
     assertEntityAllowed(ctx, args.name);
-    const md = new Metadata();
+    const md = ctx.provider ?? new Metadata();
     const entity = md.EntityByName(args.name);
     if (!entity) {
         throw new Error(`Entity '${args.name}' not found in metadata.`);
@@ -293,7 +293,7 @@ function handleGetRelatedEntities(
     args: { name: string }
 ): SimpleRelatedEntity[] {
     assertEntityAllowed(ctx, args.name);
-    const md = new Metadata();
+    const md = ctx.provider ?? new Metadata();
     const entity = md.EntityByName(args.name);
     if (!entity) {
         throw new Error(`Entity '${args.name}' not found in metadata.`);
@@ -461,7 +461,7 @@ async function handleEntityLoad(
     args: { entityName: string; id: string }
 ): Promise<EntityResult> {
     assertEntityAllowed(ctx, args.entityName);
-    const md = new Metadata();
+    const md = ctx.provider ?? new Metadata();
     const entity = await md.GetEntityObject<BaseEntity>(args.entityName, ctx.contextUser);
     if (!entity) {
         return {
@@ -488,7 +488,7 @@ async function handleEntityCreate(
     args: { entityName: string; data: Record<string, unknown> }
 ): Promise<EntityResult> {
     assertEntityAllowed(ctx, args.entityName);
-    const md = new Metadata();
+    const md = ctx.provider ?? new Metadata();
     const entity = await md.GetEntityObject<BaseEntity>(args.entityName, ctx.contextUser);
     if (!entity) {
         return {
@@ -517,7 +517,7 @@ async function handleEntityUpdate(
     args: { entityName: string; id: string; data: Record<string, unknown> }
 ): Promise<EntityResult> {
     assertEntityAllowed(ctx, args.entityName);
-    const md = new Metadata();
+    const md = ctx.provider ?? new Metadata();
     const entity = await md.GetEntityObject<BaseEntity>(args.entityName, ctx.contextUser);
     if (!entity) {
         return {
@@ -555,7 +555,7 @@ async function handleEntityDelete(
     args: { entityName: string; id: string }
 ): Promise<{ Success: boolean; ErrorMessage: string | null }> {
     assertEntityAllowed(ctx, args.entityName);
-    const md = new Metadata();
+    const md = ctx.provider ?? new Metadata();
     const entity = await md.GetEntityObject<BaseEntity>(args.entityName, ctx.contextUser);
     if (!entity) {
         return {
@@ -594,7 +594,7 @@ async function handleEntitySave(
     args: { entityName: string; data: Record<string, unknown> }
 ): Promise<EntityResult> {
     assertEntityAllowed(ctx, args.entityName);
-    const md = new Metadata();
+    const md = ctx.provider ?? new Metadata();
     const entity = await md.GetEntityObject<BaseEntity>(args.entityName, ctx.contextUser);
     if (!entity) {
         return {

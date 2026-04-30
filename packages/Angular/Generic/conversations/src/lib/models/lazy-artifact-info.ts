@@ -174,7 +174,7 @@ export class LazyArtifactInfo {
 
   private async doFallbackLoad(): Promise<void> {
     try {
-      const md = new Metadata();
+      const md = new Metadata(); // global-provider-ok: utility — single-provider context
       const [artifact, version] = await Promise.all([
         this._fallbackArtifact ? Promise.resolve(this._fallbackArtifact) : this.loadSingleArtifact(md),
         this._fallbackVersion ? Promise.resolve(this._fallbackVersion) : this.loadSingleVersion(md)

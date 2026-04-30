@@ -20,7 +20,7 @@ import { AddAppPackages, RemoveAppPackages, RunPackageInstall, BumpPrefixedDepen
 import { AddServerDynamicPackages, RemoveServerDynamicPackages, ToggleServerDynamicPackages, AddEntityPackageMapping, RemoveEntityPackageMapping } from './config-manager.js';
 import { RegenerateClientBootstrap, type ClientBootstrapEntry } from './client-bootstrap-gen.js';
 import { BaseEntity, DatabaseProviderBase, Metadata, RunView } from '@memberjunction/core';
-import type { UserInfo } from '@memberjunction/core';
+import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 import {
   RecordAppInstallation,
   RecordInstallHistoryEntry,
@@ -287,8 +287,9 @@ async function RecordInstallationAtomically(
   contextUser: UserInfo,
   manifest: MJAppManifest,
   callbacks?: AppInstallCallbacks,
+  provider?: IMetadataProvider,
 ): Promise<InternalResult> {
-  const md = new Metadata();
+  const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
   const tg = await md.CreateTransactionGroup();
 
   try {

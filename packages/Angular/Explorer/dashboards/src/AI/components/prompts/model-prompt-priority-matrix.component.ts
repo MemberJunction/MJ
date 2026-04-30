@@ -1,10 +1,11 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
-import { RunView, Metadata, LogError, LogStatus } from '@memberjunction/core';
+import { RunView, LogError, LogStatus } from '@memberjunction/core';
 import { MJAIPromptModelEntity } from '@memberjunction/core-entities';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJAIModelEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { UUIDsEqual } from '@memberjunction/global';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 interface PromptModelAssociation {
   promptId: string;
@@ -31,7 +32,7 @@ interface MatrixCell {
   templateUrl: './model-prompt-priority-matrix.component.html',
   styleUrls: ['./model-prompt-priority-matrix.component.css']
 })
-export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
+export class ModelPromptPriorityMatrixComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   @Input() selectedPrompts: MJAIPromptEntityExtended[] = [];
   @Input() selectedModels: MJAIModelEntityExtended[] = [];
   @Input() readonly = false;
@@ -73,7 +74,7 @@ export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
   
   private destroy$ = new Subject<void>();
   
-  constructor(private notificationService: MJNotificationService) {}
+  constructor(private notificationService: MJNotificationService) { super(); }
   
   ngOnInit(): void {
     this.loadData();
@@ -112,7 +113,7 @@ export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
   }
   
   private async loadPrompts(): Promise<MJAIPromptEntityExtended[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView({
       EntityName: 'MJ: AI Prompts',
       ExtraFilter: "Status = 'Active'",
@@ -130,7 +131,7 @@ export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
   }
   
   private async loadModels(): Promise<MJAIModelEntityExtended[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView({
       EntityName: 'MJ: AI Models',
       ExtraFilter: "IsActive = 1",
@@ -148,7 +149,7 @@ export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
   }
   
   private async loadAssociations(): Promise<MJAIPromptModelEntity[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView({
       EntityName: 'MJ: AI Prompt Models',
       ExtraFilter: '',
@@ -426,7 +427,7 @@ export class ModelPromptPriorityMatrixComponent implements OnInit, OnDestroy {
       this.isLoading = true;
       this.loadingMessage = 'Saving associations...';
       
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       if (!md) throw new Error('Metadata provider not available');
       
       const savePromises: Promise<boolean>[] = [];

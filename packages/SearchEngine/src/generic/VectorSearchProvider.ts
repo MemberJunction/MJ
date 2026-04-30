@@ -307,8 +307,8 @@ export class VectorSearchProvider extends BaseSearchProvider {
     private extractDisplayTitle(meta: Record<string, unknown>, fallbackEntity: string): string {
         const entityName = meta['Entity'] as string | undefined;
         if (entityName) {
-            const md = new Metadata();
-            const entityInfo = md.Entities.find(e => e.Name === entityName);
+            const md = this.Provider;
+            const entityInfo = md.EntityByName(entityName);
             if (entityInfo) {
                 const nameFields = entityInfo.Fields
                     .filter(f => f.IsNameField)

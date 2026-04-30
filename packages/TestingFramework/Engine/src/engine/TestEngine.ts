@@ -705,9 +705,10 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         contextUser: UserInfo,
         suiteRunId?: string | null,
         sequence?: number | null,
-        tags?: string | null
+        tags?: string | null,
+        provider?: IMetadataProvider
     ): Promise<MJTestRunEntity> {
-        const md = new Metadata();
+        const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
         const testRun = await md.GetEntityObject<MJTestRunEntity>('MJ: Test Runs', contextUser);
         testRun.NewRecord();
         testRun.TestID = test.ID;
@@ -753,9 +754,10 @@ export class TestEngine extends BaseSingleton<TestEngine> {
     private async createSuiteRun(
         suite: MJTestSuiteEntity,
         contextUser: UserInfo,
-        options?: SuiteRunOptions
+        options?: SuiteRunOptions,
+        provider?: IMetadataProvider
     ): Promise<MJTestSuiteRunEntity> {
-        const md = new Metadata();
+        const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
         const suiteRun = await md.GetEntityObject<MJTestSuiteRunEntity>(
             'MJ: Test Suite Runs',
             contextUser
@@ -855,7 +857,8 @@ export class TestEngine extends BaseSingleton<TestEngine> {
     private async persistOutputs(
         testRun: MJTestRunEntity,
         outputs: TestRunOutputItem[],
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<void> {
         try {
             this.log(`Persisting ${outputs.length} test run output(s) for TestRun ${testRun.ID}`);
@@ -866,7 +869,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                 return;
             }
 
-            const md = new Metadata();
+            const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
             let persisted = 0;
             for (const output of outputs) {
                 const outputType = outputTypes.find(t => t.Get('Name') === output.outputTypeName);
@@ -891,7 +894,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
      * @private
      */
     private async persistSingleOutput(
-        md: Metadata,
+        md: IMetadataProvider,
         testRun: MJTestRunEntity,
         output: TestRunOutputItem,
         outputTypeId: string,

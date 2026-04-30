@@ -437,7 +437,7 @@ export class QueryCompositionEngine {
      * Looks up a query by category path + name from the metadata provider only.
      */
     private lookupQueryFromMetadata(token: ParsedCompositionToken): QueryInfo {
-        const allQueries = Metadata.Provider.Queries;
+        const allQueries = Metadata.Provider.Queries; // global-provider-ok: data provider implementation, owns its provider context
         const queryName = token.QueryName.toLowerCase();
 
         // If category segments provided, build expected category path

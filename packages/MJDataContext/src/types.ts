@@ -340,10 +340,10 @@ export class DataContextItem {
      * @param contextUser 
      * @returns 
      */
-    protected async LoadFromFullEntity(contextUser: UserInfo): Promise<boolean> {
+    protected async LoadFromFullEntity(contextUser: UserInfo, provider?: IMetadataProvider): Promise<boolean> {
         try {
-            const md = new Metadata();
-            const rv = new RunView();
+            const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
+            const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
             const viewParams: RunViewParams = { IgnoreMaxRows: true }; // ignore max rows for both types
             const e = md.Entities.find((e) => UUIDsEqual(e.ID, this.EntityID));
 
@@ -370,9 +370,9 @@ export class DataContextItem {
      * @param contextUser 
      * @returns 
      */
-    protected async LoadFromSingleRecord(contextUser: UserInfo, includeRelatedEntityData: boolean, maxRecordsPerRelationship: number): Promise<boolean> {
+    protected async LoadFromSingleRecord(contextUser: UserInfo, includeRelatedEntityData: boolean, maxRecordsPerRelationship: number, provider?: IMetadataProvider): Promise<boolean> {
         try {
-            const md = new Metadata();
+            const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
             const record = await md.GetEntityObject(this.EntityName, contextUser);
             const pkeyVals: KeyValuePair[] = [];
             const ei = md.Entities.find((e) => UUIDsEqual(e.ID, this.EntityID));
@@ -605,7 +605,7 @@ export class DataContext {
             if (!DataContextID || DataContextID.length === 0)
                 throw new Error(`Data Context ID not set or invalid`);
 
-            const p = provider ? provider : Metadata.Provider; 
+            const p = provider ?? Metadata.Provider;
             const rv = RunView.FromMetadataProvider(p);
             const dciEntityInfo = p.Entities.find((e) => e.Name === 'MJ: Data Context Items');
             if (!dciEntityInfo)
@@ -660,12 +660,12 @@ export class DataContext {
      * @param persistItemData - optional, if true, the data for each item will be saved to the database, if false, the data will not be saved to the database. The default is false.
      * @returns 
      */
-    public async SaveItems(contextUser?: UserInfo, persistItemData: boolean = false): Promise<boolean> {
+    public async SaveItems(contextUser?: UserInfo, persistItemData: boolean = false, provider?: IMetadataProvider): Promise<boolean> {
         try {
             if (!this.ID || this.ID.length === 0)
                 throw new Error(`Data Context ID not set or invalid`);
 
-            const md = new Metadata();
+            const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
             const tg = await md.CreateTransactionGroup();
             const itemsArray = this.Items.map((item) => {return {
                 item: item,
@@ -843,9 +843,9 @@ export class DataContext {
      * This method will clone the data context and all of its items. This method will return a promise that will resolve to a new DataContext object if the cloning was successful, and will reject if the cloning was not successful.
      * @param context 
      */
-    public static async Clone(context: DataContext, includeData: boolean = false, contextUser: UserInfo = undefined): Promise<DataContext> {
+    public static async Clone(context: DataContext, includeData: boolean = false, contextUser: UserInfo = undefined, provider?: IMetadataProvider): Promise<DataContext> {
         try {
-            const md = new Metadata();
+            const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
 
             // first, clone the data context itself at the top level
             const currentContext = await md.GetEntityObject<MJDataContextEntity>('MJ: Data Contexts', contextUser);

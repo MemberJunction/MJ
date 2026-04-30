@@ -1,4 +1,4 @@
-import { UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import { BaseSingleton } from '@memberjunction/global';
 import { BridgeHandlerMap } from '@memberjunction/code-execution';
 import { MJActionEntity, MJActionEntity_IRuntimeActionConfiguration } from '@memberjunction/core-entities';
@@ -20,6 +20,13 @@ export interface BridgeContext {
     contextUser: UserInfo;
     /** Optional cancellation signal propagated from the caller. */
     abortSignal?: AbortSignal;
+    /**
+     * Optional metadata provider to use for any data access performed inside bridge handlers.
+     * When supplied, handlers must honor it (e.g. `const md = ctx.provider ?? new Metadata()`)
+     * so that handler-side reads/writes participate in the caller's transaction. Falls back to
+     * the default global provider when not supplied.
+     */
+    provider?: IMetadataProvider;
 }
 
 /**

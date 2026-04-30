@@ -52,7 +52,7 @@ export class GetEntityListAction extends BaseAction {
             const startTime = Date.now();
 
             // Get MJ metadata (cached, no DB queries)
-            const md = new Metadata();
+            const md = params.Provider ?? new Metadata();
             let entities = md.Entities;
 
             // Apply filters

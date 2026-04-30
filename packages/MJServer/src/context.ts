@@ -333,8 +333,8 @@ export const contextFunction =
       throw new AuthenticationError('No user payload — auth middleware may not have run');
     }
 
-    if (Metadata.Provider.Entities.length === 0 ) {
-      console.warn('WARNING: No entities found in global/shared metadata, this can often be due to the use of **global** Metadata/RunView/DB Providers in a multi-user environment. Check your code to make sure you are using the providers passed to you in AppContext by MJServer and not calling new Metadata() new RunView() new RunQuery() and similar patterns as those are unstable at times in multi-user server environments!!!');
+    if (Metadata.Provider.Entities.length === 0 ) { // global-provider-ok: diagnostic warning about global provider state
+      console.warn('WARNING: No entities found in global/shared metadata, this can often be due to the use of **global** Metadata/RunView/DB Providers in a multi-user environment. Check your code to make sure you are using the providers passed to you in AppContext by MJServer and not calling new Metadata() new RunView() new RunQuery() and similar patterns as those are unstable at times in multi-user server environments!!!'); // global-provider-ok: diagnostic warning text mentions the anti-pattern by name
     }
 
     // Create per-request provider instance based on database type
@@ -406,7 +406,7 @@ async function createPostgresProvider(): Promise<DatabaseProviderBase> {
   );
 
   // Share the connection pool from the primary provider to avoid pool exhaustion
-  const primaryProvider = Metadata.Provider as unknown as { DatabaseConnection?: import('pg').Pool };
+  const primaryProvider = Metadata.Provider as unknown as { DatabaseConnection?: import('pg').Pool }; // global-provider-ok: bootstrap (per-connection PG pool sharing)
   if (primaryProvider?.DatabaseConnection) {
     await pgProvider.ConfigWithSharedPool(pgConfig, primaryProvider.DatabaseConnection);
   } else {

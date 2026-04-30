@@ -22,7 +22,7 @@ export class EntityCommunicationsEngine extends EntityCommunicationsEngineBase {
         try {
             this.TryThrowIfNotLoaded();
 
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: server bootstrap, single-provider context
             const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, params.EntityID));
             if (!entityInfo)
                 throw new Error(`Entity ${params.EntityID} not found`);

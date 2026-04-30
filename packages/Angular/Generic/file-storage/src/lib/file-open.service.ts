@@ -15,16 +15,30 @@
  */
 
 import { Injectable } from '@angular/core';
-import { Metadata } from '@memberjunction/core';
+import { IMetadataProvider, Metadata } from '@memberjunction/core';
 import { GraphQLDataProvider, GraphQLFileStorageClient } from '@memberjunction/graphql-dataprovider';
 
+/**
+ * Multi-provider note: callers running under a non-default `IMetadataProvider`
+ * (multi-server clients) should set `service.Provider = component.ProviderToUse`
+ * from a parent component before invoking any methods.
+ */
 @Injectable({ providedIn: 'root' })
 export class FileOpenService {
     private client: GraphQLFileStorageClient | null = null;
+    private _provider: IMetadataProvider | null = null;
+
+    public get Provider(): IMetadataProvider {
+        return this._provider ?? Metadata.Provider;
+    }
+    public set Provider(value: IMetadataProvider | null) {
+        this._provider = value;
+        this.client = null; // invalidate cached client
+    }
 
     private getClient(): GraphQLFileStorageClient {
         if (!this.client) {
-            const provider = Metadata.Provider as GraphQLDataProvider;
+            const provider = this.Provider as GraphQLDataProvider;
             this.client = new GraphQLFileStorageClient(provider);
         }
         return this.client;

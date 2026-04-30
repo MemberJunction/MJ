@@ -2,7 +2,7 @@ import { BaseEntity } from "./baseEntity";
 import { EntityDependency, EntityInfo,  RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult, EntityDocumentTypeInfo } from "./entityInfo";
 import { ApplicationInfo } from "./applicationInfo";
 import { RunViewParams } from "../views/runView";
-import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
+import { AuditLogTypeInfo, AuthorizationInfo, AuthorizationRoleInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
 import { RunReportParams } from "./runReport";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo, QueryDependencyInfo, SQLDialectInfo, QuerySQLInfo } from "./queryInfo";
@@ -498,6 +498,12 @@ export interface IMetadataProvider {
     get AuditLogTypes(): AuditLogTypeInfo[]
 
     get Authorizations(): AuthorizationInfo[]
+
+    /**
+     * Flat collection of all authorization-role assignments.
+     * Consumed by `AuthorizationInfo.Roles` for lazy per-auth filtering.
+     */
+    get AuthorizationRoles(): AuthorizationRoleInfo[]
 
     get Queries(): QueryInfo[]
 
@@ -1375,6 +1381,12 @@ export class AllMetadata {
     AllRowLevelSecurityFilters: RowLevelSecurityFilterInfo[] = [];
     AllAuditLogTypes: AuditLogTypeInfo[] = [];
     AllAuthorizations: AuthorizationInfo[] = [];
+    /**
+     * Flat collection of all authorization-role assignments.
+     * Loaded via `AllMetadataArrays` and used by `AuthorizationInfo.Roles`
+     * for lazy, on-demand filtering — mirrors the `AllQueryFields` pattern.
+     */
+    AllAuthorizationRoles: AuthorizationRoleInfo[] = [];
     AllQueryCategories: QueryCategoryInfo[] = [];
     AllQueries: QueryInfo[] = [];
     AllQueryFields: QueryFieldInfo[] = [];

@@ -1,0 +1,208 @@
+<div class="fields-grid-root">
+
+  <!-- ── Error banner ────────────────────────────────────────────────────── -->
+  @if (HasErrors) {
+    <div class="fields-error-banner" role="alert">
+      <i class="fa-solid fa-triangle-exclamation"></i>
+      Remove reserved column names before continuing.
+    </div>
+  }
+
+  <!-- ── Table ───────────────────────────────────────────────────────────── -->
+  <div class="table-wrap">
+    <table class="fields-table">
+      <thead>
+        <tr>
+          <th class="col-name">Name <span class="required-mark">*</span></th>
+          <th class="col-type">Type <span class="required-mark">*</span></th>
+          <th class="col-req">Req</th>
+          <th class="col-extra">Length</th>
+          <th class="col-default">Default</th>
+          <th class="col-desc">Description</th>
+          <th class="col-actions"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- ── Auto-managed columns — always injected, cannot be edited ── -->
+        <tr class="auto-col-row">
+          <td class="col-name"><div class="name-cell"><i class="fa-solid fa-lock-keyhole auto-lock"></i><code>ID</code><span class="auto-badge">PK</span></div></td>
+          <td class="col-type"><code>UNIQUEIDENTIFIER</code></td>
+          <td class="col-req"><i class="fa-solid fa-check req-yes"></i></td>
+          <td class="col-extra"><span class="cell-na">—</span></td>
+          <td class="col-default"><code class="auto-default">NEWSEQUENTIALID()</code></td>
+          <td class="col-desc"><span class="auto-desc">Primary key — always present</span></td>
+          <td class="col-actions"><i class="fa-solid fa-lock auto-lock-icon" title="Auto-managed"></i></td>
+        </tr>
+        <tr class="auto-col-row">
+          <td class="col-name"><div class="name-cell"><i class="fa-solid fa-lock-keyhole auto-lock"></i><code>__mj_CreatedAt</code><span class="auto-badge">AUTO</span></div></td>
+          <td class="col-type"><code>DATETIMEOFFSET</code></td>
+          <td class="col-req"><i class="fa-solid fa-check req-yes"></i></td>
+          <td class="col-extra"><span class="cell-na">—</span></td>
+          <td class="col-default"><code class="auto-default">GETUTCDATE()</code></td>
+          <td class="col-desc"><span class="auto-desc">Record creation timestamp</span></td>
+          <td class="col-actions"><i class="fa-solid fa-lock auto-lock-icon" title="Auto-managed"></i></td>
+        </tr>
+        <tr class="auto-col-row auto-col-divider">
+          <td class="col-name"><div class="name-cell"><i class="fa-solid fa-lock-keyhole auto-lock"></i><code>__mj_UpdatedAt</code><span class="auto-badge">AUTO</span></div></td>
+          <td class="col-type"><code>DATETIMEOFFSET</code></td>
+          <td class="col-req"><i class="fa-solid fa-check req-yes"></i></td>
+          <td class="col-extra"><span class="cell-na">—</span></td>
+          <td class="col-default"><code class="auto-default">GETUTCDATE()</code></td>
+          <td class="col-desc"><span class="auto-desc">Last update timestamp</span></td>
+          <td class="col-actions"><i class="fa-solid fa-lock auto-lock-icon" title="Auto-managed"></i></td>
+        </tr>
+
+        @if (rows.length === 0) {
+          <tr>
+            <td colspan="7" class="empty-row">
+              No columns defined yet. Click <strong>Add Column</strong> below to begin.
+            </td>
+          </tr>
+        }
+
+        @for (row of rows; track TrackByIndex($index, row)) {
+          <tr
+            class="field-row"
+            [class.row-hidden]="row.isHidden"
+            [class.row-error]="IsReservedName(row.Name)"
+            [class.row-active]="ActiveRowIndex === row.rowIndex">
+
+            <!-- Name -->
+            <td class="col-name">
+              <div class="name-cell">
+                <input
+                  type="text"
+                  class="mj-input cell-input"
+                  [class.input-error]="IsReservedName(row.Name)"
+                  [value]="row.Name"
+                  placeholder="ColumnName"
+                  (input)="OnNameChange(row.rowIndex, $any($event.target).value)"
+                  (focus)="ActiveRowIndex = row.rowIndex" />
+                @if (IsReservedName(row.Name)) {
+                  <span class="reserved-badge" title="This column is auto-managed">reserved</span>
+                }
+              </div>
+            </td>
+
+            <!-- Type -->
+            <td class="col-type">
+              <select
+                class="mj-input cell-input cell-select"
+                [value]="row.Type ?? 'string'"
+                (change)="OnTypeChange(row.rowIndex, $any($event.target).value)"
+                (focus)="ActiveRowIndex = row.rowIndex">
+                @for (opt of FieldTypeOptions; track opt.value) {
+                  <option [value]="opt.value">{{ opt.label }}</option>
+                }
+              </select>
+            </td>
+
+            <!-- Required -->
+            <td class="col-req">
+              <label class="checkbox-wrap" [title]="row.IsNullable ? 'Optional' : 'Required'">
+                <input
+                  type="checkbox"
+                  [checked]="!row.IsNullable"
+                  (change)="OnRequiredToggle(row.rowIndex)" />
+              </label>
+            </td>
+
+            <!-- Max Len / Precision+Scale -->
+            <td class="col-extra">
+              @if (ShowMaxLength(row.Type)) {
+                <input
+                  type="number"
+                  class="mj-input cell-input cell-number"
+                  [value]="row.MaxLength ?? 200"
+                  min="1"
+                  max="4000"
+                  placeholder="200"
+                  (input)="OnMaxLengthChange(row.rowIndex, $any($event.target).value)"
+                  (focus)="ActiveRowIndex = row.rowIndex" />
+              } @else if (ShowPrecisionScale(row.Type)) {
+                <div class="precision-scale">
+                  <input
+                    type="number"
+                    class="mj-input cell-input cell-number-sm"
+                    [value]="row.Precision ?? 18"
+                    min="1" max="38"
+                    placeholder="18"
+                    (input)="updateRow(row.rowIndex, { Precision: +$any($event.target).value })"
+                    (focus)="ActiveRowIndex = row.rowIndex" />
+                  <span class="sep">,</span>
+                  <input
+                    type="number"
+                    class="mj-input cell-input cell-number-sm"
+                    [value]="row.Scale ?? 2"
+                    min="0" max="38"
+                    placeholder="2"
+                    (input)="updateRow(row.rowIndex, { Scale: +$any($event.target).value })"
+                    (focus)="ActiveRowIndex = row.rowIndex" />
+                </div>
+              } @else {
+                <span class="cell-na">—</span>
+              }
+            </td>
+
+            <!-- Default -->
+            <td class="col-default">
+              <input
+                type="text"
+                class="mj-input cell-input"
+                [value]="row.DefaultValue ?? ''"
+                placeholder="optional"
+                (input)="OnDefaultValueChange(row.rowIndex, $any($event.target).value)"
+                (focus)="ActiveRowIndex = row.rowIndex" />
+            </td>
+
+            <!-- Description -->
+            <td class="col-desc">
+              <input
+                type="text"
+                class="mj-input cell-input"
+                [value]="row.Description ?? ''"
+                placeholder="optional"
+                (input)="OnDescriptionChange(row.rowIndex, $any($event.target).value)"
+                (focus)="ActiveRowIndex = row.rowIndex" />
+            </td>
+
+            <!-- Actions -->
+            <td class="col-actions">
+              @if (Mode === 'modify' && row.isExisting) {
+                <button
+                  type="button"
+                  class="action-icon-btn"
+                  [title]="row.isHidden ? 'Unhide column' : 'Hide column from new records'"
+                  (click)="ToggleHide(row.rowIndex)">
+                  <i class="fa-solid" [class.fa-eye-slash]="!row.isHidden" [class.fa-eye]="row.isHidden"></i>
+                </button>
+              } @else {
+                <button
+                  type="button"
+                  class="action-icon-btn delete-btn"
+                  title="Remove this column"
+                  (click)="DeleteRow(row.rowIndex)">
+                  <i class="fa-solid fa-xmark"></i>
+                </button>
+              }
+            </td>
+
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ── Add field button ────────────────────────────────────────────────── -->
+  <div class="add-field-bar">
+    <button
+      mjButton
+      buttonStyle="secondary"
+      type="button"
+      (click)="AddField()">
+      <i class="fa-solid fa-plus"></i>
+      Add Column
+    </button>
+  </div>
+
+</div>
