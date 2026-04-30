@@ -106,7 +106,7 @@ export class DatabasePreviewPaneComponent {
      * referenced table isn't a known MJ entity.
      */
     private resolveSatelliteFields(foreignKeys: ForeignKeySpec[]): Map<string, ERDField[]> {
-        const md = new Metadata();
+        const md = new Metadata();  // global-provider-ok: TODO multi-provider migration — DatabaseDesigner UI doesn't yet thread Provider input
         const result = new Map<string, ERDField[]>();
         const seen = new Set<string>();
 

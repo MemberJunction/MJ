@@ -159,7 +159,7 @@ async function refreshUserCacheFromPG(pgPool: import('pg').Pool, coreSchema: str
           UUIDsEqual(role.UserID as string, user.ID as string)
         ),
       };
-      return new UserInfo(Metadata.Provider, userWithRoles);
+      return new UserInfo(Metadata.Provider, userWithRoles);  // global-provider-ok: MetadataSync CLI bootstrap — runs against the global default provider
     });
     const cache = UserCache.Instance;
     (cache as unknown as Record<string, unknown>)['_users'] = userInfos;
