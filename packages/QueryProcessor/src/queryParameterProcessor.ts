@@ -138,7 +138,13 @@ export class QueryParameterProcessor {
                             finalValue = new Date(paramDef.DefaultValue);
                             break;
                         case 'array':
-                            finalValue = JSON.parse(paramDef.DefaultValue);
+                            try {
+                                const parsed = JSON.parse(paramDef.DefaultValue);
+                                finalValue = Array.isArray(parsed) ? parsed : [parsed];
+                            } catch {
+                                // Plain string default (e.g., "Attended") — wrap in array
+                                finalValue = [paramDef.DefaultValue];
+                            }
                             break;
                         default:
                             finalValue = paramDef.DefaultValue;

@@ -239,6 +239,27 @@ describe('QueryParameterProcessor.validateParameters', () => {
       expect(result.success).toBe(true);
       expect(result.validatedParameters.limit).toBe(50);
     });
+
+    it('should parse valid JSON array default for array type', () => {
+      const defs = [makeParamDef({ Name: 'tags', Type: 'array', DefaultValue: '["a","b"]' })];
+      const result = QueryParameterProcessor.validateParameters({}, defs as never[]);
+      expect(result.success).toBe(true);
+      expect(result.validatedParameters.tags).toEqual(['a', 'b']);
+    });
+
+    it('should wrap plain string default in array for array type', () => {
+      const defs = [makeParamDef({ Name: 'status', Type: 'array', DefaultValue: 'Attended' })];
+      const result = QueryParameterProcessor.validateParameters({}, defs as never[]);
+      expect(result.success).toBe(true);
+      expect(result.validatedParameters.status).toEqual(['Attended']);
+    });
+
+    it('should wrap non-array JSON default in array for array type', () => {
+      const defs = [makeParamDef({ Name: 'code', Type: 'array', DefaultValue: '42' })];
+      const result = QueryParameterProcessor.validateParameters({}, defs as never[]);
+      expect(result.success).toBe(true);
+      expect(result.validatedParameters.code).toEqual([42]);
+    });
   });
 
   describe('unknown parameters', () => {
