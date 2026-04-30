@@ -62,6 +62,8 @@ flowchart TD
     style Output fill:#2d8659,stroke:#1a5c3a,color:#fff
 ```
 
+> **Authoring constraint:** the SQL CodeGen emits ships in Flyway migrations that customer databases will replay forever. When you author a schema change that CodeGen will regenerate from, the [Publish-Then-No-Breaking-Changes Policy](../../guides/PUBLISH_NO_BREAK_POLICY.md) governs what's safe — within a published OpenApp major version, only additive schema changes are allowed (new tables, new optional columns, widened types, new optional SP parameters). Dropping or renaming columns, narrowing types, and adding required parameters break historical migrations and are not allowed without a major version bump. Tolerant SP signatures (Pillar 1) make additive SP changes safe by default; the policy is what forbids the breaking variants.
+
 ## Key Features
 
 - **Full-Stack Synchronization**: A single schema change propagates to TypeScript entities, Angular forms, SQL procedures, and GraphQL resolvers automatically
@@ -547,8 +549,6 @@ forceRegeneration: {
 ```
 
 Only the intersection of matched entities and enabled object types gets regenerated.
-
-> **Authoring guidance:** the SQL emitted by force-regen ships in a normal Flyway migration that customer databases will replay. Before flipping any of these flags on, read the [Publish-Then-No-Breaking-Changes Policy](../../guides/PUBLISH_NO_BREAK_POLICY.md) — within a published OpenApp major version, your regen output must remain strictly additive (new optional SP parameters, widened columns, new tables) and never remove or rename anything. Tolerant SP signatures (Pillar 1) make additive SP changes safe by default; the policy is what forbids the breaking variants.
 
 ## SQL Migration Logging
 
