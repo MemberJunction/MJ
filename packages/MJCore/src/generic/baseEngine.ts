@@ -665,7 +665,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     ): Promise<boolean> {
         try {
             const recordData = JSON.parse(recordDataJSON);
-            const md = new Metadata();
+            // Use this engine's bound provider (ProviderToUse) instead of `new Metadata()` so
+            // multi-provider client setups instantiate entities against the correct server.
+            const md = this.ProviderToUse;
             // Find the proper entity name with original casing from the config
             const originalEntityName = matchingConfigs[0].EntityName!;
             const entity = await md.GetEntityObject(originalEntityName, this._contextUser);

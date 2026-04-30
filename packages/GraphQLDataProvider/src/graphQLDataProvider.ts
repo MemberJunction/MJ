@@ -3111,6 +3111,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     type: 'remote-invalidate',
                     entityName: event.EntityName,
                     baseEntity: null,
+                    // Attach the publishing provider so multi-provider client setups can resolve
+                    // entity metadata against the correct server (instead of the global default).
+                    provider: this,
                     payload: {
                         primaryKeyValues: event.PrimaryKeyValues,
                         action: event.Action,

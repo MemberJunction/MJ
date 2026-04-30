@@ -817,11 +817,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     public async FullTextSearch(params: FullTextSearchParams, contextUser?: UserInfo): Promise<FullTextSearchResult> {
         const startTime = Date.now();
         try {
-            const md = new Metadata();
             const maxRows = params.MaxRowsPerEntity ?? 10;
 
-            // Get all FTS-enabled entities
-            const ftsEntities = this.resolveFTSEntities(md, params.EntityNames);
+            // Use this provider's metadata directly — `this` implements IMetadataProvider, so
+            // its Entities reflect the schema for the database this provider is connected to.
+            // (The previous `new Metadata()` reached for the global default provider, which is
+            // wrong in multi-provider client setups.)
+            const ftsEntities = this.resolveFTSEntities(this, params.EntityNames);
             if (ftsEntities.length === 0) {
                 return {
                     Success: true,
@@ -893,7 +895,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * Resolve which entities to search. Filters to only FTS-enabled entities.
      * If entityNames provided, intersects with the FTS-enabled set.
      */
-    private resolveFTSEntities(md: Metadata, entityNames?: string[]): EntityInfo[] {
+    private resolveFTSEntities(md: IMetadataProvider, entityNames?: string[]): EntityInfo[] {
         const allEntities = md.Entities.filter(e => e.FullTextSearchEnabled);
 
         if (!entityNames || entityNames.length === 0) {
@@ -1740,7 +1742,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     primaryKeyFieldName,
                     checkResult.maxUpdatedAt || new Date().toISOString(),
                     checkResult.rowCount || 0,
-                    checkResult.aggregateResults // Pass fresh aggregate results (can't be differentially computed)
+                    checkResult.aggregateResults, // Pass fresh aggregate results (can't be differentially computed)
+                    this
                 );
 
                 if (merged) {
@@ -1794,7 +1797,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     checkResult.results || [],
                     checkResult.maxUpdatedAt,
                     checkResult.aggregateResults, // Include aggregate results in cache
-                    checkResult.rowCount
+                    checkResult.rowCount,
+                    this
                 ).catch(e => LogError(`Failed to update cache: ${e}`));
             }
 
@@ -1914,7 +1918,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 result.Results,
                 maxUpdatedAt,
                 result.AggregateResults,
-                result.TotalRowCount
+                result.TotalRowCount,
+                this
             );
         } else if (this.shouldAutoCache(params, result)) {
             // Server-side auto-cache: small, unfiltered, unsorted results are
@@ -1928,7 +1933,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 result.Results,
                 maxUpdatedAt,
                 result.AggregateResults,
-                result.TotalRowCount
+                result.TotalRowCount,
+                this
             );
             LogStatusEx({ message: `  📦 [Auto-Cache] RunView "${params.EntityName || params.ViewName || 'unknown'}" — ${result.Results.length} rows auto-cached (small + unfiltered)`, verboseOnly: true });
         }
@@ -1994,7 +2000,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     results[i].Results,
                     maxUpdatedAt,
                     results[i].AggregateResults,
-                    results[i].TotalRowCount
+                    results[i].TotalRowCount,
+                    this
                 ));
             } else if (this.shouldAutoCache(params[i], results[i])) {
                 const maxUpdatedAt = this.extractMaxUpdatedAt(results[i].Results);
@@ -2004,7 +2011,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     results[i].Results,
                     maxUpdatedAt,
                     results[i].AggregateResults,
-                    results[i].TotalRowCount
+                    results[i].TotalRowCount,
+                    this
                 ));
                 LogStatusEx({ message: `    📦 [Auto-Cache] RunViews "${params[i].EntityName || params[i].ViewName || 'unknown'}" — ${results[i].Results.length} rows auto-cached (small + unfiltered)`, verboseOnly: true });
             }
