@@ -386,4 +386,138 @@ describe('SearchFusion', () => {
             expect(names).toEqual(['Articles', 'Policies']);
         });
     });
+
+    // ────────────────────────────────────────────────────────────────────
+    // Tier-1 search edge-case coverage (release-readiness audit)
+    // ────────────────────────────────────────────────────────────────────
+
+    describe('Defensive sanitation against malformed provider results', () => {
+        it('drops items with NaN Score before fusing', () => {
+            const lists: LabeledResultList[] = [
+                {
+                    Source: 'vector',
+                    Results: [
+                        makeResult({ EntityName: 'E', RecordID: 'good', Score: 0.6 }),
+                        makeResult({ EntityName: 'E', RecordID: 'nan', Score: NaN }),
+                    ],
+                },
+                {
+                    Source: 'entity',
+                    Results: [
+                        makeResult({ EntityName: 'E', RecordID: 'good', Score: 0.4 }),
+                    ],
+                },
+            ];
+            const result = fusion.Fuse(lists, 10);
+            const ids = result.map(r => r.RecordID);
+            expect(ids).toContain('good');
+            expect(ids).not.toContain('nan');
+        });
+
+        it('drops items with Infinity Score', () => {
+            const lists: LabeledResultList[] = [
+                {
+                    Source: 'vector',
+                    Results: [
+                        makeResult({ EntityName: 'E', RecordID: 'inf', Score: Infinity }),
+                        makeResult({ EntityName: 'E', RecordID: 'ok', Score: 0.5 }),
+                    ],
+                },
+                { Source: 'entity', Results: [] },
+            ];
+            const result = fusion.Fuse(lists, 10);
+            expect(result.map(r => r.RecordID)).toEqual(['ok']);
+        });
+
+        it('drops items with empty RecordID', () => {
+            const lists: LabeledResultList[] = [
+                {
+                    Source: 'vector',
+                    Results: [
+                        makeResult({ EntityName: 'E', RecordID: '', Score: 0.9 }),
+                        makeResult({ EntityName: 'E', RecordID: 'a', Score: 0.7 }),
+                    ],
+                },
+                { Source: 'entity', Results: [] },
+            ];
+            const result = fusion.Fuse(lists, 10);
+            expect(result.map(r => r.RecordID)).toEqual(['a']);
+        });
+
+        it('drops items with non-string RecordID', () => {
+            const lists: LabeledResultList[] = [
+                {
+                    Source: 'vector',
+                    Results: [
+                        // Cast through unknown to construct a type-incorrect runtime
+                        // payload that mirrors what a misbehaving 3rd-party
+                        // provider could emit.
+                        ({ ...makeResult({ EntityName: 'E', RecordID: 'x', Score: 0.8 }), RecordID: 42 as unknown as string }),
+                        makeResult({ EntityName: 'E', RecordID: 'b', Score: 0.5 }),
+                    ],
+                },
+                { Source: 'entity', Results: [] },
+            ];
+            const result = fusion.Fuse(lists, 10);
+            expect(result.map(r => r.RecordID)).toEqual(['b']);
+        });
+
+        it('survives a list with only malformed items by treating it as empty', () => {
+            const lists: LabeledResultList[] = [
+                {
+                    Source: 'vector',
+                    Results: [
+                        makeResult({ EntityName: 'E', RecordID: '', Score: NaN }),
+                    ],
+                },
+                {
+                    Source: 'entity',
+                    Results: [
+                        makeResult({ EntityName: 'E', RecordID: 'real', Score: 0.7 }),
+                    ],
+                },
+            ];
+            const result = fusion.Fuse(lists, 10);
+            // Only the entity list survives sanitation → single-source path
+            expect(result).toHaveLength(1);
+            expect(result[0].RecordID).toBe('real');
+        });
+    });
+
+    describe('Single-provider scope (post-fusion-fix regression guard)', () => {
+        it('returns vector results unchanged when only Vector contributes', () => {
+            // Common production setup: a scope wired only to the Vector
+            // provider. We just changed `applyRRF` to merge ScoreBreakdowns
+            // for multi-provider hits — verify the single-provider fast
+            // path (which doesn't go through applyRRF) still returns the
+            // provider's items verbatim.
+            const items: SearchResultItem[] = [
+                makeResult({ EntityName: 'E', RecordID: 'a', Score: 0.9, SourceType: 'vector', ScoreBreakdown: { Vector: 0.9 } as SearchScoreBreakdown }),
+                makeResult({ EntityName: 'E', RecordID: 'b', Score: 0.7, SourceType: 'vector', ScoreBreakdown: { Vector: 0.7 } as SearchScoreBreakdown }),
+                makeResult({ EntityName: 'E', RecordID: 'c', Score: 0.5, SourceType: 'vector', ScoreBreakdown: { Vector: 0.5 } as SearchScoreBreakdown }),
+            ];
+            const lists: LabeledResultList[] = [
+                { Source: 'vector', Results: items },
+                { Source: 'entity', Results: [] },
+            ];
+            const result = fusion.Fuse(lists, 10);
+            expect(result).toHaveLength(3);
+            expect(result.map(r => r.RecordID)).toEqual(['a', 'b', 'c']);
+            // Source type and breakdown preserved verbatim
+            expect(result[0].SourceType).toBe('vector');
+            expect((result[0].ScoreBreakdown as { Vector?: number }).Vector).toBe(0.9);
+        });
+
+        it('truncates to maxResults in single-provider mode', () => {
+            const items: SearchResultItem[] = Array.from({ length: 25 }, (_, i) =>
+                makeResult({ EntityName: 'E', RecordID: `r${i}`, Score: 1 - i * 0.01, SourceType: 'entity' })
+            );
+            const lists: LabeledResultList[] = [
+                { Source: 'entity', Results: items },
+            ];
+            const result = fusion.Fuse(lists, 5);
+            expect(result).toHaveLength(5);
+            expect(result.map(r => r.RecordID)).toEqual(['r0', 'r1', 'r2', 'r3', 'r4']);
+        });
+    });
 });

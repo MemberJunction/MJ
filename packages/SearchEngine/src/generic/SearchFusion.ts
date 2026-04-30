@@ -53,8 +53,24 @@ export class SearchFusion {
         maxResults: number,
         fusionWeights?: FusionWeightsByProvider
     ): SearchResultItem[] {
-        // Collect only lists that have results
-        const nonEmpty = lists.filter(l => l.Results.length > 0);
+        // Defensive sanitation: reject items with non-finite Score or empty
+        // RecordID before fusion. A custom 3rd-party provider that returns
+        // `Score: NaN`, `Score: undefined`, or `RecordID: ''` would otherwise
+        // poison the RRF sort (NaN comparisons are always false → unstable
+        // ordering) or short-circuit dedup (empty key collisions). Filter
+        // here once rather than in three downstream places.
+        const sanitized: LabeledResultList[] = lists.map(l => ({
+            Source: l.Source,
+            Results: l.Results.filter(r =>
+                r != null
+                && typeof r.RecordID === 'string'
+                && r.RecordID.length > 0
+                && Number.isFinite(r.Score)
+            ),
+        }));
+
+        // Collect only lists that have (sanitized) results
+        const nonEmpty = sanitized.filter(l => l.Results.length > 0);
         if (nonEmpty.length === 0) return [];
 
         // Single source: return as-is (no normalization needed, scores are native to that source)
@@ -186,12 +202,23 @@ export class SearchFusion {
         const weights = lists.map(l => fusionWeights?.[l.Source] ?? 1);
         const fused = this.computeWeightedRRF(rankedLists, weights);
 
-        // Build a lookup from RecordID to full result item (prefer first occurrence)
+        // Build a lookup from RecordID to full result item. When the same record
+        // appears in multiple provider lists, merge their `ScoreBreakdown`s so the
+        // multi-provider evidence isn't lost. Keeping only the first occurrence
+        // would silently drop the second provider's contribution — which then
+        // causes the downstream `Deduplicate.breakdownMax` post-processing to
+        // under-rank multi-provider hits (they'd look single-provider).
         const resultMap = new Map<string, SearchResultItem>();
         for (const list of lists) {
             for (const r of list.Results) {
-                if (!resultMap.has(r.RecordID)) {
+                const existing = resultMap.get(r.RecordID);
+                if (!existing) {
                     resultMap.set(r.RecordID, r);
+                } else {
+                    resultMap.set(r.RecordID, {
+                        ...existing,
+                        ScoreBreakdown: { ...existing.ScoreBreakdown, ...r.ScoreBreakdown },
+                    });
                 }
             }
         }
