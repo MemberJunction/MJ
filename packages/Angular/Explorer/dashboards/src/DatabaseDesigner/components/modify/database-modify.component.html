@@ -1,0 +1,132 @@
+<div class="modify-root">
+
+  <!-- ── Loading ───────────────────────────────────────────────────────── -->
+  @if (IsLoading) {
+    <div class="modify-loading">
+      <mj-loading text="Loading entity details…"></mj-loading>
+    </div>
+  }
+
+  <!-- ── Error ─────────────────────────────────────────────────────────── -->
+  @if (LoadError) {
+    <div class="modify-error" role="alert">
+      <i class="fa-solid fa-circle-exclamation"></i>
+      {{ LoadError }}
+    </div>
+  }
+
+  <!-- ── Main view ─────────────────────────────────────────────────────── -->
+  @if (!IsLoading && !LoadError && EntityDetail) {
+    <!-- Entity header -->
+    <div class="modify-header">
+      <div class="entity-info">
+        <i class="fa-solid fa-table-cells-large"></i>
+        <span class="entity-name">{{ EntityDetail.entityName }}</span>
+        <span class="schema-path">{{ EntityDetail.schemaName }}.{{ EntityDetail.tableName }}</span>
+      </div>
+    </div>
+
+    <!-- Tab bar -->
+    <div class="tab-bar" role="tablist">
+      <button
+        role="tab"
+        class="tab-btn"
+        [class.active]="ActiveTab === 'fields'"
+        [attr.aria-selected]="ActiveTab === 'fields'"
+        (click)="SetTab('fields')">
+        <i class="fa-solid fa-table-list"></i>
+        Fields
+      </button>
+      <button
+        role="tab"
+        class="tab-btn"
+        [class.active]="ActiveTab === 'review'"
+        [attr.aria-selected]="ActiveTab === 'review'"
+        (click)="SetTab('review')">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        Review Changes
+      </button>
+      <button
+        role="tab"
+        class="tab-btn"
+        [class.active]="ActiveTab === 'apply'"
+        [class.tab-apply]="true"
+        [attr.aria-selected]="ActiveTab === 'apply'"
+        (click)="SetTab('apply')">
+        <i class="fa-solid fa-rocket-launch"></i>
+        Apply Changes
+      </button>
+    </div>
+
+    <!-- Tab content: Fields + Review get a live preview pane on the right; Apply takes full width -->
+    @if (ActiveTab === 'apply') {
+
+      <div class="tab-content tab-content-full">
+        <div class="apply-tab">
+          <mj-database-pipeline-panel
+            [TableDefinition]="CurrentTableSpec"
+            ModificationType="alter"
+            [ExistingEntityId]="EntityId"
+            (Completed)="OnPipelineCompleted($event)"
+            (Errored)="OnPipelineErrored($event)">
+          </mj-database-pipeline-panel>
+        </div>
+      </div>
+
+    } @else {
+
+      <as-split direction="horizontal" class="modify-split" gutterSize="6">
+
+        <as-split-area [size]="55" [minSize]="40">
+          <div class="tab-content">
+
+            @if (ActiveTab === 'fields') {
+              <mj-database-fields-grid
+                [Columns]="EditedColumns"
+                Mode="modify"
+                (ColumnsChanged)="OnColumnsChanged($event)">
+              </mj-database-fields-grid>
+            }
+
+            @if (ActiveTab === 'review') {
+              <mj-database-review-panel
+                [TableDefinition]="CurrentTableSpec"
+                ModificationType="alter"
+                [ExistingColumns]="ExistingColumns">
+              </mj-database-review-panel>
+            }
+
+          </div>
+        </as-split-area>
+
+        <as-split-area [size]="45" [minSize]="25">
+          <mj-database-preview-pane
+            class="modify-preview"
+            [TableDefinition]="CurrentTableSpec ?? {}"
+            [IsAlter]="true">
+          </mj-database-preview-pane>
+        </as-split-area>
+
+      </as-split>
+
+    }
+
+    <!-- Footer -->
+    <div class="modify-footer">
+      <button mjButton buttonStyle="secondary" (click)="OnCancel()">
+        @if (IsPipelineRunning) { Close } @else { Cancel }
+      </button>
+      @if (ActiveTab !== 'apply') {
+        <button
+          mjButton
+          buttonStyle="primary"
+          [disabled]="!CanApplyChanges || IsPipelineRunning"
+          (click)="OnApplyChanges()">
+          <i class="fa-solid fa-rocket-launch"></i>
+          Apply Changes
+        </button>
+      }
+    </div>
+  }
+
+</div>

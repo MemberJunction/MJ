@@ -1717,6 +1717,23 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
     };
   }
 
+  /**
+   * Returns the complete set of schema names this instance will block in DDL.
+   *
+   * Always includes `__mj` (the MemberJunction system schema, never modifiable).
+   * Also includes any additional schemas configured via the `RSU_PROTECTED_SCHEMAS`
+   * environment variable (comma-separated list, e.g. `RSU_PROTECTED_SCHEMAS=dbo,sys`).
+   *
+   * Callers such as the Database Designer Validator use this for early-exit UX
+   * feedback before DDL is even generated — the same set that
+   * `ValidateMigrationSQL()` enforces at the SQL level.
+   *
+   * @returns A readonly lowercase set of all protected schema names.
+   */
+  public GetAllProtectedSchemas(): ReadonlySet<string> {
+    return new Set(['__mj', ...rsuConfig.ProtectedSchemas.map((s) => s.toLowerCase())]);
+  }
+
   private getProtectedSchemas(): string[] {
     return rsuConfig.ProtectedSchemas;
   }

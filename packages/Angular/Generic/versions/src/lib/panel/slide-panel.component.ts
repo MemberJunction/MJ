@@ -50,6 +50,13 @@ export class MjSlidePanelComponent implements OnInit, OnDestroy {
     @Output() Closed = new EventEmitter<void>();
     @Output() WidthChanged = new EventEmitter<number>();
 
+    /**
+     * Optional guard called before any close gesture (X button, backdrop click, Escape).
+     * Return `false` to cancel the close — e.g., when an in-progress operation is running.
+     * The panel itself never shows a dialog; the consumer is responsible for any confirmation UI.
+     */
+    @Input() CanClose: (() => boolean) | null = null;
+
     public IsVisible = false;
     private _widthPx = 0;
     private isResizing = false;
@@ -92,6 +99,7 @@ export class MjSlidePanelComponent implements OnInit, OnDestroy {
     }
 
     public OnClose(): void {
+        if (this.CanClose && !this.CanClose()) return;
         this.IsVisible = false;
         this._visible = false;
         this.cdr.markForCheck();
