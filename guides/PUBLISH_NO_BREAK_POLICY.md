@@ -1,6 +1,6 @@
 # Publish-Then-No-Breaking-Changes Policy
 
-**Status:** Adopted at the 2026-04-29 cross-app migration meeting; applies prospectively from each app's first published version after adoption.
+**Status:** Adopted at the 2026-04-29 cross-app migration meeting; applies prospectively from each app's next published version going forward.
 **Applies to:** All MemberJunction OpenApps.
 **Source of record:** §3.2 of [plans/cross-app-migration-ordering.md](../plans/cross-app-migration-ordering.md).
 
@@ -9,14 +9,6 @@
 Once an OpenApp version is **published**, within that major version the app's schema is **immutable except for additive changes**. The exhaustive list of what is and isn't allowed is below.
 
 This is a hard rule, not a guideline. Breaking it forces a major version bump (1.x → 2.0), which is a manual upgrade path — not an automatic one.
-
-## What "published" means
-
-An OpenApp version is **published** the moment migrations for that version are part of a release that has gone out — i.e., a tagged release that any customer database, anywhere, might replay. After that point, those migrations are part of the historical migration stream forever, and any subsequent change inside the same major version must respect the rule.
-
-A version that's still pre-release — on a feature branch, on `next` waiting for a release cut, or in any state where it could still be revised before going to customers — is not "published." You're free to fix up migrations within it until release.
-
-Practically: if you discover a mistake in a migration on `next` *before* the next release tag goes out, you can correct it. If you discover the same mistake *after* the release ships, the migration is now historical and must be fixed by an additive follow-up migration, not by editing the original.
 
 ## What's not allowed within a published major version
 
@@ -29,7 +21,7 @@ Practically: if you discover a mistake in a migration on `next` *before* the nex
 | Removing or renaming an entity | Same reasoning as dropping a table, plus metadata-level breakage |
 | Removing or renaming a stored-procedure parameter | Historical `EXEC` calls in migration history will fail because they reference the dropped/renamed parameter by name |
 | Adding a *required* (NOT NULL, no database default) column or stored-procedure parameter | Pillar 1 (tolerant SP signatures) makes additive changes safe *only* when the new parameter is optional. A required addition breaks every historical `EXEC` that doesn't pass it |
-| Dropping an `EntityRelationship` row that downstream code or UI depends on | Removes a documented navigation path; downstream code that traverses the relationship via metadata (entity navigation, related-data resolvers, generated UI links) stops finding it |
+| Dropping a foreign-key constraint or `EntityRelationship` row that downstream code, UI, or referential-integrity expectations depend on | Removes a documented navigation path or referential-integrity guarantee; downstream code that traverses the relationship via metadata, or that relies on the FK to enforce data shape, stops working as expected |
 
 ## What IS allowed
 
@@ -59,7 +51,7 @@ To physically remove a deprecated entity or column, you need a major version bum
 
 ## Breaking changes force a major version bump
 
-When an app genuinely needs to drop, narrow, or rename something, the path is a major version bump:
+When an app genuinely needs to make a breaking change — drop, narrow, rename, or anything else from the Forbidden list — the path is a major version bump:
 
 - **OpenApp 1.x → 2.0** is allowed to drop tables, drop columns, narrow types, rename entities, etc.
 - The 2.0 release is treated as a new app from the customer's perspective. Installation is a manual migration path — typically a one-time hand-authored "open-heart surgery" migration that walks an existing 1.x customer to 2.0. There is no parallel 1.x maintenance track once 2.0 ships.
@@ -67,7 +59,7 @@ When an app genuinely needs to drop, narrow, or rename something, the path is a 
 
 ## Why this works
 
-If every app obeys this rule going forward, the only ordering problem the OpenApp installer needs to solve is the dependency graph — which it already does via the manifest's `consumes` block. The "drop X in app A after app B has dropped its FK to X" scenario only arises when an app violates the policy. Once the policy is in force across all apps, cross-schema interleaving stops being a requirement and the simpler "install each app's migrations in dependency order" model is sufficient.
+If every app obeys this rule going forward, the only ordering problem the OpenApp installer needs to solve is the dependency graph derived from each app's manifest. (Formalizing that installer model is the Pillar 3 work — §4.1 of [plans/cross-app-migration-ordering.md](../plans/cross-app-migration-ordering.md) — and isn't fully in place yet, but the policy is what makes it *sufficient* once it ships.) The "drop X in app A after app B has dropped its FK to X" scenario only arises when an app violates the policy. With the policy in force, cross-schema interleaving stops being a requirement and the simpler "install each app's migrations in dependency order" model is enough.
 
 This is why the architecture document calls the policy a **pillar**: the tooling (Pillar 1, tolerant SP signatures; Pillar 3, OpenApp dependency-order installation) is necessary but not sufficient on its own. Without the policy, a single app dropping a column can cascade-break every downstream consumer's migration history regardless of how the tooling orders things.
 
@@ -122,7 +114,7 @@ Two reasons:
 1. Downstream apps may have read or written `OldName` directly (in views, in custom SQL, in entity-field references). Renaming silently breaks them.
 2. Historical `spUpdateMyTable @OldName=...` calls become invalid because the SP parameter no longer exists.
 
-**Correct path:** add `NewName` as a new column, mark `OldName` as deprecated at the metadata level, populate `NewName` from `OldName` going forward. `OldName` stays physically present until the app eventually bumps a major version — at which point the deprecated column can be dropped.
+**Correct path:** add `NewName` as a new column, mark `OldName` as deprecated at the metadata level, populate `NewName` from `OldName` going forward. `OldName` stays physically present indefinitely; if the app eventually bumps a major version, that's a chance to drop accumulated deprecations, but it's not required.
 
 ### Example 4: Narrowing a column's type
 
@@ -151,21 +143,21 @@ ALTER TABLE ${flyway:defaultSchema}.MyTable DROP COLUMN LegacyFlag;
 
 Historical migration `EXEC __mj.spCreateMyTable @Name='X', @LegacyFlag=1` will fail with "could not find @LegacyFlag" against the regenerated SP. The historical EXEC sits in the migration stream forever, so this is a permanent break.
 
-**Correct path:** mark the `LegacyFlag` column as deprecated at the metadata level. The column stays physically present, codegen continues to emit `@LegacyFlag` as an optional parameter on `spCreateMyTable` / `spUpdateMyTable`, and historical `EXEC` calls keep working. New code stops using it. If the app eventually does a major version bump, that's the moment to physically remove the deprecated column — until then, it's harmless dead weight.
+**Correct path:** mark the `LegacyFlag` column as deprecated at the metadata level. The column stays physically present, codegen continues to emit `@LegacyFlag` as an optional parameter on `spCreateMyTable` / `spUpdateMyTable`, and historical `EXEC` calls keep working. New code stops using it. The deprecated column can stay indefinitely — it's harmless dead weight — and only needs physical removal if and when the app does a major version bump.
 
-### Example 6: Adding a NEW required SP parameter
+### Example 6: Adding a required column (and thus a required SP parameter)
 
-**Not allowed within the same major version.** Pillar 1 makes additive changes safe *only* when the new parameter is optional. Codegen won't stop you from adding a required column — and the resulting required SP parameter — but doing so breaks every historical EXEC that doesn't pass it.
+**Not allowed within the same major version.** Pillar 1 makes additive changes safe *only* when the new parameter is optional, which means the underlying column has to be nullable, have a database default, or both. A new column declared NOT NULL with no default produces a required SP parameter, which breaks every historical EXEC that doesn't pass it.
 
 ```sql
--- ❌ FORBIDDEN within v1.x — adds @MyRequiredParam with no default
-CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateMyTable]
-    @Name nvarchar(255),
-    @MyRequiredParam int   -- new, required, breaks historical EXECs
-AS
+-- ❌ FORBIDDEN within v1.x — adds a NOT NULL column with no default.
+-- Codegen will emit @MyRequiredParam in spCreateMyTable / spUpdateMyTable
+-- with no default value, breaking historical EXECs.
+ALTER TABLE ${flyway:defaultSchema}.MyTable
+    ADD MyRequiredParam int NOT NULL;
 ```
 
-**Correct path:** add the underlying column as nullable or with a database default. Codegen will then emit the parameter with `= NULL` and the SP body will apply the default. New callers can pass a value; old callers continue to work without one.
+**Correct path:** declare the column either nullable or with a database default (or both). Codegen will then emit the parameter with `= NULL` and the SP body will apply the default. New callers can pass a value; old callers continue to work without one. See Example 2 for the worked-out NOT-NULL-with-default case.
 
 ## How to enforce
 
@@ -175,7 +167,7 @@ Tooling support to catch some of these mechanically at install time is described
 
 ## How this applies to versions already in the wild
 
-The policy is **prospective**. Past published versions of any app stay as they are — the policy doesn't retroactively make their already-shipped migrations a violation, and it doesn't require rewriting history. From the first new published version of an app after policy adoption, the rule applies to that app going forward.
+The policy is **prospective**. Past published versions of any app stay as they are — the policy doesn't retroactively make their already-shipped migrations a violation, and it doesn't require rewriting history. From each app's next published version going forward, the rule applies to that app.
 
 ## See also
 
