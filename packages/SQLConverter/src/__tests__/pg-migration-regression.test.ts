@@ -147,8 +147,11 @@ describe.skipIf(!hasPGMigrations)('v5 migration regression — committed PG file
     ? readdirSync(PG_MIGRATIONS_DIR).filter(f => f.endsWith('.pg.sql') || f.endsWith('.pg-only.sql')).sort()
     : [];
 
-  it('should have PG migration files', () => {
-    expect(pgFiles.length).toBeGreaterThan(30);
+  it('should have at least one PG migration file', () => {
+    // With the v5.30 baseline approach, the baseline alone is sufficient — historical
+    // V-files have been removed since their content is in the baseline. This check
+    // just ensures migrations-pg/v5/ isn't empty.
+    expect(pgFiles.length).toBeGreaterThan(0);
   });
 
   it('should have a baseline migration', () => {
