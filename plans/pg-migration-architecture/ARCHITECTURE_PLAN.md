@@ -317,7 +317,7 @@ All gated on `MJ_TEST_PG_URL` so they're optional in CI but auditable locally. *
 
 `scripts/pg-diff-regenerated.mjs` + `scripts/pg-diff-non-header.mjs` — clean-slate experiment tooling: snapshot working migrations, regenerate from T-SQL, classify diffs as cosmetic-header vs. substantive. CLI-arg driven (`<snapshot-dir> [regen-dir]`).
 
-`scripts/full-pg-test-cycle.mjs`, `scripts/test-pg-ci-flow.mjs`, `scripts/check-migration-state.mjs`, `scripts/compare-migration-structures.mjs` — operator-level scripts for the PG dev loop, runnable in CI or locally.
+`scripts/full-pg-test-cycle.mjs`, `scripts/test-pg-ci-flow.mjs`, `scripts/check-migration-state.mjs` — operator-level scripts for the PG dev loop, runnable in CI or locally.
 
 #### 3.6.4 Docker Workbench for Interactive Dev
 

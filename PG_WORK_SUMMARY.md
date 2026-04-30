@@ -241,7 +241,6 @@ Operator-level scripts that codify the PG dev loop. Useful in CI, useful locally
 | `scripts/full-pg-test-cycle.mjs` | End-to-end: drop DB → create → migrate → CodeGen → metadata sync → verify entity counts. The "smoke test" for PG. |
 | `scripts/test-pg-ci-flow.mjs` | What CI runs: same as above but with strict failure modes and machine-readable output. |
 | `scripts/check-migration-state.mjs` | Reports applied vs pending migrations + drift detection (PG vs T-SQL count, baseline parity). |
-| `scripts/compare-migration-structures.mjs` | Diffs PG schema introspection against expected baseline + applied migrations. |
 | `scripts/run-pg-migrate.mjs` | Thin Node wrapper around `mj migrate` for scripting. |
 | `scripts/test-single-migration.mjs` | Apply one migration in isolation against a fresh DB — useful when bisecting failures. |
 | `scripts/pg-bootstrap-helpers.sql` | SQL fixtures the test scripts need (test users, sample data). |
