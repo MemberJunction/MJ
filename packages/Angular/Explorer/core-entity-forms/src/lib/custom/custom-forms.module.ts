@@ -66,6 +66,7 @@ import { EntityLinkPillComponent } from "./Tests/entity-link-pill.component";
 import { MJListFormComponentExtended } from "./Lists/list-form.component";
 import { MJContentSourceFormComponentExtended } from "./ContentSources/content-source-form.component";
 import { MJSearchScopeFormComponentExtended } from "./SearchScopes/searchscope-form.component";
+import { MJSearchScopeProviderFormComponentExtended } from "./SearchScopes/searchscopeprovider-form.component";
 import { SearchModule } from "@memberjunction/ng-search";
 
 @NgModule({
@@ -111,6 +112,7 @@ import { SearchModule } from "@memberjunction/ng-search";
         MJListFormComponentExtended,
         MJContentSourceFormComponentExtended,
         MJSearchScopeFormComponentExtended,
+        MJSearchScopeProviderFormComponentExtended,
     ],
     imports: [
         CommonModule,
@@ -179,6 +181,7 @@ import { SearchModule } from "@memberjunction/ng-search";
         MJListFormComponentExtended,
         MJContentSourceFormComponentExtended,
         MJSearchScopeFormComponentExtended,
+        MJSearchScopeProviderFormComponentExtended,
         ActionsModule
     ],
     providers: [

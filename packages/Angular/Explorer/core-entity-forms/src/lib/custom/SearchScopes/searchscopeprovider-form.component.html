@@ -1,0 +1,149 @@
+<mj-record-form-container [Record]="record" [FormComponent]="this"
+    (Navigate)="OnFormNavigate($event)"
+    (DeleteRequested)="OnDeleteRequested()"
+    (FavoriteToggled)="OnFavoriteToggled()"
+    (HistoryRequested)="OnHistoryRequested()"
+    (ListManagementRequested)="OnListManagementRequested()">
+
+    <!-- ========================================
+         FIELD PANELS
+         ======================================== -->
+    <!-- Search Configuration Section -->
+    <mj-collapsible-panel
+        SectionKey="searchConfiguration"
+        SectionName="Search Configuration"
+        Icon="fa fa-search"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="SearchScopeID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+
+        <!-- P5.5 — provider picker. Replaces the generated form's plain
+             SearchProviderID textbox. Sourced from MJ: Search Providers
+             rows; each option is annotated with whether the provider's
+             DriverClass is currently registered with the server's
+             ClassFactory. -->
+        <div class="provider-picker">
+            <label class="provider-picker-label">Search Provider</label>
+            @if (LoadError) {
+                <p class="provider-picker-error">
+                    <i class="fa-solid fa-circle-exclamation"></i>
+                    Could not load provider catalog — {{ LoadError }}
+                </p>
+            }
+            <select
+                class="mj-input provider-picker-select"
+                [disabled]="!EditMode || !ProvidersLoaded"
+                [ngModel]="SelectedSearchProviderID"
+                (ngModelChange)="SelectedSearchProviderID = $event">
+                <option value="">— Select a provider —</option>
+                @for (option of AvailableProviders; track option.ID) {
+                    <option [value]="option.ID">
+                        {{ option.Name }} — {{ option.DriverClass }}{{ option.IsRegisteredOnServer ? '' : ' (not registered on this server)' }}{{ option.Status !== 'Active' ? ' [' + option.Status + ']' : '' }}
+                    </option>
+                }
+            </select>
+            @if (SelectedProviderUnregisteredOnServer) {
+                <p class="provider-picker-warning">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    The selected provider's <code>DriverClass</code> is not registered with this MJServer build.
+                    Searches using this <code>SearchScopeProvider</code> will return no results until the
+                    package that registers <code>{{ SelectedProvider?.DriverClass }}</code> is installed.
+                </p>
+            }
+            <p class="provider-picker-help">
+                Picks from rows in <code>MJ: Search Providers</code>. The "(not registered on this server)" suffix
+                comes from the <code>AvailableSearchProviders</code> query, which calls
+                <code>BaseSearchProvider.GetAvailableProviders()</code> server-side to enumerate
+                ClassFactory registrations.
+            </p>
+        </div>
+
+    </mj-collapsible-panel>
+
+    <!-- Operational Settings Section -->
+    <mj-collapsible-panel
+        SectionKey="operationalSettings"
+        SectionName="Operational Settings"
+        Icon="fa fa-sliders-h"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="Enabled"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="MaxResultsOverride"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ProviderConfigOverride"
+            Type="code"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Query Processing Section -->
+    <mj-collapsible-panel
+        SectionKey="queryProcessing"
+        SectionName="Query Processing"
+        Icon="fa fa-magic"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field
+            [Record]="record"
+            [ShowLabel]="false"
+            FieldName="QueryTransformTemplateID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- System Metadata Section -->
+    <mj-collapsible-panel
+        SectionKey="systemMetadata"
+        SectionName="System Metadata"
+        Icon="fa fa-cog"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_CreatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="__mj_UpdatedAt"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+</mj-record-form-container>
