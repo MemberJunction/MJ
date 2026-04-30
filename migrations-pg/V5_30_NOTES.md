@@ -58,7 +58,7 @@ This applies the v5.30 metadata changes from canonical source files in `metadata
 - Performance smoke test on a realistic dataset (1M+ rows in busy entities)
 - Actual managed-PG (RDS) install dry-run
 - Connection pooling and operational hardening guide
-- Re-enable the parity test (`should have a PG counterpart for every T-SQL V-migration`) after both PRs merge
+- Parity test (`should have a PG counterpart for every T-SQL V-migration`) is currently `it.skip(...)` in `pg-migration-regression.test.ts`. It is meaningful only on the historical-migrations path (`pg-migration-files` worktree branch). On the baseline path (this PR) there are no committed V*.pg.sql to map to T-SQL sources, so the test would always show 100% missing — re-enable only if the historical path is selected for merge.
 
 ## How to verify a new migration port locally
 

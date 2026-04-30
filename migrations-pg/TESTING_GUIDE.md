@@ -2,6 +2,15 @@
 
 Comprehensive reference for every test, audit, and verification that gates the PostgreSQL migration work. Reviewers can use this to understand what's been validated and how, what currently passes, and what known gaps remain.
 
+## Two PR paths — quick orientation
+
+This work ships across two coordinated branches; reviewers pick one to merge:
+
+- **Baseline path (this PR — `claude/study-pg-migrations-tooling-OUKTx`)**: a single v5.30 baseline file (`B202604301800__v5.30__PG_Baseline.pg.sql`) replaces all historical V*.pg.sql migrations. `migrations-pg/v5/` contains only the baseline. Self-contained PR.
+- **Historical-migrations path (`pg-migration-files` worktree branch)**: full v5.0 baseline + every V*.pg.sql for v5.0 through v5.30, all rewritten to be managed-PG safe. ~106 files total. Preserves PG-side migration history matching SQL Server.
+
+Both paths produce equivalent v5.30 schema state when applied. **Tests in this guide that depend on per-file V*.pg.sql counterparts (e.g. the parity check in §1.1) apply to the historical-migrations path only.** They are skipped on the baseline path because the baseline replaces all V-files. Where this distinction matters, the test entry calls it out explicitly.
+
 ---
 
 ## 1. Unit tests (run via `npm test` at the package level)
@@ -12,6 +21,7 @@ Comprehensive reference for every test, audit, and verification that gates the P
 |---|---|---|---|
 | 28 unit-test files (rules, parsers, helpers) | **749 passing**, 2 skipped | Validates every converter rule (TSQLToPostgresRules, ViewRule, AlterTableRule, FunctionRule, GrantRule, InsertRule, ProcedureToFunctionRule, etc.) and shared infrastructure (StatementClassifier, SubSplitter, BatchConverter, TypeResolver) | ✅ All green |
 | `pg-migration-regression.test.ts` (heavy) | **107 passing**, 1 intentional skip | Loops the converter over every T-SQL migration. Catches regressions in conversion logic. | ✅ Green locally; gated on `CI === 'true'` to skip the heavy converter loops on CI (where pg-migrations.yml does the equivalent gate). Set `CI_HEAVY_REGRESSION=true` to opt back in. |
+| `pg-migration-regression.test.ts`: parity test (`should have a PG counterpart for every T-SQL V-migration`) | **`it.skip(...)`** | Validates 1:1 mapping between every T-SQL migration in `migrations/v5/` and a PG counterpart in `migrations-pg/v5/`. | ⏭️ Permanently skipped on the **baseline path** (this PR) — the baseline replaces all V*.pg.sql files, so there are no per-file counterparts to map. Meaningful only on the **historical-migrations path** (`pg-migration-files` worktree branch); if that path is chosen for merge, this test should be re-enabled by removing the `.skip` and the historical V-files will satisfy it. |
 
 **Total SQLConverter tests: 856.** Run via `cd packages/SQLConverter && npx vitest run`.
 
@@ -104,7 +114,7 @@ Run: `node scripts/test-pg-autoquoter-coverage.mjs` (with MJAPI running on PG).
 
 **Pass criterion:** Conversion succeeds for every file; baseline applies cleanly; schema thresholds met.
 
-**Status on this PR:** ✅ Green (was failing for 8+ runs before this PR's baseline replacement, with errors like "PermissionDomain already exists" / "RestoredFromID does not exist"). After the new v5.30 baseline replaced the v5.0 Frankenstein baseline, all 107 V-files are timestamp-skipped and the baseline alone produces the full schema state.
+**Status on this PR:** ✅ Last verified green at commit `27f9ace2c7` (post-baseline-replacement). Was failing for 8+ runs before that commit, with errors like "PermissionDomain already exists" / "RestoredFromID does not exist". After the new v5.30 baseline replaced the v5.0 Frankenstein baseline, all V-files are timestamp-skipped and the baseline alone produces the full schema state. Subsequent commits (CI test gating, V-file deletion, doc updates) have not yet been verified against this CI.
 
 ### 3.3 `.github/workflows/changes.yml` — "Ensure migrations are valid"
 

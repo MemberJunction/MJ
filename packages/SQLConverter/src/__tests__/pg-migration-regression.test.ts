@@ -254,13 +254,15 @@ describe.skipIf(!hasMigrations || !hasPGMigrations)('v5 migration regression —
     'V202604271430__v5.30.x__Metadata_Sync',                        // 964k-line generated content; regenerate via mj-sync push in v5.30.1
   ]);
 
-  // SKIPPED while the PG migration files are split across two PRs (this PG
-  // tooling PR vs. the dedicated migrations PR `pg-migration-files` branch).
-  // On this branch alone, ~50 v5.12–v5.29 PG files live in the sister PR and
-  // are missing from migrations-pg/v5/, so the test would always fail in
-  // isolation. Once both PRs merge to next, the merged state has full coverage
-  // (modulo the 4 v5.30 entries listed in PENDING_V5_30_PORTS above), and this
-  // test should be re-enabled by removing `.skip`. Tracked alongside v5.30.1.
+  // PERMANENTLY SKIPPED on the baseline path (this PR). The v5.30 baseline
+  // replaces all V*.pg.sql files; there are no per-file PG counterparts to
+  // map to T-SQL sources. Re-enabling here would always show 100% missing.
+  //
+  // This test is meaningful ONLY on the alternative `pg-migration-files`
+  // worktree branch, which preserves the full historical V*.pg.sql files.
+  // If that branch is chosen for merge, remove the `.skip` and the historical
+  // PG files will satisfy the parity check (modulo the entries in
+  // PENDING_V5_30_PORTS above). On the baseline path, leave skipped.
   it.skip('should have a PG counterpart for every T-SQL V-migration (allowing tracked exemptions)', () => {
     const tsqlFiles = readdirSync(MIGRATIONS_DIR)
       .filter(f => f.startsWith('V') && f.endsWith('.sql'))
