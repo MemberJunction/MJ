@@ -1,4 +1,4 @@
-import { Metadata, RunView } from '@memberjunction/core';
+import { IMetadataProvider, Metadata, RunView } from '@memberjunction/core';
 import { MJResourcePermissionEntity, MJUserEntity } from '@memberjunction/core-entities';
 import {
     ResourceShareAdapter,
@@ -19,11 +19,25 @@ import {
  * const adapter = new MJResourcePermissionShareAdapter(CONVERSATIONS_RESOURCE_TYPE_ID);
  * ```
  */
+/**
+ * Multi-provider note: callers running under a non-default `IMetadataProvider`
+ * (e.g. multi-server clients) should set `adapter.Provider = component.ProviderToUse`
+ * after construction so all metadata/RunView calls flow through the same provider.
+ */
 export class MJResourcePermissionShareAdapter implements ResourceShareAdapter {
+    private _provider: IMetadataProvider | null = null;
+
+    public get Provider(): IMetadataProvider {
+        return this._provider ?? Metadata.Provider;
+    }
+    public set Provider(value: IMetadataProvider | null) {
+        this._provider = value;
+    }
+
     constructor(private readonly resourceTypeId: string) {}
 
     async LoadShares(context: ResourceShareContext): Promise<ResourceSharePermissionModel[]> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.Provider);
         const result = await rv.RunView<MJResourcePermissionEntity>({
             EntityName: 'MJ: Resource Permissions',
             ExtraFilter:
@@ -52,8 +66,8 @@ export class MJResourcePermissionShareAdapter implements ResourceShareAdapter {
     }
 
     async CreateShare(context: ResourceShareContext, user: MJUserEntity): Promise<ResourceSharePermissionModel> {
-        const md = new Metadata();
-        const perm = await md.GetEntityObject<MJResourcePermissionEntity>('MJ: Resource Permissions');
+        const md = this.Provider;
+        const perm = await md.GetEntityObject<MJResourcePermissionEntity>('MJ: Resource Permissions', md.CurrentUser);
         perm.NewRecord();
         perm.ResourceTypeID = this.resourceTypeId;
         perm.ResourceRecordID = context.ResourceID;
@@ -80,8 +94,8 @@ export class MJResourcePermissionShareAdapter implements ResourceShareAdapter {
     }
 
     private async loadUser(userId: string): Promise<MJUserEntity | null> {
-        const md = new Metadata();
-        const user = await md.GetEntityObject<MJUserEntity>('MJ: Users');
+        const md = this.Provider;
+        const user = await md.GetEntityObject<MJUserEntity>('MJ: Users', md.CurrentUser);
         const loaded = await user.Load(userId);
         return loaded ? user : null;
     }

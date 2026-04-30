@@ -7,7 +7,7 @@
  * @module @memberjunction/ai-mcp-client/oauth/AuthServerDiscovery
  */
 
-import { Metadata, RunView, UserInfo, LogError, LogStatus, BaseEntity, CompositeKey } from '@memberjunction/core';
+import { Metadata, RunView, UserInfo, LogError, LogStatus, BaseEntity, CompositeKey, IMetadataProvider } from '@memberjunction/core';
 import type { AuthServerMetadata, CachedAuthServerMetadata } from './types.js';
 
 /** Entity name for OAuth auth server metadata cache */
@@ -327,11 +327,12 @@ export class AuthServerDiscovery {
         metadata: AuthServerMetadata,
         cachedAt: Date,
         expiresAt: Date,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<void> {
         try {
-            const md = new Metadata();
-            const rv = new RunView();
+            const md = provider ?? (new Metadata() as unknown as IMetadataProvider);
+            const rv = RunView.FromMetadataProvider(md);
 
             // Check if record exists
             const existing = await rv.RunView<{ ID: string }>({
@@ -386,10 +387,10 @@ export class AuthServerDiscovery {
      * @param issuerUrl - The issuer URL to delete
      * @param contextUser - User context
      */
-    private async deleteFromDatabase(issuerUrl: string, contextUser: UserInfo): Promise<void> {
+    private async deleteFromDatabase(issuerUrl: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<void> {
         try {
-            const md = new Metadata();
-            const rv = new RunView();
+            const md = provider ?? (new Metadata() as unknown as IMetadataProvider);
+            const rv = RunView.FromMetadataProvider(md);
 
             const existing = await rv.RunView<{ ID: string }>({
                 EntityName: ENTITY_OAUTH_METADATA_CACHE,

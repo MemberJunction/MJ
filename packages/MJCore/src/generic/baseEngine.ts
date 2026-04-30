@@ -314,7 +314,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * Returns the metadata provider to use for the engine. If a provider is set via the Config method, that provider will be used, otherwise the default provider will be used.
      */
     public get ProviderToUse(): IMetadataProvider {
-        return this._provider || Metadata.Provider;
+        return this._provider || Metadata.Provider; // global-provider-ok: explicit fallback in BaseEngine accessor
     }
 
     /**

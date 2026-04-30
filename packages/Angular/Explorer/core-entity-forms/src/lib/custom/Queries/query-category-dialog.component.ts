@@ -3,6 +3,7 @@ import { MJQueryCategoryEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 interface CategoryNode {
     id: string;
     name: string;
@@ -17,7 +18,7 @@ interface CategoryNode {
     templateUrl: './query-category-dialog.component.html',
     styleUrls: ['./query-category-dialog.component.css']
 })
-export class QueryCategoryDialogComponent implements OnInit {
+export class QueryCategoryDialogComponent extends BaseAngularComponent implements OnInit {
     @Input() isVisible = false;
     @Output() isVisibleChange = new EventEmitter<boolean>();
     @Output() onCategoryCreated = new EventEmitter<MJQueryCategoryEntity>();
@@ -35,7 +36,7 @@ export class QueryCategoryDialogComponent implements OnInit {
     
     async loadCategories() {
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<MJQueryCategoryEntity>({
                 EntityName: 'MJ: Query Categories',
                 OrderBy: 'Name',
@@ -113,7 +114,7 @@ export class QueryCategoryDialogComponent implements OnInit {
         this.isCreating = true;
         
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const newCategory = await md.GetEntityObject<MJQueryCategoryEntity>('MJ: Query Categories');
             newCategory.Name = this.categoryName.trim();
             newCategory.ParentID = this.selectedParentId;

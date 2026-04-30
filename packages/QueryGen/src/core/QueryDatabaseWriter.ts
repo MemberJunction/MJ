@@ -47,9 +47,9 @@ export class QueryDatabaseWriter {
       return { success: true, results: [] };
     }
 
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: query generation reads schema globally
     const results: string[] = [];
-    const provider = Metadata.Provider as DatabaseProviderBase;
+    const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: query generation reads schema globally
 
     await provider.BeginTransaction();
     try {
@@ -169,7 +169,7 @@ export class QueryDatabaseWriter {
     }
 
     // Category doesn't exist, create it
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: query generation reads schema globally
     const category = await md.GetEntityObject<MJQueryCategoryEntity>('MJ: Query Categories', contextUser);
     category.NewRecord();
     category.Name = categoryName;

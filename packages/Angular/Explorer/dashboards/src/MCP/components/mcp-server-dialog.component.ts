@@ -6,9 +6,10 @@
 
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
-import { Metadata, CompositeKey } from '@memberjunction/core';
+import { CompositeKey } from '@memberjunction/core';
 import { MJMCPServerEntity } from '@memberjunction/core-entities';
 import { MCPServerData } from '../mcp-dashboard.component';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 /**
  * Transport type options
@@ -49,7 +50,7 @@ export interface ServerDialogResult {
     templateUrl: './mcp-server-dialog.component.html',
     styleUrls: ['./mcp-server-dialog.component.css']
 })
-export class MCPServerDialogComponent implements OnInit, OnChanges {
+export class MCPServerDialogComponent extends BaseAngularComponent implements OnInit, OnChanges {
 
     @Input() server: MCPServerData | null = null;
     @Input() visible = false;
@@ -94,6 +95,7 @@ export class MCPServerDialogComponent implements OnInit, OnChanges {
         private fb: FormBuilder,
         private cdr: ChangeDetectorRef
     ) {
+        super();
         this.serverForm = this.createForm();
     }
 
@@ -225,7 +227,7 @@ export class MCPServerDialogComponent implements OnInit, OnChanges {
         this.cdr.detectChanges();
 
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const entity = await md.GetEntityObject<MJMCPServerEntity>('MJ: MCP Servers');
 
             if (this.IsEditMode && this.server) {

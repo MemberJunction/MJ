@@ -1,4 +1,4 @@
-import { BaseEntity, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { BaseEntity, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { BaseArchiveDriver } from './BaseArchiveDriver';
 import { DefaultArchiveDriver } from './DefaultArchiveDriver';
@@ -25,6 +25,17 @@ export interface EntityProcessingResult {
  * in configurable batch sizes.
  */
 export class ArchiveProcessor {
+    /** Optional metadata provider; falls back to Metadata.Provider when not set. */
+    private _provider: IMetadataProvider | undefined;
+
+    public set Provider(value: IMetadataProvider | undefined) {
+        this._provider = value;
+    }
+
+    public get Provider(): IMetadataProvider {
+        return this._provider ?? Metadata.Provider;
+    }
+
     /**
      * Processes all eligible records for a single entity configuration.
      *
@@ -302,7 +313,7 @@ export class ArchiveProcessor {
         contextUser: UserInfo
     ): Promise<void> {
         try {
-            const md = new Metadata();
+            const md = this.Provider;
             const detail = await md.GetEntityObject('MJ: Archive Run Details', contextUser);
 
             detail.Set('ArchiveRunID', archiveRun.Get('ID'));

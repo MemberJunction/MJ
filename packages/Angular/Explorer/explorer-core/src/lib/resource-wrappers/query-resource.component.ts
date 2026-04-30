@@ -14,7 +14,7 @@ export class QueryResource extends BaseResourceComponent implements OnInit {
         super.ngOnInit();
     }
     async GetResourceDisplayName(data: ResourceData): Promise<string> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         let compositeKey: CompositeKey = new CompositeKey([{FieldName: "ID", Value: data.ResourceRecordID}]);
         const name = await md.GetEntityRecordName('Queries', compositeKey);
         return `${name ? name : 'Query ID: ' + data.ResourceRecordID}`;

@@ -1,12 +1,13 @@
 import { Resolver, Mutation, Ctx, Arg, ObjectType, Field } from 'type-graphql';
 import { AppContext } from '../types.js';
-import { LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { MJContentProcessRunEntity } from '@memberjunction/core-entities';
 import { ResolverBase } from '../generic/ResolverBase.js';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { PubSubManager } from '../generic/PubSubManager.js';
 import { PipelineProgressNotification } from './PipelineProgressResolver.js';
 import { v4 as uuidv4 } from 'uuid';
+import { GetReadWriteProvider } from '../util.js';
 
 const PIPELINE_PROGRESS_TOPIC = 'PIPELINE_PROGRESS';
 
@@ -31,7 +32,7 @@ export class AutotagPipelineResolver extends ResolverBase {
     async RunAutotagPipeline(
         @Arg('contentSourceIDs', () => [String], { nullable: true }) contentSourceIDs: string[] | undefined,
         @Arg('forceReprocess', { nullable: true }) forceReprocess: boolean | undefined,
-        @Ctx() { userPayload }: AppContext = {} as AppContext
+        @Ctx() { userPayload, providers }: AppContext = {} as AppContext
     ): Promise<AutotagPipelineResult> {
         try {
             const currentUser = this.GetUserFromPayload(userPayload);
@@ -42,8 +43,14 @@ export class AutotagPipelineResolver extends ResolverBase {
             const pipelineRunID = uuidv4();
             LogStatus(`RunAutotagPipeline: starting pipeline ${pipelineRunID}`);
 
+            // Capture the per-request provider snapshot before returning so the fire-and-forget
+            // background job binds to the same connection the caller used. Without this, the
+            // background job would silently use the global default — wrong for multi-tenant.
+            const provider = (GetReadWriteProvider(providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider)
+                ?? (new Metadata() as unknown as IMetadataProvider);
+
             // Fire-and-forget: start the pipeline in the background and return immediately
-            this.runPipelineInBackground(pipelineRunID, currentUser, contentSourceIDs, forceReprocess);
+            this.runPipelineInBackground(pipelineRunID, currentUser, provider, contentSourceIDs, forceReprocess);
 
             return {
                 Success: true,
@@ -68,11 +75,12 @@ export class AutotagPipelineResolver extends ResolverBase {
     private async runPipelineInBackground(
         pipelineRunID: string,
         currentUser: UserInfo,
+        provider: IMetadataProvider,
         contentSourceIDs?: string[],
         forceReprocess?: boolean
     ): Promise<void> {
         const startTime = Date.now();
-        const processRun = await this.createProcessRun(pipelineRunID, currentUser, contentSourceIDs);
+        const processRun = await this.createProcessRun(pipelineRunID, currentUser, provider, contentSourceIDs);
 
         try {
             this.publishProgress(pipelineRunID, 'autotag', 0, 0, startTime, 'Initializing pipeline...');
@@ -147,6 +155,7 @@ export class AutotagPipelineResolver extends ResolverBase {
     private async createProcessRun(
         pipelineRunID: string,
         currentUser: UserInfo,
+        provider: IMetadataProvider,
         contentSourceIDs?: string[]
     ): Promise<MJContentProcessRunEntity | null> {
         try {
@@ -156,7 +165,7 @@ export class AutotagPipelineResolver extends ResolverBase {
                 sourceID = contentSourceIDs[0];
             } else {
                 // Load content sources to get any available source ID (SourceID is NOT NULL)
-                const rv = new RunView();
+                const rv = RunView.FromMetadataProvider(provider);
                 const result = await rv.RunView<{ ID: string }>({
                     EntityName: 'MJ: Content Sources',
                     Fields: ['ID'],
@@ -173,7 +182,7 @@ export class AutotagPipelineResolver extends ResolverBase {
                 return null;
             }
 
-            const md = new Metadata();
+            const md = provider;
             const run = await md.GetEntityObject<MJContentProcessRunEntity>('MJ: Content Process Runs', currentUser);
             run.NewRecord();
             run.ID = pipelineRunID;
@@ -252,7 +261,7 @@ export class AutotagPipelineResolver extends ResolverBase {
     @Mutation(() => AutotagPipelineResult)
     async PauseClassificationPipeline(
         @Arg('processRunID') processRunID: string,
-        @Ctx() { userPayload }: AppContext = {} as AppContext
+        @Ctx() { userPayload, providers }: AppContext = {} as AppContext
     ): Promise<AutotagPipelineResult> {
         try {
             const currentUser = this.GetUserFromPayload(userPayload);
@@ -260,7 +269,7 @@ export class AutotagPipelineResolver extends ResolverBase {
                 return { Success: false, Status: 'Error', ErrorMessage: 'Unable to determine current user' };
             }
 
-            const md = new Metadata();
+            const md = (GetReadWriteProvider(providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider) ?? new Metadata();
             const run = await md.GetEntityObject<MJContentProcessRunEntity>('MJ: Content Process Runs', currentUser);
             const loaded = await run.Load(processRunID);
             if (!loaded) {
@@ -284,7 +293,7 @@ export class AutotagPipelineResolver extends ResolverBase {
     @Mutation(() => AutotagPipelineResult)
     async ResumeClassificationPipeline(
         @Arg('processRunID') processRunID: string,
-        @Ctx() { userPayload }: AppContext = {} as AppContext
+        @Ctx() { userPayload, providers }: AppContext = {} as AppContext
     ): Promise<AutotagPipelineResult> {
         try {
             const currentUser = this.GetUserFromPayload(userPayload);
@@ -292,7 +301,7 @@ export class AutotagPipelineResolver extends ResolverBase {
                 return { Success: false, Status: 'Error', ErrorMessage: 'Unable to determine current user' };
             }
 
-            const md = new Metadata();
+            const md = (GetReadWriteProvider(providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider) ?? new Metadata();
             const run = await md.GetEntityObject<MJContentProcessRunEntity>('MJ: Content Process Runs', currentUser);
             const loaded = await run.Load(processRunID);
             if (!loaded) {
@@ -312,7 +321,7 @@ export class AutotagPipelineResolver extends ResolverBase {
             const pipelineRunID = uuidv4();
             LogStatus(`ResumeClassificationPipeline: Resuming run ${processRunID} from offset ${run.LastProcessedOffset}`);
 
-            this.runPipelineInBackground(pipelineRunID, currentUser, undefined, undefined);
+            this.runPipelineInBackground(pipelineRunID, currentUser, md as unknown as IMetadataProvider, undefined, undefined);
 
             return { Success: true, Status: 'Resumed', PipelineRunID: pipelineRunID };
         } catch (error) {

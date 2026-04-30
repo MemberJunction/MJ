@@ -1,4 +1,4 @@
-import { EntityFieldInfo, EntityInfo } from '@memberjunction/core';
+import { EntityFieldInfo, EntityInfo, IMetadataProvider, Metadata } from '@memberjunction/core';
 
 // ================================================================
 // Card Variant
@@ -155,12 +155,12 @@ export function GenerateCardTemplate(entity: EntityInfo, maxDisplayFields: numbe
 export function GenerateCardTemplateFromMetadata(
     entityName: string,
     metadataKeys: string[],
-    maxDisplayFields: number = 4
+    maxDisplayFields: number = 4,
+    provider?: IMetadataProvider
 ): CardTemplate {
     let entity: EntityInfo | null = null;
     try {
-        const { Metadata } = require('@memberjunction/core');
-        const md = new Metadata();
+        const md = (provider ?? Metadata.Provider) as unknown as IMetadataProvider;
         entity = md.Entities.find((e: EntityInfo) => e.Name === entityName) ?? null;
     } catch {
         // Metadata not available — use key-only fallback

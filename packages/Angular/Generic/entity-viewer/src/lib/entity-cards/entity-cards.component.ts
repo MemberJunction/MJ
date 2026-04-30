@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnChanges, OnInit, SimpleChanges, ElementRef, AfterViewChecked, ChangeDetectorRef, ViewEncapsulation } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { EntityInfo, EntityFieldInfo, EntityFieldValueListType, RunView } from '@memberjunction/core';
 import { CardTemplate, CardDisplayField, CardFieldType, RecordSelectedEvent, RecordOpenedEvent } from '../types';
 import { buildCompositeKey, buildPkString, computeFieldsList } from '../utils/record.util';
@@ -33,11 +34,12 @@ import { HighlightUtil } from '../utils/highlight.util';
   styleUrls: ['./entity-cards.component.css'],
   encapsulation: ViewEncapsulation.None
 })
-export class EntityCardsComponent implements OnChanges, OnInit, AfterViewChecked {
+export class EntityCardsComponent extends BaseAngularComponent implements OnChanges, OnInit, AfterViewChecked  {
   constructor(
     private elementRef: ElementRef,
     private cdr: ChangeDetectorRef
-  ) {}
+  ) {
+  super();}
   /**
    * The entity metadata for the records being displayed
    */
@@ -176,7 +178,7 @@ export class EntityCardsComponent implements OnChanges, OnInit, AfterViewChecked
     this.isLoading = true;
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<Record<string, unknown>>({
         EntityName: this.entity.Name,
         ResultType: 'simple',

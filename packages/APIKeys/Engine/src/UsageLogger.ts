@@ -4,7 +4,7 @@
  * @module @memberjunction/api-keys
  */
 
-import { Metadata, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, Metadata, UserInfo } from '@memberjunction/core';
 import { MJAPIKeyUsageLogEntity } from '@memberjunction/core-entities';
 import { UsageLogEntry, EvaluatedRule } from './interfaces';
 
@@ -18,9 +18,9 @@ export class UsageLogger {
      * @param contextUser - The user context for database operations
      * @returns The created log entity ID, or null if logging failed
      */
-    public async Log(entry: UsageLogEntry, contextUser: UserInfo): Promise<string | null> {
+    public async Log(entry: UsageLogEntry, contextUser: UserInfo, provider?: IMetadataProvider): Promise<string | null> {
         try {
-            const md = new Metadata();
+            const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
             const logEntity = await md.GetEntityObject<MJAPIKeyUsageLogEntity>(
                 'MJ: API Key Usage Logs',
                 contextUser

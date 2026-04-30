@@ -46,7 +46,7 @@ export class RuntimeUtilities {
    */
   public buildUtilities(debug: boolean = false): ComponentUtilities {
     this.debug = debug;
-    const md = new Metadata();
+    const md = new Metadata();  // global-provider-ok: utility — single-provider context
     return this.SetupUtilities(md);
   }
 

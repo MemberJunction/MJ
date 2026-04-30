@@ -1,7 +1,7 @@
 import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { BaseAction } from '@memberjunction/actions';
 import { RegisterClass } from '@memberjunction/global';
-import { LogError, Metadata } from '@memberjunction/core';
+import { IMetadataProvider, LogError, Metadata } from '@memberjunction/core';
 import {
     MJActionEntity,
     MJActionParamEntity,
@@ -63,7 +63,7 @@ export class CreateRuntimeActionAction extends BaseAction {
                 );
             }
 
-            const md = new Metadata();
+            const md = params.Provider ?? new Metadata();
             // Entity is registered as 'MJ: Actions' (see entity_subclasses.ts —
             // newer MJ core entities use the 'MJ: ' prefix). Passing 'Actions'
             // silently returned null, so every Create Runtime Action call
@@ -132,7 +132,7 @@ export class CreateRuntimeActionAction extends BaseAction {
     }
 
     private async createActionParam(
-        md: Metadata,
+        md: IMetadataProvider | Metadata,
         params: RunActionParams,
         actionId: string,
         spec: ParamSpec
@@ -164,7 +164,7 @@ export class CreateRuntimeActionAction extends BaseAction {
     }
 
     private async createResultCode(
-        md: Metadata,
+        md: IMetadataProvider | Metadata,
         params: RunActionParams,
         actionId: string,
         spec: ResultCodeSpec

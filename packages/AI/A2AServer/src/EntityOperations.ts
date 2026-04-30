@@ -1,4 +1,4 @@
-import { BaseEntity, EntityInfo, LogError, Metadata, RunView, RunQuery, UserInfo, CompositeKey} from "@memberjunction/core";
+import { BaseEntity, EntityInfo, IMetadataProvider, LogError, Metadata, RunView, RunQuery, UserInfo, CompositeKey} from "@memberjunction/core";
 import { UserCache } from "@memberjunction/sqlserver-dataprovider";
 import { a2aServerSettings } from './config.js';
 
@@ -14,10 +14,18 @@ export interface OperationParameters {
 
 export class EntityOperations {
     private contextUser: UserInfo;
-    private metadata: Metadata;
+    /** The metadata provider used for all entity operations on this instance. */
+    private provider: IMetadataProvider;
 
-    constructor() {
-        this.metadata = new Metadata();
+    /**
+     * @param provider The per-request `IMetadataProvider` to bind every entity operation to.
+     *   The A2A server resolves this once per request (currently from the global
+     *   `Metadata.Provider`) and passes it down — when A2AServer gains an `AppContext`-style
+     *   per-request provider model, only the server's request handler changes; this class is
+     *   already correct.
+     */
+    constructor(provider: IMetadataProvider) {
+        this.provider = provider;
         // Find the user by email if configured, otherwise use the first user in the cache
         if (a2aServerSettings?.userEmail) {
             const user = UserCache.Instance.Users.find((u: UserInfo) =>
@@ -42,7 +50,7 @@ export class EntityOperations {
     public findEntity(entityName: string): EntityInfo | null {
         if (!entityName) return null;
         
-        return this.metadata.Entities.find(e => 
+        return this.provider.Entities.find(e => 
             e.Name.toLowerCase() === entityName.toLowerCase() ||
             e.ClassName.toLowerCase() === entityName.toLowerCase()
         ) || null;
@@ -102,7 +110,7 @@ export class EntityOperations {
                 };
             }
 
-            const record = await this.metadata.GetEntityObject(entity.Name, this.contextUser);
+            const record = await this.provider.GetEntityObject(entity.Name, this.contextUser);
             const keyPairs = this.createKeyPairsForLoading(entity, parameters);
             
             const loaded = await record.InnerLoad(new CompositeKey(keyPairs));
@@ -136,7 +144,7 @@ export class EntityOperations {
                 };
             }
 
-            const record = await this.metadata.GetEntityObject(entity.Name, this.contextUser);
+            const record = await this.provider.GetEntityObject(entity.Name, this.contextUser);
             record.SetMany(parameters, true);
             
             const success = await record.Save();
@@ -170,7 +178,7 @@ export class EntityOperations {
                 };
             }
 
-            const record = await this.metadata.GetEntityObject(entity.Name, this.contextUser);
+            const record = await this.provider.GetEntityObject(entity.Name, this.contextUser);
             const keyPairs = this.createKeyPairsForLoading(entity, parameters);
             
             const loaded = await record.InnerLoad(new CompositeKey(keyPairs));
@@ -217,7 +225,7 @@ export class EntityOperations {
                 };
             }
 
-            const record = await this.metadata.GetEntityObject(entity.Name, this.contextUser);
+            const record = await this.provider.GetEntityObject(entity.Name, this.contextUser);
             const keyPairs = this.createKeyPairsForLoading(entity, parameters);
             
             const loaded = await record.InnerLoad(new CompositeKey(keyPairs));

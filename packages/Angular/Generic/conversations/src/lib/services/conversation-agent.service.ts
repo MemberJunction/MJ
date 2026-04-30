@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { Metadata, RunView } from '@memberjunction/core';
+import { Metadata, RunView, IMetadataProvider } from '@memberjunction/core';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { ExecuteAgentResult, AgentExecutionProgressCallback, ConversationUtility, AttachmentData } from '@memberjunction/ai-core-plus';
 import { ChatMessage, ChatMessageContent } from '@memberjunction/ai';
@@ -52,10 +52,24 @@ export class ConversationAgentService {
    */
   public readonly isProcessing$: Observable<boolean> = this._isProcessing$.asObservable();
 
+  private _provider: IMetadataProvider | null = null;
+
   constructor(
     private mentionParser: MentionParserService,
     private agentClientService: AgentClientService
   ) {
+    this.initializeAIClient();
+  }
+
+  /**
+   * The metadata provider this service uses. When unset, falls back to Metadata.Provider.
+   * Setting it re-initializes the AI client to bind to the supplied provider.
+   */
+  public get Provider(): IMetadataProvider {
+      return this._provider ?? Metadata.Provider;
+  }
+  public set Provider(value: IMetadataProvider | null) {
+    this._provider = value;
     this.initializeAIClient();
   }
 
@@ -66,7 +80,7 @@ export class ConversationAgentService {
    */
   private initializeAIClient(): void {
     try {
-      const provider = Metadata.Provider as GraphQLDataProvider;
+      const provider = this.Provider as GraphQLDataProvider;
       if (provider) {
         this._aiClient = new GraphQLAIClient(provider);
       } else {
@@ -149,7 +163,7 @@ export class ConversationAgentService {
       this._isProcessing$.next(true);
 
       // Get current user for permission filtering
-      const currentUser = Metadata.Provider.CurrentUser;
+      const currentUser = this.Provider.CurrentUser;
       if (!currentUser) {
         console.warn('⚠️ No current user available for permission filtering, using unfiltered agents');
       }
@@ -298,7 +312,7 @@ export class ConversationAgentService {
     const attachmentsByDetailId = new Map<string, AttachmentData[]>(); // DetailID -> array of AttachmentData
 
     if (messageIds.length > 0) {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.Provider);
 
       // Load artifacts and attachments in parallel
       const [artifactsLoaded, attachmentsLoaded] = await Promise.all([

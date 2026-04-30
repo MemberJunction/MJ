@@ -1572,10 +1572,7 @@ export class RuntimeSchemaManager extends BaseSingleton<RuntimeSchemaManager> {
 
   /** Get the database provider for DDL operations. Prefers the dedicated DDL provider if set. */
   private getDBProvider(): DatabaseProviderBase {
-    if (this._ddlProvider) {
-      return this._ddlProvider;
-    }
-    const provider = Metadata.Provider;
+    const provider = this._ddlProvider ?? Metadata.Provider;
     if (!provider || !('ExecuteSQL' in provider)) {
       throw new RSUError('CONFIG', 'MJ data provider is not initialized. RSU requires a running MJAPI with a configured database provider.');
     }

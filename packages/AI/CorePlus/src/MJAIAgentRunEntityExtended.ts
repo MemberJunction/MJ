@@ -1,4 +1,4 @@
-import { BaseEntity, CompositeKey, LogErrorEx, Metadata } from "@memberjunction/core";
+import { BaseEntity, CompositeKey, LogErrorEx, IMetadataProvider } from "@memberjunction/core";
 import { MJAIAgentRunEntity } from "@memberjunction/core-entities";
 import { RegisterClass, SafeJSONParse } from "@memberjunction/global";
 import { MJAIAgentRunStepEntityExtended } from "./MJAIAgentRunStepEntityExtended";
@@ -79,7 +79,7 @@ export class MJAIAgentRunEntityExtended extends MJAIAgentRunEntity {
         // Handle steps array if provided
         if (__runSteps && Array.isArray(__runSteps)) {
             this._runSteps = [];
-            const md = new Metadata();
+            const md = this.ProviderToUse as unknown as IMetadataProvider;
             for (const stepData of __runSteps) {
                 const step = await md.GetEntityObject<MJAIAgentRunStepEntityExtended>('MJ: AI Agent Run Steps', this.ContextCurrentUser);
                 await step.LoadFromData(stepData);

@@ -1,5 +1,5 @@
 import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
-import { UserInfo, Metadata, RunView, LogError, LogStatus } from '@memberjunction/core';
+import { UserInfo, Metadata, RunView, LogError, LogStatus, IMetadataProvider } from '@memberjunction/core';
 import { MJTagEntity, MJTagAuditLogEntity, MJContentItemTagEntity, MJTaggedItemEntity } from '@memberjunction/core-entities';
 import { TagEngine } from './TagEngine';
 
@@ -40,6 +40,20 @@ export class TagGovernanceEngine extends BaseSingleton<TagGovernanceEngine> {
 
     public static get Instance(): TagGovernanceEngine {
         return TagGovernanceEngine.getInstance<TagGovernanceEngine>();
+    }
+
+    private _provider: IMetadataProvider | null = null;
+
+    /**
+     * Optional metadata provider override. Callers should set
+     * `instance.Provider = providerToUse` before invoking governance operations
+     * in multi-provider contexts. Falls back to the global default provider when unset.
+     */
+    public get Provider(): IMetadataProvider {
+        return this._provider ?? (new Metadata() as unknown as IMetadataProvider);
+    }
+    public set Provider(value: IMetadataProvider | null) {
+        this._provider = value;
     }
 
     // ========================================================================
@@ -355,7 +369,7 @@ export class TagGovernanceEngine extends BaseSingleton<TagGovernanceEngine> {
      * @throws Error if the tag cannot be loaded
      */
     private async loadTag(tagID: string, contextUser: UserInfo): Promise<MJTagEntity> {
-        const md = new Metadata();
+        const md = this.Provider;
         const tag = await md.GetEntityObject<MJTagEntity>('MJ: Tags', contextUser);
         const loaded = await tag.Load(tagID);
         if (!loaded) {
@@ -369,7 +383,7 @@ export class TagGovernanceEngine extends BaseSingleton<TagGovernanceEngine> {
      * @throws Error if the tag cannot be saved
      */
     private async createNewTag(name: string, parentID: string | null, contextUser: UserInfo): Promise<MJTagEntity> {
-        const md = new Metadata();
+        const md = this.Provider;
         const tag = await md.GetEntityObject<MJTagEntity>('MJ: Tags', contextUser);
         tag.NewRecord();
         tag.Name = name;
@@ -399,7 +413,7 @@ export class TagGovernanceEngine extends BaseSingleton<TagGovernanceEngine> {
         details?: Record<string, unknown>,
         relatedTagID?: string
     ): Promise<void> {
-        const md = new Metadata();
+        const md = this.Provider;
         const auditLog = await md.GetEntityObject<MJTagAuditLogEntity>('MJ: Tag Audit Logs', contextUser);
         auditLog.NewRecord();
         auditLog.TagID = tagID;

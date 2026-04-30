@@ -288,7 +288,7 @@ export class CommunicationRunsResourceComponent extends BaseResourceComponent im
             this.isLoading = true;
             this.cdr.detectChanges();
 
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const yesterday = new Date();
             yesterday.setDate(yesterday.getDate() - 1);
             const yesterdayIso = yesterday.toISOString();

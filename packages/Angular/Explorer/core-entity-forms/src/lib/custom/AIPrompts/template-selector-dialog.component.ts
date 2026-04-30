@@ -7,6 +7,7 @@ import { MJTemplateEntity, MJTemplateCategoryEntity } from '@memberjunction/core
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { UUIDsEqual } from '@memberjunction/global';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface TemplateSelectorConfig {
   /** Title for the dialog */
   title: string;
@@ -40,7 +41,7 @@ export interface TemplateSelectorResult {
   standalone: true,
   imports: [CommonModule, ReactiveFormsModule]
 })
-export class TemplateSelectorDialogComponent implements OnInit, OnDestroy {
+export class TemplateSelectorDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   
   // Input configuration
   config: TemplateSelectorConfig = { title: 'Select Template' };
@@ -67,7 +68,8 @@ export class TemplateSelectorDialogComponent implements OnInit, OnDestroy {
 
   constructor(
     private cdr: ChangeDetectorRef
-  ) {}
+  ) {
+    super();}
 
   ngOnInit() {
     this.setupSearch();
@@ -119,7 +121,7 @@ export class TemplateSelectorDialogComponent implements OnInit, OnDestroy {
 
   private async loadTemplates() {
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       
       // Build filter
       let filter = '';
@@ -154,7 +156,7 @@ export class TemplateSelectorDialogComponent implements OnInit, OnDestroy {
 
   private async loadCategories() {
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       
       const result = await rv.RunView<MJTemplateCategoryEntity>({
         EntityName: 'MJ: Template Categories',

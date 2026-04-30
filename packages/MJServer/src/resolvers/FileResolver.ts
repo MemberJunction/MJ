@@ -1,4 +1,4 @@
-import { EntityPermissionType, Metadata, FieldValueCollection, EntitySaveOptions } from '@memberjunction/core';
+import { EntityPermissionType, FieldValueCollection, EntitySaveOptions } from '@memberjunction/core';
 import { NormalizeUUID } from '@memberjunction/global';
 import { MJFileEntity, MJFileStorageProviderEntity, MJFileStorageAccountEntity } from '@memberjunction/core-entities';
 import {
@@ -417,7 +417,7 @@ export class FileResolver extends FileResolverBase {
 
   @FieldResolver(() => String)
   async DownloadUrl(@Root() file: MJFile_, @Ctx() context: AppContext) {
-    const md = new Metadata();
+    const md = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
     const user = this.GetUserFromPayload(context.userPayload);
     const fileEntity = await md.GetEntityObject<MJFileEntity>('MJ: Files', user);
     fileEntity.CheckPermissions(EntityPermissionType.Read, true);

@@ -156,7 +156,7 @@ export class SchedulingResourceComponent extends BaseResourceComponent implement
 
     /** Navigate to the full Scheduling application */
     public GoToSchedulingApp(): void {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const schedulingApp = md.Applications.find(a => a.Name === 'Scheduling');
         if (schedulingApp) {
             this.navigationService.SwitchToApp(schedulingApp.ID);
@@ -252,7 +252,7 @@ export class SchedulingResourceComponent extends BaseResourceComponent implement
         this.cdr.detectChanges();
 
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const [jobsResult, runsResult] = await rv.RunViews([
                 {
                     EntityName: 'MJ: Scheduled Jobs',

@@ -8,6 +8,7 @@ import { Subject, debounceTime } from 'rxjs';
 import { NewItemOption } from '../../generic/Item.types';
 import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 /**
  * Represents a record that can be added to a list
  */
@@ -24,7 +25,7 @@ interface AddableRecord {
   templateUrl: './single-list-detail.component.html',
   styleUrls: ['./single-list-detail.component.css', '../../shared/first-tab-styles.css']
 })
-export class SingleListDetailComponent implements OnInit {
+export class SingleListDetailComponent extends BaseAngularComponent implements OnInit {
 
   @Input() public ListID: string = "";
 
@@ -109,6 +110,7 @@ export class SingleListDetailComponent implements OnInit {
     private cdr: ChangeDetectorRef,
     private elementRef: ElementRef
   ) {
+    super();
     // Debounce search input
     this.searchSubject
       .pipe(debounceTime(300))
@@ -130,7 +132,7 @@ export class SingleListDetailComponent implements OnInit {
     this.showLoader = true;
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       this.listRecord = await md.GetEntityObject<MJListEntity>("MJ: Lists");
       const loadResult = await this.listRecord.Load(this.ListID);
 
@@ -241,8 +243,8 @@ export class SingleListDetailComponent implements OnInit {
     this.removeTotal = this.selectedKeys.length;
     this.removeProgress = 0;
 
-    const md = new Metadata();
-    const rv = new RunView();
+    const md = this.ProviderToUse;
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const entityInfo = md.EntityByID(this.listRecord.EntityID);
 
     // selectedKeys from grid are in concatenated format (ID|value)
@@ -333,8 +335,8 @@ export class SingleListDetailComponent implements OnInit {
   private async loadExistingListDetailIds(): Promise<void> {
     if (!this.listRecord) return;
 
-    const md = new Metadata();
-    const rv = new RunView();
+    const md = this.ProviderToUse;
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
     const result = await rv.RunView<{ RecordID: string }>({
       EntityName: 'MJ: List Details',
@@ -366,7 +368,7 @@ export class SingleListDetailComponent implements OnInit {
 
     this.addDialogLoading = true;
 
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const sourceEntityInfo = md.EntityByID(this.listRecord.EntityID);
     if (!sourceEntityInfo) {
       this.addDialogLoading = false;
@@ -381,7 +383,7 @@ export class SingleListDetailComponent implements OnInit {
       filter = `${nameField.Name} LIKE '%${searchText}%'`;
     }
 
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result: RunViewResult = await rv.RunView({
       EntityName: this.listRecord.Entity,
       ExtraFilter: filter,
@@ -434,7 +436,7 @@ export class SingleListDetailComponent implements OnInit {
     this.addProgress = 0;
     const progressPerRecord = 0.8 / recordsToAdd.length; // 80% for individual saves
 
-    const md = new Metadata();
+    const md = this.ProviderToUse;
 
     // Use transaction group for bulk insert
     const tg = await md.CreateTransactionGroup();
@@ -502,8 +504,8 @@ export class SingleListDetailComponent implements OnInit {
 
     this.showAddFromViewLoader = true;
 
-    const rv = new RunView();
-    const md = new Metadata();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+    const md = this.ProviderToUse;
 
     const runViewResult = await rv.RunView<MJUserViewEntityExtended>({
       EntityName: "MJ: User Views",
@@ -541,8 +543,8 @@ export class SingleListDetailComponent implements OnInit {
     this.fetchingRecordsToSave = true;
     this.cdr.detectChanges();
 
-    const rv = new RunView();
-    const md = new Metadata();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+    const md = this.ProviderToUse;
 
     // Collect all unique record IDs from selected views
     const recordIdSet = new Set<string>();

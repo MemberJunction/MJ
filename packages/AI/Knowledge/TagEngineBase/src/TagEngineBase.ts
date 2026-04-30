@@ -170,7 +170,7 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
         description: string | null,
         contextUser: UserInfo
     ): Promise<MJTagEntity> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const tag = await md.GetEntityObject<MJTagEntity>('MJ: Tags', contextUser);
         tag.NewRecord();
         tag.Name = name;
@@ -227,7 +227,7 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
         recordID: string,
         contextUser: UserInfo
     ): Promise<MJTaggedItemEntity | null> {
-        const rv = new RunView();
+        const rv = this.RunViewProviderToUse;
         const result = await rv.RunView<MJTaggedItemEntity>({
             EntityName: 'MJ: Tagged Items',
             ExtraFilter: `TagID='${tagID}' AND EntityID='${entityID}' AND RecordID='${recordID}'`,
@@ -266,7 +266,7 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
         weight: number,
         contextUser: UserInfo
     ): Promise<MJTaggedItemEntity> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const item = await md.GetEntityObject<MJTaggedItemEntity>('MJ: Tagged Items', contextUser);
         item.NewRecord();
         item.TagID = tagID;

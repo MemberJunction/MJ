@@ -180,7 +180,7 @@ export class HomeApplication extends BaseApplication {
    */
   private resolveIcon(entityName: string | undefined, resourceTypeName: string): string {
     if (entityName) {
-      const md = new Metadata();
+      const md = this.Provider;
       const entityIcon = md.EntityByName(entityName)?.Icon;
       if (entityIcon) {
         return entityIcon;
@@ -375,7 +375,7 @@ export class HomeApplication extends BaseApplication {
 
     // Check the cache first
     try {
-      const cachedName = await Metadata.Provider.GetCachedRecordName(entityName, compositeKey, true);
+      const cachedName = await this.Provider.GetCachedRecordName(entityName, compositeKey, true);
       if (cachedName) {
         return cachedName;
       }
@@ -437,7 +437,7 @@ export class HomeApplication extends BaseApplication {
    */
   private saveStackToStorage(): void {
     try {
-      const provider = Metadata.Provider.LocalStorageProvider;
+      const provider = this.Provider.LocalStorageProvider;
       if (!provider) {
         return;
       }
@@ -468,7 +468,7 @@ export class HomeApplication extends BaseApplication {
    */
   private async loadStackFromStorage(): Promise<void> {
     try {
-      const provider = Metadata.Provider.LocalStorageProvider;
+      const provider = this.Provider.LocalStorageProvider;
       if (!provider) {
         return;
       }

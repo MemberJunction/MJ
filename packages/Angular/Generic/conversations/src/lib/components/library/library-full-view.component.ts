@@ -1,4 +1,5 @@
 import { Component, Input, OnInit } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, RunView } from '@memberjunction/core';
 import { MJCollectionEntity } from '@memberjunction/core-entities';
 
@@ -284,7 +285,7 @@ import { MJCollectionEntity } from '@memberjunction/core-entities';
     }
   `]
 })
-export class LibraryFullViewComponent implements OnInit {
+export class LibraryFullViewComponent extends BaseAngularComponent implements OnInit  {
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
 
@@ -295,7 +296,8 @@ export class LibraryFullViewComponent implements OnInit {
   public breadcrumbs: Array<{ id: string; name: string }> = [];
   public currentCollectionId: string | null = null;
 
-  constructor() {}
+  constructor() {
+  super();}
 
   ngOnInit() {
     this.loadCollections();
@@ -304,7 +306,7 @@ export class LibraryFullViewComponent implements OnInit {
   async loadCollections(): Promise<void> {
     this.isLoading = true;
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const filter = `EnvironmentID='${this.environmentId}'` +
                      (this.currentCollectionId ? ` AND ParentID='${this.currentCollectionId}'` : ' AND ParentID IS NULL');
 

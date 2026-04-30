@@ -5,6 +5,7 @@ import { Metadata, RunView } from '@memberjunction/core';
 import { MJEntityPermissionEntity, MJEntityEntity, MJRoleEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface PermissionDialogData {
   entity: MJEntityEntity;
   roles: MJRoleEntity[];
@@ -30,7 +31,7 @@ interface RolePermissions {
   templateUrl: './permission-dialog.component.html',
   styleUrls: ['./permission-dialog.component.css']
 })
-export class PermissionDialogComponent implements OnInit, OnDestroy, OnChanges {
+export class PermissionDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy, OnChanges {
   @Input() data: PermissionDialogData | null = null;
   @Input() visible = false;
   @Output() result = new EventEmitter<PermissionDialogResult>();
@@ -38,8 +39,7 @@ export class PermissionDialogComponent implements OnInit, OnDestroy, OnChanges {
   private fb = inject(FormBuilder);
   private cdr = inject(ChangeDetectorRef);
   private ngZone = inject(NgZone);
-  private metadata = new Metadata();
-
+  private get metadata() { return this.ProviderToUse; }
   public permissionForm: FormGroup;
   public isLoading = false;
   public error: string | null = null;
@@ -47,6 +47,7 @@ export class PermissionDialogComponent implements OnInit, OnDestroy, OnChanges {
   public availableRoles: MJRoleEntity[] = [];
 
   constructor() {
+    super();
     this.permissionForm = this.fb.group({});
   }
 

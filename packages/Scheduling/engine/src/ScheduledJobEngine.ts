@@ -446,9 +446,10 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
      */
     private async createJobRun(
         job: MJScheduledJobEntity,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<MJScheduledJobRunEntity> {
-        const md = new Metadata();
+        const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
         const run = await md.GetEntityObject<MJScheduledJobRunEntity>(
             'MJ: Scheduled Job Runs',
             contextUser
@@ -622,9 +623,10 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
      */
     private async createQueuedJobRun(
         job: MJScheduledJobEntity,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<MJScheduledJobRunEntity> {
-        const md = new Metadata();
+        const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
         const run = await md.GetEntityObject<MJScheduledJobRunEntity>(
             'MJ: Scheduled Job Runs',
             contextUser

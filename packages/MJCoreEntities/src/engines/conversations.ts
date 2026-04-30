@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, IMetadataProvider, Metadata, RunQuery, RunView, TransformSimpleObjectToEntityObject, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, BaseEntityEvent, IMetadataProvider, RunQuery, RunView, TransformSimpleObjectToEntityObject, UserInfo } from "@memberjunction/core";
 import { NormalizeUUID, UUIDsEqual } from "@memberjunction/global";
 import { BehaviorSubject, Observable } from "rxjs";
 import {
@@ -400,7 +400,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         description?: string,
         projectId?: string
     ): Promise<MJConversationEntity> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
 
         conversation.Name = name;
@@ -433,7 +433,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         let conversation = this.GetConversation(id);
         if (!conversation) {
             // Not in cache — load from DB as fallback
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
             const loaded = await conversation.Load(id);
             if (!loaded) {
@@ -533,7 +533,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         let conversation = this.GetConversation(id);
         if (!conversation) {
             // Not in cache — load from DB as fallback
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
             const loaded = await conversation.Load(id);
             if (!loaded) {
@@ -573,7 +573,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
             return { Successful: [], Failed: [] };
         }
 
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const successful: string[] = [];
         const failed: Array<{ ID: string; Name: string; Error: string }> = [];
         const entitiesToDelete: MJConversationEntity[] = [];
@@ -719,12 +719,12 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         rawData: ConversationDetailComplete[],
         contextUser: UserInfo
     ): Promise<ConversationDetailCache> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
 
         // Hydrate raw rows into MJConversationDetailEntity objects
         const validRows = rawData.filter(row => !!row.ID);
         const details = await TransformSimpleObjectToEntityObject<MJConversationDetailEntity>(
-            Metadata.Provider, 'MJ: Conversation Details', validRows, contextUser
+            this.ProviderToUse, 'MJ: Conversation Details', validRows, contextUser
         );
 
         // Build peripheral data maps from parsed JSON in one pass
@@ -831,7 +831,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         }
 
         const freshRows = result.Results as ConversationDetailComplete[];
-        const md = new Metadata();
+        const md = this.ProviderToUse;
 
         // Build a lookup of existing details by ID for fast comparison
         const existingDetailsMap = new Map<string, MJConversationDetailEntity>();
@@ -1085,7 +1085,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         contextUser: UserInfo,
         additionalFields?: Partial<MJConversationDetailEntity>
     ): Promise<MJConversationDetailEntity> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', contextUser);
 
         detail.ConversationID = conversationId;
@@ -1153,7 +1153,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
 
         if (!detail) {
             // Not in cache — load from DB as fallback
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', contextUser);
             const loaded = await detail.Load(detailId);
             if (!loaded) {
@@ -1402,7 +1402,7 @@ export class ConversationEngine extends BaseEngine<ConversationEngine> {
         updates: Partial<Pick<MJConversationEntity, 'IsArchived' | 'IsPinned' | 'Name' | 'Description'>>,
         contextUser: UserInfo
     ): Promise<boolean> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', contextUser);
 
         const loaded = await conversation.Load(id);

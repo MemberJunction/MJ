@@ -1013,7 +1013,7 @@ export class ManageMetadataBase {
     * @returns
     */
    public async manageMetadata(pool: CodeGenConnection, currentUser: UserInfo): Promise<boolean> {
-      const md = new Metadata();
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
       // Auto-exclude platform-specific system schemas.
       // We mutate configInfo.excludeSchemas directly so that all downstream code
       // (including createExcludeTablesAndSchemasFilter) picks up the exclusions.
@@ -1117,7 +1117,7 @@ export class ManageMetadataBase {
          logStatus(`    > Created ${vecResult.createdCount} virtual entit${vecResult.createdCount === 1 ? 'y' : 'ies'} from config`);
          // Refresh metadata so manageVirtualEntities can find the newly-created entities
          // in the cache — otherwise EntityByName() returns null and field sync is silently skipped
-         const md = new Metadata();
+         const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
          await md.Refresh();
       }
 
@@ -1197,7 +1197,7 @@ export class ManageMetadataBase {
          if (veFields && veFields.length > 0) {
             // we have 1+ fields, now loop through them and process each one
             // first though, remove any fields that are no longer in the view
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
             const entity = md.EntityByName(virtualEntity.Name)
             if (entity) {
                const removeList = [];
@@ -1249,7 +1249,7 @@ export class ManageMetadataBase {
       // if it exist it updates the entity field to match the view's data type and nullability attributes
 
       // first, get the entity definition
-      const md = new Metadata();
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
       const entity = md.EntityByName(virtualEntity.Name);
       let newEntityFieldUUID = null;
       let didUpdate: boolean = false;
@@ -1315,7 +1315,7 @@ export class ManageMetadataBase {
          return; // Feature not enabled, nothing to do
       }
 
-      const md = new Metadata();
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
       const virtualEntities = md.Entities.filter(e => e.VirtualEntity);
       if (virtualEntities.length === 0) {
          return;
@@ -1464,7 +1464,7 @@ export class ManageMetadataBase {
       }>;
    }> {
       const tableRefs = SQLParser.ExtractTableRefs(viewDefinition);
-      const md = new Metadata();
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
       const sourceEntities: Array<{
          Name: string;
          Description: string;
@@ -1630,7 +1630,7 @@ export class ManageMetadataBase {
          return false;
       }
 
-      const md = new Metadata();
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
       const sqlStatements: string[] = [];
 
       for (const fk of foreignKeys) {
@@ -1792,7 +1792,7 @@ export class ManageMetadataBase {
       let bSuccess = true;
       let anyUpdates = false;
 
-      const md = new Metadata();
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
       const childEntities = md.Entities.filter(e => e.IsChildType);
 
       if (childEntities.length === 0) {
@@ -2268,7 +2268,7 @@ export class ManageMetadataBase {
             }
 
             // if we get here we now need to refresh our metadata object
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
             await md.Refresh();
          }
          return true;
@@ -2342,7 +2342,7 @@ export class ManageMetadataBase {
     *    other lookup failure (e.g., name shape we didn't anticipate).
     */
    protected resolveEntityNamesToIDs(entityNames: string[]): string[] {
-      const md = new Metadata();
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
       const ids: string[] = [];
       for (const name of entityNames) {
          if (typeof name !== 'string' || name.trim().length === 0) continue;
@@ -2453,7 +2453,7 @@ export class ManageMetadataBase {
       // because entity.Fields and entity.PrimaryKeys won't reflect the updated flags
       if (configInfo.additionalSchemaInfo) {
          logStatus('      Refreshing metadata after applying soft PK/FK configuration...');
-         const md = new Metadata();
+         const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
          await md.Refresh();
          logStatus('      Metadata refresh complete');
       }
@@ -3706,7 +3706,7 @@ export class ManageMetadataBase {
       const newEntities = newEntitiesResult.recordset;
 
          if (newEntities && newEntities.length > 0 ) {
-            const md = new Metadata()
+            const md = new Metadata() // global-provider-ok: codegen runs offline against a single provider
             const transaction = await pool.beginTransaction();
             try {
                // wrap in a transaction so we get all of it or none of it
@@ -3740,7 +3740,7 @@ export class ManageMetadataBase {
       // 1) entity has a field that is a primary key
       // validate all of these factors by getting the sql from SQL Server and check the result, if failure, shouldCreate=false and generate validation message, otherwise return empty validation message and true for shouldCreate.
 
-      const query = this.dbProvider.callRoutineSQL(Metadata.Provider.ConfigData.MJCoreSchemaName, 'spGetPrimaryKeyForTable', [`'${newEntity.TableName}'`, `'${newEntity.SchemaName}'`], ['TableName', 'SchemaName']);
+      const query = this.dbProvider.callRoutineSQL(Metadata.Provider.ConfigData.MJCoreSchemaName, 'spGetPrimaryKeyForTable', [`'${newEntity.TableName}'`, `'${newEntity.SchemaName}'`], ['TableName', 'SchemaName']); // global-provider-ok: codegen runs offline against a single provider
 
       try {
           const resultResult = await ds.query(query);
@@ -4136,7 +4136,7 @@ export class ManageMetadataBase {
          return;
       }
 
-      const md = new Metadata();
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
       for (const roleDef of defaults.Roles) {
          const role = md.Roles.find(
             r => r.Name.trim().toLowerCase() === roleDef.RoleName.trim().toLowerCase()
@@ -4202,7 +4202,7 @@ export class ManageMetadataBase {
          const newAppID = await this.createNewApplication(pool, appUUID, schemaName, schemaName, currentUser);
          if (newAppID) {
             apps = [newAppID];
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
             await md.Refresh();
          } else {
             LogError(`   >>>> ERROR: Unable to create new application for schema ${schemaName}`);
@@ -4236,7 +4236,7 @@ export class ManageMetadataBase {
          return;
       }
 
-      const md = new Metadata();
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
       const permissions = configInfo.newEntityDefaults.PermissionDefaults.Permissions;
       for (const p of permissions) {
          const RoleID = md.Roles.find(r => r.Name.trim().toLowerCase() === p.RoleName.trim().toLowerCase())?.ID;
@@ -4622,7 +4622,7 @@ export class ManageMetadataBase {
       }
 
       // Walk the IS-A chain using in-memory metadata
-      const md = new Metadata();
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
       const allEntities = md.Entities;
       const parentChain: Array<{ entityID: string; entityName: string }> = [];
       const visited = new Set<string>();

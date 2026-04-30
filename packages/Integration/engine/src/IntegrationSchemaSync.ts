@@ -13,7 +13,7 @@
  * dynamic wins for type/size columns (Type, Length, Precision, Scale).
  */
 
-import { Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { IntegrationEngineBase } from '@memberjunction/integration-engine-base';
 import type {
     MJIntegrationObjectEntity,
@@ -30,6 +30,7 @@ export interface PersistSchemaOptions {
     IntegrationID: string;
     SourceSchema: SourceSchemaInfo;
     ContextUser: UserInfo;
+    Provider?: IMetadataProvider;
 }
 
 export interface PersistSchemaResult {
@@ -76,7 +77,7 @@ export class IntegrationSchemaSync {
      */
     public static async PersistDiscoveredSchema(opts: PersistSchemaOptions): Promise<PersistSchemaResult> {
         const { IntegrationID, SourceSchema, ContextUser } = opts;
-        const md = new Metadata();
+        const md: IMetadataProvider = opts.Provider ?? Metadata.Provider;
         const engine = IntegrationEngineBase.Instance;
         const result: PersistSchemaResult = { ObjectsCreated: 0, ObjectsUpdated: 0, FieldsCreated: 0, FieldsUpdated: 0 };
 
@@ -111,7 +112,7 @@ export class IntegrationSchemaSync {
     // ── Object upsert ────────────────────────────────────────────────
 
     private static async UpsertObject(
-        md: Metadata,
+        md: IMetadataProvider,
         integrationID: string,
         srcObj: SourceObjectInfo,
         existingObjects: MJIntegrationObjectEntity[],
@@ -159,7 +160,7 @@ export class IntegrationSchemaSync {
     // ── Field upsert ─────────────────────────────────────────────────
 
     private static async UpsertField(
-        md: Metadata,
+        md: IMetadataProvider,
         objectID: string,
         srcField: SourceFieldInfo,
         existingFields: MJIntegrationObjectFieldEntity[],
@@ -254,6 +255,7 @@ export class IntegrationSchemaSync {
         SupportsListing: boolean;
         ContextUser: UserInfo;
         IconClass?: string;
+        Provider?: IMetadataProvider;
     }): Promise<{ ActionsCreated: number }> {
         const { IntegrationName, CustomObjects, ContextUser } = opts;
         if (CustomObjects.length === 0) return { ActionsCreated: 0 };
@@ -272,7 +274,7 @@ export class IntegrationSchemaSync {
 
         // Persist action records via BaseEntity — same structure, just saved to DB
         // instead of writing to mj-sync JSON
-        const md = new Metadata();
+        const md: IMetadataProvider = opts.Provider ?? Metadata.Provider;
         let created = 0;
 
         // Ensure category exists
@@ -312,7 +314,7 @@ export class IntegrationSchemaSync {
     }
 
     private static async PersistActionRecord(
-        md: Metadata,
+        md: IMetadataProvider,
         record: { fields: Record<string, unknown>; relatedEntities: Record<string, Array<{ fields: Record<string, unknown> }>> },
         categoryID: string | null,
         contextUser: UserInfo
@@ -364,7 +366,7 @@ export class IntegrationSchemaSync {
     }
 
     private static async ResolveOrCreateCategory(
-        md: Metadata,
+        md: IMetadataProvider,
         integrationName: string,
         categoryRecords: Array<{ fields: Record<string, unknown> }>,
         contextUser: UserInfo

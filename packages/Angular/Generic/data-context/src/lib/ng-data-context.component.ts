@@ -26,7 +26,7 @@ export class DataContextComponent implements OnInit {
   public expandedItems: { [key: string]: boolean } = {};
 
   public get ProviderToUse(): IMetadataProvider {
-    return this.Provider || Metadata.Provider;
+    return this.Provider ?? Metadata.Provider;
   }
 
   public get filteredItems(): MJDataContextItemEntity[] {
@@ -112,7 +112,7 @@ export class DataContextComponent implements OnInit {
 
   public getEntityName(entityId: string | null): string | undefined {
     if (!entityId) return undefined;
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     return md.Entities.find(e => UUIDsEqual(e.ID, entityId))?.Name;
   }
 

@@ -18,12 +18,12 @@ import {
   CompositeKey,
   EntityFieldInfo,
   EntityFieldTSType,
-  Metadata,
   RunView,
 } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJRecordChangeEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { diffChars, diffWords, Change } from 'diff';
 import { RestoreCommitEvent } from './restore-preview-panel/restore-preview-panel.component';
 
@@ -117,7 +117,7 @@ export interface FilterPill {
   changeDetection: ChangeDetectionStrategy.OnPush,
   encapsulation: ViewEncapsulation.None,
 })
-export class RecordChangesComponent implements OnInit, OnDestroy {
+export class RecordChangesComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   public IsLoading = false;
   public IsVisible = false;
   @Output() dialogClosed = new EventEmitter();
@@ -185,7 +185,7 @@ export class RecordChangesComponent implements OnInit, OnDestroy {
     private ngZone: NgZone,
     private mjNotificationService: MJNotificationService,
     private sanitizer: DomSanitizer,
-  ) {}
+  ) { super(); }
 
   ngOnInit(): void {
     if (this.record) {
@@ -241,12 +241,22 @@ export class RecordChangesComponent implements OnInit, OnDestroy {
 
   public async LoadRecordChanges(pkey: CompositeKey, appName: string, entityName: string): Promise<void> {
     if (pkey && entityName) {
-      const md = new Metadata();
-      const changes = await md.GetRecordChanges<MJRecordChangeEntity>(entityName, pkey);
+      const md = this.ProviderToUse;
+      const entityInfo = md.EntityByName(entityName);
+      let changes: MJRecordChangeEntity[] = [];
+      if (entityInfo?.TrackRecordChanges) {
+        const rvResult = await RunView.FromMetadataProvider(md).RunView<MJRecordChangeEntity>({
+          EntityName: 'MJ: Record Changes',
+          ExtraFilter: `Entity='${entityName}' AND RecordID='${pkey.ToConcatenatedString()}'`,
+          OrderBy: 'ChangedAt DESC',
+          ResultType: 'entity_object',
+        });
+        if (rvResult.Success) changes = rvResult.Results;
+      }
       this.ngZone.run(() => {
         if (changes) {
           this.viewData = changes.sort(
-            (a, b) => new Date(b.ChangedAt).getTime() - new Date(a.ChangedAt).getTime(),
+            (a: MJRecordChangeEntity, b: MJRecordChangeEntity) => new Date(b.ChangedAt).getTime() - new Date(a.ChangedAt).getTime(),
           );
           this.rebuildConditionalPills();
           this.applyFilters();
@@ -424,7 +434,7 @@ export class RecordChangesComponent implements OnInit, OnDestroy {
       const entityId = this.record.EntityInfo.ID;
       const recordId = this.record.PrimaryKey.ToConcatenatedString();
 
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const itemsResult = await rv.RunView<{ VersionLabelID: string }>({
         EntityName: 'MJ: Version Label Items',
         Fields: ['VersionLabelID'],

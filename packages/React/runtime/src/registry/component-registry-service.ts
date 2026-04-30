@@ -13,7 +13,7 @@ import {
   DependencyTree, 
   RegistryComponentMetadata
 } from './registry-provider';
-import { UserInfo, Metadata } from '@memberjunction/core';
+import { UserInfo, Metadata, IMetadataProvider } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { 
   MJComponentEntity, 
@@ -72,6 +72,19 @@ export class ComponentRegistryService {
   private registryProviders = new Map<string, RegistryProvider>();
   private debug: boolean = false;
   private graphQLClient?: IComponentRegistryClient;
+  private _provider: IMetadataProvider | null = null;
+
+  /**
+   * Optional metadata provider override. Callers should set
+   * `instance.Provider = providerToUse` before invoking registry methods
+   * in multi-provider contexts. Falls back to the global default provider when unset.
+   */
+  public get Provider(): IMetadataProvider {
+    return this._provider ?? (new Metadata() as unknown as IMetadataProvider);
+  }
+  public set Provider(value: IMetadataProvider | null) {
+    this._provider = value;
+  }
   
   private constructor(
     compiler: ComponentCompiler,
@@ -153,7 +166,7 @@ export class ComponentRegistryService {
             const client = new GraphQLComponentRegistryClient(provider as GraphQLDataProvider);
             this.cachedProviderClient = client;
             if (this.debug) {
-              console.log('📡 [ComponentRegistryService] Created GraphQL client from Metadata.Provider');
+              console.log('📡 [ComponentRegistryService] Created GraphQL client from active metadata provider');
             }
             return client;
           } catch (error) {
@@ -166,7 +179,7 @@ export class ComponentRegistryService {
     } catch (error) {
       // Provider might not be available in all environments
       if (this.debug) {
-        console.log('⚠️ [ComponentRegistryService] Could not access Metadata.Provider:', error);
+        console.log('⚠️ [ComponentRegistryService] Could not access metadata provider:', error);
       }
     }
     
@@ -349,7 +362,7 @@ export class ComponentRegistryService {
     // Get GraphQL client - use provided one or fallback to Metadata.Provider
     const graphQLClient = await this.getGraphQLClient();
     if (!graphQLClient) {
-      throw new Error('GraphQL client not available for external registry fetching. No client provided and Metadata.Provider is not a GraphQLDataProvider.');
+      throw new Error('GraphQL client not available for external registry fetching. No client provided and the active metadata provider is not a GraphQLDataProvider.');
     }
     
     // Check if we have a cached version first
@@ -585,7 +598,7 @@ export class ComponentRegistryService {
     contextUser?: UserInfo
   ): Promise<void> {
     // Get the actual entity object to save
-    const md = new Metadata();
+    const md = this.Provider;
     const componentEntity = await md.GetEntityObject<MJComponentEntity>('MJ: Components', contextUser);
     
     // Load the existing component

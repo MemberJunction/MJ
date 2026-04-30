@@ -53,7 +53,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
     @ViewChild('keyList') keyListComponent: APIKeyListComponent | undefined;
 
     protected override destroy$ = new Subject<void>();
-    private md = new Metadata();
+    private md = this.ProviderToUse;
     private cdr: ChangeDetectorRef;
 
     // View state
@@ -163,7 +163,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
      * Load all API keys
      */
     private async loadAPIKeys(): Promise<void> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<MJAPIKeyEntity>({
             EntityName: 'MJ: API Keys',
             OrderBy: '__mj_CreatedAt DESC',
@@ -217,7 +217,7 @@ export class APIKeysResourceComponent extends BaseResourceComponent implements O
      * Load recent activity from usage logs and key changes
      */
     private async loadRecentActivity(): Promise<void> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
         // Load usage logs
         const usageResult = await rv.RunView<MJAPIKeyUsageLogEntity>({

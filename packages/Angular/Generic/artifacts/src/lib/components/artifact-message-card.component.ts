@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView } from '@memberjunction/core';
 import { Subject } from 'rxjs';
@@ -179,7 +180,7 @@ import { ArtifactIconService } from '../services/artifact-icon.service';
     }
   `]
 })
-export class ArtifactMessageCardComponent implements OnInit, OnDestroy {
+export class ArtifactMessageCardComponent extends BaseAngularComponent implements OnInit, OnDestroy  {
   @Input() artifactId!: string;
   @Input() versionNumber?: number;
   @Input() currentUser!: UserInfo;
@@ -194,7 +195,8 @@ export class ArtifactMessageCardComponent implements OnInit, OnDestroy {
 
   private destroy$ = new Subject<void>();
 
-  constructor(private artifactIconService: ArtifactIconService) {}
+  constructor(private artifactIconService: ArtifactIconService) {
+  super();}
 
   async ngOnInit(): Promise<void> {
     // If entities are provided, use them directly
@@ -234,7 +236,7 @@ export class ArtifactMessageCardComponent implements OnInit, OnDestroy {
       this.error = false;
 
       // Load artifact directly
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJArtifactEntity>({
         EntityName: 'MJ: Conversation Artifacts',
         ExtraFilter: `ID='${this.artifactId}'`,
@@ -262,7 +264,7 @@ export class ArtifactMessageCardComponent implements OnInit, OnDestroy {
     if (!this._artifact) return;
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const filter = this.versionNumber
         ? `ArtifactID='${this._artifact.ID}' AND VersionNumber=${this.versionNumber}`
         : `ArtifactID='${this._artifact.ID}'`;

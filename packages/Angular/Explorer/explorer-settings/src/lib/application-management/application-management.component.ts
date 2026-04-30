@@ -58,8 +58,7 @@ export class ApplicationManagementComponent extends BaseDashboard implements OnD
   public expandedAppId: string | null = null;
 
   protected override destroy$ = new Subject<void>();
-  private metadata = new Metadata();
-
+  private get metadata() { return this.ProviderToUse; }
   constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {
     super();
   }
@@ -110,7 +109,7 @@ export class ApplicationManagementComponent extends BaseDashboard implements OnD
   }
 
   private async loadApplications(): Promise<MJApplicationEntity[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<MJApplicationEntity>({
       EntityName: 'MJ: Applications',
       ResultType: 'entity_object',
@@ -121,7 +120,7 @@ export class ApplicationManagementComponent extends BaseDashboard implements OnD
   }
   
   private async loadApplicationEntities(): Promise<MJApplicationEntityEntity[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<MJApplicationEntityEntity>({
       EntityName: 'MJ: Application Entities',
       ResultType: 'entity_object',

@@ -198,7 +198,7 @@ export class AgentAuditService {
     await this.ensureInitialized();
 
     // Load run entity
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: CLI tool, single-provider context
     const runEntity = await md.GetEntityObject<MJAIAgentRunEntity>('MJ: AI Agent Runs', this.contextUser);
     const loaded = await runEntity.Load(runId);
 

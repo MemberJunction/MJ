@@ -118,8 +118,8 @@ export class GetListRecordsAction extends BaseAction {
 
         if (entityName) {
           // Get the entity's primary key field(s)
-          const md = new Metadata();
-          const entityInfo = md.Entities.find(e => e.Name === entityName);
+          const md = params.Provider ?? new Metadata();
+          const entityInfo = md.EntityByName(entityName);
 
           if (entityInfo && entityInfo.PrimaryKeys.length > 0) {
             // Build appropriate filter for single vs composite keys

@@ -234,7 +234,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
 
   async ngOnInit() {
     super.ngOnInit();
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     this.currentUser = md.CurrentUser;
 
     // Check initial mobile state and set default collapsed
@@ -692,7 +692,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
       };
 
       const engine = UserInfoEngine.Instance;
-      const md = new Metadata();
+      const md = this.ProviderToUse;
 
       // Find existing setting from cached user settings
       let setting = engine.UserSettings.find(s => s.Setting === this.USER_SETTING_SIDEBAR_KEY);
@@ -904,7 +904,7 @@ export class ChatConversationsResource extends BaseResourceComponent implements 
    * Resolve an application name to its ID.
    */
   private resolveAppId(appName: string): string | undefined {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const apps = md.Applications;
     const app = apps.find(a => a.Name.toLowerCase() === appName.toLowerCase());
     return app?.ID;

@@ -1,5 +1,5 @@
 import { ElementRef, Injectable, Injector } from '@angular/core';
-import { CompositeKey, LocalCacheManager, LogError, Metadata, StartupManager } from '@memberjunction/core';
+import { CompositeKey, IMetadataProvider, LocalCacheManager, LogError, Metadata, StartupManager } from '@memberjunction/core';
 import { ArtifactMetadataEngine, DashboardEngine, ResourcePermissionEngine, MJResourceTypeEntity, MJUserNotificationEntity, ViewColumnInfo } from '@memberjunction/core-entities';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { EntityCommunicationsEngineBase } from "@memberjunction/entity-communications-base";
@@ -59,6 +59,21 @@ export class SharedService {
   }
 
   /**
+   * Optional explicit metadata provider. Set via `setProvider()` from a caller
+   * with provider context (e.g. the shell). Falls back to `Metadata.Provider`
+   * when not set.
+   */
+  private _provider: IMetadataProvider | null = null;
+
+  public set Provider(value: IMetadataProvider | null) {
+      this._provider = value;
+  }
+
+  public get Provider(): IMetadataProvider {
+      return this._provider ?? Metadata.Provider;
+  }
+
+  /**
    * Pre-warms commonly used engines in the background after login.
    * This reduces perceived latency when users navigate to features like
    * Conversations, Dashboards, or Artifacts. Fire-and-forget pattern -
@@ -110,7 +125,7 @@ export class SharedService {
    * Returns the current session ID, which is automatically created when the service is instantiated.
    */
   public get SessionId(): string {
-    return (<GraphQLDataProvider>Metadata.Provider).sessionId;
+    return (<GraphQLDataProvider>this.Provider).sessionId;
   }
 
   public get ResourceTypes(): MJResourceTypeEntity[] {
@@ -174,10 +189,8 @@ export class SharedService {
   }
 
   private static async handleDataLoading() {
-    const md = new Metadata();
-
     // make sure startup is done
-    await StartupManager.Instance.Startup();          
+    await StartupManager.Instance.Startup();
 
     this._resourceTypes = ResourcePermissionEngine.Instance.ResourceTypes;
 
@@ -213,7 +226,7 @@ export class SharedService {
   }
 
   public PushStatusUpdates(): Observable<string> {
-    const gp: GraphQLDataProvider = <GraphQLDataProvider>Metadata.Provider;
+    const gp: GraphQLDataProvider = <GraphQLDataProvider>this.Provider;
     return gp.PushStatusUpdates();
   }
 

@@ -317,12 +317,13 @@ export class APIKeyEngine {
      */
     public async CreateAPIKey(
         params: CreateAPIKeyParams,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<CreateAPIKeyResult> {
         try {
             const { Raw, Hash } = this.GenerateAPIKey();
 
-            const md = new Metadata();
+            const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
             const apiKey = await md.GetEntityObject<MJAPIKeyEntity>('MJ: API Keys', contextUser);
 
             apiKey.Hash = Hash;
@@ -507,8 +508,8 @@ export class APIKeyEngine {
      * @param contextUser - User context for database operations
      * @returns True if revocation succeeded, false otherwise
      */
-    public async RevokeAPIKey(apiKeyId: string, contextUser: UserInfo): Promise<boolean> {
-        const md = new Metadata();
+    public async RevokeAPIKey(apiKeyId: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<boolean> {
+        const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
         const apiKey = await md.GetEntityObject<MJAPIKeyEntity>('MJ: API Keys', contextUser);
 
         const loaded = await apiKey.Load(apiKeyId);
@@ -762,10 +763,11 @@ export class APIKeyEngine {
      */
     public async UpdateLastUsed(
         apiKeyId: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<boolean> {
         try {
-            const md = new Metadata();
+            const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
             const apiKey = await md.GetEntityObject<MJAPIKeyEntity>('MJ: API Keys', contextUser);
 
             if (await apiKey.Load(apiKeyId)) {

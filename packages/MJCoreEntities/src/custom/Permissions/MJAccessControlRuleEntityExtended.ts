@@ -1,5 +1,5 @@
-import { BaseEntity, EntityPermissionType, EntitySaveOptions, Metadata } from '@memberjunction/core';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { BaseEntity, EntityPermissionType, EntitySaveOptions } from '@memberjunction/core';
+import { RegisterClass } from '@memberjunction/global';
 
 import { MJAccessControlRuleEntity } from '../../generated/entity_subclasses';
 import {
@@ -38,7 +38,7 @@ export class MJAccessControlRuleEntityExtended extends MJAccessControlRuleEntity
                 // Only user grantees get individual notifications.
                 if (this.GranteeType !== 'User' || !this.GranteeID) return null;
 
-                const entityInfo = new Metadata().Entities.find((e) => UUIDsEqual(e.ID, this.EntityID));
+                const entityInfo = provider.EntityByID(this.EntityID);
                 return {
                     Provider: provider,
                     ContextUser: this.ContextCurrentUser,

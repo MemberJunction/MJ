@@ -16,6 +16,7 @@ import {
   UserInfo,
 } from '@memberjunction/core';
 import { MJRecordChangeEntity } from '@memberjunction/core-entities';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { RestoreCommitEvent } from '@memberjunction/ng-record-changes';
 import {
   AfterRecordRestoreEventArgs,
@@ -90,7 +91,7 @@ import {
   changeDetection: ChangeDetectionStrategy.OnPush,
   encapsulation: ViewEncapsulation.None,
 })
-export class RecycleBinComponent implements OnInit {
+export class RecycleBinComponent extends BaseAngularComponent implements OnInit  {
   // ─── Inputs ─────────────────────────────────────────────────────
 
   /**
@@ -117,7 +118,7 @@ export class RecycleBinComponent implements OnInit {
 
   /**
    * Optional context user. When omitted, falls back to
-   * {@link Metadata.Provider.CurrentUser} per standard MJ conventions.
+   * {@link this.ProviderToUse.CurrentUser} per standard MJ conventions.
    */
   @Input() ContextUser: UserInfo | null = null;
 
@@ -185,7 +186,8 @@ export class RecycleBinComponent implements OnInit {
   private isInitialized = false;
   private resolvedEntityInfo: EntityInfo | null = null;
 
-  constructor(private cdr: ChangeDetectorRef) {}
+  constructor(private cdr: ChangeDetectorRef) {
+  super();}
 
   ngOnInit(): void {
     this.isInitialized = true;
@@ -222,7 +224,7 @@ export class RecycleBinComponent implements OnInit {
     }
 
     // Resolve metadata + permissions
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const entityInfo = md.Entities.find(
       e => e.Name.trim().toLowerCase() === this.EntityName!.trim().toLowerCase(),
     );
@@ -270,7 +272,7 @@ export class RecycleBinComponent implements OnInit {
     this.cdr.markForCheck();
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       // Get the most recent Delete change per RecordID. We over-fetch and
       // dedupe in JS — the data is small and SQL grouping with the latest
       // change per ID is awkward across dialects.
@@ -360,7 +362,7 @@ export class RecycleBinComponent implements OnInit {
     let newRecordID: string | undefined;
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const entity = await md.GetEntityObject(this.resolvedEntityInfo.Name, this.ContextUser ?? undefined);
 
       // Apply the snapshot fields, including the original primary key

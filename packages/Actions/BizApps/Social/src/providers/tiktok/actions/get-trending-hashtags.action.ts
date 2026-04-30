@@ -22,7 +22,7 @@ export class GetTrendingHashtagsAction extends TikTokBaseAction {
                 throw new Error('CompanyIntegrationID is required');
             }
             
-            await this.initializeOAuth(companyIntegrationId);
+            await this.initializeOAuth(companyIntegrationId, params);
             
             // Extract parameters
             const country = this.getParamValue(Params, 'Country') || 'US';

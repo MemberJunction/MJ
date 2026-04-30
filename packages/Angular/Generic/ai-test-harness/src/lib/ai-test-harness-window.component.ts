@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, ViewChild, OnInit } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJAIAgentEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { Metadata } from '@memberjunction/core';
 
@@ -81,7 +82,7 @@ export interface AITestHarnessWindowData {
         }
     `]
 })
-export class AITestHarnessWindowComponent implements OnInit {
+export class AITestHarnessWindowComponent extends BaseAngularComponent implements OnInit  {
     @Input() data: AITestHarnessWindowData = {};
     @Output() closeWindow = new EventEmitter<void>();
     
@@ -95,7 +96,7 @@ export class AITestHarnessWindowComponent implements OnInit {
     prompt?: MJAIPromptEntityExtended;
     mode: 'agent' | 'prompt' = 'agent';
     
-    private metadata = new Metadata();
+    private metadata = this.ProviderToUse;
     
     ngOnInit() {
         console.log('🪟 AITestHarnessWindowComponent.ngOnInit - data:', this.data);
