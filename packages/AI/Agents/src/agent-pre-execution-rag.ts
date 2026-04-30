@@ -115,16 +115,11 @@ export class AgentPreExecutionRAG {
      */
     public async Execute(params: AgentPreExecutionRAGParams): Promise<AgentPreExecutionRAGResult | null> {
         if (!params.agent?.ID) return null;
-
-        // Ensure the scope metadata cache is warm
         await SearchEngineBase.Instance.Config(false, params.contextUser);
 
-        // 1. Load active PreExecution/Both scope rows for this agent
-        const allAgentScopeRows = SearchEngineBase.Instance.GetAgentScopes(params.agent.ID, 'PreExecution');
-        if (allAgentScopeRows.length === 0) return null;
-
-        // Sort by Priority ascending (lower = higher priority)
-        const agentScopeRows = [...allAgentScopeRows].sort((a, b) => a.Priority - b.Priority);
+        // 1. Load active PreExecution/Both scope rows for this agent (sorted by priority)
+        const agentScopeRows = this.loadActiveAgentScopeRows(params.agent.ID);
+        if (agentScopeRows.length === 0) return null;
 
         const searchContext: SearchContext = {
             PrimaryScopeEntityID: params.primaryScopeEntityId,
@@ -136,109 +131,13 @@ export class AgentPreExecutionRAG {
         // 2–3. For each agent-scope row, render the query and run scoped search.
         const perScopeResults: ScopeSearchResult[] = [];
         for (const row of agentScopeRows) {
-            const scope = SearchEngineBase.Instance.GetActiveScopeByID(row.SearchScopeID);
-            if (!scope) {
-                LogStatus(`AgentPreExecutionRAG: Scope "${row.SearchScopeID}" not active — skipping.`);
-                continue;
-            }
-
-            const query = await this.resolveQuery(row, scope, params);
-            if (!query || !query.trim()) continue;
-
-            const fusionWeights = this.parseFusionWeights(row.FusionWeightsOverride);
-            const minScore = row.MinScore ?? 0;
-            const maxResults = row.MaxResults ?? 10;
-
-            try {
-                // Phase 2C: when params.streamingEnabled is true, consume
-                // SearchEngine.streamSearch() instead of Search() and append
-                // a markdown trace line to the scratchpad as each provider
-                // returns. The aggregate result (the 'final' event) is the
-                // same as Search() returns synchronously, so downstream
-                // fusion/formatting is unchanged. Markdown over JSON for
-                // the prompt-injection trail per RAG_plan §2.2.
-                let sr: Awaited<ReturnType<typeof SearchEngine.Instance.Search>>;
-                if (params.streamingEnabled) {
-                    let finalResults: SearchResultItem[] = [];
-                    let sourceCounts = { Vector: 0, FullText: 0, Entity: 0, Storage: 0 };
-                    let elapsedMs = 0;
-                    let errorMsg: string | undefined;
-                    const traces: string[] = [];
-                    for await (const ev of SearchEngine.Instance.streamSearch({
-                        Query: query,
-                        MaxResults: maxResults,
-                        MinScore: minScore,
-                        ScopeIDs: [scope.ID],
-                        SearchContext: hasContext ? searchContext : undefined,
-                        FusionWeightsOverride: fusionWeights,
-                        Mode: 'full'
-                    }, params.contextUser)) {
-                        if (ev.phase === 'provider') {
-                            traces.push(`### Provider \`${ev.providerName}\` returned ${ev.results.length} rows in ${ev.durationMs}ms`);
-                        } else if (ev.phase === 'final') {
-                            finalResults = ev.results;
-                            sourceCounts = ev.sourceCounts;
-                            elapsedMs = ev.elapsedMs;
-                        } else if (ev.phase === 'error') {
-                            errorMsg = ev.error;
-                        }
-                    }
-                    if (params.streamingTrace) {
-                        params.streamingTrace.push(...traces);
-                    }
-                    sr = {
-                        Success: !errorMsg,
-                        Results: finalResults,
-                        TotalCount: finalResults.length,
-                        ElapsedMs: elapsedMs,
-                        SourceCounts: sourceCounts,
-                        Providers: [],
-                        ErrorMessage: errorMsg,
-                    };
-                } else {
-                    sr = await SearchEngine.Instance.Search({
-                        Query: query,
-                        MaxResults: maxResults,
-                        MinScore: minScore,
-                        ScopeIDs: [scope.ID],
-                        SearchContext: hasContext ? searchContext : undefined,
-                        FusionWeightsOverride: fusionWeights,
-                        Mode: 'full'
-                    }, params.contextUser);
-                }
-
-                if (sr.Success && sr.Results.length > 0) {
-                    perScopeResults.push({
-                        scopeID: scope.ID,
-                        scopeName: scope.Name,
-                        scopeDescription: scope.Description,
-                        scopeIcon: scope.Icon,
-                        query,
-                        results: sr.Results,
-                        minScore
-                    });
-                } else if (!sr.Success) {
-                    LogError(`AgentPreExecutionRAG: Search in scope "${scope.Name}" failed: ${sr.ErrorMessage}`);
-                }
-            } catch (error) {
-                const msg = error instanceof Error ? error.message : String(error);
-                LogError(`AgentPreExecutionRAG: Exception searching scope "${scope.Name}": ${msg}`);
-            }
+            const r = await this.searchOneAgentScope(row, params, searchContext, hasContext);
+            if (r) perScopeResults.push(r);
         }
-
         if (perScopeResults.length === 0) return null;
 
         // 4. Cross-scope RRF when multiple scopes contributed
-        let combined: SearchResultItem[];
-        if (perScopeResults.length === 1) {
-            combined = perScopeResults[0].results;
-        } else {
-            const fusion = new SearchFusion();
-            const map = new Map<string, SearchResultItem[]>();
-            for (const s of perScopeResults) map.set(s.scopeID, s.results);
-            const maxAcrossScopes = Math.max(...perScopeResults.map(s => s.results.length));
-            combined = fusion.Deduplicate(fusion.CrossScopeFusion(map, Math.max(10, maxAcrossScopes)));
-        }
+        const combined = this.combineAcrossScopes(perScopeResults);
 
         // 5. Format for system-message injection
         const formatted = this.formatAsSystemMessage(perScopeResults);
@@ -251,6 +150,148 @@ export class AgentPreExecutionRAG {
             queriedScopeIDs: perScopeResults.map(s => s.scopeID),
             agentScopeRows
         };
+    }
+
+    /**
+     * Load active PreExecution/Both AIAgentSearchScope rows for the agent,
+     * sorted by Priority ascending (lower number = higher priority).
+     */
+    private loadActiveAgentScopeRows(agentID: string): MJAIAgentSearchScopeEntity[] {
+        const rows = SearchEngineBase.Instance.GetAgentScopes(agentID, 'PreExecution');
+        return [...rows].sort((a, b) => a.Priority - b.Priority);
+    }
+
+    /**
+     * Resolve + render the query for one agent-scope row, run the search
+     * (sync or streaming), and shape the per-scope result. Returns null when
+     * the row is unusable (inactive scope, empty query, search failure, or
+     * empty result set) — the caller decides whether to keep iterating.
+     */
+    private async searchOneAgentScope(
+        row: MJAIAgentSearchScopeEntity,
+        params: AgentPreExecutionRAGParams,
+        searchContext: SearchContext,
+        hasContext: boolean,
+    ): Promise<ScopeSearchResult | null> {
+        const scope = SearchEngineBase.Instance.GetActiveScopeByID(row.SearchScopeID);
+        if (!scope) {
+            LogStatus(`AgentPreExecutionRAG: Scope "${row.SearchScopeID}" not active — skipping.`);
+            return null;
+        }
+        const query = await this.resolveQuery(row, scope, params);
+        if (!query || !query.trim()) return null;
+
+        const fusionWeights = this.parseFusionWeights(row.FusionWeightsOverride);
+        const minScore = row.MinScore ?? 0;
+        const maxResults = row.MaxResults ?? 10;
+
+        try {
+            const sr = params.streamingEnabled
+                ? await this.streamSearchOneScope({ scope, query, maxResults, minScore, fusionWeights, searchContext, hasContext, params })
+                : await SearchEngine.Instance.Search({
+                    Query: query,
+                    MaxResults: maxResults,
+                    MinScore: minScore,
+                    ScopeIDs: [scope.ID],
+                    SearchContext: hasContext ? searchContext : undefined,
+                    FusionWeightsOverride: fusionWeights,
+                    Mode: 'full',
+                    // P3.2 — thread AIAgentID so SearchExecutionLog rows
+                    // attribute pre-execution RAG searches to the calling
+                    // agent. Without this, the analytics dashboard's "top
+                    // searches by agent" view is blind to the RAG path.
+                    AIAgentID: params.agent.ID,
+                }, params.contextUser);
+
+            if (sr.Success && sr.Results.length > 0) {
+                return {
+                    scopeID: scope.ID,
+                    scopeName: scope.Name,
+                    scopeDescription: scope.Description,
+                    scopeIcon: scope.Icon,
+                    query,
+                    results: sr.Results,
+                    minScore,
+                };
+            }
+            if (!sr.Success) {
+                LogError(`AgentPreExecutionRAG: Search in scope "${scope.Name}" failed: ${sr.ErrorMessage}`);
+            }
+            return null;
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            LogError(`AgentPreExecutionRAG: Exception searching scope "${scope.Name}": ${msg}`);
+            return null;
+        }
+    }
+
+    /**
+     * Phase 2C streaming-mode helper — consume `SearchEngine.streamSearch()`
+     * and shape the events back into a `SearchResult` so the rest of the
+     * pipeline doesn't need to know about streaming. Per-provider trace
+     * lines are appended to `params.streamingTrace` (markdown over JSON,
+     * per RAG_plan §2.2) so the agent's pre-prompt scratchpad can show
+     * "while you wait" progress.
+     */
+    private async streamSearchOneScope(input: {
+        scope: MJSearchScopeEntity;
+        query: string;
+        maxResults: number;
+        minScore: number;
+        fusionWeights: FusionWeightsByProvider | undefined;
+        searchContext: SearchContext;
+        hasContext: boolean;
+        params: AgentPreExecutionRAGParams;
+    }): Promise<Awaited<ReturnType<typeof SearchEngine.Instance.Search>>> {
+        let finalResults: SearchResultItem[] = [];
+        let sourceCounts = { Vector: 0, FullText: 0, Entity: 0, Storage: 0 };
+        let elapsedMs = 0;
+        let errorMsg: string | undefined;
+        const traces: string[] = [];
+        for await (const ev of SearchEngine.Instance.streamSearch({
+            Query: input.query,
+            MaxResults: input.maxResults,
+            MinScore: input.minScore,
+            ScopeIDs: [input.scope.ID],
+            SearchContext: input.hasContext ? input.searchContext : undefined,
+            FusionWeightsOverride: input.fusionWeights,
+            Mode: 'full',
+            AIAgentID: input.params.agent.ID,
+        }, input.params.contextUser)) {
+            if (ev.phase === 'provider') {
+                traces.push(`### Provider \`${ev.providerName}\` returned ${ev.results.length} rows in ${ev.durationMs}ms`);
+            } else if (ev.phase === 'final') {
+                finalResults = ev.results;
+                sourceCounts = ev.sourceCounts;
+                elapsedMs = ev.elapsedMs;
+            } else if (ev.phase === 'error') {
+                errorMsg = ev.error;
+            }
+        }
+        if (input.params.streamingTrace) input.params.streamingTrace.push(...traces);
+        return {
+            Success: !errorMsg,
+            Results: finalResults,
+            TotalCount: finalResults.length,
+            ElapsedMs: elapsedMs,
+            SourceCounts: sourceCounts,
+            Providers: [],
+            ErrorMessage: errorMsg,
+        };
+    }
+
+    /**
+     * Cross-scope reciprocal rank fusion — when 2+ scopes contributed, run
+     * RRF + dedup so the merged list reflects each scope's contribution.
+     * Single-scope cases skip fusion and return the only result list directly.
+     */
+    private combineAcrossScopes(perScopeResults: ScopeSearchResult[]): SearchResultItem[] {
+        if (perScopeResults.length === 1) return perScopeResults[0].results;
+        const fusion = new SearchFusion();
+        const map = new Map<string, SearchResultItem[]>();
+        for (const s of perScopeResults) map.set(s.scopeID, s.results);
+        const maxAcrossScopes = Math.max(...perScopeResults.map(s => s.results.length));
+        return fusion.Deduplicate(fusion.CrossScopeFusion(map, Math.max(10, maxAcrossScopes)));
     }
 
     /**

@@ -75,6 +75,20 @@ interface FTSEntityRecord {
     Enabled: boolean;
 }
 
+/** Row shape for the Search Analytics rollup. Mirrors the columns
+ *  `LoadSearchAnalytics` requests via the `Fields:` constraint. */
+interface AnalyticsRow {
+    ID: string;
+    SearchScopeID: string | null;
+    Status: string;
+    Query: string;
+    ResultCount: number;
+    TotalDurationMs: number;
+    RerankerName: string | null;
+    RerankerCostCents: number | null;
+    FailureReason: string | null;
+}
+
 @RegisterClass(BaseResourceComponent, 'KnowledgeConfigResource')
 @Component({
     standalone: false,
@@ -296,96 +310,12 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
         this.AnalyticsLoading = true;
         this.cdr.detectChanges();
         try {
-            const rv = new RunView();
-            const result = await rv.RunView<{
-                ID: string;
-                SearchScopeID: string | null;
-                Status: string;
-                Query: string;
-                ResultCount: number;
-                TotalDurationMs: number;
-                RerankerName: string | null;
-                RerankerCostCents: number | null;
-                FailureReason: string | null;
-            }>({
-                EntityName: 'MJ: Search Execution Logs',
-                Fields: ['ID', 'SearchScopeID', 'Status', 'ResultCount', 'TotalDurationMs', 'RerankerName', 'RerankerCostCents', 'FailureReason'],
-                OrderBy: '__mj_CreatedAt DESC',
-                MaxRows: 5000,
-                ResultType: 'simple',
-            });
-            if (!result.Success) {
-                LogError(`KnowledgeConfig: LoadSearchAnalytics failed: ${result.ErrorMessage}`);
-                return;
-            }
-            const rows = result.Results ?? [];
-            this.AnalyticsTotalRuns = rows.length;
-            const successRows = rows.filter(r => r.Status === 'Success');
-            this.AnalyticsSuccessRate = rows.length > 0 ? Math.round((successRows.length / rows.length) * 100) : 0;
-            this.AnalyticsHitRate = successRows.length > 0
-                ? Math.round((successRows.filter(r => (r.ResultCount ?? 0) > 0).length / successRows.length) * 100)
-                : 0;
-
-            const latencies = successRows.map(r => r.TotalDurationMs ?? 0).sort((a, b) => a - b);
-            this.AnalyticsAvgLatencyMs = latencies.length > 0
-                ? Math.round(latencies.reduce((s, x) => s + x, 0) / latencies.length)
-                : 0;
-            this.AnalyticsP95LatencyMs = latencies.length > 0
-                ? latencies[Math.min(latencies.length - 1, Math.floor(latencies.length * 0.95))]
-                : 0;
-
-            this.AnalyticsTotalRerankerCostCents = rows.reduce((s, r) => s + (r.RerankerCostCents ?? 0), 0);
-
-            // Per-scope rollup (lookup scope name from already-loaded list when available)
-            const byScope = new Map<string, { Count: number; LatencySum: number; ScopeID: string }>();
-            for (const r of rows) {
-                const id = r.SearchScopeID ?? '__unscoped__';
-                const cur = byScope.get(id) ?? { Count: 0, LatencySum: 0, ScopeID: id };
-                cur.Count++;
-                cur.LatencySum += r.TotalDurationMs ?? 0;
-                byScope.set(id, cur);
-            }
-            // Make sure we have scope names — fetch when missing
-            const scopeNameMap = new Map(this.SearchScopes.map(s => [s.ID, s.Name]));
-            if (this.SearchScopes.length === 0 && byScope.size > 0) {
-                await this.LoadSearchScopes();
-                this.SearchScopes.forEach(s => scopeNameMap.set(s.ID, s.Name));
-            }
-            this.AnalyticsTopScopes = Array.from(byScope.values())
-                .map(g => ({
-                    ScopeID: g.ScopeID,
-                    Name: scopeNameMap.get(g.ScopeID) ?? (g.ScopeID === '__unscoped__' ? '— unscoped —' : `(${g.ScopeID.slice(0, 8)}…)`),
-                    Count: g.Count,
-                    AvgLatencyMs: Math.round(g.LatencySum / g.Count),
-                }))
-                .sort((a, b) => b.Count - a.Count)
-                .slice(0, 10);
-
-            // Top failure reasons
-            const byFailure = new Map<string, number>();
-            for (const r of rows) {
-                if (r.Status !== 'Success' && r.FailureReason) {
-                    byFailure.set(r.FailureReason, (byFailure.get(r.FailureReason) ?? 0) + 1);
-                }
-            }
-            this.AnalyticsTopFailures = Array.from(byFailure.entries())
-                .map(([Reason, Count]) => ({ Reason, Count }))
-                .sort((a, b) => b.Count - a.Count)
-                .slice(0, 5);
-
-            // Reranker spend rollup
-            const byReranker = new Map<string, { Count: number; TotalCents: number }>();
-            for (const r of rows) {
-                if (!r.RerankerName) continue;
-                const cur = byReranker.get(r.RerankerName) ?? { Count: 0, TotalCents: 0 };
-                cur.Count++;
-                cur.TotalCents += r.RerankerCostCents ?? 0;
-                byReranker.set(r.RerankerName, cur);
-            }
-            this.AnalyticsRerankerSpend = Array.from(byReranker.entries())
-                .map(([Reranker, v]) => ({ Reranker, Count: v.Count, TotalCents: +v.TotalCents.toFixed(4) }))
-                .sort((a, b) => b.TotalCents - a.TotalCents);
-
+            const rows = await this.fetchSearchExecutionRows();
+            if (rows === null) return;
+            this.computeAnalyticsKpis(rows);
+            await this.computeAnalyticsTopScopes(rows);
+            this.computeAnalyticsTopFailures(rows);
+            this.computeAnalyticsRerankerSpend(rows);
             this.AnalyticsLoaded = true;
         } catch (err) {
             LogError(`KnowledgeConfig: LoadSearchAnalytics threw: ${err instanceof Error ? err.message : String(err)}`);
@@ -393,6 +323,100 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
             this.AnalyticsLoading = false;
             this.cdr.detectChanges();
         }
+    }
+
+    /** Fetch the raw SearchExecutionLog rows. Returns null on RunView failure (already logged). */
+    private async fetchSearchExecutionRows(): Promise<AnalyticsRow[] | null> {
+        const rv = new RunView();
+        const result = await rv.RunView<AnalyticsRow>({
+            EntityName: 'MJ: Search Execution Logs',
+            Fields: ['ID', 'SearchScopeID', 'Status', 'ResultCount', 'TotalDurationMs', 'RerankerName', 'RerankerCostCents', 'FailureReason'],
+            OrderBy: '__mj_CreatedAt DESC',
+            MaxRows: 5000,
+            ResultType: 'simple',
+        });
+        if (!result.Success) {
+            LogError(`KnowledgeConfig: LoadSearchAnalytics failed: ${result.ErrorMessage}`);
+            return null;
+        }
+        return result.Results ?? [];
+    }
+
+    /** Total runs, success rate, hit rate, avg + p95 latency, total reranker spend. */
+    private computeAnalyticsKpis(rows: AnalyticsRow[]): void {
+        this.AnalyticsTotalRuns = rows.length;
+        const successRows = rows.filter(r => r.Status === 'Success');
+        this.AnalyticsSuccessRate = rows.length > 0 ? Math.round((successRows.length / rows.length) * 100) : 0;
+        this.AnalyticsHitRate = successRows.length > 0
+            ? Math.round((successRows.filter(r => (r.ResultCount ?? 0) > 0).length / successRows.length) * 100)
+            : 0;
+        const latencies = successRows.map(r => r.TotalDurationMs ?? 0).sort((a, b) => a - b);
+        this.AnalyticsAvgLatencyMs = latencies.length > 0
+            ? Math.round(latencies.reduce((s, x) => s + x, 0) / latencies.length)
+            : 0;
+        this.AnalyticsP95LatencyMs = latencies.length > 0
+            ? latencies[Math.min(latencies.length - 1, Math.floor(latencies.length * 0.95))]
+            : 0;
+        this.AnalyticsTotalRerankerCostCents = rows.reduce((s, r) => s + (r.RerankerCostCents ?? 0), 0);
+    }
+
+    /**
+     * Per-scope volume rollup → top 10 by Count. Fetches scope names from
+     * `this.SearchScopes` when already loaded, otherwise loads them on demand
+     * so the unscoped audit-only path still gets human-readable labels.
+     */
+    private async computeAnalyticsTopScopes(rows: AnalyticsRow[]): Promise<void> {
+        const byScope = new Map<string, { Count: number; LatencySum: number; ScopeID: string }>();
+        for (const r of rows) {
+            const id = r.SearchScopeID ?? '__unscoped__';
+            const cur = byScope.get(id) ?? { Count: 0, LatencySum: 0, ScopeID: id };
+            cur.Count++;
+            cur.LatencySum += r.TotalDurationMs ?? 0;
+            byScope.set(id, cur);
+        }
+        const scopeNameMap = new Map(this.SearchScopes.map(s => [s.ID, s.Name]));
+        if (this.SearchScopes.length === 0 && byScope.size > 0) {
+            await this.LoadSearchScopes();
+            this.SearchScopes.forEach(s => scopeNameMap.set(s.ID, s.Name));
+        }
+        this.AnalyticsTopScopes = Array.from(byScope.values())
+            .map(g => ({
+                ScopeID: g.ScopeID,
+                Name: scopeNameMap.get(g.ScopeID) ?? (g.ScopeID === '__unscoped__' ? '— unscoped —' : `(${g.ScopeID.slice(0, 8)}…)`),
+                Count: g.Count,
+                AvgLatencyMs: Math.round(g.LatencySum / g.Count),
+            }))
+            .sort((a, b) => b.Count - a.Count)
+            .slice(0, 10);
+    }
+
+    /** Top 5 failure reasons across non-Success rows. */
+    private computeAnalyticsTopFailures(rows: AnalyticsRow[]): void {
+        const byFailure = new Map<string, number>();
+        for (const r of rows) {
+            if (r.Status !== 'Success' && r.FailureReason) {
+                byFailure.set(r.FailureReason, (byFailure.get(r.FailureReason) ?? 0) + 1);
+            }
+        }
+        this.AnalyticsTopFailures = Array.from(byFailure.entries())
+            .map(([Reason, Count]) => ({ Reason, Count }))
+            .sort((a, b) => b.Count - a.Count)
+            .slice(0, 5);
+    }
+
+    /** Per-reranker spend rollup, sorted descending by total cost. */
+    private computeAnalyticsRerankerSpend(rows: AnalyticsRow[]): void {
+        const byReranker = new Map<string, { Count: number; TotalCents: number }>();
+        for (const r of rows) {
+            if (!r.RerankerName) continue;
+            const cur = byReranker.get(r.RerankerName) ?? { Count: 0, TotalCents: 0 };
+            cur.Count++;
+            cur.TotalCents += r.RerankerCostCents ?? 0;
+            byReranker.set(r.RerankerName, cur);
+        }
+        this.AnalyticsRerankerSpend = Array.from(byReranker.entries())
+            .map(([Reranker, v]) => ({ Reranker, Count: v.Count, TotalCents: +v.TotalCents.toFixed(4) }))
+            .sort((a, b) => b.TotalCents - a.TotalCents);
     }
 
     // ─── Permissions Audit (P2A.7) ────────────────────────────────────────────
@@ -423,83 +447,12 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
         this.PermissionsLoading = true;
         this.cdr.detectChanges();
         try {
-            const rv = new RunView();
-            // Pull permissions, scopes, users, roles in one batched call.
-            // SearchScopePermission has SearchScopeID, UserID, RoleID;
-            // join in JS against the already-loaded scope list and live RunView
-            // results for users/roles.
-            // BypassCache: true on every view — this is an audit dashboard, so we
-            // want SQL-truth even when permission/scope rows have been written
-            // outside the normal BaseEntity.Save() path (test harnesses,
-            // direct-SQL maintenance, recovery scripts). Without this, scope
-            // names can render as "(unknown)" if the cache was populated before
-            // the underlying row was inserted.
-            const result = await rv.RunViews([
-                {
-                    EntityName: 'MJ: Search Scope Permissions',
-                    Fields: ['ID', 'SearchScopeID', 'UserID', 'RoleID', 'PermissionLevel'],
-                    OrderBy: '__mj_CreatedAt DESC',
-                    MaxRows: 5000,
-                    ResultType: 'simple',
-                    BypassCache: true,
-                },
-                {
-                    EntityName: 'MJ: Search Scopes',
-                    Fields: ['ID', 'Name'],
-                    ResultType: 'simple',
-                    BypassCache: true,
-                },
-                {
-                    EntityName: 'MJ: Users',
-                    Fields: ['ID', 'Name', 'Email'],
-                    ResultType: 'simple',
-                    BypassCache: true,
-                },
-                {
-                    EntityName: 'MJ: Roles',
-                    Fields: ['ID', 'Name'],
-                    ResultType: 'simple',
-                    BypassCache: true,
-                },
-            ]);
-            if (!result?.[0]?.Success) {
-                LogError(`KnowledgeConfig: LoadPermissionsAudit failed: ${result?.[0]?.ErrorMessage}`);
+            const fetched = await this.fetchPermissionsAuditData();
+            if (!fetched) {
                 this.PermissionsRows = [];
                 return;
             }
-            const perms = result[0].Results as Array<{
-                ID: string; SearchScopeID: string; UserID: string | null;
-                RoleID: string | null; PermissionLevel: string;
-            }>;
-            const scopes = (result[1].Results ?? []) as Array<{ ID: string; Name: string }>;
-            const users = (result[2].Results ?? []) as Array<{ ID: string; Name: string; Email: string }>;
-            const roles = (result[3].Results ?? []) as Array<{ ID: string; Name: string }>;
-            const scopeName = new Map(scopes.map(s => [s.ID, s.Name]));
-            const userByID = new Map(users.map(u => [u.ID, u]));
-            const roleName = new Map(roles.map(r => [r.ID, r.Name]));
-            // Drop permission rows whose SearchScope is not visible to the
-            // current user. MJ's row-level filtering on the SearchScope entity
-            // means non-Owner users only see scopes they have access to;
-            // surfacing the permission row with "(unknown)" leaks the row's
-            // existence without giving the auditor anything useful, so we
-            // skip it. This is a UX call, not a security one — the API
-            // already enforces visibility on the underlying entities.
-            this.PermissionsRows = perms
-                .filter(p => scopeName.has(p.SearchScopeID))
-                .map(p => {
-                    const u = p.UserID ? userByID.get(p.UserID) : null;
-                    return {
-                        ID: p.ID,
-                        SearchScopeID: p.SearchScopeID,
-                        SearchScopeName: scopeName.get(p.SearchScopeID) ?? '(unknown)',
-                        UserID: p.UserID,
-                        UserName: u?.Name ?? null,
-                        UserEmail: u?.Email ?? null,
-                        RoleID: p.RoleID,
-                        RoleName: p.RoleID ? (roleName.get(p.RoleID) ?? '(unknown)') : null,
-                        PermissionLevel: p.PermissionLevel,
-                    };
-                });
+            this.PermissionsRows = this.shapePermissionsAuditRows(fetched);
             this.PermissionsLoaded = true;
         } catch (err) {
             LogError(`KnowledgeConfig: LoadPermissionsAudit threw: ${err instanceof Error ? err.message : String(err)}`);
@@ -527,6 +480,78 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
     public RefreshPermissionsAudit(): void {
         this.PermissionsLoaded = false;
         void this.LoadPermissionsAudit();
+    }
+
+    /**
+     * Pull permissions, scopes, users, roles in one batched call.
+     * `BypassCache: true` on every view — this is an audit dashboard, so we
+     * want SQL-truth even when permission/scope rows have been written
+     * outside the normal `BaseEntity.Save()` path (test harnesses,
+     * direct-SQL maintenance, recovery scripts). Without this, scope names
+     * can render as "(unknown)" if the cache was populated before the
+     * underlying row was inserted.
+     *
+     * Returns null on RunView failure (already logged).
+     */
+    private async fetchPermissionsAuditData(): Promise<{
+        perms: Array<{ ID: string; SearchScopeID: string; UserID: string | null; RoleID: string | null; PermissionLevel: string }>;
+        scopes: Array<{ ID: string; Name: string }>;
+        users: Array<{ ID: string; Name: string; Email: string }>;
+        roles: Array<{ ID: string; Name: string }>;
+    } | null> {
+        const rv = new RunView();
+        const result = await rv.RunViews([
+            { EntityName: 'MJ: Search Scope Permissions', Fields: ['ID', 'SearchScopeID', 'UserID', 'RoleID', 'PermissionLevel'], OrderBy: '__mj_CreatedAt DESC', MaxRows: 5000, ResultType: 'simple', BypassCache: true },
+            { EntityName: 'MJ: Search Scopes', Fields: ['ID', 'Name'], ResultType: 'simple', BypassCache: true },
+            { EntityName: 'MJ: Users', Fields: ['ID', 'Name', 'Email'], ResultType: 'simple', BypassCache: true },
+            { EntityName: 'MJ: Roles', Fields: ['ID', 'Name'], ResultType: 'simple', BypassCache: true },
+        ]);
+        if (!result?.[0]?.Success) {
+            LogError(`KnowledgeConfig: LoadPermissionsAudit failed: ${result?.[0]?.ErrorMessage}`);
+            return null;
+        }
+        return {
+            perms: (result[0].Results ?? []) as Array<{ ID: string; SearchScopeID: string; UserID: string | null; RoleID: string | null; PermissionLevel: string }>,
+            scopes: (result[1].Results ?? []) as Array<{ ID: string; Name: string }>,
+            users: (result[2].Results ?? []) as Array<{ ID: string; Name: string; Email: string }>,
+            roles: (result[3].Results ?? []) as Array<{ ID: string; Name: string }>,
+        };
+    }
+
+    /**
+     * Shape the raw fetched data into the audit-table rows. Drops
+     * permission rows whose SearchScope is not visible to the current user
+     * (MJ's row-level filtering hides scopes from non-Owner callers).
+     * Surfacing the permission row with "(unknown)" leaks the row's
+     * existence without giving the auditor anything useful — the underlying
+     * API already enforces visibility, so this is a UX call, not a security
+     * one.
+     */
+    private shapePermissionsAuditRows(data: {
+        perms: Array<{ ID: string; SearchScopeID: string; UserID: string | null; RoleID: string | null; PermissionLevel: string }>;
+        scopes: Array<{ ID: string; Name: string }>;
+        users: Array<{ ID: string; Name: string; Email: string }>;
+        roles: Array<{ ID: string; Name: string }>;
+    }): typeof this.PermissionsRows {
+        const scopeName = new Map(data.scopes.map(s => [s.ID, s.Name]));
+        const userByID = new Map(data.users.map(u => [u.ID, u]));
+        const roleName = new Map(data.roles.map(r => [r.ID, r.Name]));
+        return data.perms
+            .filter(p => scopeName.has(p.SearchScopeID))
+            .map(p => {
+                const u = p.UserID ? userByID.get(p.UserID) : null;
+                return {
+                    ID: p.ID,
+                    SearchScopeID: p.SearchScopeID,
+                    SearchScopeName: scopeName.get(p.SearchScopeID) ?? '(unknown)',
+                    UserID: p.UserID,
+                    UserName: u?.Name ?? null,
+                    UserEmail: u?.Email ?? null,
+                    RoleID: p.RoleID,
+                    RoleName: p.RoleID ? (roleName.get(p.RoleID) ?? '(unknown)') : null,
+                    PermissionLevel: p.PermissionLevel,
+                };
+            });
     }
 
     // ─── Search Scopes ────────────────────────────────────────────────────────

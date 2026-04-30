@@ -89,14 +89,22 @@ interface ProviderEntry {
     Record: unknown;
 }
 
+// Test-only escape hatch interface: SearchEngine guards its provider-list
+// state behind private fields. Rather than `as any`, we narrow to a
+// structural type that exposes just the two fields tests need to mutate.
+interface SearchEngineTestState {
+    _providerEntries: ProviderEntry[];
+    _configured: boolean;
+}
+
 class TestSearchEngine extends SearchEngine {
     public InjectProviders(entries: ProviderEntry[]): void {
         // Bypass Config() — set internal state directly so tests don't need
-        // the full SearchEngineBase metadata pipeline.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (this as any)._providerEntries = entries;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (this as any)._configured = true;
+        // the full SearchEngineBase metadata pipeline. The double-cast goes
+        // through `unknown` which TypeScript permits without `any`.
+        const state = this as unknown as SearchEngineTestState;
+        state._providerEntries = entries;
+        state._configured = true;
     }
 
     public override async filterByPermissions(results: SearchResultItem[]): Promise<SearchResultItem[]> {

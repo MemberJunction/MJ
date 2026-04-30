@@ -4237,10 +4237,16 @@ The context is now within limits. Please retry your request with the recovered c
                 Type: 'Input' as const
             }));
 
-            // Build action context: preserve the agent's context and inject resolved storage account ID
-            const actionContext = this._resolvedStorageAccountId
-                ? { ...(typeof params.context === 'object' && params.context ? params.context : {}), __resolvedStorageAccountId: this._resolvedStorageAccountId }
-                : params.context;
+            // Build action context: preserve the agent's context, stamp the
+            // calling agent's identity so scope-aware actions (Scoped Search,
+            // future agent-aware tools) can attribute the call without the LLM
+            // needing to pass it explicitly, and inject resolved storage account ID.
+            const baseContext = typeof params.context === 'object' && params.context ? params.context : {};
+            const actionContext = {
+                ...baseContext,
+                AgentID: params.agent.ID,
+                ...(this._resolvedStorageAccountId ? { __resolvedStorageAccountId: this._resolvedStorageAccountId } : {}),
+            };
 
             // Execute the action and return the full ActionResult
             const result = await actionEngine.RunAction({

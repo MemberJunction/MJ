@@ -627,43 +627,51 @@ export class GraphQLSearchClient {
             const variables = this.prepareSearchVariables(params);
 
             let inner: Subscription | null = null;
-            this._dataProvider.ExecuteGQL(startMutation, variables).then((result) => {
-                const start = (result?.StreamScopedSearch as { Success: boolean; StreamID: string; ErrorMessage?: string } | undefined);
-                if (!start?.Success) {
-                    observer.error(new Error(start?.ErrorMessage ?? 'StreamScopedSearch failed to start'));
-                    return;
-                }
+            // IIFE so the Observable executor stays synchronous (it must
+            // return the cleanup function), but the body uses async/await
+            // for the mutation + subscription dance.
+            (async () => {
+                try {
+                    const result = await this._dataProvider.ExecuteGQL(startMutation, variables);
+                    const start = result?.StreamScopedSearch as { Success: boolean; StreamID: string; ErrorMessage?: string } | undefined;
+                    if (!start?.Success) {
+                        observer.error(new Error(start?.ErrorMessage ?? 'StreamScopedSearch failed to start'));
+                        return;
+                    }
 
-                // Step 2: subscribe to events filtered by streamID.
-                const subQuery = gql`
-                    subscription SearchStream($streamID: ID!) {
-                        SearchStreamEvents(streamID: $streamID) {
-                            StreamID
-                            Phase
-                            ProviderName
-                            DurationMs
-                            Results { ID EntityName RecordID SourceType Title Snippet Score Tags MatchedAt ProviderId ProviderLabel ProviderIcon }
-                            SourceCounts { Vector FullText Entity Storage }
-                            ElapsedMs
-                            ErrorMessage
-                        }
-                    }`;
-                inner = this._dataProvider.subscribe(subQuery, { streamID: start.StreamID }).subscribe({
-                    next: (data: Record<string, unknown>) => {
-                        const ev = data?.['SearchStreamEvents'] as { StreamID: string; Phase: string; ProviderName?: string; DurationMs?: number; Results?: SearchClientResultItem[]; SourceCounts?: { Vector: number; FullText: number; Entity: number; Storage: number }; ElapsedMs?: number; ErrorMessage?: string } | undefined;
-                        if (!ev) return;
-                        observer.next(ev);
-                        if (ev.Phase === 'final') {
-                            observer.complete();
-                            inner?.unsubscribe();
-                        } else if (ev.Phase === 'error') {
-                            observer.error(new Error(ev.ErrorMessage ?? 'Stream error'));
-                            inner?.unsubscribe();
-                        }
-                    },
-                    error: (err: unknown) => observer.error(err),
-                });
-            }).catch(err => observer.error(err));
+                    // Step 2: subscribe to events filtered by streamID.
+                    const subQuery = gql`
+                        subscription SearchStream($streamID: ID!) {
+                            SearchStreamEvents(streamID: $streamID) {
+                                StreamID
+                                Phase
+                                ProviderName
+                                DurationMs
+                                Results { ID EntityName RecordID SourceType Title Snippet Score Tags MatchedAt ProviderId ProviderLabel ProviderIcon }
+                                SourceCounts { Vector FullText Entity Storage }
+                                ElapsedMs
+                                ErrorMessage
+                            }
+                        }`;
+                    inner = this._dataProvider.subscribe(subQuery, { streamID: start.StreamID }).subscribe({
+                        next: (data: Record<string, unknown>) => {
+                            const ev = data?.['SearchStreamEvents'] as { StreamID: string; Phase: string; ProviderName?: string; DurationMs?: number; Results?: SearchClientResultItem[]; SourceCounts?: { Vector: number; FullText: number; Entity: number; Storage: number }; ElapsedMs?: number; ErrorMessage?: string } | undefined;
+                            if (!ev) return;
+                            observer.next(ev);
+                            if (ev.Phase === 'final') {
+                                observer.complete();
+                                inner?.unsubscribe();
+                            } else if (ev.Phase === 'error') {
+                                observer.error(new Error(ev.ErrorMessage ?? 'Stream error'));
+                                inner?.unsubscribe();
+                            }
+                        },
+                        error: (err: unknown) => observer.error(err),
+                    });
+                } catch (err) {
+                    observer.error(err);
+                }
+            })();
 
             return () => { inner?.unsubscribe(); };
         });

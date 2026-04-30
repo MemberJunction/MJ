@@ -341,6 +341,12 @@ export class MJSearchScopeFormComponentExtended extends MJSearchScopeFormCompone
             const rv = new RunView();
             const result = await rv.RunView<MJSearchExecutionLogEntityType>({
                 EntityName: 'MJ: Search Execution Logs',
+                // Constrain to the columns the CSV writer actually emits — avoids
+                // pulling the wider entity (per Section 6.8).
+                Fields: [
+                    '__mj_CreatedAt', 'Status', 'Query', 'ResultCount', 'TotalDurationMs',
+                    'RerankerName', 'RerankerCostCents', 'FailureReason', 'UserID', 'AIAgentID',
+                ],
                 ExtraFilter: `SearchScopeID='${this.record.ID.replace(/'/g, "''")}'`,
                 OrderBy: '__mj_CreatedAt DESC',
                 MaxRows: 500,
