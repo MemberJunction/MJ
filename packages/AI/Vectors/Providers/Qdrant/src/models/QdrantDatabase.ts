@@ -18,7 +18,7 @@ import {
     QueryOptions as MJQueryOptions,
     MetadataFilterCondition,
 } from '@memberjunction/ai-vectordb';
-import { LogError, LogStatus } from '@memberjunction/core';
+import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import { qdrantUrl } from '../config';
 
 /**
@@ -247,7 +247,10 @@ export class QdrantDatabase extends VectorDBBase {
      *          or a failure response on error.
      * @throws Never throws; errors are caught and returned as a failure response.
      */
-    public async QueryIndex(params: MJQueryOptions): Promise<BaseResponse> {
+    // Qdrant authenticates via its own API key, so contextUser is unused here.
+    // Accepting the parameter keeps the override compatible with the abstract
+    // signature added in @memberjunction/ai-vectordb v5.30+.
+    public async QueryIndex(params: MJQueryOptions, _contextUser?: UserInfo): Promise<BaseResponse> {
         try {
             const collectionName = this.ExtractCollectionName(params);
             if (!collectionName) {

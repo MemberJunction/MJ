@@ -219,20 +219,19 @@ export class SimpleVectorDatabase extends VectorDBBase {
 
     // ── VectorDBBase implementation ────────────────────────────────────────
 
-    public async QueryIndex(params: QueryOptions): Promise<BaseResponse> {
+    public async QueryIndex(params: QueryOptions, contextUser?: UserInfo): Promise<BaseResponse> {
         // VectorSearchProvider invokes QueryIndex with both `id` (the index
         // name to query) and `vector` (the query embedding). This doesn't
         // fit cleanly into either QueryByRecordId or QueryByVectorValues
         // taken alone — the union members don't share `id`+`vector`. We
         // narrow via property-existence to handle both fields.
-        const p = params as { id?: string; vector?: number[]; topK?: number; filter?: { __contextUser?: UserInfo } };
+        const p = params as { id?: string; vector?: number[]; topK?: number };
         const indexName = String(p.id ?? '');
         const queryVector = p.vector;
         const topK = Number(p.topK ?? 10);
-        // VectorSearchProvider smuggles contextUser through filter.__contextUser
-        // because VectorDBBase.QueryIndex's signature has no UserInfo channel.
-        // RunView's server-side guard requires a context user; we honor it.
-        const contextUser = p.filter?.__contextUser;
+        // contextUser is required for RunView's server-side guard. Remote
+        // drivers (Pinecone/Qdrant) ignore it; in-process drivers like this
+        // one need it to honor row-level security on the source entity.
         if (!indexName || !Array.isArray(queryVector)) {
             LogError(`SimpleVectorDatabase.QueryIndex: missing indexName="${indexName}" or vector (length ${Array.isArray(queryVector) ? queryVector.length : 'n/a'})`);
             return { success: false, message: 'Missing indexName or vector', data: null };

@@ -18,7 +18,7 @@ import {
     VectorMetadataFilter,
     VectorRecord,
 } from '@memberjunction/ai-vectordb';
-import { LogError, LogStatus } from '@memberjunction/core';
+import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
 import pg from 'pg';
 import { ParseConnectionString, PgVectorConnectionConfig } from '../config';
 
@@ -323,7 +323,10 @@ export class PgVectorDatabase extends VectorDBBase {
      *          scored matches, or a failure response on error.
      * @throws Never throws; errors are caught and returned as a failure response.
      */
-    public async QueryIndex(params: QueryOptions): Promise<BaseResponse> {
+    // pgvector authenticates via the configured pg connection, so contextUser
+    // is unused here. Accepting the parameter keeps the override compatible
+    // with the abstract signature added in @memberjunction/ai-vectordb v5.30+.
+    public async QueryIndex(params: QueryOptions, _contextUser?: UserInfo): Promise<BaseResponse> {
         try {
             const pool = this.GetPool();
             const vector = 'vector' in params ? params.vector : null;

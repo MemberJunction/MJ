@@ -288,20 +288,18 @@ export class VectorSearchProvider extends BaseSearchProvider {
             return [];
         }
 
-        // Smuggle contextUser through the filter object. Remote drivers
-        // (Pinecone/Qdrant) don't need a UserInfo — they authenticate via
-        // their own API key. In-process drivers (e.g. SimpleVectorDatabase)
-        // need to call RunView under the calling user's identity to honor
-        // server-side row-level security; this is the only channel
-        // available without breaking VectorDBBase's contract.
-        const filterWithCtx = filter ? { ...filter, __contextUser: contextUser } : { __contextUser: contextUser };
+        // contextUser is passed as the 2nd arg per VectorDBBase.QueryIndex's
+        // contract. Remote drivers (Pinecone/Qdrant) ignore it and authenticate
+        // via their own API key; in-process drivers (e.g. SimpleVectorDatabase)
+        // use it to honor server-side row-level security when loading vectors
+        // via RunView.
         const response: BaseResponse = await vectorDBInstance.QueryIndex({
             id: vectorIndex.Name,
             vector: queryVector,
             topK,
             includeMetadata: true,
-            filter: filterWithCtx,
-        });
+            filter,
+        }, contextUser);
 
         if (!response.success || !response.data?.matches) {
             return [];
