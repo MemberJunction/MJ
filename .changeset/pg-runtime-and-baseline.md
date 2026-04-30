@@ -15,8 +15,8 @@ Bring MJ to a state where it runs end-to-end on PostgreSQL — including managed
 
 **CLI (`@memberjunction/cli`):** consumes published Skyway 0.6.0 multi-dialect packages (`skyway-core`, `skyway-sqlserver`, `skyway-postgres`).
 
-**Managed-PG support:** historical PG migrations rewritten to drop the `pg_cast` UPDATE that required superuser, with INSERT VALUES tuples / WHERE-comparisons / CHECK constraints rewritten to use BOOLEAN literals (`TRUE`/`FALSE`) directly. 50 files touched, 10,967 INSERT tuples + 3,510 comparisons + 9 CHECK constraints fixed.
+**Managed-PG support:** historical PG migrations rewritten to drop the `pg_cast` UPDATE that required superuser, with INSERT VALUES tuples / WHERE-comparisons / CHECK constraints rewritten to use BOOLEAN literals (`TRUE`/`FALSE`) directly. 50 files touched in the companion `pg-migration-files` PR; 10,967 INSERT tuples + 3,510 comparisons + 9 CHECK constraints fixed.
 
-**v5.30 baseline:** `migrations-pg/v5/B202604301800__v5.30__PG_Baseline.pg.sql` replaces the v5.0 baseline; contains every v5.0–v5.30 schema change and metadata syncs through v5.29. Required post-install step for fresh PG installs: `mj sync push --dir metadata` (the v5.30 metadata sync is deferred to v5.30.1; this step closes the gap).
+The actual PG migration content — v5.0 baseline + every V*.pg.sql for v5.0–v5.30 — ships in the companion `pg-migration-files` PR. The two PRs merge together.
 
-See `migrations-pg/TESTING_GUIDE.md` for the full validation chain (per-migration audit, schema dump diff, snapshot scripts, autoQuoter coverage).
+See `migrations-pg/TESTING_GUIDE.md` for the verification strategy used during this PR's development (per-migration audit, schema dump diff, snapshot scripts, autoQuoter coverage).
