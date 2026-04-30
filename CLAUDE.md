@@ -11,7 +11,7 @@ See **[claude-full-auto.md](claude-full-auto.md)** for the full-autonomy develop
 
 ## 📜 Project-Wide Standards
 
-- **[Publish-Then-No-Breaking-Changes Policy](guides/PUBLISH_NO_BREAK_POLICY.md)** — Once an OpenApp version is published, within that major version no dropping tables/columns, no narrowing types, no removing/renaming SP parameters or entities. Only additive changes. Breaking changes force a major version bump. Read this before authoring any migration that modifies an existing schema.
+- **[Publish-Then-No-Breaking-Changes Policy](guides/PUBLISH_NO_BREAK_POLICY.md)** (adopted at the 2026-04-29 cross-app migration meeting; applies prospectively from each app's first published version after adoption) — within a published OpenApp major version, only additive schema changes are allowed: no dropping tables or columns, no narrowing types, no removing or renaming SP parameters or entities, no adding required parameters. Breaking changes force a major version bump. Consult this before authoring any migration that modifies an existing schema.
 
 ## 🚨 CRITICAL RULES - VIOLATIONS ARE UNACCEPTABLE 🚨
 

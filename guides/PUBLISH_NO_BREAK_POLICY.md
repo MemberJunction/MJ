@@ -1,8 +1,8 @@
 # Publish-Then-No-Breaking-Changes Policy
 
-**Status:** Active
-**Applies to:** All MemberJunction OpenApps (MJ core, BizApps Common, BC SaaS, Skip, Izzy, MJC, and any future apps)
-**Source of record:** Phase 1 of [plans/cross-app-migration-ordering.md](../plans/cross-app-migration-ordering.md) §3.2 (cross-app migration architecture, 2026-04-29 meeting)
+**Status:** Adopted at the 2026-04-29 cross-app migration meeting; applies prospectively from each app's first published version after adoption.
+**Applies to:** All MemberJunction OpenApps.
+**Source of record:** §3.2 of [plans/cross-app-migration-ordering.md](../plans/cross-app-migration-ordering.md).
 
 ## The rule
 
@@ -21,11 +21,13 @@ A version that's still on a feature branch and hasn't been merged yet is not "pu
 | Forbidden | Why |
 |---|---|
 | Dropping a table | Downstream apps may have foreign keys to it; dropping breaks their migrations |
-| Dropping a column | Downstream code may read or write it |
+| Dropping a column | Downstream code may read or write it; codegen will also regenerate SPs without that column's parameter, breaking historical `EXEC` calls |
+| Renaming a column | Equivalent to dropping the old name and adding a new one — both halves are forbidden by the rules above and below |
 | Narrowing a column's type (`nvarchar(100)` → `nvarchar(50)`, `bigint` → `int`, `decimal(18,4)` → `decimal(10,2)`) | Existing data may not fit; downstream callers may pass values that no longer round-trip |
 | Removing or renaming an entity | Same reasoning as dropping a table, plus metadata-level breakage |
-| Removing or renaming a stored-procedure parameter | Historical `EXEC` calls in migration history will fail. Pillar 1 (tolerant SP signatures) makes this rarely *necessary*, but the policy is what *forbids* it — adding a required parameter to an existing published SP is technically possible at the codegen level and would still violate the policy |
-| Removing relationships that downstream code depends on | Breaks downstream entity navigation, view JOINs, FK metadata |
+| Removing or renaming a stored-procedure parameter | Historical `EXEC` calls in migration history will fail because they reference the dropped/renamed parameter by name |
+| Adding a *required* (NOT NULL, no database default) column or stored-procedure parameter | Pillar 1 (tolerant SP signatures) makes additive changes safe *only* when the new parameter is optional. A required addition breaks every historical `EXEC` that doesn't pass it |
+| Dropping a foreign key or `EntityRelationship` row that downstream code depends on | Breaks downstream entity navigation, view JOINs, and any code that traverses the relationship via metadata |
 
 ## What IS allowed
 
@@ -134,29 +136,24 @@ Existing rows may have values longer than 50 characters; the migration would fai
 
 **Correct path:** if you genuinely need to narrow, ship a v2.0 with the new type and a migration that either truncates with explicit consent or rejects rows that don't fit.
 
-### Example 5: Removing an SP parameter
+### Example 5: Removing an SP parameter (by dropping its underlying column)
 
-**Not allowed within the same major version.** Even with Pillar 1's tolerant signatures, *removing* a parameter breaks historical EXEC calls that named it.
+**Not allowed within the same major version.** SP parameters in MJ aren't authored by hand — codegen emits them from the schema. So you don't remove a parameter directly; you remove it indirectly by dropping the column the parameter is bound to. Both the column drop and the resulting SP parameter loss are forbidden, for the same reason: historical `EXEC` calls in the migration stream reference that parameter by name, and they'll fail forever once it's gone.
 
 ```sql
--- ❌ FORBIDDEN within v1.x — drops @LegacyFlag from spCreateMyTable
-CREATE PROCEDURE [${flyway:defaultSchema}].[spCreateMyTable]
-    @Name nvarchar(255),
-    @Description nvarchar(MAX) = NULL
-    -- @LegacyFlag was here; now removed
-AS
-BEGIN
-    -- ...
-END
+-- ❌ FORBIDDEN within v1.x — drops the LegacyFlag column.
+-- Codegen will then emit spCreateMyTable / spUpdateMyTable WITHOUT @LegacyFlag,
+-- breaking every historical EXEC that named it.
+ALTER TABLE ${flyway:defaultSchema}.MyTable DROP COLUMN LegacyFlag;
 ```
 
-Historical migration `EXEC __mj.spCreateMyTable @Name='X', @LegacyFlag=1` will fail with "could not find @LegacyFlag" against the new SP. The historical EXEC sits in the migration stream forever, so this is a permanent break.
+Historical migration `EXEC __mj.spCreateMyTable @Name='X', @LegacyFlag=1` will fail with "could not find @LegacyFlag" against the regenerated SP. The historical EXEC sits in the migration stream forever, so this is a permanent break.
 
-**Correct path:** mark the column behind `@LegacyFlag` as deprecated at the metadata level, leave the SP parameter in place (it just becomes a no-op or always-default), and remove it in v2.0.
+**Correct path:** mark the `LegacyFlag` column as deprecated at the metadata level. The column stays physically present, codegen continues to emit `@LegacyFlag` as an optional parameter on `spCreateMyTable` / `spUpdateMyTable`, and historical `EXEC` calls keep working. New code stops using it. Physically remove the column in v2.0 along with any other accumulated deprecations.
 
 ### Example 6: Adding a NEW required SP parameter
 
-**Allowed at the codegen level, but a policy violation.** Pillar 1 doesn't *prevent* you from adding a required parameter (NOT NULL, no default) — codegen will faithfully emit `@MyRequiredParam type` with no default. But doing so breaks every historical EXEC that doesn't pass it, even though the parameter is technically "new."
+**Not allowed within the same major version.** Pillar 1 makes additive changes safe *only* when the new parameter is optional. Codegen won't stop you from adding a required column — and the resulting required SP parameter — but doing so breaks every historical EXEC that doesn't pass it.
 
 ```sql
 -- ❌ FORBIDDEN within v1.x — adds @MyRequiredParam with no default
@@ -170,17 +167,13 @@ AS
 
 ## How to enforce
 
-This policy is enforced primarily by **review**, not by automation:
+This policy is enforced primarily by review. Migration PRs that drop tables, drop columns, narrow types, rename entities/columns, or drop columns whose names appear as SP parameters should be flagged. When a breaking change is genuinely needed, the PR description should propose the major version bump path instead of attempting the change in-place.
 
-- Migration PRs that drop tables, drop columns, narrow types, rename entities/columns, or remove SP parameters should be flagged in code review.
-- The CodeGen owner and at least one consumer-team reviewer (BC SaaS, Skip, Izzy, MJC, BizApps Common as relevant) should be tagged on PRs that change schema in a published OpenApp.
-- When a breaking change is genuinely needed, the PR description must propose a major version bump path.
+Tooling support to catch some of these mechanically at install time is described in §4.3 of [plans/cross-app-migration-ordering.md](../plans/cross-app-migration-ordering.md) (pre-install OpenApp manifest validation). That tooling isn't in place yet; review is the gate until it lands.
 
-Tooling support is forthcoming — see plans/cross-app-migration-ordering.md §4.3 for the planned pre-install validation that catches some of these at install time.
+## How this applies to versions already in the wild
 
-## Audit at adoption
-
-Before this policy formally applies to an existing app, an audit pass confirms which already-shipped versions of that app must be honored as immutable from this point forward. The first major version bump under the new policy is when the rule formally applies. Past published versions stay as they are; the policy applies prospectively.
+The policy is **prospective**. Past published versions of any app stay as they are — the policy doesn't retroactively make their already-shipped migrations a violation, and it doesn't require rewriting history. From the first new published version of an app after policy adoption, the rule applies to that app going forward.
 
 ## See also
 
