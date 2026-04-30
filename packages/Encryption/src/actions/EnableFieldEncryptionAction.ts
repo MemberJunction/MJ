@@ -40,7 +40,7 @@
  */
 
 import { RegisterClass } from '@memberjunction/global';
-import { LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { ActionResultSimple, RunActionParams, ActionParam } from '@memberjunction/actions-base';
 import { EncryptionEngine } from '../EncryptionEngine';
 import { EnableFieldEncryptionParams, EnableFieldEncryptionResult } from '../interfaces';
@@ -99,7 +99,7 @@ export class EnableFieldEncryptionAction {
             const result = await this.enableFieldEncryption({
                 entityFieldId: String(entityFieldId),
                 batchSize: Number(batchSize)
-            }, ContextUser);
+            }, ContextUser, params.Provider);
 
             // Update output parameters
             const outputParams = [...Params];
@@ -143,13 +143,14 @@ export class EnableFieldEncryptionAction {
      */
     private async enableFieldEncryption(
         params: EnableFieldEncryptionParams,
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<EnableFieldEncryptionResult> {
         const { entityFieldId, batchSize = 100 } = params;
         const engine = EncryptionEngine.Instance;
         await engine.Config(false, contextUser);
-        const md = new Metadata();
-        const rv = new RunView();
+        const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
+        const rv = provider ? RunView.FromMetadataProvider(provider as unknown as IMetadataProvider) : new RunView();
 
         let recordsEncrypted = 0;
         let recordsSkipped = 0;

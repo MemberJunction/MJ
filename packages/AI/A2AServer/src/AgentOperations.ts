@@ -1,4 +1,4 @@
-import { Metadata, UserInfo } from "@memberjunction/core";
+import { IMetadataProvider, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual } from "@memberjunction/global";
 import { AIEngine } from "@memberjunction/aiengine";
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
@@ -16,13 +16,20 @@ export interface OperationParameters {
 }
 
 /**
- * Handles agent-related operations for the A2A server
+ * Handles agent-related operations for the A2A server.
+ *
+ * **Multi-provider note:** every entity load/save inside this class binds to the
+ * `IMetadataProvider` passed at construction. The A2A server resolves the provider once
+ * per request and passes it down — when A2AServer gains a per-request provider model, only
+ * the request handler changes; this class is already correct.
  */
 export class AgentOperations {
     private contextUser: UserInfo;
+    private provider: IMetadataProvider;
 
-    constructor(contextUser: UserInfo) {
+    constructor(contextUser: UserInfo, provider: IMetadataProvider) {
         this.contextUser = contextUser;
+        this.provider = provider;
     }
 
     /**
@@ -153,9 +160,8 @@ export class AgentOperations {
                 };
             }
             
-            // Load the agent run from database
-            const md = new Metadata();
-            const agentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', this.contextUser);
+            // Load the agent run from database via the per-request provider.
+            const agentRun = await this.provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', this.contextUser);
             const loaded = await agentRun.Load(runId);
             
             if (!loaded) {
@@ -201,9 +207,8 @@ export class AgentOperations {
                 };
             }
             
-            // Load the agent run from database
-            const md = new Metadata();
-            const agentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', this.contextUser);
+            // Load the agent run from database via the per-request provider.
+            const agentRun = await this.provider.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', this.contextUser);
             const loaded = await agentRun.Load(runId);
             
             if (!loaded) {

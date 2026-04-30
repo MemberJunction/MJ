@@ -1347,6 +1347,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
 
   async ngOnInit() {
     super.ngOnInit();
+    this.setOperationsService.Provider = this.ProviderToUse;
     await this.loadAvailableLists();
     await this.loadSavedState();
     this.NotifyLoadComplete();
@@ -1364,8 +1365,8 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
   }
 
   async loadAvailableLists() {
-    const rv = new RunView();
-    const md = new Metadata();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+    const md = this.ProviderToUse;
 
     const result = await rv.RunView<MJListEntity>({
       EntityName: 'MJ: Lists',
@@ -1525,7 +1526,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     this.cdr.detectChanges();
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const entityId = this.selectedLists[0].list.EntityID;
       const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityId));
 
@@ -1549,7 +1550,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
       const primaryKeyField = primaryKeyFields.length > 0 ? primaryKeyFields[0].Name : 'ID';
       const recordIdFilter = recordIds.map(id => `'${id}'`).join(',');
 
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<Record<string, unknown>>({
         EntityName: entityInfo.Name,
         ExtraFilter: `${primaryKeyField} IN (${recordIdFilter})`,
@@ -1654,7 +1655,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
   openRecord(record: PreviewRecord): void {
     if (!this.currentEntityInfo) {
       // Try to get entity info
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const entityId = this.selectedLists[0]?.list.EntityID;
       if (entityId) {
         this.currentEntityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityId)) || null;
@@ -1738,7 +1739,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     this.cdr.detectChanges();
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const tg = await md.CreateTransactionGroup();
 
       // Queue the list plus all of its initial detail records in a single transaction.
@@ -1873,7 +1874,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     this.cdr.detectChanges();
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const tg = await md.CreateTransactionGroup();
 
       for (const recordId of this.recordsToAdd) {
@@ -1961,7 +1962,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
    */
   private async saveStateToServer(): Promise<void> {
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const userId = md.CurrentUser?.ID;
       if (!userId) return;
 
@@ -1996,7 +1997,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     this.isLoadingSettings = true;
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const userId = md.CurrentUser?.ID;
       if (!userId) {
         this.isLoadingSettings = false;

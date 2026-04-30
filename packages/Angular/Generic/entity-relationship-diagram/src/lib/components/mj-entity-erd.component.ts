@@ -8,7 +8,8 @@ import {
   ViewChild,
   ChangeDetectionStrategy
 } from '@angular/core';
-import { EntityInfo, Metadata } from '@memberjunction/core';
+import { EntityInfo } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ERDDiagramComponent } from './erd-diagram.component';
 import {
   ERDNode,
@@ -136,7 +137,7 @@ export interface OpenEntityRecordEvent {
   `,
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class MJEntityERDComponent implements OnChanges {
+export class MJEntityERDComponent extends BaseAngularComponent implements OnChanges {
   @ViewChild(ERDDiagramComponent) erdDiagram!: ERDDiagramComponent;
 
   // ============================================================================
@@ -296,7 +297,7 @@ export class MJEntityERDComponent implements OnChanges {
   /** Computed ERD nodes */
   erdNodes: ERDNode[] = [];
 
-  private _metadata = new Metadata();
+  private get _metadata() { return this.ProviderToUse; }
 
   // ============================================================================
   // LIFECYCLE

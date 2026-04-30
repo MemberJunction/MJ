@@ -40,7 +40,7 @@ async function main() {
   contextUser.LastName = 'User';
 
   // Ensure metadata provider is configured
-  if (!Metadata.Provider) {
+  if (!Metadata.Provider) {  // global-provider-ok: CLI example — single-provider context
     console.error('ERROR: Metadata provider not configured');
     console.error('Please configure database connection before running this example');
     process.exit(1);
@@ -51,7 +51,7 @@ async function main() {
   // ========================================
 
   console.log('Step 1: Loading entities...');
-  const md = new Metadata();
+  const md = new Metadata();  // global-provider-ok: CLI example — single-provider context
 
   // Filter to specific entity for this example
   const targetEntityName = 'Customers'; // Change this to test with different entities
@@ -168,7 +168,7 @@ async function main() {
 
   console.log('Step 5: Testing query...');
 
-  const dataProvider = Metadata.Provider.DatabaseConnection as DatabaseProviderBase;
+  const dataProvider = Metadata.Provider.DatabaseConnection as DatabaseProviderBase;  // global-provider-ok: CLI example — single-provider context
   const tester = new QueryTester(
     dataProvider,
     entityMetadata,

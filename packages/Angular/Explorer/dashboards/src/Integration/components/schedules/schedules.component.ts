@@ -114,6 +114,7 @@ export class SchedulesComponent extends BaseResourceComponent implements OnInit,
 
   async ngOnInit(): Promise<void> {
     super.ngOnInit();
+    this.dataService.Provider = this.ProviderToUse;
     this.buildTimelineHours();
     await this.LoadData();
     this.NotifyLoadComplete();
@@ -251,7 +252,7 @@ export class SchedulesComponent extends BaseResourceComponent implements OnInit,
     this.cdr.detectChanges();
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const entity = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
       await entity.Load(integrationID);
 
@@ -345,7 +346,7 @@ export class SchedulesComponent extends BaseResourceComponent implements OnInit,
     cronExpression: string,
     integrationID: string
   ): Promise<string> {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
 
     if (existingJobID) {
       const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs');
@@ -379,7 +380,7 @@ export class SchedulesComponent extends BaseResourceComponent implements OnInit,
 
   /** Sets an existing ScheduledJob to Disabled so it stops firing. */
   private async DisableScheduledJob(jobID: string): Promise<void> {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs');
     const loaded = await job.Load(jobID);
     if (loaded) {

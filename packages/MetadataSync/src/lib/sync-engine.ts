@@ -146,7 +146,7 @@ export class SyncEngine {
    * @param contextUser - The user context for database operations
    */
   constructor(contextUser: UserInfo) {
-    this.metadata = new Metadata();
+    this.metadata = new Metadata(); // global-provider-ok: metadata sync operates on the configured provider only
     this.contextUser = contextUser;
   }
   

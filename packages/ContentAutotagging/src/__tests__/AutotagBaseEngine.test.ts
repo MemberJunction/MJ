@@ -7,6 +7,32 @@ const mockRunViewFn = vi.fn().mockResolvedValue({
   Results: [],
 });
 
+// Multi-provider migration helper: mock entity record factory shared between the mock
+// factory below (which hoists to top of file) and the test setup. Use vi.hoisted to make
+// it available even after hoisting reorders things.
+const { buildMockEntityRecord } = vi.hoisted(() => ({
+  buildMockEntityRecord: () => ({
+    NewRecord: vi.fn(),
+    Load: vi.fn().mockResolvedValue(true),
+    Delete: vi.fn().mockResolvedValue(true),
+    Save: vi.fn().mockResolvedValue(true),
+    Set: vi.fn(),
+    Get: vi.fn(),
+    ID: 'mock-id',
+    Name: 'Mock',
+    Description: '',
+    ItemID: '',
+    Tag: '',
+    ContentItemID: '',
+    Value: '',
+    SourceID: '',
+    StartTime: new Date(),
+    EndTime: new Date(),
+    Status: '',
+    ProcessedItems: 0,
+  }),
+}));
+
 const mockRunViewsFn = vi.fn().mockResolvedValue([
   { Success: true, Results: [], TotalCount: 0, RowCount: 0, Elapsed: 0, ErrorMessage: '' },
   { Success: true, Results: [], TotalCount: 0, RowCount: 0, Elapsed: 0, ErrorMessage: '' },
@@ -15,26 +41,12 @@ const mockRunViewsFn = vi.fn().mockResolvedValue([
 vi.mock('@memberjunction/core', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@memberjunction/core')>();
   class MockMetadata {
-    GetEntityObject = vi.fn().mockResolvedValue({
-      NewRecord: vi.fn(),
-      Load: vi.fn().mockResolvedValue(true),
-      Delete: vi.fn().mockResolvedValue(true),
-      Save: vi.fn().mockResolvedValue(true),
-      Set: vi.fn(),
-      Get: vi.fn(),
-      ID: 'mock-id',
-      Name: 'Mock',
-      Description: '',
-      ItemID: '',
-      Tag: '',
-      ContentItemID: '',
-      Value: '',
-      SourceID: '',
-      StartTime: new Date(),
-      EndTime: new Date(),
-      Status: '',
-      ProcessedItems: 0,
-    });
+    GetEntityObject = vi.fn().mockResolvedValue(buildMockEntityRecord());
+    // Multi-provider migration: AutotagBaseEngine uses this.ProviderToUse, which falls back
+    // to Metadata.Provider. Mirror the helper instance shape on the static.
+    static Provider = {
+      GetEntityObject: vi.fn().mockResolvedValue(buildMockEntityRecord()),
+    };
   }
   class MockRunView {
     RunView = mockRunViewFn;
@@ -56,6 +68,9 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
     RegisterClass: vi.fn(() => (target: Function) => target),
     MJGlobal: {
       Instance: {
+        // Multi-provider migration: BaseSingleton.getInstance uses GetGlobalObjectStore.
+        // Provide a per-test object store so AutotagBaseEngine instances resolve correctly.
+        GetGlobalObjectStore: vi.fn(() => ({})),
         ClassFactory: {
           CreateInstance: vi.fn().mockReturnValue({
             ChatCompletion: vi.fn().mockResolvedValue({
@@ -299,6 +314,19 @@ describe('AutotagBaseEngine', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     engine = new AutotagBaseEngine();
+    // Multi-provider migration: AutotagBaseEngine uses this.ProviderToUse, which falls back
+    // to Metadata.Provider. The vi.mock above replaces the Metadata helper class, but the
+    // real BaseEngine internally reads `Metadata.Provider` from a module loaded before the
+    // mock takes effect. Stub the engine's ProviderToUse getter directly so tests reach the
+    // mock GetEntityObject deterministically.
+    Object.defineProperty(engine, 'ProviderToUse', {
+      get() {
+        return {
+          GetEntityObject: vi.fn().mockResolvedValue(buildMockEntityRecord()),
+        };
+      },
+      configurable: true,
+    });
   });
 
   describe('chunkExtractedText', () => {

@@ -6,7 +6,7 @@ import { ActionResult } from "@memberjunction/actions-base";
 
     async function test(params: any) {
         // Create an instance of Metadata to interact with entities.
-        const md = new Metadata();
+        const md = new Metadata();  // global-provider-ok: manual smoke-test script — single-provider context
         
         // Create an instance of RunView to retrieve multiple records from the 'Pending Accounts' entity.
         const rv = new RunView();

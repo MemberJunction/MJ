@@ -6,8 +6,9 @@ import {
   OnDestroy,
   inject,
 } from '@angular/core';
-import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
+import { CompositeKey, RunView } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import {
   MJArchiveConfigurationEntity,
   MJArchiveConfigurationEntityEntity,
@@ -62,7 +63,7 @@ export interface StorageAccountOption {
   styleUrls: ['./archive-config-admin.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class ArchiveConfigAdminComponent implements OnInit, OnDestroy {
+export class ArchiveConfigAdminComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   private cdr = inject(ChangeDetectorRef);
 
   /** All configurations */
@@ -229,7 +230,7 @@ export class ArchiveConfigAdminComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const [configResult, storageResult] = await rv.RunViews([
         {
           EntityName: 'MJ: Archive Configurations',
@@ -294,7 +295,7 @@ export class ArchiveConfigAdminComponent implements OnInit, OnDestroy {
     this.cdr.markForCheck();
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const escapedId = configId.replace(/'/g, "''");
       const result = await rv.RunView<Record<string, unknown>>({
         EntityName: 'MJ: Archive Configuration Entities',
@@ -333,8 +334,8 @@ export class ArchiveConfigAdminComponent implements OnInit, OnDestroy {
   private async saveConfiguration(): Promise<void> {
     if (!this.SelectedConfig?.IsDirty) return;
 
-    const md = new Metadata();
-    const entity = await md.GetEntityObject<MJArchiveConfigurationEntity>('MJ: Archive Configurations');
+    const md = this.ProviderToUse;
+    const entity = await md.GetEntityObject<MJArchiveConfigurationEntity>('MJ: Archive Configurations', md.CurrentUser);
 
     if (!this.SelectedConfig.ID.startsWith('new-')) {
       await entity.InnerLoad(CompositeKey.FromKeyValuePair('ID', this.SelectedConfig.ID));
@@ -376,8 +377,8 @@ export class ArchiveConfigAdminComponent implements OnInit, OnDestroy {
 
   /** Save a single config entity record using strongly-typed entity */
   private async saveConfigEntity(configEntity: ArchiveConfigEntity): Promise<void> {
-    const md = new Metadata();
-    const entity = await md.GetEntityObject<MJArchiveConfigurationEntityEntity>('MJ: Archive Configuration Entities');
+    const md = this.ProviderToUse;
+    const entity = await md.GetEntityObject<MJArchiveConfigurationEntityEntity>('MJ: Archive Configuration Entities', md.CurrentUser);
 
     if (!configEntity.IsNew) {
       await entity.InnerLoad(CompositeKey.FromKeyValuePair('ID', configEntity.ID));
@@ -403,7 +404,7 @@ export class ArchiveConfigAdminComponent implements OnInit, OnDestroy {
 
   /** Refresh the config list after a save */
   private async refreshConfigList(): Promise<void> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<Record<string, unknown>>({
       EntityName: 'MJ: Archive Configurations',
       ExtraFilter: '',

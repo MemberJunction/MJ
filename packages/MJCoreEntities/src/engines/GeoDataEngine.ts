@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, Metadata, UserInfo, LogStatus } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo, LogStatus } from "@memberjunction/core";
 import { MJCountryEntity, MJStateProvinceEntity } from "../generated/entity_subclasses";
 
 /**
@@ -87,7 +87,7 @@ export class GeoDataEngine extends BaseEngine<GeoDataEngine> {
         // The country/state-province dataset is large (~3,000+ rows with BoundaryGeoJSON
         // blobs) and parsing the geometry for point-in-polygon takes ~3-4s synchronously.
         // None of that work is useful unless at least one entity opts into geocoding.
-        const entities = (provider ?? Metadata.Provider)?.Entities;
+        const entities = (provider ?? this.ProviderToUse)?.Entities;
         if (entities && !entities.some(e => e.SupportsGeoCoding)) {
             LogStatus('GeoDataEngine: no entities have SupportsGeoCoding=1 — skipping country/state-province load and geometry parsing');
             return;

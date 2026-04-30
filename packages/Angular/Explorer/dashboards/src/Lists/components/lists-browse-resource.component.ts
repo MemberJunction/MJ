@@ -1781,8 +1781,8 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     this.isLoading = true;
 
     try {
-      const md = new Metadata();
-      const rv = new RunView();
+      const md = this.ProviderToUse;
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       this.currentUserId = md.CurrentUser?.ID || '';
 
       // Load all lists, categories, details, and users in parallel
@@ -2183,8 +2183,8 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     this.cdr.detectChanges();
 
     try {
-      const md = new Metadata();
-      const rv = new RunView();
+      const md = this.ProviderToUse;
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
       const newList = await md.GetEntityObject<MJListEntity>('MJ: Lists');
       newList.Name = `${listToDuplicate.Name} (Copy)`;
@@ -2292,7 +2292,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     const listName = this.newListName;
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       let list: MJListEntity;
 
       if (this.editingList) {

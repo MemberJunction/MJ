@@ -49,7 +49,7 @@ export class ArtifactResource extends BaseResourceComponent {
 
   ngOnInit() {
     super.ngOnInit();
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     this.currentUser = md.CurrentUser;
 
     // Get artifact ID from resource data
@@ -96,7 +96,7 @@ export class ArtifactResource extends BaseResourceComponent {
     // Try to load artifact name from database
     if (data.ResourceRecordID) {
       try {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const artifact = await md.GetEntityObject<any>('MJ: Conversation Artifacts');
         await artifact.Load(data.ResourceRecordID);
         return artifact.Name || `Artifact - ${data.ResourceRecordID}`;

@@ -1,21 +1,32 @@
 import { MJRecommendationEntity, MJRecommendationItemEntity } from '@memberjunction/core-entities';
-import { LogError, Metadata, UserInfo } from '@memberjunction/core';
+import { LogError, Metadata, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { RecommendationRequest, RecommendationResult } from './generic/types';
 
 /**
  * Base class for all recommendation providers
  */
 export abstract class RecommendationProviderBase {
-  private _md: Metadata;
   private _ContextUser: UserInfo;
+  private _provider: IMetadataProvider | null = null;
 
   public constructor(ContextUser: UserInfo) {
     this._ContextUser = ContextUser;
-    this._md = new Metadata();
   }
 
   public get ContextUser(): UserInfo {
     return this._ContextUser;
+  }
+
+  /**
+   * Optional metadata provider override. Callers should set
+   * `instance.Provider = providerToUse` before invoking provider methods
+   * in multi-provider contexts. Falls back to the global default provider when unset.
+   */
+  public get Provider(): IMetadataProvider {
+    return this._provider ?? (new Metadata() as unknown as IMetadataProvider);
+  }
+  public set Provider(value: IMetadataProvider | null) {
+    this._provider = value;
   }
   
   /**

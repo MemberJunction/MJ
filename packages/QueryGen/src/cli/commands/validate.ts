@@ -41,7 +41,7 @@ export async function validateCommand(options: Record<string, unknown>): Promise
     // 2. Verify database connection and load metadata
     spinner.text = 'Loading metadata...';
     // Assume provider is already configured by the calling application
-    if (!Metadata.Provider) {
+    if (!Metadata.Provider) { // global-provider-ok: CLI tool, single-provider context
       throw new Error('Metadata provider not configured. Please ensure database connection is set up before running CLI.');
     }
     spinner.succeed('Metadata loaded');
@@ -52,7 +52,7 @@ export async function validateCommand(options: Record<string, unknown>): Promise
     spinner.succeed(chalk.green(`Found ${queryFiles.length} query files`));
 
     // 4. Validate each query
-    const dataProvider = Metadata.Provider.DatabaseConnection as DatabaseProviderBase;
+    const dataProvider = Metadata.Provider.DatabaseConnection as DatabaseProviderBase; // global-provider-ok: CLI tool, single-provider context
     let passCount = 0;
     let failCount = 0;
     const errors: Array<{ file: string; error: string }> = [];

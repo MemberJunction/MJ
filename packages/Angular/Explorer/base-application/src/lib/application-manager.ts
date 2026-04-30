@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { MJGlobal, MJEventType, UUIDsEqual } from '@memberjunction/global';
-import { Metadata, ApplicationInfo, LogError, LogStatus, StartupManager } from '@memberjunction/core';
+import { Metadata, ApplicationInfo, LogError, LogStatus, StartupManager, IMetadataProvider } from '@memberjunction/core';
 import { MJUserApplicationEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseApplication } from './base-application';
 
@@ -117,6 +117,22 @@ export class ApplicationManager {
     return this.activeApp$.value;
   }
 
+  /**
+   * Optional explicit metadata provider. When set, all provider lookups
+   * use this instead of falling back to `Metadata.Provider`. This is the
+   * threading point for multi-provider Angular apps — the shell calls
+   * `setProvider(this.ProviderToUse)` after the manager is acquired from DI.
+   */
+  private _provider: IMetadataProvider | null = null;
+
+  public set Provider(value: IMetadataProvider | null) {
+      this._provider = value;
+  }
+
+  public get Provider(): IMetadataProvider {
+      return this._provider ?? Metadata.Provider;
+  }
+
   constructor() {
     this.Initialize();
   }
@@ -217,7 +233,7 @@ export class ApplicationManager {
     this.loading$.next(true);
 
     try {
-      const md = new Metadata();
+      const md = this.Provider;
       const appInfoList: ApplicationInfo[] = md.Applications;
 
       // First, create BaseApplication instances for ALL apps
@@ -261,7 +277,10 @@ export class ApplicationManager {
 
         if (app) {
           // should always get here unless failure to load registered sub-class but CreateInstance has
-          // fallback to base class anyway so should always get here 
+          // fallback to base class anyway so should always get here
+          if (this._provider) {
+            app.Provider = this._provider;
+          }
           allApps.push(app);
         }
       }
@@ -289,7 +308,7 @@ export class ApplicationManager {
    * This can be called to refresh after configuration changes.
    */
   private async loadUserApplicationConfig(): Promise<void> {
-    const md = new Metadata();
+    const md = this.Provider;
     const allApps = this.allApplications$.value;
 
     // Build a map for quick lookup

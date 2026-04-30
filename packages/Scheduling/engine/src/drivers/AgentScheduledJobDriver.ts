@@ -5,7 +5,7 @@
 
 import { RegisterClass } from '@memberjunction/global';
 import { BaseScheduledJob, ScheduledJobExecutionContext } from '../BaseScheduledJob';
-import { ValidationResult, UserInfo, Metadata, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/core';
+import { ValidationResult, UserInfo, Metadata, ValidationErrorInfo, ValidationErrorType, IMetadataProvider } from '@memberjunction/core';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import {
@@ -158,8 +158,8 @@ export class AgentScheduledJobDriver extends BaseScheduledJob {
         };
     }
 
-    private async loadAgent(agentId: string, contextUser: UserInfo): Promise<MJAIAgentEntityExtended> {
-        const md = new Metadata();
+    private async loadAgent(agentId: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<MJAIAgentEntityExtended> {
+        const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
         const agent = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', contextUser);
         const loaded = await agent.Load(agentId);
 

@@ -71,7 +71,7 @@ export class GraphQLServerGeneratorBase {
     const isInternal = generatedEntitiesImportLibrary.trim().toLowerCase() === '@memberjunction/core-entities';
     let sEntityOutput: string = '';
     try {
-      const md = new Metadata();
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
       const fields: EntityFieldInfo[] = sortBySequenceAndCreatedAt(entity.Fields);
       const serverGraphQLTypeName: string = this.getServerGraphQLTypeName(entity);
 
@@ -190,7 +190,7 @@ ${this.generateEntityImports(entities, importLibrary, isInternal)}
     importLibrary: string,
     excludeRelatedEntitiesExternalToSchema: boolean
   ): string {
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
     let sRet: string = `/********************************************************************************
 * ${entity.Name} TypeGraphQL Type Class Definition - AUTO GENERATED FILE
 *
@@ -329,7 +329,7 @@ export class ${serverGraphQLTypeName} {`;
     excludeRelatedEntitiesExternalToSchema: boolean,
     isInternal: boolean
   ): string {
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
     const typeNameBase = this.getServerGraphQLTypeNameBase(entity);
     let sRet = '';
 
@@ -469,7 +469,7 @@ export class ${typeNameBase}Resolver${entity.CustomResolverAPI ? 'Base' : ''} ex
    */
   protected schemaNameExpression(entity: EntityInfo): string {
     if (entity.SchemaName === mjCoreSchema) {
-      return 'Metadata.Provider.ConfigData.MJCoreSchemaName';
+      return 'Metadata.Provider.ConfigData.MJCoreSchemaName'; // global-provider-ok: codegen runs offline against a single provider
     }
     return `'${entity.SchemaName}'`;
   }
@@ -607,7 +607,7 @@ export class ${classPrefix}${typeNameBase}Input {`;
   }
 
   protected generateOneToManyFieldResolver(entity: EntityInfo, r: EntityRelationshipInfo, isInternal: boolean): string {
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
     const re = md.EntityByName(r.RelatedEntity);
     const typeNameBase = this.getServerGraphQLTypeNameBase(entity);
     const instanceName = typeNameBase.toLowerCase() + this.GraphQLTypeSuffix;
@@ -658,7 +658,7 @@ export class ${classPrefix}${typeNameBase}Input {`;
   }
 
   protected generateManyToManyFieldResolver(entity: EntityInfo, r: EntityRelationshipInfo): string {
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
     const re = md.Entities.find((e) => e.Name.toLowerCase() == r.RelatedEntity.toLowerCase())!;
     const typeNameBase = this.getServerGraphQLTypeNameBase(entity);
     const instanceName = typeNameBase.toLowerCase() + this.GraphQLTypeSuffix;

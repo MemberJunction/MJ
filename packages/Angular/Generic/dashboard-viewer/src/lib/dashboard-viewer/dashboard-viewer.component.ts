@@ -19,6 +19,7 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { DashboardEngine, MJDashboardEntity, MJDashboardPartTypeEntity, MJDashboardCategoryEntity } from '@memberjunction/core-entities';
 import { BreadcrumbNavigateEvent } from '../breadcrumb/dashboard-breadcrumb.component';
 import { ResolvedLayoutConfig } from 'golden-layout';
@@ -52,7 +53,7 @@ import { BaseDashboardPart } from '../parts/base-dashboard-part';
     styleUrls: ['./dashboard-viewer.component.css'],
     encapsulation: ViewEncapsulation.None
 })
-export class DashboardViewerComponent implements OnDestroy {
+export class DashboardViewerComponent extends BaseAngularComponent implements OnDestroy {
     // ========================================
     // Inputs
     // ========================================
@@ -217,6 +218,7 @@ export class DashboardViewerComponent implements OnDestroy {
         private readonly injector: Injector,
         private readonly environmentInjector: EnvironmentInjector
     ) {
+        super();
         // Store the promise so layout initialization can wait for it
         this._partTypesLoaded = this.loadPartTypes();
     }
@@ -499,8 +501,8 @@ export class DashboardViewerComponent implements OnDestroy {
             this.isLoading = true;
             this.cdr.detectChanges();
 
-            const md = new Metadata();
-            const dashboard = await md.GetEntityObject<MJDashboardEntity>('MJ: Dashboards');
+            const p = this.ProviderToUse;
+            const dashboard = await p.GetEntityObject<MJDashboardEntity>('MJ: Dashboards', p.CurrentUser);
             const loaded = await dashboard.Load(id);
 
             if (loaded) {

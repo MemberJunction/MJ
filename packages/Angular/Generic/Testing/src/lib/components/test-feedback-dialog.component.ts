@@ -1,6 +1,7 @@
 import { Component, OnInit, Input, Output, EventEmitter, ChangeDetectorRef } from '@angular/core';
-import { Metadata, UserInfo, RunView } from '@memberjunction/core';
+import { UserInfo, RunView } from '@memberjunction/core';
 import { MJTestRunFeedbackEntity } from '@memberjunction/core-entities';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 export interface TestFeedbackDialogData {
   testRunId: string;
@@ -456,7 +457,7 @@ export interface TestFeedbackDialogResult {
     }
   `]
 })
-export class TestFeedbackDialogComponent implements OnInit {
+export class TestFeedbackDialogComponent extends BaseAngularComponent implements OnInit {
   private _data!: TestFeedbackDialogData;
   private _visible = false;
   private dataLoaded = false;
@@ -503,11 +504,11 @@ export class TestFeedbackDialogComponent implements OnInit {
   errorMessage = '';
   existingFeedback: MJTestRunFeedbackEntity | null = null;
 
-  private metadata = new Metadata();
+  private get metadata() { return this.ProviderToUse; }
 
   constructor(
     private cdr: ChangeDetectorRef
-  ) {}
+  ) { super(); }
 
   async ngOnInit(): Promise<void> {
     if (this._visible && this._data && !this.dataLoaded) {
@@ -536,7 +537,7 @@ export class TestFeedbackDialogComponent implements OnInit {
     this.isLoading = true;
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJTestRunFeedbackEntity>({
         EntityName: 'MJ: Test Run Feedbacks',
         ExtraFilter: `TestRunID='${this.data.testRunId}' AND ReviewerUserID='${this.data.currentUser.ID}'`,

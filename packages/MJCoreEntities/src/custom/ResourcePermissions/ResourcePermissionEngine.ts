@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, IStartupSink, Metadata, RegisterForStartup, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, IStartupSink, RegisterForStartup, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual } from "@memberjunction/global";
 import { MJResourcePermissionEntity, MJResourceTypeEntity } from "../../generated/entity_subclasses";
 
@@ -178,7 +178,7 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
      * foreign key to the Users entity from the resource type's entity and looks for the field that is consider the "Name Field" for the entity and returns those values.
      */
     public GetResourceTypeInfoFields(ResourceTypeID: string): {OwnerIDFieldName: string, NameFieldName: string, PrimaryKeyFieldName: string} {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const rt = this.ResourceTypes.find((rt) => UUIDsEqual(rt.ID, ResourceTypeID));
         if (!rt)
             throw new Error(`Resource Type ${ResourceTypeID} not found`);

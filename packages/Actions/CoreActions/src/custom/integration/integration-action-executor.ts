@@ -174,7 +174,7 @@ export class IntegrationActionExecutor extends BaseAction {
         id: string,
         params: RunActionParams
     ): Promise<MJCompanyIntegrationEntity> {
-        const md = new Metadata();
+        const md = params.Provider ?? new Metadata();
         const entity = await md.GetEntityObject<MJCompanyIntegrationEntity>(
             'Company Integrations', params.ContextUser
         );

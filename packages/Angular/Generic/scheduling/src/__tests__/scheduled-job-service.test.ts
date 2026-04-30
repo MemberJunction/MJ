@@ -13,20 +13,35 @@ const mockRunViewMethod = vi.fn();
 // Shared mock for entity Load
 const mockEntityLoad = vi.fn().mockResolvedValue(true);
 
-vi.mock('@memberjunction/core', () => ({
-    Metadata: function Metadata() {
+vi.mock('@memberjunction/core', () => {
+    const MockMetadata: any = function Metadata() {
         return {
             GetEntityObject: vi.fn().mockResolvedValue({
                 Load: mockEntityLoad,
                 ID: 'job-001',
                 Name: 'Test Job',
             }),
+            Entities: [],
         };
-    },
-    RunView: function RunView() {
-        return { RunView: mockRunViewMethod };
-    },
-}));
+    };
+    // Add static Provider for the migration's `?? Metadata.Provider` fallback in services.
+    // Use a getter for GetEntityObject so we don't reference top-level let/const variables
+    // at vi.mock factory hoist time.
+    MockMetadata.Provider = {
+        Entities: [],
+        GetEntityObject(..._args: unknown[]) {
+            return Promise.resolve({
+                Load: mockEntityLoad,
+                ID: 'job-001',
+                Name: 'Test Job',
+            });
+        },
+    };
+    const MockRunView: any = function RunView() { return { RunView: mockRunViewMethod }; };
+    // Multi-provider migration: services now use RunView.FromMetadataProvider(...) instead of `new RunView()`.
+    MockRunView.FromMetadataProvider = (_p: unknown) => ({ RunView: mockRunViewMethod });
+    return { Metadata: MockMetadata, RunView: MockRunView };
+});
 
 vi.mock('@memberjunction/core-entities', () => ({
     MJScheduledJobEntity: class {},

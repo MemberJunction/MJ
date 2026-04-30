@@ -1,4 +1,4 @@
-import { CompositeKey, Metadata, UserInfo } from '@memberjunction/core';
+import { CompositeKey, IMetadataProvider, Metadata, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { TemplateEngineServer } from '@memberjunction/templates';
 
@@ -18,6 +18,14 @@ export abstract class EntityDocumentTemplateParserBase {
     return EntityDocumentTemplateParserBase.__cache;
   }
 
+  /** Optional provider override; falls back to Metadata.Provider when not set. */
+  protected _provider?: IMetadataProvider;
+
+  /** Returns the active provider — explicit override if set, otherwise the global default. */
+  protected get ProviderToUse(): IMetadataProvider {
+    return this._provider ?? Metadata.Provider;
+  }
+
   /**
    * This method will parse an entity document template and replace values within ${} placeholders with actual values from the entity record. In the case of function calls
    * within the placeholders, the functions object must be provided to parse the function calls.
@@ -32,7 +40,7 @@ export abstract class EntityDocumentTemplateParserBase {
       throw new Error('ContextUser is required to parse the template');
     }
 
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const entityInfo = md.Entities.find((e) => UUIDsEqual(e.ID, EntityID));
     if (!entityInfo) {
       throw new Error(`Entity with ID ${EntityID} not found.`);

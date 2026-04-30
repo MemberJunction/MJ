@@ -1,8 +1,8 @@
 # Multi-Provider Threading Plan
 
-**Status:** Phase 1 in flight (PR `fix-cache-write-allowcaching`); Phases 2–6 not yet started.
+**Status: COMPLETE.** Phase 1 merged (PR `fix-cache-write-allowcaching`); Phases 2–6 done in PR `multi-provider-threading`.
 **Target:** Eliminate all uncontrolled reads of the global default `IMetadataProvider` in code paths that should be **per-provider** (multi-tenant servers, parallel client connections, transaction-isolated request handlers).
-**Owner:** TBD.
+**Result:** Zero non-allowlisted violations across all 92 packages. Compliance scanner flipped to **strict mode** — any new `new Metadata()` / `Metadata.Provider` reference fails CI unless allowlisted with `// global-provider-ok: <reason>`.
 
 ---
 
@@ -488,7 +488,38 @@ These are pessimistic estimates that include integration testing, code review it
 
 ---
 
-## 12. Open Questions for Reviewer
+## 12. Deferred Work — REST and A2A Per-Request Provider Plumbing
+
+Phases 2–6 are complete and the strict compliance test is green. Two structural gaps remain, intentionally deferred because both surfaces are uncommon in current deployments:
+
+### 12.1 REST endpoint handlers (~13 sites)
+
+**Files:**
+- [packages/MJServer/src/rest/RESTEndpointHandler.ts](../packages/MJServer/src/rest/RESTEndpointHandler.ts)
+- [packages/MJServer/src/rest/EntityCRUDHandler.ts](../packages/MJServer/src/rest/EntityCRUDHandler.ts)
+- [packages/MJServer/src/rest/ViewOperationsHandler.ts](../packages/MJServer/src/rest/ViewOperationsHandler.ts)
+
+All currently allowlisted with `// global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet`.
+
+**Problem:** GraphQL resolvers receive `AppContext.providers` (built per-request via `resolveProviderForRequest`), but REST middleware has no equivalent. Every REST handler reaches for `new Metadata()` and silently uses the global default — fine for single-server deployments, broken for multi-tenant ones.
+
+**Fix:** Build the same per-request provider materialization that GraphQL uses, expose it as an Express middleware that attaches `req.mjProvider`, and update each handler to read from `req.mjProvider` instead of `new Metadata()`. The handler bodies are mechanical to migrate once the middleware exists.
+
+### 12.2 A2A server request boundary (1 centralized site)
+
+**File:** [packages/AI/A2AServer/src/Server.ts:387](../packages/AI/A2AServer/src/Server.ts#L387)
+
+Already centralized into a single `resolveProviderForRequest()` boundary that returns `Metadata.Provider`. The constructors of `AgentOperations` and `EntityOperations` already accept an `IMetadataProvider`, so the rest of the A2A code is provider-correct — only this one entry point needs to materialize a per-request provider.
+
+**Fix:** Mirror MJServer's `resolveProviderForRequest` once A2A grows per-request authentication / tenant resolution. One-line change at the boundary; downstream code is already wired.
+
+### 12.3 Why deferred
+
+Neither REST endpoints nor A2A are commonly used in current MJ deployments. Both are single-line migrations at a clear boundary once the per-request provider plumbing is built. Tracking them here so the next person picking up multi-tenant work has a clean starting point.
+
+---
+
+## 13. Open Questions for Reviewer
 
 1. **MJServer mode helper:** `ResolverBase.GetProvider(ctx, mode)` — should `mode` default to `'read'` or `'write'`? Current draft says `'read'`. Mutations explicitly ask for `'write'`.
 2. **Engine global `.Instance`:** Should we deprecate `Engine.Instance` entirely, or leave it as the "global default" path with a warning? Strict deprecation is cleaner; leaving it is gentler on third-party consumers.

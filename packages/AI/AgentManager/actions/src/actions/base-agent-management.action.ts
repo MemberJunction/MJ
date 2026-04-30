@@ -1,6 +1,6 @@
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
-import { BaseEntity, Metadata, LogError, RunView, UserInfo } from "@memberjunction/core";
+import { BaseEntity, IMetadataProvider, Metadata, LogError, RunView, UserInfo } from "@memberjunction/core";
 import { DatabaseProviderBase } from "@memberjunction/core";
 import { MJAIAgentTypeEntity, MJAIAgentPromptEntity } from "@memberjunction/core-entities";
 import { MJAIPromptEntityExtended, MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
@@ -84,10 +84,13 @@ export abstract class BaseAgentManagementAction extends BaseAction {
     }
 
     /**
-     * Get metadata instance
+     * Resolve the metadata provider for the running action. Pass `params` from
+     * `InternalRunAction` so every entity load/save binds to the per-request provider
+     * (`params.Provider`) rather than the process-global default. Falls back to a default
+     * Metadata helper instance when no provider was passed (e.g. legacy callers).
      */
-    protected getMetadata(): Metadata {
-        return new Metadata();
+    protected getMetadata(params?: RunActionParams): IMetadataProvider {
+        return (params?.Provider ?? new Metadata()) as unknown as IMetadataProvider;
     }
 
     /**
@@ -202,11 +205,12 @@ export abstract class BaseAgentManagementAction extends BaseAction {
     }
 
     /**
-     * Load an AI Agent entity by ID
+     * Load an AI Agent entity by ID. Pass the running action's `params` so the underlying
+     * entity load uses the per-request provider (multi-tenant correctness).
      */
-    protected async loadAgent(agentID: string, contextUser: UserInfo): Promise<AgentLoadResult> {
+    protected async loadAgent(agentID: string, contextUser: UserInfo, params?: RunActionParams): Promise<AgentLoadResult> {
         try {
-            const md = this.getMetadata();
+            const md = this.getMetadata(params);
             const agent = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', contextUser);
             
             if (!agent) {
@@ -243,11 +247,12 @@ export abstract class BaseAgentManagementAction extends BaseAction {
     }
 
     /**
-     * Validate agent type exists
+     * Validate agent type exists. Pass the running action's `params` so the lookup uses
+     * the per-request provider (multi-tenant correctness).
      */
-    protected async validateAgentType(typeID: string, contextUser: UserInfo): Promise<AgentTypeValidationResult> {
+    protected async validateAgentType(typeID: string, contextUser: UserInfo, params?: RunActionParams): Promise<AgentTypeValidationResult> {
         try {
-            const md = this.getMetadata();
+            const md = this.getMetadata(params);
             const agentType = await md.GetEntityObject<MJAIAgentTypeEntity>('MJ: AI Agent Types', contextUser);
             
             if (!agentType) {
@@ -298,16 +303,19 @@ export abstract class BaseAgentManagementAction extends BaseAction {
     }
 
     /**
-     * Creates a prompt and associates it with an agent
+     * Creates a prompt and associates it with an agent. Pass the running action's `params`
+     * so the underlying entity creates bind to the per-request provider (multi-tenant
+     * correctness).
      */
     protected async createAndAssociatePrompt(
         agent: MJAIAgentEntityExtended,
         promptText: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        params?: RunActionParams
     ): Promise<PromptCreationResult> {
         try {
-            const md = this.getMetadata();
-            
+            const md = this.getMetadata(params);
+
             // Create the prompt
             const prompt = await md.GetEntityObject<MJAIPromptEntityExtended>('MJ: AI Prompts', contextUser);
             if (!prompt) {
@@ -317,7 +325,7 @@ export abstract class BaseAgentManagementAction extends BaseAction {
             prompt.NewRecord();
             prompt.Name = `${agent.Name} System Prompt`;
             prompt.Description = `System prompt for ${agent.Name} agent`;
-            prompt.TypeID = await this.getPromptTypeID('Chat', contextUser);
+            prompt.TypeID = await this.getPromptTypeID('Chat', contextUser, params);
             prompt.Status = 'Active';
             prompt.ResponseFormat = 'JSON';
             prompt.PromptRole = 'System';
@@ -365,10 +373,12 @@ export abstract class BaseAgentManagementAction extends BaseAction {
     }
 
     /**
-     * Gets the prompt type ID for a given type name
+     * Gets the prompt type ID for a given type name. Pass the running action's `params`
+     * so the RunView binds to the per-request provider.
      */
-    private async getPromptTypeID(typeName: string, contextUser: UserInfo): Promise<string> {
-        const rv = new RunView();
+    private async getPromptTypeID(typeName: string, contextUser: UserInfo, params?: RunActionParams): Promise<string> {
+        const provider = (params?.Provider ?? new Metadata()) as unknown as IMetadataProvider;
+        const rv = RunView.FromMetadataProvider(provider);
         const result = await rv.RunView({
             EntityName: 'MJ: AI Prompt Types',
             ExtraFilter: `Name = '${typeName}'`,

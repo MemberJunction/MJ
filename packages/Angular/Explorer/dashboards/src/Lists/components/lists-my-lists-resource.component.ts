@@ -1361,8 +1361,8 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
     this.isLoading = true;
 
     try {
-      const md = new Metadata();
-      const rv = new RunView();
+      const md = this.ProviderToUse;
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const userId = md.CurrentUser?.ID;
 
       if (!userId) {
@@ -1681,8 +1681,8 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
     this.cdr.detectChanges();
 
     try {
-      const md = new Metadata();
-      const rv = new RunView();
+      const md = this.ProviderToUse;
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
       const newList = await md.GetEntityObject<MJListEntity>('MJ: Lists');
       newList.Name = `${listToDuplicate.Name} (Copy)`;
@@ -1791,7 +1791,7 @@ export class ListsMyListsResource extends BaseResourceComponent implements OnDes
     const listName = this.newListName;
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       let list: MJListEntity;
 
       if (this.editingList) {

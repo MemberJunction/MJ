@@ -238,7 +238,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
     private settingsPersistSubject = new Subject<void>();
     private settingsLoaded = false;
 
-    private metadata = new Metadata();
+    private metadata = this.ProviderToUse;
 
     public servers: MCPServerData[] = [];
     public connections: MCPConnectionData[] = [];
@@ -588,7 +588,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
             // Initialize MCPEngine and load execution logs in parallel
             // forceRefresh=true is needed after sync operations since backend changes
             // won't trigger local BaseEntity events
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const [, logsResult] = await Promise.all([
                 MCPEngine.Instance.Config(forceRefresh),
                 rv.RunView<MJMCPToolExecutionLogEntity>({
@@ -1079,7 +1079,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         }
 
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const entity = await md.GetEntityObject<MJMCPServerEntity>('MJ: MCP Servers');
             const loaded = await entity.Load(server.ID);
             if (!loaded) {
@@ -1107,7 +1107,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
      * Internal helper to delete a tool by ID without confirmation
      */
     private async deleteToolInternal(toolId: string): Promise<void> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const entity = await md.GetEntityObject<MJMCPServerToolEntity>('MJ: MCP Server Tools');
         const loaded = await entity.Load(toolId);
         if (!loaded) {
@@ -1130,8 +1130,8 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
      */
     private async deleteConnectionInternal(connectionId: string): Promise<void> {
         console.log(`[MCPDashboard] deleteConnectionInternal called for connectionId: ${connectionId}`);
-        const rv = new RunView();
-        const md = new Metadata();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        const md = this.ProviderToUse;
         const tg = await md.CreateTransactionGroup();
 
         // Queue deletes for execution logs
@@ -1261,7 +1261,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         this.ServerFormError = null;
         this.cdr.detectChanges();
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const entity = await md.GetEntityObject<MJMCPServerEntity>('MJ: MCP Servers');
             if (this.EditingServer?.ID) {
                 await entity.Load(this.EditingServer.ID);
@@ -1325,7 +1325,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         this.ConnectionFormError = null;
         this.cdr.detectChanges();
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             let credentialID: string | null = null;
 
             // If a bearer token was provided, create a Credential record for it
@@ -1943,7 +1943,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
      */
     public async loadFavorites(): Promise<void> {
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const currentUserID = md.CurrentUser?.ID;
             if (!currentUserID) return;
             // MCPEngine caches MCP: Tool Favorites via BaseEngine CacheLocal — Config() is
@@ -1973,7 +1973,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
 
     public async toggleFavorite(toolID: string, event?: Event): Promise<void> {
         if (event) event.stopPropagation();
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const currentUserID = md.CurrentUser?.ID;
         if (!currentUserID) {
             console.warn('[MCPDashboard] toggleFavorite: no current user');
@@ -2388,7 +2388,7 @@ export class MCPDashboardComponent extends BaseDashboard implements OnInit, Afte
         // Load full log details if needed (InputArgs, Result)
         if (!log.InputArgs && !log.Result) {
             try {
-                const rv = new RunView();
+                const rv = RunView.FromMetadataProvider(this.ProviderToUse);
                 const result = await rv.RunView<MJMCPToolExecutionLogEntity>({
                     EntityName: 'MJ: MCP Tool Execution Logs',
                     ExtraFilter: `ID='${log.ID}'`,

@@ -67,7 +67,7 @@ export function attachTenantContext(
 function isEntityScoped(entityName: string, config: MultiTenancyConfig): boolean {
   // Auto-exclude core MJ entities (entities in the __mj schema)
   if (config.autoExcludeCoreEntities) {
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: read-only schema check. Hooks (PreRunViewHook/PreSaveHook) don't carry per-request provider; reading the constant `__mj` schema flag is identical across every provider's catalog.
     const entity = md.Entities.find(
       e => e.Name.trim().toLowerCase() === entityName.trim().toLowerCase()
     );

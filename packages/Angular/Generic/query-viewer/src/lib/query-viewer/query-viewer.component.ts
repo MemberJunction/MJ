@@ -11,7 +11,8 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
-import { RunQuery, RunQueryParams, RunQueryResult, Metadata, QueryInfo } from '@memberjunction/core';
+import { RunQuery, RunQueryParams, RunQueryResult, QueryInfo } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UUIDsEqual } from '@memberjunction/global';
 import { PageChangeEvent } from '@memberjunction/ng-pagination';
 import { UserInfoEngine } from '@memberjunction/core-entities';
@@ -56,7 +57,7 @@ import {
     styleUrls: ['./query-viewer.component.css'],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class QueryViewerComponent implements OnInit, OnDestroy {
+export class QueryViewerComponent extends BaseAngularComponent implements OnInit, OnDestroy {
     // ========================================
     // Inputs
     // ========================================
@@ -183,11 +184,10 @@ export class QueryViewerComponent implements OnInit, OnDestroy {
     public QueryTotalRowCount: number = 0;
     public CurrentPageNumber: number = 1;
 
-    private metadata = new Metadata();
     private destroy$ = new Subject<void>();
     private userInfoEngine = UserInfoEngine.Instance;
 
-    constructor(private cdr: ChangeDetectorRef) {}
+    constructor(private cdr: ChangeDetectorRef) { super(); }
 
     ngOnInit(): void {}
 
@@ -219,7 +219,7 @@ export class QueryViewerComponent implements OnInit, OnDestroy {
         }
 
         // Load query info from metadata
-        this.QueryInfo = this.metadata.Queries.find(q => UUIDsEqual(q.ID, this._queryId)) || null;
+        this.QueryInfo = this.ProviderToUse.Queries.find(q => UUIDsEqual(q.ID, this._queryId)) || null;
 
         if (!this.QueryInfo) {
             this.LastError = `Query with ID ${this._queryId} not found`;

@@ -995,7 +995,7 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
     }
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJTaskEntity>(
         {
           EntityName: 'MJ: Tasks',

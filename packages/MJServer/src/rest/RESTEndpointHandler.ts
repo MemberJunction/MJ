@@ -74,7 +74,7 @@ export class RESTEndpointHandler {
      */
     private isEntityAllowed(entityName: string): boolean {
         const name = entityName.toLowerCase();
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
         const entity = md.Entities.find(e => e.Name.toLowerCase() === name);
         
         // If entity not found in metadata, don't allow it
@@ -417,7 +417,7 @@ export class RESTEndpointHandler {
             const user = req['mjUser'];
 
             // Get the entity object
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
             const entity = await md.GetEntityObject(entityName, user);
 
             // Create a composite key
@@ -445,7 +445,7 @@ export class RESTEndpointHandler {
             const user = req['mjUser'];
 
             // Get the entity object
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
             const entity = await md.GetEntityObject(entityName, user);
 
             // Create a composite key
@@ -473,7 +473,7 @@ export class RESTEndpointHandler {
             const user = req['mjUser'];
 
             // Get the entity object
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
             const entity = await md.GetEntityObject(entityName, user);
 
             // Create a composite key
@@ -589,7 +589,7 @@ export class RESTEndpointHandler {
             const user = req['mjUser'];
             
             // Filter entities based on user permissions and REST API configuration
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
             const entities = md.Entities.filter(e => {
                 // First check if entity is allowed based on configuration
                 if (!this.isEntityAllowed(e.Name)) {
@@ -629,7 +629,7 @@ export class RESTEndpointHandler {
 
             const user = req['mjUser'];
             
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
             const entity = md.Entities.find(e => e.Name === entityName);
             if (!entity) {
                 res.status(404).json({ error: `Entity '${entityName}' not found` });
@@ -695,7 +695,7 @@ export class RESTEndpointHandler {
             const user = req['mjUser'];
 
             // Get the entity object
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
             const entity = await md.GetEntityObject(entityName, user);
 
             // Create a composite key
@@ -723,7 +723,7 @@ export class RESTEndpointHandler {
             const user = req['mjUser'];
 
             // Get the entity object
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
             const entity = await md.GetEntityObject(entityName, user);
 
             // Create a composite key
@@ -751,7 +751,7 @@ export class RESTEndpointHandler {
             const user = req['mjUser'];
 
             // Get the entity object
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
             const entity = await md.GetEntityObject(entityName, user);
 
             // Create a composite key

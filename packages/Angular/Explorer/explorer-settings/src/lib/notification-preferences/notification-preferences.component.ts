@@ -4,6 +4,7 @@ import { MJUserNotificationTypeEntity, MJUserNotificationPreferenceEntity, UserI
 import { SharedService } from '@memberjunction/ng-shared';
 import { UUIDsEqual } from '@memberjunction/global';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 /**
  * View model for managing notification preferences in the UI.
  * Combines notification type definition with user's current preferences and change tracking.
@@ -49,13 +50,14 @@ interface NotificationPreferenceViewModel {
   templateUrl: './notification-preferences.component.html',
   styleUrls: ['./notification-preferences.component.css'],
 })
-export class NotificationPreferencesComponent implements OnInit {
+export class NotificationPreferencesComponent extends BaseAngularComponent implements OnInit {
   loading = true;
   saving = false;
   viewModels: NotificationPreferenceViewModel[] = [];
   hasChanges = false;
 
-  constructor(private sharedService: SharedService) {}
+  constructor(private sharedService: SharedService) {
+    super();}
 
   /**
    * Angular lifecycle hook - initializes the component by loading notification preferences.
@@ -142,7 +144,7 @@ export class NotificationPreferencesComponent implements OnInit {
   async save(): Promise<void> {
     try {
       this.saving = true;
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const currentUser = md.CurrentUser;
       const transGroup = await md.CreateTransactionGroup();
 

@@ -1,9 +1,9 @@
 import { Component, Input, AfterViewInit, ChangeDetectorRef, ElementRef } from '@angular/core';
 
-import { BaseEntity, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, Metadata, RunView, RunViewParams, ValidationErrorInfo } from '@memberjunction/core';
+import { BaseEntity, EntityFieldInfo, EntityFieldTSType, EntityInfo, LogError, RunView, RunViewParams, ValidationErrorInfo } from '@memberjunction/core';
 import { MJEvent, MJEventType, MJGlobal } from '@memberjunction/global';
 import { SharedService } from '@memberjunction/ng-shared';
-import { BaseFormComponentEvent, BaseFormComponentEventCodes, FormEditingCompleteEvent } from '@memberjunction/ng-base-types';
+import { BaseAngularComponent, BaseFormComponentEvent, BaseFormComponentEventCodes, FormEditingCompleteEvent } from '@memberjunction/ng-base-types';
 
 export class JoinGridCell {
   index!: number;
@@ -40,7 +40,7 @@ export class JoinGridRow {
   templateUrl: './join-grid.component.html',
   styleUrls: ['./join-grid.component.css']
 })
-export class JoinGridComponent implements AfterViewInit { 
+export class JoinGridComponent extends BaseAngularComponent implements AfterViewInit {
   /**
    * Required: the name of the entity that will be used for displaying data for rows. This means that each row in the RowsEntity will be shown as a row in the grid
    * where the RowsEntityDisplayField will be used in the first column of the grid.
@@ -193,8 +193,8 @@ export class JoinGridComponent implements AfterViewInit {
    */
   @Input() EditMode: 'None' | 'Save' | 'Queue' = 'None';
 
-  constructor(private cdr: ChangeDetectorRef, private elementRef: ElementRef) { 
-
+  constructor(private cdr: ChangeDetectorRef, private elementRef: ElementRef) {
+    super();
   }
 
 
@@ -216,8 +216,8 @@ export class JoinGridComponent implements AfterViewInit {
     // for each pending delete, we need to delete the record
     // for each pending insert, we need to save the record
     // do it all in one transaction
-    const md = new Metadata();
-    const tg = await md.CreateTransactionGroup();
+    const p = this.ProviderToUse;
+    const tg = await p.CreateTransactionGroup();
 
     if (this.ColumnsMode === 'Entity') {
       let validated = true;
@@ -350,14 +350,14 @@ export class JoinGridComponent implements AfterViewInit {
     this._joinEntityData = undefined;
 
     // we are provided an array of Column and Row objects. We need to get the rows from the JoinEntity that link them up.
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     if (this.ColumnsMode === 'Entity') {
-      this._columnsEntityInfo = md.EntityByName(this.ColumnsEntityName);
+      this._columnsEntityInfo = md.EntityByName(this.ColumnsEntityName) ?? null;
       if (!this._columnsEntityInfo)
         throw new Error('Invalid entity name provided for columns entity.');
     }
-    this._rowsEntityInfo = md.EntityByName(this.RowsEntityName);
-    if (!this._rowsEntityInfo) 
+    this._rowsEntityInfo = md.EntityByName(this.RowsEntityName) ?? null;
+    if (!this._rowsEntityInfo)
       throw new Error('Invalid entity name provided for rows entity.');
 
     await this.PopulateRowsAndColsData();
@@ -510,7 +510,7 @@ export class JoinGridComponent implements AfterViewInit {
         // We need to add the record, first see if the record is in the _pendingDeletes array
         let record = this._pendingDeletes.find(obj => obj.Get(this.JoinEntityColumnForeignKey) === cell.ColumnForeignKeyValue && obj.Get(this.JoinEntityRowForeignKey) === row.RowForeignKeyValue);
         if (!record) {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             record = await md.GetEntityObject(this.JoinEntityName);
             record.Set(this.JoinEntityRowForeignKey, row.RowForeignKeyValue);
             record.Set(this.JoinEntityColumnForeignKey, cell.ColumnForeignKeyValue);
@@ -583,7 +583,7 @@ export class JoinGridComponent implements AfterViewInit {
     if (this.ColumnsMode !== 'Fields') 
       throw new Error('This method should only be called when ColumnsMode=Entity')      
 
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     // first check to see if this is in the _pendingDeletes array, if so, we need to remove it from there
     let newObj = this._pendingDeletes!.find(pd => pd.Get(this.JoinEntityRowForeignKey) === row.RowForeignKeyValue)
     if (newObj) {
@@ -673,7 +673,7 @@ export class JoinGridComponent implements AfterViewInit {
    * @param colName 
    */
   public GetJoinEntityField(colName: string): EntityFieldInfo {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const entity = md.EntityByName(this.JoinEntityName);
     if (!entity)
       throw new Error('Invalid entity name provided for JoinEntity');

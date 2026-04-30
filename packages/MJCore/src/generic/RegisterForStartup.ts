@@ -338,7 +338,7 @@ export class StartupManager extends BaseSingleton<StartupManager> {
         // first, init the LocalCacheManager and await its completion
         // Get the storage provider from the metadata provider (uses IndexedDB)
         const cacheStart = Date.now();
-        const storageProvider = Metadata.Provider.LocalStorageProvider;
+        const storageProvider = (provider ?? Metadata.Provider).LocalStorageProvider;
         await LocalCacheManager.Instance.Initialize(storageProvider);
         console.debug(`LocalCacheManager initialized in ${Date.now() - cacheStart}ms`);
 
