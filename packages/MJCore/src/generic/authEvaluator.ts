@@ -1,5 +1,6 @@
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
 import { Metadata } from "./metadata";
+import { IMetadataProvider } from "./interfaces";
 import { AuthorizationInfo, UserInfo } from "./securityInfo";
 
 /**
@@ -17,6 +18,13 @@ import { AuthorizationInfo, UserInfo } from "./securityInfo";
  * (root "Schema Management" for all database-designer ops, or a specific leaf
  * for finer control).  Use the plain {@link UserCanExecute} only when you
  * explicitly need to verify a direct grant with no hierarchy traversal.
+ *
+ * ## Multi-provider support
+ * Authorizations and CurrentUser are per-provider state, so methods that need
+ * the provider accept an optional `provider` parameter that takes precedence
+ * over the global `Metadata.Provider`. Pass the provider explicitly when
+ * running in multi-provider client setups (parallel server connections);
+ * single-provider apps can omit it and rely on the global default.
  */
 export class AuthorizationEvaluator {
 
@@ -32,10 +40,13 @@ export class AuthorizationEvaluator {
      *
      * Throws if no current user is set.  Use {@link CurrentUserCanExecuteWithAncestors}
      * for hierarchy-aware checking.
+     *
+     * @param auth The authorization to check.
+     * @param provider Optional metadata provider whose CurrentUser to evaluate against. Falls back to `Metadata.Provider`.
      */
-    public CurrentUserCanExecute(auth: AuthorizationInfo): boolean {
-        const md = new Metadata();
-        if (!md.CurrentUser)
+    public CurrentUserCanExecute(auth: AuthorizationInfo, provider?: IMetadataProvider): boolean {
+        const md = provider ?? Metadata.Provider;
+        if (!md?.CurrentUser)
             throw new Error('No current user is set for authorization evaluation')
 
         return this.UserCanExecute(auth, md.CurrentUser)
@@ -71,11 +82,12 @@ export class AuthorizationEvaluator {
      * Throws if no current user is set.
      *
      * @param auth - The authorization to check (typically a leaf/child node).
+     * @param provider Optional metadata provider whose CurrentUser to evaluate against. Falls back to `Metadata.Provider`.
      * @returns `true` if the current user has `auth` or any ancestor auth.
      */
-    public CurrentUserCanExecuteWithAncestors(auth: AuthorizationInfo): boolean {
-        const md = new Metadata();
-        if (!md.CurrentUser)
+    public CurrentUserCanExecuteWithAncestors(auth: AuthorizationInfo, provider?: IMetadataProvider): boolean {
+        const md = provider ?? Metadata.Provider;
+        if (!md?.CurrentUser)
             throw new Error('No current user is set for authorization evaluation')
 
         return this.UserCanExecuteWithAncestors(auth, md.CurrentUser, md.Authorizations)
@@ -113,7 +125,7 @@ export class AuthorizationEvaluator {
         user: UserInfo,
         allAuthorizations?: AuthorizationInfo[]
     ): boolean {
-        const auths = allAuthorizations ?? new Metadata().Authorizations;
+        const auths = allAuthorizations ?? Metadata.Provider?.Authorizations ?? new Metadata().Authorizations;
         return AuthorizationEvaluator.walkAuthHierarchy(auth, user, auths, new Set<string>());
     }
 
@@ -123,14 +135,16 @@ export class AuthorizationEvaluator {
      * Returns every authorization that `user` can execute via a **direct role
      * match** (no ancestor traversal).
      *
+     * @param user The user to evaluate.
+     * @param provider Optional metadata provider whose Authorizations list to scan. Falls back to `Metadata.Provider`.
      * @throws if `user` or `user.UserRoles` is not provided.
      */
-    public GetUserAuthorizations(user: UserInfo): AuthorizationInfo[] {
+    public GetUserAuthorizations(user: UserInfo, provider?: IMetadataProvider): AuthorizationInfo[] {
         if (!user?.UserRoles)
             throw new Error('User must be provided to evaluate authorizations');
 
-        const md = new Metadata();
-        return md.Authorizations.filter(a => a.UserCanExecute(user));
+        const md = provider ?? Metadata.Provider;
+        return (md?.Authorizations ?? new Metadata().Authorizations).filter(a => a.UserCanExecute(user));
     }
 
     /**
@@ -139,13 +153,16 @@ export class AuthorizationEvaluator {
      *
      * Useful for building a complete "effective permission set" for a user
      * without needing to know the exact hierarchy in advance.
+     *
+     * @param user The user to evaluate.
+     * @param provider Optional metadata provider whose Authorizations list to scan. Falls back to `Metadata.Provider`.
      */
-    public GetUserAuthorizationsWithAncestors(user: UserInfo): AuthorizationInfo[] {
-        const md = new Metadata();
+    public GetUserAuthorizationsWithAncestors(user: UserInfo, provider?: IMetadataProvider): AuthorizationInfo[] {
         if (!user?.UserRoles)
             throw new Error('User must be provided to evaluate authorizations');
 
-        const auths = md.Authorizations;
+        const md = provider ?? Metadata.Provider;
+        const auths = md?.Authorizations ?? new Metadata().Authorizations;
         return auths.filter(a => this.UserCanExecuteWithAncestors(a, user, auths));
     }
 
