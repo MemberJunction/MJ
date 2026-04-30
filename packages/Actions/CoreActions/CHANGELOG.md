@@ -1,5 +1,38 @@
 # Change Log - @memberjunction/core-actions
 
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ai-agent-manager@5.30.1
+- @memberjunction/ai-agents@5.30.1
+- @memberjunction/ai-engine-base@5.30.1
+- @memberjunction/ai@5.30.1
+- @memberjunction/ai-core-plus@5.30.1
+- @memberjunction/aiengine@5.30.1
+- @memberjunction/ai-mcp-client@5.30.1
+- @memberjunction/ai-prompts@5.30.1
+- @memberjunction/ai-betty-bot@5.30.1
+- @memberjunction/ai-vector-sync@5.30.1
+- @memberjunction/actions-base@5.30.1
+- @memberjunction/code-execution@5.30.1
+- @memberjunction/actions@5.30.1
+- @memberjunction/communication-types@5.30.1
+- @memberjunction/communication-engine@5.30.1
+- @memberjunction/content-autotagging@5.30.1
+- @memberjunction/external-change-detection@5.30.1
+- @memberjunction/generic-database-provider@5.30.1
+- @memberjunction/integration-engine@5.30.1
+- @memberjunction/core@5.30.1
+- @memberjunction/core-entities@5.30.1
+- @memberjunction/core-entities-server@5.30.1
+- @memberjunction/export-engine@5.30.1
+- @memberjunction/global@5.30.1
+- @memberjunction/storage@5.30.1
+- @memberjunction/sqlserver-dataprovider@5.30.1
+- @memberjunction/search-engine@5.30.1
+- @memberjunction/geo-core@5.30.1
+
 ## 5.30.0
 
 ### Minor Changes

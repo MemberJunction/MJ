@@ -1,5 +1,22 @@
 # @memberjunction/generic-database-provider
 
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/aiengine@5.30.1
+- @memberjunction/actions-base@5.30.1
+- @memberjunction/actions@5.30.1
+- @memberjunction/encryption@5.30.1
+- @memberjunction/core@5.30.1
+- @memberjunction/core-entities@5.30.1
+- @memberjunction/global@5.30.1
+- @memberjunction/queue@5.30.1
+- @memberjunction/query-processor@5.30.1
+- @memberjunction/sql-dialect@5.30.1
+- @memberjunction/sql-parser@5.30.1
+- @memberjunction/geo-core@5.30.1
+
 ## 5.30.0
 
 ### Patch Changes

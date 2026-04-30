@@ -1,5 +1,13 @@
 # @memberjunction/ng-record-merge
 
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ng-shared-generic@5.30.1
+- @memberjunction/core@5.30.1
+- @memberjunction/global@5.30.1
+
 ## 5.30.0
 
 ### Patch Changes

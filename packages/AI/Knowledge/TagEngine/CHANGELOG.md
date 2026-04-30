@@ -1,5 +1,18 @@
 # @memberjunction/tag-engine
 
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.30.1
+- @memberjunction/aiengine@5.30.1
+- @memberjunction/tag-engine-base@5.30.1
+- @memberjunction/ai-prompts@5.30.1
+- @memberjunction/ai-vectors-memory@5.30.1
+- @memberjunction/core@5.30.1
+- @memberjunction/core-entities@5.30.1
+- @memberjunction/global@5.30.1
+
 ## 5.30.0
 
 ### Patch Changes

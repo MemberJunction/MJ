@@ -1,5 +1,19 @@
 # @memberjunction/ng-dashboard-viewer
 
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ng-artifacts@5.30.1
+- @memberjunction/ng-entity-viewer@5.30.1
+- @memberjunction/ng-map-view@5.30.1
+- @memberjunction/ng-query-viewer@5.30.1
+- @memberjunction/ng-shared-generic@5.30.1
+- @memberjunction/ng-trees@5.30.1
+- @memberjunction/core@5.30.1
+- @memberjunction/core-entities@5.30.1
+- @memberjunction/global@5.30.1
+
 ## 5.30.0
 
 ### Patch Changes
