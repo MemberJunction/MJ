@@ -421,14 +421,21 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         if (this._embeddingsGenerated) return;
         if (!this._embeddingsPromise) {
             this._embeddingsPromise = (async () => {
-                await Promise.all([
-                    this.RefreshAgentEmbeddings(),
-                    this.RefreshActionEmbeddings(),
-                    this.RefreshNoteEmbeddings(this._contextUser),
-                    this.RefreshExampleEmbeddings(this._contextUser)
-                ]);
-                this._embeddingsGenerated = true;
-                this._embeddingsPromise = null;
+                try {
+                    await Promise.all([
+                        this.RefreshAgentEmbeddings(),
+                        this.RefreshActionEmbeddings(),
+                        this.RefreshNoteEmbeddings(this._contextUser),
+                        this.RefreshExampleEmbeddings(this._contextUser)
+                    ]);
+                    this._embeddingsGenerated = true;
+                } finally {
+                    // Always clear the in-flight promise so the next caller can retry
+                    // after a transient failure (e.g., model download flake). Without
+                    // this, a single failed load would poison every subsequent
+                    // FindSimilar* call for the lifetime of the process.
+                    this._embeddingsPromise = null;
+                }
             })();
         }
         await this._embeddingsPromise;
