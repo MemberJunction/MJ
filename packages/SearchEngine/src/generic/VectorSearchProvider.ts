@@ -218,7 +218,12 @@ export class VectorSearchProvider extends BaseSearchProvider {
                     return [];
                 }
 
-                const embedResult = await embeddingInstance.EmbedText({ text: query, model: '' });
+                // Some embedding drivers (e.g. LocalEmbedding via Xenova/transformers)
+                // require the model identifier to load the correct pipeline.
+                // Prefer APIName (the canonical identifier the driver expects)
+                // and fall back to Name when APIName isn't set.
+                const modelName = model.APIName ?? model.Name;
+                const embedResult = await embeddingInstance.EmbedText({ text: query, model: modelName });
                 if (!embedResult?.vector?.length) {
                     LogError(`VectorSearchProvider: Failed to embed with ${model.Name}`);
                     return [];
@@ -282,12 +287,19 @@ export class VectorSearchProvider extends BaseSearchProvider {
             return [];
         }
 
+        // Smuggle contextUser through the filter object. Remote drivers
+        // (Pinecone/Qdrant) don't need a UserInfo — they authenticate via
+        // their own API key. In-process drivers (e.g. SimpleVectorDatabase)
+        // need to call RunView under the calling user's identity to honor
+        // server-side row-level security; this is the only channel
+        // available without breaking VectorDBBase's contract.
+        const filterWithCtx = filter ? { ...filter, __contextUser: contextUser } : { __contextUser: contextUser };
         const response: BaseResponse = await vectorDBInstance.QueryIndex({
             id: vectorIndex.Name,
             vector: queryVector,
             topK,
             includeMetadata: true,
-            filter,
+            filter: filterWithCtx,
         });
 
         if (!response.success || !response.data?.matches) {
