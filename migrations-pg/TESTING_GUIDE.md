@@ -48,15 +48,82 @@ Running `npm test` at the repo root via Turbo runs unit tests across **321 packa
 
 ## 2. Database-level verification
 
+### How the baseline was built and validated (the full chain)
+
+The v5.30 baseline (`B202604301800__v5.30__PG_Baseline.pg.sql`) was constructed and validated through a deliberate chain of steps. Each step is reproducible and independently verifiable:
+
+```
+[T-SQL migrations]                                   [V*.pg.sql migrations]
+       │                                                       │
+       │ SQLConverter (mj migrate convert)                     │
+       └──────────────────► migrations-pg/v5/V*.pg.sql ────────┘
+                                                               │
+                                                               ▼
+Step 1: Drop+create mj_pg_canonical, apply v5.0 baseline + every V*.pg.sql + V*.pg-only.sql
+        (106 files, 0 errors during apply)
+                                                               │
+                                                               ▼
+Step 2: Run `mj codegen --skipfiles` against mj_pg_canonical
+        (fills in CRUD routines, view regen, GRANTs)
+                                                               │
+                                                               ▼
+                            [mj_pg_canonical = source of truth]
+                                                               │
+                                                               ▼
+Step 3: Generate baseline via scripts/regenerate-pg-baseline.sh
+        (pg_dump --schema=__mj with PII scrubbing + PG18 boolean fix)
+                                                               │
+                                                               ▼
+              [B202604301800__v5.30__PG_Baseline.pg.sql]
+                                                               │
+                                                               ▼
+Step 4: Drop+create mj_pg_baseline_test, apply ONLY the baseline
+                                                               │
+                                                               ▼
+                        [mj_pg_baseline_test = candidate state]
+```
+
+We then ran **three independent verifications** that `mj_pg_canonical` and `mj_pg_baseline_test` are equivalent (sections 2.1–2.3 below), plus a functional smoke (§2.4). All four passed before the baseline was committed.
+
+The validation chain proves transitively that every migration's content is in the baseline:
+
+> **canonical ≡ baseline_test  AND  canonical contains every migration's declared content  ⟹  baseline_test contains every migration's declared content**
+
+The "audit also catches real gaps" sanity check (§2.1) was run against the OLD baseline source (`mj_pg_test`) and correctly flagged 26 missing objects, validating that the audit logic catches gaps and isn't just always returning 0.
+
+---
+
+
 ### 2.1 Per-migration baseline completeness audit (`scripts/audit-baseline-completeness.mjs`)
 
-**What it does:** Iterates every committed `.pg.sql` and `.pg-only.sql` migration file. Parses each for declared schema objects: `CREATE TABLE`, `ALTER TABLE ADD COLUMN`, `CREATE INDEX`, `CREATE OR REPLACE VIEW`, `CREATE OR REPLACE FUNCTION`, `ADD CONSTRAINT`. For each declared object, queries the target PG database to verify presence. Reports per-migration missing objects.
+**What it does:** Iterates every committed `.pg.sql` and `.pg-only.sql` migration file in the worktree at `MJ-pg-migrations-worktree/migrations-pg/v5/` (the path is configurable via the `MIGRATIONS_DIR` env var). For each file, parses the SQL with regex matchers for the following six categories of schema-changing DDL:
+
+| Category | Regex pattern target | Example matched |
+|---|---|---|
+| Tables | `CREATE TABLE [IF NOT EXISTS] [schema.]"<name>"` | `CREATE TABLE __mj."PermissionDomain"` |
+| Columns | `ALTER TABLE "<table>" ... ADD [COLUMN] [IF NOT EXISTS] "<col>"` | `ALTER TABLE __mj."AIAgentNote" ADD COLUMN "ConsolidationCount"` |
+| Indexes | `CREATE [UNIQUE] INDEX [IF NOT EXISTS] "<name>"` | `CREATE INDEX "IDX_AUTO_MJ_FKEY_..."` |
+| Views | `CREATE [OR REPLACE] VIEW [schema.]"<name>"` | `CREATE OR REPLACE VIEW __mj."vwPermissionDomains"` |
+| Functions | `CREATE [OR REPLACE] FUNCTION [schema.]"<name>"` | `CREATE OR REPLACE FUNCTION __mj."fn_create_permission_domain"` |
+| Constraints | `ADD CONSTRAINT "<name>"` | `ADD CONSTRAINT "FK_PermissionDomain_..."` |
+
+For each declared object, the audit queries the target PG database for presence. Cross-platform-equivalent names (e.g., SS-style `spCreateFoo` ↔ PG `fn_create_foo`, SS auto-generated `CK__Foo__hex` ↔ PG `Foo_Col_not_null`) are handled by an exemption table in the script with explicit reasoning.
+
+The audit produces a per-migration report: which file, which categories missing, exact object names.
 
 **Why it matters:** Counts alone (e.g. "312 tables ≥ 250 threshold") are insufficient — a baseline can have the right count but the wrong tables. The audit verifies each individual migration's declared content is present.
 
-**Result on the new v5.30 baseline:** **0/5,721 objects missing across 107 migrations**. The same audit, run against the previous baseline source (`mj_pg_test`), correctly flagged 26 missing objects (PermissionDomain table + 5 Memory_Consolidation columns + 3 Runtime_Actions columns + 17 supporting indexes/views/functions/constraints), proving the audit logic catches real gaps.
+**Results:**
 
-Run: `PG_DATABASE=<db> node scripts/audit-baseline-completeness.mjs`.
+| Database under audit | Total objects checked | Missing | Migrations w/ misses |
+|---|---|---|---|
+| **`mj_pg_baseline_test`** (built from new v5.30 baseline) | 5,721 | **0** | **0/107** ✅ |
+| `mj_pg_canonical` (built by applying every migration directly) | 5,721 | 0 | 0/107 ✅ |
+| `mj_pg_test` (the OLD baseline source — should fail) | 5,721 | **26** | **3/107** ✅ caught |
+
+The third row is critical for trusting the audit. Running it against the OLD baseline source flagged exactly the 26 v5.30 objects we knew were missing (PermissionDomain table + 5 Memory_Consolidation columns + 3 Runtime_Actions columns + 17 supporting indexes/views/functions/constraints), proving the audit catches real gaps and isn't just returning 0 for everything.
+
+**Run:** `PG_DATABASE=<db> node scripts/audit-baseline-completeness.mjs`
 
 ### 2.2 Schema dump diff
 
