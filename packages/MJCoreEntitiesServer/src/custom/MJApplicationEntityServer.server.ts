@@ -16,7 +16,7 @@ export class MJApplicationEntityServer extends MJApplicationEntity {
         super(Entity);
 
         // Verify this is running server-side only
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: constructor runs before entity provider is wired
         if (md.ProviderType !== 'Database')
             throw new Error('This class is only supported for server-side/database providers. Remove this package from your application.');
     }
@@ -27,7 +27,7 @@ export class MJApplicationEntityServer extends MJApplicationEntity {
      * 2. Automatic UserApplication creation for default apps
      */
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
-        const provider = Metadata.Provider as DatabaseProviderBase;
+        const provider = this.ProviderToUse as unknown as DatabaseProviderBase;
 
         // Auto-generate Path from Name if AutoUpdatePath is true
         await this.autoGeneratePath();

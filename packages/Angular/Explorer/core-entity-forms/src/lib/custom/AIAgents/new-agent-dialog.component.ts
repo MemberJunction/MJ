@@ -9,6 +9,7 @@ import { MJDialogRef } from '@memberjunction/ng-ui-components';
 import { BehaviorSubject } from 'rxjs';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface NewAgentConfig {
   parentAgentId?: string;
   parentAgentName?: string;
@@ -21,7 +22,7 @@ export interface NewAgentConfig {
   templateUrl: './new-agent-dialog.component.html',
   styleUrls: ['./new-agent-dialog.component.css']
 })
-export class NewAgentDialogComponent implements OnInit {
+export class NewAgentDialogComponent extends BaseAngularComponent implements OnInit {
   @Input() config: NewAgentConfig = {
     redirectToForm: true
   };
@@ -38,7 +39,8 @@ export class NewAgentDialogComponent implements OnInit {
   constructor(
     private fb: FormBuilder,
     private navigationService: NavigationService
-  ) {}
+  ) {
+    super();}
   
   ngOnInit() {
     this.initializeForm();
@@ -94,7 +96,7 @@ export class NewAgentDialogComponent implements OnInit {
     this.isSubmitting = true;
     
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const agent = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents');
       
       if (!agent) {

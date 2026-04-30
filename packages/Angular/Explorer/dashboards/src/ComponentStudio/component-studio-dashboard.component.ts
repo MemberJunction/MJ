@@ -1,7 +1,7 @@
 import { Component, AfterViewInit, OnDestroy, ViewChild, ElementRef, ChangeDetectorRef, HostListener } from '@angular/core';
 import { BaseDashboard } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata } from '@memberjunction/core';
+import { Metadata, IMetadataProvider } from '@memberjunction/core';
 import {
   MJComponentEntityExtended,
   MJArtifactVersionEntity,
@@ -90,7 +90,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   @ViewChild('fileInput', { static: false }) fileInput?: ElementRef<HTMLInputElement>;
 
   protected override destroy$ = new Subject<void>();
-  private metadata: Metadata = new Metadata();
+  private get metadata(): IMetadataProvider { return this.ProviderToUse; }
 
   constructor(
     public state: ComponentStudioStateService,
@@ -125,7 +125,9 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
   }
 
   protected initDashboard(): void {
-    // Initialize dashboard
+    // Wire up provider-aware services for multi-provider support
+    this.state.Provider = this.ProviderToUse;
+    this.versionService.Provider = this.ProviderToUse;
   }
 
   protected loadData(): void {
@@ -544,7 +546,7 @@ export class ComponentStudioDashboardComponent extends BaseDashboard implements 
         version.ArtifactID = artifact.ID;
         version.UserID = this.metadata.CurrentUser.ID;
 
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const versionsResult = await rv.RunView<MJArtifactVersionEntity>({
           EntityName: 'MJ: Artifact Versions',
           ExtraFilter: `ArtifactID = '${artifact.ID}'`,

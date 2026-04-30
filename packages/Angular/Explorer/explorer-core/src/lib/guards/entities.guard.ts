@@ -2,11 +2,27 @@ import {
   ActivatedRouteSnapshot,
   RouterStateSnapshot,
 } from '@angular/router';
-import {EntityPermissionType, Metadata} from "@memberjunction/core";
-  
+import {EntityPermissionType, Metadata, IMetadataProvider} from "@memberjunction/core";
+
+/**
+ * Module-level provider for the route guard. Set via `setEntitiesGuardProvider()`
+ * from app-init / shell. Falls back to `Metadata.Provider` when not set, which
+ * is fine for single-provider apps — guards are constructed by Angular DI and
+ * don't have a natural per-component provider context.
+ */
+let _guardProvider: IMetadataProvider | null = null;
+
+export function setEntitiesGuardProvider(p: IMetadataProvider): void {
+  _guardProvider = p;
+}
+
+function getGuardProvider(): IMetadataProvider {
+  return _guardProvider ?? Metadata.Provider;
+}
+
 export function checkUserEntityPermissions(type: EntityPermissionType): (route: ActivatedRouteSnapshot, state: RouterStateSnapshot) => any {
     return (route: ActivatedRouteSnapshot, state: RouterStateSnapshot) => {
-      const md = new Metadata();
+      const md = getGuardProvider();
       const appName = route.params['appName'];
       const entityName = route.params['entityName'];
   

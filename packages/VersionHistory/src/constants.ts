@@ -109,7 +109,7 @@ export function buildIdKey(id: string): CompositeKey {
 // Record change utilities
 // ---------------------------------------------------------------------------
 
-import { BaseEntity, Metadata, RunView, UserInfo, LogError } from '@memberjunction/core';
+import { BaseEntity, IMetadataProvider, Metadata, RunView, UserInfo, LogError } from '@memberjunction/core';
 
 /**
  * Load a FullRecordJSON snapshot from a RecordChange entry.
@@ -155,9 +155,10 @@ export async function loadRecordChangeSnapshot(
 export async function loadEntityById<T extends BaseEntity = BaseEntity>(
     entityName: string,
     id: string,
-    contextUser: UserInfo
+    contextUser: UserInfo,
+    provider?: IMetadataProvider
 ): Promise<T | null> {
-    const md = new Metadata();
+    const md = provider ?? Metadata.Provider;
     const entityInfo = md.EntityByName(entityName);
     if (!entityInfo) {
         LogError(`VersionHistory: Entity '${entityName}' not found in metadata`);

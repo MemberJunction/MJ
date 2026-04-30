@@ -1,10 +1,11 @@
 import { Resolver, Mutation, Arg, Ctx } from "type-graphql";
 import { Field, InputType, ObjectType } from "type-graphql";
-import { LogError, Metadata } from "@memberjunction/core";
+import { IMetadataProvider, LogError, Metadata } from "@memberjunction/core";
 import { MJAPIKeyScopeEntity } from "@memberjunction/core-entities";
 import { GetAPIKeyEngine } from "@memberjunction/api-keys";
 import { AppContext } from "../types.js";
 import { ResolverBase } from "../generic/ResolverBase.js";
+import { GetReadWriteProvider } from "../util.js";
 
 /**
  * Input type for creating a new API key
@@ -144,7 +145,8 @@ export class APIKeyResolver extends ResolverBase {
 
             // Save scope associations if provided
             if (input.ScopeIDs && input.ScopeIDs.length > 0 && result.APIKeyId) {
-                await this.saveScopeAssociations(result.APIKeyId, input.ScopeIDs, user);
+                const writeProvider = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
+                await this.saveScopeAssociations(result.APIKeyId, input.ScopeIDs, user, writeProvider);
             }
 
             return {
@@ -219,9 +221,10 @@ export class APIKeyResolver extends ResolverBase {
     private async saveScopeAssociations(
         apiKeyId: string,
         scopeIds: string[],
-        user: any
+        user: any,
+        provider?: IMetadataProvider
     ): Promise<void> {
-        const md = new Metadata();
+        const md = provider ?? new Metadata();
 
         for (const scopeId of scopeIds) {
             try {

@@ -2,7 +2,6 @@ import { Arg, Ctx, Field, ObjectType, Query, Resolver } from "type-graphql";
 import { AppContext } from "../types.js";
 import { DataContext } from "@memberjunction/data-context";
 import { GetReadOnlyDataSource, GetReadOnlyProvider } from "../util.js";
-import { Metadata } from "@memberjunction/core";
 import { MJDataContextItemEntity } from "@memberjunction/core-entities";
 import { ResolverBase } from "../generic/ResolverBase.js";
 
@@ -62,7 +61,7 @@ export class GetDataContextDataResolver extends ResolverBase {
             const dciData = await md.GetEntityObject<MJDataContextItemEntity>("MJ: Data Context Items", appCtx.userPayload.userRecord);
             if (await dciData.Load(DataContextItemID)) {
                 const dci = DataContext.CreateDataContextItem(); // use class factory to get whatever lowest level sub-class is registered
-                await dci.LoadMetadataFromEntityRecord(dciData, Metadata.Provider, appCtx.userPayload.userRecord);
+                await dci.LoadMetadataFromEntityRecord(dciData, md, appCtx.userPayload.userRecord);
                 // now the metadata is loaded so we can call the regular load function
                 if (await dci.LoadData(ds)) {
                     return {

@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { UserInfo, RunView, Metadata } from '@memberjunction/core';
+import { UserInfo, RunView, Metadata, IMetadataProvider } from '@memberjunction/core';
 import { MJCollectionPermissionEntity } from '@memberjunction/core-entities';
 
 export interface CollectionPermission {
@@ -27,12 +27,24 @@ export interface PermissionSet {
     providedIn: 'root'
 })
 export class CollectionPermissionService {
+    private _provider: IMetadataProvider | null = null;
+
+    /**
+     * Set the metadata provider this service should use. When unset, falls back to Metadata.Provider.
+     */
+    public set Provider(value: IMetadataProvider | null) {
+        this._provider = value;
+    }
+
+    public get Provider(): IMetadataProvider {
+        return this._provider ?? Metadata.Provider;
+    }
 
     /**
      * Load all permissions for a collection
      */
     async loadPermissions(collectionId: string, currentUser: UserInfo): Promise<CollectionPermission[]> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.Provider);
         const result = await rv.RunView<MJCollectionPermissionEntity>({
             EntityName: 'MJ: Collection Permissions',
             ExtraFilter: `CollectionID='${collectionId}'`,
@@ -54,7 +66,7 @@ export class CollectionPermissionService {
         userId: string,
         currentUser: UserInfo
     ): Promise<CollectionPermission | null> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.Provider);
         const result = await rv.RunView<MJCollectionPermissionEntity>({
             EntityName: 'MJ: Collection Permissions',
             ExtraFilter: `CollectionID='${collectionId}' AND UserID='${userId}'`,
@@ -84,7 +96,7 @@ export class CollectionPermissionService {
 
         // Build filter for all collection IDs
         const collectionFilter = collectionIds.map(id => `CollectionID='${id}'`).join(' OR ');
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.Provider);
         const result = await rv.RunView<MJCollectionPermissionEntity>({
             EntityName: 'MJ: Collection Permissions',
             ExtraFilter: `(${collectionFilter}) AND UserID='${userId}'`,
@@ -111,7 +123,7 @@ export class CollectionPermissionService {
         sharedByUserId: string,
         currentUser: UserInfo
     ): Promise<MJCollectionPermissionEntity> {
-        const md = new Metadata();
+        const md = this.Provider;
         const permission = await md.GetEntityObject<MJCollectionPermissionEntity>(
             'MJ: Collection Permissions',
             currentUser
@@ -160,7 +172,7 @@ export class CollectionPermissionService {
         sharedByUserId: string,
         currentUser: UserInfo
     ): Promise<void> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.Provider);
         const childrenResult = await rv.RunView({
             EntityName: 'MJ: Collections',
             ExtraFilter: `ParentID='${parentCollectionId}'`,
@@ -194,7 +206,7 @@ export class CollectionPermissionService {
         permissions: PermissionSet,
         currentUser: UserInfo
     ): Promise<boolean> {
-        const md = new Metadata();
+        const md = this.Provider;
         const permission = await md.GetEntityObject<MJCollectionPermissionEntity>(
             'MJ: Collection Permissions',
             currentUser
@@ -237,7 +249,7 @@ export class CollectionPermissionService {
         permissions: PermissionSet,
         currentUser: UserInfo
     ): Promise<void> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.Provider);
         const childrenResult = await rv.RunView({
             EntityName: 'MJ: Collections',
             ExtraFilter: `ParentID='${parentCollectionId}'`,
@@ -262,7 +274,7 @@ export class CollectionPermissionService {
      * Revoke permission
      */
     async revokePermission(permissionId: string, currentUser: UserInfo): Promise<boolean> {
-        const md = new Metadata();
+        const md = this.Provider;
         const permission = await md.GetEntityObject<MJCollectionPermissionEntity>(
             'MJ: Collection Permissions',
             currentUser
@@ -298,7 +310,7 @@ export class CollectionPermissionService {
         userId: string,
         currentUser: UserInfo
     ): Promise<void> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.Provider);
         const childrenResult = await rv.RunView({
             EntityName: 'MJ: Collections',
             ExtraFilter: `ParentID='${parentCollectionId}'`,

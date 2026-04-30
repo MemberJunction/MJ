@@ -10,6 +10,7 @@ vi.mock('@angular/core', () => {
     }
     return {
         Component: () => (target: unknown) => target,
+        Directive: () => (target: unknown) => target,
         Input: () => (target: unknown, key: string) => {},
         Output: () => (target: unknown, key: string) => {},
         EventEmitter: MockEventEmitter,
@@ -18,9 +19,26 @@ vi.mock('@angular/core', () => {
     };
 });
 
+// BaseAngularComponent uses @Directive() at runtime — mock it so tests don't pull in real Angular DI.
+vi.mock('@memberjunction/ng-base-types', async () => {
+    // Lazy-instantiate the MockMetadata from the @memberjunction/core mock so the fallback
+    // matches what real BaseAngularComponent does (`return this.Provider || Metadata.Provider`).
+    const core = await import('@memberjunction/core');
+    class MockBaseAngularComponent {
+        Provider: unknown = null;
+        get ProviderToUse(): unknown {
+            return this.Provider ?? new (core as unknown as { Metadata: new () => unknown }).Metadata();
+        }
+    }
+    return { BaseAngularComponent: MockBaseAngularComponent };
+});
+
 vi.mock('@memberjunction/core', () => {
     class MockRunView {
         RunView = mockRunViewFn;
+        // Multi-provider migration: code now uses RunView.FromMetadataProvider(...) instead of `new RunView()`.
+        // Return a fresh instance — the test doesn't assert on the provider, only on RunView results.
+        static FromMetadataProvider(_p: unknown) { return new MockRunView(); }
     }
     class MockBaseEntity {}
     class MockMetadata {

@@ -12,6 +12,7 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { RunView } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { GlobalFilterState } from '../../../interfaces/analytics-preferences.interface';
 
 // ── Interfaces ──
@@ -444,7 +445,7 @@ const FIELDS = [
         }
     `]
 })
-export class AnalyticsErrorAnalysisComponent implements OnInit, OnDestroy {
+export class AnalyticsErrorAnalysisComponent extends BaseAngularComponent implements OnInit, OnDestroy {
     @Input() TimeRange = '7d';
     @Input() Filters: GlobalFilterState = { Models: [], Agents: [], Prompts: [], Statuses: [] };
 
@@ -497,7 +498,7 @@ export class AnalyticsErrorAnalysisComponent implements OnInit, OnDestroy {
         this.cdr.detectChanges();
 
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const dateFilter = this.buildDateFilter();
             const extraFilters = this.buildExtraFilters();
             const baseFilter = [dateFilter, ...extraFilters].filter(Boolean).join(' AND ');

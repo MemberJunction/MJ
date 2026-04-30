@@ -1,4 +1,4 @@
-import { BaseEntity, CompositeKey, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { FileStorageEngineBase } from '@memberjunction/core-entities';
 import { initializeDriverWithAccountCredentials } from '@memberjunction/storage';
 import { BaseArchiveDriver } from './BaseArchiveDriver';
@@ -10,6 +10,17 @@ import { RestoreRecordContext, RestoreRecordResult } from './types';
  * archived versions and restoring specific versions.
  */
 export class ArchiveRecovery {
+    /** Optional metadata provider; falls back to Metadata.Provider when not set. */
+    private _provider: IMetadataProvider | undefined;
+
+    public set Provider(value: IMetadataProvider | undefined) {
+        this._provider = value;
+    }
+
+    public get Provider(): IMetadataProvider {
+        return this._provider ?? Metadata.Provider;
+    }
+
     /**
      * Retrieves all archived versions for a specific entity record.
      * Queries the ArchiveRunDetail table for matching records.
@@ -84,7 +95,7 @@ export class ArchiveRecovery {
      * Loads a single ArchiveRunDetail record by ID.
      */
     private async LoadArchiveRunDetail(detailId: string, contextUser: UserInfo): Promise<BaseEntity | null> {
-        const md = new Metadata();
+        const md = this.Provider;
         const detail = await md.GetEntityObject('MJ: Archive Run Details', contextUser);
         const loaded = await detail.InnerLoad(CompositeKey.FromKeyValuePair('ID', detailId));
         return loaded ? detail : null;
@@ -94,7 +105,7 @@ export class ArchiveRecovery {
      * Loads a single ArchiveRun record by ID.
      */
     private async LoadArchiveRun(archiveRunId: string, contextUser: UserInfo): Promise<BaseEntity | null> {
-        const md = new Metadata();
+        const md = this.Provider;
         const run = await md.GetEntityObject('MJ: Archive Runs', contextUser);
         const loaded = await run.InnerLoad(CompositeKey.FromKeyValuePair('ID', archiveRunId));
         return loaded ? run : null;
@@ -106,7 +117,7 @@ export class ArchiveRecovery {
     private async InitializeStorageDriver(archiveRun: BaseEntity, contextUser: UserInfo): Promise<import('@memberjunction/storage').FileStorageBase> {
         const configId = archiveRun.Get('ArchiveConfigurationID') as string;
 
-        const md = new Metadata();
+        const md = this.Provider;
         const config = await md.GetEntityObject('MJ: Archive Configurations', contextUser);
         const loaded = await config.InnerLoad(CompositeKey.FromKeyValuePair('ID', configId));
         if (!loaded) {

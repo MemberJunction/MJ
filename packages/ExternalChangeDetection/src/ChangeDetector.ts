@@ -83,7 +83,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
     private _dialect: SQLDialect;
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
-        const p = <SQLServerDataProvider> ( provider || Metadata.Provider );
+        const p = <SQLServerDataProvider> ( provider ?? Metadata.Provider );
         
         // Initialize dialect
         const platform = (p as any).DatabasePlatform || 'sqlserver';
@@ -104,7 +104,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
         // represented entity. MJEntityEntity.PrimaryKeys returns the PK of the "MJ: Entities"
         // table itself (always "ID"), not the PK of the entity the record represents.
         // Map each loaded record to its corresponding EntityInfo from the metadata provider.
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         this._EligibleEntities = (this._EligibleEntities || [])
             .map(e => md.EntityByID(e.ID))
             .filter((e): e is EntityInfo => e != null);
@@ -163,7 +163,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
         try {
             this.validateEntityEligibility(entity);
 
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const rq = new RunQuery();
             const params = this.buildDetectionParams(entity);
             const changes: ChangeDetectionItem[] = [];
@@ -376,7 +376,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
      * Regression for https://github.com/MemberJunction/MJ/issues/2367
      */
     private async buildEntityFromRow(
-        md: Metadata,
+        md: IMetadataProvider,
         entity: EntityInfo,
         row: Record<string, unknown>
     ): Promise<BaseEntity> {
@@ -436,7 +436,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
     /**
      * Compares the current record with the last RecordChange snapshot to determine field-level changes.
      */
-    public async DetermineRecordChanges(md: Metadata, change: ChangeDetectionItem): Promise<{changes: FieldChange[], latestRecord: BaseEntity}> {
+    public async DetermineRecordChanges(md: IMetadataProvider, change: ChangeDetectionItem): Promise<{changes: FieldChange[], latestRecord: BaseEntity}> {
         try {
             const record = change.LatestRecord;
             if (!record)
@@ -743,7 +743,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
      */
     private async getApproxRowCounts(entities: EntityInfo[]): Promise<Map<string, number>> {
         try {
-            const provider = Metadata.Provider as SQLServerDataProvider;
+            const provider = this.ProviderToUse as SQLServerDataProvider;
             const entityIDs = entities.map(e => `'${e.ID}'`).join(',');
             const sql = `
                 SELECT
@@ -933,7 +933,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
      * is fast with no DB round trips for metadata loading.
      */
     private async createReplayProviders(count: number): Promise<SQLServerDataProvider[]> {
-        const singletonProvider = Metadata.Provider as SQLServerDataProvider;
+        const singletonProvider = this.ProviderToUse as SQLServerDataProvider;
         const pool = singletonProvider.DatabaseConnection;
         const schema = singletonProvider.MJCoreSchemaName;
 
@@ -965,7 +965,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
                 const hours = diff / (1000 * 60 * 60);
                 if (hours > staleTimeoutHours) {
                     // this is a stale run, so mark it as error and allow a new run to proceed
-                    const md = new Metadata();
+                    const md = this.ProviderToUse;
                     const staleRun = await md.GetEntityObject<MJRecordChangeReplayRunEntity>("MJ: Record Change Replay Runs", this.ContextUser);
                     await staleRun.InnerLoad(runData.ID);
                     staleRun.Status = 'Error';
@@ -979,7 +979,7 @@ export class ExternalChangeDetectorEngine extends BaseEngine<ExternalChangeDetec
             }
 
             // if we get here, either there was no existing run, or we just marked a stale run as error
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const run = await md.GetEntityObject<MJRecordChangeReplayRunEntity>("MJ: Record Change Replay Runs", this.ContextUser)
             run.StartedAt = new Date();
             run.UserID = this.ContextUser.ID;

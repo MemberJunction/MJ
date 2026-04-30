@@ -60,7 +60,7 @@ export class AgentRunner {
     private readonly _provider: IMetadataProvider;
 
     constructor(provider?: IMetadataProvider) {
-        this._provider = provider || Metadata.Provider;
+        this._provider = provider ?? Metadata.Provider;
     }
 
 

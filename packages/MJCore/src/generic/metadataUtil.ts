@@ -7,7 +7,7 @@ import { Metadata } from "./metadata";
  * @param provider - optional, if you want to use a different provider than the default one
  */
 export function GetEntityNameFromSchemaAndViewString(schemaAndView: string, provider?: IMetadataProvider): string | null {
-    const p = provider || new Metadata();
+    const p = provider ?? (new Metadata() as unknown as IMetadataProvider);
     // check to see if the view has a . in it, that would mean it has schema and view name, SHOULD always have that
     let schema = '', view = '';
     if (schemaAndView.indexOf('.') === -1) {

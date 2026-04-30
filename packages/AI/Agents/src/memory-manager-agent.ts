@@ -1,6 +1,6 @@
 import { BaseAgent } from './base-agent';
 import { RegisterClass, CleanAndParseJSON } from '@memberjunction/global';
-import { UserInfo, Metadata, RunView, RunQuery, LogError, LogStatus } from '@memberjunction/core';
+import { UserInfo, RunView, RunQuery, LogError, LogStatus, IMetadataProvider } from '@memberjunction/core';
 import {
     MJConversationDetailEntity,
     MJAIAgentRunEntity,
@@ -481,7 +481,7 @@ export class MemoryManagerAgent extends BaseAgent {
         }
 
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const step = await md.GetEntityObject<MJAIAgentRunStepEntity>('MJ: AI Agent Run Steps', this._contextUser);
 
             step.AgentRunID = this._agentRunID;
@@ -1324,7 +1324,7 @@ export class MemoryManagerAgent extends BaseAgent {
         let created = 0;
         let merged = 0;
         let failed = 0;
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const rv = new RunView();
 
         // Cache source agent runs to avoid repeated lookups
@@ -1521,7 +1521,7 @@ export class MemoryManagerAgent extends BaseAgent {
         const allNotes = AIEngine.Instance.AgentNotes.filter(n => n.Status === 'Active');
         let notesScored = 0;
         let tierPromotions = 0;
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const scoresForDistribution: number[] = [];
 
         // Pre-pass: compute uniqueness per note once, derive 95th-percentile threshold.
@@ -1867,7 +1867,7 @@ export class MemoryManagerAgent extends BaseAgent {
         const newNoteIds: string[] = [];
         const verifications: ConsolidationVerificationResult[] = [];
         const runner = new AIPromptRunner();
-        const md = new Metadata();
+        const md = this.ProviderToUse;
 
         for (const cluster of clusters) {
             try {
@@ -2125,7 +2125,7 @@ export class MemoryManagerAgent extends BaseAgent {
         if (candidatePairs.length === 0) return result;
 
         const runner = new AIPromptRunner();
-        const md = new Metadata();
+        const md = this.ProviderToUse;
 
         for (const [noteA, noteB] of candidatePairs) {
             result.pairsAnalyzed++;
@@ -2238,7 +2238,7 @@ export class MemoryManagerAgent extends BaseAgent {
         noteA: MJAIAgentNoteEntity,
         noteB: MJAIAgentNoteEntity,
         llmResult: { keepNoteId?: string; revokeNoteId?: string; reason: string },
-        md: Metadata,
+        md: IMetadataProvider,
         contextUser: UserInfo
     ): Promise<'flagged' | 'resolved' | 'skipped'> {
         if (this.shouldFlagContradiction(noteA, noteB)) {
@@ -2276,7 +2276,7 @@ export class MemoryManagerAgent extends BaseAgent {
         noteA: MJAIAgentNoteEntity,
         noteB: MJAIAgentNoteEntity,
         llmResult: { keepNoteId?: string; revokeNoteId?: string; reason: string },
-        md: Metadata,
+        md: IMetadataProvider,
         contextUser: UserInfo
     ): Promise<void> {
         const flagComment = `[Contradiction flagged: conflicts with note ${llmResult.revokeNoteId && UUIDsEqual(noteA.ID, llmResult.revokeNoteId) ? llmResult.keepNoteId : llmResult.revokeNoteId}. ${llmResult.reason}]`;
@@ -2308,7 +2308,7 @@ export class MemoryManagerAgent extends BaseAgent {
         consolidatePrompt: MJAIPromptEntityExtended,
         aiNoteTypeId: string,
         runner: AIPromptRunner,
-        md: Metadata,
+        md: IMetadataProvider,
         contextUser: UserInfo
     ): Promise<{ consolidated: number; archived: number; newNoteId: string | null; verification: ConsolidationVerificationResult | null }> {
         const maxGeneration = Math.max(...cluster.map(n => n.ConsolidationCount || 0));
@@ -2466,7 +2466,7 @@ export class MemoryManagerAgent extends BaseAgent {
         consolidatedNoteData: NonNullable<ConsolidationPromptResult['consolidatedNote']>,
         reason: string,
         aiNoteTypeId: string,
-        md: Metadata,
+        md: IMetadataProvider,
         contextUser: UserInfo
     ): Promise<MJAIAgentNoteEntity | null> {
         const newNote = await md.GetEntityObject<MJAIAgentNoteEntity>('MJ: AI Agent Notes', contextUser);
@@ -2540,7 +2540,7 @@ export class MemoryManagerAgent extends BaseAgent {
         cluster: MJAIAgentNoteEntity[],
         newNoteId: string,
         reason: string,
-        md: Metadata,
+        md: IMetadataProvider,
         contextUser: UserInfo
     ): Promise<number> {
         const results = await Promise.all(
@@ -2604,7 +2604,7 @@ export class MemoryManagerAgent extends BaseAgent {
         }
 
         const caches = await this.buildReferenceExistenceCache(notes, contextUser);
-        const md = new Metadata();
+        const md = this.ProviderToUse;
 
         for (const note of notes) {
             if (result.notesArchived >= maxPerCycle) break;
@@ -2735,7 +2735,7 @@ export class MemoryManagerAgent extends BaseAgent {
     private async archiveOrphanedNote(
         noteId: string,
         reasons: string[],
-        md: Metadata,
+        md: IMetadataProvider,
         contextUser: UserInfo
     ): Promise<boolean> {
         const noteToArchive = await md.GetEntityObject<MJAIAgentNoteEntity>('MJ: AI Agent Notes', contextUser);
@@ -2843,7 +2843,7 @@ export class MemoryManagerAgent extends BaseAgent {
     /** Archive notes and examples past their explicit ExpiresAt timestamp, regardless of decay score. */
     private async archiveExpiredItems(contextUser: UserInfo): Promise<{ notesExpired: number; examplesExpired: number }> {
         const result = { notesExpired: 0, examplesExpired: 0 };
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const nowISO = new Date().toISOString();
 
         const [expiredNotes, expiredExamples] = await this.loadExpiredItems(contextUser, nowISO);
@@ -2887,7 +2887,7 @@ export class MemoryManagerAgent extends BaseAgent {
 
     private async archiveExpiredNote(
         note: { ID: string; ExpiresAt: Date },
-        md: Metadata,
+        md: IMetadataProvider,
         contextUser: UserInfo
     ): Promise<boolean> {
         const noteToArchive = await md.GetEntityObject<MJAIAgentNoteEntity>('MJ: AI Agent Notes', contextUser);
@@ -2899,7 +2899,7 @@ export class MemoryManagerAgent extends BaseAgent {
 
     private async archiveExpiredExample(
         example: { ID: string; ExpiresAt: Date },
-        md: Metadata,
+        md: IMetadataProvider,
         contextUser: UserInfo
     ): Promise<boolean> {
         const exampleToArchive = await md.GetEntityObject<MJAIAgentExampleEntity>('MJ: AI Agent Examples', contextUser);
@@ -2927,7 +2927,7 @@ export class MemoryManagerAgent extends BaseAgent {
     }> {
         const result = { notesDecayed: 0, notesArchived: 0, examplesDecayed: 0, examplesArchived: 0 };
         const stats: DecayStatsAccumulator = { decayFactors: [], protectedPreserved: 0, ephemeralAccelerated: 0 };
-        const md = new Metadata();
+        const md = this.ProviderToUse;
 
         const [activeNotes, activeExamples] = await this.loadDecayCandidates(contextUser);
 
@@ -2976,7 +2976,7 @@ export class MemoryManagerAgent extends BaseAgent {
     private async decayOneNote(
         note: DecayNoteCandidate,
         archiveEnabledAgentIds: Set<string | undefined>,
-        md: Metadata,
+        md: IMetadataProvider,
         contextUser: UserInfo,
         result: { notesDecayed: number; notesArchived: number },
         stats: DecayStatsAccumulator
@@ -3024,7 +3024,7 @@ export class MemoryManagerAgent extends BaseAgent {
     private async decayOneExample(
         example: DecayExampleCandidate,
         archiveEnabledAgentIds: Set<string | undefined>,
-        md: Metadata,
+        md: IMetadataProvider,
         contextUser: UserInfo,
         result: { examplesArchived: number },
         stats: DecayStatsAccumulator
@@ -3259,7 +3259,7 @@ export class MemoryManagerAgent extends BaseAgent {
         let created = 0;
         let skipped = 0;
         let failed = 0;
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const rv = new RunView();
 
         // Cache source agent runs to avoid repeated lookups

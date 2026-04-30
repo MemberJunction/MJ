@@ -1,10 +1,11 @@
 import { Arg, Ctx, Field, InputType, Mutation, ObjectType, registerEnumType } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
-import { DatabaseProviderBase, EntityDeleteOptions, EntitySaveOptions, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, EntityDeleteOptions, EntitySaveOptions, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
 import { MJRoleEntity, MJUserEntity, MJUserRoleEntity } from '@memberjunction/core-entities';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
+import { GetReadWriteProvider } from '../util.js';
 
 @ObjectType()
 export class SyncRolesAndUsersResultType {
@@ -92,16 +93,17 @@ export class SyncRolesAndUsersResolver {
         // attempted this with a TransactionGroup but ran into nesting issues —
         // direct DB transactions per the plan doc avoid that.
         try {
-            const provider = Metadata.Provider as DatabaseProviderBase;
+            const md = GetReadWriteProvider(context.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
+            const provider = md as unknown as DatabaseProviderBase;
             await provider.BeginTransaction();
             try {
-                const roleResult = await this.DoSyncRoles(data.Roles, context.userPayload.userRecord, context.userPayload);
+                const roleResult = await this.DoSyncRoles(data.Roles, context.userPayload.userRecord, context.userPayload, md);
                 if (!roleResult.Success) {
                     await provider.RollbackTransaction();
                     return roleResult;
                 }
 
-                const usersResult = await this.DoSyncUsers(data.Users, context.userPayload.userRecord, context.userPayload);
+                const usersResult = await this.DoSyncUsers(data.Users, context.userPayload.userRecord, context.userPayload, md);
                 if (!usersResult.Success) {
                     await provider.RollbackTransaction();
                     return usersResult;
@@ -136,10 +138,11 @@ export class SyncRolesAndUsersResolver {
         // Wrap delete + add + update of roles in one DB transaction so any failure
         // rolls back the whole batch. Keeps the sync idempotent across retries.
         try {
-            const provider = Metadata.Provider as DatabaseProviderBase;
+            const md = GetReadWriteProvider(context.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
+            const provider = md as unknown as DatabaseProviderBase;
             await provider.BeginTransaction();
             try {
-                const result = await this.DoSyncRoles(roles, context.userPayload.userRecord, context.userPayload);
+                const result = await this.DoSyncRoles(roles, context.userPayload.userRecord, context.userPayload, md);
                 if (result.Success) {
                     await provider.CommitTransaction();
                 } else {
@@ -161,7 +164,7 @@ export class SyncRolesAndUsersResolver {
      * Throws on any Save/Delete failure so the outer transaction rolls back. A returned
      * `{ Success: true }` means every operation succeeded.
      */
-    protected async DoSyncRoles(roles: RoleInputType[], user: UserInfo, userPayload: UserPayload): Promise<SyncRolesAndUsersResultType> {
+    protected async DoSyncRoles(roles: RoleInputType[], user: UserInfo, userPayload: UserPayload, provider?: IMetadataProvider): Promise<SyncRolesAndUsersResultType> {
         const rv = new RunView();
         const result = await rv.RunView<MJRoleEntity>({
             EntityName: "MJ: Roles",
@@ -174,7 +177,7 @@ export class SyncRolesAndUsersResolver {
 
         const currentRoles = result.Results;
         await this.DeleteRemovedRoles(currentRoles, roles, user, userPayload);
-        await this.AddNewRoles(currentRoles, roles, user, userPayload);
+        await this.AddNewRoles(currentRoles, roles, user, userPayload, provider);
         await this.UpdateExistingRoles(currentRoles, roles, userPayload);
         return { Success: true };
     }
@@ -192,9 +195,9 @@ export class SyncRolesAndUsersResolver {
         }
     }
 
-    protected async AddNewRoles(currentRoles: MJRoleEntity[], futureRoles: RoleInputType[], user: UserInfo, userPayload: UserPayload): Promise<void> {
+    protected async AddNewRoles(currentRoles: MJRoleEntity[], futureRoles: RoleInputType[], user: UserInfo, userPayload: UserPayload, provider?: IMetadataProvider): Promise<void> {
         // go through the future roles and add any that are not in the current roles
-        const md = new Metadata();
+        const md = provider ?? new Metadata();
 
         for (const add of futureRoles) {
             if (!currentRoles.find(r => r.Name.trim().toLowerCase() === add.Name.trim().toLowerCase())) {
@@ -262,10 +265,11 @@ export class SyncRolesAndUsersResolver {
     ) : Promise<SyncRolesAndUsersResultType> {
         // Wrap delete + add + update + role-sync of users in one DB transaction.
         try {
-            const provider = Metadata.Provider as DatabaseProviderBase;
+            const md = GetReadWriteProvider(context.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
+            const provider = md as unknown as DatabaseProviderBase;
             await provider.BeginTransaction();
             try {
-                const result = await this.DoSyncUsers(users, context.userPayload.userRecord, context.userPayload);
+                const result = await this.DoSyncUsers(users, context.userPayload.userRecord, context.userPayload, md);
                 if (result.Success) {
                     await provider.CommitTransaction();
                 } else {
@@ -286,7 +290,7 @@ export class SyncRolesAndUsersResolver {
      * Transaction-free core of SyncUsers — expected to be invoked inside an outer transaction.
      * Throws on any Save/Delete failure so the outer transaction rolls back.
      */
-    protected async DoSyncUsers(users: UserInputType[], user: UserInfo, userPayload: UserPayload): Promise<SyncRolesAndUsersResultType> {
+    protected async DoSyncUsers(users: UserInputType[], user: UserInfo, userPayload: UserPayload, provider?: IMetadataProvider): Promise<SyncRolesAndUsersResultType> {
         const rv = new RunView();
         const result = await rv.RunView<MJUserEntity>({
             EntityName: "MJ: Users",
@@ -299,9 +303,9 @@ export class SyncRolesAndUsersResolver {
 
         const currentUsers = result.Results;
         await this.DeleteRemovedUsers(currentUsers, users, user, userPayload);
-        await this.AddNewUsers(currentUsers, users, userPayload);
+        await this.AddNewUsers(currentUsers, users, userPayload, provider);
         await this.UpdateExistingUsers(currentUsers, users, userPayload);
-        await this.SyncUserRoles(users, user, userPayload);
+        await this.SyncUserRoles(users, user, userPayload, provider);
         return { Success: true };
     }
 
@@ -322,9 +326,9 @@ export class SyncRolesAndUsersResolver {
         }
     }
 
-    protected async AddNewUsers(currentUsers: MJUserEntity[], futureUsers: UserInputType[], userPayload: UserPayload): Promise<void> {
+    protected async AddNewUsers(currentUsers: MJUserEntity[], futureUsers: UserInputType[], userPayload: UserPayload, provider?: IMetadataProvider): Promise<void> {
         // add users that are not in the current users
-        const md = new Metadata();
+        const md = provider ?? new Metadata();
 
         for (const add of futureUsers) {
             const match = currentUsers.find(currentUser => currentUser.Email?.trim().toLowerCase() === add.Email?.trim().toLowerCase());
@@ -389,10 +393,10 @@ export class SyncRolesAndUsersResolver {
         }
     }
 
-    protected async SyncUserRoles(users: UserInputType[], u: UserInfo, userPayload: UserPayload): Promise<void> {
+    protected async SyncUserRoles(users: UserInputType[], u: UserInfo, userPayload: UserPayload, provider?: IMetadataProvider): Promise<void> {
         // for each user in the users array, make sure there is a User Role that matches. First, get a list of all DATABASE user and roels so we have that for fast lookup in memory
         const rv = new RunView();
-        const md = new Metadata();
+        const md = provider ?? new Metadata();
 
         const p1 = rv.RunView<MJUserEntity>({
             EntityName: "MJ: Users",

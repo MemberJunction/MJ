@@ -26,7 +26,7 @@ export class InstagramSearchPostsAction extends InstagramBaseAction {
             const includeArchived = this.getParamValue(params.Params, 'IncludeArchived') || false;
 
             // Initialize OAuth
-            if (!await this.initializeOAuth(companyIntegrationId)) {
+            if (!await this.initializeOAuth(companyIntegrationId, params)) {
                 return {
                     Success: false,
                     Message: 'Failed to initialize Instagram authentication',

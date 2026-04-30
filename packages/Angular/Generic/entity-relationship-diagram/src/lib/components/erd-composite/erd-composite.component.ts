@@ -1,8 +1,9 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild } from '@angular/core';
 import { Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
-import { EntityInfo, EntityFieldInfo, Metadata } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJEntityERDComponent } from '../mj-entity-erd.component';
 import { EntitySelectedEvent, OpenEntityRecordEvent } from '../mj-entity-erd.component';
 import { ERDConfig, ERDState } from '../../interfaces/erd-types';
@@ -71,7 +72,7 @@ export interface ERDCompositeState {
   templateUrl: './erd-composite.component.html',
   styleUrls: ['./erd-composite.component.css']
 })
-export class ERDCompositeComponent implements OnInit, OnDestroy {
+export class ERDCompositeComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   @ViewChild(MJEntityERDComponent) mjEntityErd!: MJEntityERDComponent;
 
   /** Whether the ERD is in a refreshing state */
@@ -174,7 +175,7 @@ export class ERDCompositeComponent implements OnInit, OnDestroy {
 
   private async loadData(): Promise<void> {
     // Load entities from metadata (always needed for allEntityFields and relationship lookups)
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     this.entities = md.Entities;
 
     // Load all entity fields from entities

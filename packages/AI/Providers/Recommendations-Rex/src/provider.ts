@@ -1,5 +1,5 @@
 import { RecommendationProviderBase, RecommendationRequest, RecommendationResult } from "@memberjunction/ai-recommendations";
-import { EntityInfo, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo } from "@memberjunction/core";
+import { EntityInfo, LogError, LogStatus, RunView, RunViewResult, UserInfo } from "@memberjunction/core";
 import { MJEntityRecordDocumentEntityType, MJListDetailEntity, MJListEntity, MJRecommendationEntity, MJRecommendationItemEntity } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
 import axios, { AxiosError, AxiosRequestConfig, AxiosResponse, isAxiosError } from "axios";
@@ -212,7 +212,7 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
     }
 
     protected async ConvertRecommendationsToItemEntities(recommendationEntity: MJRecommendationEntity, recommendations: RecommendationResponse[], currentUser: UserInfo, typeMap: Record<string, string>): Promise<MJRecommendationItemEntity[]> {
-        const md = new Metadata();        
+        const md = this.Provider;
 
         const entities: MJRecommendationItemEntity[] =  await Promise.all(recommendations.map(async (recommendation: RecommendationResponse) => {
             const entity: MJRecommendationItemEntity = await md.GetEntityObject<MJRecommendationItemEntity>("MJ: Recommendation Items", currentUser);
@@ -255,7 +255,7 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
             };
         }
 
-        const md: Metadata = new Metadata();
+        const md = this.Provider;
         const entity: EntityInfo | undefined = md.EntityByName(entityName);
         
         if(!entity){
@@ -302,7 +302,7 @@ export class RexRecommendationsProvider extends RecommendationProviderBase {
     }
 
     private async AddRecordToErrorsList(listID: string, recordID: string, errorMessage: string, currentUser?: UserInfo): Promise<void> {
-        const md: Metadata = new Metadata();
+        const md = this.Provider;
         const listDetail: MJListDetailEntity = await md.GetEntityObject<MJListDetailEntity>("MJ: List Details", currentUser);
         
         listDetail.NewRecord();

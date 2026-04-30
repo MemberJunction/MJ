@@ -66,6 +66,20 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     public readonly EmbeddingModelTypeName: string = 'Embeddings';
     public readonly LocalEmbeddingModelVendorName: string = 'LocalEmbeddings';
 
+    private _provider: IMetadataProvider | null = null;
+
+    /**
+     * Optional metadata provider override. Callers should set
+     * `AIEngine.Instance.Provider = providerToUse` before invoking entity-AI execution methods
+     * in multi-provider contexts. Falls back to the global default provider when unset.
+     */
+    public get Provider(): IMetadataProvider {
+        return this._provider ?? (new Metadata() as unknown as IMetadataProvider);
+    }
+    public set Provider(value: IMetadataProvider | null) {
+        this._provider = value;
+    }
+
     // Vector service for agent embeddings - initialized during Config
     private _agentVectorService: SimpleVectorService<AgentEmbeddingMetadata> | null = null;
 
@@ -1280,7 +1294,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
                     }
                 }
                 else if (entityAction.OutputType.trim().toLowerCase() === 'entity') {
-                    const md = new Metadata();
+                    const md = this.Provider;
                     const newRecord = await md.GetEntityObject(entityAction.OutputEntity);
                     newRecord.NewRecord();
                     newRecord.Set('EntityID', params.entityRecord.EntityInfo.ID);

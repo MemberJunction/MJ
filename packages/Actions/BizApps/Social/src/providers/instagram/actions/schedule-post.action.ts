@@ -25,7 +25,7 @@ export class InstagramSchedulePostAction extends InstagramBaseAction {
             const firstComment = this.getParamValue(params.Params, 'FirstComment');
 
             // Initialize OAuth
-            if (!await this.initializeOAuth(companyIntegrationId)) {
+            if (!await this.initializeOAuth(companyIntegrationId, params)) {
                 return {
                     Success: false,
                     Message: 'Failed to initialize Instagram authentication',

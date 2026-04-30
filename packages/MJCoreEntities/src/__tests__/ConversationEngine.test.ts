@@ -81,6 +81,15 @@ vi.mock('@memberjunction/core', () => {
             ): Promise<void> {
                 // no-op
             }
+            // Multi-provider migration: engines now use this.ProviderToUse instead of new Metadata().
+            // Mock returns the same mock metadata shape that the tests previously got via new Metadata().
+            get ProviderToUse() {
+                return {
+                    GetEntityObject: () => Promise.resolve(mockConversationEntity),
+                    CreateTransactionGroup: async () => ({ Submit: vi.fn().mockResolvedValue(true) }),
+                    CurrentUser: { ID: 'user-1' },
+                };
+            }
         },
         Metadata: MockMetadata,
         RunView: class MockRunView {

@@ -72,7 +72,7 @@ export class QueryBrowserResourceComponent extends BaseResourceComponent impleme
     /** Tracks expanded state by category ID — persisted across sessions */
     private expandedState = new Map<string, boolean>();
 
-    private metadata = new Metadata();
+    private metadata = this.ProviderToUse;
     protected override destroy$ = new Subject<void>();
     private dataLoaded = false;
 

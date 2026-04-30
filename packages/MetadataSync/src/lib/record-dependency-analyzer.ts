@@ -53,7 +53,7 @@ export class RecordDependencyAnalyzer {
   private recordCounter: number = 0;
 
   constructor() {
-    this.metadata = new Metadata();
+    this.metadata = new Metadata(); // global-provider-ok: metadata sync operates on the configured provider only
   }
 
   /**

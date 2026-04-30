@@ -63,8 +63,7 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
   public rolePermissions: Map<string, string[]> = new Map();
 
   protected override destroy$ = new Subject<void>();
-  private metadata = new Metadata();
-
+  private get metadata() { return this.ProviderToUse; }
   constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {
     super();
   }
@@ -110,7 +109,7 @@ export class RoleManagementComponent extends BaseDashboard implements OnDestroy 
   }
 
   private async loadRoles(): Promise<MJRoleEntity[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<MJRoleEntity>({
       EntityName: 'MJ: Roles',
       ResultType: 'entity_object',

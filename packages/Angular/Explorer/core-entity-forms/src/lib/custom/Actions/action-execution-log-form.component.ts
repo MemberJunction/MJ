@@ -80,7 +80,7 @@ export class MJActionExecutionLogFormComponentExtended extends MJActionExecution
         
         this.isLoadingAction = true;
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             this.action = await md.GetEntityObject<MJActionEntity>('MJ: Actions');
             if (this.action) {
                 await this.action.Load(this.record.ActionID);
@@ -97,7 +97,7 @@ export class MJActionExecutionLogFormComponentExtended extends MJActionExecution
         
         this.isLoadingUser = true;
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             this.user = await md.GetEntityObject<MJUserEntity>('MJ: Users');
             if (this.user) {
                 await this.user.Load(this.record.UserID);

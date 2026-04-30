@@ -4,6 +4,7 @@ import { FormsModule, ReactiveFormsModule, FormBuilder, FormGroup, Validators } 
 import { Metadata, RunView } from '@memberjunction/core';
 import { MJUserEntity, MJRoleEntity, MJUserRoleEntity } from '@memberjunction/core-entities';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface UserDialogData {
   user?: MJUserEntity;
   mode: 'create' | 'edit';
@@ -22,7 +23,7 @@ export interface UserDialogResult {
   templateUrl: './user-dialog.component.html',
   styleUrls: ['./user-dialog.component.css']
 })
-export class UserDialogComponent implements OnInit, OnDestroy, OnChanges {
+export class UserDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy, OnChanges {
   @Input() data: UserDialogData | null = null;
   @Input() visible = false;
   @Output() result = new EventEmitter<UserDialogResult>();
@@ -30,8 +31,7 @@ export class UserDialogComponent implements OnInit, OnDestroy, OnChanges {
   private fb = inject(FormBuilder);
   private cdr = inject(ChangeDetectorRef);
   private ngZone = inject(NgZone);
-  private metadata = new Metadata();
-
+  private get metadata() { return this.ProviderToUse; }
   public userForm: FormGroup;
   public isLoading = false;
   public error: string | null = null;
@@ -39,6 +39,7 @@ export class UserDialogComponent implements OnInit, OnDestroy, OnChanges {
   public existingUserRoles: MJUserRoleEntity[] = [];
 
   constructor() {
+    super();
     this.userForm = this.fb.group({
       name: ['', [Validators.required, Validators.email]],
       firstName: [''],
@@ -126,7 +127,7 @@ export class UserDialogComponent implements OnInit, OnDestroy, OnChanges {
 
   private async loadExistingUserRoles(userId: string): Promise<void> {
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJUserRoleEntity>({
         EntityName: 'MJ: User Roles',
         ExtraFilter: `UserID='${userId}'`,
