@@ -33,10 +33,20 @@ dependent state confirmed.
 checksums — run `flyway repair` once. The actual schema effects are
 identical so no schema drift; just history-row hash updates.
 
+## ⚠️ Required post-install step for fresh PG installs
+
+The v5.30 baseline (`B202604301800__v5.30__PG_Baseline.pg.sql`) contains every schema change from v5.0–v5.30 (tables, columns, views, functions, indexes, constraints) and metadata syncs through v5.29. **It does not contain v5.30 metadata-only updates** — those were deferred (see below). After a fresh install, you must run:
+
+```bash
+mj sync push --dir metadata
+```
+
+This applies the v5.30 metadata changes from canonical source files in `metadata/` (new AI prompts, agent definitions, entity descriptions, etc.). Without this step, your install will have v5.30 schema but stale metadata.
+
 ## What's deferred to v5.30.1
 
 ### v5.30 coverage
-- **`V202604271430__v5.30.x__Metadata_Sync.sql`** — 964k-line auto-generated metadata dump. Hits a converter string-literal escape bug at the `${formatted}` JS template literal pattern in stored Query SQL. Right fix is to regenerate via `mj-sync push` from a known-correct state rather than repair generated content.
+- **`V202604271430__v5.30.x__Metadata_Sync.sql`** — 964k-line auto-generated metadata dump. Hits a converter string-literal escape bug at the `${formatted}` JS template literal pattern in stored Query SQL. The right fix is to regenerate via `mj sync push` from a known-correct state rather than repair generated content. **Workaround for fresh installs: `mj sync push --dir metadata` after applying baseline.** This is captured above in the "Required post-install step" section.
 
 ### Converter rule gaps surfaced this round (Category A in the manual fixes catalog)
 - A5: `sys.check_constraints` + `sys.columns` dynamic-name lookup → `pg_constraint` joins

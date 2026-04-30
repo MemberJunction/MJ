@@ -58,6 +58,13 @@ mj migrate --verbose
 
 This walks `migrations-pg/v5/` in order, applying each to `MJ_PG_Dev`. Skyway records every applied migration in `__mj.skyway_schema_history` so reruns are idempotent.
 
+The first thing applied is the **v5.30 baseline** (`B202604301800__v5.30__PG_Baseline.pg.sql`). The baseline contains:
+- ✅ Every v5.0–v5.30 **schema** change (tables, columns, views, functions, indexes, constraints)
+- ✅ Every metadata sync **through v5.29**
+- ❌ Does **not** contain the v5.30 metadata sync — that's the 964k-line `V202604271430__v5.30.x__Metadata_Sync.sql` whose PG conversion has a known string-escape bug. **Run step 5 (`mj sync push --dir metadata`) after `mj migrate` to bring metadata to true v5.30 state.** Without that step, you'll have v5.30 schema but stale (v5.29) metadata for new agents/prompts/entity descriptions.
+
+After the baseline, every committed `V*.pg.sql` is applied — but ones with timestamps before the baseline's `202604301800` are auto-skipped (their content is in the baseline). Future v5.31+ migrations will land normally.
+
 **If migrations-pg/v5/ doesn't exist yet** (because you're developing on a branch that only has T-SQL migrations):
 
 ```bash
@@ -85,13 +92,15 @@ When a view's column shape changes (added/removed/retyped column), PG's `CREATE 
 
 For CI runs, set `MJ_CODEGEN_STRICT_VIEW_REGEN=true` to make any view regeneration failure a hard error. Local dev defaults to non-strict — failures are summarized but don't halt the run.
 
-## 5. Seed metadata
+## 5. Seed metadata (REQUIRED for true v5.30 state)
 
 ```bash
 mj sync push --dir metadata
 ```
 
 Every `metadata/*/` directory with a `.mj-sync.json` gets pushed into the live DB via `PostgreSQLDataProvider`. This is the same push/pull flow as SQL Server — there is no PG-specific invocation.
+
+**Why this is required for fresh PG installs at v5.30**: the baseline contains schema + metadata syncs through v5.29. The 964k-line v5.30 metadata sync (`V202604271430__v5.30.x__Metadata_Sync.sql`) is deferred to v5.30.1 — its PG conversion hits a string-escape bug at the `${formatted}` template literal pattern in stored Query SQL. The right fix isn't to repair generated content but to regenerate from canonical sources via `mj sync push` — which is exactly what this step does. After this step, your DB is at true v5.30 metadata state.
 
 ## 6. Start MJAPI
 
