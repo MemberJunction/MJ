@@ -324,7 +324,6 @@ export class EntitySearchProvider extends BaseSearchProvider {
      * returns empty and the caller short-circuits to zero results.
      */
     private sanitizeUserSearchString(input: string): string {
-        if (input == null) return '';
         return input.replace(/[%_[\]]/g, '').trim();
     }
 }

@@ -113,8 +113,14 @@ export class SimpleVectorDatabase extends VectorDBBase {
 
     /** Materialize the index — load rows from the configured entity, parse
      *  each row's vector, and pack them into a `SimpleVectorService`.
-     *  Caches the result in `indexCache`; bypasses cache when row count
-     *  changed since last load. */
+     *
+     *  **Cache freshness model:** the cache key is `indexName` and the
+     *  validity signal is `rowCount`. This means in-place edits of an
+     *  existing row's `EmbeddingVector` (without changing the row count)
+     *  are NOT detected by the cache — the stale vector will be returned
+     *  until the process restarts or the row is deleted/inserted.
+     *  This is acceptable for the dev/agent-memory positioning of this
+     *  driver; production-scale corpora should use Pinecone/Qdrant. */
     private async loadIndex(indexName: string, contextUser: UserInfo | undefined): Promise<{
         config: SimpleVectorProviderConfig;
         service: SimpleVectorService;
@@ -123,9 +129,25 @@ export class SimpleVectorDatabase extends VectorDBBase {
         const config = await this.loadIndexConfig(indexName, contextUser);
         if (!config) return null;
 
-        // Pull all rows of the configured entity. We don't constrain Fields
-        // because the test corpus is small and the driver needs Title/Snippet
-        // surfacing. Row count is the cache-validity signal.
+        const rows = await this.fetchEntityRows(config, contextUser);
+        if (rows == null) return null;
+
+        const cached = indexCache.get(indexName);
+        if (cached && cached.rowCount === rows.length) {
+            return { config: cached.config, service: cached.service, rowsByID: cached.rowsByID };
+        }
+
+        const { service, rowsByID } = this.buildServiceFromRows(rows, config);
+        indexCache.set(indexName, { config, service, rowCount: rows.length, rowsByID });
+        return { config, service, rowsByID };
+    }
+
+    /** Run RunView for the configured entity; returns null if the entity is
+     *  unknown or the RunView call failed (both already logged). */
+    private async fetchEntityRows(
+        config: SimpleVectorProviderConfig,
+        contextUser: UserInfo | undefined,
+    ): Promise<Array<Record<string, unknown>> | null> {
         const md = new Metadata();
         const entity = md.Entities.find(e => e.Name === config.entityName);
         if (!entity) return null;
@@ -141,13 +163,19 @@ export class SimpleVectorDatabase extends VectorDBBase {
             LogError(`SimpleVectorDatabase.loadIndex: RunView on "${config.entityName}" failed: ${r.ErrorMessage}`);
             return null;
         }
-        const rows = r.Results ?? [];
+        return r.Results ?? [];
+    }
 
-        const cached = indexCache.get(indexName);
-        if (cached && cached.rowCount === rows.length) {
-            return { config: cached.config, service: cached.service, rowsByID: cached.rowsByID };
-        }
-
+    /** Parse each row's vector field, validate it's a numeric array, and
+     *  pack the survivors into a fresh `SimpleVectorService` plus the
+     *  ID→row map used to enrich match metadata. Rows with missing IDs,
+     *  missing vector columns, or unparseable JSON are silently skipped
+     *  — callers haven't necessarily embedded every row yet (e.g. only
+     *  `Status='Active'` rows have embeddings), so logging would spam. */
+    private buildServiceFromRows(
+        rows: Array<Record<string, unknown>>,
+        config: SimpleVectorProviderConfig,
+    ): { service: SimpleVectorService; rowsByID: Map<string, Record<string, unknown>> } {
         const service = new SimpleVectorService();
         const entries: Array<{ key: string; vector: number[]; metadata: Record<string, unknown> }> = [];
         const rowsByID = new Map<string, Record<string, unknown>>();
@@ -162,14 +190,11 @@ export class SimpleVectorDatabase extends VectorDBBase {
                     rowsByID.set(id, row);
                 }
             } catch {
-                // Row's vector column is unparseable — silently skip.
-                // Surfacing this would spam logs for entities that haven't
-                // had every row embedded yet (Status!='Active', etc.).
+                // Vector column is unparseable — silently skip (see JSDoc above).
             }
         }
         service.LoadVectors(entries);
-        indexCache.set(indexName, { config, service, rowCount: rows.length, rowsByID });
-        return { config, service, rowsByID };
+        return { service, rowsByID };
     }
 
     /** Build the metadata bag returned in QueryIndex matches. Mirrors what

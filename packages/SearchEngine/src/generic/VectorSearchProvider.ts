@@ -221,8 +221,9 @@ export class VectorSearchProvider extends BaseSearchProvider {
                 // Some embedding drivers (e.g. LocalEmbedding via Xenova/transformers)
                 // require the model identifier to load the correct pipeline.
                 // Prefer APIName (the canonical identifier the driver expects)
-                // and fall back to Name when APIName isn't set.
-                const modelName = model.APIName ?? model.Name;
+                // and fall back to Name when APIName isn't set or is empty.
+                // `||` (not `??`) so an empty-string `APIName` also falls back.
+                const modelName = model.APIName || model.Name;
                 const embedResult = await embeddingInstance.EmbedText({ text: query, model: modelName });
                 if (!embedResult?.vector?.length) {
                     LogError(`VectorSearchProvider: Failed to embed with ${model.Name}`);
