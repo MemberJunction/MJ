@@ -136,6 +136,7 @@ export class SchedulingDashboardComponent extends BaseDashboard implements After
   }
 
   initDashboard(): void {
+    this.schedulingService.Provider = this.ProviderToUse;
     this.IsLoading = false;
   }
 

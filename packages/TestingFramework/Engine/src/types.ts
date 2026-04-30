@@ -5,7 +5,7 @@
  * This file contains execution-specific types that depend on engine internals
  */
 
-import { UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, UserInfo } from '@memberjunction/core';
 import {
   MJTestEntity,
   MJTestRunEntity,
@@ -260,4 +260,11 @@ export interface OracleInput {
    * User context
    */
   contextUser: UserInfo;
+
+  /**
+   * Optional metadata provider to use for entity/SQL operations during oracle evaluation.
+   * If supplied, oracles should use this provider instead of the global Metadata.Provider
+   * to participate in the same transaction/connection as the calling test run.
+   */
+  provider?: IMetadataProvider;
 }

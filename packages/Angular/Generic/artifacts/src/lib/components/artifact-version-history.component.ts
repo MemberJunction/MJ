@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView } from '@memberjunction/core';
 
@@ -109,7 +110,7 @@ import { UserInfo, RunView } from '@memberjunction/core';
     .diff-content pre { margin: 0; font-family: 'Courier New', monospace; font-size: 12px; white-space: pre-wrap; }
   `]
 })
-export class ArtifactVersionHistoryComponent implements OnInit {
+export class ArtifactVersionHistoryComponent extends BaseAngularComponent implements OnInit  {
   @Input() artifact!: MJArtifactEntity;
   @Input() currentUser!: UserInfo;
 
@@ -129,7 +130,7 @@ export class ArtifactVersionHistoryComponent implements OnInit {
 
   private async loadVersions(): Promise<void> {
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJArtifactVersionEntity>({
         EntityName: 'MJ: Artifact Versions',
         ExtraFilter: `ArtifactID='${this.artifact.ID}'`,

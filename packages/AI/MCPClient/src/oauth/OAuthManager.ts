@@ -8,7 +8,7 @@
  * @module @memberjunction/ai-mcp-client/oauth/OAuthManager
  */
 
-import { Metadata, RunView, UserInfo, LogError, LogStatus, BaseEntity, CompositeKey } from '@memberjunction/core';
+import { Metadata, RunView, UserInfo, LogError, LogStatus, BaseEntity, CompositeKey, IMetadataProvider } from '@memberjunction/core';
 import { AuthServerDiscovery } from './AuthServerDiscovery.js';
 import { ClientRegistration } from './ClientRegistration.js';
 import { TokenManager } from './TokenManager.js';
@@ -617,9 +617,10 @@ export class OAuthManager {
      * @param contextUser - User context
      * @returns Number of states cleared
      */
-    public async clearExpiredAuthorizationStates(contextUser: UserInfo): Promise<number> {
+    public async clearExpiredAuthorizationStates(contextUser: UserInfo, provider?: IMetadataProvider): Promise<number> {
         try {
-            const rv = new RunView();
+            const md = provider ?? (new Metadata() as unknown as IMetadataProvider);
+            const rv = RunView.FromMetadataProvider(md);
             const now = new Date().toISOString();
 
             const expired = await rv.RunView<{ ID: string }>({
@@ -633,7 +634,6 @@ export class OAuthManager {
                 return 0;
             }
 
-            const md = new Metadata();
             let cleared = 0;
 
             for (const record of expired.Results) {
@@ -743,10 +743,11 @@ export class OAuthManager {
      */
     private async saveAuthorizationState(
         state: OAuthAuthorizationState,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<void> {
         try {
-            const md = new Metadata();
+            const md = provider ?? (new Metadata() as unknown as IMetadataProvider);
             const entity = await md.GetEntityObject<BaseEntity>(ENTITY_OAUTH_AUTHORIZATION_STATES, contextUser);
 
             entity.NewRecord();
@@ -843,10 +844,11 @@ export class OAuthManager {
         status: OAuthAuthorizationStatus,
         contextUser: UserInfo,
         errorCode?: string,
-        errorDescription?: string
+        errorDescription?: string,
+        provider?: IMetadataProvider
     ): Promise<void> {
         try {
-            const md = new Metadata();
+            const md = provider ?? (new Metadata() as unknown as IMetadataProvider);
             const entity = await md.GetEntityObject<BaseEntity>(ENTITY_OAUTH_AUTHORIZATION_STATES, contextUser);
 
             const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: stateId }]);

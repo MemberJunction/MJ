@@ -5,7 +5,7 @@
 
 import { RegisterClass, SafeJSONParse, UUIDsEqual } from '@memberjunction/global';
 import { BaseScheduledJob, ScheduledJobExecutionContext } from '../BaseScheduledJob';
-import { ValidationResult, UserInfo, Metadata, ValidationErrorInfo, ValidationErrorType } from '@memberjunction/core';
+import { ValidationResult, UserInfo, Metadata, ValidationErrorInfo, ValidationErrorType, IMetadataProvider } from '@memberjunction/core';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { SQLServerDataProvider } from '@memberjunction/sqlserver-dataprovider';
 import {
@@ -203,9 +203,9 @@ export class ActionScheduledJobDriver extends BaseScheduledJob {
         return result;
     }
 
-    private async executeSQL(sql: string): Promise<any> {
+    private async executeSQL(sql: string, provider?: IMetadataProvider): Promise<any> {
         try {
-            const sqlProvider = Metadata.Provider as SQLServerDataProvider;
+            const sqlProvider = (provider ?? Metadata.Provider) as SQLServerDataProvider;
             const result = await sqlProvider.ExecuteSQL(sql);
             return result;
         } catch (error) {

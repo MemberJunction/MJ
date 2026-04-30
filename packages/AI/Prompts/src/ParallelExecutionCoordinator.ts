@@ -1,4 +1,4 @@
-import { LogError, LogStatus, Metadata } from '@memberjunction/core';
+import { LogError, LogStatus, Metadata, IMetadataProvider } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { BaseLLM, ChatParams, ChatResult, ChatMessageRole, ChatMessage, GetAIAPIKey } from '@memberjunction/ai';
 import { MJAIPromptEntityExtended, MJAIPromptRunEntityExtended } from '@memberjunction/ai-core-plus';
@@ -134,12 +134,25 @@ class ParallelProgressTracker {
 export class ParallelExecutionCoordinator {
   private readonly _defaultConfig: ParallelExecutionConfig;
   private _metadata: Metadata;
+  private _provider: IMetadataProvider | null = null;
+
+  /**
+   * Optional metadata provider override. Callers should set
+   * `instance.Provider = providerToUse` before invoking execution methods
+   * in multi-provider contexts. Falls back to the global default provider when unset.
+   */
+  public get Provider(): IMetadataProvider {
+    return this._provider ?? (this._metadata as unknown as IMetadataProvider);
+  }
+  public set Provider(value: IMetadataProvider | null) {
+    this._provider = value;
+  }
 
   /**
    * Creates a new parallel execution coordinator with default configuration.
    */
   constructor() {
-    this._metadata = new Metadata();
+    this._metadata = (this._provider as unknown as Metadata) ?? new Metadata();
     this._defaultConfig = {
       maxConcurrentExecutions: 5,
       taskTimeoutMS: 30000, // 30 seconds
@@ -1010,7 +1023,7 @@ export class ParallelExecutionCoordinator {
    */
   private async createChildPromptRun(task: ExecutionTask, startTime: Date, parentPromptRunId: string, executionOrder?: number, agentRunId?: string): Promise<MJAIPromptRunEntityExtended> {
     try {
-      const promptRun = await this._metadata.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', task.contextUser);
+      const promptRun = await this.Provider.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', task.contextUser);
       promptRun.NewRecord();
 
       promptRun.PromptID = task.prompt.ID;
@@ -1116,7 +1129,7 @@ export class ParallelExecutionCoordinator {
     executionOrder: number,
   ): Promise<MJAIPromptRunEntityExtended> {
     try {
-      const promptRun = await this._metadata.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs');
+      const promptRun = await this.Provider.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs');
       promptRun.NewRecord();
 
       promptRun.PromptID = judgePrompt.ID;

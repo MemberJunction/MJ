@@ -1,7 +1,7 @@
 import { AutotagBase, AutotagProgressCallback } from '../../Core';
 import { AutotagBaseEngine, ContentSourceParams } from '../../Engine';
 import { RegisterClass } from '@memberjunction/global';
-import { UserInfo, Metadata, RunView } from '@memberjunction/core';
+import { IMetadataProvider, UserInfo, Metadata, RunView } from '@memberjunction/core';
 import { MJContentSourceEntity, MJContentItemEntity } from '@memberjunction/core-entities';
 import * as cheerio from 'cheerio';
 import axios from 'axios';
@@ -36,7 +36,8 @@ export class AutotagWebsite extends AutotagBase {
      * It initializes the connection, retrieves the content sources corresponding to the content source type, sets the content items that we want to process, 
      * extracts and processes the text, and sets the results in the database.
      */
-    public async Autotag(contextUser: UserInfo, onProgress?: AutotagProgressCallback): Promise<number> {
+    public async Autotag(contextUser: UserInfo, onProgress?: AutotagProgressCallback, contentSourceIDs?: string[], provider?: IMetadataProvider): Promise<number> {
+        if (provider) this._provider = provider;
         this.contextUser = contextUser;
         this.contentSourceTypeID = this.engine.SetSubclassContentSourceType('Website');
         const contentSources: MJContentSourceEntity[] = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID);
@@ -149,7 +150,7 @@ export class AutotagWebsite extends AutotagBase {
             
                     if (lastStoredHash !== newHash) {
                         // This content item has changed since we last access it, update the hash and last updated date
-                        const md = new Metadata();
+                        const md = this.ProviderToUse;
                         const contentItem = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', this.contextUser);
                         contentItem.Load(contentItemResult.ID);
                         contentItem.Checksum = newHash
@@ -161,7 +162,7 @@ export class AutotagWebsite extends AutotagBase {
                 }
                 else {
                     // This content item does not exist, add it
-                    const md = new Metadata();
+                    const md = this.ProviderToUse;
                     const contentItem = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', this.contextUser);
                     contentItem.ContentSourceID = contentSourceParams.contentSourceID
                     contentItem.Name = this.getPathName(contentItemLink) // Will get overwritten by title later if it exists

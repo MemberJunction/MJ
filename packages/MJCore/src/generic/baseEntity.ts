@@ -984,9 +984,10 @@ export abstract class BaseEntity<T = unknown> {
         const parentEntityInfo = this.EntityInfo.ParentEntityInfo;
         if (!parentEntityInfo) return;
 
-        // Create the parent entity via Metadata.Provider for proper class factory
-        // resolution and provider routing
-        this._parentEntity = await Metadata.Provider.GetEntityObject(
+        // Create the parent entity via this entity's provider so multi-provider scenarios
+        // route the parent through the same connection — not the global default.
+        const parentProvider = this.ProviderToUse as unknown as IMetadataProvider;
+        this._parentEntity = await parentProvider.GetEntityObject(
             parentEntityInfo.Name,
             this._contextCurrentUser
         );
@@ -1071,8 +1072,10 @@ export abstract class BaseEntity<T = unknown> {
      * child's data, and recursively discovers further children.
      */
     private async createAndLinkChildEntity(childEntityName: string): Promise<void> {
-        // Create child via Metadata.Provider for proper class factory resolution
-        const childEntity = await Metadata.Provider.GetEntityObject<BaseEntity>(
+        // Create child via this entity's provider so the child shares the same connection
+        // (correct in multi-provider scenarios — never the global default).
+        const childProvider = this.ProviderToUse as unknown as IMetadataProvider;
+        const childEntity = await childProvider.GetEntityObject<BaseEntity>(
             childEntityName,
             this._contextCurrentUser
         );
@@ -2442,7 +2445,9 @@ export abstract class BaseEntity<T = unknown> {
      * Internal helper method for the class and sub-classes - used to easily get the Active User which is either the ContextCurrentUser, if defined, or the Metadata.Provider.CurrentUser if not.
      */
     protected get ActiveUser(): UserInfo {
-        return this.ContextCurrentUser || Metadata.Provider.CurrentUser; // use the context user ahead of the Provider.Current User - this is for SERVER side ops where the user changes per request
+        // Use the entity's bound provider (per-instance) before falling back to the global
+        // default — multi-provider correctness for server requests with per-request users.
+        return this.ContextCurrentUser || (this.ProviderToUse as unknown as IMetadataProvider)?.CurrentUser || Metadata.Provider.CurrentUser; // global-provider-ok: final fallback when no provider is bound
     }
 
     /**
@@ -2461,8 +2466,9 @@ export abstract class BaseEntity<T = unknown> {
             return;
         }
 
-        // Cache it via the provider's public API
-        Metadata.Provider.SetCachedRecordName(this.EntityInfo.Name, this.PrimaryKey, recordName);
+        // Cache it via this entity's provider so the cache lives on the right connection.
+        const md = this.ProviderToUse as unknown as IMetadataProvider;
+        md.SetCachedRecordName(this.EntityInfo.Name, this.PrimaryKey, recordName);
     }
 
     /**
@@ -2474,7 +2480,7 @@ export abstract class BaseEntity<T = unknown> {
     public CheckPermissions(type: EntityPermissionType, throwError: boolean): boolean {
         const u: UserInfo = this.ActiveUser;
         if (!u)
-            throw new Error('No user set - either the context user for the entity object must be set, or the Metadata.Provider.CurrentUser must be set');
+            throw new Error('No user set - either the context user for the entity object must be set, or the Metadata.Provider.CurrentUser must be set'); // global-provider-ok: error message text
 
         // Virtual entities are read-only — block Create, Update, Delete at the ORM level
         // This catches server-side code calling .Save()/.Delete() directly, which bypasses the API layer flags
@@ -3081,7 +3087,8 @@ export abstract class BaseEntity<T = unknown> {
         childCheck: { HasChildren: boolean; ChildEntityName: string },
         parentOptions: EntityDeleteOptions
     ): Promise<boolean> {
-        const childEntity = await Metadata.Provider.GetEntityObject<BaseEntity>(
+        const cascadeProvider = this.ProviderToUse as unknown as IMetadataProvider;
+        const childEntity = await cascadeProvider.GetEntityObject<BaseEntity>(
             childCheck.ChildEntityName,
             this._contextCurrentUser
         );

@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ChangeDetectionStrategy } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
@@ -85,7 +86,7 @@ export interface CreateAgentResult {
         ])
     ]
 })
-export class CreateAgentPanelComponent implements OnInit, OnDestroy {
+export class CreateAgentPanelComponent extends BaseAngularComponent implements OnInit, OnDestroy  {
     // =========================================================================
     // Inputs & Outputs
     // =========================================================================
@@ -134,7 +135,8 @@ export class CreateAgentPanelComponent implements OnInit, OnDestroy {
     constructor(
         private fb: FormBuilder,
         private cdr: ChangeDetectorRef
-    ) {}
+    ) {
+    super();}
 
     // =========================================================================
     // Lifecycle
@@ -204,7 +206,7 @@ export class CreateAgentPanelComponent implements OnInit, OnDestroy {
             this.AgentTypes = engine.AgentTypes as MJAIAgentTypeEntity[];
 
             // Load available prompts and actions in parallel
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const [promptsResult, actionsResult] = await rv.RunViews([
                 {
                     EntityName: 'MJ: AI Prompts',
@@ -247,7 +249,7 @@ export class CreateAgentPanelComponent implements OnInit, OnDestroy {
     }
 
     private async createAgentEntity(): Promise<void> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         this.agentEntity = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents');
         this.agentEntity.NewRecord();
 
@@ -381,7 +383,7 @@ export class CreateAgentPanelComponent implements OnInit, OnDestroy {
         this.LinkedPrompts.push(prompt);
 
         // Create link entity
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const agentPrompt = await md.GetEntityObject<MJAIAgentPromptEntity>('MJ: AI Agent Prompts');
         agentPrompt.NewRecord();
         agentPrompt.AgentID = this.agentEntity.ID;
@@ -459,7 +461,7 @@ export class CreateAgentPanelComponent implements OnInit, OnDestroy {
         this.LinkedActions.push(action);
 
         // Create link entity
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const agentAction = await md.GetEntityObject<MJAIAgentActionEntity>('MJ: AI Agent Actions');
         agentAction.NewRecord();
         agentAction.AgentID = this.agentEntity.ID;

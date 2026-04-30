@@ -105,6 +105,14 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
     private readonly matchEngine = new MatchEngine();
     private readonly watermarkService = new WatermarkService();
 
+    /** Optional provider override; falls back to Metadata.Provider when not set. */
+    private _provider?: IMetadataProvider;
+
+    /** Returns the active provider — explicit override if set, otherwise the global default. */
+    protected get ProviderToUse(): IMetadataProvider {
+        return this._provider ?? Metadata.Provider;
+    }
+
     /** In-process lock map to prevent concurrent syncs for the same CompanyIntegration */
     private static readonly activeSyncs = new Map<string, Promise<SyncResult>>();
 
@@ -147,8 +155,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
      *
      * Call this once during MJAPI startup after metadata is loaded.
      */
-    public async ResumeOrphanedSyncs(contextUser: UserInfo): Promise<void> {
-        await IntegrationEngineBase.Instance.Config(false, contextUser);
+    public async ResumeOrphanedSyncs(contextUser: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        if (provider) this._provider = provider;
+        await IntegrationEngineBase.Instance.Config(false, contextUser, provider);
 
         const rv = new RunView();
         const orphanedRuns = await rv.RunView<MJCompanyIntegrationRunEntity>({
@@ -250,8 +259,10 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         triggerType: SyncTriggerType = 'Manual',
         onProgress?: OnProgressCallback,
         onNotification?: OnNotificationCallback,
-        options?: IntegrationSyncOptions
+        options?: IntegrationSyncOptions,
+        provider?: IMetadataProvider
     ): Promise<SyncResult> {
+        if (provider) this._provider = provider;
         const lockKey = companyIntegrationID.toLowerCase();
         const existing = IntegrationEngine.activeSyncs.get(lockKey);
         if (existing) {
@@ -401,7 +412,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         contextUser: UserInfo,
         scheduledJobRunID?: string
     ): Promise<MJCompanyIntegrationRunEntity> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const run = await md.GetEntityObject<MJCompanyIntegrationRunEntity>(
             'MJ: Company Integration Runs',
             contextUser
@@ -891,8 +902,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         }
 
         // Load current field values for each changed record
-        const md = new Metadata();
-        const entityInfo = md.Entities.find(e => e.Name === entityMap.Entity);
+        const md = this.ProviderToUse;
+        const entityInfo = md.EntityByName(entityMap.Entity);
         const pkFieldName = entityInfo?.FirstPrimaryKey?.Name ?? 'ID';
         for (const [recordID, change] of latestByRecord) {
             if (change.Type === 'Delete') continue; // No fields to load for deletes
@@ -945,8 +956,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             }
         }
 
-        const md = new Metadata();
-        const entityInfo = md.Entities.find(e => e.Name === entityMap.Entity);
+        const md = this.ProviderToUse;
+        const entityInfo = md.EntityByName(entityMap.Entity);
         const pkFieldName = entityInfo?.FirstPrimaryKey?.Name ?? 'ID';
 
         const now = new Date().toISOString();
@@ -1088,8 +1099,8 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         console.log(`[IntegrationEngine] Orphan detection for ${entityMap.ExternalObjectName}: ${orphans.length} records in MJ not found in external system`);
 
-        const md = new Metadata();
-        const entityInfo = md.Entities.find(e => e.Name === entityMap.Entity);
+        const md = this.ProviderToUse;
+        const entityInfo = md.EntityByName(entityMap.Entity);
         const pkFields = entityInfo?.PrimaryKeys ?? (entityInfo?.FirstPrimaryKey ? [entityInfo.FirstPrimaryKey] : []);
 
         for (const orphan of orphans) {
@@ -1194,7 +1205,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         // per-batch all-or-nothing semantics. Batch failures report every record in the
         // batch as errored since the rollback undid any partial success within the batch.
         const APPLY_BATCH_SIZE = 500;
-        const provider = Metadata.Provider as DatabaseProviderBase;
+        const provider = this.ProviderToUse as DatabaseProviderBase;
 
         for (let i = 0; i < records.length; i += APPLY_BATCH_SIZE) {
             const batch = records.slice(i, i + APPLY_BATCH_SIZE);
@@ -1284,7 +1295,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         entityMap: ICompanyIntegrationEntityMap,
         contextUser: UserInfo
     ): Promise<void> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const entity = await md.GetEntityObject(record.MJEntityName, contextUser);
         entity.NewRecord();
         this.SetEntityFields(entity, record.MappedFields);
@@ -1335,9 +1346,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
             return;
         }
 
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const entity = await md.GetEntityObject(record.MJEntityName, contextUser);
-        const entityInfo = md.Entities.find(e => e.Name === record.MJEntityName);
+        const entityInfo = md.EntityByName(record.MJEntityName);
         const pkFields = entityInfo?.PrimaryKeys ?? (entityInfo?.FirstPrimaryKey ? [entityInfo.FirstPrimaryKey] : []);
         const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(record.MatchedMJRecordID, pkFields));
         if (!loaded) {
@@ -1404,9 +1415,9 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
 
         if (entityMap.DeleteBehavior === 'DoNothing') return false;
 
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const entity = await md.GetEntityObject(record.MJEntityName, contextUser);
-        const entityInfo = md.Entities.find(e => e.Name === record.MJEntityName);
+        const entityInfo = md.EntityByName(record.MJEntityName);
         const pkFields = entityInfo?.PrimaryKeys ?? (entityInfo?.FirstPrimaryKey ? [entityInfo.FirstPrimaryKey] : []);
         const loaded = await entity.InnerLoad(this.BuildEntityPrimaryKey(record.MatchedMJRecordID, pkFields));
         if (!loaded) {
@@ -1590,7 +1601,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         entityRecordID: string,
         contextUser: UserInfo
     ): Promise<void> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const recordMap = await md.GetEntityObject<MJCompanyIntegrationRecordMapEntity>(
             'MJ: Company Integration Record Maps',
             contextUser
@@ -1616,7 +1627,7 @@ export class IntegrationEngine extends BaseSingleton<IntegrationEngine> {
         result: SyncResult,
         contextUser: UserInfo
     ): Promise<void> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const detail = await md.GetEntityObject<MJCompanyIntegrationRunDetailEntity>(
             'MJ: Company Integration Run Details',
             contextUser

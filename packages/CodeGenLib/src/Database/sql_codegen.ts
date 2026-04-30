@@ -310,7 +310,7 @@ export class SQLCodeGenBase {
                 startSpinner(`Regenerating ${uniqueEntityNames.length} entities with late-phase view changes...`);
 
                 // Refresh metadata to pick up DB changes from Step 3 (e.g., SupportsGeoCoding = 1)
-                const regenMd = new Metadata();
+                const regenMd = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
                 await regenMd.Refresh();
 
                 // Resolve entity names to EntityInfo objects from the refreshed metadata
@@ -382,7 +382,7 @@ export class SQLCodeGenBase {
             }
 
             // now - we need to tell our metadata object to refresh itself
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
             await md.Refresh();
 
             return overallSuccess;
@@ -812,7 +812,7 @@ export class SQLCodeGenBase {
      * (BaseViewGenerated === false), are included in the API, and are not virtual.
      */
     protected getModifiedCustomBaseViewEntities(): EntityInfo[] {
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
         const modifiedOrNewNames = [
             ...ManageMetadataBase.modifiedEntityList,
             ...ManageMetadataBase.newEntityList,
@@ -1191,7 +1191,7 @@ export class SQLCodeGenBase {
             : `fnSearch${entity.CodeName}`;
 
         if (entity.FullTextSearchFunctionGenerated && (!entity.FullTextSearchFunction || entity.FullTextSearchFunction.length === 0)) {
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
             const u = UserCache.Instance.Users[0];
             if (!u)
                 throw new Error('Could not find the first user in the cache, cant generate the full text search function without a user');
@@ -1521,7 +1521,7 @@ export class SQLCodeGenBase {
         let sOutput: string = '';
         let fieldCount: number = 0;
         const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
         const allGeneratedAliases: string[] = [];
 
         // Get fields that are related entities with join field configuration.
@@ -1614,7 +1614,7 @@ export class SQLCodeGenBase {
                     }
 
                     // Get field metadata from related entity to check if virtual
-                    const relatedEntity = md.Entities.find(e => e.Name === ef.RelatedEntity);
+                    const relatedEntity = md.EntityByName(ef.RelatedEntity);
                     const relatedField = relatedEntity?.Fields.find(f => f.Name.toLowerCase() === fieldName.toLowerCase());
                     const isVirtual = relatedField?.IsVirtual || false;
 
@@ -1644,8 +1644,8 @@ export class SQLCodeGenBase {
     }
 
     protected getIsNameFieldForSingleEntity(entityName: string): {nameField: string, nameFieldIsVirtual: boolean} {
-        const md: Metadata = new Metadata(); // use the full metadata entity list, not the filtered version that we receive
-        const e: EntityInfo = md.Entities.find(e => e.Name === entityName)!;
+        const md: Metadata = new Metadata(); // use the full metadata entity list, not the filtered version that we receive // global-provider-ok: codegen runs offline against a single provider
+        const e: EntityInfo = md.EntityByName(entityName)!;
         if (e) {
             const ef: EntityFieldInfo = e.NameField!;
             if (e.NameField)
@@ -1673,8 +1673,8 @@ export class SQLCodeGenBase {
     }
 
     protected validateFieldExists(entityName: string, fieldName: string): boolean {
-        const md = new Metadata();
-        const entity = md.Entities.find(e => e.Name === entityName);
+        const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
+        const entity = md.EntityByName(entityName);
         if (!entity) return false;
         return entity.Fields.some(f => f.Name.toLowerCase() === fieldName.toLowerCase());
     }
@@ -1748,7 +1748,7 @@ export class SQLCodeGenBase {
     protected async generateCascadeDeletes(entity: EntityInfo, pool: CodeGenConnection): Promise<string> {
         let sOutput: string = '';
         if (entity.CascadeDeletes) {
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
 
             // Find all fields in other entities that are foreign keys to this entity
             for (const e of md.Entities) {
@@ -1888,7 +1888,7 @@ export class SQLCodeGenBase {
      */
     protected analyzeCascadeDeleteDependencies(entity: EntityInfo): void {
         if (entity.CascadeDeletes) {
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
 
             // Find all fields in other entities that are foreign keys to this entity
             for (const e of md.Entities) {

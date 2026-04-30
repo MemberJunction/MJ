@@ -4,6 +4,7 @@ import {
     ResourceShareContext,
     ResourceShareDialogResult
 } from '@memberjunction/ng-resource-permissions';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { DashboardShareAdapter } from './dashboard-share-adapter';
 
 /**
@@ -32,7 +33,7 @@ export type ShareDialogResult = ResourceShareDialogResult & { Dashboard?: MJDash
         </mj-resource-share-dialog>
     `
 })
-export class DashboardShareDialogComponent {
+export class DashboardShareDialogComponent extends BaseAngularComponent {
     @Input() Visible = false;
     @Input()
     set Dashboard(value: MJDashboardEntity | null) {
@@ -55,6 +56,11 @@ export class DashboardShareDialogComponent {
     public adapter = new DashboardShareAdapter();
 
     private _dashboard: MJDashboardEntity | null = null;
+
+    constructor() {
+        super();
+        this.adapter.Provider = this.ProviderToUse;
+    }
 
     onResult(result: ResourceShareDialogResult): void {
         this.Result.emit({

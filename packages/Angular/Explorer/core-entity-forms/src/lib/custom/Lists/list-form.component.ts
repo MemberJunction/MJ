@@ -119,8 +119,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     public shareDialogConfig: ListShareDialogConfig | null = null;
 
     private destroy$ = new Subject<void>();
-    private metadata = new Metadata();
-
+    private get metadata() { return this.ProviderToUse; }
     override async ngOnInit(): Promise<void> {
         await super.ngOnInit();
 
@@ -168,7 +167,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     }
 
     private async loadCategories(): Promise<void> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<MJListCategoryEntity>({
             EntityName: 'MJ: List Categories',
             OrderBy: 'Name',
@@ -186,7 +185,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         this.cdr.markForCheck();
 
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<MJListDetailEntity>({
                 EntityName: 'MJ: List Details',
                 ExtraFilter: `ListID = '${this.record.ID}'`,
@@ -215,7 +214,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     private async loadRecordNames(): Promise<void> {
         if (!this.entityInfo) return;
 
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         // Get the name field - NameField is EntityFieldInfo or undefined
         const nameFieldInfo = this.entityInfo.NameField;
         const nameFieldName = nameFieldInfo ? nameFieldInfo.Name : 'ID';
@@ -249,7 +248,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         this.isLoadingStats = true;
 
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const [itemsResult, sharesResult, invitationsResult] = await rv.RunViews([
                 {
                     EntityName: 'MJ: List Details',
@@ -536,7 +535,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
     private async loadExistingListDetailIds(): Promise<void> {
         if (!this.record) return;
 
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<{ RecordID: string }>({
             EntityName: 'MJ: List Details',
             ExtraFilter: `ListID = '${this.record.ID}'`,
@@ -579,7 +578,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
             filter = `${nameField.Name} LIKE '%${searchText}%'`;
         }
 
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result: RunViewResult = await rv.RunView({
             EntityName: this.record.Entity,
             ExtraFilter: filter,
@@ -693,7 +692,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         this.showAddFromViewLoader = true;
         this.cdr.markForCheck();
 
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const runViewResult = await rv.RunView<MJUserViewEntityExtended>({
             EntityName: 'MJ: User Views',
             ExtraFilter: `UserID = '${this.metadata.CurrentUser.ID}' AND EntityID = '${this.record.EntityID}'`,
@@ -731,7 +730,7 @@ export class MJListFormComponentExtended extends MJListFormComponent implements 
         this.fetchingRecordsToSave = true;
         this.cdr.markForCheck();
 
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
         // Collect all unique record IDs from selected views
         const recordIdSet = new Set<string>();

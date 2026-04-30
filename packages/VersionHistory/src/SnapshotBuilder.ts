@@ -1,6 +1,7 @@
 import {
     CompositeKey,
     EntityInfo,
+    IMetadataProvider,
     Metadata,
     RunView,
     UserInfo,
@@ -58,6 +59,14 @@ interface RecordChangeLookup {
 export class SnapshotBuilder {
     private Walker = new DependencyGraphWalker();
 
+    /** Optional provider override; falls back to Metadata.Provider when not set. */
+    private _provider?: IMetadataProvider;
+
+    /** Returns the active provider — explicit override if set, otherwise the global default. */
+    protected get ProviderToUse(): IMetadataProvider {
+        return this._provider ?? Metadata.Provider;
+    }
+
     // =========================================================================
     // Public API
     // =========================================================================
@@ -88,7 +97,7 @@ export class SnapshotBuilder {
         entityName: string,
         contextUser: UserInfo
     ): Promise<CaptureResult> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const entityInfo = md.EntityByName(entityName);
         if (!entityInfo) {
             return this.failResult(labelId, `Entity '${escapeSqlString(entityName)}' not found`);
@@ -142,7 +151,7 @@ export class SnapshotBuilder {
         labelId: string,
         contextUser: UserInfo
     ): Promise<CaptureResult> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const trackedEntities = md.Entities.filter(e => e.TrackRecordChanges);
 
         const allErrors: CaptureError[] = [];
@@ -473,7 +482,7 @@ export class SnapshotBuilder {
         existingRecordData?: Record<string, unknown>
     ): Promise<CaptureItemResult> {
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const entityInfo = md.EntityByName(entityName);
             if (!entityInfo) {
                 return { Success: false, WasSynthetic: false, Error: `Entity '${entityName}' not found` };
@@ -579,7 +588,7 @@ export class SnapshotBuilder {
         contextUser: UserInfo
     ): Promise<MJRecordChangeEntity | null> {
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const change = await md.GetEntityObject<MJRecordChangeEntity>(ENTITY_RECORD_CHANGES, contextUser);
 
             change.EntityID = entityInfo.ID;
@@ -616,7 +625,7 @@ export class SnapshotBuilder {
         wasSynthetic: boolean,
         contextUser: UserInfo
     ): Promise<CaptureItemResult> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const item = await md.GetEntityObject<MJVersionLabelItemEntity>(ENTITY_VERSION_LABEL_ITEMS, contextUser);
         item.VersionLabelID = labelId;
         item.RecordChangeID = recordChangeId;

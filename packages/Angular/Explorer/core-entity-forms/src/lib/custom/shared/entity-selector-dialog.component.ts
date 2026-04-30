@@ -3,6 +3,7 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { RunView } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface EntitySelectorConfig {
     entityName: string;
     title: string;
@@ -256,7 +257,7 @@ export interface EntitySelectorConfig {
         }
     `]
 })
-export class EntitySelectorDialogComponent implements OnInit {
+export class EntitySelectorDialogComponent extends BaseAngularComponent implements OnInit {
     @Input() config!: EntitySelectorConfig;
 
     public entities: any[] = [];
@@ -269,7 +270,8 @@ export class EntitySelectorDialogComponent implements OnInit {
 
     constructor(
         private sharedService: SharedService
-    ) {}
+    ) {
+    super();}
 
     async ngOnInit() {
         await this.loadEntities();
@@ -278,7 +280,7 @@ export class EntitySelectorDialogComponent implements OnInit {
     async loadEntities() {
         this.isLoading = true;
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView({
                 EntityName: this.config.entityName,
                 ExtraFilter: this.config.filters,

@@ -65,7 +65,7 @@ export class BatchContextIndex {
     this.index = new Map();
     this.entitiesByName = new Map();
     this.pkFieldCache = new Map();
-    this.metadata = metadata ?? new Metadata();
+    this.metadata = metadata ?? new Metadata(); // global-provider-ok: metadata sync operates on the configured provider only
   }
 
   // ---------------------------------------------------------------------------

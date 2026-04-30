@@ -296,7 +296,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         contextUser: UserInfo
     ): Promise<void> {
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const item = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', contextUser);
             await item.Load(contentItemID);
             item.TaggingStatus = status;
@@ -489,7 +489,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         contextUser: UserInfo
     ): Promise<void> {
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             let entityID: string;
             let recordID: string;
 
@@ -528,7 +528,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 recordID = erdResult.Results[0].RecordID;
             } else {
                 // Non-entity source — tag the ContentItem itself
-                const contentItemsEntity = md.Entities.find(e => e.Name === 'MJ: Content Items');
+                const contentItemsEntity = md.EntityByName('MJ: Content Items');
                 if (!contentItemsEntity) return;
                 entityID = contentItemsEntity.ID;
                 recordID = contentItemTag.ItemID;
@@ -705,7 +705,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     public async deleteInvalidContentItem(contentItemID: string, contextUser: UserInfo): Promise<void> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const contentItem: MJContentItemEntity = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', contextUser);
         await contentItem.Load(contentItemID);
         await contentItem.Delete();
@@ -772,7 +772,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * for taxonomy bridge processing.
      */
     public async saveContentItemTags(contentItemID: string, LLMResults: JsonObject, contextUser: UserInfo): Promise<void> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const keywords = LLMResults.keywords;
         if (!keywords || !Array.isArray(keywords)) return;
 
@@ -821,7 +821,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * Updates content item name/description, then creates attribute records for other fields.
      */
     public async saveResultsToContentItemAttribute(LLMResults: JsonObject, contextUser: UserInfo): Promise<void> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const contentItemID = LLMResults.contentItemID as string;
         const skipKeys = new Set(['keywords', 'processStartTime', 'processEndTime', 'contentItemID', 'isValidContent']);
 
@@ -1066,7 +1066,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * Saves process run metadata to the database (backward-compatible simple version).
      */
     public async saveProcessRun(processRunParams: ProcessRunParams, contextUser: UserInfo): Promise<void> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const processRun = await md.GetEntityObject<MJContentProcessRunEntity>('MJ: Content Process Runs', contextUser);
         processRun.NewRecord();
         processRun.SourceID = processRunParams.sourceID;
@@ -1090,7 +1090,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         contextUser: UserInfo,
         config?: MJContentProcessRunEntity_IContentProcessRunConfiguration
     ): Promise<MJContentProcessRunEntity> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const processRun = await md.GetEntityObject<MJContentProcessRunEntity>('MJ: Content Process Runs', contextUser);
         processRun.NewRecord();
         processRun.SourceID = sourceID;
@@ -1965,7 +1965,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         contextUser: UserInfo
     ): Promise<boolean> {
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const duplicate = await md.GetEntityObject<MJContentItemDuplicateEntity>('MJ: Content Item Duplicates', contextUser);
             const loaded = await duplicate.Load(duplicateID);
             if (!loaded) {
@@ -2101,7 +2101,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             return;
         }
 
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const duplicate = await md.GetEntityObject<MJContentItemDuplicateEntity>('MJ: Content Item Duplicates', contextUser);
         duplicate.NewRecord();
         duplicate.ContentItemAID = canonicalAID;

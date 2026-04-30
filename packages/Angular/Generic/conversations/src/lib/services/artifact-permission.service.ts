@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { UserInfo, RunView, Metadata } from '@memberjunction/core';
+import { UserInfo, RunView, Metadata, IMetadataProvider } from '@memberjunction/core';
 import { MJArtifactPermissionEntity, MJArtifactEntity, MJCollectionArtifactEntity } from '@memberjunction/core-entities';
 import { CollectionPermissionService } from './collection-permission.service';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -32,16 +32,31 @@ export interface ArtifactPermissionSet {
     providedIn: 'root'
 })
 export class ArtifactPermissionService {
+    private _provider: IMetadataProvider | null = null;
 
     constructor(
         private collectionPermissionService: CollectionPermissionService
     ) {}
 
     /**
+     * The metadata provider this service uses. When unset, falls back to Metadata.Provider.
+     * Setting it also propagates to the collection-permission service this depends on.
+     */
+    public get Provider(): IMetadataProvider {
+        return this._provider ?? Metadata.Provider;
+    }
+    public set Provider(value: IMetadataProvider | null) {
+        this._provider = value;
+        if (value !== null) {
+            this.collectionPermissionService.Provider = value;
+        }
+    }
+
+    /**
      * Load all explicit permissions for an artifact
      */
     async loadPermissions(artifactId: string, currentUser: UserInfo): Promise<ArtifactPermission[]> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.Provider);
         const result = await rv.RunView<MJArtifactPermissionEntity>({
             EntityName: 'MJ: Artifact Permissions',
             ExtraFilter: `ArtifactID='${artifactId}'`,
@@ -103,7 +118,7 @@ export class ArtifactPermissionService {
         userId: string,
         currentUser: UserInfo
     ): Promise<ArtifactPermission | null> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.Provider);
         const result = await rv.RunView<MJArtifactPermissionEntity>({
             EntityName: 'MJ: Artifact Permissions',
             ExtraFilter: `ArtifactID='${artifactId}' AND UserID='${userId}'`,
@@ -197,7 +212,7 @@ export class ArtifactPermissionService {
         sharedByUserId: string,
         currentUser: UserInfo
     ): Promise<MJArtifactPermissionEntity> {
-        const md = new Metadata();
+        const md = this.Provider;
         const permission = await md.GetEntityObject<MJArtifactPermissionEntity>(
             'MJ: Artifact Permissions',
             currentUser
@@ -226,7 +241,7 @@ export class ArtifactPermissionService {
         permissions: ArtifactPermissionSet,
         currentUser: UserInfo
     ): Promise<boolean> {
-        const md = new Metadata();
+        const md = this.Provider;
         const permission = await md.GetEntityObject<MJArtifactPermissionEntity>(
             'MJ: Artifact Permissions',
             currentUser
@@ -244,7 +259,7 @@ export class ArtifactPermissionService {
      * Revoke explicit permission
      */
     async revokePermission(permissionId: string, currentUser: UserInfo): Promise<boolean> {
-        const md = new Metadata();
+        const md = this.Provider;
         const permission = await md.GetEntityObject<MJArtifactPermissionEntity>(
             'MJ: Artifact Permissions',
             currentUser
@@ -311,7 +326,7 @@ export class ArtifactPermissionService {
      * Helper: Get artifact record
      */
     private async getArtifact(artifactId: string, currentUser: UserInfo): Promise<MJArtifactEntity | null> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.Provider);
         const result = await rv.RunView<MJArtifactEntity>({
             EntityName: 'MJ: Artifacts',
             ExtraFilter: `ID='${artifactId}'`,
@@ -332,7 +347,7 @@ export class ArtifactPermissionService {
         artifactId: string,
         currentUser: UserInfo
     ): Promise<MJCollectionArtifactEntity[]> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.Provider);
         const result = await rv.RunView<MJCollectionArtifactEntity>({
             EntityName: 'MJ: Collection Artifacts',
             ExtraFilter: `ArtifactVersionID IN (

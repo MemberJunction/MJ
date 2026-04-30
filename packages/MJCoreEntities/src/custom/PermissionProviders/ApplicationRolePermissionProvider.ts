@@ -1,5 +1,6 @@
 import {
     GranteeType,
+    IMetadataProvider,
     Metadata,
     NormalizedPermission,
     PermissionAction,
@@ -41,7 +42,8 @@ export class ApplicationRolePermissionProvider extends PermissionProviderBase {
         user: UserInfo,
         resourceType: string,
         resourceId: string | null,
-        action: PermissionAction
+        action: PermissionAction,
+        _provider?: IMetadataProvider
     ): Promise<PermissionCheckResult> {
         if (resourceType !== 'Applications') {
             return {
@@ -69,22 +71,22 @@ export class ApplicationRolePermissionProvider extends PermissionProviderBase {
         };
     }
 
-    async GetEffectivePermissions(user: UserInfo, resourceType: string, resourceId: string): Promise<NormalizedPermission[]> {
+    async GetEffectivePermissions(user: UserInfo, resourceType: string, resourceId: string, provider?: IMetadataProvider): Promise<NormalizedPermission[]> {
         if (resourceType !== 'Applications') return [];
         const actions = this.actionsForUserApp(user, resourceId);
         if (actions.length === 0) return [];
 
-        const app = new Metadata().Applications.find((a) => UUIDsEqual(a.ID, resourceId));
+        const app = (provider ?? new Metadata()).Applications.find((a) => UUIDsEqual(a.ID, resourceId));
         return [this.buildNormalizedPermission({
             resourceType: 'Applications', resourceId, resourceName: app?.Name,
             granteeType: 'User', granteeId: user.ID, granteeName: user.Name, actions,
         })];
     }
 
-    async GetUserResources(user: UserInfo, resourceType?: string): Promise<NormalizedPermission[]> {
+    async GetUserResources(user: UserInfo, resourceType?: string, provider?: IMetadataProvider): Promise<NormalizedPermission[]> {
         if (resourceType && resourceType !== 'Applications') return [];
 
-        const md = new Metadata();
+        const md = provider ?? new Metadata();
         const results: NormalizedPermission[] = [];
         for (const app of md.Applications) {
             const actions = this.actionsForUserApp(user, app.ID);
@@ -97,10 +99,10 @@ export class ApplicationRolePermissionProvider extends PermissionProviderBase {
         return results;
     }
 
-    async GetResourcePermissions(resourceType: string, resourceId: string): Promise<NormalizedPermission[]> {
+    async GetResourcePermissions(resourceType: string, resourceId: string, provider?: IMetadataProvider): Promise<NormalizedPermission[]> {
         if (resourceType !== 'Applications') return [];
 
-        const md = new Metadata();
+        const md = provider ?? new Metadata();
         const app = md.Applications.find((a) => UUIDsEqual(a.ID, resourceId));
         if (!app) return [];
 

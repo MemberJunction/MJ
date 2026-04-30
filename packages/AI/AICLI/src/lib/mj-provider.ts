@@ -1,4 +1,4 @@
-import { SetProvider, Metadata } from '@memberjunction/core';
+import { SetProvider, IMetadataProvider } from '@memberjunction/core';
 import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
 import sql from 'mssql';
 import { loadAIConfig } from '../config';
@@ -19,17 +19,22 @@ import '@memberjunction/ai-anthropic';
 
 let isInitialized = false;
 let connectionPool: sql.ConnectionPool | null = null;
+let cliProvider: IMetadataProvider | null = null;
 
-export async function initializeMJProvider(): Promise<void> {
-  if (isInitialized) {
-    return;
-  }
-
-  // Check if MJ provider is already initialized
-  if (Metadata.Provider) {
-    console.log('MJ Provider already initialized');
-    isInitialized = true;
-    return;
+/**
+ * Initialize this CLI process's MJ data provider and return it.
+ *
+ * The returned provider is also registered as the process-global default by
+ * `setupSQLServerClient`, which is the established CLI/server bootstrap pattern in MJ
+ * (see `MJServer/src/index.ts`, `CodeGenLib`, etc.). Callers that want to thread the
+ * provider explicitly through their own code can capture the return value here rather
+ * than reaching for `Metadata.Provider` later.
+ *
+ * Calling this more than once in a process is idempotent — the cached provider is returned.
+ */
+export async function initializeMJProvider(): Promise<IMetadataProvider> {
+  if (isInitialized && cliProvider) {
+    return cliProvider;
   }
 
   try {
@@ -95,9 +100,12 @@ For security, consider using environment variables:
       180000
     );
 
-    await setupSQLServerClient(providerConfig);
+    // setupSQLServerClient creates the SQLServerDataProvider and registers it as the
+    // global default — the established CLI bootstrap pattern. Capture the same instance
+    // here so callers receive it directly without reading Metadata.Provider later.
+    cliProvider = await setupSQLServerClient(providerConfig) as unknown as IMetadataProvider;
     isInitialized = true;
-    
+    return cliProvider;
   } catch (error: any) {
     if (error?.message?.startsWith('❌')) {
       // Already formatted error, re-throw as is
@@ -138,6 +146,8 @@ Next steps:
 For debugging, run with --verbose flag for detailed error information.`);
     }
   }
+  // Unreachable — every branch above either returned or threw — but keeps TypeScript happy.
+  throw new Error('initializeMJProvider: unreachable');
 }
 
 export function getConnectionPool(): sql.ConnectionPool {
@@ -152,7 +162,18 @@ This is an internal error. Please report this issue.`);
   return connectionPool;
 }
 
+/**
+ * Returns the bound provider for this CLI process, or null if `initializeMJProvider()`
+ * hasn't been called yet. Prefer calling `initializeMJProvider()` and capturing its
+ * return value instead of relying on this getter — that keeps callers explicit about
+ * provider ownership.
+ */
+export function getMJProvider(): IMetadataProvider | null {
+  return cliProvider;
+}
+
 export async function closeMJProvider(): Promise<void> {
+  cliProvider = null;
   if (connectionPool) {
     await connectionPool.close();
     connectionPool = null;

@@ -43,6 +43,7 @@ vi.mock('@memberjunction/core', () => {
   return {
     Metadata: MockMetadata,
     UserInfo: class {},
+    IMetadataProvider: class {},
   };
 });
 
@@ -83,7 +84,10 @@ describe('AgentOperations', () => {
     mockAgentRun.Status = 'Running';
     mockAgentRun.Load.mockResolvedValue(true);
     mockAgentRun.Save.mockResolvedValue(true);
-    ops = new AgentOperations(mockUser);
+    // Multi-provider migration: AgentOperations now requires a provider in construction.
+    // Provide a minimal mock with the GetEntityObject the tests rely on.
+    const mockProvider = { GetEntityObject: async () => mockAgentRun } as never;
+    ops = new AgentOperations(mockUser, mockProvider);
   });
 
   describe('discoverAgents', () => {

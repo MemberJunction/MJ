@@ -154,7 +154,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     private async loadEditDocTemplate(templateId: string): Promise<void> {
         if (!templateId) return;
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<{ TemplateText: string }>({
                 EntityName: 'MJ: Template Contents',
                 ExtraFilter: `TemplateID='${templateId}'`,
@@ -181,7 +181,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         this.IsEditSaving = true;
         this.cdr.detectChanges();
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const doc = await md.GetEntityObject<MJEntityDocumentEntity>('MJ: Entity Documents');
             const loaded = await doc.Load(this.EditDocID);
             if (!loaded) throw new Error('Could not load entity document');
@@ -216,7 +216,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     private async saveEditDocTemplate(templateId: string): Promise<void> {
         if (!templateId || !this.EditDocTemplate) return;
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<MJTemplateContentEntity>({
                 EntityName: 'MJ: Template Contents',
                 ExtraFilter: `TemplateID='${templateId}'`,
@@ -268,7 +268,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         this.IsEditDeleting = true;
         this.cdr.detectChanges();
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const doc = await md.GetEntityObject<MJEntityDocumentEntity>('MJ: Entity Documents');
             const loaded = await doc.Load(this.EditDocID);
             if (!loaded) throw new Error('Could not load entity document');
@@ -338,7 +338,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
                 return;
             }
 
-            const md = new Metadata();
+            const md = this.ProviderToUse;
 
             // Create ScheduledAction
             const scheduledAction = await md.GetEntityObject<MJScheduledActionEntity>('MJ: Scheduled Actions');
@@ -380,7 +380,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
     /** Find the __VectorizeEntity action ID */
     private async findVectorizeActionID(): Promise<string | null> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<{ ID: string }>({
             EntityName: 'Actions',
             ExtraFilter: `Name = '__VectorizeEntity'`,
@@ -396,7 +396,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
     /** Create a ScheduledActionParam linking the entity document ID */
     private async createVectorizeScheduleParam(scheduledActionID: string, actionID: string, entityDocumentID: string): Promise<void> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const paramResult = await rv.RunView<{ ID: string; Name: string }>({
             EntityName: 'Action Params',
             ExtraFilter: `ActionID = '${actionID}' AND Name = 'entityDocumentID'`,
@@ -410,7 +410,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             return;
         }
 
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const param = await md.GetEntityObject<MJScheduledActionParamEntity>('MJ: Scheduled Action Params');
         param.NewRecord();
         param.ScheduledActionID = scheduledActionID;
@@ -550,7 +550,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         const doc = this.entityDocuments.find(d => UUIDsEqual(d.ID, entityDocumentId));
         if (!doc) return;
 
-        const provider = Metadata.Provider as GraphQLDataProvider;
+        const provider = this.ProviderToUse as GraphQLDataProvider;
         if (!provider) return;
 
         this.addSyncingId(entityDocumentId);
@@ -604,7 +604,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
     /** Subscribe to PipelineProgress for a specific pipeline run */
     private subscribeToPipelineProgress(entityDocumentId: string, pipelineRunID: string, entityName: string): void {
-        const provider = Metadata.Provider as GraphQLDataProvider;
+        const provider = this.ProviderToUse as GraphQLDataProvider;
         const subscriptionQuery = `
             subscription PipelineProgress($pipelineRunID: String!) {
                 PipelineProgress(pipelineRunID: $pipelineRunID) {
@@ -902,7 +902,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         this.cdr.detectChanges();
 
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const entityDoc = await md.GetEntityObject<MJEntityDocumentEntity>('MJ: Entity Documents');
             entityDoc.NewRecord();
             entityDoc.Name = this.SaveDocumentName;
@@ -1020,7 +1020,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         // Each query fetches only the most recent row (MaxRows: 1) and uses
         // TotalRowCount for the actual vector count — avoids loading all rows.
         // AI Models come from a different domain — fetched in the same batch.
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const erdQueries = this.entityDocuments.map(doc => ({
             EntityName: 'MJ: Entity Record Documents',
             ExtraFilter: `EntityDocumentID='${doc.ID}' AND VectorID IS NOT NULL`,
@@ -1235,7 +1235,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         }
 
         // TypeID — look up 'Record Duplicate' entity document type
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const typeResult = await rv.RunView<{ ID: string }>({
             EntityName: 'MJ: Entity Document Types',
             ExtraFilter: "Name = 'Record Duplicate'",
@@ -1271,7 +1271,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
     /** Create a Template + TemplateContent record for the entity document */
     private async createTemplateForDocument(entityDoc: MJEntityDocumentEntity): Promise<void> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const templateText = this.EditableTemplate || this.SuggestionResult?.template || '';
         if (!templateText) {
             throw new Error('No template content to save');
@@ -1292,7 +1292,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         entityDoc.TemplateID = template.ID;
 
         // Find 'Text' content type
-        const contentTypeResult = await new RunView().RunView<{ ID: string }>({
+        const contentTypeResult = await RunView.FromMetadataProvider(this.ProviderToUse).RunView<{ ID: string }>({
             EntityName: 'MJ: Template Content Types',
             ExtraFilter: "Name = 'Text'",
             ResultType: 'simple',
@@ -1320,7 +1320,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
 
     /** Build grouped entity list from metadata, grouped by SchemaName */
     private loadEntityGroups(): void {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const groupMap = new Map<string, { Name: string; ID: string }[]>();
 
         for (const entity of md.Entities) {
@@ -1362,7 +1362,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         const row = this.SyncRows.find(r => r.EntityDocumentID === entityDocumentId);
         if (!row) return;
 
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<{ __mj_UpdatedAt: string }>({
             EntityName: 'MJ: Entity Record Documents',
             ExtraFilter: `EntityDocumentID='${entityDocumentId}' AND VectorID IS NOT NULL`,
@@ -1388,14 +1388,14 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
      * a natural language template optimized for vector embeddings.
      */
     private async callSuggestionPrompt(entityName: string, useCase: string): Promise<DocumentSuggestionResult | null> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const entity = md.Entities.find(e => e.Name === entityName);
         if (!entity) {
             throw new Error(`Entity "${entityName}" not found in metadata`);
         }
 
         const prompt = this.findSuggestionPrompt();
-        const provider = Metadata.Provider as GraphQLDataProvider;
+        const provider = this.ProviderToUse as GraphQLDataProvider;
         if (!provider) {
             throw new Error('GraphQL provider not available');
         }
@@ -1446,7 +1446,7 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             Description: f.Description || '',
         }));
 
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const relationships = entity.RelatedEntities
             .filter(r => r.Type === 'One to Many' || r.Type === 'Many to One')
             .slice(0, 20)

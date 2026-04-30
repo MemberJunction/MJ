@@ -1,15 +1,26 @@
 import { Injectable } from '@angular/core';
-import { Metadata, RunView } from '@memberjunction/core';
+import { IMetadataProvider, Metadata, RunView } from '@memberjunction/core';
 import { MJScheduledJobEntity, MJScheduledJobTypeEntity, MJScheduledJobRunEntity } from '@memberjunction/core-entities';
 
 /**
  * Service for loading and caching scheduled job data.
  * Safe to call multiple times — caches job types after first load.
+ *
+ * Multi-provider note: callers under a non-default provider should set
+ * `service.Provider = component.ProviderToUse` before invoking any methods.
  */
 @Injectable({ providedIn: 'root' })
 export class ScheduledJobService {
     private _jobTypes: MJScheduledJobTypeEntity[] = [];
     private _jobTypesLoading: Promise<MJScheduledJobTypeEntity[]> | null = null;
+    private _provider: IMetadataProvider | null = null;
+
+    public get Provider(): IMetadataProvider {
+        return this._provider ?? Metadata.Provider;
+    }
+    public set Provider(value: IMetadataProvider | null) {
+        this._provider = value;
+    }
 
     /** Cached list of all scheduled job types */
     public get JobTypes(): MJScheduledJobTypeEntity[] {
@@ -42,8 +53,8 @@ export class ScheduledJobService {
      * Returns null if not found or load fails.
      */
     public async LoadJob(jobID: string): Promise<MJScheduledJobEntity | null> {
-        const md = new Metadata();
-        const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs');
+        const md = this.Provider;
+        const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', md.CurrentUser);
         const loaded = await job.Load(jobID);
         return loaded ? job : null;
     }
@@ -52,7 +63,7 @@ export class ScheduledJobService {
      * Load recent runs for a given job, ordered by most recent first.
      */
     public async LoadJobRuns(jobID: string, maxRows: number = 10): Promise<MJScheduledJobRunEntity[]> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.Provider);
         const result = await rv.RunView<MJScheduledJobRunEntity>({
             EntityName: 'MJ: Scheduled Job Runs',
             ExtraFilter: `ScheduledJobID='${jobID}'`,
@@ -70,7 +81,7 @@ export class ScheduledJobService {
     }
 
     private async fetchJobTypes(): Promise<MJScheduledJobTypeEntity[]> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.Provider);
         const result = await rv.RunView<MJScheduledJobTypeEntity>({
             EntityName: 'MJ: Scheduled Job Types',
             ExtraFilter: '',

@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { RunView, Metadata } from '@memberjunction/core';
+import { RunView, Metadata, IMetadataProvider } from '@memberjunction/core';
 import {
   MJConversationEntity,
   MJConversationArtifactEntity,
@@ -33,7 +33,20 @@ export class ComponentVersionService {
   private _componentArtifactTypeID: string | null = null;
   private _cachedConversationID: string | null = null;
 
-  private metadata: Metadata = new Metadata();
+  private _provider: IMetadataProvider | null = null;
+
+  /** Set the metadata provider this service should use. Components should call this after injection. */
+  public set Provider(value: IMetadataProvider | null) {
+      this._provider = value;
+  }
+
+  public get Provider(): IMetadataProvider {
+      return this._provider ?? Metadata.Provider;
+  }
+
+  private get metadata(): IMetadataProvider {
+    return this.Provider;
+  }
 
   get CurrentArtifactID(): string | null { return this._currentArtifactID; }
   set CurrentArtifactID(value: string | null) { this._currentArtifactID = value; }
@@ -264,7 +277,7 @@ export class ComponentVersionService {
       return this._componentArtifactTypeID;
     }
 
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     const result = await rv.RunView<{ ID: string }>({
       EntityName: 'MJ: Artifact Types',
       ExtraFilter: `Name='Component'`,
@@ -296,7 +309,7 @@ export class ComponentVersionService {
     }
 
     // Look for an existing Component Studio conversation for this user
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     const result = await rv.RunView<{ ID: string }>({
       EntityName: 'MJ: Conversations',
       ExtraFilter: `UserID='${currentUser.ID}' AND Name='Component Studio'`,
@@ -334,7 +347,7 @@ export class ComponentVersionService {
    * Determines the next version number for the given artifact.
    */
   private async resolveNextVersionNumber(artifactId: string): Promise<number> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     const result = await rv.RunView<{ Version: number }>({
       EntityName: 'MJ: Conversation Artifact Versions',
       ExtraFilter: `ConversationArtifactID='${artifactId}'`,
@@ -396,7 +409,7 @@ export class ComponentVersionService {
    * Finds the latest version entity for the given artifact.
    */
   private async findLatestVersionEntity(artifactId: string): Promise<MJConversationArtifactVersionEntity | null> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     const result = await rv.RunView<MJConversationArtifactVersionEntity>({
       EntityName: 'MJ: Conversation Artifact Versions',
       ExtraFilter: `ConversationArtifactID='${artifactId}'`,
@@ -435,7 +448,7 @@ export class ComponentVersionService {
    * Fetches the full version history for an artifact, ordered newest-first.
    */
   private async fetchVersionHistory(artifactId: string): Promise<VersionHistoryEntry[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     const result = await rv.RunView<MJConversationArtifactVersionEntity>({
       EntityName: 'MJ: Conversation Artifact Versions',
       ExtraFilter: `ConversationArtifactID='${artifactId}'`,
