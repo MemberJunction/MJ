@@ -16,6 +16,16 @@ COPY packages/ ./packages/
 COPY metadata/ ./metadata/
 COPY migrations/ ./migrations/
 
+# Overlay codegen output produced by the form-generator service (see
+# docker/regression/gen-forms.sh). `npm run regression:build` invokes
+# gen-forms before this build whenever .docker-generated/ is missing, so
+# these COPYs always have real content. Required so MJAPI's build can
+# compile the GraphQL resolvers that reference AssociationDemo entity
+# classes — without these the schema is missing types like
+# CreateAssociationDemoMemberInput and demo-entity queries fail at runtime.
+COPY docker/regression/.docker-generated/GeneratedEntities/ ./packages/GeneratedEntities/src/generated/
+COPY docker/regression/.docker-generated/MJAPI-generated/ ./packages/MJAPI/src/generated/
+
 RUN npm install
 
 RUN npm run build:api
@@ -30,10 +40,13 @@ WORKDIR /app
 
 COPY --from=builder /app ./
 COPY docker/MJAPI/docker.config.cjs ./mj.config.cjs
+COPY docker/regression/scripts/ ./docker/regression/scripts/
 
-# Patch: fix autoCreateNewUsers (production config has === 1 bug with string env vars)
-# and force it on for the test environment so the test user gets created on first login
-RUN sed -i 's/autoCreateNewUsers: process.env.AUTO_CREATE_NEW_USERS ? process.env.AUTO_CREATE_NEW_USERS === 1 : false/autoCreateNewUsers: true/' mj.config.cjs
+# Patch userHandling config for the test environment.
+# See docker/regression/scripts/patch-test-api-config.cjs for the rationale —
+# in short: autoCreateNewUsers + UI/Integration roles + CreateUserApplicationRecords
+# so the test user gets full access without any manual SQL setup at runtime.
+RUN node docker/regression/scripts/patch-test-api-config.cjs
 
 EXPOSE 4000
 
@@ -42,4 +55,6 @@ HEALTHCHECK --interval=10s --timeout=5s --retries=15 --start-period=30s \
 
 # Database setup (migrations, CodeGen, AssociationDB) is handled by the db-setup container.
 # MJAPI just starts the GraphQL server.
-CMD ["node", "--experimental-specifier-resolution=node", "packages/MJAPI/dist/index.js"]
+# --max-old-space-size=8192: 8GB heap to handle the load of 150 parallel regression tests
+# (default ~4GB OOMs under sustained GraphQL/subscription load)
+CMD ["node", "--experimental-specifier-resolution=node", "--max-old-space-size=8192", "packages/MJAPI/dist/index.js"]

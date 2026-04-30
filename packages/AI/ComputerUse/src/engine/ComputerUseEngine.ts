@@ -331,8 +331,21 @@ export class ComputerUseEngine {
 
     private async closeBrowser(): Promise<void> {
         if (!this._ownsAdapter) {
-            // Shared adapter: close the page but not the context/browser
-            // SharedContextBrowserAdapter.Close() handles this correctly
+            // Shared adapter: between tests, the BrowserContext lives on but
+            // we must clean per-session state (IndexedDB, sessionStorage,
+            // non-auth localStorage, service workers) — otherwise stale
+            // cache from this test deadlocks the next test's app boot.
+            // Auth tokens in localStorage are preserved so the next test
+            // doesn't have to re-login.
+            const startUrl = this.activeParams?.StartUrl;
+            if (startUrl) {
+                try {
+                    const origin = new URL(startUrl).origin;
+                    await this.browserAdapter.ResetStatePreservingAuth(origin);
+                } catch { /* swallow — best effort */ }
+            }
+
+            // Now close the page; the context and browser are owned by the pool
             try {
                 if (this.browserAdapter.IsOpen) {
                     await this.browserAdapter.Close();

@@ -20,6 +20,19 @@ import {
     CookieEntry,
 } from '../types/browser.js';
 
+/**
+ * Diagnostic event captured from the browser (console messages, network
+ * failures, page errors). Adapters that capture diagnostics push
+ * events into an internal buffer and expose them via GetDiagnostics().
+ */
+export interface BrowserDiagnosticEvent {
+    timestamp: string;
+    type: 'console' | 'pageerror' | 'requestfailed' | 'crash';
+    level?: string;
+    message: string;
+    url?: string;
+}
+
 export abstract class BaseBrowserAdapter {
     // ─── Lifecycle ─────────────────────────────────────────
 
@@ -107,6 +120,40 @@ export abstract class BaseBrowserAdapter {
     /** Current viewport dimensions */
     public abstract get ViewportWidth(): number;
     public abstract get ViewportHeight(): number;
+
+    // ─── State Reset (Optional) ────────────────────────────
+
+    /**
+     * Reset per-session state for the given origin while preserving auth tokens.
+     *
+     * Intended for shared-context adapters: between tests in the same browser
+     * context, cached state from the previous test (IndexedDB metadata cache,
+     * sessionStorage, service workers, non-auth localStorage entries) can
+     * deadlock the next test's app initialization. This method clears that
+     * state so the next test starts clean — but preserves Auth0 / OAuth
+     * tokens in localStorage so the user stays logged in.
+     *
+     * Default implementation is a no-op. Adapters that own a context across
+     * test boundaries (e.g., SharedContextBrowserAdapter) override this.
+     *
+     * Best-effort: never throws — all errors are swallowed.
+     *
+     * @param origin - Origin (protocol + host + port) whose storage to clean
+     */
+    public async ResetStatePreservingAuth(_origin: string): Promise<void> {
+        // No-op by default — adapters that share context across tests override this.
+    }
+
+    // ─── Diagnostics ──────────────────────────────────────
+
+    /**
+     * Retrieve and flush all buffered diagnostic events captured since
+     * the last call. Returns an empty array if the adapter doesn't
+     * capture diagnostics or if there are no new events.
+     */
+    public GetDiagnostics(): BrowserDiagnosticEvent[] {
+        return [];
+    }
 
     // ─── Utilities ─────────────────────────────────────────
 

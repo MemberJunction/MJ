@@ -51,6 +51,9 @@ export default class TestSuite extends Command {
       description: 'Maximum number of parallel workers (default 4)',
       default: 4,
     }),
+    'flaky-check': Flags.integer({
+      description: 'Run each test N times to detect flakiness (variance > 0.3 or mixed pass/fail = flaky). Recommended: 3 or 5',
+    }),
   };
 
   async run(): Promise<void> {
@@ -70,6 +73,7 @@ export default class TestSuite extends Command {
         delay: flags.delay,
         parallel: flags.parallel,
         maxParallel: flags['max-parallel'],
+        flakyCheck: flags['flaky-check'],
       });
 
     } catch (error) {

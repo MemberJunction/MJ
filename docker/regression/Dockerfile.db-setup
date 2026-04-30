@@ -43,8 +43,13 @@ RUN sed -i 's/autoCreateNewUsers: process.env.AUTO_CREATE_NEW_USERS ? process.en
 # Generate the combined AssociationDB SQL (skip docs for speed in test env)
 RUN cd Demos/AssociationDB && bash prepare_build.sh --skip-docs
 
-# The entrypoint script runs all setup steps in sequence
+# The entrypoint script runs all setup steps in sequence.
+# It invokes Node helpers from /app/docker/regression/scripts (for DB ops,
+# metadata patches, etc.) so we bake those in here as well. The same image
+# is reused by the form-generator service, which calls bootstrap-db.cjs
+# from form-gen-entrypoint.sh.
 COPY docker/regression/db-setup-entrypoint.sh /app/db-setup-entrypoint.sh
+COPY docker/regression/scripts/ /app/docker/regression/scripts/
 RUN chmod +x /app/db-setup-entrypoint.sh
 
 CMD ["/bin/bash", "/app/db-setup-entrypoint.sh"]

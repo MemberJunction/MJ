@@ -121,6 +121,14 @@ export interface TestRunOptions {
    * run > suite > test > type
    */
   variables?: TestRunVariables;
+
+  /**
+   * Override the test's RepeatCount field at runtime.
+   * Useful for flaky-test detection: forces every test in the run to execute
+   * N times so the suite runner can compute score variance.
+   * If undefined, the test's own RepeatCount is used.
+   */
+  repeatCountOverride?: number;
 }
 
 /**

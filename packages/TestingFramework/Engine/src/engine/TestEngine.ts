@@ -258,9 +258,10 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             // Get tags from options
             const tags = options.tags;
 
-            // Check RepeatCount and branch to repeated execution if needed
-            if (test.RepeatCount && test.RepeatCount > 1) {
-                return await this.runRepeatedTest(test, test.RepeatCount, options, contextUser, suiteRunId, suiteTestSequence, startTime, tags);
+            // Check RepeatCount (or runtime override from --flaky-check) and branch to repeated execution if needed
+            const effectiveRepeatCount = options.repeatCountOverride ?? test.RepeatCount ?? 1;
+            if (effectiveRepeatCount > 1) {
+                return await this.runRepeatedTest(test, effectiveRepeatCount, options, contextUser, suiteRunId, suiteTestSequence, startTime, tags);
             }
 
             // Single execution - delegate to helper method

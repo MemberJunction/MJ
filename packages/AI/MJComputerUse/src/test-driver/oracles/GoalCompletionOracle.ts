@@ -47,15 +47,22 @@ export class GoalCompletionOracle implements IOracle {
 
             // Check if the engine reported success
             if (!actual.success) {
+                // Include the judge's reason (if available) — this is the most valuable
+                // piece of diagnostic info when a test fails with "Impossible" status.
+                const judgeReason = actual.finalJudgeVerdict?.Reason;
+                const judgeFeedback = actual.finalJudgeVerdict?.Feedback;
+                const reasonSuffix = judgeReason ? ` — ${judgeReason}` : '';
                 return {
                     oracleType: this.type,
                     passed: false,
                     score: 0,
-                    message: `Engine reported failure with status: ${actual.status}`,
+                    message: `Engine reported failure with status: ${actual.status}${reasonSuffix}`,
                     details: {
                         status: actual.status,
                         error: actual.error,
-                        totalSteps: actual.totalSteps
+                        totalSteps: actual.totalSteps,
+                        judgeReason,
+                        judgeFeedback
                     }
                 };
             }

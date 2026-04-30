@@ -4,7 +4,7 @@
     "Name": "T10 - Entity Form Edit and Save Record",
     "Description": "Opens an existing Member record, modifies a field value, saves the changes, and verifies the save succeeded.",
     "InputDefinition": {
-      "goal": "Navigate to Data Explorer and open the Members entity. Click on any member record to open its detail form. Modify any editable text field (such as Title, Notes, or Description) by clearing it and typing a new value. Save the record. Verify that a save confirmation message appears or the form shows the updated value.",
+      "goal": "IMPORTANT ENVIRONMENT NOTE: This application runs in a resource-constrained Docker environment and may take 10-30 seconds to load pages, initialize the workspace, or complete navigation transitions. If you see a loading screen, spinner, or blank page — DO NOT navigate away, go back, refresh, or retry login. Simply wait with increasing intervals (5s, then 10s, then 15s) until the content appears. The application WILL load; it just needs time. Only request judgement if you have waited over 60 seconds total on the same loading state with no change.\n\nNavigate to Data Explorer and open the Members entity. Click on any member record to open its detail form. Modify any editable text field (such as Title, Notes, or Description) by clearing it and typing a new value. Save the record. Verify that a save confirmation message appears or the form shows the updated value.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -30,7 +30,7 @@
     "ExpectedOutcomes": {
       "goalCompleted": true,
       "minConfidence": 0.7,
-      "maxSteps": 30,
+      "maxSteps": 35,
       "judgeValidationCriteria": [
         "Record form was opened with existing data",
         "A field value was changed",
@@ -39,8 +39,8 @@
     },
     "Configuration": {
       "headless": true,
-      "maxSteps": 30,
-      "maxExecutionTime": 300000,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
       "screenshotHistoryDepth": 3,
       "viewportWidth": 1280,
       "viewportHeight": 720,
@@ -59,7 +59,7 @@
           "type": "step-count",
           "weight": 0.4,
           "config": {
-            "maxSteps": 30
+            "maxSteps": 35
           }
         }
       ],
@@ -75,7 +75,7 @@
     "ID": "E3EDE599-BBCB-4AB0-947E-76E933261185"
   },
   "sync": {
-    "lastModified": "2026-04-08T04:19:00.311Z",
-    "checksum": "0b8194d3eb80053a915b9e55845a3b2faf9f9d916dc922fd2951b3256c756ac6"
+    "lastModified": "2026-04-30T01:03:56.033Z",
+    "checksum": "8d59a56a2a91a0e57d0d65df28975a3e564d5eb9a2c3275e3dc4a18a15a2eb8b"
   }
 }

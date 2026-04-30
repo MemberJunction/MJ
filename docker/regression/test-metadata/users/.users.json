@@ -1,0 +1,144 @@
+[
+  {
+    "fields": {
+      "Name": "computeruse@bluecypress.io",
+      "FirstName": "Computer",
+      "LastName": "Use",
+      "Email": "computeruse@bluecypress.io",
+      "Type": "User",
+      "IsActive": true,
+      "LinkedRecordType": "None"
+    },
+    "relatedEntities": {
+      "MJ: User Roles": [
+        {
+          "fields": {
+            "UserID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=UI"
+          }
+        },
+        {
+          "fields": {
+            "UserID": "@parent:ID",
+            "RoleID": "@lookup:MJ: Roles.Name=Integration"
+          }
+        }
+      ],
+      "MJ: List Categories": [
+        {
+          "fields": {
+            "Name": "My Members",
+            "Description": "Curated lists of members I follow",
+            "UserID": "@parent:ID"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Events",
+            "Description": "Events I'm tracking or attending",
+            "UserID": "@parent:ID"
+          }
+        }
+      ],
+      "MJ: Lists": [
+        {
+          "fields": {
+            "Name": "VIP Members",
+            "Description": "Members flagged as VIP for outreach",
+            "UserID": "@parent:ID",
+            "EntityID": "@lookup:MJ: Entities.Name=Members",
+            "CategoryID": "@lookup:MJ: List Categories.Name=My Members&UserID=@parent:ID"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Recent Sign-ups",
+            "Description": "Members who joined in the last 30 days",
+            "UserID": "@parent:ID",
+            "EntityID": "@lookup:MJ: Entities.Name=Members",
+            "CategoryID": "@lookup:MJ: List Categories.Name=My Members&UserID=@parent:ID"
+          }
+        },
+        {
+          "fields": {
+            "Name": "Spring Events",
+            "Description": "Events scheduled for the Spring season",
+            "UserID": "@parent:ID",
+            "EntityID": "@lookup:MJ: Entities.Name=Events",
+            "CategoryID": "@lookup:MJ: List Categories.Name=Events&UserID=@parent:ID"
+          }
+        }
+      ],
+      "MJ: User View Categories": [
+        {
+          "fields": {
+            "Name": "Members Views",
+            "UserID": "@parent:ID",
+            "EntityID": "@lookup:MJ: Entities.Name=Members"
+          }
+        }
+      ],
+      "MJ: User Views": [
+        {
+          "fields": {
+            "Name": "All Active Members",
+            "Description": "Members where IsActive = 1, sorted by JoinDate desc",
+            "UserID": "@parent:ID",
+            "EntityID": "@lookup:MJ: Entities.Name=Members",
+            "CategoryID": "@lookup:MJ: User View Categories.Name=Members Views&UserID=@parent:ID",
+            "IsShared": false,
+            "IsDefault": true,
+            "WhereClause": "IsActive = 1"
+          }
+        },
+        {
+          "fields": {
+            "Name": "All Members",
+            "Description": "Default view of all members",
+            "UserID": "@parent:ID",
+            "EntityID": "@lookup:MJ: Entities.Name=Members",
+            "CategoryID": "@lookup:MJ: User View Categories.Name=Members Views&UserID=@parent:ID",
+            "IsShared": false,
+            "IsDefault": false
+          }
+        },
+        {
+          "fields": {
+            "Name": "Upcoming Events",
+            "Description": "Events with StartDate in the future",
+            "UserID": "@parent:ID",
+            "EntityID": "@lookup:MJ: Entities.Name=Events",
+            "IsShared": false,
+            "IsDefault": false
+          }
+        }
+      ],
+      "MJ: User Notifications": [
+        {
+          "fields": {
+            "UserID": "@parent:ID",
+            "Title": "Welcome to MJ Explorer",
+            "Message": "Your account is set up and ready. Take a look around — your saved Lists and Views are already populated.",
+            "Unread": true
+          }
+        },
+        {
+          "fields": {
+            "UserID": "@parent:ID",
+            "Title": "VIP Members list updated",
+            "Message": "5 new members were added to your 'VIP Members' list automatically based on recent activity.",
+            "Unread": true
+          }
+        },
+        {
+          "fields": {
+            "UserID": "@parent:ID",
+            "Title": "Weekly digest available",
+            "Message": "Your weekly activity digest is ready to view in the Reports app.",
+            "Unread": false
+          }
+        }
+      ]
+    }
+  }
+]

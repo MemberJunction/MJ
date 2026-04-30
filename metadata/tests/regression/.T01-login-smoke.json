@@ -2,9 +2,9 @@
   "fields": {
     "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
     "Name": "T01 - Login Smoke",
-    "Description": "Navigates to MJ Explorer, authenticates via Auth0 FormLogin, and verifies the application loads after login. This is the most fundamental regression test \u2014 if login fails, nothing else can run.",
+    "Description": "Navigates to MJ Explorer, authenticates via Auth0 FormLogin, and verifies the application loads after login. This is the most fundamental regression test — if login fails, nothing else can run.",
     "InputDefinition": {
-      "goal": "Verify the MJ Explorer dashboard or home screen has loaded successfully with navigation elements visible.",
+      "goal": "IMPORTANT ENVIRONMENT NOTE: This application runs in a resource-constrained Docker environment and may take 10-30 seconds to load pages, initialize the workspace, or complete navigation transitions. If you see a loading screen, spinner, or blank page — DO NOT navigate away, go back, refresh, or retry login. Simply wait with increasing intervals (5s, then 10s, then 15s) until the content appears. The application WILL load; it just needs time. Only request judgement if you have waited over 60 seconds total on the same loading state with no change.\n\nVerify the MJ Explorer dashboard or home screen has loaded successfully with navigation elements visible.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -31,7 +31,7 @@
       "goalCompleted": true,
       "finalUrlPattern": "^http://localhost:4200(?!/login|/callback)",
       "minConfidence": 0.7,
-      "maxSteps": 30,
+      "maxSteps": 35,
       "judgeValidationCriteria": [
         "User is logged in and past the Auth0 login screen",
         "MJ Explorer application is visible with navigation elements",
@@ -40,8 +40,8 @@
     },
     "Configuration": {
       "headless": true,
-      "maxSteps": 30,
-      "maxExecutionTime": 300000,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
       "screenshotHistoryDepth": 3,
       "viewportWidth": 1280,
       "viewportHeight": 720,
@@ -67,7 +67,7 @@
           "type": "step-count",
           "weight": 0.2,
           "config": {
-            "maxSteps": 30
+            "maxSteps": 35
           }
         }
       ],
@@ -84,7 +84,7 @@
     "ID": "2F4CAED9-0916-433E-8A63-70C4B71B337B"
   },
   "sync": {
-    "lastModified": "2026-04-08T04:19:00.121Z",
-    "checksum": "ef3c11ac3e97ae69cea36d660016dc2c41b2459a9132668d474b04138cddcb81"
+    "lastModified": "2026-04-30T01:03:55.753Z",
+    "checksum": "c231e749ffbffb0fa452c8f428572084cd184cc5abd0d427aa61eee2fef2f59f"
   }
 }

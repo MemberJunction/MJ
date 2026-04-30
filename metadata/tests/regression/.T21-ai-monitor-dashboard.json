@@ -4,7 +4,7 @@
     "Name": "T21 - AI Monitor Dashboard",
     "Description": "Navigates to AI > Monitor and verifies the monitoring dashboard loads with status indicators.",
     "InputDefinition": {
-      "goal": "Use the application switcher to navigate to the AI application. Find and open the Monitor or monitoring dashboard section. Verify that the dashboard displays with monitoring widgets, status indicators, or agent execution data. No error messages or crash screens should be visible.",
+      "goal": "IMPORTANT ENVIRONMENT NOTE: This application runs in a resource-constrained Docker environment and may take 10-30 seconds to load pages, initialize the workspace, or complete navigation transitions. If you see a loading screen, spinner, or blank page — DO NOT navigate away, go back, refresh, or retry login. Simply wait with increasing intervals (5s, then 10s, then 15s) until the content appears. The application WILL load; it just needs time. Only request judgement if you have waited over 60 seconds total on the same loading state with no change.\n\nUse the application switcher to navigate to the AI application. Find and open the Monitor or monitoring dashboard section. Verify that the dashboard displays with monitoring widgets, status indicators, or agent execution data. No error messages or crash screens should be visible.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -30,7 +30,7 @@
     "ExpectedOutcomes": {
       "goalCompleted": true,
       "minConfidence": 0.7,
-      "maxSteps": 30,
+      "maxSteps": 35,
       "judgeValidationCriteria": [
         "AI Monitor view is active",
         "Dashboard or monitoring widgets are displayed",
@@ -39,8 +39,8 @@
     },
     "Configuration": {
       "headless": true,
-      "maxSteps": 30,
-      "maxExecutionTime": 300000,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
       "screenshotHistoryDepth": 3,
       "viewportWidth": 1280,
       "viewportHeight": 720,
@@ -59,7 +59,7 @@
           "type": "step-count",
           "weight": 0.4,
           "config": {
-            "maxSteps": 30
+            "maxSteps": 35
           }
         }
       ],
@@ -75,7 +75,7 @@
     "ID": "7F861EDC-EDEF-4333-8EFE-C9B6F2209404"
   },
   "sync": {
-    "lastModified": "2026-04-08T04:19:00.541Z",
-    "checksum": "1919a650e5632bdadab34da4d194b9fc20b5198956f5d623f666de9ce6ac57ee"
+    "lastModified": "2026-04-30T01:03:56.256Z",
+    "checksum": "8867c9d30170e708e799840b7bfd7f0b5afbe4cdf05ea256262279e64e0f21a5"
   }
 }

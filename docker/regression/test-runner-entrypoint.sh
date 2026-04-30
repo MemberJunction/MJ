@@ -1,11 +1,20 @@
 #!/bin/bash
 # Test Runner Entrypoint
-# 1. Forwards localhost:4200 → mjexplorer:4200 (secure context for Auth0)
-# 2. Syncs test metadata to database
-# 3. Verifies MJAPI and nginx proxy are working
-# 4. Runs the regression test suite in parallel (N workers, shared browser contexts)
-# 5. Extracts screenshots and generates markdown report
+#
+# Runs the regression suite end-to-end:
+#   1. Forwards localhost:4200 → mjexplorer:4200 (secure context for Auth0)
+#   2. Syncs application + test metadata
+#   3. Seeds the test user + roles + apps + favorites via SQL safety-net
+#   4. Pre-flight diagnostics (MJAPI, nginx, socat, Auth0)
+#   5. Runs the regression test suite in parallel (N workers, shared browser contexts)
+#   6. Extracts screenshots from DB
+#   7. Generates markdown + HTML reports
+#
+# All non-trivial JavaScript lives in scripts/*.cjs — see scripts/lib/db.cjs
+# for the shared mssql connection helper.
 set -e
+
+SCRIPTS=/app/docker/regression/scripts
 
 # Register ComputerUseTestDriver with ClassFactory before the CLI runs.
 export NODE_OPTIONS="--import /app/bootstrap.mjs"
@@ -15,17 +24,50 @@ echo "  MJ Regression Test Runner"
 echo "  ─────────────────────────────────────────"
 echo ""
 
-# Forward localhost:4200 → mjexplorer:4200 so the browser accesses the app via localhost.
-# This is required because auth0-spa-js only works on secure origins, and browsers
-# treat localhost as a secure context (but not arbitrary hostnames like "mjexplorer").
+# ─── 1. localhost proxy ──────────────────────────────────────────────────────
+# auth0-spa-js only works on secure origins; browsers treat localhost as
+# secure but not arbitrary hostnames like "mjexplorer". Forward
+# localhost:4200 → mjexplorer:4200 inside the test-runner container.
 echo "Starting localhost proxy (localhost:4200 → mjexplorer:4200)..."
 socat TCP-LISTEN:4200,fork,reuseaddr TCP:mjexplorer:4200 &
 SOCAT_PID=$!
 sleep 1
-curl -sf http://localhost:4200/ -o /dev/null && echo "  ✓ localhost:4200 is reachable" || echo "  ✗ localhost:4200 NOT reachable"
+curl -sf http://localhost:4200/ -o /dev/null \
+    && echo "  ✓ localhost:4200 is reachable" \
+    || echo "  ✗ localhost:4200 NOT reachable"
 echo ""
 
-# Sync test metadata (tests first, then suites that reference them)
+# ─── 2. Application + test metadata ──────────────────────────────────────────
+# Application sync must run first so that the SQL user-setup can find all
+# ApplicationEntity rows (with DefaultForNewUser=1) to create the matching
+# UserApplicationEntity rows.
+echo "Syncing application metadata..."
+npx mj sync push --dir=metadata --include="applications" 2>&1 || {
+    echo "  WARNING: Application metadata sync failed"
+}
+echo ""
+
+# Test-scoped metadata (from docker/regression/test-metadata/):
+#   tags  — 3 global tags (vip, follow-up, regression-test)
+#   users — test user + roles + List Categories + Lists + User View Categories
+#           + User Views + User Notifications (nested as relatedEntities)
+# Tags must process first so any future UserTag references resolve.
+echo "Syncing test user metadata..."
+npx mj sync push --dir=/app/test-metadata --include="tags,users" 2>&1 || {
+    echo "  WARNING: Test user metadata sync failed — falling back to SQL"
+}
+echo ""
+
+# ─── 3. SQL safety-net for test user + roles + apps + favorites ──────────────
+# Guarantees the user + both roles exist before the browser authenticates,
+# even if mj-sync fails. Also seeds dynamic example data (lists, favorites)
+# that reference AssociationDemo record IDs.
+echo "Ensuring test user, roles, apps, and example data via SQL..."
+node "$SCRIPTS/setup-test-user.cjs" 2>&1
+echo ""
+
+# Sync test definitions + suite mapping. Tests must process before suites
+# because suites reference tests by name.
 echo "Syncing test metadata..."
 npx mj sync push --dir=metadata --include="tests" 2>&1 || {
     echo "  WARNING: Test metadata sync failed"
@@ -37,217 +79,82 @@ npx mj sync push --dir=metadata --include="test-suites" 2>&1 || {
 }
 echo ""
 
-# Verify MJAPI and nginx proxy are working
-echo "Verifying MJAPI and nginx proxy..."
-node -e "
-(async () => {
-  const gqlBody = JSON.stringify({ query: '{ __schema { queryType { name } } }' });
-
-  // Healthcheck direct to mjapi
-  try {
-    const hc = await fetch('http://mjapi:4000/healthcheck');
-    const hcBody = await hc.text();
-    console.log('  [direct] Healthcheck: ' + hc.status + ' ' + hcBody);
-  } catch (e) {
-    console.log('  [direct] Healthcheck FAILED: ' + e.message);
-  }
-
-  // GraphQL POST through nginx proxy (same path the browser uses)
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000);
-    const resp = await fetch('http://localhost:4200/api/', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: gqlBody,
-      signal: controller.signal
-    });
-    clearTimeout(timeout);
-    const body = await resp.text();
-    console.log('  [via nginx] GraphQL /api/: ' + resp.status + ' ' + body.substring(0, 200));
-  } catch (e) {
-    console.log('  [via nginx] GraphQL /api/ FAILED: ' + e.message);
-  }
-})();
-" 2>&1
+# ─── 4. Pre-flight diagnostics ───────────────────────────────────────────────
+# Probes MJAPI/nginx/socat/Auth0 + records a memory snapshot. Writes to
+# /tmp/preflight.json (we move it into $RUN_DIR after creating it below).
+echo "Running pre-flight diagnostics..."
+node "$SCRIPTS/preflight-checks.cjs" 2>&1
 echo ""
 
-# Run the regression suite (disable set -e so we can capture screenshots on failure)
-# --parallel: N workers sharing browser contexts (1 login per worker, not per test)
+# Each run writes into its own timestamped folder so runs don't overwrite
+# each other. Structure:
+#   test-results/run-YYYYMMDDTHHMMSSZ/{results.json,report.md,report.html,
+#                                     diagnostics.json,preflight.json,
+#                                     screenshots/}
+# A "latest" symlink always points at the most recent run.
+TIMESTAMP=$(date -u +"%Y%m%dT%H%M%SZ")
+RUN_DIR="/app/test-results/run-${TIMESTAMP}"
+mkdir -p "$RUN_DIR/screenshots"
+echo "Run directory: $RUN_DIR"
+echo ""
+
+# Move pre-flight diagnostics into the run directory.
+[ -f /tmp/preflight.json ] && mv /tmp/preflight.json "$RUN_DIR/preflight.json"
+
+# ─── 5. Background health monitor ────────────────────────────────────────────
+# Probes MJAPI/nginx/socat every 10s, writes diagnostics.json into RUN_DIR.
+echo "Starting background health monitor..."
+RUN_DIR="$RUN_DIR" node "$SCRIPTS/health-monitor.cjs" &
+MONITOR_PID=$!
+echo "  Health monitor PID: $MONITOR_PID"
+echo ""
+
+# ─── 6. Run the suite ────────────────────────────────────────────────────────
+# Disable set -e so we can capture screenshots + reports on failure.
 WORKERS=${MAX_PARALLEL_WORKERS:-4}
 echo "Running regression suite (${WORKERS} parallel workers)..."
 set +e
-npx mj test suite --name "MJ Explorer Regression Suite" --format json --output /app/test-results/results.json --parallel --max-parallel "$WORKERS"
+npx mj test suite --name "MJ Explorer Regression Suite" \
+    --format json \
+    --output "$RUN_DIR/results.json" \
+    --parallel \
+    --max-parallel "$WORKERS"
 EXIT_CODE=$?
 set -e
 
-# Extract screenshots from results JSON
+# Stop the health monitor.
+echo ""
+echo "Stopping health monitor..."
+kill $MONITOR_PID 2>/dev/null
+wait $MONITOR_PID 2>/dev/null || true
+
+# ─── 7. Extract screenshots + generate reports ───────────────────────────────
 echo ""
 echo "Extracting screenshots..."
-node -e "
-const fs = require('fs');
-const path = require('path');
-const dir = '/app/test-results/screenshots';
-fs.mkdirSync(dir, { recursive: true });
+RUN_DIR="$RUN_DIR" node "$SCRIPTS/extract-screenshots.cjs" 2>&1 \
+    || echo "  WARNING: Screenshot extraction failed"
 
-// Read the test run outputs from DB via a simple SQL query
-const sql = require('mssql');
-const config = {
-  server: process.env.DB_HOST || 'sqlserver',
-  port: parseInt(process.env.DB_PORT || '1433'),
-  database: process.env.DB_DATABASE || 'MemberJunction_Test',
-  user: process.env.DB_USERNAME || 'sa',
-  password: process.env.DB_PASSWORD,
-  options: { encrypt: true, trustServerCertificate: true }
-};
-
-(async () => {
-  try {
-    const results = JSON.parse(fs.readFileSync('/app/test-results/results.json', 'utf8'));
-    const pool = await sql.connect(config);
-
-    for (const test of results.testResults || []) {
-      const testDir = path.join(dir, test.testName.replace(/[^a-zA-Z0-9_-]/g, '_'));
-      fs.mkdirSync(testDir, { recursive: true });
-
-      const outputs = await pool.request()
-        .input('testRunId', sql.UniqueIdentifier, test.testRunId)
-        .query('SELECT Name, Sequence, InlineData, Description FROM __mj.vwTestRunOutputs WHERE TestRunID = @testRunId ORDER BY Sequence');
-
-      let count = 0;
-      for (const row of outputs.recordset) {
-        if (row.InlineData) {
-          const filename = 'step_' + String(row.Sequence).padStart(2, '0') + '.png';
-          fs.writeFileSync(path.join(testDir, filename), Buffer.from(row.InlineData, 'base64'));
-          count++;
-        }
-      }
-      console.log('  ' + test.testName + ': ' + count + ' screenshots saved');
-    }
-
-    await pool.close();
-  } catch (err) {
-    console.error('  WARNING: Screenshot extraction failed:', err.message);
-  }
-})();
-" 2>&1 || echo "  WARNING: Screenshot extraction failed"
-
-# Generate markdown report
 echo ""
 echo "Generating markdown report..."
-node -e "
-const fs = require('fs');
-
-try {
-  const r = JSON.parse(fs.readFileSync('/app/test-results/results.json', 'utf8'));
-  const lines = [];
-
-  // Header
-  lines.push('# MJ Explorer Regression Report');
-  lines.push('');
-  lines.push('| Field | Value |');
-  lines.push('|-------|-------|');
-  lines.push('| **Suite** | ' + r.suiteName + ' |');
-  lines.push('| **Status** | ' + (r.failedTests === 0 && r.passedTests === r.totalTests ? 'PASSED' : 'FAILED') + ' |');
-  lines.push('| **Date** | ' + new Date(r.startedAt).toISOString().split('T')[0] + ' |');
-  lines.push('| **Duration** | ' + Math.round(r.durationMs / 1000) + 's |');
-  lines.push('| **Passed** | ' + r.passedTests + '/' + r.totalTests + ' |');
-  lines.push('| **Average Score** | ' + (r.averageScore * 100).toFixed(1) + '% |');
-  lines.push('');
-
-  // Summary table
-  lines.push('## Test Results');
-  lines.push('');
-  lines.push('| # | Test | Status | Score | Steps | Duration | Details |');
-  lines.push('|---|------|--------|-------|-------|----------|---------|');
-
-  for (const t of r.testResults) {
-    const status = t.status === 'Passed' ? 'PASS' : t.status === 'Timeout' ? 'TIMEOUT' : 'FAIL';
-    const score = t.score > 0 ? (t.score * 100).toFixed(0) + '%' : '-';
-    const dur = Math.round(t.durationMs / 1000) + 's';
-
-    // Extract step count from oracle results or error message
-    let steps = '-';
-    const stepOracle = (t.oracleResults || []).find(o => o.oracleType === 'step-count');
-    if (stepOracle && stepOracle.details) {
-      steps = stepOracle.details.totalSteps + '/' + stepOracle.details.maxSteps;
-    }
-
-    // Details: first oracle reason or error message
-    let details = '';
-    if (t.errorMessage) {
-      details = t.errorMessage;
-    } else {
-      const goalOracle = (t.oracleResults || []).find(o => o.oracleType === 'goal-completion');
-      if (goalOracle && goalOracle.details && goalOracle.details.reason) {
-        details = goalOracle.details.reason.substring(0, 120);
-        if (goalOracle.details.reason.length > 120) details += '...';
-      }
-    }
-
-    const seq = t.sequence || r.testResults.indexOf(t) + 1;
-    lines.push('| ' + seq + ' | ' + t.testName + ' | ' + status + ' | ' + score + ' | ' + steps + ' | ' + dur + ' | ' + details + ' |');
-  }
-
-  // Failed/timeout details
-  const failures = r.testResults.filter(t => t.status !== 'Passed');
-  if (failures.length > 0) {
-    lines.push('');
-    lines.push('## Failed / Timed Out Tests');
-    lines.push('');
-    for (const t of failures) {
-      lines.push('### ' + t.testName);
-      lines.push('');
-      lines.push('- **Status**: ' + t.status);
-      lines.push('- **Duration**: ' + Math.round(t.durationMs / 1000) + 's');
-      if (t.errorMessage) {
-        lines.push('- **Error**: ' + t.errorMessage);
-      }
-      if (t.oracleResults && t.oracleResults.length > 0) {
-        lines.push('- **Oracle Results**:');
-        for (const o of t.oracleResults) {
-          lines.push('  - ' + o.oracleType + ': ' + (o.passed ? 'PASS' : 'FAIL') + ' (score: ' + o.score.toFixed(2) + ') — ' + (o.message || '').substring(0, 150));
-        }
-      }
-      lines.push('');
-    }
-  }
-
-  // Oracle breakdown for passed tests
-  const passed = r.testResults.filter(t => t.status === 'Passed');
-  if (passed.length > 0) {
-    lines.push('## Passed Test Details');
-    lines.push('');
-    for (const t of passed) {
-      lines.push('### ' + t.testName + ' (score: ' + (t.score * 100).toFixed(0) + '%)');
-      lines.push('');
-      if (t.oracleResults) {
-        for (const o of t.oracleResults) {
-          lines.push('- **' + o.oracleType + '**: ' + (o.passed ? 'PASS' : 'FAIL') + ' (score: ' + o.score.toFixed(2) + ')');
-        }
-      }
-      lines.push('');
-    }
-  }
-
-  lines.push('---');
-  lines.push('*Generated by MJ Regression Test Runner*');
-  lines.push('');
-
-  const report = lines.join('\n');
-  fs.writeFileSync('/app/test-results/report.md', report);
-  console.log('  ✓ Report saved to /app/test-results/report.md');
-
-  // Also print to console
-  console.log('');
-  console.log(report);
-} catch (err) {
-  console.error('  WARNING: Report generation failed:', err.message);
-}
-" 2>&1
+RUN_DIR="$RUN_DIR" node "$SCRIPTS/generate-md-report.cjs" 2>&1
 
 echo ""
-echo "Results: /app/test-results/results.json"
-echo "Report:  /app/test-results/report.md"
-echo "Screenshots: /app/test-results/screenshots/"
+echo "Generating HTML screenshot gallery..."
+RUN_DIR="$RUN_DIR" TIMESTAMP="$TIMESTAMP" node "$SCRIPTS/generate-html-report.cjs" 2>&1
+
+# Maintain a "latest" symlink pointing at this run's directory.
+# `mj test compare --from-json docker/regression/test-results` discovers
+# all run-* folders automatically (no need to reference "latest" explicitly).
+ln -sfn "run-${TIMESTAMP}" /app/test-results/latest \
+    || echo "  WARNING: Could not create latest symlink"
+
+echo ""
+echo "Run directory: $RUN_DIR"
+echo "  results.json       → $RUN_DIR/results.json"
+echo "  report.md          → $RUN_DIR/report.md"
+echo "  report.html        → $RUN_DIR/report.html  (open in a browser)"
+echo "  screenshots/       → $RUN_DIR/screenshots/"
+echo "  diagnostics.json   → $RUN_DIR/diagnostics.json  (health monitor log)"
+echo "  preflight.json     → $RUN_DIR/preflight.json    (pre-flight checks)"
+echo "  latest symlink     → /app/test-results/latest → run-${TIMESTAMP}"
 exit $EXIT_CODE

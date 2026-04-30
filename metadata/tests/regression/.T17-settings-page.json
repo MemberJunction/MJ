@@ -4,7 +4,7 @@
     "Name": "T17 - Settings Page Navigation",
     "Description": "Opens the user settings/preferences page and verifies settings categories are displayed.",
     "InputDefinition": {
-      "goal": "Find and open the user settings or preferences page (usually accessible from the user menu or a gear icon). Verify that the settings page displays with multiple settings categories visible.",
+      "goal": "IMPORTANT ENVIRONMENT NOTE: This application runs in a resource-constrained Docker environment and may take 10-30 seconds to load pages, initialize the workspace, or complete navigation transitions. If you see a loading screen, spinner, or blank page — DO NOT navigate away, go back, refresh, or retry login. Simply wait with increasing intervals (5s, then 10s, then 15s) until the content appears. The application WILL load; it just needs time. Only request judgement if you have waited over 60 seconds total on the same loading state with no change.\n\nFind and open the user settings or preferences page (usually accessible from the user menu or a gear icon). Verify that the settings page displays with multiple settings categories visible.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -30,7 +30,7 @@
     "ExpectedOutcomes": {
       "goalCompleted": true,
       "minConfidence": 0.7,
-      "maxSteps": 30,
+      "maxSteps": 35,
       "judgeValidationCriteria": [
         "Settings page or dialog is open",
         "Multiple settings categories are visible"
@@ -38,8 +38,8 @@
     },
     "Configuration": {
       "headless": true,
-      "maxSteps": 30,
-      "maxExecutionTime": 300000,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
       "screenshotHistoryDepth": 3,
       "viewportWidth": 1280,
       "viewportHeight": 720,
@@ -58,7 +58,7 @@
           "type": "step-count",
           "weight": 0.3,
           "config": {
-            "maxSteps": 30
+            "maxSteps": 35
           }
         }
       ],
@@ -74,7 +74,7 @@
     "ID": "D94781D3-F117-4832-B497-3CDB9CE2296E"
   },
   "sync": {
-    "lastModified": "2026-04-08T04:19:00.454Z",
-    "checksum": "aeffc99559ca0f7737b8d4851618c304f1be14a2e9c1a09e4b043303bf5cc043"
+    "lastModified": "2026-04-30T01:03:56.175Z",
+    "checksum": "daa6912c6803698fc487f51f959a1640ae388d11c1f72472d88510073252de8f"
   }
 }

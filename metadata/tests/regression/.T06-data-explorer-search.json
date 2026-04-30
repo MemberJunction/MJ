@@ -4,7 +4,7 @@
     "Name": "T06 - Data Explorer Search",
     "Description": "Uses the search functionality to find an entity or record. Searches for 'Event' and verifies results appear.",
     "InputDefinition": {
-      "goal": "Use the search functionality (the search bar or search icon typically located in the header or navigation area). Type 'Event' into the search field and submit the search. Verify that search results appear showing Event-related entities or records.",
+      "goal": "IMPORTANT ENVIRONMENT NOTE: This application runs in a resource-constrained Docker environment and may take 10-30 seconds to load pages, initialize the workspace, or complete navigation transitions. If you see a loading screen, spinner, or blank page — DO NOT navigate away, go back, refresh, or retry login. Simply wait with increasing intervals (5s, then 10s, then 15s) until the content appears. The application WILL load; it just needs time. Only request judgement if you have waited over 60 seconds total on the same loading state with no change.\n\nUse the search functionality (the search bar or search icon typically located in the header or navigation area). Type 'Event' into the search field and submit the search. Verify that search results appear showing Event-related entities or records.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -30,7 +30,7 @@
     "ExpectedOutcomes": {
       "goalCompleted": true,
       "minConfidence": 0.7,
-      "maxSteps": 30,
+      "maxSteps": 35,
       "judgeValidationCriteria": [
         "Search input contains 'Event' or similar",
         "Results related to Events are displayed"
@@ -38,8 +38,8 @@
     },
     "Configuration": {
       "headless": true,
-      "maxSteps": 30,
-      "maxExecutionTime": 300000,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
       "screenshotHistoryDepth": 3,
       "viewportWidth": 1280,
       "viewportHeight": 720,
@@ -58,7 +58,7 @@
           "type": "step-count",
           "weight": 0.4,
           "config": {
-            "maxSteps": 30
+            "maxSteps": 35
           }
         }
       ],
@@ -74,7 +74,7 @@
     "ID": "8D4FF31A-B6D0-4E02-9528-4F0D0E240851"
   },
   "sync": {
-    "lastModified": "2026-04-08T04:19:00.232Z",
-    "checksum": "9377e77038da60040b9136131482d5ba2aefa854ce201a1b04954b16ca87b313"
+    "lastModified": "2026-04-30T01:03:55.948Z",
+    "checksum": "d62e16f6637f990e4cc396b62750c789f1fb15728fe31bcd21aea3edb8eff735"
   }
 }

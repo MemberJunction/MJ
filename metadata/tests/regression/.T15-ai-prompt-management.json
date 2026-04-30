@@ -4,7 +4,7 @@
     "Name": "T15 - AI Application Prompt Management",
     "Description": "Navigates to AI > Prompts and views the prompt management interface. Opens a prompt to see its detail form.",
     "InputDefinition": {
-      "goal": "Use the application switcher to navigate to the AI application. Find and open the Prompts section. View the list of prompts, then click on one to open its detail form. Verify that the prompt detail form shows prompt text or configuration.",
+      "goal": "IMPORTANT ENVIRONMENT NOTE: This application runs in a resource-constrained Docker environment and may take 10-30 seconds to load pages, initialize the workspace, or complete navigation transitions. If you see a loading screen, spinner, or blank page — DO NOT navigate away, go back, refresh, or retry login. Simply wait with increasing intervals (5s, then 10s, then 15s) until the content appears. The application WILL load; it just needs time. Only request judgement if you have waited over 60 seconds total on the same loading state with no change.\n\nUse the application switcher to navigate to the AI application. Find and open the Prompts section. View the list of prompts, then click on one to open its detail form. Verify that the prompt detail form shows prompt text or configuration.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -30,7 +30,7 @@
     "ExpectedOutcomes": {
       "goalCompleted": true,
       "minConfidence": 0.7,
-      "maxSteps": 30,
+      "maxSteps": 35,
       "judgeValidationCriteria": [
         "AI Prompts section is active",
         "Prompt list or browser is visible",
@@ -39,8 +39,8 @@
     },
     "Configuration": {
       "headless": true,
-      "maxSteps": 30,
-      "maxExecutionTime": 300000,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
       "screenshotHistoryDepth": 3,
       "viewportWidth": 1280,
       "viewportHeight": 720,
@@ -59,7 +59,7 @@
           "type": "step-count",
           "weight": 0.4,
           "config": {
-            "maxSteps": 30
+            "maxSteps": 35
           }
         }
       ],
@@ -75,7 +75,7 @@
     "ID": "92255EB2-CC3D-4FF2-8652-EE2CFB5D8A6D"
   },
   "sync": {
-    "lastModified": "2026-04-08T04:19:00.414Z",
-    "checksum": "80869c0f0fe9af7482239cdb0348e8f9b45f43aae578025d026b5602bf651992"
+    "lastModified": "2026-04-30T01:03:56.132Z",
+    "checksum": "d78da94ddc93ab5aca6874093852fc565fdb1b789be426f899b797e7e806b512"
   }
 }

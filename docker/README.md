@@ -73,19 +73,28 @@ The `socat` proxy is required because Auth0's SDK only works on secure origins, 
 cp docker/regression/.env.test.example docker/regression/.env.test
 # Edit docker/regression/.env.test with real values
 
-# 2. Build all images
+# 2. Build all images. The first run (or any time .docker-generated/ is
+#    empty) also runs `regression:gen-forms` to produce Angular entity forms
+#    against a temp DB — that step adds ~5 min but only happens when the form
+#    output is missing. Subsequent builds skip it.
 npm run regression:build
 
-# 3. Run the full stack
+# 3. Run the full stack — creates docker/regression/test-results/run-{TIMESTAMP}/
+#    Fast path: plain `docker compose up`, no rebuild, no codegen.
 npm run regression:up
 
-# 4. Check results
-cat docker/regression/test-results/report.md
-ls docker/regression/test-results/screenshots/
+# 4. Check results — open the HTML gallery in a browser
+open docker/regression/test-results/latest/report.html        # macOS
+xdg-open docker/regression/test-results/latest/report.html    # Linux
 
-# 5. Tear down
+# 5. Compare against the previous run
+npm run regression:compare
+
+# 6. Tear down
 npm run regression:down
 ```
+
+Each run writes to a brand-new `run-{TIMESTAMP}/` folder with `results.json`, `report.md`, `report.html`, and `screenshots/`. Runs never overwrite each other; the `latest` symlink always points at the most recent.
 
 ### Rebuilding Individual Services
 
@@ -137,7 +146,7 @@ Each test uses the **ComputerUseTestDriver** which:
 5. A judge LLM periodically evaluates whether the goal was achieved
 6. Oracles score the result (goal-completion, url-match, step-count)
 7. Results and screenshots are persisted to the MJ database
-8. The entrypoint extracts screenshots to `test-results/screenshots/` and generates `report.md`
+8. The entrypoint extracts screenshots to `run-{TIMESTAMP}/screenshots/` and generates `report.md` + `report.html`
 
 **Parallel architecture**: 1 Browser → N BrowserContexts → 1 Page per test. Workers are created with staggered delays (2.5s apart) to avoid simultaneous Auth0 logins triggering rate limits. Tests are distributed round-robin across workers. Configure with `MAX_PARALLEL_WORKERS` env var (default: 4).
 
@@ -212,11 +221,49 @@ Test definitions have three sections:
 
 ### Output
 
-Each run produces three artifacts in `docker/regression/test-results/`:
+Each run produces a self-contained `run-{TIMESTAMP}/` folder under `docker/regression/test-results/`:
 
-- **results.json** -- Full suite results with oracle scores per test
+- **results.json** -- Full suite results with oracle scores per test (machine-readable, used by `mj test compare`)
 - **report.md** -- Human-readable markdown summary with pass/fail table
+- **report.html** -- Self-contained HTML gallery with embedded screenshot thumbnails (click to expand) and per-test oracle details
 - **screenshots/** -- Per-test step-by-step PNG screenshots organized by test name
+
+A `latest` symlink in `test-results/` always points at the most recent run.
+
+### Comparing Runs
+
+The Docker DB is wiped on `down -v`, so comparisons use the per-run JSON artifacts on disk:
+
+```bash
+# Compare the two most recent runs
+npm run regression:compare
+
+# Pass extra flags after `--`
+npm run regression:compare -- --diff-only
+npm run regression:compare -- --format=markdown --output=delta.md
+```
+
+Exit code `0` = no regressions, `1` = regressions detected, `2` = data error. CI-friendly. A test is a "regression" when its previous status was Passed and current is not, OR when its score dropped by more than 0.10.
+
+### Flaky Test Detection
+
+Re-execute every test N times and flag any test with score variance > 0.3 or mixed pass/fail outcomes:
+
+```bash
+# Inside the test-runner container (or against a synced local DB)
+mj test suite --name "MJ Explorer Regression Suite" --flaky-check 3 --parallel
+```
+
+Cost scales linearly with `N`. Use after adding new tests or before a release if Computer Use prompts have changed.
+
+### Validating a Test Without Running It
+
+```bash
+# Validate JSON, oracle types, scoring weights — no browser, no LLM cost
+mj test run --name "T26 - My New Test" --dry-run
+```
+
+Catches misconfigured oracles, malformed JSON, and missing drivers before burning credits.
 
 ### Cost
 
@@ -230,15 +277,15 @@ Full 25-test suite: approximately **$10-12** per run. Parallel execution (4 work
 
 ### Container Details
 
-**Dockerfile.db-setup** -- One-shot init container that creates the database, runs `mj migrate` (Flyway migrations, 290+ entities), installs AssociationDB via Node.js mssql driver (2,000 members, 21 events, 60 courses, 50 forum threads, 100 resources, 413 certifications, 110 products), and runs `mj codegen`. MJAPI depends on it via `service_completed_successfully`.
+**Dockerfile.db-setup** -- One-shot init container that creates the database, installs AssociationDB (2,000 members, 21 events, 60 courses, 50 forum threads, 100 resources, 413 certifications, 110 products), runs `mj migrate` (Flyway migrations, 290+ entities), runs `mj codegen`, then patches a known CodeGen drift issue with the `__mj_CreatedAt`/`__mj_UpdatedAt` EntityField rows. MJAPI depends on it via `service_completed_successfully`.
 
-**Dockerfile.explorer** -- Two-stage build: Angular AOT build + nginx:alpine. The nginx config uses a `map` block to conditionally set `Connection: upgrade` only for WebSocket requests (critical -- unconditionally setting it causes GraphQL POST requests to hang). `GRAPHQL_URI` must be an absolute URL (`http://localhost:4200/api/`) because `graphql-request` v7+ validates with `new URL()`.
+**Dockerfile.explorer** -- Two-stage build: Angular AOT build + nginx:alpine. The nginx config (a static `nginx.conf`) uses a `map` block to conditionally set `Connection: upgrade` only for WebSocket requests (critical -- unconditionally setting it causes GraphQL POST requests to hang). `GRAPHQL_URI` must be an absolute URL (`http://localhost:4200/api/`) because `graphql-request` v7+ validates with `new URL()`.
 
-**Dockerfile.api** -- Two-stage build. Patches `mj.config.cjs` to force `autoCreateNewUsers: true`. Only runs the GraphQL server -- all setup is handled by db-setup.
+**Dockerfile.api** -- Two-stage build. Runs `scripts/patch-test-api-config.cjs` at image-bake time to flip `autoCreateNewUsers`, `newUserRoles`, and `CreateUserApplicationRecords` for the test environment. Only runs the GraphQL server -- all DB setup is handled by db-setup.
 
-**Dockerfile.test-runner** -- Based on `mcr.microsoft.com/playwright:v1.58.1-noble` (includes Chromium). Installs `socat`, builds the full monorepo with `--concurrency=2` (avoids OOM), creates a bootstrap ESM file to register `ComputerUseTestDriver` via `@RegisterClass`.
+**Dockerfile.test-runner** -- Based on `mcr.microsoft.com/playwright:v1.58.1-noble` (includes Chromium). Installs `socat`, builds the full monorepo with `--concurrency=2` (avoids OOM), creates a bootstrap ESM file to register `ComputerUseTestDriver` via `@RegisterClass`. The entrypoint, scripts, and metadata are bind-mounted at runtime so changes don't need a rebuild.
 
-**test-runner-entrypoint.sh** -- Orchestrates: socat proxy → metadata sync → MJAPI/nginx verification → parallel suite execution (`--parallel --max-parallel N`) → screenshot extraction → markdown report. Uses `set +e` around suite execution so failures don't prevent screenshot/report generation.
+**Entrypoints + scripts** -- The three entrypoint scripts (`db-setup-entrypoint.sh`, `form-gen-entrypoint.sh`, `test-runner-entrypoint.sh`) are thin bash orchestrators that invoke `node scripts/<name>.cjs` for each non-trivial step. All scripts live in [`docker/regression/scripts/`](regression/scripts/) and share an mssql connection helper in [`scripts/lib/db.cjs`](regression/scripts/lib/db.cjs). See [REGRESSION_TESTING.md](regression/REGRESSION_TESTING.md) for the full step-by-step rundown.
 
 ### Port Mapping
 
@@ -382,19 +429,46 @@ docker/
 │   ├── Dockerfile
 │   ├── entrypoint.sh
 │   └── start.sh
-└── regression/                   # E2E regression test stack
-    ├── docker-compose.test.yml   # Orchestration (5 services)
-    ├── Dockerfile.db-setup       # DB init: migrations + AssociationDB + CodeGen
-    ├── db-setup-entrypoint.sh    # DB init entrypoint script
-    ├── Dockerfile.api            # MJAPI for test environment
-    ├── Dockerfile.explorer       # MJExplorer: Angular + nginx reverse proxy
-    ├── Dockerfile.test-runner    # Test runner: Playwright + MJ Testing Framework
-    ├── test-runner-entrypoint.sh # Test execution, screenshots, report generation
-    ├── .env.test.example         # Environment variable template
-    └── test-results/             # Output directory (gitignored)
+└── regression/                       # E2E regression test stack
+    ├── docker-compose.test.yml       # Orchestration (5 services + opt-in form-generator)
+    ├── Dockerfile.db-setup           # DB init: migrations + AssociationDB + CodeGen
+    ├── Dockerfile.api                # MJAPI for test environment
+    ├── Dockerfile.explorer           # MJExplorer: Angular + nginx reverse proxy
+    ├── Dockerfile.test-runner        # Test runner: Playwright + MJ Testing Framework
+    ├── db-setup-entrypoint.sh        # Thin bash orchestrator → scripts/*.cjs
+    ├── form-gen-entrypoint.sh        # Same shape: minimal bash → scripts/*.cjs
+    ├── test-runner-entrypoint.sh     # Same shape: minimal bash → scripts/*.cjs
+    ├── nginx.conf                    # Static nginx config (proxy /api/ → mjapi)
+    ├── .env.test.example             # Environment variable template
+    ├── REGRESSION_TESTING.md         # Detailed runbook
+    ├── scripts/                      # All non-trivial JavaScript lives here
+    │   ├── lib/db.cjs                # Shared mssql connection helper
+    │   ├── lib/probes.cjs            # Shared HTTP/TCP probes (preflight + monitor)
+    │   ├── bootstrap-db.cjs          # CREATE DATABASE + install AssociationDB
+    │   ├── patch-test-api-config.cjs # Bake-time MJAPI config patch
+    │   ├── gen-environment-ts.cjs    # Bake-time MJExplorer environment.ts gen
+    │   ├── setup-test-user.cjs       # SQL safety-net for user/roles/apps/favorites
+    │   ├── preflight-checks.cjs      # Pre-flight diagnostics
+    │   ├── health-monitor.cjs        # Background health monitor
+    │   ├── extract-screenshots.cjs   # Pull PNGs out of vwTestRunOutputs
+    │   ├── generate-md-report.cjs    # Render report.md
+    │   ├── generate-html-report.cjs  # Render report.html (lightbox gallery)
+    │   └── inline-report.cjs         # Optional: inline screenshots into a portable HTML
+    ├── test-metadata/                # Docker-only metadata (test user with UI + Integration roles)
+    │   └── users/.users.json
+    └── test-results/                 # Output directory (gitignored, bind-mounted)
+        ├── latest -> run-{TIMESTAMP}/   # Symlink to most recent run
+        └── run-{TIMESTAMP}/             # One folder per run (never overwritten)
+            ├── results.json
+            ├── report.md
+            ├── report.html
+            ├── preflight.json
+            ├── diagnostics.json
+            └── screenshots/
 
 metadata/
 ├── tests/regression/             # 25 test definition JSON files (.T01 through .T25)
+│   └── README.md                 # Test author guide
 └── test-suites/
     └── .regression-suite.json    # Suite linking all 25 tests in sequence
 ```

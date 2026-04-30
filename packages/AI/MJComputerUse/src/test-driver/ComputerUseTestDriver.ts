@@ -146,10 +146,15 @@ export class ComputerUseTestDriver extends BaseTestDriver {
 
             // 3. Execute with timeout
             const effectiveTimeout = this.getEffectiveTimeout(context.test, config);
-            const { result, timedOut } = await this.executeWithTimeout(runParams, effectiveTimeout, context, config);
+            const { result, timedOut, browserDiagnostics } = await this.executeWithTimeout(runParams, effectiveTimeout, context, config);
 
             // 4. Build actual output with execution configuration
             const actualOutput = this.buildActualOutput(result);
+
+            // Attach browser diagnostics (console errors, network failures, crashes)
+            if (browserDiagnostics.length > 0) {
+                (actualOutput as Record<string, unknown>).browserDiagnostics = browserDiagnostics;
+            }
 
             // Add test configuration metadata for debugging
             (actualOutput as Record<string, unknown>).executionConfig = {
@@ -388,13 +393,19 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         timeoutMs: number,
         context: DriverExecutionContext,
         config: ComputerUseTestConfig
-    ): Promise<{ result: ComputerUseResult; timedOut: boolean }> {
+    ): Promise<{ result: ComputerUseResult; timedOut: boolean; browserDiagnostics: unknown[] }> {
         const engine = new MJComputerUseEngine();
 
         // Resolve browser session strategy
         const adapter = await this.resolveBrowserAdapter(config, context);
         if (adapter) {
             engine.SetBrowserAdapter(adapter);
+        }
+
+        // Pre-flight: probe MJAPI health before starting the test
+        const preflightHealth = await this.probeMjapiHealth();
+        if (!preflightHealth.ok) {
+            this.logToTestRun(context, 'warn', `MJAPI pre-flight unhealthy: ${preflightHealth.error}`);
         }
 
         let timedOut = false;
@@ -410,11 +421,41 @@ export class ComputerUseTestDriver extends BaseTestDriver {
 
         try {
             const result = await engine.Run(params);
-            return { result, timedOut };
+
+            // Collect browser diagnostics (console errors, network failures, crashes).
+            // Cast via unknown: GetDiagnostics is on BaseBrowserAdapter but compiled
+            // types may not reflect it until the computer-use package is rebuilt.
+            const adapterObj = adapter as unknown as { GetDiagnostics?: () => unknown[] } | null;
+            const browserDiagnostics = adapterObj && typeof adapterObj.GetDiagnostics === 'function'
+                ? adapterObj.GetDiagnostics()
+                : [];
+            if (browserDiagnostics.length > 0) {
+                this.logToTestRun(context, 'warn', `Browser captured ${browserDiagnostics.length} diagnostic event(s)`);
+            }
+
+            return { result, timedOut, browserDiagnostics };
         } finally {
             if (timeoutId) {
                 clearTimeout(timeoutId);
             }
+        }
+    }
+
+    /**
+     * Quick MJAPI health probe. Returns { ok, error? } — never throws.
+     */
+    private async probeMjapiHealth(): Promise<{ ok: boolean; status?: number; error?: string }> {
+        try {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 5000);
+            const resp = await fetch('http://mjapi:4000/healthcheck', { signal: controller.signal });
+            clearTimeout(timeout);
+            return { ok: resp.ok, status: resp.status };
+        } catch (err) {
+            const message = err instanceof Error
+                ? (err.name === 'AbortError' ? 'timeout (5s)' : err.message)
+                : String(err);
+            return { ok: false, error: message };
         }
     }
 
@@ -530,6 +571,34 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         // Step screenshots
         for (const step of result.Steps) {
             if (step.Screenshot) {
+                // Store full action data for visual overlay rendering in the HTML report.
+                // Each action includes type + coordinates/bounding boxes where applicable.
+                const actionRecords = step.ActionsRequested.map(a => {
+                    const rec: Record<string, unknown> = { type: a.Type };
+                    switch (a.Type) {
+                        case 'Click':
+                            rec.x = a.X; rec.y = a.Y;
+                            rec.button = a.Button; rec.clickCount = a.ClickCount;
+                            if (a.BoundingBox) rec.bbox = { xMin: a.BoundingBox.XMin, yMin: a.BoundingBox.YMin, xMax: a.BoundingBox.XMax, yMax: a.BoundingBox.YMax };
+                            break;
+                        case 'Type':
+                            rec.text = a.Text;
+                            break;
+                        case 'Scroll':
+                            rec.deltaX = a.DeltaX; rec.deltaY = a.DeltaY;
+                            break;
+                        case 'Wait':
+                            rec.durationMs = a.DurationMs;
+                            break;
+                        case 'Navigate':
+                            rec.url = a.Url;
+                            break;
+                        case 'Keypress': case 'KeyDown': case 'KeyUp':
+                            rec.key = a.Key;
+                            break;
+                    }
+                    return rec;
+                });
                 outputs.push({
                     outputTypeName: 'Screenshot',
                     sequence,
@@ -538,9 +607,15 @@ export class ComputerUseTestDriver extends BaseTestDriver {
                     description: step.Url ? `Page: ${step.Url}` : undefined,
                     mimeType: 'image/png',
                     inlineData: step.Screenshot,
-                    metadata: step.ControllerReasoning
-                        ? { reasoning: step.ControllerReasoning }
-                        : undefined,
+                    metadata: {
+                        reasoning: step.ControllerReasoning || undefined,
+                        actions: actionRecords.length > 0 ? actionRecords : undefined,
+                        url: step.Url || undefined,
+                        // Coordinates in actions are in 1000x1000 normalized space
+                        // (the LLM controller's coordinate system). The HTML overlay
+                        // uses viewBox="0 0 1000 1000" to map directly.
+                        coordinateSpace: 1000,
+                    },
                 });
                 sequence++;
             }

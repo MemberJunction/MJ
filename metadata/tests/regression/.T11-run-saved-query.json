@@ -4,7 +4,7 @@
     "Name": "T11 - Run a Saved Query",
     "Description": "Navigates to the Query Browser, finds and executes a saved query, and verifies results are displayed in a grid.",
     "InputDefinition": {
-      "goal": "Navigate to Data Explorer and look for the Queries section or Query Browser. Find any available saved query and execute it. Verify that query results are displayed in a table or grid with data rows.",
+      "goal": "IMPORTANT ENVIRONMENT NOTE: This application runs in a resource-constrained Docker environment and may take 10-30 seconds to load pages, initialize the workspace, or complete navigation transitions. If you see a loading screen, spinner, or blank page — DO NOT navigate away, go back, refresh, or retry login. Simply wait with increasing intervals (5s, then 10s, then 15s) until the content appears. The application WILL load; it just needs time. Only request judgement if you have waited over 60 seconds total on the same loading state with no change.\n\nNavigate to Data Explorer and look for the Queries section or Query Browser. Find any available saved query and execute it. Verify that query results are displayed in a table or grid with data rows.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -30,7 +30,7 @@
     "ExpectedOutcomes": {
       "goalCompleted": true,
       "minConfidence": 0.7,
-      "maxSteps": 30,
+      "maxSteps": 35,
       "judgeValidationCriteria": [
         "Query browser or query list is visible",
         "A query was selected and executed",
@@ -39,8 +39,8 @@
     },
     "Configuration": {
       "headless": true,
-      "maxSteps": 30,
-      "maxExecutionTime": 300000,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
       "screenshotHistoryDepth": 3,
       "viewportWidth": 1280,
       "viewportHeight": 720,
@@ -59,7 +59,7 @@
           "type": "step-count",
           "weight": 0.4,
           "config": {
-            "maxSteps": 30
+            "maxSteps": 35
           }
         }
       ],
@@ -75,7 +75,7 @@
     "ID": "A5174558-E08A-4A33-982C-2ADCACC01100"
   },
   "sync": {
-    "lastModified": "2026-04-08T04:19:00.333Z",
-    "checksum": "107b68e067eafff0c188674c8a9f5af96b62863c2169f27f45714284a265e4fb"
+    "lastModified": "2026-04-30T01:03:56.052Z",
+    "checksum": "c1f5bda50cacf66cfe6e33465fb84b3d3a9c76ac7d40c23c85c0a6cf438deeba"
   }
 }

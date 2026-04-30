@@ -52,6 +52,48 @@ services:
       CODEGEN_DB_USERNAME: sa
       CODEGEN_DB_PASSWORD: "${TEST_SA_PASSWORD:-TestPassword123!}"
 
+  # Form generator — opt-in service (profile: gen-forms) that runs codegen
+  # against a temporary DB and writes Angular entity-form components to a
+  # host bind-mount. The explorer Dockerfile picks them up at build time.
+  # See docker/regression/.docker-generated/.gitignore for why this is laid
+  # out the way it is.
+  form-generator:
+    profiles: ["gen-forms"]
+    build:
+      context: ../..
+      dockerfile: docker/regression/Dockerfile.db-setup
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      <<: *db-env
+      CODEGEN_DB_USERNAME: sa
+      CODEGEN_DB_PASSWORD: "${TEST_SA_PASSWORD:-TestPassword123!}"
+    entrypoint: ["/bin/bash", "/app/form-gen-entrypoint.sh"]
+    volumes:
+      - ./form-gen-entrypoint.sh:/app/form-gen-entrypoint.sh:ro
+      # Override mj.config.cjs with one that includes the full Angular output
+      # directives — the base MJAPI config strips them because production never
+      # generates forms at runtime. We need them here.
+      - ./form-gen.config.cjs:/app/mj.config.cjs:ro
+      # Make the original docker/MJAPI/docker.config.cjs require()-able from
+      # form-gen.config.cjs. The Dockerfile only COPYs it to /app/mj.config.cjs
+      # (which we just shadowed), so we expose it again at its repo-relative
+      # path inside the container.
+      - ../MJAPI/docker.config.cjs:/app/docker/MJAPI/docker.config.cjs:ro
+      - ./.docker-generated/MJExplorer-forms:/app/packages/MJExplorer/src/app/generated
+      # The Angular forms import entity classes from mj_generatedentities
+      # (packages/GeneratedEntities). CodeGen's EntitySubclasses output writes
+      # those classes — capture them on the host so the explorer build picks
+      # them up via Dockerfile.explorer's overlay COPY.
+      - ./.docker-generated/GeneratedEntities:/app/packages/GeneratedEntities/src/generated
+      # CodeGen's GraphQLServer output writes TypeGraphQL resolvers for non-core
+      # entities (e.g. AssociationDemo). MJAPI compiles these into its bundle at
+      # build time, so without them the GraphQL schema is missing types like
+      # CreateAssociationDemoMemberInput and queries against demo entities fail
+      # with 'Unknown type' / 'ID|null' errors.
+      - ./.docker-generated/MJAPI-generated:/app/packages/MJAPI/src/generated
+
   mjapi:
     build:
       context: ../..
@@ -68,6 +110,9 @@ services:
       NODE_ENV: test
     ports:
       - "14000:4000"
+    # Auto-restart if MJAPI crashes (e.g. OOM under heavy regression load)
+    # so the suite can continue rather than fail every remaining test.
+    restart: on-failure:5
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:4000/healthcheck"]
       interval: 10s
@@ -114,4 +159,8 @@ services:
     volumes:
       - ./test-results:/app/test-results
       - ./test-runner-entrypoint.sh:/app/test-runner-entrypoint.sh:ro
+      # All of the entrypoint's Node helpers — DB ops, screenshot extraction,
+      # md/html report generators, health monitor, etc. — live under scripts/
+      - ./scripts:/app/docker/regression/scripts:ro
       - ../../metadata:/app/metadata
+      - ./test-metadata:/app/test-metadata:ro

@@ -18,6 +18,26 @@
 module.exports = {
   /**
    * ====================
+   * Database Configuration
+   * ====================
+   *
+   * Required by CLI tools (mj test, mj sync, etc.) that don't go through the
+   * MJServer config merging path. Values are read from .env.
+   */
+  dbHost: process.env.DB_HOST || 'localhost',
+  dbPort: process.env.DB_PORT ? parseInt(process.env.DB_PORT) : 1433,
+  dbDatabase: process.env.DB_DATABASE,
+  dbUsername: process.env.DB_USERNAME,
+  dbPassword: process.env.DB_PASSWORD,
+  dbTrustServerCertificate: process.env.DB_TRUST_SERVER_CERTIFICATE === '1' || process.env.DB_TRUST_SERVER_CERTIFICATE === 'true',
+  coreSchema: process.env.MJ_CORE_SCHEMA || '__mj',
+
+  // CodeGen uses its own credentials with broader DDL permissions
+  codeGenLogin: process.env.CODEGEN_DB_USERNAME,
+  codeGenPassword: process.env.CODEGEN_DB_PASSWORD,
+
+  /**
+   * ====================
    * CodeGen Overrides
    * ====================
    */

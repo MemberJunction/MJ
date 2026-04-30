@@ -4,7 +4,7 @@
     "Name": "T02 - Home Application Load",
     "Description": "After login, verifies the Home application loads with navigation elements visible including header, app switcher, and at least one navigation item.",
     "InputDefinition": {
-      "goal": "Verify the Home application has loaded successfully. Confirm that the application header with the MJ logo is visible, the app switcher or navigation sidebar is present, and at least one navigation item is displayed.",
+      "goal": "IMPORTANT ENVIRONMENT NOTE: This application runs in a resource-constrained Docker environment and may take 10-30 seconds to load pages, initialize the workspace, or complete navigation transitions. If you see a loading screen, spinner, or blank page — DO NOT navigate away, go back, refresh, or retry login. Simply wait with increasing intervals (5s, then 10s, then 15s) until the content appears. The application WILL load; it just needs time. Only request judgement if you have waited over 60 seconds total on the same loading state with no change.\n\nVerify the Home application has loaded successfully. Confirm that the application header with the MJ logo is visible, the app switcher or navigation sidebar is present, and at least one navigation item is displayed.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -31,7 +31,7 @@
       "goalCompleted": true,
       "finalUrlPattern": "^http://localhost:4200",
       "minConfidence": 0.8,
-      "maxSteps": 30,
+      "maxSteps": 35,
       "judgeValidationCriteria": [
         "Application header with MJ logo is visible",
         "App switcher or navigation sidebar is present",
@@ -40,8 +40,8 @@
     },
     "Configuration": {
       "headless": true,
-      "maxSteps": 30,
-      "maxExecutionTime": 300000,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
       "screenshotHistoryDepth": 3,
       "viewportWidth": 1280,
       "viewportHeight": 720,
@@ -76,7 +76,7 @@
     "ID": "5FF83062-9015-4E5E-8BD7-3C38F22A5356"
   },
   "sync": {
-    "lastModified": "2026-04-08T04:19:00.144Z",
-    "checksum": "6adbdc9c05787ff7dc45bea749d148a162011f6aa5762059d339c9b489b879c5"
+    "lastModified": "2026-04-30T01:03:55.774Z",
+    "checksum": "810c7d9883150c5bfb1f3fe0af4a26ebd9c1fdde3b3ada1a32fa538479830916"
   }
 }

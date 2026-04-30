@@ -4,7 +4,7 @@
     "Name": "T19 - Query Browser Execute Query",
     "Description": "Navigates to Data Explorer > Queries, finds a query related to events or members, executes it, and verifies results display.",
     "InputDefinition": {
-      "goal": "Navigate to Data Explorer. Find the Queries section and locate a query related to events or members. Select and execute the query. Verify that results are displayed in a tabular format with data rows.",
+      "goal": "IMPORTANT ENVIRONMENT NOTE: This application runs in a resource-constrained Docker environment and may take 10-30 seconds to load pages, initialize the workspace, or complete navigation transitions. If you see a loading screen, spinner, or blank page — DO NOT navigate away, go back, refresh, or retry login. Simply wait with increasing intervals (5s, then 10s, then 15s) until the content appears. The application WILL load; it just needs time. Only request judgement if you have waited over 60 seconds total on the same loading state with no change.\n\nNavigate to Data Explorer. Find the Queries section and locate a query related to events or members. Select and execute the query. Verify that results are displayed in a tabular format with data rows.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -30,7 +30,7 @@
     "ExpectedOutcomes": {
       "goalCompleted": true,
       "minConfidence": 0.7,
-      "maxSteps": 30,
+      "maxSteps": 35,
       "judgeValidationCriteria": [
         "Query browser is active",
         "A query was selected and run",
@@ -39,8 +39,8 @@
     },
     "Configuration": {
       "headless": true,
-      "maxSteps": 30,
-      "maxExecutionTime": 300000,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
       "screenshotHistoryDepth": 3,
       "viewportWidth": 1280,
       "viewportHeight": 720,
@@ -59,7 +59,7 @@
           "type": "step-count",
           "weight": 0.4,
           "config": {
-            "maxSteps": 30
+            "maxSteps": 35
           }
         }
       ],
@@ -75,7 +75,7 @@
     "ID": "F89CF3DF-CDC1-4460-9BD1-C98E750C163F"
   },
   "sync": {
-    "lastModified": "2026-04-08T04:19:00.498Z",
-    "checksum": "57c582dabbcad83b2709af5ee608f03a17e5641bc53df21567e5d965afe82f71"
+    "lastModified": "2026-04-30T01:03:56.216Z",
+    "checksum": "23bfcaf91ef09f157ce87f76d68d50ab2a6e4e8d148674a6c48b0bc84bcd13b5"
   }
 }

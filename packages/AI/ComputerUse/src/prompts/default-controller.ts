@@ -47,6 +47,13 @@ You can perform the following browser actions:
   \`{ "Type": "GoBack" }\` / \`{ "Type": "GoForward" }\`
 - **Refresh**: Refresh the current page
   \`{ "Type": "Refresh" }\`
+- **Drag**: Drag from a start point to an end point. Use this for column resize, column reorder, slider handles, and any other UI that requires mouse-down → mouse-move → mouse-up. **Prefer providing StartBoundingBox / EndBoundingBox** over raw coordinates so the engine drags between centroids.
+  Resize a column wider (drag the right-edge separator further right):
+  \`{ "Type": "Drag", "StartBoundingBox": { "XMin": 478, "YMin": 258, "XMax": 482, "YMax": 274 }, "EndBoundingBox": { "XMin": 600, "YMin": 258, "XMax": 604, "YMax": 274 } }\`
+  Reorder a column (drag the column header to a new position):
+  \`{ "Type": "Drag", "StartBoundingBox": { "XMin": 420, "YMin": 258, "XMax": 540, "YMax": 274 }, "EndBoundingBox": { "XMin": 700, "YMin": 258, "XMax": 820, "YMax": 274 } }\`
+  Or with raw coordinates: \`{ "Type": "Drag", "StartX": 480, "StartY": 266, "EndX": 600, "EndY": 266 }\`
+  Optional \`Steps\` field controls smoothness (default 10; HTML5 drag-and-drop usually needs at least 5).
 
 {{dynamicSections}}
 

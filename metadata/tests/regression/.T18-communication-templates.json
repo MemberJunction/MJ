@@ -4,7 +4,7 @@
     "Name": "T18 - Communication Templates View",
     "Description": "Navigates to the Communication application and views communication templates.",
     "InputDefinition": {
-      "goal": "Use the application switcher to navigate to the Communication application (if available). View the template list or template browser. Verify that at least one communication template is displayed.",
+      "goal": "IMPORTANT ENVIRONMENT NOTE: This application runs in a resource-constrained Docker environment and may take 10-30 seconds to load pages, initialize the workspace, or complete navigation transitions. If you see a loading screen, spinner, or blank page — DO NOT navigate away, go back, refresh, or retry login. Simply wait with increasing intervals (5s, then 10s, then 15s) until the content appears. The application WILL load; it just needs time. Only request judgement if you have waited over 60 seconds total on the same loading state with no change.\n\nUse the application switcher to navigate to the Communication application (if available). View the template list or template browser. Verify that at least one communication template is displayed.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -30,7 +30,7 @@
     "ExpectedOutcomes": {
       "goalCompleted": true,
       "minConfidence": 0.7,
-      "maxSteps": 30,
+      "maxSteps": 35,
       "judgeValidationCriteria": [
         "Communication application is active",
         "Template list or browser is displayed"
@@ -38,8 +38,8 @@
     },
     "Configuration": {
       "headless": true,
-      "maxSteps": 30,
-      "maxExecutionTime": 300000,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
       "screenshotHistoryDepth": 3,
       "viewportWidth": 1280,
       "viewportHeight": 720,
@@ -58,7 +58,7 @@
           "type": "step-count",
           "weight": 0.4,
           "config": {
-            "maxSteps": 30
+            "maxSteps": 35
           }
         }
       ],
@@ -74,7 +74,7 @@
     "ID": "3CEF8310-6CDD-493F-824D-C13EB9BB9217"
   },
   "sync": {
-    "lastModified": "2026-04-08T04:19:00.476Z",
-    "checksum": "f4376aca395c267d4152830dee0dbefbb0f74d857da6e1eaa5ac1fd0b3286398"
+    "lastModified": "2026-04-30T01:03:56.196Z",
+    "checksum": "cdafb5dd0c51ae911279a1a38bb8d0a6527729876d0874cc3e387ad9f3ad2aaa"
   }
 }

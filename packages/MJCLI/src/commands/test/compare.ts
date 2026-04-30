@@ -4,10 +4,13 @@ export default class TestCompare extends Command {
   static description = 'Compare test runs for regression detection';
 
   static examples = [
+    '<%= config.bin %> <%= command.id %>',
+    '<%= config.bin %> <%= command.id %> --latest',
     '<%= config.bin %> <%= command.id %> <run-id-1> <run-id-2>',
-    '<%= config.bin %> <%= command.id %> --baseline=<run-id> --current=<run-id>',
-    '<%= config.bin %> <%= command.id %> --suite=<suite-id> --since="2024-01-01"',
-    '<%= config.bin %> <%= command.id %> <run-id-1> <run-id-2> --format=json',
+    '<%= config.bin %> <%= command.id %> -v 5.17.0 -v 5.18.0',
+    '<%= config.bin %> <%= command.id %> -c abc1234 -c def5678',
+    '<%= config.bin %> <%= command.id %> --from-json baseline.json latest.json',
+    '<%= config.bin %> <%= command.id %> --latest --format=markdown --output=report.md',
   ];
 
   static args = {
@@ -41,6 +44,10 @@ export default class TestCompare extends Command {
       description: 'Compare the two most recent completed suite runs',
       default: false,
     }),
+    'from-json': Flags.string({
+      description: 'Compare two results.json files directly (no DB). Pass twice: --from-json PREV --from-json CURR',
+      multiple: true,
+    }),
     format: Flags.string({
       char: 'f',
       description: 'Output format',
@@ -71,6 +78,7 @@ export default class TestCompare extends Command {
         commit: flags.commit,
         diffOnly: flags['diff-only'],
         latest: flags.latest,
+        fromJson: flags['from-json'],
         format: flags.format as 'console' | 'json' | 'markdown',
         output: flags.output,
         verbose: flags.verbose,

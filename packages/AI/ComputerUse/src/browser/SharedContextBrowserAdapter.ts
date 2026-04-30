@@ -13,7 +13,7 @@
  */
 
 import type { BrowserContext, Page, Route } from 'playwright';
-import { BaseBrowserAdapter } from './BaseBrowserAdapter.js';
+import { BaseBrowserAdapter, BrowserDiagnosticEvent } from './BaseBrowserAdapter.js';
 import {
     BrowserAction,
     BrowserConfig,
@@ -28,6 +28,7 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
 
     private domainHeaders: Map<string, Record<string, string>> = new Map();
     private routeInterceptorActive: boolean = false;
+    private diagnosticBuffer: BrowserDiagnosticEvent[] = [];
 
     constructor(sharedContext: BrowserContext) {
         super();
@@ -42,9 +43,11 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
         }
 
         this.config = config;
+        this.diagnosticBuffer = [];
         this.page = await this.sharedContext.newPage();
         this.page.setDefaultNavigationTimeout(config.NavigationTimeoutMs);
         this.page.setDefaultTimeout(config.ActionTimeoutMs);
+        this.attachPageDiagnostics(this.page);
     }
 
     public override async Close(): Promise<void> {
@@ -56,6 +59,114 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
 
         this.domainHeaders.clear();
         this.routeInterceptorActive = false;
+    }
+
+    /**
+     * Reset per-session state for the given origin while preserving auth tokens.
+     * Called between tests in shared-context mode so that the next test starts
+     * with a clean app state but doesn't have to re-login.
+     *
+     * Cleans (for the given origin):
+     *   - `sessionStorage` (entirely)
+     *   - `localStorage` EXCEPT entries matching auth-token patterns
+     *   - All IndexedDB databases (clears cached entity metadata)
+     *   - Service worker registrations
+     *
+     * Preserves: cookies (handled at context level by Playwright — they survive
+     * naturally), auth-token localStorage entries (Auth0, MSAL, generic OAuth).
+     *
+     * Best-effort: never throws.
+     */
+    public override async ResetStatePreservingAuth(origin: string): Promise<void> {
+        // Need a page on the target origin to access its storage.
+        // Open a temporary page if we don't have one, navigate to origin, run cleanup, close.
+        const ownTempPage = !this.page;
+        let page = this.page;
+
+        try {
+            if (!page) {
+                page = await this.sharedContext.newPage();
+            }
+
+            // Navigate to the origin so we can access its localStorage / IndexedDB.
+            // Use `domcontentloaded` to avoid waiting on slow Angular bootstrap.
+            await page.goto(origin, { waitUntil: 'domcontentloaded', timeout: 10_000 }).catch(() => {});
+
+            // Run cleanup in the page context.
+            await page.evaluate(async () => {
+                // Auth-token key patterns to PRESERVE in localStorage.
+                // Covers Auth0 SPA SDK, MSAL, and generic OAuth conventions.
+                const AUTH_KEY_PATTERNS = [
+                    /^@@auth0spajs@@/,           // Auth0 SPA SDK
+                    /^auth0\./,                  // Auth0 legacy
+                    /^msal\./i,                  // MSAL (Azure AD)
+                    /^okta-/,                    // Okta
+                    /access[_-]?token/i,         // Generic OAuth access tokens
+                    /id[_-]?token/i,             // OIDC ID tokens
+                    /refresh[_-]?token/i,        // OAuth refresh tokens
+                ];
+
+                const isAuthKey = (key: string): boolean =>
+                    AUTH_KEY_PATTERNS.some(pattern => pattern.test(key));
+
+                // 1. Snapshot auth-related localStorage entries
+                const preserved: Record<string, string> = {};
+                try {
+                    for (let i = 0; i < localStorage.length; i++) {
+                        const k = localStorage.key(i);
+                        if (k && isAuthKey(k)) {
+                            const v = localStorage.getItem(k);
+                            if (v !== null) preserved[k] = v;
+                        }
+                    }
+                } catch { /* swallow */ }
+
+                // 2. Clear sessionStorage entirely
+                try { sessionStorage.clear(); } catch { /* swallow */ }
+
+                // 3. Clear localStorage, then restore preserved auth entries
+                try {
+                    localStorage.clear();
+                    for (const [k, v] of Object.entries(preserved)) {
+                        localStorage.setItem(k, v);
+                    }
+                } catch { /* swallow */ }
+
+                // 4. Delete all IndexedDB databases (clears MJ metadata cache, Apollo cache, etc.)
+                try {
+                    // `indexedDB.databases()` is supported in modern Chromium
+                    const idbAny = indexedDB as unknown as { databases?: () => Promise<Array<{ name?: string }>> };
+                    if (typeof idbAny.databases === 'function') {
+                        const dbs = await idbAny.databases();
+                        await Promise.all(dbs.map(db => {
+                            if (!db.name) return Promise.resolve();
+                            return new Promise<void>(resolve => {
+                                const req = indexedDB.deleteDatabase(db.name!);
+                                req.onsuccess = () => resolve();
+                                req.onerror = () => resolve();
+                                req.onblocked = () => resolve();
+                            });
+                        }));
+                    }
+                } catch { /* swallow */ }
+
+                // 5. Unregister service workers (clears cached responses, push subs, etc.)
+                try {
+                    if ('serviceWorker' in navigator) {
+                        const regs = await navigator.serviceWorker.getRegistrations();
+                        await Promise.all(regs.map(r => r.unregister().catch(() => false)));
+                    }
+                } catch { /* swallow */ }
+            }).catch(() => { /* swallow */ });
+        } catch {
+            // Best-effort — never throw
+        } finally {
+            // If we opened a temporary page just for cleanup, close it.
+            if (ownTempPage && page) {
+                await page.close().catch(() => {});
+                // Don't assign this.page — we never had one.
+            }
+        }
     }
 
     // ─── Navigation ────────────────────────────────────────
@@ -139,6 +250,26 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
             case 'Refresh':
                 await page.reload({ waitUntil: 'load' });
                 break;
+            case 'Drag': {
+                let startX = action.StartX;
+                let startY = action.StartY;
+                let endX = action.EndX;
+                let endY = action.EndY;
+                if (action.StartBoundingBox) {
+                    startX = (action.StartBoundingBox.XMin + action.StartBoundingBox.XMax) / 2;
+                    startY = (action.StartBoundingBox.YMin + action.StartBoundingBox.YMax) / 2;
+                }
+                if (action.EndBoundingBox) {
+                    endX = (action.EndBoundingBox.XMin + action.EndBoundingBox.XMax) / 2;
+                    endY = (action.EndBoundingBox.YMin + action.EndBoundingBox.YMax) / 2;
+                }
+                const steps = Math.max(1, Math.floor(action.Steps || 10));
+                await page.mouse.move(startX, startY);
+                await page.mouse.down();
+                await page.mouse.move(endX, endY, { steps });
+                await page.mouse.up();
+                break;
+            }
             default: {
                 const _exhaustive: never = action;
                 throw new Error(`Unknown browser action type: ${JSON.stringify(_exhaustive)}`);
@@ -237,6 +368,66 @@ export class SharedContextBrowserAdapter extends BaseBrowserAdapter {
 
     public override get ViewportHeight(): number {
         return this.config.ViewportHeight;
+    }
+
+    // ─── Diagnostics ──────────────────────────────────────
+
+    /**
+     * Retrieve and flush all buffered diagnostic events (console errors,
+     * network failures, page crashes) captured since the last call.
+     */
+    public override GetDiagnostics(): BrowserDiagnosticEvent[] {
+        const events = this.diagnosticBuffer;
+        this.diagnosticBuffer = [];
+        return events;
+    }
+
+    /**
+     * Attach event listeners to a page to capture console messages,
+     * page errors, request failures, and crashes into the diagnostic buffer.
+     * Only captures warnings and errors to avoid noise from info/debug logs.
+     */
+    private attachPageDiagnostics(page: Page): void {
+        page.on('console', (msg) => {
+            const level = msg.type(); // 'error', 'warning', 'log', 'info', 'debug'
+            if (level === 'error' || level === 'warning') {
+                this.diagnosticBuffer.push({
+                    timestamp: new Date().toISOString(),
+                    type: 'console',
+                    level,
+                    message: msg.text().substring(0, 500),
+                    url: page.url(),
+                });
+            }
+        });
+
+        page.on('pageerror', (error) => {
+            this.diagnosticBuffer.push({
+                timestamp: new Date().toISOString(),
+                type: 'pageerror',
+                message: error.message.substring(0, 500),
+                url: page.url(),
+            });
+        });
+
+        page.on('requestfailed', (request) => {
+            const failure = request.failure();
+            this.diagnosticBuffer.push({
+                timestamp: new Date().toISOString(),
+                type: 'requestfailed',
+                message: `${request.method()} ${request.url().substring(0, 200)} — ${failure?.errorText ?? 'unknown'}`,
+                url: page.url(),
+            });
+        });
+
+        page.on('crash', () => {
+            this.diagnosticBuffer.push({
+                timestamp: new Date().toISOString(),
+                type: 'crash',
+                message: 'Page crashed (renderer process killed or OOM)',
+                url: page.url(),
+            });
+        });
     }
 
     // ─── Internal ──────────────────────────────────────────

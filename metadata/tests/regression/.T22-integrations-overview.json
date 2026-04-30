@@ -4,7 +4,7 @@
     "Name": "T22 - Integrations Overview",
     "Description": "Navigates to the Integrations application and verifies the overview dashboard loads.",
     "InputDefinition": {
-      "goal": "Use the application switcher to navigate to the Integrations application (if available). Verify that the integrations overview or connection list is displayed.",
+      "goal": "IMPORTANT ENVIRONMENT NOTE: This application runs in a resource-constrained Docker environment and may take 10-30 seconds to load pages, initialize the workspace, or complete navigation transitions. If you see a loading screen, spinner, or blank page — DO NOT navigate away, go back, refresh, or retry login. Simply wait with increasing intervals (5s, then 10s, then 15s) until the content appears. The application WILL load; it just needs time. Only request judgement if you have waited over 60 seconds total on the same loading state with no change.\n\nUse the application switcher to navigate to the Integrations application (if available). Verify that the integrations overview or connection list is displayed.",
       "startUrl": "http://localhost:4200",
       "allowedDomains": [
         "localhost",
@@ -30,7 +30,7 @@
     "ExpectedOutcomes": {
       "goalCompleted": true,
       "minConfidence": 0.7,
-      "maxSteps": 30,
+      "maxSteps": 35,
       "judgeValidationCriteria": [
         "Integrations application is active",
         "Overview or connection list is displayed"
@@ -38,8 +38,8 @@
     },
     "Configuration": {
       "headless": true,
-      "maxSteps": 30,
-      "maxExecutionTime": 300000,
+      "maxSteps": 35,
+      "maxExecutionTime": 420000,
       "screenshotHistoryDepth": 3,
       "viewportWidth": 1280,
       "viewportHeight": 720,
@@ -58,7 +58,7 @@
           "type": "step-count",
           "weight": 0.4,
           "config": {
-            "maxSteps": 30
+            "maxSteps": 35
           }
         }
       ],
@@ -74,7 +74,7 @@
     "ID": "5266CE50-884B-4AAD-B450-07098B547C8D"
   },
   "sync": {
-    "lastModified": "2026-04-08T04:19:00.561Z",
-    "checksum": "7badc232ca0d9e114665215868c36035468455f4a549fddf9abee7ffaf790f5f"
+    "lastModified": "2026-04-30T01:03:56.276Z",
+    "checksum": "a8f961ac88056fb23f01e9a9b0312f4c82f434846966be746ae692f64b2af8f3"
   }
 }
