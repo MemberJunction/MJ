@@ -119,8 +119,15 @@ export interface ERDConfig {
   linkDistance?: number;
   /** Collision radius padding */
   collisionPadding?: number;
-  /** Whether to show field details in nodes */
+  /** Whether to show field details in nodes (PK + FK rows). Defaults to true. */
   showFieldDetails?: boolean;
+  /**
+   * Whether to render all non-PK/non-FK fields as well.  When true, every field on
+   * each node is rendered (PKs first, FKs next, then all other fields in declaration
+   * order).  Use for "table card" style diagrams where users want to see every column.
+   * Defaults to false (classic schema-relationship view: keys only).
+   */
+  showAllFields?: boolean;
   /** Whether to show relationship labels */
   showRelationshipLabels?: boolean;
   /** Whether to enable node dragging */
@@ -275,6 +282,12 @@ export interface ERDState {
   focusDepth: number;
   /** Node positions for restoring exact layout */
   nodePositions: Record<string, { x: number; y: number; fx?: number | null; fy?: number | null }>;
+  /**
+   * Active layout algorithm — persisted so a user's preferred view
+   * (schema-grid vs. dagre hierarchical) survives navigation and
+   * reloads.  Defaults to 'schema-grid' when absent.
+   */
+  layoutAlgorithm?: 'schema-grid' | 'dagre';
 }
 
 /**
@@ -375,13 +388,14 @@ export interface ERDNodeDragEvent {
 
 /**
  * Layout algorithm options for the ERD diagram.
- * - 'force': D3 force-directed layout (dynamic, animated)
- * - 'dagre': Dagre hierarchical layout with orthogonal edges (static, clean)
- * - 'horizontal': Left-to-right hierarchical layout using Dagre
- * - 'vertical': Top-to-bottom hierarchical layout using Dagre
+ * - 'schema-grid': Schema-grouped rectangular bands with grid-tiled nodes (default, clean, predictable)
+ * - 'force': Legacy D3 force-directed layout (dynamic, animated) — retained for compat
+ * - 'dagre': Legacy Dagre hierarchical layout with orthogonal edges — retained for compat
+ * - 'horizontal': Left-to-right hierarchical layout using Dagre — retained for compat
+ * - 'vertical': Top-to-bottom hierarchical layout using Dagre — retained for compat
  * - 'radial': Radial layout (not yet implemented)
  */
-export type ERDLayoutAlgorithm = 'force' | 'dagre' | 'horizontal' | 'vertical' | 'radial';
+export type ERDLayoutAlgorithm = 'schema-grid' | 'force' | 'dagre' | 'horizontal' | 'vertical' | 'radial';
 
 /**
  * Dagre-specific layout configuration options.
@@ -461,6 +475,13 @@ export interface ERDConfig {
   minZoom?: number;
   /** Maximum zoom level. Default: 4 */
   maxZoom?: number;
+  /**
+   * Maximum zoom level applied during fit-to-view.  Default 2.5 — allows small
+   * diagrams (e.g. Database Designer wizard preview with 1–3 entities) to scale
+   * up enough to fill the pane without looking "lost", while still letting
+   * manual zoom (wheel/pinch) go higher up to `maxZoom`.
+   */
+  maxFitZoom?: number;
   /** Initial zoom level (1 = 100%). Default: 1 */
   initialZoom?: number;
   /** Enable multi-select with Ctrl+click. Default: false */
@@ -495,11 +516,24 @@ export interface ERDConfig {
   // Layout
   // ============================================================================
 
-  /** Layout algorithm to use. Default: 'force' */
+  /** Layout algorithm to use. Default: 'schema-grid' */
   layoutAlgorithm?: ERDLayoutAlgorithm;
 
   /** Dagre-specific layout configuration (only used when layoutAlgorithm is 'dagre', 'horizontal', or 'vertical') */
   dagreConfig?: ERDDagreConfig;
+
+  /** Draw rounded rectangular bands grouping nodes by schema. Default: true (schema-grid layout only) */
+  showSchemaBands?: boolean;
+
+  /** Draw crow's-foot markers at the source end of edges (many side). Default: true */
+  crowsFoot?: boolean;
+
+  /**
+   * Max visible fields on a node before the "+N more" toggle kicks in.
+   * Default: Infinity when `showAllFields` is true; when `showAllFields` is false,
+   * only PK + FK fields are shown regardless of this value.
+   */
+  maxVisibleFields?: number;
 
   // ============================================================================
   // Colors

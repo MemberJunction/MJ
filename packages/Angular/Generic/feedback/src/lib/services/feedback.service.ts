@@ -2,7 +2,7 @@ import { Injectable, Inject } from '@angular/core';
 import { Observable, from, BehaviorSubject, throwError } from 'rxjs';
 import { catchError, tap, map } from 'rxjs/operators';
 import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
-import { Metadata } from '@memberjunction/core';
+import { IMetadataProvider, Metadata } from '@memberjunction/core';
 import { FeedbackSubmission, FeedbackResponse, FeedbackEnvironment, FeedbackCategory, FeedbackSeverity } from '../feedback.types';
 import { FeedbackConfig, FEEDBACK_CONFIG } from '../feedback.config';
 
@@ -54,6 +54,15 @@ export class FeedbackService {
   private _isSubmitting$ = new BehaviorSubject<boolean>(false);
   public IsSubmitting$ = this._isSubmitting$.asObservable();
 
+  private _provider: IMetadataProvider | null = null;
+  /** Multi-provider note: set this from a parent component via `service.Provider = component.ProviderToUse;` */
+  public get Provider(): IMetadataProvider {
+    return this._provider ?? Metadata.Provider;
+  }
+  public set Provider(value: IMetadataProvider | null) {
+    this._provider = value;
+  }
+
   constructor(
     @Inject(FEEDBACK_CONFIG) private config: FeedbackConfig
   ) {}
@@ -70,7 +79,7 @@ export class FeedbackService {
    */
   public async IsEnabled(): Promise<boolean> {
     try {
-      const provider = Metadata.Provider as GraphQLDataProvider;
+      const provider = this.Provider as GraphQLDataProvider;
       const result = await provider.ExecuteGQL(FEEDBACK_ENABLED_QUERY, {}) as { FeedbackEnabled: boolean };
       return result?.FeedbackEnabled ?? true;
     } catch {
@@ -84,7 +93,7 @@ export class FeedbackService {
    */
   public async Classify(title: string, description: string): Promise<{ category: FeedbackCategory; severity: FeedbackSeverity } | null> {
     try {
-      const provider = Metadata.Provider as GraphQLDataProvider;
+      const provider = this.Provider as GraphQLDataProvider;
       const result = await provider.ExecuteGQL(CLASSIFY_FEEDBACK_MUTATION, {
         input: { Title: title, Description: description }
       }) as ClassifyFeedbackResult;
@@ -135,7 +144,7 @@ export class FeedbackService {
    */
   private async executeGraphQLMutation(input: GraphQLFeedbackInput): Promise<SubmitFeedbackResult> {
     const variables = { input };
-    const provider = Metadata.Provider as GraphQLDataProvider;
+    const provider = this.Provider as GraphQLDataProvider;
     const result = await provider.ExecuteGQL(SUBMIT_FEEDBACK_MUTATION, variables);
     return result as SubmitFeedbackResult;
   }
@@ -164,7 +173,7 @@ export class FeedbackService {
    * Enrich submission with auto-captured environment data and authenticated user info
    */
   private enrichSubmission(data: FeedbackSubmission): FeedbackSubmission {
-    const md = new Metadata();
+    const md = this.Provider;
     const currentUser = md.CurrentUser;
 
     return {

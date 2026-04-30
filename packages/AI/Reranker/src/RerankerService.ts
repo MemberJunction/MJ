@@ -8,7 +8,7 @@
  * @since 3.0.0
  */
 
-import { LogError, LogStatus, Metadata, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogError, LogStatus, Metadata, UserInfo } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual, BaseSingleton } from '@memberjunction/global';
 import { AIEngine, NoteMatchResult } from '@memberjunction/aiengine';
 import { MJAIAgentNoteEntity, MJAIAgentRunStepEntity } from '@memberjunction/core-entities';
@@ -428,9 +428,10 @@ export class RerankerService extends BaseSingleton<RerankerService> {
         options: RerankObservabilityOptions,
         contextUser: UserInfo,
         input: { query: string; noteCount: number; config: RerankerConfiguration; notes: NoteMatchResult[] },
-        startTime: number
+        startTime: number,
+        provider?: IMetadataProvider
     ): Promise<MJAIAgentRunStepEntity> {
-        const md = new Metadata();
+        const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
         const stepEntity = await md.GetEntityObject<MJAIAgentRunStepEntity>(
             'MJ: AI Agent Run Steps',
             contextUser

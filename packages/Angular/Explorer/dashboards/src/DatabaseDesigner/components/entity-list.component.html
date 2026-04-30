@@ -1,0 +1,226 @@
+<div class="entity-list-root">
+
+  <!-- ── Header ─────────────────────────────────────────────────────────── -->
+  <div class="entity-list-header">
+    <h2 class="entity-list-title">
+      <i class="fa-solid fa-table-cells-large"></i>
+      Database Designer
+    </h2>
+    <button
+      mjButton
+      buttonStyle="primary"
+      class="new-entity-btn"
+      (click)="OnNewEntity()">
+      <i class="fa-solid fa-plus"></i>
+      New Entity
+    </button>
+  </div>
+
+  <!-- ── Toolbar ────────────────────────────────────────────────────────── -->
+  <div class="entity-list-toolbar">
+    <div class="search-wrap">
+      <i class="fa-solid fa-magnifying-glass search-icon"></i>
+      <input
+        type="text"
+        class="mj-input search-input"
+        placeholder="Search by name, table, or schema…"
+        [(ngModel)]="SearchTerm"
+        aria-label="Search entities" />
+      @if (SearchTerm) {
+        <button
+          class="search-clear"
+          (click)="SearchTerm = ''"
+          aria-label="Clear search">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      }
+    </div>
+
+    @if (AvailableFilterSchemas.length > 1) {
+      <select
+        class="mj-input schema-filter"
+        [value]="SelectedSchema"
+        (change)="SelectedSchema = $any($event.target).value"
+        aria-label="Filter by schema">
+        <option value="">All Schemas</option>
+        @for (schema of AvailableFilterSchemas; track schema) {
+          <option [value]="schema">{{ schema }}</option>
+        }
+      </select>
+    }
+
+    <button
+      mjButton
+      buttonStyle="secondary"
+      class="refresh-btn"
+      title="Refresh list"
+      [disabled]="IsLoading"
+      (click)="OnRefresh()">
+      <i class="fa-solid fa-rotate" [class.fa-spin]="IsLoading"></i>
+    </button>
+  </div>
+
+  <!-- ── Error ──────────────────────────────────────────────────────────── -->
+  @if (ErrorMessage) {
+    <div class="entity-list-error" role="alert">
+      <i class="fa-solid fa-circle-exclamation"></i>
+      {{ ErrorMessage }}
+    </div>
+  }
+
+  <!-- ── Loading skeleton ───────────────────────────────────────────────── -->
+  @if (IsLoading && FilteredEntities.length === 0) {
+    <div class="skeleton-table" aria-busy="true" aria-label="Loading entities…">
+      @for (_ of [1, 2, 3, 4]; track $index) {
+        <div class="skeleton-row">
+          <div class="skeleton-cell wide"></div>
+          <div class="skeleton-cell medium"></div>
+          <div class="skeleton-cell narrow"></div>
+          <div class="skeleton-cell narrow"></div>
+          <div class="skeleton-cell medium"></div>
+          <div class="skeleton-cell narrow"></div>
+        </div>
+      }
+    </div>
+  }
+
+  <!-- ── Entity table ───────────────────────────────────────────────────── -->
+  @if (!IsLoading || FilteredEntities.length > 0) {
+    @if (FilteredEntities.length > 0) {
+      <div class="table-wrap">
+        <table class="entity-table" role="grid" aria-label="User-defined entities">
+          <thead>
+            <tr>
+              <th class="col-name sortable" (click)="OnSortChange('entityName')" scope="col">
+                Entity Name
+                <span class="sort-icon">
+                  @if (SortField === 'entityName') {
+                    <i class="fa-solid" [class.fa-chevron-up]="SortDirection === 'asc'" [class.fa-chevron-down]="SortDirection === 'desc'"></i>
+                  } @else {
+                    <i class="fa-solid fa-chevron-up muted"></i>
+                  }
+                </span>
+              </th>
+              <th class="col-schema sortable" (click)="OnSortChange('schemaName')" scope="col">
+                Schema
+                <span class="sort-icon">
+                  @if (SortField === 'schemaName') {
+                    <i class="fa-solid" [class.fa-chevron-up]="SortDirection === 'asc'" [class.fa-chevron-down]="SortDirection === 'desc'"></i>
+                  } @else {
+                    <i class="fa-solid fa-chevron-up muted"></i>
+                  }
+                </span>
+              </th>
+              <th class="col-table sortable" (click)="OnSortChange('tableName')" scope="col">
+                Table
+                <span class="sort-icon">
+                  @if (SortField === 'tableName') {
+                    <i class="fa-solid" [class.fa-chevron-up]="SortDirection === 'asc'" [class.fa-chevron-down]="SortDirection === 'desc'"></i>
+                  } @else {
+                    <i class="fa-solid fa-chevron-up muted"></i>
+                  }
+                </span>
+              </th>
+              <th class="col-owner sortable" (click)="OnSortChange('owner')" scope="col">
+                Owner
+                <span class="sort-icon">
+                  @if (SortField === 'owner') {
+                    <i class="fa-solid" [class.fa-chevron-up]="SortDirection === 'asc'" [class.fa-chevron-down]="SortDirection === 'desc'"></i>
+                  } @else {
+                    <i class="fa-solid fa-chevron-up muted"></i>
+                  }
+                </span>
+              </th>
+              <th class="col-created sortable" (click)="OnSortChange('createdAt')" scope="col">
+                Created
+                <span class="sort-icon">
+                  @if (SortField === 'createdAt') {
+                    <i class="fa-solid" [class.fa-chevron-up]="SortDirection === 'asc'" [class.fa-chevron-down]="SortDirection === 'desc'"></i>
+                  } @else {
+                    <i class="fa-solid fa-chevron-up muted"></i>
+                  }
+                </span>
+              </th>
+              <th class="col-actions" scope="col">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (entity of FilteredEntities; track TrackByEntityId($index, entity)) {
+              <tr class="entity-row">
+                <td class="col-name">
+                  <div class="entity-name-cell">
+                    <span class="entity-name">{{ entity.entityName }}</span>
+                    @if (entity.isOwner) {
+                      <span class="owner-badge owner-you" title="You own this entity">You</span>
+                    }
+                  </div>
+                </td>
+                <td class="col-schema">
+                  <span class="schema-badge">{{ entity.schemaName }}</span>
+                </td>
+                <td class="col-table">
+                  <code class="table-name">{{ entity.tableName }}</code>
+                </td>
+                <td class="col-owner">
+                  @if (entity.isOwner) {
+                    <span class="owner-self">
+                      <i class="fa-solid fa-user-check"></i>
+                      You
+                    </span>
+                  } @else if (entity.ownerDisplayName) {
+                    <span class="owner-other">{{ entity.ownerDisplayName }}</span>
+                  } @else {
+                    <span class="owner-other muted">—</span>
+                  }
+                </td>
+                <td class="col-created">{{ FormatDate(entity.createdAt) }}</td>
+                <td class="col-actions">
+                  <div class="row-actions">
+                    <button
+                      mjButton
+                      buttonStyle="secondary"
+                      class="action-btn"
+                      title="Edit this entity"
+                      (click)="OnEditEntity(entity)">
+                      <i class="fa-solid fa-pen-to-square"></i>
+                      Edit
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+
+      <div class="entity-count">
+        {{ FilteredEntities.length }} {{ FilteredEntities.length === 1 ? 'entity' : 'entities' }}
+        @if (SearchTerm) { matching "{{ SearchTerm }}" }
+      </div>
+    } @else if (!IsLoading) {
+      <!-- ── Zero state ───────────────────────────────────────────────── -->
+      <div class="zero-state">
+        <div class="zero-state-icon">
+          <i class="fa-regular fa-rectangle-list"></i>
+        </div>
+        @if (SearchTerm) {
+          <h3 class="zero-state-title">No entities match "{{ SearchTerm }}"</h3>
+          <p class="zero-state-body">Try a different search term or clear the filter.</p>
+          <button mjButton buttonStyle="secondary" (click)="SearchTerm = ''">
+            Clear search
+          </button>
+        } @else {
+          <h3 class="zero-state-title">No entities yet</h3>
+          <p class="zero-state-body">
+            Create your first user-defined entity. You can also use the
+            Database Designer agent in a conversation for guided design.
+          </p>
+          <button mjButton buttonStyle="primary" (click)="OnNewEntity()">
+            <i class="fa-solid fa-plus"></i>
+            Create Entity
+          </button>
+        }
+      </div>
+    }
+  }
+</div>

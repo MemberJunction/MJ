@@ -406,7 +406,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         contextUser?: UserInfo,
     ): Promise<void> {
         // Get the current provider instance
-        const provider = Metadata.Provider as GenericDatabaseProvider;
+        const provider = Metadata.Provider as GenericDatabaseProvider; // global-provider-ok: data provider implementation, owns its provider context
         if (provider && provider._sqlLoggingSessions.size > 0) {
             await provider._logSqlStatement(query, parameters, description, false, isMutation, simpleSQLFallback, contextUser);
         }

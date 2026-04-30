@@ -1,4 +1,4 @@
-import { Metadata } from '@memberjunction/core';
+import { IMetadataProvider, Metadata } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { DashboardEngine, MJDashboardPermissionEntity, MJUserEntity } from '@memberjunction/core-entities';
 import {
@@ -21,10 +21,14 @@ import {
  * consumers see the new grants immediately.
  */
 export class DashboardShareAdapter implements ResourceShareAdapter {
+    private _provider: IMetadataProvider | null = null;
+    public get Provider(): IMetadataProvider { return this._provider ?? Metadata.Provider; }
+    public set Provider(value: IMetadataProvider | null) { this._provider = value; }
+
     async LoadShares(context: ResourceShareContext): Promise<ResourceSharePermissionModel[]> {
         const existing = DashboardEngine.Instance.GetDashboardShares(context.ResourceID);
         const rows: ResourceSharePermissionModel[] = [];
-        const md = new Metadata();
+        const md = this.Provider;
         for (const permission of existing) {
             const user = await md.GetEntityObject<MJUserEntity>('MJ: Users');
             await user.Load(permission.UserID);
@@ -41,7 +45,7 @@ export class DashboardShareAdapter implements ResourceShareAdapter {
     }
 
     async CreateShare(context: ResourceShareContext, user: MJUserEntity): Promise<ResourceSharePermissionModel> {
-        const md = new Metadata();
+        const md = this.Provider;
         const permission = await md.GetEntityObject<MJDashboardPermissionEntity>('MJ: Dashboard Permissions');
         permission.NewRecord();
         permission.DashboardID = context.ResourceID;

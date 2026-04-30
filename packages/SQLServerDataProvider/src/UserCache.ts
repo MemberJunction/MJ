@@ -35,7 +35,7 @@ export class UserCache extends BaseSingleton<UserCache> {
      */
     public async Refresh(pool: sql.ConnectionPool, autoRefreshIntervalMS?: number): Promise<void> {
       try {
-        const coreSchema = Metadata.Provider.ConfigData.MJCoreSchemaName;
+        const coreSchema = Metadata.Provider.ConfigData.MJCoreSchemaName; // global-provider-ok: data provider implementation, owns its provider context
         const request = new sql.Request(pool);
         const uResult = await request.query(`SELECT * FROM [${coreSchema}].vwUsers`);
         const rRequest = new sql.Request(pool);
@@ -45,7 +45,7 @@ export class UserCache extends BaseSingleton<UserCache> {
         if (u) {
           this._users = u.map((user: any) => {
             user.UserRoles = r.filter((role: any) => UUIDsEqual(role.UserID, user.ID));
-            const uI = new UserInfo(Metadata.Provider, user)
+            const uI = new UserInfo(Metadata.Provider, user) // global-provider-ok: data provider implementation, owns its provider context
             return uI;
           })
 

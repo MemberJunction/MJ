@@ -2,7 +2,6 @@ import { Component, ChangeDetectorRef, ViewChild, AfterViewInit, OnDestroy } fro
 import { RegisterClass } from '@memberjunction/global';
 import { BaseDashboardPart } from './base-dashboard-part';
 import { PanelConfig } from '../models/dashboard-types';
-import { Metadata } from '@memberjunction/core';
 import { MJQueryEntity } from '@memberjunction/core-entities';
 import { QueryViewerComponent, QueryEntityLinkClickEvent } from '@memberjunction/ng-query-viewer';
 
@@ -154,11 +153,11 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
         this.stopAutoRefresh();
 
         try {
-            const md = new Metadata();
+            const p = this.ProviderToUse;
 
             if (queryId) {
                 // Load query by ID to verify it exists
-                this.queryEntity = await md.GetEntityObject<MJQueryEntity>('MJ: Queries');
+                this.queryEntity = await p.GetEntityObject<MJQueryEntity>('MJ: Queries', p.CurrentUser);
                 const loaded = await this.queryEntity.Load(queryId);
 
                 if (!loaded) {
@@ -168,7 +167,7 @@ export class QueryPartComponent extends BaseDashboardPart implements AfterViewIn
                 this.queryId = queryId;
             } else if (queryName) {
                 // Query by name - find the query ID from metadata
-                const queryInfo = md.Queries.find(q => q.Name === queryName);
+                const queryInfo = p.Queries.find(q => q.Name === queryName);
                 if (queryInfo) {
                     this.queryId = queryInfo.ID;
                 } else {

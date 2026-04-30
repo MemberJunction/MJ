@@ -1,6 +1,6 @@
 import { RegisterClass } from '@memberjunction/global';
 import { MJGlobal } from '@memberjunction/global';
-import { UserInfo, Metadata, RunView, LogStatus, LogError } from '@memberjunction/core';
+import { IMetadataProvider, UserInfo, Metadata, RunView, LogStatus, LogError } from '@memberjunction/core';
 import { MJContentItemEntity } from '@memberjunction/core-entities';
 import { FileStorageBase, StorageObjectMetadata } from '@memberjunction/storage';
 import { AutotagBase, AutotagProgressCallback } from '../../Core';
@@ -41,7 +41,8 @@ export class AutotagCloudStorage extends AutotagBase {
     private engine!: AutotagBaseEngine;
     protected contentSourceTypeID!: string;
 
-    public async Autotag(contextUser: UserInfo, onProgress?: AutotagProgressCallback): Promise<number> {
+    public async Autotag(contextUser: UserInfo, onProgress?: AutotagProgressCallback, contentSourceIDs?: string[], provider?: IMetadataProvider): Promise<number> {
+        if (provider) this._provider = provider;
         this.contextUser = contextUser;
         this.engine = AutotagBaseEngine.Instance;
         this.contentSourceTypeID = this.engine.SetSubclassContentSourceType('Cloud Storage');
@@ -220,7 +221,7 @@ export class AutotagCloudStorage extends AutotagBase {
             return null; // Content unchanged
         }
 
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         let contentItem: MJContentItemEntity;
 
         if (existing) {

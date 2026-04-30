@@ -8,6 +8,7 @@
  */
 
 import {
+    IMetadataProvider,
     LogError,
     Metadata,
     RunView,
@@ -25,6 +26,17 @@ import { SearchResultItem } from './search.types';
  * from entity-type content sources.
  */
 export class SearchEnricher {
+    /** Optional metadata provider; falls back to Metadata.Provider. */
+    private _provider: IMetadataProvider | undefined;
+
+    public set Provider(value: IMetadataProvider | undefined) {
+        this._provider = value;
+    }
+
+    public get Provider(): IMetadataProvider {
+        return this._provider ?? Metadata.Provider;
+    }
+
     /**
      * Apply full enrichment to search results: entity icons, record names, and tags.
      *
@@ -34,7 +46,7 @@ export class SearchEnricher {
     public async Enrich(results: SearchResultItem[], contextUser: UserInfo): Promise<void> {
         if (results.length === 0) return;
 
-        const md = new Metadata();
+        const md = this.Provider;
         this.addEntityIcons(results, md);
         await this.resolveRecordNames(results, md, contextUser);
     }
@@ -123,10 +135,10 @@ export class SearchEnricher {
     /**
      * Add entity icons for results that don't already have them from vector metadata.
      */
-    private addEntityIcons(results: SearchResultItem[], md: Metadata): void {
+    private addEntityIcons(results: SearchResultItem[], md: IMetadataProvider): void {
         for (const result of results) {
             if (!result.EntityIcon) {
-                const entity = md.Entities.find(e => e.Name === result.EntityName);
+                const entity = md.EntityByName(result.EntityName);
                 if (entity?.Icon) {
                     result.EntityIcon = entity.Icon;
                 }
@@ -141,7 +153,7 @@ export class SearchEnricher {
      */
     private async resolveRecordNames(
         results: SearchResultItem[],
-        md: Metadata,
+        md: IMetadataProvider,
         contextUser: UserInfo
     ): Promise<void> {
         const needsName = results.filter(r =>
@@ -177,13 +189,13 @@ export class SearchEnricher {
     private buildNameInputs(
         needsName: SearchResultItem[],
         allResults: SearchResultItem[],
-        md: Metadata
+        md: IMetadataProvider
     ): { ResultIndex: number; Input: EntityRecordNameInput }[] {
         const indexed: { ResultIndex: number; Input: EntityRecordNameInput }[] = [];
 
         for (const r of needsName) {
             const resultIndex = allResults.indexOf(r);
-            const entity = md.Entities.find(e => e.Name === r.EntityName);
+            const entity = md.EntityByName(r.EntityName);
             if (!entity) continue;
 
             const key = new CompositeKey();
@@ -207,11 +219,11 @@ export class SearchEnricher {
     ): Promise<void> {
         if (results.length === 0) return;
 
-        const md = new Metadata();
+        const md = this.Provider;
         const entityIdMap = new Map<string, string>();
         for (const r of results) {
             if (!entityIdMap.has(r.EntityName)) {
-                const entityInfo = md.Entities.find(e => e.Name === r.EntityName);
+                const entityInfo = md.EntityByName(r.EntityName);
                 if (entityInfo) {
                     entityIdMap.set(r.EntityName, entityInfo.ID);
                 }

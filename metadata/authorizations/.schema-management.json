@@ -1,0 +1,130 @@
+[
+  {
+    "fields": {
+      "Name": "Schema Management",
+      "ParentID": null,
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Root authorization for all schema management operations via the Database Designer Agent. Users or roles must have this authorization (or a child) to invoke any Database Designer functionality."
+    },
+    "primaryKey": {
+      "ID": "84DB865B-7681-4546-9B2A-FE51C774C20E"
+    },
+    "sync": {
+      "lastModified": "2026-04-27T03:49:31.439Z",
+      "checksum": "d36ae69207702f3915b6839d020d3aeeae2c197ce246fc000bbf2e0c01f9c28f"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Create Entities",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Schema Management",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Grants the ability to create new database entities (tables) through the Database Designer Agent. Child authorizations further restrict which schemas are permitted."
+    },
+    "primaryKey": {
+      "ID": "D36AAC11-611D-49AF-978F-1338D1F8D0E2"
+    },
+    "sync": {
+      "lastModified": "2026-04-27T03:49:31.462Z",
+      "checksum": "e96bd2338a40249350c71e1e6a9a53c20aa2a0ca2e56e11004a4ca9016e1c30e"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Create in UDT Schema",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Create Entities",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Grants the ability to create new entities in the __mj_UDT schema only. This is the most restricted create permission — recommended for most users."
+    },
+    "primaryKey": {
+      "ID": "1ADB18F6-DA0F-4521-A75B-DCFD025C7C33"
+    },
+    "sync": {
+      "lastModified": "2026-04-27T03:49:31.536Z",
+      "checksum": "47efd764617f6b4070d2728ac724e2acf2094c79a1c373e8f989dbf92182742b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Create in Custom Schema",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Create Entities",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Grants the ability to create new entities in any non-protected schema (not __mj, dbo, sys, or INFORMATION_SCHEMA). Intended for advanced users who need to extend application schemas."
+    },
+    "primaryKey": {
+      "ID": "9EC5948F-3FB6-4A08-85F0-7AF3C53331D0"
+    },
+    "sync": {
+      "lastModified": "2026-04-27T03:49:31.550Z",
+      "checksum": "618f2a1a800969ca8463fe7f9474729f1eb5de028132c1ebfcda70c50f8fd360"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Modify Entities",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Schema Management",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Grants the ability to modify existing database entities through the Database Designer Agent. Child authorizations restrict the scope of what can be modified."
+    },
+    "primaryKey": {
+      "ID": "AC30EB98-6A09-4A84-9ABE-CB21EE934ED8"
+    },
+    "sync": {
+      "lastModified": "2026-04-27T03:49:31.483Z",
+      "checksum": "c1b99be454b86960221d284a258ae6f74ef8ae1d4838d94d7058ba57bf314c6a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Modify Own Entities",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Modify Entities",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Grants the ability to modify only entities that the current user originally created via the Database Designer Agent. Tracks ownership via MJ: Entity Settings (UDT provenance metadata)."
+    },
+    "primaryKey": {
+      "ID": "E2083EEA-E8C4-47D5-8FF4-DDB2C1B5593F"
+    },
+    "sync": {
+      "lastModified": "2026-04-27T03:49:31.561Z",
+      "checksum": "5f17528dadb56b313574c07b1fe5175e63591fcfa1a240035120ffa3ab26a381"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Modify Any UDT Entities",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Modify Entities",
+      "IsActive": true,
+      "UseAuditLog": true,
+      "Description": "Grants the ability to modify any entity in the __mj_UDT schema, regardless of who created it. Intended for admins who need to maintain user-defined tables."
+    },
+    "primaryKey": {
+      "ID": "887DDF68-6BC7-4CB0-ADEF-6B7F37B4AE2D"
+    },
+    "sync": {
+      "lastModified": "2026-04-27T03:49:31.574Z",
+      "checksum": "3c31a5b4f168772efbe2d6bb77952635665ec7cb3617c6b9c5a4b1a6de73d934"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Delete Entities",
+      "ParentID": "@lookup:MJ: Authorizations.Name=Schema Management",
+      "IsActive": false,
+      "UseAuditLog": true,
+      "Description": "Reserved for future use — grants the ability to delete (DROP) entities through the Database Designer Agent. Inactive until delete workflow is implemented in a future phase."
+    },
+    "primaryKey": {
+      "ID": "13984512-2DA4-441B-83D4-F28193F8F26A"
+    },
+    "sync": {
+      "lastModified": "2026-04-27T03:49:31.496Z",
+      "checksum": "5d9460be8f29932b7e72650553b66fab0ec6fd2423b5348e7dad49430af2a3ed"
+    }
+  }
+]

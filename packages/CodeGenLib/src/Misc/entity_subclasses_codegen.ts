@@ -348,9 +348,9 @@ export const loadModule = () => {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
     public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
-        if (Metadata.Provider.ProviderType === ProviderType.Database) {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
-            const provider = Metadata.Provider as DatabaseProviderBase;
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
             
             try {
                 await provider.BeginTransaction();
@@ -485,9 +485,9 @@ ${fields}
       // logging the generated function means that we want to EMIT SQL that will update the EntityField table for the fields that had emitted validation functions
       // so that we have a record of what was generated
       // we need to update the database for each of the generated field validators where there was a change in the CHECK constraint for the generation results
-      const md = new Metadata();
-      const entityFieldsEntityID = md.Entities.find(e=>e.Name === 'MJ: Entity Fields')?.ID;
-      const entitiesEntityID = md.Entities.find(e=>e.Name === 'MJ: Entities')?.ID;
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
+      const entityFieldsEntityID = md.EntityByName('MJ: Entity Fields')?.ID;
+      const entitiesEntityID = md.EntityByName('MJ: Entities')?.ID;
 
       if (!skipDBUpdate) {
         // only do the database update stuff if we are not skipping the DB update, of course the .justGenerated flag SHOULD be false in all of the records

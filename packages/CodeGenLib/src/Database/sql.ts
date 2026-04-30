@@ -148,7 +148,7 @@ public buildEntityLevelsTree(entities: EntityInfo[]): EntityInfo[][] {
 
 public async recompileAllBaseViews(ds: CodeGenConnection, excludeSchemas: string[], applyPermissions: boolean, excludeEntities?: string[]): Promise<boolean> {
    let bSuccess: boolean = true; // start off true
-   const md: Metadata = new Metadata();
+   const md: Metadata = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
 
    // Build the dependency order tree, provide ALL entities for this process
    const entityLevelTree = this.buildEntityLevelsTree(md.Entities);

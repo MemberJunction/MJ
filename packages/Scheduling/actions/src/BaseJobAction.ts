@@ -1,7 +1,7 @@
 import { BaseAction } from '@memberjunction/actions';
 import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, UserInfo, RunView } from '@memberjunction/core';
+import { Metadata, UserInfo, RunView, IMetadataProvider } from '@memberjunction/core';
 import { MJScheduledJobEntity } from '@memberjunction/core-entities';
 import cronParser from 'cron-parser';
 
@@ -46,7 +46,8 @@ export abstract class BaseJobAction extends BaseAction {
      */
     protected async loadJob(
         jobId: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<{ job?: MJScheduledJobEntity; error?: ActionResultSimple }> {
         if (!jobId) {
             return {
@@ -58,7 +59,7 @@ export abstract class BaseJobAction extends BaseAction {
             };
         }
 
-        const md = new Metadata();
+        const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
         const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', contextUser);
 
         const loadResult = await job.Load(jobId);

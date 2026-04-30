@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { map } from 'rxjs/operators';
-import { RunView, UserInfo } from '@memberjunction/core';
+import { RunView, UserInfo, Metadata, IMetadataProvider } from '@memberjunction/core';
 import { MJAIAgentRunEntity } from '@memberjunction/core-entities';
 import { ConversationEngine } from '@memberjunction/core-entities';
 
@@ -32,6 +32,18 @@ export class ActiveTasksService {
   private _tasks$ = new BehaviorSubject<Map<string, ActiveTask>>(new Map());
   private _conversationIdsWithTasks$ = new BehaviorSubject<Set<string>>(new Set());
   private engine = ConversationEngine.Instance;
+  private _provider: IMetadataProvider | null = null;
+
+  /**
+   * Set the metadata provider this service should use. When unset, falls back to Metadata.Provider.
+   */
+  public set Provider(value: IMetadataProvider | null) {
+      this._provider = value;
+  }
+
+  public get Provider(): IMetadataProvider {
+      return this._provider ?? Metadata.Provider;
+  }
 
   /**
    * Observable of all active tasks as an array
@@ -210,7 +222,7 @@ export class ActiveTasksService {
    */
   async restoreFromDatabase(currentUser: UserInfo): Promise<void> {
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.Provider);
 
       // Query for running agent runs owned by this user
       // Only restore parent agents (those with ConversationDetailID) - child agents don't have one

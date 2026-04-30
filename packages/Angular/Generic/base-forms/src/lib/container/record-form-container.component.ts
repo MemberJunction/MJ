@@ -5,6 +5,7 @@ import {
   ViewChild, ViewEncapsulation
 } from '@angular/core';
 import { BaseEntity, CompositeKey, EntityInfo, Metadata, RunView } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
@@ -63,7 +64,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
   templateUrl: './record-form-container.component.html',
   styleUrls: ['./record-form-container.component.css']
 })
-export class MjRecordFormContainerComponent implements AfterContentInit, OnDestroy {
+export class MjRecordFormContainerComponent extends BaseAngularComponent implements AfterContentInit, OnDestroy  {
   private cdr = inject(ChangeDetectorRef);
   private ngZone = inject(NgZone);
   private notificationService = inject(MJNotificationService);
@@ -415,7 +416,7 @@ export class MjRecordFormContainerComponent implements AfterContentInit, OnDestr
    */
   private async LoadTagCount(record: BaseEntity): Promise<void> {
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       // Don't narrow Fields — the server caches RunView results by entity+filter (ignoring Fields),
       // so a narrow query here would poison the cache for the subsequent full-field load in the Tags panel.
       const result = await rv.RunView({
@@ -439,7 +440,7 @@ export class MjRecordFormContainerComponent implements AfterContentInit, OnDestr
   private async LoadVersionCount(record: BaseEntity): Promise<void> {
     if (!record.EntityInfo.TrackRecordChanges) return;
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<{ ID: string }>({
         EntityName: 'MJ: Record Changes',
         Fields: ['ID'],
@@ -606,7 +607,7 @@ export class MjRecordFormContainerComponent implements AfterContentInit, OnDestr
   }
 
   OnTagsRecordNavigate(event: { EntityName: string; RecordID: string }): void {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const entityInfo = md.Entities.find(e => e.Name === event.EntityName);
     const pkey = new CompositeKey();
     if (entityInfo) {

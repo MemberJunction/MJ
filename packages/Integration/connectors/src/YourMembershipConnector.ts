@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, type UserInfo } from '@memberjunction/core';
+import { Metadata, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJCompanyIntegrationEntity, MJCredentialEntity } from '@memberjunction/core-entities';
 import {
     BaseIntegrationConnector,
@@ -3745,8 +3745,8 @@ export class YourMembershipConnector extends BaseRESTIntegrationConnector {
         throw new Error('No YM credentials found. Attach a credential with ClientID, APIKey, and APIPassword, or set Configuration JSON on the CompanyIntegration.');
     }
 
-    private async LoadFromCredential(credentialID: string, contextUser: UserInfo): Promise<YMConnectionConfig | null> {
-        const md = new Metadata();
+    private async LoadFromCredential(credentialID: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<YMConnectionConfig | null> {
+        const md = provider ?? new Metadata();
         const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
         const loaded = await credential.Load(credentialID);
         if (!loaded || !credential.Values) return null;

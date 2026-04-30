@@ -3,6 +3,7 @@ import { RunView, LogError } from '@memberjunction/core';
 import { MJActionEntity, MJActionCategoryEntity } from '@memberjunction/core-entities';
 import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 interface CategoryTreeNode {
   category: MJActionCategoryEntity;
@@ -16,7 +17,7 @@ interface CategoryTreeNode {
   templateUrl: './actions-list-view.component.html',
   styleUrls: ['./actions-list-view.component.css']
 })
-export class ActionsListViewComponent implements OnInit, OnDestroy {
+export class ActionsListViewComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   @Output() openEntityRecord = new EventEmitter<{entityName: string; recordId: string}>();
 
   public isLoading = true;
@@ -51,7 +52,7 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
 
   private destroy$ = new Subject<void>();
 
-  constructor() {}
+  constructor() { super(); }
 
   ngOnInit(): void {
     this.setupFilters();
@@ -80,7 +81,7 @@ export class ActionsListViewComponent implements OnInit, OnDestroy {
     try {
       this.isLoading = true;
       
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       
       const [actionsResult, categoriesResult] = await rv.RunViews([
         {

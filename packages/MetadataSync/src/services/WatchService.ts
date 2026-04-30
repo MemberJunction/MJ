@@ -348,7 +348,7 @@ export class WatchService {
       const syncConfig = await loadSyncConfig(configManager.getOriginalCwd());
       
       if (syncConfig?.sqlLogging?.enabled) {
-        const provider = Metadata.Provider as any; // SQLServerDataProvider
+        const provider = Metadata.Provider as any; // SQLServerDataProvider // global-provider-ok: metadata sync operates on the configured provider only
         
         if (provider && typeof provider.CreateSqlLogger === 'function') {
           // Generate filename with timestamp

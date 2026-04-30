@@ -1,4 +1,4 @@
-import { IMetadataProvider, LogError, Metadata, RunMaybeSerial, UserInfo } from "@memberjunction/core";
+import { IMetadataProvider, LogError, UserInfo } from "@memberjunction/core";
 import type { QuerySyncContext, ExtractedField, ResolveResult } from "./types";
 import { parseQuerySQL } from "./parse";
 import {
@@ -62,20 +62,20 @@ export async function RunExtractionPipeline(ctx: QuerySyncContext): Promise<Pipe
  * Removes all extraction data for a query (parameters, fields, entities, dependencies, SQL records).
  */
 export async function CleanupQueryData(ctx: QuerySyncContext): Promise<void> {
-    await RunMaybeSerial(ctx.metadataProvider, [
-        () => RemoveAllRecords(ctx.queryID, 'MJ: Query Parameters', ctx.contextUser, ctx.runViewProvider, ctx.isSaved, ctx.metadataProvider),
-        () => RemoveAllRecords(ctx.queryID, 'MJ: Query Fields', ctx.contextUser, ctx.runViewProvider, ctx.isSaved, ctx.metadataProvider),
-        () => RemoveAllRecords(ctx.queryID, 'MJ: Query Entities', ctx.contextUser, ctx.runViewProvider, ctx.isSaved, ctx.metadataProvider),
-        () => RemoveAllRecords(ctx.queryID, 'MJ: Query Dependencies', ctx.contextUser, ctx.runViewProvider, ctx.isSaved, ctx.metadataProvider),
-        () => RemoveAllRecords(ctx.queryID, 'MJ: Query SQLs', ctx.contextUser, ctx.runViewProvider, ctx.isSaved, ctx.metadataProvider),
+    await Promise.all([
+        RemoveAllRecords(ctx.queryID, 'MJ: Query Parameters', ctx.contextUser, ctx.runViewProvider, ctx.isSaved),
+        RemoveAllRecords(ctx.queryID, 'MJ: Query Fields', ctx.contextUser, ctx.runViewProvider, ctx.isSaved),
+        RemoveAllRecords(ctx.queryID, 'MJ: Query Entities', ctx.contextUser, ctx.runViewProvider, ctx.isSaved),
+        RemoveAllRecords(ctx.queryID, 'MJ: Query Dependencies', ctx.contextUser, ctx.runViewProvider, ctx.isSaved),
+        RemoveAllRecords(ctx.queryID, 'MJ: Query SQLs', ctx.contextUser, ctx.runViewProvider, ctx.isSaved),
     ]);
 }
 
 // ─── Internal stage helpers ──────────────────────────────────────────────────
 
 function resolve(ctx: QuerySyncContext, parseResult: ReturnType<typeof parseQuerySQL>): ResolveResult {
-    const allQueries = Metadata.Provider.Queries;
     const md = ctx.metadataProvider;
+    const allQueries = md.Queries;
 
     // Composition references
     const resolvedCompositionRefs = ResolveCompositionReferences(ctx.sql, ctx.queryName, allQueries);
@@ -120,7 +120,7 @@ function merge(
 
     const finalFields = rawFields
         ? EnrichFieldTypesFromEntityMetadata(
-              EnrichFieldTypesFromCompositions(rawFields, resolveResult.resolvedCompositionRefs, parseResult.selectColumns),
+              EnrichFieldTypesFromCompositions(rawFields, resolveResult.resolvedCompositionRefs, parseResult.selectColumns, md),
               parseResult.selectColumns,
               parseResult.tableRefs,
               md
@@ -136,31 +136,31 @@ async function sync(
     finalFields: ExtractedField[] | null,
     resolveResult: ResolveResult
 ): Promise<void> {
-    const syncFactories: (() => Promise<void>)[] = [];
+    const syncPromises: Promise<void>[] = [];
 
     // Parameters
     if (finalParams) {
-        syncFactories.push(() => SyncParameters(ctx.queryID, finalParams, ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved));
+        syncPromises.push(SyncParameters(ctx.queryID, finalParams, ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved));
     } else {
-        syncFactories.push(() => RemoveAllRecords(ctx.queryID, 'MJ: Query Parameters', ctx.contextUser, ctx.runViewProvider, ctx.isSaved, ctx.metadataProvider));
+        syncPromises.push(RemoveAllRecords(ctx.queryID, 'MJ: Query Parameters', ctx.contextUser, ctx.runViewProvider, ctx.isSaved));
     }
 
     // Fields
     if (finalFields) {
-        syncFactories.push(() => SyncFields(ctx.queryID, finalFields, ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved));
+        syncPromises.push(SyncFields(ctx.queryID, finalFields, ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved));
     } else {
-        syncFactories.push(() => RemoveAllRecords(ctx.queryID, 'MJ: Query Fields', ctx.contextUser, ctx.runViewProvider, ctx.isSaved, ctx.metadataProvider));
+        syncPromises.push(RemoveAllRecords(ctx.queryID, 'MJ: Query Fields', ctx.contextUser, ctx.runViewProvider, ctx.isSaved));
     }
 
     // Entities
     if (resolveResult.entityMetadata.length > 0) {
-        syncFactories.push(() => SyncEntities(ctx.queryID, resolveResult.entityMetadata, ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved));
+        syncPromises.push(SyncEntities(ctx.queryID, resolveResult.entityMetadata, ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved));
     } else {
-        syncFactories.push(() => RemoveAllRecords(ctx.queryID, 'MJ: Query Entities', ctx.contextUser, ctx.runViewProvider, ctx.isSaved, ctx.metadataProvider));
+        syncPromises.push(RemoveAllRecords(ctx.queryID, 'MJ: Query Entities', ctx.contextUser, ctx.runViewProvider, ctx.isSaved));
     }
 
     // Dependencies
-    syncFactories.push(() => SyncDependencies(ctx.queryID, resolveResult.resolvedCompositionRefs, ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved));
+    syncPromises.push(SyncDependencies(ctx.queryID, resolveResult.resolvedCompositionRefs, ctx.contextUser, ctx.metadataProvider, ctx.runViewProvider, ctx.isSaved));
 
-    await RunMaybeSerial(ctx.metadataProvider, syncFactories);
+    await Promise.all(syncPromises);
 }

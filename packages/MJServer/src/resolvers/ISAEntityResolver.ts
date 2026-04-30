@@ -1,4 +1,4 @@
-import { EntityInfo, IEntityDataProvider, Metadata, UserInfo } from '@memberjunction/core';
+import { IEntityDataProvider } from '@memberjunction/core';
 import { Arg, Ctx, Field, ObjectType, Query, Resolver } from 'type-graphql';
 import { AppContext } from '../types.js';
 import { GetReadOnlyProvider } from '../util.js';
@@ -63,8 +63,7 @@ export class ISAEntityResolver {
     ): Promise<ISAChildEntityResult> {
         try {
             const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-            const md = new Metadata();
-            const entityInfo = md.Entities.find(e => e.Name === EntityName);
+            const entityInfo = provider.Entities.find(e => e.Name === EntityName);
 
             if (!entityInfo) {
                 return {
@@ -127,8 +126,7 @@ export class ISAEntityResolver {
     ): Promise<ISAChildEntitiesResult> {
         try {
             const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-            const md = new Metadata();
-            const entityInfo = md.Entities.find(e => e.Name === EntityName);
+            const entityInfo = provider.Entities.find(e => e.Name === EntityName);
 
             if (!entityInfo) {
                 return {

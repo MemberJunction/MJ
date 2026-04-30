@@ -214,6 +214,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   private documentClickHandler: ((e: Event) => void) | null = null;
 
   async ngOnInit(): Promise<void> {
+    this.dataService.Provider = this.ProviderToUse;
     this.documentClickHandler = (e: Event) => this.onDocumentClick(e);
     document.addEventListener('click', this.documentClickHandler);
     await this.LoadData();
@@ -357,7 +358,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     this.cdr.detectChanges();
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
       await ci.Load(summary.Integration.ID);
       this.EditEntity = ci;
@@ -458,7 +459,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     this.cdr.detectChanges();
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
       await ci.Load(integrationID);
       const deleted = await ci.Delete();
@@ -675,7 +676,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
 
   private async loadScheduledJobForIntegration(companyIntegrationID: string): Promise<void> {
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
       await ci.Load(companyIntegrationID);
       const scheduledJobID = ci.Get('ScheduledJobID') as string | null;
@@ -683,7 +684,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
 
       // Also look up the Integration Sync job type ID for pre-populating new schedules
       if (!this.integrationSyncJobTypeID) {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const typeResult = await rv.RunView<{ ID: string }>({
           EntityName: 'MJ: Scheduled Job Types',
           ExtraFilter: `Name='Integration Sync'`,
@@ -1098,7 +1099,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     this.IsLoadingCredentials = true;
     this.cdr.detectChanges();
 
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const filter = this.IntegrationCredentialTypeID
       ? `CredentialTypeID='${this.IntegrationCredentialTypeID}' AND IsActive=1`
       : 'IsActive=1';
@@ -1193,7 +1194,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
     this.cdr.detectChanges();
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
       await ci.Load(this.SavedIntegrationID);
       ci.IsActive = true;
@@ -1436,7 +1437,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   private async saveCompanyIntegration(): Promise<string | null> {
     if (!this.SelectedCompanyID || !this.SelectedIntegration) return null;
 
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
 
     if (this.SavedIntegrationID) {
@@ -1492,7 +1493,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   }
 
   private async toggleConnectionActive(summary: IntegrationSummary): Promise<void> {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations');
     await ci.Load(summary.Integration.ID);
     ci.IsActive = !summary.Integration.IsActive;
@@ -1503,7 +1504,7 @@ export class ConnectionsComponent extends BaseResourceComponent implements OnIni
   }
 
   private async loadEditCredentials(): Promise<void> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<MJCredentialEntity>({
       EntityName: 'MJ: Credentials',
       ExtraFilter: 'IsActive=1',

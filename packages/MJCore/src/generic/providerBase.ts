@@ -4,7 +4,7 @@ import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageP
 import { RunQueryParams } from "./runQuery";
 import { LocalCacheManager } from "./localCacheManager";
 import { ApplicationInfo } from "../generic/applicationInfo";
-import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
+import { AuditLogTypeInfo, AuthorizationInfo, AuthorizationRoleInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
 import { MJGlobal, NormalizeUUID, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { TelemetryManager } from "./telemetryManager";
@@ -103,6 +103,12 @@ export const AllMetadataArrays = [
     { key: 'AllRowLevelSecurityFilters', class: RowLevelSecurityFilterInfo },
     { key: 'AllAuditLogTypes', class: AuditLogTypeInfo},
     { key: 'AllAuthorizations', class: AuthorizationInfo},
+    /**
+     * Flat join-table records linking authorizations to roles.
+     * Consumed lazily by `AuthorizationInfo.Roles` — no post-processing
+     * in `GetAllMetadata` is required.  Mirrors the QueryFields pattern.
+     */
+    { key: 'AllAuthorizationRoles', class: AuthorizationRoleInfo},
     { key: 'AllQueryCategories', class: QueryCategoryInfo},
     { key: 'AllQueries', class: QueryInfo },
     { key: 'AllQueryFields', class: QueryFieldInfo },
@@ -2469,7 +2475,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // This was Bug 1 of the 3-bug chain that caused first-run CodeGen on PG to silently
         // drop CRUD for newly-created entities like SystemEvent — its EntityField rows existed
         // in the DB but the in-memory snapshot used by the entity-loop never picked them up.
-        if (Metadata.Provider && !data.IgnoreExistingMetadata && !this._refresh) {
+        if (Metadata.Provider && !data.IgnoreExistingMetadata && !this._refresh) { // global-provider-ok: bootstrap checks for an existing global registration
             // we have an existing globally registered provider AND we are not
             // requested to ignore the existing metadata, so we will not refresh it
             if (this.CopyMetadataFromGlobalProvider()) {
@@ -2629,8 +2635,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     protected CopyMetadataFromGlobalProvider(): boolean {
         try {
-            if (Metadata.Provider && Metadata.Provider !== this && Metadata.Provider.AllMetadata) { 
-                this._localMetadata = this.CloneAllMetadata(Metadata.Provider.AllMetadata);
+            if (Metadata.Provider && Metadata.Provider !== this && Metadata.Provider.AllMetadata) { // global-provider-ok: this method literally clones FROM the global provider on bootstrap
+                this._localMetadata = this.CloneAllMetadata(Metadata.Provider.AllMetadata); // global-provider-ok: bootstrap clone path
                 return true;
             }
             return false;
@@ -2883,6 +2889,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     public get Authorizations(): AuthorizationInfo[] {
         return this._localMetadata.AllAuthorizations;
+    }
+    /**
+     * Gets the flat collection of authorization-role assignments.
+     * Consumed lazily by {@link AuthorizationInfo.Roles} — consumers should
+     * prefer accessing roles through `AuthorizationInfo.Roles` rather than
+     * filtering this array directly.
+     * @returns Array of AuthorizationRoleInfo join-table objects
+     */
+    public get AuthorizationRoles(): AuthorizationRoleInfo[] {
+        return this._localMetadata.AllAuthorizationRoles;
     }
     /**
      * Gets all saved queries in the system.

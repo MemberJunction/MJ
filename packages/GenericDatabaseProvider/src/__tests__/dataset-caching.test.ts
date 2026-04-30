@@ -211,9 +211,9 @@ describe('Dataset Caching in GetDatasetByName', () => {
             expect.any(Object),         // synthetic params
             entityData,                 // results
             '2026-03-01T00:00:00.000Z', // maxUpdatedAt
-            undefined,                  // aggregateResults — datasets don't aggregate
-            undefined,                  // totalRowCount — datasets stream all rows
-            expect.anything(),          // provider (the GenericDatabaseProvider instance)
+            undefined,                  // aggregateResults
+            undefined,                  // totalRowCount
+            expect.anything()           // provider (multi-provider migration: GenericDatabaseProvider passes `this`)
         );
     });
 
