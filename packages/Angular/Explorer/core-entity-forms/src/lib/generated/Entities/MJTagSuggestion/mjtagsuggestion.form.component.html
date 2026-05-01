@@ -8,17 +8,25 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Object Mapping Section -->
+    <!-- Suggestion Details Section -->
     <mj-collapsible-panel
-        SectionKey="objectMapping"
-        SectionName="Object Mapping"
-        Icon="fa fa-link"
+        SectionKey="suggestionDetails"
+        SectionName="Suggestion Details"
+        Icon="fa fa-lightbulb"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="CompanyIntegrationID"
+            FieldName="ProposedName"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ProposedParentID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
@@ -27,70 +35,84 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="ExternalObjectName"
+            FieldName="Reason"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="ExternalObjectLabel"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="EntityID"
-            Type="textbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-            LinkType="Record"
         ></mj-form-field>
 
     </mj-collapsible-panel>
 
-    <!-- Sync Control Section -->
+    <!-- Matching Analysis Section -->
     <mj-collapsible-panel
-        SectionKey="syncControl"
-        SectionName="Sync Control"
-        Icon="fa fa-sync"
+        SectionKey="matchingAnalysis"
+        SectionName="Matching Analysis"
+        Icon="fa fa-project-diagram"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="SyncDirection"
-            Type="select"
+            FieldName="BestMatchTagID"
+            Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
+            LinkType="Record"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="SyncEnabled"
-            Type="checkbox"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Priority"
+            FieldName="BestMatchScore"
             Type="number"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Source Context Section -->
+    <mj-collapsible-panel
+        SectionKey="sourceContext"
+        SectionName="Source Context"
+        Icon="fa fa-file-alt"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="DeleteBehavior"
-            Type="select"
+            FieldName="SourceContentItemID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="SourceContentSourceID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="SourceText"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Review Workflow Section -->
+    <mj-collapsible-panel
+        SectionKey="reviewWorkflow"
+        SectionName="Review Workflow"
+        Icon="fa fa-check-double"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
@@ -99,37 +121,37 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Engine Configuration Section -->
-    <mj-collapsible-panel
-        SectionKey="engineConfiguration"
-        SectionName="Engine Configuration"
-        Icon="fa fa-cogs"
-        [Form]="this"
-        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="MatchStrategy"
-            Type="code"
+            FieldName="ResolvedTagID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ReviewedByUserID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="ReviewedAt"
+            Type="datepicker"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
-            FieldName="ConflictResolution"
-            Type="select"
-            [EditMode]="EditMode"
-            [FormContext]="formContext"
-        ></mj-form-field>
-        <mj-form-field 
-            [Record]="record"
-            [ShowLabel]="true"
-            FieldName="Configuration"
-            Type="code"
+            FieldName="ReviewerNotes"
+            Type="textarea"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -140,7 +162,7 @@
     <mj-collapsible-panel
         SectionKey="systemMetadata"
         SectionName="System Metadata"
-        Icon="fa fa-database"
+        Icon="fa fa-cog"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -160,60 +182,6 @@
             [FormContext]="formContext"
         ></mj-form-field>
 
-    </mj-collapsible-panel>
-
-    <!-- ========================================
-         RELATED ENTITY PANELS
-         ======================================== -->
-
-    <!-- Company Integration Sync Watermarks Section -->
-    <mj-collapsible-panel
-        SectionKey="mJCompanyIntegrationSyncWatermarks"
-        SectionName="Company Integration Sync Watermarks"
-        Icon="fa fa-sync-alt"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJCompanyIntegrationSyncWatermarks')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integration Sync Watermarks','EntityMapID')"
-                [NewRecordValues]="NewRecordValues('MJ: Company Integration Sync Watermarks')"
-                [AllowLoad]="IsSectionExpanded('mJCompanyIntegrationSyncWatermarks')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJCompanyIntegrationSyncWatermarks', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Company Integration Field Maps Section -->
-    <mj-collapsible-panel
-        SectionKey="mJCompanyIntegrationFieldMaps"
-        SectionName="Company Integration Field Maps"
-        Icon="fa fa-exchange-alt"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJCompanyIntegrationFieldMaps')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Company Integration Field Maps','EntityMapID')"
-                [NewRecordValues]="NewRecordValues('MJ: Company Integration Field Maps')"
-                [AllowLoad]="IsSectionExpanded('mJCompanyIntegrationFieldMaps')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJCompanyIntegrationFieldMaps', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
     </mj-collapsible-panel>
 </mj-record-form-container>
         
