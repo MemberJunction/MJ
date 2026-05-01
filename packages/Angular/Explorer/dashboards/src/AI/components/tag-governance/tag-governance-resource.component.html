@@ -1,0 +1,795 @@
+<div class="tg-shell">
+
+  <!-- LEFT NAV — within-dashboard navigation (shell handles top nav) -->
+  <aside class="tg-leftnav">
+    <div class="tg-leftnav-hd">
+      <div class="title">Tag Governance</div>
+      <div class="sub">Taxonomy · Suggestions · Health</div>
+    </div>
+    <div class="tg-leftnav-list">
+      <div class="tg-nav-item" [class.active]="ActiveSection === 'taxonomy'" (click)="ChangeSection('taxonomy')">
+        <i class="fa-solid fa-sitemap ic"></i>
+        <span class="label">Taxonomy</span>
+        <span class="badge">{{ TagsByID.size }}</span>
+      </div>
+      <div class="tg-nav-item" [class.active]="ActiveSection === 'suggestions'" (click)="ChangeSection('suggestions')">
+        <i class="fa-solid fa-inbox ic"></i>
+        <span class="label">Suggestions</span>
+        <span class="badge">{{ SuggestionRows.length }}</span>
+      </div>
+      <div class="tg-nav-item" [class.active]="ActiveSection === 'health'" (click)="ChangeSection('health')">
+        <i class="fa-solid fa-heart-pulse ic"></i>
+        <span class="label">Tag Health</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ACTIVE SECTION -->
+  <section class="tg-section">
+
+    <!-- ============================================================== TAXONOMY -->
+    @if (ActiveSection === 'taxonomy') {
+      <div class="tg-section-hd">
+        <div class="heading">
+          <h2>Taxonomy</h2>
+          <div class="sub">Curate the tag hierarchy · governance · scope · synonyms</div>
+        </div>
+        <div class="actions">
+          <button class="tg-btn" (click)="loadAll()" [disabled]="IsLoading"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
+        </div>
+      </div>
+
+      <div class="tg-section-body">
+        <div class="tax-shell">
+
+          <!-- TREE -->
+          <aside class="tax-side">
+            <div class="tax-side-tb">
+              <input class="tg-input" style="font-size: 12px; padding: 5px 9px;" placeholder="Search {{ TagsByID.size }} tags…"
+                     [(ngModel)]="TreeFilter" (input)="rebuildTree()" />
+            </div>
+            <div class="tax-tree-body">
+              @if (IsLoading) {
+                <mj-loading></mj-loading>
+              } @else if (Tree.length === 0) {
+                <div class="empty-state"><i class="fa-solid fa-tree"></i>No tags match the filter.</div>
+              } @else {
+                <ng-container *ngTemplateOutlet="treeNodeTpl; context: { $implicit: Tree, depth: 0 }"></ng-container>
+              }
+            </div>
+          </aside>
+
+          <!-- DETAIL -->
+          <section class="tax-form">
+            @if (!SelectedTag) {
+              <div class="tax-form-empty">
+                <i class="fa-solid fa-arrow-left"></i>
+                Select a tag from the tree to view governance, scope and synonyms.
+              </div>
+            } @else {
+              <ng-container *ngTemplateOutlet="taxonomyDetailTpl"></ng-container>
+            }
+          </section>
+
+        </div>
+      </div>
+    }
+
+    <!-- ============================================================== SUGGESTIONS -->
+    @if (ActiveSection === 'suggestions') {
+      <div class="tg-section-hd">
+        <div class="heading">
+          <h2>Tag Suggestions</h2>
+          <div class="sub">{{ SuggestionRows.length }} pending · select rows for bulk approve / reject</div>
+        </div>
+        <div class="actions">
+          <button class="tg-btn" (click)="loadAll()" [disabled]="IsLoading"><i class="fa-solid fa-arrows-rotate"></i> Refresh</button>
+          <button class="tg-btn primary" (click)="RunHealthNow()" [disabled]="HealthRunning">
+            @if (HealthRunning) { <i class="fa-solid fa-spinner fa-spin"></i> Running… }
+            @else { <i class="fa-solid fa-heart-pulse"></i> Run Tag Health }
+          </button>
+        </div>
+      </div>
+
+      <div class="tg-section-body">
+        <div class="sg-shell">
+          <div class="sg-main">
+            <div class="sg-toolbar">
+              <input class="tg-input" style="width: 280px;" placeholder="Search proposed name, source text…"
+                     [(ngModel)]="SuggestionSearch" (input)="applySuggestionFilters()" />
+              <select class="tg-input" style="width: 200px;"
+                      [(ngModel)]="SuggestionFilterReason" (change)="applySuggestionFilters()">
+                <option value="">All reasons</option>
+                @for (r of ReasonOptions; track r) { <option [value]="r">{{ r }}</option> }
+              </select>
+              <input class="tg-input" type="number" step="0.05" min="0" max="1"
+                     style="width: 100px;" placeholder="Min score"
+                     [ngModel]="SuggestionFilterMinScore"
+                     (ngModelChange)="SuggestionFilterMinScore = $event === '' ? null : $event; applySuggestionFilters()" />
+              <span style="flex: 1;"></span>
+              <span style="font-size: 12px; color: var(--mj-text-muted);">
+                Showing <strong>{{ SuggestionRowsFiltered.length }} of {{ SuggestionRows.length }}</strong>
+              </span>
+            </div>
+
+            @if (SelectedSuggestionCount() > 0) {
+              <div class="sg-bulk-bar">
+                <strong>{{ SelectedSuggestionCount() }} selected</strong>
+                <span style="flex: 1;"></span>
+                <button class="tg-btn success sm" (click)="BulkApprove()" [disabled]="BulkInProgress">
+                  <i class="fa-solid fa-check"></i> Approve all (auto-pick best disposition)
+                </button>
+                <button class="tg-btn danger sm" (click)="BulkReject()" [disabled]="BulkInProgress">
+                  <i class="fa-solid fa-xmark"></i> Reject
+                </button>
+              </div>
+            }
+
+            <div class="sg-table-body">
+              @if (IsLoading) {
+                <mj-loading></mj-loading>
+              } @else if (SuggestionRowsFiltered.length === 0) {
+                <div class="empty-state"><i class="fa-solid fa-inbox"></i>No pending suggestions.</div>
+              } @else {
+                <table class="sg-table">
+                  <thead>
+                    <tr>
+                      <th style="width: 30px;">
+                        <input type="checkbox"
+                               [checked]="SelectedSuggestionCount() === SuggestionRowsFiltered.length && SuggestionRowsFiltered.length > 0"
+                               (change)="ToggleAllSuggestions($any($event.target).checked)" />
+                      </th>
+                      <th>Proposed name</th>
+                      <th>Reason</th>
+                      <th>Best match</th>
+                      <th>Score</th>
+                      <th>Source</th>
+                      <th>Created</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (row of SuggestionRowsFiltered; track row.ID) {
+                      <tr [class.checked]="row.selected"
+                          [class.selected]="SuggestionSelected?.ID === row.ID"
+                          (click)="SelectSuggestion(row)">
+                        <td><input type="checkbox" [checked]="row.selected" (click)="ToggleSuggestionSelected(row, $event)" /></td>
+                        <td><strong>{{ row.ProposedName }}</strong></td>
+                        <td><span class="sg-reason {{ ReasonClass(row.Reason) }}">{{ row.Reason }}</span></td>
+                        <td>
+                          @if (row.BestMatchName) {
+                            {{ row.BestMatchName }}
+                            <span style="color: var(--mj-text-muted); font-size: 11px;">{{ row.BestMatchPath }}</span>
+                          } @else {
+                            <span style="color: var(--mj-text-muted);">— no match —</span>
+                          }
+                        </td>
+                        <td class="sg-score">
+                          @if (row.BestMatchScore != null) {
+                            <span class="sg-score-bar"><span [style.width.%]="row.BestMatchScore * 100"></span></span>
+                            {{ row.BestMatchScore | number: '1.3-3' }}
+                          } @else {
+                            <span style="color: var(--mj-text-muted);">—</span>
+                          }
+                        </td>
+                        <td style="color: var(--mj-text-muted); font-size: 12px;">
+                          @if (row.SourceContentSourceID) { Source · {{ row.SourceContentSourceID.substring(0,8) }}…  }
+                          @else { TagHealthJob }
+                        </td>
+                        <td style="color: var(--mj-text-muted);">{{ row.CreatedAt | date: 'short' }}</td>
+                        <td>
+                          @if (row.dispositionInProgress) {
+                            <span style="color: var(--mj-text-muted); font-size: 11px;">
+                              <i class="fa-solid fa-spinner fa-spin"></i> {{ row.dispositionInProgress }}…
+                            </span>
+                          } @else {
+                            <div class="sg-row-actions">
+                              <button class="tg-btn xs" title="Create as new tag" (click)="DispositionSuggestion(row, 'create-new'); $event.stopPropagation()">
+                                <i class="fa-solid fa-plus"></i>
+                              </button>
+                              @if (row.BestMatchTagID) {
+                                <button class="tg-btn xs primary" title="Merge into best match" (click)="DispositionSuggestion(row, 'merge'); $event.stopPropagation()">
+                                  <i class="fa-solid fa-code-merge"></i>
+                                </button>
+                              }
+                              <button class="tg-btn xs danger" title="Reject" (click)="DispositionSuggestion(row, 'reject'); $event.stopPropagation()">
+                                <i class="fa-solid fa-xmark"></i>
+                              </button>
+                            </div>
+                          }
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              }
+            </div>
+          </div>
+
+          <!-- DRAWER -->
+          @if (SuggestionSelected) {
+            <aside class="sg-drawer">
+              <div class="sg-drawer-hd">
+                <div>
+                  <div style="font-weight: 600;">"{{ SuggestionSelected.ProposedName }}"</div>
+                  <div style="font-size: 11px; color: var(--mj-text-muted);">
+                    Suggestion · {{ SuggestionSelected.CreatedAt | date: 'short' }}
+                  </div>
+                </div>
+                <button class="tg-btn xs" (click)="CloseDrawer()" title="Close"><i class="fa-solid fa-xmark"></i></button>
+              </div>
+              <div class="sg-drawer-bd">
+                <span class="sg-reason {{ ReasonClass(SuggestionSelected.Reason) }}">
+                  {{ SuggestionSelected.Reason }}
+                  @if (SuggestionSelected.BestMatchScore != null) { · {{ SuggestionSelected.BestMatchScore | number: '1.3-3' }} }
+                </span>
+
+                @if (SuggestionSelected.BestMatchTagID) {
+                  <h4>Proposes merge into</h4>
+                  <div class="candidate">
+                    <div style="flex: 1;">
+                      <div class="nm">{{ SuggestionSelected.BestMatchName }}</div>
+                      <div class="ctx">{{ SuggestionSelected.BestMatchPath }}</div>
+                    </div>
+                  </div>
+                }
+
+                @if (SuggestionSelected.SourceText) {
+                  <h4>Source text</h4>
+                  <p class="preview">"{{ SuggestionSelected.SourceText }}"</p>
+                }
+
+                <h4>If approved</h4>
+                <p class="preview">
+                  @if (SuggestionSelected.BestMatchTagID) {
+                    Re-point any free-text ContentItemTag rows whose Tag matches "<strong>{{ SuggestionSelected.ProposedName }}</strong>" to <strong>{{ SuggestionSelected.BestMatchName }}</strong>, add "{{ SuggestionSelected.ProposedName }}" as a synonym (Source: Merged), and mark the suggestion as Merged.
+                  } @else {
+                    Create a new tag named "<strong>{{ SuggestionSelected.ProposedName }}</strong>" (subject to ValidateAutoGrow), inherit parent scope when applicable, and re-point any matching free-text ContentItemTag rows.
+                  }
+                </p>
+
+                @if (SuggestionSelectedAffectedItems.length > 0) {
+                  <h4>Affected content (sample of {{ SuggestionSelectedAffectedCount }})</h4>
+                  <ul>
+                    @for (item of SuggestionSelectedAffectedItems; track item.Title) {
+                      <li>{{ item.Title }} <span style="color: var(--mj-text-muted);">· {{ item.CreatedAt | date: 'shortDate' }}</span></li>
+                    }
+                  </ul>
+                }
+              </div>
+              <div class="sg-drawer-ft">
+                @if (SuggestionSelected.BestMatchTagID) {
+                  <button class="tg-btn primary" (click)="DispositionSuggestion(SuggestionSelected!, 'merge')"
+                          [disabled]="!!SuggestionSelected.dispositionInProgress">
+                    <i class="fa-solid fa-code-merge"></i> Merge
+                  </button>
+                }
+                <button class="tg-btn" (click)="DispositionSuggestion(SuggestionSelected!, 'create-new')"
+                        [disabled]="!!SuggestionSelected.dispositionInProgress">
+                  <i class="fa-solid fa-plus"></i> Create as new
+                </button>
+                <button class="tg-btn danger" (click)="DispositionSuggestion(SuggestionSelected!, 'reject')"
+                        [disabled]="!!SuggestionSelected.dispositionInProgress">
+                  <i class="fa-solid fa-xmark"></i> Reject
+                </button>
+              </div>
+            </aside>
+          }
+        </div>
+      </div>
+    }
+
+    <!-- ============================================================== TAG HEALTH -->
+    @if (ActiveSection === 'health') {
+      <div class="tg-section-hd">
+        <div class="heading">
+          <h2>Tag Health</h2>
+          <div class="sub">Automated signals about taxonomy quality</div>
+        </div>
+        <div class="actions">
+          <button class="tg-btn" (click)="RebuildEmbeddings()" [disabled]="RebuildEmbeddingsRunning">
+            @if (RebuildEmbeddingsRunning) { <i class="fa-solid fa-spinner fa-spin"></i> Rebuilding… }
+            @else { <i class="fa-solid fa-rotate"></i> Rebuild stale embeddings }
+          </button>
+          <button class="tg-btn primary" (click)="RunHealthNow()" [disabled]="HealthRunning">
+            @if (HealthRunning) { <i class="fa-solid fa-spinner fa-spin"></i> Running… }
+            @else { <i class="fa-solid fa-play"></i> Run now }
+          </button>
+        </div>
+      </div>
+
+      <div class="health-shell">
+        <div class="runbar">
+          <div class="stat">
+            <div class="l">Last run</div>
+            <div class="v">{{ LastHealthSummary.runAt ? (LastHealthSummary.runAt | date: 'short') : '—' }}</div>
+          </div>
+          <div class="stat">
+            <div class="l">Tags scanned</div>
+            <div class="v">{{ TotalTagsScanned }}</div>
+          </div>
+          <div class="stat">
+            <div class="l">Issues enqueued (last run)</div>
+            <div class="v">{{ LastHealthSummary.mergeCount + LastHealthSummary.lowUsageCount + LastHealthSummary.wideNodeCount }}</div>
+          </div>
+          <div class="stat">
+            <div class="l">Pending suggestions</div>
+            <div class="v">{{ SuggestionRows.length }}</div>
+          </div>
+          <span class="grow"></span>
+          <div class="stat">
+            <div class="l">Last duration</div>
+            <div class="v">{{ LastHealthSummary.durationMs ? (LastHealthSummary.durationMs + 'ms') : '—' }}</div>
+          </div>
+        </div>
+
+        <div class="health-cards">
+          <div class="h-card merge">
+            <div class="top">
+              <div class="ic"><i class="fa-solid fa-code-merge"></i></div>
+              <div>
+                <div class="name">Merge candidates</div>
+                <h3>Likely duplicate tags</h3>
+              </div>
+            </div>
+            <div class="big">{{ LastHealthSummary.mergeCount }}</div>
+            <p class="sub">Pairs with high embedding cosine + name similarity. Approving merges the source tag into the target and re-points existing ContentItemTag rows.</p>
+            <div class="top-list">
+              <div style="font-size: 11px; color: var(--mj-text-muted); font-weight: 600; text-transform: uppercase;">Top {{ MergeCandidates.length }}</div>
+              @for (m of MergeCandidates; track m.ProposedName) {
+                <div class="li"><span style="font-weight: 600;">{{ m.ProposedName }}</span><span class="arrow">→</span><span>{{ m.BestMatchName }}</span><span class="score">{{ m.Score | number: '1.2-2' }}</span></div>
+              }
+              @if (MergeCandidates.length === 0) {
+                <div class="li" style="color: var(--mj-text-muted); font-size: 12px;">No merge candidates pending.</div>
+              }
+            </div>
+            <div class="ft">
+              <button class="tg-btn primary sm" (click)="ChangeSection('suggestions'); SuggestionFilterReason = 'MergeCandidate'; applySuggestionFilters()">
+                Open in Suggestions
+              </button>
+            </div>
+          </div>
+
+          <div class="h-card lowusage">
+            <div class="top">
+              <div class="ic"><i class="fa-solid fa-leaf"></i></div>
+              <div>
+                <div class="name">Low usage</div>
+                <h3>Deprecation candidates</h3>
+              </div>
+            </div>
+            <div class="big">{{ LastHealthSummary.lowUsageCount }}</div>
+            <p class="sub">Active tags used fewer than the threshold over the lookback window. Often abandoned imports or finished-project tags.</p>
+            <div class="top-list">
+              <div style="font-size: 11px; color: var(--mj-text-muted); font-weight: 600; text-transform: uppercase;">Top {{ LowUsageCandidates.length }}</div>
+              @for (l of LowUsageCandidates; track l.Name) {
+                <div class="li"><span style="font-weight: 600;">{{ l.Name }}</span><span class="meta">{{ l.Usage }} uses</span></div>
+              }
+              @if (LowUsageCandidates.length === 0) {
+                <div class="li" style="color: var(--mj-text-muted); font-size: 12px;">No low-usage candidates.</div>
+              }
+            </div>
+            <div class="ft">
+              <button class="tg-btn primary sm" (click)="ChangeSection('suggestions'); SuggestionFilterReason = 'LowUsage'; applySuggestionFilters()">
+                Review
+              </button>
+            </div>
+          </div>
+
+          <div class="h-card widenode">
+            <div class="top">
+              <div class="ic"><i class="fa-solid fa-tree"></i></div>
+              <div>
+                <div class="name">Wide nodes</div>
+                <h3>Parents with too many children</h3>
+              </div>
+            </div>
+            <div class="big">{{ LastHealthSummary.wideNodeCount }}</div>
+            <p class="sub">Parents whose direct-child count exceeds <strong>MaxChildren</strong> (or the implicit threshold {{ HealthThresholds.maxImplicitChildren }} when no cap is set).</p>
+            <div class="top-list">
+              <div style="font-size: 11px; color: var(--mj-text-muted); font-weight: 600; text-transform: uppercase;">Top {{ WideNodeCandidates.length }}</div>
+              @for (w of WideNodeCandidates; track w.Name) {
+                <div class="li"><span style="font-weight: 600;">{{ w.Name }}</span><span class="meta">{{ w.ChildCount }} children · cap {{ w.Threshold }}</span></div>
+              }
+              @if (WideNodeCandidates.length === 0) {
+                <div class="li" style="color: var(--mj-text-muted); font-size: 12px;">No wide-node candidates.</div>
+              }
+            </div>
+            <div class="ft">
+              <button class="tg-btn primary sm" (click)="ChangeSection('suggestions'); SuggestionFilterReason = 'WideNode'; applySuggestionFilters()">
+                Review
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="threshold-form">
+          <h3>Health-job thresholds</h3>
+          <div class="grid">
+            <div class="field"><label>Merge: min co-occurrence</label>
+              <input class="tg-input" type="number" min="0" [(ngModel)]="HealthThresholds.minCoOccurrence" />
+              <span class="hint">Pairs must appear together in ≥ this many items.</span>
+            </div>
+            <div class="field"><label>Merge: min embedding cosine</label>
+              <input class="tg-input" type="number" min="0" max="1" step="0.01" [(ngModel)]="HealthThresholds.minEmbeddingSimilarity" />
+            </div>
+            <div class="field"><label>Merge: min name similarity</label>
+              <input class="tg-input" type="number" min="0" max="1" step="0.05" [(ngModel)]="HealthThresholds.minNameSimilarity" />
+              <span class="hint">Dice's-coefficient bigram similarity.</span>
+            </div>
+            <div class="field"><label>Low usage: max usage</label>
+              <input class="tg-input" type="number" min="0" [(ngModel)]="HealthThresholds.maxUsage" />
+            </div>
+            <div class="field"><label>Wide node: max implicit children</label>
+              <input class="tg-input" type="number" min="0" [(ngModel)]="HealthThresholds.maxImplicitChildren" />
+              <span class="hint">Used when a tag has no explicit MaxChildren cap.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="run-history">
+          <div class="run-history-hd">
+            <h3>Run history</h3>
+            <span style="font-size: 11px; color: var(--mj-text-muted);">last {{ HealthRunHistory.length }} runs</span>
+          </div>
+          @if (HealthRunHistory.length === 0) {
+            <div class="empty-state" style="padding: 32px;"><i class="fa-solid fa-clock-rotate-left"></i>No runs yet.</div>
+          } @else {
+            <table>
+              <thead>
+                <tr>
+                  <th>When</th><th>Trigger</th><th>Tags scanned</th><th>Merge</th><th>Low usage</th><th>Wide node</th><th>Total</th><th>Duration</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (run of HealthRunHistory; track run.When) {
+                  <tr>
+                    <td style="color: var(--mj-text-muted);">{{ run.When | date: 'short' }}</td>
+                    <td>{{ run.Trigger }}</td>
+                    <td>{{ run.TagsScanned }}</td>
+                    <td>{{ run.Merge }}</td>
+                    <td>{{ run.LowUsage }}</td>
+                    <td>{{ run.WideNode }}</td>
+                    <td><strong>{{ run.Merge + run.LowUsage + run.WideNode }}</strong></td>
+                    <td>{{ run.DurationMs }}ms</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          }
+        </div>
+      </div>
+    }
+  </section>
+
+</div>
+
+
+<!-- ============================ SCOPE EDITOR DIALOG ============================ -->
+
+@if (ScopeDialogOpen && SelectedTag) {
+  <div class="dialog-backdrop" (click)="CloseScopeDialog()">
+    <div class="dialog-card" (click)="$event.stopPropagation()">
+      <div class="dialog-hd">
+        <div>
+          <h2>Edit scope · {{ SelectedTag.Name }}</h2>
+          <div style="font-size: 12px; color: var(--mj-text-muted); margin-top: 2px;">
+            Children inherit · child scope cannot widen beyond parent
+          </div>
+        </div>
+        <button class="tg-btn xs" (click)="CloseScopeDialog()"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="dialog-bd">
+        <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 14px;">
+          <span style="font-size: 12px; color: var(--mj-text-muted); font-weight: 600;">Filter by entity:</span>
+          @for (e of ScopeDialogEntities; track e.ID) {
+            <span class="sg-pill" [class.selected]="ScopeDialogActiveEntityID === e.ID"
+                  [style.background]="ScopeDialogActiveEntityID === e.ID ? 'color-mix(in srgb, var(--mj-brand-primary) 12%, transparent)' : ''"
+                  [style.color]="ScopeDialogActiveEntityID === e.ID ? 'var(--mj-brand-primary)' : ''"
+                  (click)="OnScopeDialogEntityChange(e.ID)">
+              {{ e.Name }}
+            </span>
+          }
+        </div>
+
+        <div class="scope-shell">
+          <div class="scope-pane">
+            <div class="scope-pane-hd">
+              <h3>Available</h3>
+              <span class="ct">{{ ScopeDialogAvailable.length }} not in scope</span>
+            </div>
+            <div class="scope-pane-search">
+              <input class="tg-input" style="font-size: 12px;" placeholder="Search…"
+                     [(ngModel)]="ScopeDialogSearchAvail" />
+            </div>
+            <div class="scope-pane-body">
+              @for (opt of ScopeDialogAvailable; track opt.RecordID) {
+                @if (!ScopeDialogSearchAvail || opt.DisplayName.toLowerCase().includes(ScopeDialogSearchAvail.toLowerCase())) {
+                  <div class="opt-row"
+                       [class.checked]="ScopeDialogAvailSelected.has(opt.RecordID)"
+                       [class.disabled]="opt.Disabled"
+                       (click)="ToggleAvailRow(opt, $event)"
+                       [title]="opt.DisabledReason ?? ''">
+                    <input type="checkbox" [checked]="ScopeDialogAvailSelected.has(opt.RecordID)" [disabled]="opt.Disabled" />
+                    <div style="flex: 1;">
+                      <div class="nm">{{ opt.DisplayName }}</div>
+                      @if (opt.Disabled) {
+                        <div class="sub" style="color: var(--mj-status-error-text, var(--mj-status-error));">{{ opt.DisabledReason }}</div>
+                      } @else if (opt.Subtext) {
+                        <div class="sub">{{ opt.Subtext }}</div>
+                      }
+                    </div>
+                  </div>
+                }
+              }
+            </div>
+          </div>
+
+          <div class="scope-pane middle">
+            <button class="arrow-btn primary" title="Add selected"
+                    [disabled]="ScopeDialogAvailSelected.size === 0"
+                    (click)="AddSelectedToScope()"><i class="fa-solid fa-arrow-right"></i></button>
+            <button class="arrow-btn" title="Add all"
+                    [disabled]="ScopeDialogAvailable.length === 0"
+                    (click)="AddAllToScope()">≫</button>
+            <button class="arrow-btn" title="Remove selected"
+                    [disabled]="ScopeDialogInScopeSelected.size === 0"
+                    (click)="RemoveSelectedFromScope()"><i class="fa-solid fa-arrow-left"></i></button>
+            <button class="arrow-btn" title="Remove all"
+                    [disabled]="ScopeDialogInScope.length === 0"
+                    (click)="RemoveAllFromScope()">≪</button>
+          </div>
+
+          <div class="scope-pane">
+            <div class="scope-pane-hd">
+              <h3>In scope</h3>
+              <span class="ct">{{ ScopeDialogInScope.length }} in scope</span>
+            </div>
+            <div class="scope-pane-search">
+              <input class="tg-input" style="font-size: 12px;" placeholder="Search current scope…"
+                     [(ngModel)]="ScopeDialogSearchInScope" />
+            </div>
+            <div class="scope-pane-body">
+              @for (opt of ScopeDialogInScope; track opt.RecordID) {
+                @if (!ScopeDialogSearchInScope || opt.DisplayName.toLowerCase().includes(ScopeDialogSearchInScope.toLowerCase())) {
+                  <div class="opt-row in-scope"
+                       [class.checked]="ScopeDialogInScopeSelected.has(opt.RecordID)"
+                       (click)="ToggleInScopeRow(opt, $event)">
+                    <input type="checkbox" [checked]="ScopeDialogInScopeSelected.has(opt.RecordID)" />
+                    <div style="flex: 1;">
+                      <div class="nm">{{ opt.DisplayName }}</div>
+                    </div>
+                  </div>
+                }
+              }
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="dialog-ft">
+        <button class="tg-btn" (click)="CloseScopeDialog()" [disabled]="ScopeDialogSaving">Cancel</button>
+        <button class="tg-btn primary" (click)="SaveScopeDialog()" [disabled]="ScopeDialogSaving">
+          @if (ScopeDialogSaving) { <i class="fa-solid fa-spinner fa-spin"></i> Saving… }
+          @else { Save scope }
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+
+<!-- ============================ TREE NODE TEMPLATE ============================ -->
+
+<ng-template #treeNodeTpl let-nodes let-depth="depth">
+  @for (node of nodes; track node.Tag.ID) {
+    <div class="tnode" [class.selected]="SelectedTag?.ID === node.Tag.ID" (click)="SelectTag(node.Tag)">
+      <span class="twist" (click)="ToggleNode(node, $event)">
+        @if (node.Children.length > 0) { <i class="fa-solid" [ngClass]="node.Expanded ? 'fa-chevron-down' : 'fa-chevron-right'"></i> }
+        @else { · }
+      </span>
+      <span class="name">{{ node.Tag.Name }}</span>
+      <div class="icons">
+        @if (node.Tag.IsGlobal) { <span class="ic global" title="Global"><i class="fa-solid fa-globe"></i></span> }
+        @else { <span class="ic scoped" title="Scoped"><i class="fa-solid fa-lock"></i></span> }
+        @if (node.Tag.IsFrozen) { <span class="ic frozen" title="Frozen"><i class="fa-solid fa-snowflake"></i></span> }
+        @if (!node.Tag.AllowAutoGrow) { <span class="ic no-grow" title="Auto-grow off"><i class="fa-solid fa-ban"></i></span> }
+        @if (node.Tag.RequiresReview) { <span class="ic review" title="Requires review">!</span> }
+        @if (node.Tag.MaxChildren && node.DirectChildCount > node.Tag.MaxChildren) { <span class="ic wide" title="Wide node"><i class="fa-solid fa-triangle-exclamation"></i></span> }
+        <span class="ic count">{{ node.ItemCount }}</span>
+      </div>
+    </div>
+    @if (node.Expanded && node.Children.length > 0) {
+      <div class="tchildren">
+        <ng-container *ngTemplateOutlet="treeNodeTpl; context: { $implicit: node.Children, depth: depth + 1 }"></ng-container>
+      </div>
+    }
+  }
+</ng-template>
+
+
+<!-- ============================ TAXONOMY DETAIL TEMPLATE ============================ -->
+
+<ng-template #taxonomyDetailTpl>
+  <div class="form-hd">
+    <div>
+      <div class="crumbs">{{ computeTagPath(SelectedTag!) }}</div>
+      <h2>{{ SelectedTag!.Name }}</h2>
+      <div class="badge-row">
+        <span class="tg-badge brand">{{ SelectedTag!.Status }}</span>
+        @if (SelectedTag!.IsGlobal) {
+          <span class="tg-badge success"><i class="fa-solid fa-globe"></i> Global</span>
+        } @else {
+          <span class="tg-badge brand"><i class="fa-solid fa-lock"></i> Scoped: {{ SelectedTagScopes.length }}</span>
+        }
+        @if (SelectedTag!.IsFrozen) { <span class="tg-badge warn"><i class="fa-solid fa-snowflake"></i> Frozen</span> }
+        @if (!SelectedTag!.AllowAutoGrow) { <span class="tg-badge warn">Auto-grow off</span> }
+        @if (SelectedTag!.RequiresReview) { <span class="tg-badge error">Review required</span> }
+      </div>
+    </div>
+  </div>
+
+  <div class="stats-strip">
+    <div class="metric brand">
+      <span class="lbl">Items tagged</span>
+      <span class="val">{{ TaggedItemCountsByTagID.get(NormalizeUUID(SelectedTag!.ID)) ?? 0 }}</span>
+      <span class="delta">across all sources</span>
+    </div>
+    <div class="metric">
+      <span class="lbl">Direct children</span>
+      <span class="val">{{ TagsByParentID.get(SelectedTag!.ID)?.length ?? 0 }}</span>
+      <span class="delta">@if (SelectedTag!.MaxChildren) { of cap {{ SelectedTag!.MaxChildren }} } @else { no cap }</span>
+    </div>
+    <div class="metric success">
+      <span class="lbl">Synonyms</span>
+      <span class="val">{{ SelectedTagSynonyms.length }}</span>
+      <span class="delta">{{ pendingSynonymCount() }} pending</span>
+    </div>
+    <div class="metric warn">
+      <span class="lbl">Embedding</span>
+      <span class="val" style="font-size: 14px;">{{ SelectedTag!.EmbeddingVector ? 'Cached' : '—' }}</span>
+      <span class="delta">{{ SelectedTag!.EmbeddingModelID ? 'model set' : 'no model' }}</span>
+    </div>
+  </div>
+
+  <div class="form-section">
+    <h3>Identity</h3>
+    <div class="form-grid">
+      <div class="field"><label>Display name</label>
+        <input class="tg-input" [value]="SelectedTag!.DisplayName"
+               (change)="SaveSelectedTagText('DisplayName', $any($event.target).value)" />
+      </div>
+      <div class="field"><label>Internal name (Name)</label>
+        <input class="tg-input" [value]="SelectedTag!.Name"
+               (change)="SaveSelectedTagText('Name', $any($event.target).value)" />
+      </div>
+      <div class="field" style="grid-column: 1 / -1;"><label>Description</label>
+        <textarea class="tg-input" rows="2" [value]="SelectedTag!.Description ?? ''"
+                  (change)="SaveSelectedTagText('Description', $any($event.target).value)"></textarea>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-section">
+    <h3>Governance — how the autotagger may grow this subtree</h3>
+
+    <div class="toggle-row">
+      <div class="label">
+        <span class="t">Allow auto-grow under this tag</span>
+        <span class="d">Lets the classifier create child tags below this one when it sees novel content. Off = constrained subtree.</span>
+      </div>
+      <div class="tg-switch" [class.on]="SelectedTag!.AllowAutoGrow"
+           [class.disabled]="SelectedTagSavingField['AllowAutoGrow']"
+           (click)="ToggleGovernanceFlag('AllowAutoGrow')"></div>
+    </div>
+
+    <div class="toggle-row">
+      <div class="label">
+        <span class="t">Freeze this subtree</span>
+        <span class="d">Locks this entire subtree. Even if AutoGrow is on globally, no new tags will be created here.</span>
+      </div>
+      <div class="tg-switch" [class.on]="SelectedTag!.IsFrozen"
+           [class.disabled]="SelectedTagSavingField['IsFrozen']"
+           (click)="ToggleGovernanceFlag('IsFrozen')"></div>
+    </div>
+
+    <div class="toggle-row">
+      <div class="label">
+        <span class="t">Requires review for matches</span>
+        <span class="d">When set, even high-confidence matches against this tag are routed to the suggestion queue first.</span>
+      </div>
+      <div class="tg-switch" [class.on]="SelectedTag!.RequiresReview"
+           [class.disabled]="SelectedTagSavingField['RequiresReview']"
+           (click)="ToggleGovernanceFlag('RequiresReview')"></div>
+    </div>
+
+    <div class="form-grid three" style="margin-top: 14px;">
+      <div class="field"><label>Max children</label>
+        <input class="tg-input" type="number" min="0" [value]="SelectedTag!.MaxChildren ?? ''"
+               (change)="SaveSelectedTagNumber('MaxChildren', $any($event.target).value)" />
+        <span class="hint">Hard cap on direct children. Leave blank for no cap.</span>
+      </div>
+      <div class="field"><label>Max descendant depth</label>
+        <input class="tg-input" type="number" min="0" [value]="SelectedTag!.MaxDescendantDepth ?? ''"
+               (change)="SaveSelectedTagNumber('MaxDescendantDepth', $any($event.target).value)" />
+        <span class="hint">From this node down. 0 = leaf-only.</span>
+      </div>
+      <div class="field"><label>Min confidence</label>
+        <input class="tg-input" type="number" min="0" max="1" step="0.01" [value]="SelectedTag!.MinWeight ?? ''"
+               (change)="SaveSelectedTagNumber('MinWeight', $any($event.target).value)" />
+        <span class="hint">Floor for matches against this tag.</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-section">
+    <h3>Scope — who can see and tag with this</h3>
+
+    <div class="toggle-row">
+      <div class="label">
+        <span class="t">Global tag (visible to all tenants)</span>
+        <span class="d">
+          Off = restricted to the scope rows below.
+          @if (IsGlobalLocked()) { <strong>Toggle is locked while scope rows exist.</strong> Remove all rows first. }
+        </span>
+      </div>
+      <div class="tg-switch" [class.on]="SelectedTag!.IsGlobal"
+           [class.disabled]="IsGlobalLocked() || SelectedTagSavingField['IsGlobal']"
+           (click)="ToggleGovernanceFlag('IsGlobal')"></div>
+    </div>
+
+    <div style="margin-top: 12px; font-size: 12px; color: var(--mj-text-muted);">Visible only inside these scope tuples:</div>
+    <div class="chip-list" style="margin-top: 8px;">
+      @for (s of SelectedTagScopes; track s.ID) {
+        <span class="tg-chip scoped">
+          {{ s.EntityName }} · {{ s.DisplayName }}
+        </span>
+      }
+      @if (SelectedTagScopes.length === 0) {
+        <span style="font-size: 12px; color: var(--mj-text-muted); font-style: italic;">No scope rows. {{ SelectedTag!.IsGlobal ? 'Tag is global.' : 'Tag is non-global with no scope — currently unreachable.' }}</span>
+      }
+      <button class="tg-btn sm" (click)="OpenScopeDialog()"><i class="fa-solid fa-pencil"></i> Edit scope…</button>
+    </div>
+
+    <div style="margin-top: 12px; font-size: 12px; color: var(--mj-text-muted);">
+      <i class="fa-solid fa-info-circle"></i> Children inherit this scope automatically. Promotion to global requires admin approval and unfreezes the subtree.
+    </div>
+  </div>
+
+  <div class="form-section">
+    <h3>Synonyms — alternate names that resolve to this tag</h3>
+
+    <div style="display: flex; gap: 8px; margin-bottom: 12px; align-items: flex-end;">
+      <div class="field" style="flex: 1;"><label>Add synonym</label>
+        <input class="tg-input" placeholder='e.g. "GenAI"'
+               [(ngModel)]="NewSynonymName"
+               (keyup.enter)="AddSynonym()" />
+      </div>
+      <div class="field" style="width: 130px;"><label>Source</label>
+        <select class="tg-input" [(ngModel)]="NewSynonymSource">
+          <option value="Manual">Manual</option>
+          <option value="Imported">Imported</option>
+          <option value="Merged">Merged</option>
+          <option value="LLM">LLM</option>
+        </select>
+      </div>
+      <button class="tg-btn primary" (click)="AddSynonym()" [disabled]="!NewSynonymName.trim()">+ Add</button>
+    </div>
+
+    @if (SelectedTagSynonyms.length === 0) {
+      <div class="empty-state" style="padding: 32px;"><i class="fa-solid fa-tags"></i>No synonyms yet.</div>
+    } @else {
+      @for (s of SelectedTagSynonyms; track s.ID) {
+        <div class="syn-row" [class.pending]="s.Source === 'LLM'">
+          <div class="name">{{ s.Synonym }}</div>
+          <span class="src-pill {{ s.Source.toLowerCase() }}">{{ s.Source }}</span>
+          <span class="added">{{ s.CreatedAt | date: 'mediumDate' }}</span>
+          <span class="x" title="Remove" (click)="RemoveSynonym(s)"><i class="fa-solid fa-xmark"></i></span>
+        </div>
+      }
+    }
+
+    <div style="margin-top: 12px; font-size: 12px; color: var(--mj-text-muted);">
+      <i class="fa-solid fa-info-circle"></i> Each synonym = MJ:TagSynonym row · case-insensitive · uniqueness enforced per tag.
+    </div>
+  </div>
+</ng-template>

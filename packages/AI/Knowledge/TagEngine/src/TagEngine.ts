@@ -1069,7 +1069,11 @@ export class TagEngine extends BaseSingleton<TagEngine> {
             }
         }
 
-        const md = new Metadata();
+        // Engine-wide singleton: provider is the process-default. Per CLAUDE.md
+        // "Don't reach for the global Metadata provider in per-provider code paths" —
+        // TagEngine is the single, process-global server-side engine, so this IS
+        // the documented "genuinely global" path. global-provider-ok: server-side singleton.
+        const md = new Metadata(); // global-provider-ok: TagEngine is the process-singleton server engine
         for (const ps of parentScopes) {
             const row = await md.GetEntityObject<MJTagScopeEntity>('MJ: Tag Scopes', contextUser);
             row.NewRecord();

@@ -1,4 +1,4 @@
-import { BaseEntity, Metadata, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
+import { BaseEntity, IMetadataProvider, Metadata, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MJTagEntity, MJTagScopeEntity } from '@memberjunction/core-entities';
 
@@ -31,7 +31,9 @@ export class MJTagScopeEntityServer extends MJTagScopeEntity {
             return result;
         }
 
-        const md = new Metadata();
+        // Server-side BaseEntity subclass: ContextCurrentUser is bound to the same
+        // request-scoped provider that loaded `this`. Pulling the parent tag through
+        const md = this.ProviderToUse as unknown as IMetadataProvider 
         const tag = await md.GetEntityObject<MJTagEntity>('MJ: Tags', this.ContextCurrentUser);
         const loaded = await tag.Load(this.TagID);
         if (!loaded) {
