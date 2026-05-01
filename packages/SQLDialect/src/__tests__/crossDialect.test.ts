@@ -97,18 +97,25 @@ describe('Cross-Dialect Comparison Tests', () => {
     // ─── NULL Handling ───────────────────────────────────────────────
 
     describe('NULL Handling', () => {
-        it('should provide COALESCE on both platforms via IsNull', () => {
-            const ssResult = ss.IsNull('col', "'default'");
-            const pgResult = pg.IsNull('col', "'default'");
-            // Both should produce COALESCE since IsNull delegates to Coalesce
-            expect(ssResult).toBe("COALESCE(col, 'default')");
-            expect(pgResult).toBe("COALESCE(col, 'default')");
+        it('IsNull emits each dialect\'s native keyword (ISNULL on SQL Server, COALESCE on PG)', () => {
+            // IsNull is now abstract on the base class — each dialect MUST declare its
+            // own keyword rather than inheriting an opinionated default. SQL Server
+            // emits ISNULL; PostgreSQL has no ISNULL keyword and emits COALESCE.
+            expect(ss.IsNull('col', "'default'")).toBe("ISNULL(col, 'default')");
+            expect(pg.IsNull('col', "'default'")).toBe("COALESCE(col, 'default')");
         });
 
-        it('should produce identical COALESCE syntax on both platforms', () => {
+        it('Coalesce produces identical ANSI-standard syntax on both platforms', () => {
             const expr = 'email';
             const fallback = "'no-email@example.com'";
             expect(ss.Coalesce(expr, fallback)).toBe(pg.Coalesce(expr, fallback));
+        });
+
+        it('NullLiteral and IsNullLiteral are consistent across dialects', () => {
+            expect(ss.NullLiteral).toBe('NULL');
+            expect(pg.NullLiteral).toBe('NULL');
+            expect(ss.IsNullLiteral('NULL')).toBe(true);
+            expect(pg.IsNullLiteral('NULL')).toBe(true);
         });
     });
 
