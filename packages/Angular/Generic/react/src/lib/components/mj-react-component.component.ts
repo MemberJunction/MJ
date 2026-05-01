@@ -21,7 +21,7 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ComponentSpec, ComponentCallbacks, ComponentStyles, ComponentObject, BaseEventArgs } from '@memberjunction/interactive-component-types';
 import { ReactBridgeService } from '../services/react-bridge.service';
 import { AngularAdapterService } from '../services/angular-adapter.service';
-import { 
+import {
   createErrorBoundary,
   ComponentHierarchyRegistrar,
   resourceManager,
@@ -359,10 +359,10 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
     try {
       // Ensure React is loaded
       await this.reactBridge.getReactContext();
-      
+
       // Wait for React to be fully ready (handles first-load delay)
       await this.reactBridge.waitForReactReady();
-      
+
       // NEW: Use ComponentManager if enabled (default: true)
       if (this.useComponentManager) {
         console.log(`🎯 [initializeComponent] Using NEW ComponentManager approach`);
@@ -1292,12 +1292,12 @@ export class MJReactComponent extends BaseAngularComponent implements AfterViewI
   public static forceClearRegistries(): void {
     // Clear React runtime's component registry service
     ComponentRegistryService.reset();
-    
+
     // Clear any cached hierarchy registrar
     if (typeof window !== 'undefined' && (window as any).__MJ_COMPONENT_HIERARCHY_REGISTRAR__) {
       (window as any).__MJ_COMPONENT_HIERARCHY_REGISTRAR__ = null;
     }
-    
+
     console.log('🧹 All component registries cleared for fresh load');
   }
 

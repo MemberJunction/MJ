@@ -1,4 +1,6 @@
-import { Component, ChangeDetectorRef } from '@angular/core';
+import { Component, ChangeDetectorRef, OnDestroy, OnInit } from '@angular/core';
+import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 import { ComponentStudioStateService } from '../../services/component-studio-state.service';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
@@ -145,11 +147,12 @@ import { ComponentSpec } from '@memberjunction/interactive-component-types';
     }
   `]
 })
-export class DataRequirementsEditorComponent {
+export class DataRequirementsEditorComponent implements OnInit, OnDestroy {
   EditableContent: string = '';
   IsEditing: boolean = false;
 
   private _parsedRequirements: Record<string, unknown> | null = null;
+  private destroy$ = new Subject<void>();
 
   constructor(
     public State: ComponentStudioStateService,
@@ -179,10 +182,15 @@ export class DataRequirementsEditorComponent {
 
   ngOnInit(): void {
     this.loadContent();
-    this.State.StateChanged.subscribe(() => {
+    this.State.StateChanged.pipe(takeUntil(this.destroy$)).subscribe(() => {
       this.loadContent();
       this.cdr.detectChanges();
     });
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
   }
 
   OnContentChanged(): void {
@@ -195,8 +203,9 @@ export class DataRequirementsEditorComponent {
       const spec: ComponentSpec = JSON.parse(this.State.EditableSpec);
       const dataReq = JSON.parse(this.EditableContent);
       spec.dataRequirements = dataReq;
-      this.State.UpdateSpec(spec);
       this.IsEditing = false;
+      this.State.UpdateSpec(spec);
+      this.cdr.detectChanges();
     } catch (error) {
       console.error('Error applying data requirements changes:', error);
     }
