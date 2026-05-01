@@ -21,6 +21,36 @@ export interface IContentSourceConfiguration {
     /** Enable vectorization for this source. Default true */
     EnableVectorization?: boolean;
     /**
+     * Lower confidence band (0.0-1.0) that routes a semantic match into the human-in-the-loop
+     * `MJ:Tag Suggestions` queue instead of auto-applying or auto-creating. A score `s` is
+     * routed as: `s >= TagMatchThreshold` → apply; `SuggestThreshold <= s < TagMatchThreshold`
+     * → enqueue suggestion (Reason='BelowThreshold'); `s < SuggestThreshold` → fall through to
+     * `handleNoMatch` (governed by `TagTaxonomyMode`). When unset, defaults to
+     * `TagMatchThreshold - 0.05` at runtime.
+     */
+    SuggestThreshold?: number;
+    /**
+     * Maximum number of new tags the autotagger may auto-create across an entire run before
+     * the run is paused via the existing CancellationRequested machinery. NULL/unset = unlimited.
+     * Pause is graceful — the run resumes from `LastProcessedOffset` when restarted.
+     */
+    MaxNewTagsPerRun?: number;
+    /**
+     * Maximum number of new tags the autotagger may auto-create for a single ContentItem.
+     * Once reached, further free-text tags from that item are routed to `MJ:Tag Suggestions`
+     * with Reason='MaxItemTagsExceeded' instead of being created. NULL/unset = unlimited.
+     */
+    MaxNewTagsPerItem?: number;
+    /**
+     * Maximum cumulative LLM tokens (prompt + completion) the run may consume before pausing.
+     * Reads from `ContentProcessRunDetail.TotalTokensUsed` rollup. NULL/unset = unlimited.
+     */
+    MaxTokensPerRun?: number;
+    /**
+     * Maximum cumulative cost (USD) the run may incur before pausing. NULL/unset = unlimited.
+     */
+    MaxCostPerRun?: number;
+    /**
      * Source-type-specific configuration values. The keys here correspond to the
      * RequiredFields[].Key values defined on the parent ContentSourceType's Configuration.
      *
