@@ -10,8 +10,23 @@
       {
         "name": "RecentInvoices",
         "categoryPath": "Reports/Finance",
-        "fields": ["ID", "Amount", "Date"],
-        "entityNames": ["Invoices"]
+        "fields": [
+          {
+            "name": "ID",
+            "type": "uniqueidentifier"
+          },
+          {
+            "name": "Amount",
+            "type": "int"
+          },
+          {
+            "name": "Date",
+            "type": "datetimeoffset"
+          }
+        ],
+        "entityNames": [
+          "Invoices"
+        ]
       }
     ]
   }
