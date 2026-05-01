@@ -4,6 +4,8 @@ Server-only Tag Engine that extends `@memberjunction/tag-engine-base` via compos
 
 **Server-side only.** For client-side tag operations (hierarchy, lookups, CRUD), use `@memberjunction/tag-engine-base` directly.
 
+> **Read first:** [Taxonomy & Tagging Guide](../../../../guides/TAXONOMY_TAGGING_GUIDE.md) — the canonical design doc for the tag taxonomy, the 4+1-tier resolver, scoping, governance, the suggestion queue, and Tag Health. This README is the API reference; the guide is the *why* and *how*.
+
 ## Installation
 
 ```bash

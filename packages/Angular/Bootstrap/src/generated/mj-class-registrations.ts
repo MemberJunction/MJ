@@ -41,7 +41,7 @@ import {
     MJCommunicationProviderEntityExtended,
 } from '@memberjunction/communication-types';
 
-// @memberjunction/core-entities (335 classes)
+// @memberjunction/core-entities (338 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -330,6 +330,9 @@ import {
     MJTagAuditLogEntity,
     MJTagCoOccurrenceEntity,
     MJTagEntity,
+    MJTagScopeEntity,
+    MJTagSuggestionEntity,
+    MJTagSynonymEntity,
     MJTaggedItemEntity,
     MJTaskDependencyEntity,
     MJTaskEntity,
@@ -441,7 +444,7 @@ import {
     WebURLPartComponent,
 } from '@memberjunction/ng-dashboard-viewer';
 
-// @memberjunction/ng-dashboards (75 classes)
+// @memberjunction/ng-dashboards (76 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -507,6 +510,7 @@ import {
     SecurityPermissionsComponent,
     SystemConfigurationComponent,
     SystemDiagnosticsComponent,
+    TagsResourceComponent,
     TestingAnalyticsResourceComponent,
     TestingDashboardComponent,
     TestingDashboardTabResourceComponent,
@@ -854,6 +858,9 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJTagAuditLogEntity,
     MJTagCoOccurrenceEntity,
     MJTagEntity,
+    MJTagScopeEntity,
+    MJTagSuggestionEntity,
+    MJTagSynonymEntity,
     MJTaggedItemEntity,
     MJTaskDependencyEntity,
     MJTaskEntity,
@@ -1007,6 +1014,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     SecurityPermissionsComponent,
     SystemConfigurationComponent,
     SystemDiagnosticsComponent,
+    TagsResourceComponent,
     TestingAnalyticsResourceComponent,
     TestingDashboardComponent,
     TestingDashboardTabResourceComponent,
@@ -1039,7 +1047,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 480;
+export const CLASS_REGISTRATIONS_COUNT = 484;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
