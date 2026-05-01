@@ -10,10 +10,29 @@
   "registry": "MJ",
   "status": "Active",
   "dataRequirements": {
-    "queries": [{
-      "name": "Event Attendance",
-      "categoryPath": "Events/Reports",
-      "fields": ["EventID", "EventName", "EventDate", "AttendeeCount"]
-    }]
+    "queries": [
+      {
+        "name": "Event Attendance",
+        "categoryPath": "Events/Reports",
+        "fields": [
+          {
+            "name": "EventID",
+            "type": "uniqueidentifier"
+          },
+          {
+            "name": "EventName",
+            "type": "nvarchar"
+          },
+          {
+            "name": "EventDate",
+            "type": "datetimeoffset"
+          },
+          {
+            "name": "AttendeeCount",
+            "type": "int"
+          }
+        ]
+      }
+    ]
   }
 }

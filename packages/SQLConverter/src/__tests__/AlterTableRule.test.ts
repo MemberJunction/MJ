@@ -133,6 +133,75 @@ describe('AlterTableRule', () => {
     });
   });
 
+  describe('ALTER COLUMN nullability', () => {
+    it('should convert ALTER COLUMN TYPE NOT NULL → SET NOT NULL', () => {
+      const sql = `ALTER TABLE [__mj].[Foo] ALTER COLUMN [Status] [nvarchar](20) NOT NULL`;
+      const result = convert(sql);
+      expect(result).toContain('SET NOT NULL');
+      expect(result).not.toMatch(/nvarchar.*NOT NULL/i);
+    });
+
+    it('should convert ALTER COLUMN TYPE NULL → DROP NOT NULL', () => {
+      const sql = `ALTER TABLE [__mj].[DuplicateRun] ALTER COLUMN [SourceListID] [uniqueidentifier] NULL`;
+      const result = convert(sql);
+      expect(result).toContain('DROP NOT NULL');
+      expect(result).toContain('"SourceListID"');
+      expect(result).not.toMatch(/uniqueidentifier.*NULL/i);
+    });
+
+    it('should convert ALTER COLUMN with sized type and NULL', () => {
+      const sql = `ALTER TABLE [__mj].[Foo] ALTER COLUMN [Name] [nvarchar](100) NULL`;
+      const result = convert(sql);
+      expect(result).toContain('DROP NOT NULL');
+      expect(result).toContain('"Name"');
+    });
+  });
+
+  describe('Boolean DEFAULT conversion in ADD COLUMN', () => {
+    it('should convert BIT DEFAULT 1 to BOOLEAN DEFAULT TRUE', () => {
+      const sql = `ALTER TABLE [__mj].[AIAgent] ADD [AllowEphemeralClientTools] [BIT] NOT NULL DEFAULT 1`;
+      const result = convert(sql);
+      expect(result).toContain('BOOLEAN');
+      expect(result).toContain('DEFAULT TRUE');
+      expect(result).not.toContain('DEFAULT 1');
+    });
+
+    it('should convert BIT DEFAULT 0 to BOOLEAN DEFAULT FALSE', () => {
+      const sql = `ALTER TABLE [__mj].[Entity] ADD [SupportsGeoCoding] [BIT] NOT NULL DEFAULT 0`;
+      const result = convert(sql);
+      expect(result).toContain('BOOLEAN');
+      expect(result).toContain('DEFAULT FALSE');
+      expect(result).not.toContain('DEFAULT 0');
+    });
+
+    it('should handle multiple BOOLEAN columns in one ALTER TABLE', () => {
+      const sql = `ALTER TABLE [__mj].[Entity]
+        ADD [AutoUpdateFullTextSearch] [BIT] NOT NULL DEFAULT 1,
+            [SupportsGeoCoding] [BIT] NOT NULL DEFAULT 0`;
+      const result = convert(sql);
+      expect(result).toContain('DEFAULT TRUE');
+      expect(result).toContain('DEFAULT FALSE');
+    });
+  });
+
+  describe('DEFAULT FOR column', () => {
+    it('should convert ADD DEFAULT val FOR col to ALTER COLUMN SET DEFAULT', () => {
+      const sql = `ALTER TABLE [__mj].[Foo] ADD DEFAULT 0.7 FOR [Threshold]`;
+      const result = convert(sql);
+      expect(result).toContain('ALTER COLUMN');
+      expect(result).toContain('SET DEFAULT');
+      expect(result).toContain('0.7');
+    });
+
+    it('should convert ADD CONSTRAINT name DEFAULT val FOR col', () => {
+      const sql = `ALTER TABLE [__mj].[Foo] ADD CONSTRAINT [DF_Foo_Status] DEFAULT 'Active' FOR [Status]`;
+      const result = convert(sql);
+      expect(result).toContain('ALTER COLUMN');
+      expect(result).toContain('SET DEFAULT');
+      expect(result).not.toContain('DF_Foo_Status');
+    });
+  });
+
   describe('output formatting', () => {
     it('should ensure output ends with semicolon and newline', () => {
       const sql = `ALTER TABLE [__mj].[Foo] ADD CONSTRAINT [PK_Foo] PRIMARY KEY ([ID])`;

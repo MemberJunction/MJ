@@ -12,11 +12,29 @@
       "ExecutionCostRank": 3,
       "UsesTemplate": true
     },
+    "relatedEntities": {
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/get-conversations-for-memory-manager.pg.sql"
+          },
+          "primaryKey": {
+            "ID": "80bc1238-4604-456b-806d-88e0f63baeae"
+          },
+          "sync": {
+            "lastModified": "2026-04-29T05:22:45.096Z",
+            "checksum": "bdc4d4c7725789123343a7b327ef3297707eb9bbbd3887cca2dffae7d4b45a9e"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "574FD9D5-AB9E-4FA5-A36C-C25E7D3F63FC"
     },
     "sync": {
-      "lastModified": "2026-03-01T02:08:37.662Z",
+      "lastModified": "2026-04-29T05:22:45.073Z",
       "checksum": "9031970a6c9b63ffaa8029bbdb567ede188779d413e162948582deef8ac35b74"
     }
   }

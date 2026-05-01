@@ -13,6 +13,11 @@ import path from 'node:path';
 /**
  * Minimal type definition for Skyway config so we don't need
  * `@skyway/core` at compile time.
+ *
+ * `Provider` is typed as `unknown` because it's constructed from a dynamically
+ * imported provider package (e.g. `@memberjunction/skyway-sqlserver`). Skyway
+ * 0.6.x requires a provider; the field is optional here purely because it's
+ * filled in inside `RunAppMigrations` after the dynamic import resolves.
  */
 interface SkywayConfig {
     Database: {
@@ -30,6 +35,7 @@ interface SkywayConfig {
         BaselineOnMigrate: boolean;
     };
     Placeholders?: Record<string, string>;
+    Provider?: unknown;
 }
 
 /** Minimal interface for the Skyway instance returned at runtime. */
@@ -121,11 +127,18 @@ export async function RunAppMigrations(options: MigrationRunOptions): Promise<Mi
     let skyway: SkywayInstance | undefined;
 
     try {
-        // Use a variable to prevent TypeScript from resolving the module at compile time.
-        // @memberjunction/skyway-core is published as a dependency.
+        // Use variables to prevent TypeScript from resolving the modules at compile time.
+        // @memberjunction/skyway-core + @memberjunction/skyway-sqlserver are published
+        // as dependencies of the host process (e.g. MJCLI).
         const skywayModuleId = '@memberjunction/skyway-core';
+        const sqlServerProviderModuleId = '@memberjunction/skyway-sqlserver';
         const { Skyway } = await import(skywayModuleId);
+        const { SqlServerProvider } = await import(sqlServerProviderModuleId);
         const config = BuildSkywayConfig(MigrationsDir, SchemaName, DatabaseConfig, MJCoreSchema, ExtraPlaceholders);
+        // Skyway 0.6.x requires an explicit provider. OpenApp migrations target
+        // SQL Server (Azure auto-detection is SQL-Server-specific), so we always
+        // attach the SqlServerProvider here.
+        config.Provider = new SqlServerProvider(config.Database);
 
         if (Verbose) {
             console.log(`Running Skyway migrations for schema '${SchemaName}'`);

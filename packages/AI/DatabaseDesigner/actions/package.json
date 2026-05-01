@@ -1,0 +1,35 @@
+{
+  "name": "@memberjunction/database-designer-actions",
+  "type": "module",
+  "version": "5.30.1",
+  "description": "Database Designer Actions — metadata-driven action layer for entity creation and modification",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc && tsc-alias -f",
+    "watch": "tsc -w",
+    "clean": "rimraf dist",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@memberjunction/actions": "5.30.1",
+    "@memberjunction/actions-base": "5.30.1",
+    "@memberjunction/core": "5.30.1",
+    "@memberjunction/core-entities": "5.30.1",
+    "@memberjunction/database-designer-core": "5.30.1",
+    "@memberjunction/global": "5.30.1",
+    "@memberjunction/schema-engine": "5.30.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.10.11",
+    "rimraf": "^6.1.2",
+    "tsc-alias": "^1.8.16",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MemberJunction/MJ"
+  }
+}

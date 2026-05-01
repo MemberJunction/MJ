@@ -1,0 +1,566 @@
+[
+  {
+    "fields": {
+      "Name": "Create Entity",
+      "Description": "Creates a new MemberJunction entity from a fully-formed TableDefinition. Validates authorization then executes the SchemaEngine → RuntimeSchemaManager pipeline. Use this when an agent needs to create a new database table without going through the full conversational Database Designer flow.",
+      "DriverClass": "Create Entity",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Database Design?create&Description=Actions for creating and managing MemberJunction database entities",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-table-columns"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TableDefinition",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Complete TableDefinition object (SchemaName, TableName, EntityName, Columns[]) conforming to the @memberjunction/schema-engine interface.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "A704141A-8C74-4D6C-B55B-C4C2E1A90957"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T22:32:03.179Z",
+            "checksum": "3b38d839737dc687ba143bf066af59333467a5b5631f1ec66654090f3228f214"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SkipGitCommit",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Skip creating a git commit for the migration file (default: false).",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "12BEB8CA-4A4C-4F2C-87C4-4847670EA172"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T22:32:03.205Z",
+            "checksum": "2f96f3fdfdf5e00246761d1a8515c114f1956acba4b7f2722a07fa626af59f40"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SkipRestart",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Skip restarting MJAPI after the pipeline completes (default: false). Useful for test/dev environments.",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "BC717023-5CBD-4BC3-AAF3-433D83D0B604"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T22:32:03.228Z",
+            "checksum": "a55b34f929690983d0eb8dcb7fdd77ce54d993aab23734c146ec13159f334fb8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the newly created MJ entity (null if CodeGen hasn't registered it yet).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "EF08072E-4A44-4F69-8262-512C29E812AF"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T22:32:03.249Z",
+            "checksum": "93a3615cd5d5a7b024713e5afe5fc369b73025f586e67b988c449017bffec65a"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityName",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Human-readable entity name as registered in MemberJunction.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "DD79D5F3-F5FC-4D13-906E-586AE17458CB"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T22:32:03.273Z",
+            "checksum": "99cd1d90acd11945f94049d1b8fb76cd644a17dd2ce7ccd7a71b9bb417190d77"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SchemaName",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Database schema name where the table was created.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "FA6F94D0-C3BE-404E-9DBF-4C1BD368930A"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T22:32:03.304Z",
+            "checksum": "7ac2d9ef67417068fbfb6196dff5026a839c9ff8b51c9c55558926994fba9b54"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TableName",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Physical SQL table name.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E467322A-7B23-46CC-99B0-6CA8CA65D865"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T22:32:03.326Z",
+            "checksum": "59471496cd006b9fac2204fe9d92ac5bfd48e2e97bc8a55dcbdabba1cce627a9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PipelineSteps",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Step-by-step execution trace from RuntimeSchemaManager (Name, Status, DurationMs).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C2FD6ED6-DB9F-43BE-8033-E82D13CFAD36"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T22:32:03.350Z",
+            "checksum": "b8c8608c45cc5ee13d013f5f38cf20e7ed426cac609fc8a7c06b237666ac844a"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F4CBD4ED-C258-468B-8F50-F12E4C74A431"
+    },
+    "sync": {
+      "lastModified": "2026-04-20T17:37:59.189Z",
+      "checksum": "0857272837783b6ef7590b7c35f6e89bfdb6450b3f8caf7c12041dba23390147"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Modify Entity",
+      "Description": "Applies ALTER TABLE changes to an existing MemberJunction entity based on a desired TableDefinition. Diffs the desired state against the current table, generates ALTER SQL, and executes the pipeline.",
+      "DriverClass": "Modify Entity",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Database Design?create&Description=Actions for creating and managing MemberJunction database entities",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-table-list"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TableDefinition",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Desired (full) TableDefinition including all existing and new columns.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "0889CDC0-DE0B-4A63-A8FB-82FFDD86F612"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T22:32:03.371Z",
+            "checksum": "44eca863e620fae9bead836a29764fe70c350e09068c8e0e9b11a1986dd995c2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SkipGitCommit",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Skip creating a migration git commit (default: false).",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "33088860-E2CA-4982-9376-AE5E79D37198"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T22:32:03.397Z",
+            "checksum": "31ce7f7be75a0d884dc82cb04c77a98e4138cd417ed0c8c7a04246742739c980"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SkipRestart",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Skip MJAPI restart after the pipeline (default: false).",
+            "IsRequired": false,
+            "DefaultValue": "false"
+          },
+          "primaryKey": {
+            "ID": "D18CCF6D-19A0-4D2F-B86C-5A33BA8554BD"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T22:32:03.440Z",
+            "checksum": "e40318a9c5ec1a6c5446cc5517b03e22f1490cb082ee87a6372e0d1ea54c7b40"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the modified MJ entity.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4255068B-45AD-465B-83E2-E889EA1A4F9E"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T22:32:03.463Z",
+            "checksum": "360a408f42240296950215a505aed34a43a533104b1fd158f82f76eefb5ff58f"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityName",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Human-readable entity name.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "011CD8F8-7CE8-4FC0-9B1C-57E6922C1A82"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T22:32:03.485Z",
+            "checksum": "1d57f378923d2cc5f2624415b10a68639c7584027105a9b748ecce5bde5f9625"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SchemaName",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Database schema name.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "29212F07-60A2-451A-B85F-C052676D04D7"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T22:32:03.509Z",
+            "checksum": "ad53f6d9c09fa9edbd55fbb9ef48c0e0c2cc237555b21acdef21285b63861a2b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TableName",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Physical SQL table name.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "17667631-F99C-4677-9C15-004218B60255"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T22:32:03.532Z",
+            "checksum": "59471496cd006b9fac2204fe9d92ac5bfd48e2e97bc8a55dcbdabba1cce627a9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PipelineSteps",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Pipeline step execution trace.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F1EDCC0F-6576-4E52-8202-94193F0DA933"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T22:32:03.554Z",
+            "checksum": "ba4ad3681f821e5967d6d32e86038d5d39d4779ad6d5bded103500bb2351ba7d"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "667901A9-8E3C-498A-9BFA-D511130ED451"
+    },
+    "sync": {
+      "lastModified": "2026-04-20T17:37:59.218Z",
+      "checksum": "6eef114271fb5d67d7cc93c11483a9d9e52d5cd6cee650b58805a54b66a06013"
+    }
+  },
+  {
+    "fields": {
+      "Name": "List My Entities",
+      "Description": "Returns a list of all MemberJunction entities created by the current user via the Database Designer (based on MJ:UDT:Owner EntitySettings provenance records).",
+      "DriverClass": "List My Entities",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Database Design?create&Description=Actions for creating and managing MemberJunction database entities",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-list"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Entities",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": true,
+            "Description": "Array of entity summaries: {EntityID, EntityName, SchemaName, TableName, Description}.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "99A3D6CD-09FD-4880-9C34-CD29C4C6788B"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T22:32:03.576Z",
+            "checksum": "712151d5173b0257e2c25996f3ad5f53e612cc4693b77233f657193d01a18de0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total number of entities owned by the current user.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "F4903780-47AD-4FAC-BA7A-AA2405774542"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T22:32:03.598Z",
+            "checksum": "9f42de429d63a9cbea09fd2cb161bacaaad702eebf070e56e541db1771ee564b"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "6AF1D93B-54F9-4360-9122-4C9D0332E327"
+    },
+    "sync": {
+      "lastModified": "2026-04-20T17:37:59.238Z",
+      "checksum": "53f2f30817587433ffaef9530ff4ad5b95fd78e76513bf45bafe26b84c98f417"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Describe Entity",
+      "Description": "Returns detailed column-level metadata for a MemberJunction entity. Useful for inspecting an entity's current structure before deciding to modify it.",
+      "DriverClass": "Describe Entity",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Database Design?create&Description=Actions for creating and managing MemberJunction database entities",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-info-circle"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the entity. Provide this, EntityName, or TableName.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "CCD5281D-9B90-4192-B751-2C5AF2DFDA86"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T22:32:03.620Z",
+            "checksum": "a13fe20ff2b3fd1759818c90813b639344005fae8bb819dc4646dce39268a3df"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Human-readable entity name (e.g. 'Project Milestones').",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "E71AD1C8-9A98-43D8-8372-1E7E18C39D0D"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T22:32:03.641Z",
+            "checksum": "d643c03b958159a8810154f8463af685cfa57d58441a539a00a38fcebc900d4e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TableName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Physical table name (e.g. 'ProjectMilestones'). Combine with SchemaName to narrow by schema.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4A0CE44F-7B66-410C-9E7C-52E5C7CDCB3F"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T22:32:03.716Z",
+            "checksum": "7aa78e2318fc318136cc54e27f074d93947103107a4e4ce508712c86d6810021"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SchemaName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "SQL schema name used together with TableName to identify the entity.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "A0789F41-C5CD-4F38-A434-CBA5650092EE"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T22:32:03.739Z",
+            "checksum": "24dfc2dd824f3c6a11b182806fd1c35641e80c5115e7fccc2469053a21da85c7"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "EntityInfo",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Full entity description: {EntityID, EntityName, SchemaName, TableName, Description, Columns[]}. Null if not found.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "4C624AA2-CC0A-4153-A339-1AFF9D69F0AF"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T22:32:03.760Z",
+            "checksum": "4eebb1920c38a261b16d39937286ed0da4c5a7b60ebf8b5469863c550b0fedf0"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "0121B620-98E3-41F7-878A-F11F0756CDE2"
+    },
+    "sync": {
+      "lastModified": "2026-04-20T17:26:07.830Z",
+      "checksum": "ad9d22ea987130fd470b92241c3618102878817c68a8099b770d4d7eceb3652b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Validate Entity Schema",
+      "Description": "Validates a TableDefinition against all Database Designer pre-creation checks (blocked schemas, reserved column names, naming conflicts). Returns a ValidationResult with Valid, Errors, and Warnings. Call this before CreateEntity to surface problems at the UI review step rather than mid-pipeline.",
+      "DriverClass": "Validate Entity Schema",
+      "Type": "Custom",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=Database Design?create&Description=Actions for creating and managing MemberJunction database entities",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-shield-check"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TableDefinition",
+            "Type": "Input",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "The schema to validate (SchemaName, TableName, EntityName, Columns[]).",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "2019F688-14D3-4EE9-884D-318D845540DC"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T22:32:03.672Z",
+            "checksum": "32c4d6544cbe6ac961a1f1ebd2927263aaa3994f74c31679f9537c8b4943ca80"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ValidationResult",
+            "Type": "Output",
+            "ValueType": "Simple Object",
+            "IsArray": false,
+            "Description": "Result of all pre-creation checks: { Valid: boolean, Errors: string[], Warnings: string[] }.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "99B4C0C6-03B2-438A-A955-0EF7ABC68F9D"
+          },
+          "sync": {
+            "lastModified": "2026-04-19T22:32:03.695Z",
+            "checksum": "3478184f8991cfbd666faeca33eb18573c035e1fec066d79fff24cc53d1cd83d"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "B43592DF-1E80-48E1-A3FD-BAD5C44E0A99"
+    },
+    "sync": {
+      "lastModified": "2026-04-20T17:37:59.255Z",
+      "checksum": "c3c0179c0d81075ba9a9e03d4652ce4191179e98c84982647f527c86508b9dfd"
+    }
+  }
+]

@@ -17,7 +17,7 @@
       "ID": "D972EBBA-AEB3-46F2-9ED1-B8986173039C"
     },
     "sync": {
-      "lastModified": "2026-03-11T20:52:37.958Z",
+      "lastModified": "2026-04-29T05:22:33.637Z",
       "checksum": "1cf8f4a7da64fd6b99218699ffa82496826080e5868cbb689774e2effdddb1d7"
     }
   },
@@ -34,12 +34,29 @@
       "Reusable": true,
       "UsesTemplate": true
     },
-    "relatedEntities": {},
+    "relatedEntities": {
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/demos/recent-entity-changes.pg.sql"
+          },
+          "primaryKey": {
+            "ID": "850c1fb3-3a58-4cb3-9ff1-b7c82c61fe14"
+          },
+          "sync": {
+            "lastModified": "2026-04-29T05:22:33.659Z",
+            "checksum": "96a6b8372f6a4967cc3391b1f6a35b14901fc15701eb7ad02135745140069bb4"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "C3F7F066-789A-42A2-ACFD-2C113B5D2E30"
     },
     "sync": {
-      "lastModified": "2026-03-11T20:56:07.380Z",
+      "lastModified": "2026-04-29T05:22:32.137Z",
       "checksum": "8e94e609f019b218c8f56514a5ba49dfca3d44a7858c737a22d26ffa14c9d29a"
     }
   },
@@ -61,7 +78,7 @@
       "ID": "C2162354-AB2F-4244-8659-C5A4E213E9FA"
     },
     "sync": {
-      "lastModified": "2026-03-11T20:52:37.686Z",
+      "lastModified": "2026-04-29T05:22:32.132Z",
       "checksum": "65c01072fed9b2e4b2a1d171f033ab0700887cf404eb07064e3b7e04e049f94a"
     }
   }

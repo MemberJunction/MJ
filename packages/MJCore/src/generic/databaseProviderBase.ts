@@ -127,6 +127,17 @@ export abstract class DatabaseProviderBase extends ProviderBase {
     abstract RollbackTransaction(): Promise<void>;
 
     /**
+     * Whether this provider currently has an active transaction. Subclasses
+     * that track transaction state should override this. Used by callers
+     * (e.g. `runMaybeSerial`) to decide whether to fan out concurrent saves
+     * or run them sequentially. Defaults to `false` for providers that don't
+     * expose this state.
+     */
+    public get IsInTransaction(): boolean {
+        return false;
+    }
+
+    /**
      * Internal implementation for spec-based query execution.
      * Subclasses must provide the concrete pipeline (composition → templates → execute).
      */

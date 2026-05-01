@@ -201,7 +201,10 @@ describe('Dataset Caching in GetDatasetByName', () => {
         expect(result.Results[0].Results).toEqual(entityData);
         // 2 SQL calls: metadata + batch
         expect(provider.executeSQLCalls).toHaveLength(2);
-        // Write-through to cache
+        // Write-through to cache. Match the full SetRunViewResult signature —
+        // GenericDatabaseProvider invokes it with all 7 args (fingerprint,
+        // params, results, maxUpdatedAt, aggregateResults?, totalRowCount?,
+        // provider?), and toHaveBeenCalledWith is arity-strict.
         expect(cacheSetSpy).toHaveBeenCalledTimes(1);
         expect(cacheSetSpy).toHaveBeenCalledWith(
             expect.any(String),         // fingerprint

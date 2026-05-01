@@ -1,6 +1,7 @@
 /**
- * Entity Filter Panel Component - MJ Design Token Styled
- * MemberJunction design tokens for the entity filter panel
+ * Entity Filter Panel Component
+ * Uses standardized MJ UI components (mjButton, mj-dropdown, .mj-input) for
+ * form controls — this stylesheet only covers panel layout + labels.
  */
 
 .filter-panel {
@@ -12,7 +13,6 @@
   min-width: 0;
 }
 
-/* Panel Header */
 .filter-panel-header {
   display: flex;
   justify-content: space-between;
@@ -28,47 +28,28 @@
   font-size: 16px;
   font-weight: 600;
   color: var(--mj-text-primary);
+  flex: 1;
+  min-width: 0;
 }
 
-.filter-panel-header .filter-summary-inline {
+.filter-summary-inline {
   display: flex;
   align-items: center;
   gap: 4px;
+  margin-right: 8px;
 }
 
-.filter-panel-header .filter-summary-inline .summary-value {
+.filter-summary-inline .summary-value {
   font-size: 16px;
   font-weight: 700;
   color: var(--mj-brand-primary);
 }
 
-.filter-panel-header .filter-summary-inline .summary-label {
+.filter-summary-inline .summary-label {
   font-size: 12px;
   color: var(--mj-text-secondary);
 }
 
-/* Icon Button for Close */
-.filter-panel-header .close-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  background: transparent;
-  color: var(--mj-text-secondary);
-  border: none;
-  border-radius: 50%;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.filter-panel-header .close-btn:hover {
-  background: var(--mj-bg-surface-active);
-  color: var(--mj-text-primary);
-}
-
-/* Filter Content */
 .filter-content {
   padding: 16px;
   overflow-y: auto;
@@ -76,12 +57,11 @@
   flex: 1;
 }
 
-/* Filter Groups */
 .filter-group {
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 }
 
-.filter-group .filter-label {
+.filter-label {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -91,90 +71,28 @@
   color: var(--mj-text-primary);
 }
 
-.filter-group .filter-label .fa-solid {
+.filter-label .fa-solid {
   color: var(--mj-brand-primary);
   width: 16px;
+  text-align: center;
 }
 
-/* Input Styling */
-.filter-group .filter-input,
-.filter-group .filter-select {
+/* Ensure the MJ dropdown takes the full row width like the inputs. */
+.filter-dropdown {
+  display: block;
   width: 100%;
-  max-width: 100%;
-  padding: 12px 16px;
-  font-size: 14px;
-  background: var(--mj-bg-page);
-  color: var(--mj-text-primary);
-  border: 1px solid var(--mj-color-neutral-400);
-  border-radius: 4px;
-  transition: all 0.2s ease;
-  box-sizing: border-box;
 }
 
-.filter-group .filter-input:focus,
-.filter-group .filter-select:focus {
-  outline: none;
-  border-color: var(--mj-brand-primary);
-  box-shadow: 0 0 0 3px var(--mj-color-accent-300);
+.filter-input {
+  width: 100%;
 }
 
-.filter-group .filter-input::placeholder,
-.filter-group .filter-select::placeholder {
-  color: var(--mj-text-secondary);
-  opacity: 0.6;
-  font-style: italic;
-}
-
-.filter-group .filter-select {
-  cursor: pointer;
-}
-
-.filter-group .filter-select option {
-  padding: 8px;
-}
-
-/* Filter Actions */
 .filter-actions {
   margin-top: 24px;
   padding-top: 16px;
   border-top: 1px solid var(--mj-border-default);
 }
 
-/* Outlined Button for Reset */
-.filter-actions .reset-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
+.reset-btn {
   width: 100%;
-  max-width: 100%;
-  padding: 10px 24px;
-  font-size: 14px;
-  font-weight: 500;
-  background: transparent;
-  color: var(--mj-text-secondary);
-  border: 1px solid var(--mj-color-neutral-400);
-  border-radius: 20px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-sizing: border-box;
-}
-
-.filter-actions .reset-btn:hover {
-  background: var(--mj-bg-surface-active);
-  border-color: var(--mj-color-neutral-400);
-  color: var(--mj-text-primary);
-}
-
-.filter-actions .reset-btn:active {
-  background: var(--mj-bg-surface-sunken);
-}
-
-.filter-actions .reset-btn:focus-visible {
-  outline: 2px solid var(--mj-brand-primary);
-  outline-offset: 2px;
-}
-
-.filter-actions .reset-btn .fa-solid {
-  font-size: 12px;
 }

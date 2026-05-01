@@ -1,0 +1,229 @@
+.pipeline-panel {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* ── Idle ─────────────────────────────────────────────────────────────────── */
+
+.panel-idle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 32px;
+  text-align: center;
+}
+
+.idle-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.idle-icon i {
+  font-size: 1.8rem;
+  color: var(--mj-brand-primary);
+}
+
+.idle-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+.idle-body {
+  margin: 0;
+  font-size: 0.9rem;
+  color: var(--mj-text-secondary);
+  max-width: 440px;
+}
+
+/* ── Running ──────────────────────────────────────────────────────────────── */
+
+.panel-running {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 32px;
+  text-align: center;
+}
+
+.running-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.running-spinner {
+  font-size: 1.5rem;
+  color: var(--mj-brand-primary);
+}
+
+.running-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+.running-target {
+  margin: 0;
+  font-family: monospace;
+  font-size: 0.9rem;
+  color: var(--mj-text-secondary);
+}
+
+.running-note {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--mj-text-secondary);
+  max-width: 440px;
+  line-height: 1.5;
+}
+
+/* ── Steps list (shared between success and failed) ───────────────────────── */
+
+.steps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-subtle);
+  border-radius: 8px;
+  padding: 14px 18px;
+}
+
+.step-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.875rem;
+  color: var(--mj-text-primary);
+}
+
+.step-item i {
+  font-size: 1rem;
+  flex-shrink: 0;
+  width: 18px;
+}
+
+.step-item i.step-success { color: var(--mj-status-success); }
+.step-item i.step-failed  { color: var(--mj-status-error); }
+.step-item i.step-skipped { color: var(--mj-text-muted); }
+.step-item i.step-unknown { color: var(--mj-text-muted); }
+
+.step-name {
+  flex: 1;
+}
+
+.step-duration {
+  font-size: 0.8rem;
+  color: var(--mj-text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.step-message {
+  font-size: 0.8rem;
+  color: var(--mj-status-error-text);
+  flex: 1;
+}
+
+.step-item.step-failed .step-name {
+  color: var(--mj-status-error-text);
+}
+
+.step-item.step-skipped .step-name {
+  color: var(--mj-text-muted);
+}
+
+/* ── Success card ─────────────────────────────────────────────────────────── */
+
+.success-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 24px;
+  background: var(--mj-status-success-bg);
+  border: 1px solid var(--mj-status-success-border);
+  border-radius: 8px;
+  text-align: center;
+}
+
+.success-icon {
+  font-size: 2rem;
+  color: var(--mj-status-success);
+}
+
+.success-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--mj-status-success-text);
+}
+
+.success-path {
+  margin: 0;
+  font-family: monospace;
+  font-size: 0.85rem;
+  color: var(--mj-text-secondary);
+}
+
+.success-cols {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--mj-text-secondary);
+}
+
+.success-refresh-hint {
+  margin: 4px 0 0;
+  font-size: 0.8rem;
+  color: var(--mj-text-muted);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ── Error card ───────────────────────────────────────────────────────────── */
+
+.error-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 24px;
+  background: var(--mj-status-error-bg);
+  border: 1px solid var(--mj-status-error-border);
+  border-radius: 8px;
+  text-align: center;
+}
+
+.error-icon {
+  font-size: 2rem;
+  color: var(--mj-status-error);
+}
+
+.error-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--mj-status-error-text);
+}
+
+.error-message {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--mj-text-secondary);
+  max-width: 440px;
+  line-height: 1.5;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}

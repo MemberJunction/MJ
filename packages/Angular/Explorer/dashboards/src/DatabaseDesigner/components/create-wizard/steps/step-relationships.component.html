@@ -1,0 +1,102 @@
+<div class="step-relationships">
+
+  <p class="step-info">
+    <i class="fa-solid fa-circle-info"></i>
+    Optionally define foreign key relationships to other entities.
+    Picking a target table auto-creates the UUID source column for you — or you can reuse an existing UUID column via the Source Column dropdown.
+  </p>
+
+  @if (rows.length > 0) {
+    <div class="fk-rows">
+      @for (row of rows; track TrackByIndex($index, row)) {
+        <div class="fk-row">
+
+          <div class="fk-row-header">
+            <span class="fk-row-label">Relationship {{ row.rowIndex + 1 }}</span>
+            <button type="button" class="delete-btn" title="Remove relationship" (click)="DeleteRow(row.rowIndex)">
+              <i class="fa-solid fa-trash"></i>
+            </button>
+          </div>
+
+          <div class="fk-row-grid">
+
+            <!-- Source Column — any Step 2 column, not just UUID -->
+            <div class="fk-field">
+              <label class="fk-label">Source Column</label>
+              <select class="mj-input"
+                      [value]="row.ColumnName"
+                      (change)="OnSourceColumnChange(row.rowIndex, $any($event.target).value)">
+                <option value="">— auto-create {{ row.ColumnName || '—' }} —</option>
+                @for (col of AllColumns; track col.Name) {
+                  <option [value]="col.Name">{{ col.Name }}</option>
+                }
+              </select>
+            </div>
+
+            <!-- Target Schema -->
+            <div class="fk-field">
+              <label class="fk-label">Target Schema</label>
+              <select class="mj-input"
+                      [value]="row.ReferencedSchema"
+                      (change)="OnSchemaChange(row.rowIndex, $any($event.target).value)">
+                <option value="">— select schema —</option>
+                @for (schema of AvailableSchemas; track schema) {
+                  <option [value]="schema">{{ schema }}</option>
+                }
+              </select>
+            </div>
+
+            <!-- Target Table -->
+            <div class="fk-field">
+              <label class="fk-label">Target Table</label>
+              <select class="mj-input"
+                      [value]="row.selectedEntityId"
+                      [disabled]="!row.ReferencedSchema"
+                      (change)="OnTableChange(row.rowIndex, $any($event.target).value)">
+                <option value="">{{ TablePlaceholder(row) }}</option>
+                @for (entity of EntitiesForSchema(row.ReferencedSchema); track entity.ID) {
+                  <option [value]="entity.ID">{{ entity.BaseTable }}</option>
+                }
+              </select>
+            </div>
+
+            <!-- Target Column — shows SQL type to help user match source column type -->
+            <div class="fk-field">
+              <label class="fk-label">Target Column</label>
+              <select class="mj-input"
+                      [value]="row.ReferencedColumn"
+                      [disabled]="!row.selectedEntityId"
+                      (change)="OnColumnChange(row.rowIndex, $any($event.target).value, row.selectedEntityId)">
+                <option value="">{{ ColumnPlaceholder(row) }}</option>
+                @for (col of ColumnsForEntity(row.selectedEntityId); track col.Name) {
+                  <option [value]="col.Name">{{ col.Name }} ({{ col.SqlType }})</option>
+                }
+              </select>
+            </div>
+
+            <!-- FK Type -->
+            <div class="fk-field">
+              <label class="fk-label">FK Type</label>
+              <select class="mj-input"
+                      [value]="row.IsSoft ? 'soft' : 'hard'"
+                      (change)="OnFkTypeChange(row.rowIndex, $any($event.target).value === 'soft')">
+                <option value="soft">Soft (metadata only)</option>
+                <option value="hard">Hard (DB constraint)</option>
+              </select>
+            </div>
+
+          </div>
+        </div>
+      }
+    </div>
+  }
+
+  <div class="add-bar">
+    <button mjButton buttonStyle="secondary" type="button"
+            (click)="AddRelationship()">
+      <i class="fa-solid fa-plus"></i>
+      Add Relationship
+    </button>
+  </div>
+
+</div>
