@@ -176,3 +176,8 @@ packages/DBAutoDoc/autocare-config.json
 # Local test/credential directories
 amith-sf/
 benchmark-*/
+
+# Branch-local agent-scenario harness — kept on disk, not tracked.
+# Drives real LLM tool-calls against SearchEngine; uses workbench DB credentials.
+agent-scenarios/
+sage-search.test.ts
