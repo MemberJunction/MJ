@@ -30,6 +30,7 @@ import { LiveExecutionWidgetComponent } from './AI/components/widgets/live-execu
 import { PerformanceHeatmapComponent } from './AI/components/charts/performance-heatmap.component';
 import { AgentRequestsResourceComponent } from './AI/components/requests/agent-requests-resource.component';
 import { AutotaggingPipelineResourceComponent } from './AI/components/autotagging/autotagging-pipeline-resource.component';
+import { TagSuggestionInboxResourceComponent, LoadTagSuggestionInboxResourceComponent } from './AI/components/tag-suggestions/tag-suggestion-inbox-resource.component';
 import { DuplicateDetectionResourceComponent } from './AI/components/duplicates/duplicate-detection-resource.component';
 import { VectorManagementResourceComponent } from './AI/components/vectors/vector-management-resource.component';
 import { AIInstrumentationService } from './AI/services/ai-instrumentation.service';
@@ -89,6 +90,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     PerformanceHeatmapComponent,
     AgentRequestsResourceComponent,
     AutotaggingPipelineResourceComponent,
+    TagSuggestionInboxResourceComponent,
     DuplicateDetectionResourceComponent,
     VectorManagementResourceComponent,
     KnowledgeConfigResourceComponent,
@@ -140,6 +142,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     PerformanceHeatmapComponent,
     AgentRequestsResourceComponent,
     AutotaggingPipelineResourceComponent,
+    TagSuggestionInboxResourceComponent,
     DuplicateDetectionResourceComponent,
     VectorManagementResourceComponent,
     KnowledgeConfigResourceComponent,
@@ -163,6 +166,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
 export class AIDashboardsModule {
     constructor() {
         // Ensure tree-shaking prevention loaders are called
+        LoadTagSuggestionInboxResourceComponent();
         LoadClusterVisualizationResource();
         LoadSchedulingResource();
         LoadAnalyticsResource();

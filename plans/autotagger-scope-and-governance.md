@@ -1,9 +1,32 @@
 # Autotagger Scope & Governance — Unified Implementation Plan
 
-**Status:** Migration drafted (awaiting human run + CodeGen); engine + UI work to follow
+**Status:** Implementation complete — engine + autotag wiring + Tag Health + Suggestion Inbox + tests. UX redesign deferred to mockup-driven follow-up.
 **Branch:** `claude/autotagger-scope-and-governance-plan`
 **Owner:** unassigned
 **Estimated total work:** 8–12 dev-days for engine; UI parallelizable after schema lands
+
+## Implementation status (2026-05-01)
+
+| Phase | Status | Notes |
+|---|---|---|
+| 1a — Schema migration + CodeGen | ✅ done | `V202605010846__v5.31.x__Autotagger_Scope_And_Governance.sql` applied; CodeGen produced entity classes for `MJ:Tags` (governance + embedding fields), `MJ:Tag Scopes`, `MJ:Tag Synonyms`, `MJ:Tag Suggestions`. |
+| 1b — IContentSourceConfiguration extensions | ✅ done | Added `SuggestThreshold`, `MaxNewTagsPerRun`, `MaxNewTagsPerItem`, `MaxTokensPerRun`, `MaxCostPerRun` to the typed JSON interface. |
+| 1c.1 — Save() invariant + persisted embeddings | ✅ done | `MJTagEntityServer.ValidateAsync` enforces IsGlobal⊕TagScope; `MJTagScopeEntityServer` enforces inverse. Embedding refresh via `EmbedTextLocal` + persisted `EmbeddingVector` / `EmbeddingModelID`. `RebuildTagEmbeddings` utility added; `refreshTagEmbeddings` hydrates from persisted cache. |
+| 1c.2 — TagScopeContext + TagScopeFilterBuilder | ✅ done | BaseSingleton in TagEngineBase; SQL + in-memory predicates + child-scope subset validator. |
+| 1c.3 — TagEngineBase scope-aware accessors | ✅ done | `GetVisibleTags`, scope-overload of `GetTagByName`/`GetTaxonomyTree`, `GetScopesForTag`. |
+| 1c.4 — Synonym lookup | ✅ done | `GetTagBySynonym`, lazy synonym index loaded in `Config()` from `MJ:Tag Synonyms`. |
+| 1c.5 — Governance methods | ✅ done | `ValidateAutoGrow`, `EnqueueSuggestion`, `PromoteSuggestion`, `RejectSuggestion`. `MergeTags` carries source synonyms (Source='Merged'). |
+| 1c.6 — ResolveTag extensions | ✅ done | Synonym tier added before exact; scope threaded through every tier; tiered confidence routing (`SuggestThreshold` band → enqueue suggestion, return null); `handleNoMatch` calls `ValidateAutoGrow`; `createAndEmbedTag` inherits parent scope. |
+| 1d — Autotag engine integration | ✅ done | `ScopeContextResolver` derives per-source scope; `RunBudget` enforces per-run + per-item caps; `OnAfterBatch` hook pauses run via `CancellationRequested`. |
+| 1e — Tag Health emitters | ✅ done | `TagHealthJob` with merge / low-usage / wide-node passes; gated by `MJ_AUTOTAG_RUN_TAG_HEALTH=1` env. |
+| 1f — UI — Suggestion Inbox | ✅ done (minimal) | `TagSuggestionInboxResourceComponent` registered as `'TagSuggestionInbox'`. Lists pending suggestions, supports Accept-as-new / Merge / Reject, single + bulk. Note: UI marks suggestions as Approved/Merged/Rejected directly; full server-side `PromoteSuggestion` GraphQL resolver is the natural next step (TagGovernanceEngine is ready). |
+| 1f — UI — KH facet scope filter | ⏭ deferred | Defer to UX redesign (mockups produced separately). |
+| 1f — UI — Taxonomy admin governance/scope/synonym editors + badges | ⏭ deferred | Defer to UX redesign (mockups produced separately). |
+| 1f — UI — ContentSource custom form for typed JSON knobs | ⏭ deferred | CodeGen-generated JSON-blob form already shows the new fields; a structured custom override (sliders, mode radios, scope picker) is part of the UX redesign. |
+| Unit tests | ✅ done | 12 new tests for `TagScopeFilterBuilder` (TagEngineBase), 8 for `ValidateAutoGrow`, 4 for `TagHealthJob`, 7 for `RunBudget`, 8 for `ScopeContextResolver`. All target packages green. |
+| Full repo build | ✅ green for impacted packages | TagEngineBase, TagEngine, ContentAutotagging, MJCoreEntitiesServer all build cleanly. Pre-existing failures in DatabaseDesigner/actions and dashboards/DataExplorer are unrelated to this work. |
+| Full repo unit tests | ✅ green for impacted packages | TagEngineBase 34/34, TagEngine 64/64, ContentAutotagging 114/114. Pre-existing GITHUB_TOKEN test in `@memberjunction/installer` is environmental and unrelated. |
+| UX mockup set | 🟡 in progress | Background sub-agent producing `mockups/knowledge-hub-classify-redesign/` with 3 options per major surface for human review. Will commit/push only that directory. |
 
 ---
 
