@@ -242,31 +242,6 @@ describe.skipIf(!hasMigrations || !hasPGMigrations)('v5 migration regression —
     'V202602141421__v5.0.x__Add_AllowMultipleSubtypes_to_Entity',
   ]);
 
-  /**
-   * Real coverage debt — T-SQL migrations that don't yet have a PG counterpart.
-   *
-   * v5.30:
-   *   Five of the original six v5.30 ports are converted and committed in the
-   *   migrations PR (Runtime_Actions_Schema, Archive_Codegen,
-   *   Memory_Consolidation_Schema, Unified_Permissions_Phase_2,
-   *   Scoped_EntityField_SPs — the last 3 verified functionally equivalent
-   *   against SQL Server via schema-delta diffing). The remaining one
-   *   (Metadata_Sync) is the 964k-line auto-generated metadata dump that hit
-   *   a string-literal escaping bug; will be regenerated via mj-sync push
-   *   from a known-correct state in v5.30.1 rather than chase escape bugs in
-   *   generated content.
-   *
-   * v5.31:
-   *   Create_UDT_Schema is in-flight v5.31 work landed on origin/next as part
-   *   of the Database Designer Agent. Needs a PG port (idiomatic
-   *   `CREATE SCHEMA IF NOT EXISTS "__mj_UDT"` + `COMMENT ON SCHEMA`).
-   *   Tracked for v5.31's first migrations PR.
-   */
-  const PENDING_V5_30_PORTS = new Set<string>([
-    'V202604271430__v5.30.x__Metadata_Sync',                        // 964k-line generated content; regenerate via mj-sync push in v5.30.1
-    'V202604292210__v5.31.x__Create_UDT_Schema',                    // v5.31 in-flight; needs PG port for new __mj_UDT schema (Database Designer)
-  ]);
-
   // Enforces that every T-SQL V-migration has a committed PG counterpart in
   // migrations-pg/v5/. This is the primary gate keeping migration content in
   // sync between SQL Server and PostgreSQL — paired with pg-migrations.yml
@@ -277,9 +252,11 @@ describe.skipIf(!hasMigrations || !hasPGMigrations)('v5 migration regression —
   // `describe.skipIf(!hasPGMigrations)` skips this test before it runs.
   // On any branch where PG files are committed (the migrations PR, or the
   // merged state on `next`), this test runs and fails if any T-SQL file
-  // lacks a PG counterpart (modulo the entries in PENDING_V5_30_PORTS and
-  // INTENTIONALLY_NO_PG_COUNTERPART above).
-  it('should have a PG counterpart for every T-SQL V-migration (allowing tracked exemptions)', () => {
+  // lacks a PG counterpart (modulo the small `INTENTIONALLY_NO_PG_COUNTERPART`
+  // set above for pre-baseline migrations the v5.0 PG baseline already
+  // incorporates). When this test fails, run the `pg-migrate` skill to
+  // generate the missing PG file(s) and commit them to migrations-pg/v5/.
+  it('should have a PG counterpart for every T-SQL V-migration', () => {
     const tsqlFiles = readdirSync(MIGRATIONS_DIR)
       .filter(f => f.startsWith('V') && f.endsWith('.sql'))
       .sort();
@@ -292,10 +269,10 @@ describe.skipIf(!hasMigrations || !hasPGMigrations)('v5 migration regression —
     const missing = tsqlFiles
       .map(f => f.replace(/\.sql$/, ''))
       .filter(base => !pgBases.has(base))
-      .filter(base => !INTENTIONALLY_NO_PG_COUNTERPART.has(base) && !PENDING_V5_30_PORTS.has(base));
+      .filter(base => !INTENTIONALLY_NO_PG_COUNTERPART.has(base));
 
     if (missing.length > 0) {
-      console.log('T-SQL migrations without PG counterpart (and not in the exemption sets):');
+      console.log('T-SQL migrations without PG counterpart — run the `pg-migrate` skill to generate them:');
       for (const m of missing) console.log(`  ${m}`);
     }
     expect(missing.length).toBe(0);
