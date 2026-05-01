@@ -15,10 +15,10 @@
         "isDefault": true
       },
       {
-        "Label": "Tag Governance",
+        "Label": "Tags",
         "Icon": "fa-solid fa-sitemap",
         "ResourceType": "Custom",
-        "DriverClass": "TagGovernance",
+        "DriverClass": "Tags",
         "isDefault": false
       },
       {
@@ -65,7 +65,7 @@
     "ID": "796EB8B2-B392-428B-839C-E9637C3D7EDB"
   },
   "sync": {
-    "lastModified": "2026-05-01T18:03:42.860Z",
-    "checksum": "1be7c701e9e7bdeec96c877269097ff2bd47c5eaac1ebaa0516b5b8bdf73dc71"
+    "lastModified": "2026-05-01T18:47:56.524Z",
+    "checksum": "ede1799605922038250fb7ec80cca4746f621c2abedb626ae95d3b48ec6dff7c"
   }
 }

@@ -30,7 +30,7 @@ import { LiveExecutionWidgetComponent } from './AI/components/widgets/live-execu
 import { PerformanceHeatmapComponent } from './AI/components/charts/performance-heatmap.component';
 import { AgentRequestsResourceComponent } from './AI/components/requests/agent-requests-resource.component';
 import { AutotaggingPipelineResourceComponent } from './AI/components/autotagging/autotagging-pipeline-resource.component';
-import { TagGovernanceResourceComponent, LoadTagGovernanceResourceComponent } from './AI/components/tag-governance/tag-governance-resource.component';
+import { TagsResourceComponent, LoadTagsResource } from './AI/components/tags/tags-resource.component';
 import { DuplicateDetectionResourceComponent } from './AI/components/duplicates/duplicate-detection-resource.component';
 import { VectorManagementResourceComponent } from './AI/components/vectors/vector-management-resource.component';
 import { AIInstrumentationService } from './AI/services/ai-instrumentation.service';
@@ -90,7 +90,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     PerformanceHeatmapComponent,
     AgentRequestsResourceComponent,
     AutotaggingPipelineResourceComponent,
-    TagGovernanceResourceComponent,
+    TagsResourceComponent,
     DuplicateDetectionResourceComponent,
     VectorManagementResourceComponent,
     KnowledgeConfigResourceComponent,
@@ -142,7 +142,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     PerformanceHeatmapComponent,
     AgentRequestsResourceComponent,
     AutotaggingPipelineResourceComponent,
-    TagGovernanceResourceComponent,
+    TagsResourceComponent,
     DuplicateDetectionResourceComponent,
     VectorManagementResourceComponent,
     KnowledgeConfigResourceComponent,
@@ -166,7 +166,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
 export class AIDashboardsModule {
     constructor() {
         // Ensure tree-shaking prevention loaders are called
-        LoadTagGovernanceResourceComponent();
+        LoadTagsResource();
         LoadClusterVisualizationResource();
         LoadSchedulingResource();
         LoadAnalyticsResource();

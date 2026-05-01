@@ -1,10 +1,21 @@
 /**
- * @fileoverview Content Autotagging Dashboard
+ * @fileoverview Tags dashboard — the canonical home for everything tag-related
+ * across MJ. Tags aren't classification-only: any entity / workload can assign
+ * them, so this dashboard lives at the Knowledge Hub top level rather than
+ * being buried inside the Classify (autotag pipeline) dashboard.
  *
- * Full dashboard for the content autotagging pipeline with left-nav and 5 tabs:
- * Pipeline Monitor, Sources Management, Content Types, Tag Library, Run History.
- * Supports CRUD on sources and content types via slide-in forms,
- * pipeline triggering with real-time GraphQL subscription progress.
+ * Four tabs:
+ *   - Tag Library — table + drill-down + word cloud (moved from Classify).
+ *   - Taxonomy — tree / Duplicates / Orphans / Treemap / Audit Log
+ *     (moved from Classify; Tree's right-detail panel now also surfaces
+ *     governance + scope + synonym editing; Duplicates + Orphans are now
+ *     server-driven from `MJ:Tag Suggestions`).
+ *   - Suggestions — human-in-the-loop review queue (`MJ:Tag Suggestions`).
+ *   - Health — Tag Health 3-card summary, threshold tuning, run history,
+ *     "Rebuild stale embeddings".
+ *
+ * The Classify dashboard still owns the autotag pipeline run-management
+ * surface (Pipeline / Sources / Types / History).
  */
 
 import { Component, ChangeDetectorRef, OnDestroy, AfterViewInit, inject, ViewEncapsulation } from '@angular/core';
@@ -12,7 +23,7 @@ import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { BaseEntity, CompositeKey, Metadata, RunQuery, RunView } from '@memberjunction/core';
 import { TreeBranchConfig, TreeLeafConfig } from '@memberjunction/ng-trees';
-import { ResourceData, KnowledgeHubMetadataEngine, MJContentSourceEntity, MJContentSourceTypeEntity_IContentSourceTypeField, MJScheduledActionEntity, MJScheduledActionParamEntity, MJContentItemDuplicateEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { ResourceData, KnowledgeHubMetadataEngine, MJContentSourceEntity, MJContentSourceTypeEntity_IContentSourceTypeField, MJScheduledActionEntity, MJScheduledActionParamEntity, MJContentItemDuplicateEntity, UserInfoEngine, MJTagEntity, MJTagSynonymEntity, MJTagScopeEntity } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
@@ -22,7 +33,63 @@ import { WordCloudItem } from '@memberjunction/ng-word-cloud';
 
 // ── Tab type ──
 
-type TabName = 'pipeline' | 'sources' | 'types' | 'tags' | 'taxonomy' | 'history';
+/**
+ * Tab union — wide for now because this component is in transition: the
+ * existing autotagging-pipeline tabs (pipeline / sources / types / history)
+ * are still referenced by helpers we share. NavItems only emits the 4
+ * tag-related entries, so the user only ever sees Tags / Taxonomy /
+ * Suggestions / Health. The dead-code strip is a follow-up.
+ */
+type TabName = 'pipeline' | 'sources' | 'types' | 'tags' | 'taxonomy' | 'history' | 'suggestions' | 'health';
+
+/** Conventional `Reason` values from MJ:Tag Suggestions. */
+type TagSuggestionReason =
+    | 'BelowThreshold' | 'ConstrainedMode' | 'AmbiguousMatch' | 'ParentFrozen'
+    | 'AutoGrowDisabled' | 'MaxChildrenExceeded' | 'MaxDepthExceeded'
+    | 'BelowMinWeight' | 'RequiresReview' | 'MaxItemTagsExceeded'
+    | 'MergeCandidate' | 'LowUsage' | 'WideNode';
+
+interface SuggestionRow {
+    ID: string;
+    ProposedName: string;
+    Reason: string;
+    BestMatchTagID: string | null;
+    BestMatchName: string | null;
+    BestMatchPath: string | null;
+    BestMatchScore: number | null;
+    SourceContentSourceID: string | null;
+    SourceContentItemID: string | null;
+    SourceText: string | null;
+    CreatedAt: Date;
+    Status: string;
+    selected: boolean;
+    dispositionInProgress: 'create-new' | 'merge' | 'reject' | null;
+}
+
+interface HealthRunHistoryRow {
+    When: Date;
+    Trigger: string;
+    TagsScanned: number;
+    Merge: number;
+    LowUsage: number;
+    WideNode: number;
+    DurationMs: number;
+}
+
+interface SynonymRow {
+    ID: string;
+    Synonym: string;
+    Source: string;
+    CreatedAt: Date;
+}
+
+interface TagScopeRowView {
+    ID: string;
+    ScopeEntityID: string;
+    ScopeRecordID: string;
+    EntityName: string;
+    DisplayName: string;
+}
 
 // ── Interfaces ──
 
@@ -312,15 +379,15 @@ interface SourceDetailInfo {
 
 type FormMode = 'none' | 'add-source' | 'edit-source' | 'add-type' | 'edit-type';
 
-@RegisterClass(BaseResourceComponent, 'AutotaggingPipelineResource')
+@RegisterClass(BaseResourceComponent, 'Tags')
 @Component({
     standalone: false,
-    selector: 'app-autotagging-pipeline-resource',
-    templateUrl: './autotagging-pipeline-resource.component.html',
-    styleUrls: ['./autotagging-pipeline-resource.component.css'],
+    selector: 'mj-tags-resource',
+    templateUrl: './tags-resource.component.html',
+    styleUrls: ['./tags-resource.component.css'],
     encapsulation: ViewEncapsulation.None
 })
-export class AutotaggingPipelineResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
+export class TagsResourceComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
     protected override destroy$ = new Subject<void>();
     private cdr = inject(ChangeDetectorRef);
     protected override navigationService = inject(NavigationService);
@@ -333,7 +400,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     private totalContentTagCount = 0;
 
     // ── Tab state ──
-    public ActiveTab: TabName = 'pipeline';
+    public ActiveTab: TabName = 'tags';
     private tabDataLoaded = new Set<TabName>();
 
     // ── Left nav ──
@@ -447,11 +514,11 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             ActiveTab: this.ActiveTab,
             ShowPipelineConfig: this.ShowPipelineConfig,
         });
-        UserInfoEngine.Instance.SetSettingDebounced(AutotaggingPipelineResourceComponent.PREFS_KEY, prefs);
+        UserInfoEngine.Instance.SetSettingDebounced(TagsResourceComponent.PREFS_KEY, prefs);
     }
 
     private loadClassifyPreferences(): void {
-        const raw = UserInfoEngine.Instance.GetSetting(AutotaggingPipelineResourceComponent.PREFS_KEY);
+        const raw = UserInfoEngine.Instance.GetSetting(TagsResourceComponent.PREFS_KEY);
         if (raw) {
             try {
                 const prefs = JSON.parse(raw);
@@ -547,8 +614,46 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     public TaxEditName = '';
     public TaxEditDescription = '';
 
+    // ── Suggestions inbox state (server-driven from MJ:Tag Suggestions) ──
+    public SuggestionRows: SuggestionRow[] = [];
+    public SuggestionRowsFiltered: SuggestionRow[] = [];
+    public SuggestionFilterReason = '';
+    public SuggestionFilterMinScore: number | null = null;
+    public SuggestionSearch = '';
+    public SuggestionSelected: SuggestionRow | null = null;
+    public SuggestionBulkInProgress = false;
+    public PendingSuggestionCount = 0;
+    public ReasonOptions: TagSuggestionReason[] = [
+        'BelowThreshold', 'ConstrainedMode', 'AmbiguousMatch', 'ParentFrozen', 'AutoGrowDisabled',
+        'MaxChildrenExceeded', 'MaxDepthExceeded', 'BelowMinWeight', 'RequiresReview',
+        'MaxItemTagsExceeded', 'MergeCandidate', 'LowUsage', 'WideNode',
+    ];
+
+    // ── Tag Health state ──
+    public HealthThresholds = {
+        minCoOccurrence: 10,
+        minNameSimilarity: 0.5,
+        minEmbeddingSimilarity: 0.85,
+        maxUsage: 3,
+        maxImplicitChildren: 25,
+    };
+    public HealthRunning = false;
+    public RebuildEmbeddingsRunning = false;
+    public LastHealthSummary: {
+        mergeCount: number; lowUsageCount: number; wideNodeCount: number; durationMs: number; runAt: Date | null;
+    } = { mergeCount: 0, lowUsageCount: 0, wideNodeCount: 0, durationMs: 0, runAt: null };
+    public HealthRunHistory: HealthRunHistoryRow[] = [];
+
+    // ── Per-tag governance editing (Tree right-detail addendum) ──
+    public SelectedTagSavingField: Record<string, boolean> = {};
+    public SelectedTagSynonyms: SynonymRow[] = [];
+    public SelectedTagScopes: TagScopeRowView[] = [];
+    public NewSynonymName = '';
+    public NewSynonymSource: 'Manual' | 'Imported' | 'Merged' | 'LLM' = 'Manual';
+
     // Raw taxonomy data cache
-    private tagsRaw: Record<string, unknown>[] = [];
+    /** Public so the template's Health tab can read tag count for the runbar. */
+    public tagsRaw: Record<string, unknown>[] = [];
     private taggedItemsRaw: Record<string, unknown>[] = [];
     private tagAuditLogsRaw: Record<string, unknown>[] = [];
     /** Cached per-tag aggregates from server-side SQL (weights + counts) */
@@ -947,12 +1052,14 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         ]);
         this.loadClassifyPreferences();
         this.applyIncomingConfiguration();
-        await Promise.all([this.LoadPipelineData(), this.loadEntityRecordDocCache()]);
-        this.tabDataLoaded.add('pipeline');
 
-        // If user preferences or incoming config set a non-pipeline initial tab,
-        // eagerly load that tab's data so it is not blank on first render.
-        if (this.ActiveTab !== 'pipeline' && !this.tabDataLoaded.has(this.ActiveTab)) {
+        // Tags dashboard's default landing is the Tag Library — load that data
+        // (and the entity-record-document cache used by drill-down) up front.
+        await Promise.all([this.loadTagLibraryData(), this.loadEntityRecordDocCache()]);
+        this.tabDataLoaded.add('tags');
+
+        // If preferences/config set a non-default initial tab, load it eagerly.
+        if (this.ActiveTab !== 'tags' && !this.tabDataLoaded.has(this.ActiveTab)) {
             await this.loadTabData(this.ActiveTab);
             this.tabDataLoaded.add(this.ActiveTab);
         }
@@ -1112,9 +1219,18 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
                 break;
             case 'taxonomy':
                 await this.loadTaxonomyData();
+                // Pull pending suggestions so the Duplicates / Orphans sub-tabs are populated.
+                await this.loadSuggestions();
                 break;
             case 'history':
                 await this.loadRunHistoryData();
+                break;
+            case 'suggestions':
+                await this.loadSuggestions();
+                break;
+            case 'health':
+                // Health tab uses already-loaded suggestion totals + threshold defaults.
+                if (this.SuggestionRows.length === 0) await this.loadSuggestions();
                 break;
         }
     }
@@ -1162,15 +1278,13 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     }
 
     private buildNavItems(): void {
-        // Classify dashboard owns the autotag pipeline run-management surface.
-        // Tag Library + Taxonomy moved to the canonical "Tags" dashboard
-        // (TagsResourceComponent under Knowledge Hub) — this nav intentionally
-        // omits them. The underlying state + methods remain in this file as
-        // dead code for the moment; a follow-up will strip them.
+        // Tags dashboard shows only tag-related sections. The pipeline / sources /
+        // types / history surfaces live in the Classify dashboard instead.
         this.NavItems = [
-            { Tab: 'pipeline', Icon: 'fa-solid fa-gauge-high', Label: 'Pipeline', BadgeText: this.IsRunning ? 'Live' : '', BadgeClass: 'nav-badge-live' },
-            { Tab: 'sources', Icon: 'fa-solid fa-database', Label: 'Sources', BadgeText: String(this.contentSourcesRaw.length), BadgeClass: '' },
-            { Tab: 'types', Icon: 'fa-solid fa-sliders', Label: 'Content Types', BadgeText: String(this.contentTypesRaw.length), BadgeClass: '' },
+            { Tab: 'tags', Icon: 'fa-solid fa-chart-simple', Label: 'Overview', BadgeText: String(this.totalContentTagCount), BadgeClass: '' },
+            { Tab: 'taxonomy', Icon: 'fa-solid fa-sitemap', Label: 'Taxonomy', BadgeText: String(this.tagsRaw.length || ''), BadgeClass: '' },
+            { Tab: 'suggestions', Icon: 'fa-solid fa-inbox', Label: 'Suggestions', BadgeText: String(this.PendingSuggestionCount || ''), BadgeClass: '' },
+            { Tab: 'health', Icon: 'fa-solid fa-heart-pulse', Label: 'Health', BadgeText: '', BadgeClass: '' },
         ];
     }
 
@@ -3241,14 +3355,71 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             await this.loadTagAggregates();
 
             this.buildTaxTree();
-            this.buildTaxDuplicates();
-            this.buildTaxOrphans();
+            // Duplicates + Orphans are now server-driven from MJ:Tag Suggestions
+            // (populated by TagHealthJob). The legacy client-side detectors
+            // are no longer invoked here; the data flows in via
+            // `populateDuplicatesFromSuggestions()` /
+            // `populateOrphansFromSuggestions()` after `loadSuggestions()`.
             this.buildTaxTreemap();
             this.buildTaxAuditLog();
             this.buildTaxHealth();
+            this.populateDuplicatesFromSuggestions();
+            this.populateOrphansFromSuggestions();
         } catch (error) {
             console.error('[Autotagging] Error loading taxonomy data:', error);
         }
+    }
+
+    /**
+     * Server-driven replacement for buildTaxDuplicates(). Reads pending
+     * `MJ:Tag Suggestions` rows with `Reason='MergeCandidate'` and projects
+     * each into the `TaxDuplicatePair` shape the existing Duplicates sub-tab
+     * UI expects. The UI's "Merge" button still calls `MergeTags()` (which
+     * we now route through the server-side `PromoteTagSuggestion` mutation
+     * via the wrapper below).
+     */
+    private populateDuplicatesFromSuggestions(): void {
+        const merges = this.SuggestionRows.filter(s => s.Reason === 'MergeCandidate' && s.BestMatchTagID);
+        const pairs: TaxDuplicatePair[] = merges.map(s => {
+            const score = s.BestMatchScore ?? 0;
+            return {
+                TagA: s.ProposedName,
+                TagB: s.BestMatchName ?? '',
+                TagAID: s.ID,            // suggestion ID; we route through it
+                TagBID: s.BestMatchTagID!,
+                Similarity: Math.round(score * 100),
+                SeverityClass: score >= 0.85 ? 'high' : 'moderate',
+                IsExactDuplicate: false,
+                ExactDuplicateCount: 0,
+                AllIDs: [],
+            };
+        });
+        pairs.sort((a, b) => b.Similarity - a.Similarity);
+        this.TaxDuplicates = pairs;
+    }
+
+    /**
+     * Server-driven replacement for buildTaxOrphans(). Reads pending
+     * `MJ:Tag Suggestions` with `Reason='LowUsage'` and projects each into
+     * the `TaxOrphanCard` shape. The existing Orphans UI's bulk-delete
+     * actions still hit `MJ:Tags.Delete()` directly — those go through the
+     * server-side `MJTagEntityServer` Delete override (which cleans up FK
+     * references) so the workflow is unchanged.
+     */
+    private populateOrphansFromSuggestions(): void {
+        const lows = this.SuggestionRows.filter(s => s.Reason === 'LowUsage' && s.BestMatchTagID);
+        this.TaxOrphans = lows.map(s => {
+            const tag = this.tagsRaw.find(t => UUIDsEqual(t['ID'] as string, s.BestMatchTagID!));
+            return {
+                ID: s.BestMatchTagID!,
+                Name: tag ? (tag['Name'] as string) : s.ProposedName,
+                UsageCount: this.tagAggregateCounts.get(NormalizeUUID(s.BestMatchTagID!)) ?? 0,
+                AvgWeight: this.tagAggregateWeights.get(NormalizeUUID(s.BestMatchTagID!)) ?? 0,
+                FirstSeen: tag ? this.formatShortDate((tag['__mj_CreatedAt'] as string) ?? '') : '',
+                LastSeen:  tag ? this.formatShortDate((tag['__mj_UpdatedAt'] as string) ?? '') : '',
+                IsSelected: false,
+            };
+        });
     }
 
     // ── Tree View ──
@@ -3440,7 +3611,242 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         this.TaxSelectedNode = node;
         this.TaxIsEditing = false;
         this.loadRecentItemsForTag(node);
+        // Hydrate the governance/scope/synonyms detail underneath the existing tree-node detail.
+        this.syncSelectedTagFull(node);
         this.cdr.detectChanges();
+    }
+
+    /**
+     * MJTagEntity backing the currently-selected TaxTreeNode. Exposed for the
+     * governance / scope / synonyms detail panel that lives below the existing
+     * Tree right-side detail. Populated by `syncSelectedTagFull` whenever the
+     * tree selection changes.
+     */
+    public SelectedTagFull: MJTagEntity | null = null;
+
+    private syncSelectedTagFull(node: TaxTreeNode): void {
+        // Look up the entity from the cached `tagsRaw`. tagsRaw rows are
+        // plain JSON (loaded via RunView simple ResultType), so we need the
+        // raw fields directly — we don't load a full MJTagEntity here to
+        // avoid an extra DB round-trip per click. The fields we read on the
+        // template (IsGlobal, AllowAutoGrow, etc.) are all present in the
+        // raw row from the `vwTags` view.
+        const raw = this.tagsRaw.find(t => UUIDsEqual(t['ID'] as string, node.ID));
+        if (!raw) {
+            this.SelectedTagFull = null;
+            this.SelectedTagSynonyms = [];
+            this.SelectedTagScopes = [];
+            return;
+        }
+        // Cast through unknown so the template can use typed properties on raw fields.
+        this.SelectedTagFull = raw as unknown as MJTagEntity;
+
+        // Synonyms — query view is fine here since the cardinality per tag is small.
+        this.SelectedTagSynonyms = [];
+        this.SelectedTagScopes = [];
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+        rv.RunViews([
+            { EntityName: 'MJ: Tag Synonyms', ExtraFilter: `TagID='${node.ID}'`, ResultType: 'simple' },
+            { EntityName: 'MJ: Tag Scopes', ExtraFilter: `TagID='${node.ID}'`, ResultType: 'simple' },
+        ]).then(([synRes, scopeRes]) => {
+            if (synRes.Success) {
+                this.SelectedTagSynonyms = (synRes.Results as Array<Record<string, unknown>>).map(r => ({
+                    ID: r['ID'] as string,
+                    Synonym: r['Synonym'] as string,
+                    Source: r['Source'] as string,
+                    CreatedAt: new Date(r['__mj_CreatedAt'] as string),
+                }));
+            }
+            if (scopeRes.Success) {
+                this.SelectedTagScopes = (scopeRes.Results as Array<Record<string, unknown>>).map(r => ({
+                    ID: r['ID'] as string,
+                    ScopeEntityID: r['ScopeEntityID'] as string,
+                    ScopeRecordID: r['ScopeRecordID'] as string,
+                    EntityName: (r['ScopeEntity'] as string) ?? 'Unknown entity',
+                    DisplayName: r['ScopeRecordID'] as string,
+                }));
+            }
+            this.cdr.detectChanges();
+        });
+    }
+
+    public IsGlobalLocked(): boolean {
+        return this.SelectedTagFull != null && this.SelectedTagScopes.length > 0;
+    }
+
+    /**
+     * Toggle a per-tag governance flag. Persists via a fresh MJTagEntity load
+     * + Save so the server-side `MJTagEntityServer` Save() override can run
+     * the IsGlobal⊕TagScope invariant check.
+     */
+    public async ToggleGovernanceFlag(
+        field: 'AllowAutoGrow' | 'IsFrozen' | 'RequiresReview' | 'IsGlobal'
+    ): Promise<void> {
+        if (!this.SelectedTagFull || !this.TaxSelectedNode) return;
+        if (field === 'IsGlobal' && this.IsGlobalLocked()) {
+            MJNotificationService.Instance.CreateSimpleNotification(
+                'Cannot toggle Global while scope rows exist. Remove all scope rows first or use Edit scope…',
+                'warning', 5000
+            );
+            return;
+        }
+        const currentValue = (this.SelectedTagFull as unknown as Record<string, unknown>)[field] as boolean;
+        await this.persistTagField(this.TaxSelectedNode.ID, field, !currentValue);
+    }
+
+    public async SaveSelectedTagNumber(
+        field: 'MaxChildren' | 'MaxDescendantDepth' | 'MinWeight',
+        raw: string
+    ): Promise<void> {
+        if (!this.TaxSelectedNode) return;
+        const trimmed = raw.trim();
+        const value: number | null = trimmed === '' ? null : Number(trimmed);
+        if (value !== null && !Number.isFinite(value)) {
+            MJNotificationService.Instance.CreateSimpleNotification(
+                `"${raw}" is not a valid number for ${field}.`, 'error', 4000
+            );
+            return;
+        }
+        await this.persistTagField(this.TaxSelectedNode.ID, field, value);
+    }
+
+    private async persistTagField(tagID: string, field: keyof MJTagEntity, value: unknown): Promise<void> {
+        this.SelectedTagSavingField[field as string] = true;
+        this.cdr.detectChanges();
+        try {
+            const md = this.ProviderToUse;
+            const fresh = await md.GetEntityObject<MJTagEntity>('MJ: Tags', md.CurrentUser);
+            const loaded = await fresh.Load(tagID);
+            if (!loaded) throw new Error(`Failed to load tag ${tagID}`);
+            (fresh as unknown as Record<string, unknown>)[field as string] = value;
+            const ok = await fresh.Save();
+            if (!ok) throw new Error(fresh.LatestResult?.CompleteMessage ?? 'Save failed');
+            // Mirror back into the cached tagsRaw row so the toggles reflect immediately.
+            const raw = this.tagsRaw.find(t => UUIDsEqual(t['ID'] as string, tagID));
+            if (raw) (raw as Record<string, unknown>)[field as string] = value;
+            if (this.SelectedTagFull) {
+                (this.SelectedTagFull as unknown as Record<string, unknown>)[field as string] = value;
+            }
+            MJNotificationService.Instance.CreateSimpleNotification(
+                `Saved ${String(field)} on "${this.TaxSelectedNode?.Name}".`,
+                'info', 1800
+            );
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                `Failed to save ${String(field)}: ${msg}`, 'error', 5000
+            );
+        } finally {
+            this.SelectedTagSavingField[field as string] = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    /** Inline synonym add. Server-side TagSynonymEntity Save handles uniqueness. */
+    public async AddSynonym(): Promise<void> {
+        const text = this.NewSynonymName.trim();
+        if (!text || !this.TaxSelectedNode) return;
+        if (this.SelectedTagSynonyms.some(s => s.Synonym.toLowerCase() === text.toLowerCase())) {
+            MJNotificationService.Instance.CreateSimpleNotification(
+                `"${text}" is already a synonym for this tag.`, 'warning', 3000
+            );
+            return;
+        }
+        try {
+            const md = this.ProviderToUse;
+            const syn = await md.GetEntityObject<MJTagSynonymEntity>('MJ: Tag Synonyms', md.CurrentUser);
+            syn.NewRecord();
+            syn.TagID = this.TaxSelectedNode.ID;
+            syn.Synonym = text;
+            syn.Source = this.NewSynonymSource;
+            const ok = await syn.Save();
+            if (!ok) throw new Error(syn.LatestResult?.CompleteMessage ?? 'Save failed');
+            this.SelectedTagSynonyms = [
+                ...this.SelectedTagSynonyms,
+                { ID: syn.ID, Synonym: syn.Synonym, Source: syn.Source, CreatedAt: new Date() }
+            ];
+            this.NewSynonymName = '';
+            MJNotificationService.Instance.CreateSimpleNotification(
+                `Added synonym "${text}".`, 'info', 2000
+            );
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                `Failed to add synonym: ${msg}`, 'error', 5000
+            );
+        } finally {
+            this.cdr.detectChanges();
+        }
+    }
+
+    public async RemoveSynonym(row: SynonymRow): Promise<void> {
+        if (!this.TaxSelectedNode) return;
+        if (!confirm(`Remove synonym "${row.Synonym}"?`)) return;
+        try {
+            const md = this.ProviderToUse;
+            const syn = await md.GetEntityObject<MJTagSynonymEntity>('MJ: Tag Synonyms', md.CurrentUser);
+            const loaded = await syn.Load(row.ID);
+            if (!loaded) throw new Error('Synonym not found.');
+            const ok = await syn.Delete();
+            if (!ok) throw new Error(syn.LatestResult?.CompleteMessage ?? 'Delete failed');
+            this.SelectedTagSynonyms = this.SelectedTagSynonyms.filter(s => !UUIDsEqual(s.ID, row.ID));
+            MJNotificationService.Instance.CreateSimpleNotification(
+                `Removed synonym "${row.Synonym}".`, 'info', 1800
+            );
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                `Failed to remove synonym: ${msg}`, 'error', 5000
+            );
+        } finally {
+            this.cdr.detectChanges();
+        }
+    }
+
+    /**
+     * Open the scope dialog. Implementation note: a full dual-pane scope
+     * editor is on the roadmap; for the first pass we surface a simple
+     * "remove all scope rows + flip to global" button so admins can promote
+     * a scoped tag to global, plus a notification pointing them to the
+     * Suggestions/admin path for finer-grained scope assignments.
+     */
+    public async OpenScopeDialog(): Promise<void> {
+        if (!this.TaxSelectedNode || !this.SelectedTagFull) return;
+        // Phase-1 minimal implementation: confirm + clear + flip global.
+        // Full dual-pane editor (entity picker, parent-subset validation,
+        // batch save) lives in the standalone TagGovernance dashboard and
+        // will be folded in on the next iteration of this dashboard.
+        if (this.SelectedTagScopes.length === 0 && !this.SelectedTagFull.IsGlobal) {
+            // Empty scope + non-global = currently unreachable. Promote to global.
+            if (!confirm('This tag has no scope rows and is not global — it is currently unreachable. Promote to global?')) return;
+            await this.persistTagField(this.TaxSelectedNode.ID, 'IsGlobal', true);
+            return;
+        }
+        if (this.SelectedTagScopes.length > 0) {
+            if (!confirm(`Remove all ${this.SelectedTagScopes.length} scope row(s) and promote to global? This makes the tag visible to all tenants.`)) return;
+            try {
+                const md = this.ProviderToUse;
+                for (const sc of this.SelectedTagScopes) {
+                    const row = await md.GetEntityObject<MJTagScopeEntity>('MJ: Tag Scopes', md.CurrentUser);
+                    const loaded = await row.Load(sc.ID);
+                    if (loaded) await row.Delete();
+                }
+                this.SelectedTagScopes = [];
+                await this.persistTagField(this.TaxSelectedNode.ID, 'IsGlobal', true);
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    'Tag promoted to global.', 'info', 2500
+                );
+            } catch (error) {
+                const msg = error instanceof Error ? error.message : String(error);
+                MJNotificationService.Instance.CreateSimpleNotification(
+                    `Failed to promote: ${msg}`, 'error', 5000
+                );
+            }
+            return;
+        }
+        MJNotificationService.Instance.CreateSimpleNotification(
+            'Tag is already global.', 'info', 2200
+        );
     }
 
     public FilterTaxTree(): void {
@@ -4782,9 +5188,279 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         }
         this.cdr.detectChanges();
     }
+
+    // ========================================================================
+    // SUGGESTIONS — server-driven from MJ:Tag Suggestions
+    // ========================================================================
+
+    /** Load all pending suggestions and refresh the filtered view + nav badge. */
+    public async loadSuggestions(): Promise<void> {
+        try {
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+            const sugsResult = await rv.RunView<Record<string, unknown>>({
+                EntityName: 'MJ: Tag Suggestions',
+                ExtraFilter: `Status='Pending'`,
+                OrderBy: '__mj_CreatedAt DESC',
+                ResultType: 'simple',
+                MaxRows: 1000,
+            });
+            if (!sugsResult.Success) {
+                MJNotificationService.Instance.CreateSimpleNotification(`Failed to load suggestions: ${sugsResult.ErrorMessage}`, 'error', 5000);
+                this.SuggestionRows = [];
+            } else {
+                this.SuggestionRows = sugsResult.Results.map(r => {
+                    const matchID = (r['BestMatchTagID'] as string) ?? null;
+                    const matchTag = matchID ? this.tagsRaw.find(t => UUIDsEqual(t['ID'] as string, matchID)) : null;
+                    const matchName = matchTag ? (matchTag['Name'] as string) : null;
+                    return {
+                        ID: r['ID'] as string,
+                        ProposedName: r['ProposedName'] as string,
+                        Reason: r['Reason'] as string,
+                        BestMatchTagID: matchID,
+                        BestMatchName: matchName,
+                        BestMatchPath: matchTag ? this.computeTagPath(matchTag) : null,
+                        BestMatchScore: (r['BestMatchScore'] as number) ?? null,
+                        SourceContentSourceID: (r['SourceContentSourceID'] as string) ?? null,
+                        SourceContentItemID: (r['SourceContentItemID'] as string) ?? null,
+                        SourceText: (r['SourceText'] as string) ?? null,
+                        CreatedAt: new Date(r['__mj_CreatedAt'] as string),
+                        Status: r['Status'] as string,
+                        selected: false,
+                        dispositionInProgress: null,
+                    } as SuggestionRow;
+                });
+            }
+            this.PendingSuggestionCount = this.SuggestionRows.length;
+            this.applySuggestionFilters();
+            // Refresh nav badge
+            this.buildNavItems();
+            this.cdr.detectChanges();
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Error loading suggestions: ${msg}`, 'error', 5000);
+        }
+    }
+
+    /** Walk the parent chain to build a › -separated breadcrumb for a tag. */
+    private computeTagPath(tag: Record<string, unknown>): string {
+        const parts: string[] = [tag['Name'] as string];
+        let cursorID = (tag['ParentID'] as string) ?? null;
+        const guard = new Set<string>();
+        while (cursorID && !guard.has(cursorID) && parts.length < 8) {
+            guard.add(cursorID);
+            const next = this.tagsRaw.find(t => UUIDsEqual(t['ID'] as string, cursorID!));
+            if (!next) break;
+            parts.unshift(next['Name'] as string);
+            cursorID = (next['ParentID'] as string) ?? null;
+        }
+        return parts.join(' › ');
+    }
+
+    /**
+     * Coerce the min-score number-input event into either a number or null,
+     * then re-apply filters. Inline arrow expressions in the template can't
+     * disambiguate `Event` vs `number` so we route through this helper.
+     */
+    public OnMinScoreChange(value: number | string | null | undefined): void {
+        if (value == null || value === '' || (typeof value === 'string' && value.trim() === '')) {
+            this.SuggestionFilterMinScore = null;
+        } else {
+            const n = typeof value === 'number' ? value : Number(value);
+            this.SuggestionFilterMinScore = Number.isFinite(n) ? n : null;
+        }
+        this.applySuggestionFilters();
+    }
+
+    public applySuggestionFilters(): void {
+        const reason = this.SuggestionFilterReason;
+        const minScore = this.SuggestionFilterMinScore;
+        const search = this.SuggestionSearch.trim().toLowerCase();
+        this.SuggestionRowsFiltered = this.SuggestionRows.filter(r => {
+            if (reason && r.Reason !== reason) return false;
+            if (minScore != null && (r.BestMatchScore == null || r.BestMatchScore < minScore)) return false;
+            if (search) {
+                const haystack = `${r.ProposedName} ${r.BestMatchName ?? ''} ${r.SourceText ?? ''}`.toLowerCase();
+                if (!haystack.includes(search)) return false;
+            }
+            return true;
+        });
+        this.cdr.detectChanges();
+    }
+
+    public ToggleSuggestionSelected(row: SuggestionRow, ev: Event): void {
+        ev.stopPropagation();
+        row.selected = !row.selected;
+        this.cdr.detectChanges();
+    }
+
+    public ToggleAllSuggestions(checked: boolean): void {
+        for (const r of this.SuggestionRowsFiltered) r.selected = checked;
+        this.cdr.detectChanges();
+    }
+
+    public SelectedSuggestionCount(): number {
+        return this.SuggestionRowsFiltered.filter(r => r.selected).length;
+    }
+
+    public SelectSuggestion(row: SuggestionRow): void {
+        this.SuggestionSelected = row;
+        this.cdr.detectChanges();
+    }
+
+    public CloseDrawer(): void {
+        this.SuggestionSelected = null;
+        this.cdr.detectChanges();
+    }
+
+    /** Server-driven: routes through TagGovernanceResolver mutations. */
+    public async DispositionSuggestion(row: SuggestionRow, kind: 'create-new' | 'merge' | 'reject'): Promise<void> {
+        if (!row || row.dispositionInProgress) return;
+        row.dispositionInProgress = kind;
+        this.cdr.detectChanges();
+        try {
+            const provider = this.ProviderToUse as GraphQLDataProvider;
+            if (!provider) throw new Error('No GraphQL provider available.');
+            const client = new GraphQLAIClient(provider);
+            if (kind === 'reject') {
+                const r = await client.RejectTagSuggestion({ suggestionID: row.ID });
+                if (!r.Success) throw new Error(r.ErrorMessage ?? 'reject failed');
+                MJNotificationService.Instance.CreateSimpleNotification(`Rejected "${row.ProposedName}".`, 'info', 2200);
+            } else {
+                const r = await client.PromoteTagSuggestion({
+                    suggestionID: row.ID,
+                    strategy: kind === 'merge' ? 'merge-into-existing' : 'create-new',
+                    targetTagID: kind === 'merge' ? row.BestMatchTagID ?? undefined : undefined,
+                });
+                if (!r.Success) throw new Error(r.ErrorMessage ?? 'promote failed');
+                if (kind === 'merge') {
+                    MJNotificationService.Instance.CreateSimpleNotification(`Merged "${row.ProposedName}" into "${r.ResolvedTagName ?? row.BestMatchName}".`, 'info', 2500);
+                } else {
+                    MJNotificationService.Instance.CreateSimpleNotification(`Created tag "${r.ResolvedTagName ?? row.ProposedName}".`, 'info', 2500);
+                }
+            }
+            this.SuggestionRows = this.SuggestionRows.filter(r => !UUIDsEqual(r.ID, row.ID));
+            this.PendingSuggestionCount = this.SuggestionRows.length;
+            this.applySuggestionFilters();
+            this.buildNavItems();
+            if (this.SuggestionSelected && UUIDsEqual(this.SuggestionSelected.ID, row.ID)) this.SuggestionSelected = null;
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Failed to ${kind}: ${msg}`, 'error', 6000);
+        } finally {
+            row.dispositionInProgress = null;
+            this.cdr.detectChanges();
+        }
+    }
+
+    public async BulkApprove(): Promise<void> {
+        const selected = this.SuggestionRowsFiltered.filter(r => r.selected);
+        if (selected.length === 0) return;
+        if (!confirm(`Approve ${selected.length} suggestion(s)? Each will merge into its best match (when available) or be created as a new tag.`)) return;
+        this.SuggestionBulkInProgress = true;
+        for (const row of selected) {
+            const kind = row.BestMatchTagID ? 'merge' : 'create-new';
+            await this.DispositionSuggestion(row, kind);
+        }
+        this.SuggestionBulkInProgress = false;
+    }
+
+    public async BulkReject(): Promise<void> {
+        const selected = this.SuggestionRowsFiltered.filter(r => r.selected);
+        if (selected.length === 0) return;
+        if (!confirm(`Reject ${selected.length} suggestion(s)?`)) return;
+        this.SuggestionBulkInProgress = true;
+        for (const row of selected) await this.DispositionSuggestion(row, 'reject');
+        this.SuggestionBulkInProgress = false;
+    }
+
+    public ReasonClass(reason: string): string {
+        switch (reason) {
+            case 'MergeCandidate':       return 'merge';
+            case 'BelowThreshold':       return 'below';
+            case 'ConstrainedMode':
+            case 'AmbiguousMatch':       return 'constrained';
+            case 'ParentFrozen':
+            case 'MaxChildrenExceeded':
+            case 'MaxDepthExceeded':
+            case 'BelowMinWeight':       return 'frozen';
+            case 'RequiresReview':       return 'review';
+            case 'LowUsage':             return 'lowusage';
+            case 'WideNode':             return 'widenode';
+            case 'AutoGrowDisabled':
+            case 'MaxItemTagsExceeded':  return 'autogrow';
+            default:                     return '';
+        }
+    }
+
+    // ========================================================================
+    // TAG HEALTH — wraps the server TagHealthJob via GraphQL
+    // ========================================================================
+
+    public async RunHealthNow(): Promise<void> {
+        if (this.HealthRunning) return;
+        this.HealthRunning = true;
+        this.cdr.detectChanges();
+        try {
+            const provider = this.ProviderToUse as GraphQLDataProvider;
+            if (!provider) throw new Error('No GraphQL provider available.');
+            const client = new GraphQLAIClient(provider);
+            const r = await client.RunTagHealth({
+                minCoOccurrence: this.HealthThresholds.minCoOccurrence,
+                minNameSimilarity: this.HealthThresholds.minNameSimilarity,
+                minEmbeddingSimilarity: this.HealthThresholds.minEmbeddingSimilarity,
+                maxUsage: this.HealthThresholds.maxUsage,
+                maxImplicitChildren: this.HealthThresholds.maxImplicitChildren,
+            });
+            if (!r.Success) throw new Error(r.ErrorMessage ?? 'health run failed');
+            this.LastHealthSummary = {
+                mergeCount: r.MergeCount,
+                lowUsageCount: r.LowUsageCount,
+                wideNodeCount: r.WideNodeCount,
+                durationMs: r.DurationMs,
+                runAt: new Date(),
+            };
+            this.HealthRunHistory = [
+                { When: new Date(), Trigger: 'Manual · UI', TagsScanned: this.tagsRaw.length, Merge: r.MergeCount, LowUsage: r.LowUsageCount, WideNode: r.WideNodeCount, DurationMs: r.DurationMs },
+                ...this.HealthRunHistory,
+            ].slice(0, 12);
+            MJNotificationService.Instance.CreateSimpleNotification(
+                `Tag Health: ${r.MergeCount} merge / ${r.LowUsageCount} low-usage / ${r.WideNodeCount} wide-node in ${r.DurationMs}ms.`,
+                'info', 4000
+            );
+            // Pull in the new pending suggestions so Duplicates / Orphans / Suggestions all reflect
+            await this.loadSuggestions();
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Tag Health failed: ${msg}`, 'error', 5000);
+        } finally {
+            this.HealthRunning = false;
+            this.cdr.detectChanges();
+        }
+    }
+
+    public async RebuildEmbeddings(): Promise<void> {
+        if (this.RebuildEmbeddingsRunning) return;
+        if (!confirm('Rebuild embeddings for all tags whose model doesn\'t match the configured embedding model? This can take time.')) return;
+        this.RebuildEmbeddingsRunning = true;
+        this.cdr.detectChanges();
+        try {
+            const provider = this.ProviderToUse as GraphQLDataProvider;
+            if (!provider) throw new Error('No GraphQL provider available.');
+            const client = new GraphQLAIClient(provider);
+            const r = await client.RebuildTagEmbeddings();
+            if (!r.Success) throw new Error(r.ErrorMessage ?? 'rebuild failed');
+            MJNotificationService.Instance.CreateSimpleNotification(`Refreshed ${r.Refreshed}/${r.Total} tag embeddings.`, 'info', 4000);
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            MJNotificationService.Instance.CreateSimpleNotification(`Rebuild failed: ${msg}`, 'error', 5000);
+        } finally {
+            this.RebuildEmbeddingsRunning = false;
+            this.cdr.detectChanges();
+        }
+    }
 }
 
-export function LoadAutotaggingPipelineResource(): void {
+export function LoadTagsResource(): void {
     // Prevents tree-shaking
 }
 

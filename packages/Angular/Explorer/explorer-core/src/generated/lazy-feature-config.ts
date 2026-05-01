@@ -92,7 +92,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   'BaseResourceComponent::DuplicateDetectionResource': loadAiDashboardsModule,
   'BaseResourceComponent::KnowledgeConfigResource': loadAiDashboardsModule,
   'BaseResourceComponent::SchedulingResource': loadAiDashboardsModule,
-  'BaseResourceComponent::TagGovernance': loadAiDashboardsModule,
+  'BaseResourceComponent::Tags': loadAiDashboardsModule,
   'BaseResourceComponent::VectorManagementResource': loadAiDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./communication-dashboards.module
