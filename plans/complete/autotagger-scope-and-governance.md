@@ -1,9 +1,18 @@
 # Autotagger Scope & Governance — Unified Implementation Plan
 
-**Status:** Implementation complete — engine + autotag wiring + Tag Health + Suggestion Inbox + tests. UX redesign deferred to mockup-driven follow-up.
+**Status:** ✅ **COMPLETE** — schema + engine + autotag pipeline integration + Tag Health + governance resolvers + unified Tags dashboard (Overview / Taxonomy / Suggestions / Health) + ContentSource form + tests. Shipped on PR #2500 across the commit range `a9b2db342a..b3ae2534c9`.
 **Branch:** `claude/autotagger-scope-and-governance-plan`
 **Owner:** unassigned
 **Estimated total work:** 8–12 dev-days for engine; UI parallelizable after schema lands
+
+## Final scope shipped beyond the original plan
+
+The plan called for an Suggestion Inbox component and deferred the deeper UX. Final delivery exceeded that:
+- Standalone `TagGovernanceResourceComponent` was built first as a separate Knowledge Hub dashboard, then — after UX review with mockups in `mockups/knowledge-hub-classify-redesign/` — folded into a unified **`TagsResourceComponent`** that absorbs Tag Library + Taxonomy from the existing Classify dashboard plus adds Suggestions + Health.
+- Existing Classify dashboard slimmed to its run-management surface only (Pipeline / Sources / Content Types / Run History). Tag Library + Taxonomy nav items removed.
+- Duplicates and Orphans sub-tabs in Taxonomy switched from client-side string-similarity / zero-usage detection to **server-driven** data flowing from `MJ:Tag Suggestions` populated by `TagHealthJob` (Reason='MergeCandidate' / Reason='LowUsage'). Same UI; better signal.
+- ContentSource form gained an Option-B dense Tag Pipeline Configuration panel for the typed JSON knobs (mode picker, threshold sliders with auto-pin, scope+root, budgets).
+- Two new guides shipped: `guides/TAXONOMY_TAGGING_GUIDE.md` (~730 lines, 7 Mermaid diagrams) and `guides/BASE_ENTITY_SERVER_PATTERNS.md` (captures the persisted-embedding + ValidateAsync invariant + FK-cleanup-before-delete patterns this PR introduced).
 
 ## Implementation status (2026-05-01)
 
