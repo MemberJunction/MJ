@@ -105,7 +105,7 @@ function SimpleChart({
   // Process and aggregate data
   const processData = React.useMemo(() => {
     if (!data || !Array.isArray(data) || data.length === 0) {
-      return { chartData: [], categories: [], values: [], datasets: [], isEmpty: true };
+      return { chartData: [], categories: [], values: [], datasets: [], isEmpty: true, isDateField: false };
     }
 
     try {
@@ -117,21 +117,21 @@ function SimpleChart({
           const error = `Field "${groupBy}" not found in data. Available fields: ${Object.keys(data[0]).join(', ')}`;
           console.error(error);
           setError(error);
-          return { chartData: [], categories: [], values: [], datasets: [], isEmpty: true };
+          return { chartData: [], categories: [], values: [], datasets: [], isEmpty: true, isDateField: false };
         }
 
         if (stackBy && !(stackBy in data[0])) {
           const error = `Stack field "${stackBy}" not found in data. Available fields: ${Object.keys(data[0]).join(', ')}`;
           console.error(error);
           setError(error);
-          return { chartData: [], categories: [], values: [], datasets: [], isEmpty: true };
+          return { chartData: [], categories: [], values: [], datasets: [], isEmpty: true, isDateField: false };
         }
 
         if (valueField && !(valueField in data[0])) {
           const error = `Value field "${valueField}" not found in data. Available fields: ${Object.keys(data[0]).join(', ')}`;
           console.error(error);
           setError(error);
-          return { chartData: [], categories: [], values: [], datasets: [], isEmpty: true };
+          return { chartData: [], categories: [], values: [], datasets: [], isEmpty: true, isDateField: false };
         }
       }
 
@@ -147,7 +147,7 @@ function SimpleChart({
         const sampleValue = data[0][groupBy];
         isDateField = sampleValue && (
           sampleValue instanceof Date ||
-          (typeof sampleValue === 'string' && !isNaN(Date.parse(sampleValue)))
+          (typeof sampleValue === 'string' && sampleValue.length >= 8 && !isNaN(Date.parse(sampleValue)))
         );
       }
 
@@ -156,13 +156,7 @@ function SimpleChart({
         // Collect all unique primary categories (X-axis)
         const categoriesSet = new Set();
         data.forEach(record => {
-          let key = record[groupBy] || 'Unknown';
-          if (isDateField && key !== 'Unknown') {
-            const date = new Date(key);
-            if (!isNaN(date.getTime())) {
-              key = date.toISOString().split('T')[0];
-            }
-          }
+          const key = record[groupBy] || 'Unknown';
           categoriesSet.add(key);
         });
 
@@ -192,13 +186,7 @@ function SimpleChart({
         // Group data by both primary category AND stack value
         const grouped = {};
         data.forEach(record => {
-          let categoryKey = record[groupBy] || 'Unknown';
-          if (isDateField && categoryKey !== 'Unknown') {
-            const date = new Date(categoryKey);
-            if (!isNaN(date.getTime())) {
-              categoryKey = date.toISOString().split('T')[0];
-            }
-          }
+          const categoryKey = record[groupBy] || 'Unknown';
 
           // Skip if category was filtered out by limit
           if (!categories.includes(categoryKey)) return;
@@ -270,7 +258,8 @@ function SimpleChart({
           categories: categories.map(c => String(c)),
           values: [], // Not used in stacked mode
           datasets: datasets,
-          isEmpty: false
+          isEmpty: false,
+          isDateField
         };
       }
 
@@ -278,17 +267,8 @@ function SimpleChart({
       const grouped = {};
 
       data.forEach(record => {
-        let key = record[groupBy] || 'Unknown';
-        
-        // Format date values for display
-        if (isDateField && key !== 'Unknown') {
-          const date = new Date(key);
-          if (!isNaN(date.getTime())) {
-            // Format as YYYY-MM-DD for grouping
-            key = date.toISOString().split('T')[0];
-          }
-        }
-        
+        const key = record[groupBy] || 'Unknown';
+
         if (!grouped[key]) {
           grouped[key] = {
             label: key,
@@ -361,12 +341,13 @@ function SimpleChart({
         categories,
         values,
         datasets: [], // Empty in non-stacked mode
-        isEmpty: false
+        isEmpty: false,
+        isDateField
       };
     } catch (err) {
       console.error('Error processing chart data:', err);
       setError(err.message);
-      return { chartData: [], categories: [], values: [], datasets: [], isEmpty: true };
+      return { chartData: [], categories: [], values: [], datasets: [], isEmpty: true, isDateField: false };
     }
   }, [data, groupBy, stackBy, valueField, aggregateMethod, sortBy, sortOrder, limit, entityInfo]);
 
@@ -392,7 +373,7 @@ function SimpleChart({
       const sampleValue = data[0][groupBy];
       isDateField = sampleValue && (
         sampleValue instanceof Date ||
-        (typeof sampleValue === 'string' && !isNaN(Date.parse(sampleValue)))
+        (typeof sampleValue === 'string' && sampleValue.length >= 8 && !isNaN(Date.parse(sampleValue)))
       );
     }
     
@@ -604,6 +585,16 @@ function SimpleChart({
             usePointStyle: true,
             boxPadding: 6,
             callbacks: {
+              title: (tooltipItems) => {
+                const raw = tooltipItems[0]?.label || '';
+                if (processData.isDateField && raw !== 'Unknown') {
+                  const date = new Date(raw);
+                  if (!isNaN(date.getTime())) {
+                    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                  }
+                }
+                return raw;
+              },
               label: (context) => {
                 const label = context.dataset.label || '';
                 const value = formatValue(context.parsed.y !== undefined ? context.parsed.y : context.parsed);
@@ -646,6 +637,13 @@ function SimpleChart({
             },
             callback: function(value) {
               const label = this.getLabelForValue(value);
+              // Format date values for display on the axis
+              if (processData.isDateField && typeof label === 'string' && label !== 'Unknown') {
+                const date = new Date(label);
+                if (!isNaN(date.getTime())) {
+                  return date.toISOString().split('T')[0];
+                }
+              }
               if (typeof label === 'string' && label.length > 18) {
                 return label.substring(0, 16) + '…';
               }

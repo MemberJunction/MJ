@@ -27,12 +27,24 @@ describe('sqlLike filters', () => {
                 expect(manager.executeFilter('sqlLikeContains', "O'Brien")).toBe("'%O''Brien%'");
             });
 
-            it('should escape literal % with bracket syntax', () => {
-                expect(manager.executeFilter('sqlLikeContains', '100%')).toBe("'%100[%]%'");
+            it('should strip and not escape boundary % wildcards', () => {
+                expect(manager.executeFilter('sqlLikeContains', '100%')).toBe("'%100%'");
             });
 
             it('should escape literal _ with bracket syntax', () => {
                 expect(manager.executeFilter('sqlLikeContains', 'first_name')).toBe("'%first[_]name%'");
+            });
+
+            it('should escape interior % with bracket syntax', () => {
+                expect(manager.executeFilter('sqlLikeContains', '50% off 100% items')).toBe("'%50[%] off 100[%] items%'");
+            });
+
+            it('should strip leading and trailing % wildcards from value', () => {
+                expect(manager.executeFilter('sqlLikeContains', '%Leadership%')).toBe("'%Leadership%'");
+            });
+
+            it('should strip multiple leading and trailing % wildcards', () => {
+                expect(manager.executeFilter('sqlLikeContains', '%%Leadership%%')).toBe("'%Leadership%'");
             });
 
             it('should handle empty string', () => {
@@ -61,8 +73,12 @@ describe('sqlLike filters', () => {
                 expect(manager.executeFilter('sqlLikeBegins', "O'Brien")).toBe("'O''Brien%'");
             });
 
-            it('should escape literal % with bracket syntax', () => {
-                expect(manager.executeFilter('sqlLikeBegins', '100%')).toBe("'100[%]%'");
+            it('should strip trailing % wildcard from value', () => {
+                expect(manager.executeFilter('sqlLikeBegins', 'Leadership%')).toBe("'Leadership%'");
+            });
+
+            it('should preserve leading % as literal and escape it', () => {
+                expect(manager.executeFilter('sqlLikeBegins', '%Leadership')).toBe("'[%]Leadership%'");
             });
 
             it('should escape literal _ with bracket syntax', () => {
@@ -87,7 +103,11 @@ describe('sqlLike filters', () => {
                 expect(manager.executeFilter('sqlLikeEnds', "O'Brien")).toBe("'%O''Brien'");
             });
 
-            it('should escape literal % with bracket syntax', () => {
+            it('should strip leading % wildcard from value', () => {
+                expect(manager.executeFilter('sqlLikeEnds', '%Conference')).toBe("'%Conference'");
+            });
+
+            it('should preserve trailing % as literal and escape it', () => {
                 expect(manager.executeFilter('sqlLikeEnds', '100%')).toBe("'%100[%]'");
             });
 
@@ -115,8 +135,16 @@ describe('sqlLike filters', () => {
                 expect(manager.executeFilter('sqlLikeContains', "O'Brien")).toBe("'%O''Brien%'");
             });
 
-            it('should escape literal % with backslash syntax', () => {
-                expect(manager.executeFilter('sqlLikeContains', '100%')).toBe("'%100\\%%'");
+            it('should strip and not escape boundary % wildcards', () => {
+                expect(manager.executeFilter('sqlLikeContains', '100%')).toBe("'%100%'");
+            });
+
+            it('should escape interior % with backslash syntax', () => {
+                expect(manager.executeFilter('sqlLikeContains', '50% off 100% items')).toBe("'%50\\% off 100\\% items%'");
+            });
+
+            it('should strip leading and trailing % wildcards from value', () => {
+                expect(manager.executeFilter('sqlLikeContains', '%Leadership%')).toBe("'%Leadership%'");
             });
 
             it('should escape literal _ with backslash syntax', () => {
@@ -129,8 +157,12 @@ describe('sqlLike filters', () => {
                 expect(manager.executeFilter('sqlLikeBegins', 'Leadership')).toBe("'Leadership%'");
             });
 
-            it('should escape literal % with backslash syntax', () => {
-                expect(manager.executeFilter('sqlLikeBegins', '100%')).toBe("'100\\%%'");
+            it('should strip trailing % wildcard from value', () => {
+                expect(manager.executeFilter('sqlLikeBegins', 'Leadership%')).toBe("'Leadership%'");
+            });
+
+            it('should preserve leading % as literal and escape it', () => {
+                expect(manager.executeFilter('sqlLikeBegins', '%Leadership')).toBe("'\\%Leadership%'");
             });
 
             it('should escape literal _ with backslash syntax', () => {
@@ -143,7 +175,11 @@ describe('sqlLike filters', () => {
                 expect(manager.executeFilter('sqlLikeEnds', 'Conference')).toBe("'%Conference'");
             });
 
-            it('should escape literal % with backslash syntax', () => {
+            it('should strip leading % wildcard from value', () => {
+                expect(manager.executeFilter('sqlLikeEnds', '%Conference')).toBe("'%Conference'");
+            });
+
+            it('should preserve trailing % as literal and escape it', () => {
                 expect(manager.executeFilter('sqlLikeEnds', '100%')).toBe("'%100\\%'");
             });
 

@@ -1,0 +1,180 @@
+{
+  "description": "Database Designer orchestrates a pipeline: Requirements Analyst → Schema Designer → show prototype to user → user approves → Schema Validator → Builder. terminateAfter is false for Analyst and Designer (you react to their results), true for Validator only (its output goes directly to the user).",
+
+  "example_1_new_entity_request": {
+    "description": "User describes a new entity. Call Requirements Analyst immediately — do not ask questions yourself.",
+    "nextStep": {
+      "type": "Sub-Agent",
+      "subAgent": {
+        "name": "Database Requirements Analyst",
+        "message": "Gather functional requirements for a new entity. User wants: 'track project milestones — checkpoints with a title, due date, and status'. Write FINAL if you have enough info, or DRAFT with up to 3 questions if you need clarification. Return when done.",
+        "terminateAfter": false
+      }
+    }
+  },
+
+  "example_2_analyst_returned_draft": {
+    "description": "Requirements Analyst returned with DRAFT — it has questions. Extract them from FunctionalRequirements and show them to the user as a form. Do not call any sub-agent yet.",
+    "taskComplete": false,
+    "message": "Before I design the schema, I have a few questions:",
+    "responseForm": {
+      "description": "Answer these to continue:",
+      "submitLabel": "Continue",
+      "questions": [
+        {
+          "id": "q1",
+          "label": "Should milestones have a status (e.g. Active, Completed, Cancelled) or just a done/not-done flag?",
+          "type": { "type": "textarea" },
+          "required": true
+        },
+        {
+          "id": "q2",
+          "label": "Should each milestone belong to a project? If so, is Projects already an entity in your system?",
+          "type": { "type": "textarea" },
+          "required": false
+        },
+        {
+          "id": "q3",
+          "label": "Do you want to assign milestones to a specific team member (link to Users)?",
+          "type": { "type": "textarea" },
+          "required": false
+        }
+      ]
+    },
+    "nextStep": {
+      "type": "Chat"
+    }
+  },
+
+  "example_3_user_answered_draft_questions": {
+    "description": "User answered the draft questions. Call Requirements Analyst again with their answers so it can finalize FunctionalRequirements.",
+    "nextStep": {
+      "type": "Sub-Agent",
+      "subAgent": {
+        "name": "Database Requirements Analyst",
+        "message": "Update FunctionalRequirements with the user's answers. User said: 'Yes, status: Active/Completed/Cancelled. Link to Projects entity. Assign to a team member via Users.' Finalize to FINAL mode — we have enough to design. Return when done.",
+        "terminateAfter": false
+      }
+    }
+  },
+
+  "example_4_requirements_final_call_designer": {
+    "description": "FunctionalRequirements is complete (no DRAFT), SchemaDesign is not yet in payload. Call Schema Designer. It will write SchemaDesign to the payload and return — you then show the prototype.",
+    "nextStep": {
+      "type": "Sub-Agent",
+      "subAgent": {
+        "name": "Database Schema Designer",
+        "message": "Design the schema based on FunctionalRequirements in the payload. Research any FK targets first using Database Research Agent. Write SchemaDesign (Prototype + TableDefinition + ModificationType) to payload and return Success. Do NOT show the prototype to the user — the parent agent will present it.",
+        "terminateAfter": false
+      }
+    }
+  },
+
+  "example_5_designer_returned_show_prototype": {
+    "description": "Schema Designer returned — SchemaDesign is now in the payload. YOU show SchemaDesign.Description (if present), SchemaDesign.Prototype, and SchemaDesign.ERDMermaid (if present, as a ```mermaid block) to the user with the approval buttons. When the user clicks 'Looks good — create it', the framework will send 'Does this design look right?: create_now' as the next user message.",
+    "message": "📁 __mj_UDT.ProjectMilestones — new entity\n\nHere's the proposed design for **Project Milestones**:\n\nProject Milestones tracks key checkpoints in projects with status, due dates, and optional assignment to team members.\n\n| Column | SQL Type | Required | Default | Description |\n|--------|----------|----------|---------|-------------|\n| ProjectID | UNIQUEIDENTIFIER | ✅ Yes | — | FK → Projects.ID |\n| AssignedUserID | UNIQUEIDENTIFIER | No | — | FK → __mj.User.ID |\n| Title | NVARCHAR(200) | ✅ Yes | — | Milestone display name |\n| Status | NVARCHAR(50) | ✅ Yes | 'Active' | Lifecycle status: Active, Completed, Cancelled |\n| DueDate | DATE | No | — | Target completion date |\n| Notes | NVARCHAR(MAX) | No | — | Optional notes about this milestone |\n\n```mermaid\nerDiagram\n    ProjectMilestones {\n        UNIQUEIDENTIFIER ProjectID FK\n        UNIQUEIDENTIFIER AssignedUserID FK\n        NVARCHAR Title\n        NVARCHAR Status\n        DATE DueDate\n        NVARCHAR Notes\n    }\n\n    Projects ||--o{ ProjectMilestones : \"\"\n    User ||--o{ ProjectMilestones : \"\"\n```\n\nAuto-managed by CodeGen (do not add): `ID` · `__mj_CreatedAt` · `__mj_UpdatedAt`",
+    "responseForm": {
+      "questions": [{
+        "id": "approval",
+        "label": "Does this design look right?",
+        "type": {
+          "type": "buttongroup",
+          "options": [
+            { "value": "create_now", "label": "Looks good — create it" },
+            { "value": "modify", "label": "Change something" }
+          ]
+        }
+      }]
+    },
+    "nextStep": {
+      "type": "Chat"
+    }
+  },
+
+  "example_6_user_clicked_create_now": {
+    "description": "The last user message is 'Does this design look right?: create_now' — the framework formats button clicks as '[label]: [value]', so create_now means the user approved. Call Schema Validator immediately. No message, no responseForm, no confirmation — just the sub-agent call. terminateAfter MUST be false — the parent must react to ValidationResult (success → route to Builder; failure → report errors).",
+    "nextStep": {
+      "type": "Sub-Agent",
+      "subAgent": {
+        "name": "Database Schema Validator",
+        "message": "Validate the TableDefinition in SchemaDesign.TableDefinition. Check authorization, schema blocklist, naming conflicts, and structural validity. Return ValidationResult.",
+        "terminateAfter": false
+      }
+    }
+  },
+
+  "example_7_user_wants_schema_change": {
+    "description": "User asked to change the design ('add a Notes field'). Call Schema Designer again with the change appended. After it returns, show the updated prototype.",
+    "nextStep": {
+      "type": "Sub-Agent",
+      "subAgent": {
+        "name": "Database Schema Designer",
+        "message": "Design the schema based on FunctionalRequirements in the payload. Research any FK targets first using Database Research Agent. Write SchemaDesign (Prototype + TableDefinition + ModificationType) to payload and return Success. Do NOT show the prototype to the user — the parent agent will present it. Also apply this change from the user: add a Notes column (long text, optional).",
+        "terminateAfter": false
+      }
+    }
+  },
+
+  "example_8_build_success": {
+    "description": "DatabaseDesignerResult is in the payload — entity was created successfully. Report it to the user and set taskComplete: true.",
+    "taskComplete": true,
+    "message": "Your new entity is live!\n\n- **Entity Name**: Project Milestones\n- **Table**: `__mj_UDT.ProjectMilestones`\n- **Columns**: 4 custom + 3 auto-managed (ID, CreatedAt, UpdatedAt)\n\nYou can start creating records immediately via the API or Explorer UI."
+  },
+
+  "example_10_subagent_mode_entry": {
+    "description": "payload.mode === 'subagent' and callerContext.tableSpec is present but SchemaDesign is absent. Intercept 1 fires: bypass Requirements Analyst entirely and route directly to Schema Designer with the tableSpec embedded in the message.",
+    "nextStep": {
+      "type": "Sub-Agent",
+      "subAgent": {
+        "name": "Database Schema Designer",
+        "message": "Subagent mode — called by Planning Designer Agent.\n\nSpecification:\n```json\n{\"name\": \"Customer Orders\", \"description\": \"Tracks orders placed by customers\", \"schemaName\": \"__mj_UDT\"}\n```\n\nDesign the schema for this entity. Skip DB research (Step 1) — the calling agent has already determined this is a new entity. Write SchemaDesign (Prototype + TableDefinition + ModificationType=create) to the payload and return Success.",
+        "terminateAfter": false
+      }
+    }
+  },
+
+  "example_11_subagent_confirmed_by_parent": {
+    "description": "payload.mode === 'subagent', callerContext.subagentConfirmedByParent === true, and SchemaDesign is absent. The calling agent already obtained user approval. The message includes 'User approval was already obtained' — Schema Designer should skip the approval step and proceed directly.",
+    "nextStep": {
+      "type": "Sub-Agent",
+      "subAgent": {
+        "name": "Database Schema Designer",
+        "message": "Subagent mode — called by Planning Designer Agent.\n\nSpecification:\n```json\n{\"name\": \"Customer Orders\", \"description\": \"Tracks orders placed by customers\"}\n```\n\nUser approval was already obtained by the calling agent — do not ask for confirmation. Write SchemaDesign and return Success immediately.",
+        "terminateAfter": false
+      }
+    }
+  },
+
+  "example_12_validation_passed_route_to_builder": {
+    "description": "ValidationResult.Valid === true is in the payload and DatabaseDesignerResult is absent. Intercept 3 fires automatically — route to Schema Builder. No user interaction needed.",
+    "nextStep": {
+      "type": "Sub-Agent",
+      "subAgent": {
+        "name": "Database Schema Builder",
+        "message": "Build the entity defined in SchemaDesign.TableDefinition. The schema has passed validation. Create the table, run the migration pipeline, and write DatabaseDesignerResult to the payload.",
+        "terminateAfter": false
+      }
+    }
+  },
+
+  "example_9_validation_failure": {
+    "description": "ValidationResult is in the payload and validation failed. Explain the problem and offer options.",
+    "taskComplete": false,
+    "message": "There's a problem with the schema:\n\n**Error**: An entity named `Project Milestones` already exists in `__mj_UDT`.\n\nWould you like to use a different name, or modify the existing entity instead?",
+    "responseForm": {
+      "questions": [{
+        "id": "resolution",
+        "type": {
+          "type": "buttongroup",
+          "options": [
+            { "value": "rename", "label": "Use a different name" },
+            { "value": "modify", "label": "Modify the existing entity" }
+          ]
+        }
+      }]
+    },
+    "nextStep": {
+      "type": "Chat"
+    }
+  }
+}

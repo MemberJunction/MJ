@@ -1,0 +1,79 @@
+.step-basics {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--mj-text-primary);
+}
+
+.req {
+  color: var(--mj-status-error);
+}
+
+.field-hint {
+  font-size: 0.8rem;
+  color: var(--mj-text-muted);
+  line-height: 1.5;
+}
+
+.table-name-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.table-name-wrap .mj-input {
+  flex: 1;
+  padding-right: 52px;
+}
+
+.auto-badge {
+  position: absolute;
+  right: 8px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-muted);
+  pointer-events: none;
+  transition: background 0.15s, color 0.15s;
+}
+
+.auto-badge.active {
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+}
+
+.no-schemas-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--mj-status-warning-bg);
+  color: var(--mj-status-warning-text);
+  border: 1px solid var(--mj-status-warning-border);
+  border-radius: 6px;
+  font-size: 0.875rem;
+}
+
+.warning-icon {
+  color: var(--mj-status-warning);
+  margin-right: 3px;
+}
+
+.mt-sm {
+  margin-top: 8px;
+}

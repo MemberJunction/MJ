@@ -1,1 +1,1 @@
-../../mj.config.cjs
+module.exports = require('../../mj.config.cjs');

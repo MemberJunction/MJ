@@ -10,10 +10,33 @@
   "registry": "MJ",
   "status": "Active",
   "dataRequirements": {
-    "queries": [{
-      "name": "Member Directory",
-      "categoryPath": "Membership/Reports",
-      "fields": ["MemberID", "FullName", "Email", "MembershipType", "JoinDate"]
-    }]
+    "queries": [
+      {
+        "name": "Member Directory",
+        "categoryPath": "Membership/Reports",
+        "fields": [
+          {
+            "name": "MemberID",
+            "type": "uniqueidentifier"
+          },
+          {
+            "name": "FullName",
+            "type": "nvarchar"
+          },
+          {
+            "name": "Email",
+            "type": "nvarchar"
+          },
+          {
+            "name": "MembershipType",
+            "type": "nvarchar"
+          },
+          {
+            "name": "JoinDate",
+            "type": "datetimeoffset"
+          }
+        ]
+      }
+    ]
   }
 }

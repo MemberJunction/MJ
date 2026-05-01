@@ -5,7 +5,12 @@
   "componentType": "interactive",
   "libraries": [],
   "properties": [
-    { "name": "year", "type": "number", "required": false, "description": "Year for sales report" }
+    {
+      "name": "year",
+      "type": "number",
+      "required": false,
+      "description": "Year for sales report"
+    }
   ],
   "dataRequirements": {
     "mode": "queries",
@@ -13,12 +18,39 @@
       {
         "name": "SalesReport",
         "categoryPath": "Reports/Sales",
-        "fields": ["ID", "Amount", "Quarter"],
-        "entityNames": ["Sales"],
+        "fields": [
+          {
+            "name": "ID",
+            "type": "uniqueidentifier"
+          },
+          {
+            "name": "Amount",
+            "type": "int"
+          },
+          {
+            "name": "Quarter",
+            "type": "nvarchar"
+          }
+        ],
+        "entityNames": [
+          "Sales"
+        ],
         "parameters": [
-          { "name": "Year", "type": "number", "isRequired": true },
-          { "name": "Quarter", "type": "string", "isRequired": false },
-          { "name": "Region", "type": "string", "isRequired": false }
+          {
+            "name": "Year",
+            "type": "number",
+            "isRequired": true
+          },
+          {
+            "name": "Quarter",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "Region",
+            "type": "string",
+            "isRequired": false
+          }
         ]
       }
     ]

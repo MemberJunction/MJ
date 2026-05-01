@@ -79,7 +79,15 @@ export class SchemaEvolution {
 
     /**
      * Generate ALTER TABLE SQL for a SchemaDiff.
-     * Removed columns are commented (no physical DROP — non-destructive).
+     *
+     * Removed columns are intentionally NOT emitted as `DROP COLUMN` (non-destructive design).
+     * Instead they are surfaced as warning comments that the pipeline executor MUST detect
+     * and report to the user — otherwise the user sees "success" while their requested drop
+     * was silently skipped (the original A5 false-success bug).
+     *
+     * If the user's intent contains ONLY column removals (no adds, no modifications), this
+     * method throws so the pipeline fails fast instead of running a no-op statement and
+     * reporting success.
      */
     GenerateEvolutionMigration(
         diff: SchemaDiff,
@@ -87,6 +95,17 @@ export class SchemaEvolution {
         tableName: string,
         platform: DatabasePlatform
     ): string {
+        const hasActiveOps = diff.AddedColumns.length > 0 || diff.ModifiedColumns.length > 0;
+
+        if (!hasActiveOps && diff.RemovedColumns.length > 0) {
+            throw new Error(
+                `Cannot apply migration: only removal of column(s) [${diff.RemovedColumns.join(', ')}] was requested, ` +
+                `but Database Designer does not perform destructive DROP COLUMN operations. ` +
+                `To remove a column, drop it manually after verifying no dependencies, then re-run schema sync. ` +
+                `If you intended to keep these columns, add them back to the desired schema and resubmit.`
+            );
+        }
+
         const statements: string[] = [];
 
         for (const col of diff.AddedColumns) {
@@ -99,8 +118,9 @@ export class SchemaEvolution {
 
         for (const colName of diff.RemovedColumns) {
             statements.push(
-                `-- DEPRECATED: Column [${colName}] no longer in desired schema. ` +
-                `Remove manually after confirming no dependencies.`
+                `-- ⚠️  WARNING — DROP NOT EXECUTED: Column [${colName}] was requested to be removed but ` +
+                `Database Designer does not perform destructive DROP COLUMN. ` +
+                `Drop manually after verifying no dependencies. (Pipeline executor: surface this warning to the user.)`
             );
         }
 

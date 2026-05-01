@@ -22,6 +22,8 @@ export interface ERDCompositeState {
   panPosition: { x: number; y: number };
   fieldsSectionExpanded: boolean;
   relationshipsSectionExpanded: boolean;
+  /** User's preferred layout algorithm — 'schema-grid' (default) or 'dagre'. */
+  layoutAlgorithm?: 'schema-grid' | 'dagre';
 }
 
 /**
@@ -251,6 +253,14 @@ export class ERDCompositeComponent extends BaseAngularComponent implements OnIni
   public onEntitySelected(entity: EntityInfo): void {
     this.selectedEntity = entity;
 
+    // Bring the entity into view in the diagram and emit nodeSelected
+    // upstream so the focus + highlight logic kicks in.  Done in a
+    // microtask so the [focusEntityId] binding flushes first and the
+    // inner diagram has the new focus state when we ask it to center.
+    queueMicrotask(() => {
+      this.mjEntityErd?.zoomToEntity(entity.ID);
+    });
+
     this.emitStateChange();
     this.emitUserStateChange();
   }
@@ -363,6 +373,7 @@ export class ERDCompositeComponent extends BaseAngularComponent implements OnIni
       panPosition: { x: 0, y: 0 },
       fieldsSectionExpanded: this.fieldsSectionExpanded,
       relationshipsSectionExpanded: this.relationshipsSectionExpanded,
+      layoutAlgorithm: this.mjEntityErd?.erdDiagram?.activeLayout ?? 'schema-grid',
     };
   }
 
@@ -394,6 +405,13 @@ export class ERDCompositeComponent extends BaseAngularComponent implements OnIni
       }
     } else {
       this.selectedEntity = null;
+    }
+
+    // Restore preferred layout algorithm.  Deferred to microtask so the
+    // diagram has mounted by the time we set it.
+    if (state.layoutAlgorithm) {
+      const algo = state.layoutAlgorithm;
+      queueMicrotask(() => this.mjEntityErd?.erdDiagram?.setLayoutAlgorithm(algo));
     }
 
     this.applyFilters();

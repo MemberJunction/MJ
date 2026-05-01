@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import ts from 'typescript';
 import * as fs from 'fs';
+import * as path from 'path';
 import { glob } from 'glob';
 import { generateClassRegistrationsManifest, resolveSubpathExports } from '../Manifest/GenerateClassRegistrationsManifest';
 
@@ -580,8 +581,13 @@ describe('generateClassRegistrationsManifest - syncDependencies integration', ()
     /** Captures every writeFileSync call for assertions. */
     let writtenFiles: Array<{ path: string; content: string }>;
 
-    const appDir = '/test-app';
-    const outputPath = '/test-app/src/generated/manifest.ts';
+    // Use platform-resolved absolute paths so virtualFiles keys match what
+    // the function-under-test sees after `path.resolve()` / `path.join()` —
+    // on Windows this becomes `C:/test-app/...`, on Unix `/test-app/...`.
+    // We always normalize backslashes to forward slashes (see `norm` below)
+    // so virtualFiles keys can be written with one consistent style.
+    const appDir = path.resolve('/test-app').replace(/\\/g, '/');
+    const outputPath = `${appDir}/src/generated/manifest.ts`;
 
     /**
      * Builds a minimal dependency graph where:
@@ -621,6 +627,11 @@ describe('generateClassRegistrationsManifest - syncDependencies integration', ()
         };
     }
 
+    // Normalize path separators so the virtual filesystem (forward-slash keys)
+    // can be looked up with paths that node's `path.join` may have produced
+    // with backslashes on Windows.
+    const norm = (p: string) => p.replace(/\\/g, '/');
+
     beforeEach(() => {
         vi.clearAllMocks();
         writtenFiles = [];
@@ -628,7 +639,7 @@ describe('generateClassRegistrationsManifest - syncDependencies integration', ()
 
         // existsSync: true for files in virtualFiles or directories containing them
         vi.mocked(fs.existsSync).mockImplementation((p: fs.PathLike) => {
-            const pathStr = p.toString();
+            const pathStr = norm(p.toString());
             if (pathStr in virtualFiles) return true;
             // Directory check: exists if any file lives under it
             return Object.keys(virtualFiles).some(f => f.startsWith(pathStr + '/'));
@@ -636,24 +647,25 @@ describe('generateClassRegistrationsManifest - syncDependencies integration', ()
 
         // readFileSync: return content from virtual filesystem
         vi.mocked(fs.readFileSync).mockImplementation((p: fs.PathLike) => {
-            const pathStr = p.toString();
+            const pathStr = norm(p.toString());
             if (pathStr in virtualFiles) return virtualFiles[pathStr] as string & Buffer;
             const err = new Error(`ENOENT: no such file or directory, open '${pathStr}'`);
             (err as NodeJS.ErrnoException).code = 'ENOENT';
             throw err;
         });
 
-        // writeFileSync: capture all writes
+        // writeFileSync: capture all writes (normalize so test assertions match
+        // the forward-slash paths used in virtualFiles keys)
         vi.mocked(fs.writeFileSync).mockImplementation((p: fs.PathLike, content: string | NodeJS.ArrayBufferView) => {
-            writtenFiles.push({ path: p.toString(), content: content.toString() });
+            writtenFiles.push({ path: norm(p.toString()), content: content.toString() });
         });
 
         vi.mocked(fs.mkdirSync).mockImplementation(() => undefined as unknown as string);
-        vi.mocked(fs.realpathSync).mockImplementation((p: fs.PathLike) => p.toString() as string & Buffer);
+        vi.mocked(fs.realpathSync).mockImplementation((p: fs.PathLike) => norm(p.toString()) as string & Buffer);
 
         // glob: return .ts source files under the requested cwd
         vi.mocked(glob).mockImplementation(async (_pattern: string | string[], opts?: Record<string, unknown>) => {
-            const cwd = (opts?.cwd as string) || '';
+            const cwd = norm((opts?.cwd as string) || '');
             return Object.keys(virtualFiles).filter(
                 f => f.startsWith(cwd + '/') && f.endsWith('.ts') && !f.endsWith('.d.ts')
             );
@@ -771,8 +783,8 @@ describe('generateClassRegistrationsManifest - syncDependencies integration', ()
 describe('generateClassRegistrationsManifest - scanDist opt-in', () => {
     let virtualFiles: Record<string, string>;
     let writtenFiles: Array<{ path: string; content: string }>;
-    const appDir = '/test-scan-dist';
-    const outputPath = '/test-scan-dist/src/generated/manifest.ts';
+    const appDir = path.resolve('/test-scan-dist').replace(/\\/g, '/');
+    const outputPath = `${appDir}/src/generated/manifest.ts`;
 
     function setupDistOnlyPackage(): void {
         virtualFiles = {
@@ -812,14 +824,18 @@ describe('generateClassRegistrationsManifest - scanDist opt-in', () => {
         writtenFiles = [];
         setupDistOnlyPackage();
 
+        // Normalize path separators so the forward-slash virtualFiles keys
+        // resolve regardless of platform (Windows path.join produces backslashes).
+        const norm = (p: string) => p.replace(/\\/g, '/');
+
         vi.mocked(fs.existsSync).mockImplementation((p: fs.PathLike) => {
-            const pathStr = p.toString();
+            const pathStr = norm(p.toString());
             if (pathStr in virtualFiles) return true;
             return Object.keys(virtualFiles).some(f => f.startsWith(pathStr + '/'));
         });
 
         vi.mocked(fs.readFileSync).mockImplementation((p: fs.PathLike) => {
-            const pathStr = p.toString();
+            const pathStr = norm(p.toString());
             if (pathStr in virtualFiles) return virtualFiles[pathStr] as string & Buffer;
             const err = new Error(`ENOENT: no such file or directory, open '${pathStr}'`);
             (err as NodeJS.ErrnoException).code = 'ENOENT';
@@ -827,15 +843,15 @@ describe('generateClassRegistrationsManifest - scanDist opt-in', () => {
         });
 
         vi.mocked(fs.writeFileSync).mockImplementation((p: fs.PathLike, content: string | NodeJS.ArrayBufferView) => {
-            writtenFiles.push({ path: p.toString(), content: content.toString() });
+            writtenFiles.push({ path: norm(p.toString()), content: content.toString() });
         });
 
         vi.mocked(fs.mkdirSync).mockImplementation(() => undefined as unknown as string);
-        vi.mocked(fs.realpathSync).mockImplementation((p: fs.PathLike) => p.toString() as string & Buffer);
+        vi.mocked(fs.realpathSync).mockImplementation((p: fs.PathLike) => norm(p.toString()) as string & Buffer);
 
         // glob: return matching files under the requested cwd based on pattern
         vi.mocked(glob).mockImplementation(async (_pattern: string | string[], opts?: Record<string, unknown>) => {
-            const cwd = (opts?.cwd as string) || '';
+            const cwd = norm((opts?.cwd as string) || '');
             const patternStr = Array.isArray(_pattern) ? _pattern.join(',') : _pattern;
             const wantsTS = patternStr.includes('.ts');
             const wantsJS = patternStr.includes('js'); // matches .js, .mjs, .cjs, and {js,mjs,cjs}
@@ -1041,9 +1057,9 @@ describe('resolveSubpathExports', () => {
 describe('Lazy Config Generation - Integration', () => {
     let virtualFiles: Record<string, string>;
     let writtenFiles: Array<{ path: string; content: string }>;
-    const appDir = '/test-lazy';
-    const outputPath = '/test-lazy/src/generated/manifest.ts';
-    const lazyConfigPath = '/test-lazy/src/generated/lazy-config.ts';
+    const appDir = path.resolve('/test-lazy').replace(/\\/g, '/');
+    const outputPath = `${appDir}/src/generated/manifest.ts`;
+    const lazyConfigPath = `${appDir}/src/generated/lazy-config.ts`;
 
     function setupLazyTestFiles(): void {
         virtualFiles = {
@@ -1106,14 +1122,18 @@ describe('Lazy Config Generation - Integration', () => {
         writtenFiles = [];
         setupLazyTestFiles();
 
+        // Normalize backslashes so virtualFiles keys (forward-slash) resolve
+        // when path.join produces Windows-style paths.
+        const norm = (p: string) => p.replace(/\\/g, '/');
+
         vi.mocked(fs.existsSync).mockImplementation((p: fs.PathLike) => {
-            const pathStr = p.toString();
+            const pathStr = norm(p.toString());
             if (pathStr in virtualFiles) return true;
             return Object.keys(virtualFiles).some(f => f.startsWith(pathStr + '/'));
         });
 
         vi.mocked(fs.readFileSync).mockImplementation((p: fs.PathLike) => {
-            const pathStr = p.toString();
+            const pathStr = norm(p.toString());
             if (pathStr in virtualFiles) return virtualFiles[pathStr] as string & Buffer;
             const err = new Error(`ENOENT: no such file or directory, open '${pathStr}'`);
             (err as NodeJS.ErrnoException).code = 'ENOENT';
@@ -1121,14 +1141,14 @@ describe('Lazy Config Generation - Integration', () => {
         });
 
         vi.mocked(fs.writeFileSync).mockImplementation((p: fs.PathLike, content: string | NodeJS.ArrayBufferView) => {
-            writtenFiles.push({ path: p.toString(), content: content.toString() });
+            writtenFiles.push({ path: norm(p.toString()), content: content.toString() });
         });
 
         vi.mocked(fs.mkdirSync).mockImplementation(() => undefined as unknown as string);
-        vi.mocked(fs.realpathSync).mockImplementation((p: fs.PathLike) => p.toString() as string & Buffer);
+        vi.mocked(fs.realpathSync).mockImplementation((p: fs.PathLike) => norm(p.toString()) as string & Buffer);
 
         vi.mocked(glob).mockImplementation(async (_pattern: string | string[], opts?: Record<string, unknown>) => {
-            const cwd = (opts?.cwd as string) || '';
+            const cwd = norm((opts?.cwd as string) || '');
             return Object.keys(virtualFiles).filter(
                 f => f.startsWith(cwd + '/') && f.endsWith('.ts') && !f.endsWith('.d.ts')
             );
@@ -1137,7 +1157,7 @@ describe('Lazy Config Generation - Integration', () => {
         // Mock glob.sync for the lazy config scanner (findSourceFilesSync/findDistFilesSync)
         const mockedGlob = vi.mocked(glob) as unknown as { sync: ReturnType<typeof vi.fn> };
         mockedGlob.sync.mockImplementation((_pattern: string, opts?: Record<string, unknown>) => {
-            const syncCwd = (opts?.cwd as string) || '';
+            const syncCwd = norm((opts?.cwd as string) || '');
             return Object.keys(virtualFiles).filter(
                 f => f.startsWith(syncCwd + '/') && f.endsWith('.ts') && !f.endsWith('.d.ts')
             );

@@ -46,6 +46,7 @@
     "@memberjunction/ng-auth-services": "5.30.1",
     "@memberjunction/ng-base-application": "5.30.1",
     "@memberjunction/ng-base-forms": "5.30.1",
+    "@memberjunction/ng-base-types": "5.30.1",
     "@memberjunction/ng-container-directives": "5.30.1",
     "@memberjunction/ng-conversations": "5.30.1",
     "@memberjunction/ng-dashboard-viewer": "5.30.1",

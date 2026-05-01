@@ -46,6 +46,7 @@ export class InsertRule implements IConversionRule {
   AppliesTo: StatementType[] = ['INSERT', 'UPDATE', 'DELETE'];
   Priority = 50;
   BypassSqlglot = true;
+  BypassJustification = 'INSERT INTO with N\'string\' literals, GETUTCDATE() defaults, IDENTITY_INSERT, [bracket] identifiers, and SQL Server BIT (0/1) for BOOLEAN columns. The rule strips N prefixes, converts date functions, and quotes identifiers — work sqlglot does partially but with quirks for MJ\'s CodeGen-emitted INSERTs.';
 
   PostProcess(sql: string, _originalSQL: string, context: ConversionContext): string {
     let result = convertIdentifiers(sql);

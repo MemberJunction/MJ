@@ -12,17 +12,21 @@ import { SQLServerDataProvider, SQLServerProviderConfigData, UserCache, setupSQL
 import type { MJConfig } from '../config';
 import * as fs from 'fs';
 import * as path from 'path';
-import { DatabaseProviderBase, UserInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, Metadata, SetProvider, UserInfo } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { minimatch } from 'minimatch';
 
-/** Global ConnectionPool instance for connection lifecycle management */
+/** Global mssql ConnectionPool (SQL Server path only) */
 let globalPool: sql.ConnectionPool | null = null;
 
+/** Global pg.Pool (PostgreSQL path only) — typed loosely to avoid a hard pg dep at import time */
+let globalPgPool: { end: () => Promise<void> } | null = null;
+
 /** Global provider instance to ensure single initialization */
-let globalProvider: SQLServerDataProvider | null = null;
+let globalProvider: DatabaseProviderBase | null = null;
 
 /** Promise to track ongoing initialization */
-let initializationPromise: Promise<SQLServerDataProvider> | null = null;
+let initializationPromise: Promise<DatabaseProviderBase> | null = null;
 
 /**
  * Initialize a SQLServerDataProvider with the given configuration
@@ -42,54 +46,124 @@ let initializationPromise: Promise<SQLServerDataProvider> | null = null;
  * // Provider is ready for use
  * ```
  */
-export async function initializeProvider(config: MJConfig): Promise<SQLServerDataProvider> {
+export async function initializeProvider(config: MJConfig): Promise<DatabaseProviderBase> {
   // Return existing provider if already initialized
   if (globalProvider) {
     return globalProvider;
   }
-  
+
   // Return ongoing initialization if in progress
   if (initializationPromise) {
     return initializationPromise;
   }
-  
-  // Start new initialization
-  initializationPromise = (async () => {
-    // Create mssql config
-    const poolConfig: sql.config = {
-      server: config.dbHost,
-      port: config.dbPort ? Number(config.dbPort) : 1433,
-      database: config.dbDatabase,
-      user: config.dbUsername,
-      password: config.dbPassword,
-      options: {
-        encrypt: config.dbEncrypt === 'Y' || config.dbEncrypt === 'true' ||
-                 config.dbHost?.includes('.database.windows.net'), // Auto-detect Azure SQL
-        trustServerCertificate: config.dbTrustServerCertificate === 'Y',
-        instanceName: config.dbInstanceName,
-        enableArithAbort: true
-      }
-    };
-    
-    // Create and connect pool
-    const pool = new sql.ConnectionPool(poolConfig);
-    await pool.connect();
-    
-    // Store for cleanup
-    globalPool = pool;
-    
-    // Create provider config
-    const providerConfig = new SQLServerProviderConfigData(
-      pool,
-      config.mjCoreSchema || '__mj' 
-    );
-    
-    // Use setupSQLServerClient to properly initialize
-    globalProvider = await setupSQLServerClient(providerConfig);
-    return globalProvider;
-  })();
-  
+
+  const platform = (config.dbPlatform ?? 'sqlserver').toLowerCase();
+
+  initializationPromise = platform === 'postgresql'
+    ? initializePostgresProvider(config)
+    : initializeSqlServerProvider(config);
+
   return initializationPromise;
+}
+
+async function initializeSqlServerProvider(config: MJConfig): Promise<DatabaseProviderBase> {
+  const poolConfig: sql.config = {
+    server: config.dbHost,
+    port: config.dbPort ? Number(config.dbPort) : 1433,
+    database: config.dbDatabase,
+    user: config.dbUsername,
+    password: config.dbPassword,
+    options: {
+      encrypt: config.dbEncrypt === 'Y' || config.dbEncrypt === 'true' ||
+               config.dbHost?.includes('.database.windows.net'),
+      trustServerCertificate: config.dbTrustServerCertificate === 'Y',
+      instanceName: config.dbInstanceName,
+      enableArithAbort: true
+    }
+  };
+
+  const pool = new sql.ConnectionPool(poolConfig);
+  await pool.connect();
+  globalPool = pool;
+
+  const providerConfig = new SQLServerProviderConfigData(
+    pool,
+    config.mjCoreSchema || '__mj'
+  );
+
+  const sqlProvider = await setupSQLServerClient(providerConfig);
+  globalProvider = sqlProvider as unknown as DatabaseProviderBase;
+  return globalProvider;
+}
+
+async function initializePostgresProvider(config: MJConfig): Promise<DatabaseProviderBase> {
+  // Dynamic imports so SQL-Server-only environments never resolve pg/PG provider
+  const pg = (await import('pg')).default;
+  const { PostgreSQLDataProvider, PostgreSQLProviderConfigData } =
+    await import('@memberjunction/postgresql-dataprovider');
+
+  const coreSchema = config.mjCoreSchema || '__mj';
+  const pgPool = new pg.Pool({
+    host: config.dbHost,
+    port: config.dbPort ? Number(config.dbPort) : 5432,
+    user: config.dbUsername,
+    password: config.dbPassword,
+    database: config.dbDatabase,
+    max: 10,
+    min: 1,
+  });
+
+  const testClient = await pgPool.connect();
+  await testClient.query('SELECT 1');
+  testClient.release();
+  globalPgPool = pgPool;
+
+  const pgConfigData = new PostgreSQLProviderConfigData(
+    {
+      Host: config.dbHost,
+      Port: config.dbPort ? Number(config.dbPort) : 5432,
+      Database: config.dbDatabase,
+      User: config.dbUsername,
+      Password: config.dbPassword,
+      MaxConnections: 10,
+      MinConnections: 1,
+    },
+    coreSchema,
+    1, // must be > 0 to trigger initial metadata load (AllowRefresh gate in PostgreSQLDataProvider)
+  );
+
+  const provider = new PostgreSQLDataProvider();
+  await provider.Config(pgConfigData);
+  SetProvider(provider);
+  globalProvider = provider;
+
+  await refreshUserCacheFromPG(pgPool, coreSchema);
+  return provider;
+}
+
+/**
+ * Populates UserCache from PG vwUsers/vwUserRoles. Mirrors MJServer's PG bootstrap path
+ * so CLI commands have the same System user lookup semantics as the server.
+ */
+async function refreshUserCacheFromPG(pgPool: import('pg').Pool, coreSchema: string): Promise<void> {
+  const uResult = await pgPool.query(`SELECT * FROM "${coreSchema}"."vwUsers"`);
+  const rResult = await pgPool.query(`SELECT * FROM "${coreSchema}"."vwUserRoles"`);
+  const users = uResult.rows;
+  const roles = rResult.rows;
+
+  if (users && globalProvider) {
+    const userInfos = users.map((user: Record<string, unknown>) => {
+      const userWithRoles = {
+        ...user,
+        UserRoles: roles.filter((role: Record<string, unknown>) =>
+          UUIDsEqual(role.UserID as string, user.ID as string)
+        ),
+      };
+      return new UserInfo(Metadata.Provider, userWithRoles);  // global-provider-ok: MetadataSync CLI bootstrap — runs against the global default provider
+    });
+    const cache = UserCache.Instance;
+    (cache as unknown as Record<string, unknown>)['_users'] = userInfos;
+  }
 }
 
 /**
@@ -113,6 +187,14 @@ export async function cleanupProvider(): Promise<void> {
   if (globalPool && globalPool.connected) {
     await globalPool.close();
     globalPool = null;
+  }
+  if (globalPgPool) {
+    try {
+      await globalPgPool.end();
+    } catch {
+      /* swallow — best-effort cleanup */
+    }
+    globalPgPool = null;
   }
   globalProvider = null;
   initializationPromise = null;
