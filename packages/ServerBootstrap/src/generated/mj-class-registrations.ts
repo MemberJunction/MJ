@@ -380,17 +380,10 @@ import {
     ZhipuLLM,
 } from '@memberjunction/ai-zhipu';
 
-// @memberjunction/archiving-action (3 classes)
-import {
-    ArchiveDataAction,
-    RestoreRecordAction,
-    RunAllActiveArchivesAction,
-} from '@memberjunction/archiving-action';
-
-// @memberjunction/archiving-engine (1 classes)
-import {
-    DefaultArchiveDriver,
-} from '@memberjunction/archiving-engine';
+// NOTE (manual fix): @memberjunction/archiving-action and -engine were removed
+// from the workspace; their import blocks and class refs below stripped to keep
+// the manifest building. Re-running `mj codegen manifest` will regenerate this
+// file cleanly without these references.
 
 // @memberjunction/codegen-lib (4 classes)
 import {
@@ -1245,10 +1238,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     VertexLLM,
     xAILLM,
     ZhipuLLM,
-    ArchiveDataAction,
-    RestoreRecordAction,
-    RunAllActiveArchivesAction,
-    DefaultArchiveDriver,
     EntityDataGridRelatedEntityGenerator,
     JoinGridRelatedEntityGenerator,
     PostgreSQLCodeGenProvider,
@@ -1840,8 +1829,6 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/ai-vertex',
     '@memberjunction/ai-xai',
     '@memberjunction/ai-zhipu',
-    '@memberjunction/archiving-action',
-    '@memberjunction/archiving-engine',
     '@memberjunction/codegen-lib',
     '@memberjunction/communication-ms-graph',
     '@memberjunction/communication-sendgrid',

@@ -257,15 +257,22 @@ export class RunCodeGenBase {
         const manageMD = MJGlobal.Instance.ClassFactory.CreateInstance<ManageMetadataBase>(ManageMetadataBase)!;
         updateSpinner('Managing Metadata...');
         const metadataSuccess = await reporter.phase('manageMetadata', () => manageMD.manageMetadata(conn, currentUser));
+        // Refresh in-memory metadata UNCONDITIONALLY after manageMetadata, even when it returned
+        // false. manageMetadata can return false on non-fatal sub-failures (e.g. failed validator
+        // generation for one CHECK constraint) while still having created/updated EntityField
+        // rows for newly-discovered entities. Skipping Refresh here causes the SQL-gen entity
+        // loop to use stale snapshots and silently drop CRUD for those entities — Bug 1 in the
+        // 3-bug chain, observed first-run on PG for entities like SystemEvent.
+        await provider.Refresh();
         if (!metadataSuccess) {
-          failSpinner('ERROR managing metadata');
+          failSpinner('ERROR managing metadata (refresh applied; downstream will use latest available state)');
           pipelineSuccess = false;
         } else {
-          await provider.Refresh();
           succeedSpinner('Metadata management completed');
         }
 
         const sqlOutputDir = outputDir('SQL', true);
+        let sqlGenerationSucceeded = true;
         if (sqlOutputDir) {
           startSpinner('Managing SQL Scripts and Execution...');
           const sqlSuccess = await reporter.phase('manageSQLScriptsAndExecution', () =>
@@ -273,12 +280,69 @@ export class RunCodeGenBase {
           );
           if (!sqlSuccess) {
             failSpinner('Error managing SQL scripts and execution');
+            sqlGenerationSucceeded = false;
             pipelineSuccess = false;
           } else {
             succeedSpinner('SQL scripts and execution completed');
           }
         } else {
           warnSpinner('SQL output directory NOT found in config file, skipping...');
+        }
+
+        // ── Post-run CRUD validator ─────────────────────────────────────────
+        // Runs UNCONDITIONALLY even when the SQL pipeline reported failure so
+        // we always surface the runtime impact: which entities are about to
+        // crash on Save/Delete because their fn_create_*/spCreate*/etc.
+        // weren't emitted. Historically, silent generation gaps (entity
+        // dropped from the loop due to stale PK metadata, batch short-
+        // circuit, etc.) reported "311 entities processed successfully"
+        // while leaving CRUD broken — this validator is the safety net that
+        // forces those gaps to halt the install pipeline.
+        //
+        // Strict by default. Set MJ_CODEGEN_SKIP_CRUD_VALIDATION=true to
+        // opt out (e.g. for regen-only re-runs against a partially-built DB)
+        // but the default behavior is to fail loudly and exit non-zero.
+        const skipCRUDValidation = process.env.MJ_CODEGEN_SKIP_CRUD_VALIDATION === 'true';
+        if (skipCRUDValidation) {
+          logWarning('Skipping post-CodeGen CRUD function validation (MJ_CODEGEN_SKIP_CRUD_VALIDATION=true)');
+        } else {
+          startSpinner('Validating expected CRUD routines exist in database...');
+          try {
+            // Use the same baseline filter as manageSQLScriptsAndExecution: only
+            // entities flagged IncludeInAPI=true are expected to have routines.
+            const baseline = md.Entities.filter(e => e.IncludeInAPI);
+            const missing = await sqlCodeGenObject.DBProvider.validateExpectedCRUDFunctions(conn, baseline);
+            if (missing.length > 0) {
+              const list = missing
+                .map(m => `  - [${m.schema}] ${m.entity} → missing ${m.type} routine: ${m.expectedRoutine}`)
+                .join('\n');
+              failSpinner(`Post-CodeGen CRUD validation FAILED: ${missing.length} expected routine(s) missing`);
+              logError(
+                `Post-CodeGen validation detected ${missing.length} CRUD routine(s) the runtime expects but the database is missing.\n` +
+                  `These entities are configured (AllowCreateAPI/AllowUpdateAPI/AllowDeleteAPI=true) to expose mutations via the API,\n` +
+                  `but the underlying database routine wasn't emitted/applied by CodeGen — runtime saves/deletes on these entities will throw:\n` +
+                  `${list}\n\n` +
+                  `Common causes:\n` +
+                  `  • Earlier batch failure short-circuited later generation passes\n` +
+                  `  • Stale entity-field metadata caused per-entity PK detection to fail\n` +
+                  `  • Cascade-delete dependency analysis dropped entities silently\n` +
+                  `Run codegen again on the same DB to see if the issue persists; if it does, this is a real generation bug.`
+              );
+              return false;
+            } else {
+              succeedSpinner(`Post-CodeGen CRUD validation passed (${md.Entities.length} entities checked)`);
+            }
+          } catch (e) {
+            failSpinner('Post-CodeGen CRUD validation errored');
+            logError(`CRUD validator threw: ${e instanceof Error ? e.message : String(e)}`);
+            return false;
+          }
+        }
+        // Surface upstream SQL-pipeline failure even if validator passed: a
+        // green validator just means whatever DID get generated is consistent;
+        // it doesn't whitewash an upstream batch error.
+        if (!sqlGenerationSucceeded) {
+          return false;
         }
       } else {
         warnSpinner('Skipping database generation (skip_database_generation = true)');

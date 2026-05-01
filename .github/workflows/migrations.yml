@@ -7,6 +7,7 @@ on:
       - next
     paths:
       - 'migrations/**'
+      - 'migrations-pg/**'
 
 jobs:
   test-migrations:

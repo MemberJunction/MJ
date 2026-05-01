@@ -6,12 +6,14 @@ import {
     BaseViewGenerationContext,
     CascadeDeleteContext,
     FullTextSearchResult,
+    PhasedExecutionResult,
 } from '../../codeGenDatabaseProvider';
 import { configInfo } from '../../../Config/config';
 import { logError, logWarning } from '../../../Misc/status_logging';
 import { PostgreSQLDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
 import * as fs from 'fs';
 import path from 'path';
+import { executeWithFallback } from './viewFallback';
 
 const pgDialect = new PostgreSQLDialect();
 
@@ -63,6 +65,24 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
      * Generates a PostgreSQL `CREATE OR REPLACE VIEW` statement for an entity's base view.
      * Includes all base table columns, parent/related field joins, and root field lateral
      * joins. Applies a soft-delete `WHERE` filter when the entity uses soft deletes.
+     *
+     * **Non-destructive strategy.** Historically this method emitted
+     * `DROP VIEW IF EXISTS ... CASCADE;` before the CREATE, which let it handle every
+     * column-signature change — but also silently destroyed any dependent view, function,
+     * trigger, or GRANT on the view. When a later statement (or subsequent entity in the
+     * same run) failed, half the database's objects could be gone with no error surfaced.
+     *
+     * We now emit just `CREATE OR REPLACE VIEW`, which PostgreSQL accepts when the new
+     * column list is a prefix of the existing one plus optional trailing additions. Any
+     * incompatible change (rename, reorder, type change, removed column) fails with
+     * SQLSTATE `42P16 invalid_table_definition`. That error is intentionally allowed to
+     * propagate up through `executeSQLFileViaShell` → the per-entity batch loop → and is
+     * surfaced as a real regeneration failure. A follow-up pass will add a capture-drop-
+     * restore fallback for 42P16 that preserves dependents via `pg_depend` and
+     * `pg_get_viewdef` / `pg_get_functiondef`. Until that lands, 42P16 on PG is loud and
+     * actionable instead of silent and destructive.
+     *
+     * Permissions are handled separately by sql_codegen.ts via generateViewPermissions().
      */
     generateBaseView(context: BaseViewGenerationContext): string {
         const { entity } = context;
@@ -72,8 +92,8 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
 
         const selectParts = this.buildBaseViewSelectParts(context, alias);
         const fromParts = this.buildBaseViewFromParts(context, entity, alias);
+        const quotedView = pgDialect.QuoteSchema(entity.SchemaName, viewName);
 
-        // Permissions are handled separately by sql_codegen.ts via generateViewPermissions()
         return `
 ------------------------------------------------------------
 ----- BASE VIEW FOR ENTITY:      ${entity.Name}
@@ -81,7 +101,7 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
 -----               BASE TABLE:  ${entity.BaseTable}
 -----               PRIMARY KEY: ${entity.PrimaryKeys.map((pk: EntityFieldInfo) => pk.Name).join(', ')}
 ------------------------------------------------------------
-CREATE OR REPLACE VIEW ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}
+CREATE OR REPLACE VIEW ${quotedView}
 AS
 SELECT
     ${selectParts}
@@ -94,12 +114,41 @@ ${whereClause};
     // ─── CRUD CREATE ─────────────────────────────────────────────────────
 
     /**
+     * Emits a `DO` block that drops every existing overload of `<schema>.<fnName>`.
+     * Run before each `CREATE OR REPLACE FUNCTION` to prevent PG's "function name is
+     * not unique" error when the parameter list grows (e.g. a new column adds a new
+     * `DEFAULT NULL` parameter — old + new overloads become call-ambiguous and PG
+     * refuses both `CREATE OR REPLACE` and any caller dispatch). Iterating overloads
+     * via `pg_proc` is the only way to drop without knowing the exact prior signature.
+     */
+    private generateDropAllOverloadsBlock(schemaName: string, fnName: string): string {
+        // Single quotes inside the DO block need to escape the surrounding quoting.
+        // We use dollar-quoted strings to keep the body readable.
+        return `DO $do$
+DECLARE r RECORD;
+BEGIN
+    FOR r IN SELECT oid::regprocedure AS sig
+             FROM pg_proc
+             WHERE proname = '${fnName}'
+               AND pronamespace = '${schemaName}'::regnamespace
+    LOOP
+        EXECUTE 'DROP FUNCTION ' || r.sig::text;
+    END LOOP;
+END
+$do$;
+`;
+    }
+
+    /**
      * Generates a PostgreSQL `CREATE OR REPLACE FUNCTION` for inserting a new record.
      * The function accepts typed parameters for each writable field, performs an `INSERT`
      * into the base table, and returns the newly created row from the base view via
      * `RETURN QUERY SELECT`. Handles auto-increment PKs (using `RETURNING ... INTO`),
      * UUID PKs (with `COALESCE` to gen_random_uuid()), and composite PKs. Also emits
      * `GRANT EXECUTE` permissions for authorized roles.
+     *
+     * Prepends a DROP-all-overloads block (see `generateDropAllOverloadsBlock`) so
+     * adding/removing a column doesn't trigger PG's overload-ambiguity error.
      */
     generateCRUDCreate(entity: EntityInfo): string {
         const fnName = this.getCRUDRoutineName(entity, CRUDType.Create);
@@ -107,9 +156,17 @@ ${whereClause};
         const paramString = this.generateCRUDParamString(entity.Fields, false);
         const permissions = this.generateCRUDPermissions(entity, fnName, CRUDType.Create);
 
-        const insertColumns = this.generateInsertFieldString(entity, entity.Fields, '', false);
-        const insertValues = this.generateInsertFieldString(entity, entity.Fields, 'p_', false);
         const firstKey = entity.FirstPrimaryKey;
+        // For UUID PKs and AutoIncrement PKs, the strategy below adds the PK
+        // column manually (with v_new_id or RETURNING). Excluding it from the
+        // auto-generated insertColumns/insertValues avoids the column appearing
+        // twice in the INSERT statement.
+        const pkType = firstKey.Type.toLowerCase().trim();
+        const pkHandledByStrategy =
+            firstKey.AutoIncrement ||
+            ((pkType === 'uniqueidentifier' || pkType === 'uuid') && entity.PrimaryKeys.length === 1);
+        const insertColumns = this.generateInsertFieldString(entity, entity.Fields, '', pkHandledByStrategy);
+        const insertValues = this.generateInsertFieldString(entity, entity.Fields, 'p_', pkHandledByStrategy);
 
         const strategy = this.buildCreateInsertStrategy(
             entity, firstKey, insertColumns, insertValues
@@ -119,11 +176,12 @@ ${whereClause};
 ------------------------------------------------------------
 ----- CREATE FUNCTION FOR ${entity.BaseTable}
 ------------------------------------------------------------
+${this.generateDropAllOverloadsBlock(entity.SchemaName, fnName)}
 CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(
     ${paramString}
 ) RETURNS SETOF ${pgDialect.QuoteSchema(entity.SchemaName, viewName)} AS $$
 DECLARE
-    v_new_id ${firstKey.SQLFullType};
+    v_new_id ${this.mapSQLType(firstKey.SQLFullType)};
 BEGIN
     ${strategy.preInsert}INSERT INTO ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)}
         (
@@ -168,6 +226,7 @@ ${permissions}
 ------------------------------------------------------------
 ----- UPDATE FUNCTION FOR ${entity.BaseTable}
 ------------------------------------------------------------
+${this.generateDropAllOverloadsBlock(entity.SchemaName, fnName)}
 CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(
     ${paramString}
 ) RETURNS SETOF ${pgDialect.QuoteSchema(entity.SchemaName, viewName)} AS $$
@@ -215,16 +274,19 @@ ${trigger}
 
         const { paramDecl, deleteBody, returnType, returnStatement } = this.buildDeleteStrategy(entity, cascadeSQL);
 
+        const needsRecordVar = cascadeSQL.includes('v_rec');
+
         return `
 ------------------------------------------------------------
 ----- DELETE FUNCTION FOR ${entity.BaseTable}
 ------------------------------------------------------------
+${this.generateDropAllOverloadsBlock(entity.SchemaName, fnName)}
 CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(
     ${paramDecl}
 ) RETURNS ${returnType} AS $$
 #variable_conflict use_column
 DECLARE
-    v_affected_count INTEGER;
+    v_affected_count INTEGER;${needsRecordVar ? '\n    v_rec RECORD;' : ''}
 BEGIN
 ${cascadeSQL}
 ${deleteBody}
@@ -263,7 +325,7 @@ ${permissions}
 CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, trigFnName)}()
 RETURNS TRIGGER AS $$
 BEGIN
-    NEW.${EntityInfo.UpdatedAtFieldName} := NOW() AT TIME ZONE 'UTC';
+    NEW."${EntityInfo.UpdatedAtFieldName}" := NOW() AT TIME ZONE 'UTC';
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -945,8 +1007,9 @@ ORDER BY ordinal_position`;
         'OBJECT_ID', 'SCOPE_IDENTITY',
         // Aggregate / scalar functions
         'COUNT', 'MAX', 'MIN', 'SUM', 'AVG', 'COALESCE', 'CAST', 'CONVERT', 'ISNULL',
-        'LEN', 'DATALENGTH', 'LOWER', 'UPPER', 'LTRIM', 'RTRIM', 'TRIM', 'REPLACE',
+        'LEN', 'LENGTH', 'DATALENGTH', 'LOWER', 'UPPER', 'LTRIM', 'RTRIM', 'TRIM', 'REPLACE',
         'SUBSTRING', 'CHARINDEX', 'PATINDEX', 'STUFF', 'CONCAT', 'FORMAT',
+        'LEFT', 'RIGHT', 'POSITION', 'OVERLAY', 'EXTRACT', 'GREATEST', 'LEAST',
         'DATEADD', 'DATEDIFF', 'DATEPART', 'YEAR', 'MONTH', 'DAY', 'HOUR', 'MINUTE',
         'SECOND', 'NOW', 'CURRENT_TIMESTAMP',
         // PostgreSQL specific
@@ -1106,18 +1169,209 @@ ORDER BY ordinal_position`;
 
         try {
             await client.connect();
-            // Postgres can execute multi-statement scripts in a single query call.
-            // On error, the full batch rolls back to last savepoint; we log and continue.
+            // Postgres executes a multi-statement script in a single query call. A single
+            // statement error aborts the rest of the batch server-side (simple query
+            // protocol) — so silently converting that to `return true` hid real data loss:
+            // CodeGen-generated DROP VIEW CASCADE would succeed, the follow-up CREATE
+            // would fail, and the caller would believe everything was fine. Return false
+            // on error and log it as an error, not a warning, so the per-entity batching
+            // loops can aggregate and (in strict mode) halt the install.
             try {
                 await client.query(sql);
+                return true;
             } catch (err) {
                 const msg = err instanceof Error ? err.message : String(err);
-                logWarning(`[CodeGen] SQL warning in ${path.basename(absoluteFilePath)}: ${msg.substring(0, 200)}`);
+                logError(`[CodeGen] SQL execution failed in ${path.basename(absoluteFilePath)}: ${msg.substring(0, 400)}`);
+                return false;
             }
-            return true;
         } catch (e) {
             logError(`[CodeGen] Failed to execute SQL file ${absoluteFilePath}: ${e instanceof Error ? e.message : e}`);
             return false;
+        } finally {
+            try { await client.end(); } catch { /* best-effort cleanup */ }
+        }
+    }
+
+    /** @inheritdoc */
+    getRoutineNamesBySchemaSQL(schemas: string[]): string {
+        if (schemas.length === 0) return '';
+        // pg_proc holds every function (PL/pgSQL, SQL, C, etc.). prokind filters:
+        //   'f' = normal function, 'p' = procedure, 'a' = aggregate, 'w' = window.
+        // CodeGen emits 'f' (CRUD functions, root-ID TVFs, FTS functions) and 'p'
+        // is unused on PG today but cheap to include in case we add procedures later.
+        const inList = schemas.map(s => `'${s.replace(/'/g, "''")}'`).join(', ');
+        return `SELECT n.nspname AS schema_name, p.proname AS routine_name
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE p.prokind IN ('f', 'p')
+  AND n.nspname IN (${inList});`;
+    }
+
+    /**
+     * PG-specific base-view regeneration with 42P16 recovery.
+     *
+     * Runs the provided `CREATE OR REPLACE VIEW` SQL through `executeWithFallback`
+     * on a dedicated connection: happy path issues the CREATE OR REPLACE directly,
+     * and only on SQLSTATE 42P16 does the capture/drop/recreate/restore dance fire
+     * inside a transaction that preserves every dependent view, function, grant,
+     * comment, and owner. See `viewFallback.ts` for the contract.
+     *
+     * `willRegenerate` is passed through so dependents CodeGen is about to rebuild
+     * in the same run are skipped at restore time (avoids restoring a stale
+     * captured definition against a newly-regenerated target).
+     */
+    override async regenerateBaseView(
+        entity: EntityInfo,
+        viewSQL: string,
+        willRegenerate?: Set<string>
+    ): Promise<void> {
+        const pgHost = process.env.PG_HOST ?? configInfo.dbHost;
+        const pgPort = Number(process.env.PG_PORT ?? configInfo.dbPort ?? 5432);
+        const pgDatabase = process.env.PG_DATABASE ?? configInfo.dbDatabase;
+        const pgUser = process.env.PG_USERNAME ?? configInfo.codeGenLogin;
+        const pgPassword = process.env.PG_PASSWORD ?? configInfo.codeGenPassword;
+
+        if (!pgUser || !pgPassword || !pgDatabase) {
+            throw new Error(
+                'PostgreSQL user, password, and database must be provided in the configuration or environment variables'
+            );
+        }
+
+        const pgModule = await import('pg');
+        const client = new pgModule.default.Client({
+            host: pgHost,
+            port: pgPort,
+            user: pgUser,
+            password: pgPassword,
+            database: pgDatabase,
+        });
+
+        await client.connect();
+        try {
+            await executeWithFallback({
+                client,
+                schema: entity.SchemaName,
+                viewName: entity.BaseView,
+                createOrReplaceSQL: viewSQL,
+                willRegenerate,
+            });
+        } finally {
+            try { await client.end(); } catch { /* best-effort cleanup */ }
+        }
+    }
+
+    /**
+     * Phased per-entity execution for PG. Runs view → CRUD functions → view
+     * permissions against the target DB, guaranteeing phase 2 is skipped if
+     * phase 1 failed (so we never leave `fn_create_*` functions pointing at
+     * a missing or stale view's rowtype).
+     *
+     * Phase 1 routes through `executeWithFallback` so a 42P16 triggers the
+     * capture/drop/recreate/restore flow rather than blowing up. Phase 2 runs
+     * each CRUD function's CREATE individually — we do NOT concatenate them
+     * because node-pg's simple query protocol would then abort the whole
+     * batch on the first failure; running them separately gives a per-routine
+     * error signal. Phase 3 applies view-level GRANTs.
+     */
+    override async executeEntityPhased(opts: {
+        entity: EntityInfo;
+        tvfSQL: string;
+        viewSQL: string;
+        crudCreateSQL: string;
+        crudUpdateSQL: string;
+        crudDeleteSQL: string;
+        viewPermSQL: string;
+        willRegenerate?: Set<string>;
+    }): Promise<PhasedExecutionResult> {
+        const pgHost = process.env.PG_HOST ?? configInfo.dbHost;
+        const pgPort = Number(process.env.PG_PORT ?? configInfo.dbPort ?? 5432);
+        const pgDatabase = process.env.PG_DATABASE ?? configInfo.dbDatabase;
+        const pgUser = process.env.PG_USERNAME ?? configInfo.codeGenLogin;
+        const pgPassword = process.env.PG_PASSWORD ?? configInfo.codeGenPassword;
+
+        if (!pgUser || !pgPassword || !pgDatabase) {
+            throw new Error(
+                'PostgreSQL user, password, and database must be provided in the configuration or environment variables'
+            );
+        }
+
+        const pgModule = await import('pg');
+        const client = new pgModule.default.Client({
+            host: pgHost,
+            port: pgPort,
+            user: pgUser,
+            password: pgPassword,
+            database: pgDatabase,
+        });
+
+        await client.connect();
+        try {
+            // ── Phase 0: root-ID TVFs ────────────────────────────────────
+            // The base view references these helper functions; PG rejects
+            // CREATE VIEW with `function does not exist` if they aren't
+            // installed first. Run as a single batch — these are independent
+            // CREATE OR REPLACE FUNCTION statements separated by GO.
+            if (opts.tvfSQL && opts.tvfSQL.trim()) {
+                try {
+                    await client.query(opts.tvfSQL);
+                } catch (e) {
+                    return {
+                        success: false,
+                        phase: 'tvf',
+                        error: e instanceof Error ? e : new Error(String(e)),
+                    };
+                }
+            }
+
+            // ── Phase 1: base view (fallback-aware for 42P16) ────────────
+            if (opts.viewSQL && opts.viewSQL.trim()) {
+                try {
+                    await executeWithFallback({
+                        client,
+                        schema: opts.entity.SchemaName,
+                        viewName: opts.entity.BaseView,
+                        createOrReplaceSQL: opts.viewSQL,
+                        willRegenerate: opts.willRegenerate,
+                    });
+                } catch (e) {
+                    return {
+                        success: false,
+                        phase: 'view',
+                        error: e instanceof Error ? e : new Error(String(e)),
+                    };
+                }
+            }
+
+            // ── Phase 2: CRUD functions (skipped if phase 1 failed) ──────
+            // Run each CREATE FUNCTION separately so per-function errors
+            // don't abort the others via simple-query-protocol semantics.
+            for (const crudSQL of [opts.crudCreateSQL, opts.crudUpdateSQL, opts.crudDeleteSQL]) {
+                if (!crudSQL || !crudSQL.trim()) continue;
+                try {
+                    await client.query(crudSQL);
+                } catch (e) {
+                    return {
+                        success: false,
+                        phase: 'functions',
+                        error: e instanceof Error ? e : new Error(String(e)),
+                    };
+                }
+            }
+
+            // ── Phase 3: view permissions ────────────────────────────────
+            if (opts.viewPermSQL && opts.viewPermSQL.trim()) {
+                try {
+                    await client.query(opts.viewPermSQL);
+                } catch (e) {
+                    return {
+                        success: false,
+                        phase: 'permissions',
+                        error: e instanceof Error ? e : new Error(String(e)),
+                    };
+                }
+            }
+
+            return { success: true, phase: null };
         } finally {
             try { await client.end(); } catch { /* best-effort cleanup */ }
         }
@@ -1226,13 +1480,30 @@ ORDER BY ordinal_position`;
         const paramName = `${prefix}${this.toSnakeCase(ef.CodeName)}`;
 
         if (ef.HasDefaultValue && !ef.AllowsNull) {
-            const formattedDefault = this.formatDefaultValue(ef.DefaultValue, ef.NeedsQuotes);
+            const formattedDefault = this.formatBooleanCompatibleDefault(ef);
             if (ef.IsUniqueIdentifier) {
                 return `CASE WHEN ${paramName} = '00000000-0000-0000-0000-000000000000'::UUID THEN ${formattedDefault} ELSE COALESCE(${paramName}, ${formattedDefault}) END`;
             }
             return `COALESCE(${paramName}, ${formattedDefault})`;
         }
         return paramName;
+    }
+
+    /**
+     * Like formatDefaultValue, but maps SQL Server BIT defaults (0/1) to PG
+     * BOOLEAN literals (FALSE/TRUE) when the field type is bit/boolean.
+     * COALESCE() in PG is type-strict — passing `COALESCE(boolean_param, 0)`
+     * fails with "types boolean and integer cannot be matched".
+     */
+    private formatBooleanCompatibleDefault(ef: EntityFieldInfo): string {
+        const formatted = this.formatDefaultValue(ef.DefaultValue, ef.NeedsQuotes);
+        const fieldType = ef.Type.toLowerCase().trim();
+        if (fieldType === 'bit' || fieldType === 'boolean' || fieldType === 'bool') {
+            const t = formatted.trim().toLowerCase();
+            if (t === '0' || t === "'0'") return 'FALSE';
+            if (t === '1' || t === "'1'") return 'TRUE';
+        }
+        return formatted;
     }
 
     /** Builds a WHERE clause using primary key fields with a parameter prefix */

@@ -12,11 +12,29 @@
       "ExecutionCostRank": 2,
       "UsesTemplate": true
     },
+    "relatedEntities": {
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/get-conversation-complete.pg.sql"
+          },
+          "primaryKey": {
+            "ID": "893fa858-1433-4ed0-8b9c-2347ea318a06"
+          },
+          "sync": {
+            "lastModified": "2026-04-29T05:22:43.666Z",
+            "checksum": "fa9dc8b6e528333e89946599e7f5bd1a8a91a61140f510b10383b2b05ebcb86a"
+          }
+        }
+      ]
+    },
     "primaryKey": {
       "ID": "8F84DFB4-C38E-4B8D-80E7-9CCF30039E77"
     },
     "sync": {
-      "lastModified": "2026-02-13T21:09:25.617Z",
+      "lastModified": "2026-04-29T05:22:43.642Z",
       "checksum": "f70a2a7367088944e74738f7d1cf138feea9d8c15c208391775023aa5c171bfc"
     }
   }

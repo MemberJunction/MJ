@@ -82,7 +82,7 @@ function trackLineState(line: string, state: ParseState): ParseState {
  * NOTE: SET is intentionally excluded — it would split UPDATE...SET into two
  * statements. Standalone SET commands (SET NOEXEC, SET ANSI_NULLS, etc.) are
  * already handled by preprocessor/postprocessor removal rules. */
-const STMT_KEYWORDS = /^(INSERT\s+INTO|UPDATE\s|DELETE\s|PRINT\s|PRINT\(|ALTER\s+TABLE|GRANT\s|DENY\s|REVOKE\s|IF\s+@@|IF\s+(?:NOT\s+)?EXISTS|IF\s+OBJECT_ID|EXEC\s|CREATE\s|DROP\s)/i;
+const STMT_KEYWORDS = /^(INSERT\s+INTO|UPDATE\s|DELETE\s|PRINT\s|PRINT\(|ALTER\s+TABLE|GRANT\s|DENY\s|REVOKE\s|IF\s+@@|IF\s+(?:NOT\s+)?EXISTS|IF\s+OBJECT_ID|EXEC\s|CREATE\s|DROP\s|DECLARE\s+@)/i;
 
 /** IF conditionals whose next top-level keyword is the single-statement body.
  * T-SQL allows IF without BEGIN/END for single-statement bodies:
@@ -106,9 +106,16 @@ export function subSplitCompoundBatch(batch: string): string[] {
   // Strip leading single-line comments to get the first real SQL keyword
   const upperNoComments = stripLeadingComments(batch).trimStart().toUpperCase();
 
-  // Don't sub-split CREATE TABLE/VIEW/PROCEDURE/FUNCTION/TRIGGER blocks
-  if (/^CREATE\s+(TABLE|VIEW|PROCEDURE|FUNCTION|TRIGGER)\s/i.test(upperNoComments)) return [batch];
+  // Don't sub-split CREATE VIEW/PROCEDURE/FUNCTION/TRIGGER blocks
+  if (/^CREATE\s+(VIEW|PROCEDURE|FUNCTION|TRIGGER)\s/i.test(upperNoComments)) return [batch];
   if (/^CREATE\s+PROC\s/i.test(upperNoComments)) return [batch];
+
+  // CREATE TABLE blocks: keep together UNLESS followed by ALTER TABLE or other
+  // top-level DDL/DML. Splitting ensures the follow-up ALTER TABLE statements
+  // get their own batch and go through AlterTableRule for proper quoting/FK handling.
+  if (/^CREATE\s+TABLE\s/i.test(upperNoComments)) {
+    if (!hasFollowupStatements(batch)) return [batch];
+  }
   // Don't split ;WITH CTE ... DML blocks (the DML is part of the CTE statement)
   if (/^;?\s*WITH\s+\w+\s+AS\s*\(/i.test(upperNoComments)) return [batch];
   // Don't split ALTER TABLE batches UNLESS they contain non-ALTER-TABLE statements
@@ -211,6 +218,37 @@ export function subSplitCompoundBatch(batch: string): string[] {
   return statements.length > 0 ? statements : [batch];
 }
 
+/** Check if a CREATE TABLE batch is followed by other top-level statements
+ * that need separate processing (ALTER TABLE, INSERT, UPDATE, etc.).
+ * Returns true when a second top-level statement appears after the CREATE TABLE.
+ * This allows the CREATE TABLE to process via CreateTableRule while follow-up
+ * ALTER TABLE statements go through AlterTableRule.
+ */
+function hasFollowupStatements(batch: string): boolean {
+  const FOLLOWUP = /^(ALTER\s+TABLE|INSERT\s+INTO|UPDATE\s|DELETE\s|EXEC\s|GRANT\s|DENY\s|REVOKE\s|DECLARE\s+@)/i;
+  const lines = batch.split('\n');
+  let state: ParseState = { inString: false, inBlockComment: false };
+  let beginDepth = 0;
+  let sawCreateTable = false;
+
+  for (const line of lines) {
+    const stripped = line.trim();
+    if (!state.inString && !state.inBlockComment) {
+      if (/^\bBEGIN\b/i.test(stripped)) beginDepth++;
+      if (/^\bEND\b/i.test(stripped)) beginDepth = Math.max(0, beginDepth - 1);
+      if (beginDepth === 0) {
+        if (!sawCreateTable && /^CREATE\s+TABLE\b/i.test(stripped)) {
+          sawCreateTable = true;
+        } else if (sawCreateTable && FOLLOWUP.test(stripped)) {
+          return true;
+        }
+      }
+    }
+    state = trackLineState(line, state);
+  }
+  return false;
+}
+
 /** Check if an ALTER TABLE batch contains non-ALTER-TABLE top-level statements.
  * Returns true if the batch has EXEC, INSERT, UPDATE, etc. mixed in with ALTER TABLE.
  * This allows splitting compound batches like ALTER TABLE + EXEC sp_addextendedproperty
@@ -236,9 +274,19 @@ function hasNonAlterTableStatements(batch: string): boolean {
   return false;
 }
 
-/** Strip leading single-line (--) and block comments from SQL text */
+/**
+ * Strip leading single-line (--), block comments, and T-SQL session-setting
+ * statements (SET NOCOUNT ON, SET ANSI_NULLS ON, SET XACT_ABORT ON, etc.) from SQL text.
+ *
+ * Session SETs are stripped by the global post-processor anyway; treating them
+ * as leading "noise" for classification lets us detect the real first statement
+ * keyword (e.g., DECLARE) when developers prefix a batch with SET NOCOUNT ON.
+ */
 function stripLeadingComments(sql: string): string {
   let s = sql.trimStart();
+  // Pattern matches lines like `SET NOCOUNT ON;`, `SET ANSI_NULLS ON`, etc.
+  // Only strips standalone session-setting commands (not e.g. SET @var = ...).
+  const SESSION_SET_PATTERN = /^SET\s+(NOCOUNT|ANSI_NULLS|ANSI_PADDING|ANSI_WARNINGS|ARITHABORT|CONCAT_NULL_YIELDS_NULL|NUMERIC_ROUNDABORT|QUOTED_IDENTIFIER|XACT_ABORT|NOEXEC|IMPLICIT_TRANSACTIONS)\s+(ON|OFF)\s*;?\s*\n/i;
   while (s.length > 0) {
     if (s.startsWith('--')) {
       const nl = s.indexOf('\n');
@@ -246,6 +294,9 @@ function stripLeadingComments(sql: string): string {
     } else if (s.startsWith('/*')) {
       const end = s.indexOf('*/');
       s = end < 0 ? '' : s.slice(end + 2).trimStart();
+    } else if (SESSION_SET_PATTERN.test(s)) {
+      const m = s.match(SESSION_SET_PATTERN);
+      s = m ? s.slice(m[0].length).trimStart() : s;
     } else {
       break;
     }
