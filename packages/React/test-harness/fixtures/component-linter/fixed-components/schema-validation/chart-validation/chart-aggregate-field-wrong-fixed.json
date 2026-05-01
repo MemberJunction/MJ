@@ -10,10 +10,29 @@
   "registry": "MJ",
   "status": "Active",
   "dataRequirements": {
-    "queries": [{
-      "name": "Product Performance",
-      "categoryPath": "Products/Reports",
-      "fields": ["Category", "ProductName", "SalesAmount", "UnitsSold"]
-    }]
+    "queries": [
+      {
+        "name": "Product Performance",
+        "categoryPath": "Products/Reports",
+        "fields": [
+          {
+            "name": "Category",
+            "type": "nvarchar"
+          },
+          {
+            "name": "ProductName",
+            "type": "nvarchar"
+          },
+          {
+            "name": "SalesAmount",
+            "type": "int"
+          },
+          {
+            "name": "UnitsSold",
+            "type": "nvarchar"
+          }
+        ]
+      }
+    ]
   }
 }

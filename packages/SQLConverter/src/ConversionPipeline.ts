@@ -14,6 +14,19 @@ import type {
 /**
  * Orchestrates SQL file conversion from one dialect to another.
  *
+ * @deprecated **Use `BatchConverter.convertFile()` instead.** This class is the
+ * older statement-by-statement pipeline (one sqlglot call per statement, optional
+ * LLM fallback, optional database verification). For production T-SQL → PostgreSQL
+ * conversion of MJ migrations, use the rule-based `BatchConverter` which:
+ *  - Classifies batches and routes them to dialect-specific rules
+ *  - Sub-splits compound batches (CREATE TABLE + ALTER TABLE, etc.)
+ *  - Topologically sorts views by dependency
+ *  - Groups output (Tables, Views, Procedures, Data, Grants, …) for correct apply order
+ *  - Produces idiomatic PG output without the per-statement overhead
+ *
+ * `ConversionPipeline` is retained for backward compatibility and integration
+ * tests that exercise the LLM fallback path. New consumers should not use it.
+ *
  * Pipeline steps:
  * 1. Read source SQL (from file or string)
  * 2. Split into individual statements

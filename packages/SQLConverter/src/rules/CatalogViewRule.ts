@@ -297,6 +297,7 @@ export class CatalogViewRule implements IConversionRule {
   AppliesTo: StatementType[] = ['CREATE_VIEW'];
   Priority = 15; // Run BEFORE ViewRule (priority 20)
   BypassSqlglot = true;
+  BypassJustification = 'T-SQL system catalog views (sys.tables, sys.columns, INFORMATION_SCHEMA, etc.) have no direct sqlglot translation to PG\'s pg_catalog / information_schema. We hand-translate column projections and WHERE clauses to PG-equivalent queries.';
 
   /** ViewRule instance for delegating non-catalog views */
   private viewRule = new ViewRule();

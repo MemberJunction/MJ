@@ -112,6 +112,18 @@ export interface IConversionRule {
    * The PostProcess method receives the original SQL as both parameters.
    */
   BypassSqlglot?: boolean;
+  /**
+   * If `BypassSqlglot` is true, this field documents WHY sqlglot is bypassed.
+   * Intended audience: future maintainers deciding whether the bypass is still
+   * needed (e.g., after a sqlglot upgrade). Should describe:
+   *   - What sqlglot fails to handle for this statement type
+   *   - The specific T-SQL → PG transformation we need that sqlglot doesn't produce
+   *   - A link to an upstream sqlglot issue if applicable
+   *
+   * Required when `BypassSqlglot` is true. Helps with the architecture goal of
+   * "SQLGlot handles >90% of statements" by making the bypass surface auditable.
+   */
+  BypassJustification?: string;
 }
 
 /** Conversion statistics tracking */

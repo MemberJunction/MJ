@@ -441,7 +441,7 @@ import {
     WebURLPartComponent,
 } from '@memberjunction/ng-dashboard-viewer';
 
-// @memberjunction/ng-dashboards (74 classes)
+// @memberjunction/ng-dashboards (75 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -475,6 +475,7 @@ import {
     DashboardBrowserResourceComponent,
     DataExplorerDashboardComponent,
     DataExplorerResourceComponent,
+    DatabaseDesignerDashboardComponent,
     DuplicateDetectionResourceComponent,
     EntityAdminDashboardComponent,
     EntityIntegrationComponent,
@@ -974,6 +975,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     DashboardBrowserResourceComponent,
     DataExplorerDashboardComponent,
     DataExplorerResourceComponent,
+    DatabaseDesignerDashboardComponent,
     DuplicateDetectionResourceComponent,
     EntityAdminDashboardComponent,
     EntityIntegrationComponent,
@@ -1037,7 +1039,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 479;
+export const CLASS_REGISTRATIONS_COUNT = 480;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

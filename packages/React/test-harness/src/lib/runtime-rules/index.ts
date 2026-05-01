@@ -22,6 +22,7 @@ import './no-react-destructuring';
 import './no-require-statements';
 import './no-return-component';
 import './no-use-reducer';
+import './no-unwrap-utility-libs';
 import './no-window-access';
 import './noisy-settings-updates';
 import './pass-standard-props';
