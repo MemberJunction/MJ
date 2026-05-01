@@ -168,6 +168,7 @@ export class ComponentStudioStateService {
 
   // --- Unsaved changes tracking ---
   private _hasUnsavedChanges = false;
+  private _hasResolvedSpec = false;
   get HasUnsavedChanges(): boolean { return this._hasUnsavedChanges; }
   set HasUnsavedChanges(value: boolean) { this._hasUnsavedChanges = value; }
 
@@ -509,6 +510,7 @@ export class ComponentStudioStateService {
     this._currentError = null;
     this._isDetailsPaneCollapsed = false;
     this._hasUnsavedChanges = false;
+    this._hasResolvedSpec = false;
     this.InitializeEditors();
     this.StateChanged.emit();
   }
@@ -519,6 +521,7 @@ export class ComponentStudioStateService {
     this._componentSpec = null;
     this._currentError = null;
     this._hasUnsavedChanges = false;
+    this._hasResolvedSpec = false;
     this.StateChanged.emit();
   }
 
@@ -671,14 +674,20 @@ export class ComponentStudioStateService {
    * React bridge after it loads the component hierarchy.  This replaces
    * registry-reference stubs with real code so code sections show actual source.
    * Does NOT mark the component as having unsaved changes or trigger a re-render.
+   *
+   * Runs at most once per component load. The bridge re-resolves from the registry
+   * on every refresh (including the refresh triggered by Apply Changes), and we
+   * must not let that round-trip clobber edits the user has already applied.
    */
   UpdateWithResolvedSpec(resolvedSpec: ComponentSpec): void {
     if (!this._selectedComponent) return;
+    if (this._hasResolvedSpec) return;
 
     // Only update if the resolved spec actually differs (has real code)
     const current = this._componentSpec;
     if (!current || current === resolvedSpec) return;
 
+    this._hasResolvedSpec = true;
     this._componentSpec = resolvedSpec;
 
     // Update editable spec JSON so Spec/Requirements/Design/Data tabs reflect resolved data

@@ -26,6 +26,8 @@ export {
   PerformanceHeatmapComponent,
   AgentRequestsResourceComponent,
   AutotaggingPipelineResourceComponent,
+  TagsResourceComponent,
+  LoadTagsResource,
   VectorManagementResourceComponent,
   DuplicateDetectionResourceComponent,
   AIAnalyticsResourceComponent,

@@ -3628,7 +3628,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 const totalMs = Date.now() - overallStart;
                 LogStatusEx({
                     message: `[Fast-Start Cache] Load complete: read=${readMs}ms, parse=${parseMs}ms, deserialize=${deserializeMs}ms, total=${totalMs}ms, entities=${metadata.AllEntities?.length ?? 0}`,
-                    verboseOnly: false
+                    verboseOnly: true
                 });
             } else {
                 LogError('[Fast-Start Cache] MetadataFromSimpleObject returned undefined — cache deserialization failed. Check console for per-item errors above.');
@@ -3718,7 +3718,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     const ratio = jsonString.length > 0 ? (base64.length / jsonString.length * 100).toFixed(1) : '?';
                     LogStatusEx({
                         message: `[Fast-Start Cache] Save complete: ${elapsed}ms, raw=${(jsonString.length / 1024 / 1024).toFixed(1)}MB, compressed=${(base64.length / 1024 / 1024).toFixed(1)}MB (${ratio}%)`,
-                        verboseOnly: false
+                        verboseOnly: true
                     });
                     return;
                 }
@@ -3735,7 +3735,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             const elapsed = Date.now() - start;
             LogStatusEx({
                 message: `[Fast-Start Cache] Save complete (uncompressed): ${elapsed}ms, size=${(jsonString.length / 1024 / 1024).toFixed(1)}MB`,
-                verboseOnly: false
+                verboseOnly: true
             });
         }
         catch (e) {
