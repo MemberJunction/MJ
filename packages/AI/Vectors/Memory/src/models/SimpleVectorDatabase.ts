@@ -67,7 +67,14 @@ export class SimpleVectorDatabase extends VectorDBBase {
     /** Constructor accepts any non-empty string. The base class enforces
      *  non-empty for remote stores; in-memory has no real key, so the test
      *  setup uses a placeholder env var (e.g. AI_VENDOR_API_KEY__SIMPLEVECTORDATABASE=in-memory). */
-    constructor(apiKey: string) { super(apiKey); }
+    /**
+     * In-process driver — no remote authentication. `VectorDBBase`'s base
+     * constructor rejects empty keys (designed for Pinecone/Qdrant which
+     * authenticate via API key), so we substitute a placeholder when the
+     * caller didn't provide one. This means deployments don't need to set
+     * `AI_VENDOR_API_KEY__SIMPLEVECTORDATABASE` for the driver to load.
+     */
+    constructor(apiKey?: string) { super(apiKey && apiKey.trim().length > 0 ? apiKey : 'in-memory-no-auth'); }
 
     /** Look up the MJVectorIndex row by name and return its parsed config. */
     private async loadIndexConfig(indexName: string, contextUser: UserInfo | undefined): Promise<SimpleVectorProviderConfig | null> {

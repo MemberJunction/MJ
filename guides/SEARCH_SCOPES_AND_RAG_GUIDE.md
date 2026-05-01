@@ -651,4 +651,124 @@ fire-on-dirty path — they all save through `Metadata.GetEntityObject`
 and assert that downstream Vector search finds the newly-embedded
 records.
 
+### How to enable vector search for an existing entity (in-process)
+
+Several core entities ship with `EmbeddingVector` + `EmbeddingModelID`
+columns whose contents are auto-populated by their server-side
+`Save()` override (see "Embedding regeneration contract" above).
+Today: `MJ: Queries`, `MJ: AI Agent Notes`, `MJ: AI Agent Examples`.
+
+**The data is there, but it isn't indexed by default.** The
+`VectorSearchProvider` only knows about an entity's embeddings when an
+`MJVectorIndex` row points at the column. Adding that row is what
+brings the entity into the global shell search bar's vector path.
+
+#### Recipe — point `SimpleVectorDatabase` at any embedded column
+
+`SimpleVectorDatabase` (in `@memberjunction/ai-vectors-memory`) is the
+in-process driver. It backs a `VectorDBBase` interface onto a single
+entity column, runs cosine similarity over the loaded vectors via
+`SimpleVectorService`, and requires no external service. Suitable for
+dev, agent-memory, and small/medium corpora (≤ ~50K records). For
+larger corpora use Pinecone/Qdrant/pgvector.
+
+Steps (one-time per entity):
+
+```sql
+-- 1. Register the database (the "how to load" definition)
+INSERT INTO __mj.VectorDatabase (Name, ClassKey, DefaultURL, Description)
+VALUES (
+    'Memory-Queries',                    -- friendly name
+    'SimpleVectorDatabase',              -- ClassFactory key
+    'memory://queries',                  -- nominal URL (cosmetic)
+    'In-process vector DB over MJ: Queries.EmbeddingVector'
+);
+
+-- 2. Register the index (the "what to load" definition)
+INSERT INTO __mj.VectorIndex (
+    Name, Description, VectorDatabaseID, EmbeddingModelID,
+    ExternalID, Dimensions, Metric, ProviderConfig
+) VALUES (
+    'Queries-Vector',
+    'Persistent index over MJ: Queries.EmbeddingVector',
+    '<VectorDatabase.ID from step 1>',
+    '<EmbeddingModelID — must match what saves the column>',
+    'queries',                            -- cosmetic
+    768,                                  -- mpnet=768, OpenAI-3=1536, etc.
+    'cosine',
+    '{
+        "entityName": "MJ: Queries",
+        "vectorField": "EmbeddingVector",
+        "filter": "EmbeddingVector IS NOT NULL",
+        "titleField": "Name",
+        "snippetField": "Description"
+    }'
+);
+```
+
+**Field meanings (`ProviderConfig` JSON):**
+| Key | Purpose |
+|---|---|
+| `entityName` | The entity whose rows hold the vectors. Used for `RunView`. |
+| `vectorField` | The column name. Stored as JSON-stringified `number[]`. |
+| `filter` | Optional `ExtraFilter` for the load — typically `EmbeddingVector IS NOT NULL` so unembedded rows are skipped. |
+| `titleField` | Field used as the result's display Title. Falls back to entity NameField. |
+| `snippetField` | Field used as the result's display Snippet. |
+
+**EmbeddingModelID must match the model the column was generated
+with.** `MJQueryEntityServer` and `MJAIAgentNoteEntityServer` use
+`AIEngine.Instance.EmbedTextLocal()` which routes through the
+`LocalEmbedding` driver — currently `Xenova/all-mpnet-base-v2` at 768
+dimensions (model ID `1d45aa65-41ec-4572-9ecd-ab2826c9b059` on this
+deployment). Mismatched dimensions throw at load via
+`SimpleVectorService.validateAndSetDimensions`.
+
+#### Restart, then verify
+
+After inserting, restart MJAPI so `VectorSearchProvider.CheckAvailability`
+re-counts indexes and flips `IsAvailable()=true`. Then in any client:
+
+```typescript
+const result = await SearchEngine.Instance.Search({
+    Query: 'whatever',
+    MaxResults: 10
+}, contextUser);
+
+// Look for SourceType: 'vector' items in result.Results
+// SourceCounts.Vector should be > 0
+```
+
+Or just use the global "Search everything…" bar in MJ Explorer — the
+vector hits will appear inline alongside Entity LIKE / FullText hits,
+ranked by RRF when multiple providers contribute (`ScoreBreakdown:
+{Vector: 0.X, Entity: 0.Y}`) or surfaced as-is when only one provider
+contributes (single-source fast path in `SearchFusion.Fuse`).
+
+#### Coexistence with `AllowUserSearchAPI`
+
+`MJ: Queries` ships with `AllowUserSearchAPI=false` — meaning even
+after wiring the vector index, the LIKE-based `EntitySearchProvider`
+still skips it. To get **fused** scores across both providers, also
+flip the entity flag:
+
+```sql
+UPDATE __mj.Entity SET AllowUserSearchAPI = 1 WHERE Name = 'MJ: Queries';
+```
+
+That's a wider-blast-radius change (the entity also becomes available
+in any other surface that respects `AllowUserSearchAPI`), so make it
+deliberately rather than as part of the vector wiring.
+
+#### Limitations of the in-process driver
+
+- **Process-local cache invalidation only by row count.** In-place
+  edits of an existing row's `EmbeddingVector` (without changing row
+  count) won't bust the cache until process restart. See
+  "Embedding regeneration contract" above for full operational notes.
+- **All vectors loaded into memory** at first query, then cached.
+  Sized for small/medium corpora — RAM scales linearly with row count.
+- **Single-process.** Two MJAPI replicas each maintain their own
+  in-memory cache. For sticky-session deployments that's fine; for
+  load-balanced multi-replica setups, prefer Pinecone/Qdrant.
+
 - Re-ranker catalog entity + visual configuration UI.
