@@ -1747,8 +1747,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const rv = new RunView();
+            // Apply IsActive filter in JS post-fetch — `IsActive=1` works on SQL Server
+            // (BIT) but fails on PostgreSQL (BOOLEAN) with `operator does not exist:
+            // boolean = integer`. CompanyID stays in SQL since it's a UUID equality.
             const filters: string[] = [];
-            if (activeOnly) filters.push('IsActive=1');
             if (companyID) filters.push(`CompanyID='${companyID}'`);
             const filter = filters.join(' AND ');
             const result = await rv.RunView<MJCompanyIntegrationEntity>({
@@ -1765,10 +1767,12 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
             if (!result.Success) return { Success: false, Message: result.ErrorMessage || 'Query failed' };
 
+            const filteredResults = activeOnly ? result.Results.filter(ci => ci.IsActive) : result.Results;
+
             return {
                 Success: true,
-                Message: `${result.Results.length} connections`,
-                Connections: result.Results.map(ci => ({
+                Message: `${filteredResults.length} connections`,
+                Connections: filteredResults.map(ci => ({
                     ID: ci.ID,
                     IntegrationName: ci.Integration,
                     IntegrationID: ci.IntegrationID,
