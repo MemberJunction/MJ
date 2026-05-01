@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Suggestions Inbox · Option B — Kanban</title>
+<link rel="stylesheet" href="mockup.css" />
+<style>
+  .kanban {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(240px, 1fr));
+    gap: 12px;
+    overflow-x: auto;
+    padding-bottom: 12px;
+  }
+  .col {
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 10px;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 200px);
+  }
+  .col-hd {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--mj-border-default);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--mj-bg-surface);
+    border-radius: 10px 10px 0 0;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .col-hd .dot { width: 10px; height: 10px; }
+  .col-hd .ct {
+    margin-left: auto;
+    background: var(--mj-bg-surface-sunken);
+    padding: 1px 8px;
+    border-radius: 10px;
+    font-size: 11px;
+    color: var(--mj-text-secondary);
+  }
+  .col-bd {
+    padding: 10px;
+    overflow-y: auto;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .card {
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 8px;
+    padding: 10px 12px;
+    cursor: grab;
+    box-shadow: var(--mj-shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    transition: transform 0.1s, box-shadow 0.1s;
+  }
+  .card:hover { box-shadow: var(--mj-shadow-md); transform: translateY(-1px); }
+  .card.dragging { opacity: 0.5; transform: rotate(-1deg); }
+  .card .name { font-weight: 600; font-size: 13px; }
+  .card .preview { font-size: 11px; color: var(--mj-text-secondary); line-height: 1.45; }
+  .card .meta { display: flex; justify-content: space-between; font-size: 10px; color: var(--mj-text-muted); }
+  .card .score { font-family: ui-monospace, monospace; font-weight: 700; }
+  .card.high-priority { border-left: 3px solid var(--mj-status-error); }
+  .card.has-best-match { border-left: 3px solid var(--mj-status-info); }
+  .card .quick-actions { display: flex; gap: 4px; opacity: 0.4; transition: opacity 0.1s; }
+  .card:hover .quick-actions { opacity: 1; }
+
+  .drop-targets {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+    margin-top: 16px;
+  }
+  .drop-target {
+    border: 2px dashed var(--mj-border-strong);
+    border-radius: 10px;
+    padding: 18px;
+    text-align: center;
+    color: var(--mj-text-secondary);
+    background: var(--mj-bg-surface);
+    font-weight: 600;
+  }
+  .drop-target.approve { border-color: var(--mj-status-success); color: var(--mj-status-success-text); background: var(--mj-status-success-bg); }
+  .drop-target.merge { border-color: var(--mj-status-info); color: var(--mj-status-info-text); background: var(--mj-status-info-bg); }
+  .drop-target.reject { border-color: var(--mj-status-error); color: var(--mj-status-error-text); background: var(--mj-status-error-bg); }
+</style>
+</head>
+<body>
+
+<div class="mockup-ribbon">
+  <span><strong>Mockup B:</strong> Suggestions Inbox — Kanban-by-reason</span>
+  <span><a href="index.html">← Back to index</a> · <a href="suggestions-a-inbox.html">A</a> · <strong>B</strong> · <a href="suggestions-c-table-drawer.html">C</a></span>
+</div>
+
+<header class="mj-app-header">
+  <div class="logo"><span class="logo-mark">MJ</span> MJ Explorer</div>
+  <div class="breadcrumbs">
+    <span>Knowledge Hub</span><span class="sep">›</span>
+    <span>Classify</span><span class="sep">›</span>
+    <span class="current">Suggestions Inbox</span>
+  </div>
+  <div class="right">
+    <span><strong>247</strong> pending</span>
+    <span class="avatar">AN</span>
+  </div>
+</header>
+
+<div class="page wide">
+
+  <div class="page-title">
+    <div>
+      <h1>Tag Suggestions — by reason</h1>
+      <div class="subtitle">Drag a card to a drop zone to approve, merge or reject. Or click for full review.</div>
+    </div>
+    <div class="flex gap-8">
+      <div class="segmented">
+        <span class="seg">Inbox</span>
+        <span class="seg active">Kanban</span>
+        <span class="seg">Table</span>
+      </div>
+      <button class="btn">Source: All ▾</button>
+      <button class="btn">Age: All ▾</button>
+      <button class="btn primary">+ New rule</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab">Pipeline</div>
+    <div class="tab">Sources</div>
+    <div class="tab">Taxonomy</div>
+    <div class="tab active">Suggestions <span class="count">247</span></div>
+    <div class="tab">Tag Health</div>
+    <div class="tab">Logs</div>
+  </div>
+
+  <div class="kanban">
+
+    <!-- Below threshold -->
+    <div class="col">
+      <div class="col-hd"><span class="dot yellow"></span>Below threshold<span class="ct">112</span></div>
+      <div class="col-bd">
+        <div class="card has-best-match">
+          <div class="name">Generative AI</div>
+          <div class="preview">Best match: AI / Machine Learning</div>
+          <div class="meta"><span>HubSpot · 142 items</span><span class="score">0.78</span></div>
+        </div>
+        <div class="card has-best-match">
+          <div class="name">Customer Success Plays</div>
+          <div class="preview">Best match: Customer / Success</div>
+          <div class="meta"><span>Salesforce · 8 items</span><span class="score">0.71</span></div>
+        </div>
+        <div class="card">
+          <div class="name">snake-case naming</div>
+          <div class="preview">No close existing tag (0.42)</div>
+          <div class="meta"><span>Confluence · 3 items</span><span class="score">0.42</span></div>
+        </div>
+        <div class="card has-best-match">
+          <div class="name">Async I/O patterns</div>
+          <div class="preview">Best match: Engineering / Concurrency</div>
+          <div class="meta"><span>Confluence · 12 items</span><span class="score">0.74</span></div>
+        </div>
+        <div class="card has-best-match">
+          <div class="name">Onboarding email drip</div>
+          <div class="preview">Best match: HR / Onboarding</div>
+          <div class="meta"><span>Sharepoint · 5 items</span><span class="score">0.79</span></div>
+        </div>
+        <div class="card">
+          <div class="name">Q4 retro themes</div>
+          <div class="preview">No close match</div>
+          <div class="meta"><span>Confluence · 4 items</span><span class="score">0.51</span></div>
+        </div>
+        <div class="card has-best-match">
+          <div class="name">SOC2 type II audit</div>
+          <div class="preview">Best match: Compliance / SOC2</div>
+          <div class="meta"><span>Confluence · 9 items</span><span class="score">0.83</span></div>
+        </div>
+        <div class="card has-best-match">
+          <div class="name">DSPy framework</div>
+          <div class="preview">Best match: AI / Frameworks</div>
+          <div class="meta"><span>Confluence · 2 items</span><span class="score">0.73</span></div>
+        </div>
+        <div class="muted" style="text-align:center; padding: 8px; font-size: 11px;">+ 104 more</div>
+      </div>
+    </div>
+
+    <!-- Merge -->
+    <div class="col">
+      <div class="col-hd"><span class="dot blue"></span>Merge candidate<span class="ct">68</span></div>
+      <div class="col-bd">
+        <div class="card has-best-match high-priority">
+          <div class="name">GenAI</div>
+          <div class="preview">→ <strong>Generative AI</strong></div>
+          <div class="meta"><span>TagHealthJob</span><span class="score">0.96</span></div>
+        </div>
+        <div class="card has-best-match high-priority">
+          <div class="name">Snowflake DW</div>
+          <div class="preview">→ <strong>Snowflake</strong></div>
+          <div class="meta"><span>TagHealthJob</span><span class="score">0.92</span></div>
+        </div>
+        <div class="card has-best-match">
+          <div class="name">k8s</div>
+          <div class="preview">→ <strong>Kubernetes</strong></div>
+          <div class="meta"><span>TagHealthJob</span><span class="score">0.89</span></div>
+        </div>
+        <div class="card has-best-match">
+          <div class="name">PostgreSQL</div>
+          <div class="preview">→ <strong>Postgres</strong></div>
+          <div class="meta"><span>TagHealthJob</span><span class="score">0.91</span></div>
+        </div>
+        <div class="card has-best-match">
+          <div class="name">JS / Javascript</div>
+          <div class="preview">→ <strong>JavaScript</strong></div>
+          <div class="meta"><span>TagHealthJob</span><span class="score">0.94</span></div>
+        </div>
+        <div class="card has-best-match">
+          <div class="name">DevEx</div>
+          <div class="preview">→ <strong>Developer Experience</strong></div>
+          <div class="meta"><span>TagHealthJob</span><span class="score">0.87</span></div>
+        </div>
+        <div class="card has-best-match">
+          <div class="name">A/B test</div>
+          <div class="preview">→ <strong>A/B Testing</strong></div>
+          <div class="meta"><span>TagHealthJob</span><span class="score">0.93</span></div>
+        </div>
+        <div class="muted" style="text-align:center; padding: 8px; font-size: 11px;">+ 61 more</div>
+      </div>
+    </div>
+
+    <!-- Constrained -->
+    <div class="col">
+      <div class="col-hd"><span class="dot red"></span>Constrained mode<span class="ct">31</span></div>
+      <div class="col-bd">
+        <div class="card">
+          <div class="name">K8s</div>
+          <div class="preview">"deployment failed on K8s cluster…"</div>
+          <div class="meta"><span>Zendesk #4421</span><span></span></div>
+        </div>
+        <div class="card">
+          <div class="name">WAF rules</div>
+          <div class="preview">AutoGrow disabled on parent</div>
+          <div class="meta"><span>Zendesk #4380</span><span></span></div>
+        </div>
+        <div class="card">
+          <div class="name">Datadog APM</div>
+          <div class="preview">"trace span sampling fixed via DD APM…"</div>
+          <div class="meta"><span>Zendesk #4377</span><span></span></div>
+        </div>
+        <div class="card">
+          <div class="name">Stripe webhook signing</div>
+          <div class="preview">Source: webhook delivery test failure</div>
+          <div class="meta"><span>Zendesk #4360</span><span></span></div>
+        </div>
+        <div class="card">
+          <div class="name">Sendgrid bounce loop</div>
+          <div class="preview">Source: bulk-email retry storm</div>
+          <div class="meta"><span>Zendesk #4358</span><span></span></div>
+        </div>
+        <div class="muted" style="text-align:center; padding: 8px; font-size: 11px;">+ 26 more</div>
+      </div>
+    </div>
+
+    <!-- Parent frozen -->
+    <div class="col">
+      <div class="col-hd"><span class="dot blue"></span>Parent frozen<span class="ct">17</span></div>
+      <div class="col-bd">
+        <div class="card has-best-match">
+          <div class="name">PCI-DSS v4</div>
+          <div class="preview">Parent <em>Compliance / PCI-DSS</em> is frozen</div>
+          <div class="meta"><span>Confluence</span><span></span></div>
+        </div>
+        <div class="card">
+          <div class="name">HIPAA waiver</div>
+          <div class="preview">Parent frozen by Compliance team</div>
+          <div class="meta"><span>Confluence</span><span></span></div>
+        </div>
+        <div class="card">
+          <div class="name">OAuth 2.1</div>
+          <div class="preview">MaxChildren = 12 reached</div>
+          <div class="meta"><span>Confluence · Sec</span><span></span></div>
+        </div>
+        <div class="muted" style="text-align:center; padding: 8px; font-size: 11px;">+ 14 more</div>
+      </div>
+    </div>
+
+    <!-- Requires review -->
+    <div class="col">
+      <div class="col-hd"><span class="dot yellow"></span>Requires review<span class="ct">11</span></div>
+      <div class="col-bd">
+        <div class="card high-priority">
+          <div class="name">Onboarding (Phase 2)</div>
+          <div class="preview">RequiresReview on parent</div>
+          <div class="meta"><span>Sharepoint · HR</span><span></span></div>
+        </div>
+        <div class="card">
+          <div class="name">Layoff playbook</div>
+          <div class="preview">Sensitive parent</div>
+          <div class="meta"><span>Sharepoint · HR</span><span></span></div>
+        </div>
+        <div class="card">
+          <div class="name">Pricing-related</div>
+          <div class="preview">RequiresReview on Finance</div>
+          <div class="meta"><span>Salesforce</span><span></span></div>
+        </div>
+        <div class="muted" style="text-align:center; padding: 8px; font-size: 11px;">+ 8 more</div>
+      </div>
+    </div>
+
+    <!-- Low usage -->
+    <div class="col">
+      <div class="col-hd"><span class="dot gray"></span>Low usage<span class="ct">6</span></div>
+      <div class="col-bd">
+        <div class="card">
+          <div class="name">DEI</div>
+          <div class="preview">Used 2× in 90d window</div>
+          <div class="meta"><span>TagHealthJob</span><span></span></div>
+        </div>
+        <div class="card">
+          <div class="name">Q1-2024-launch</div>
+          <div class="preview">Used 1×; deprecate?</div>
+          <div class="meta"><span>TagHealthJob</span><span></span></div>
+        </div>
+        <div class="card">
+          <div class="name">side-project</div>
+          <div class="preview">Used 0×</div>
+          <div class="meta"><span>TagHealthJob</span><span></span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Wide node -->
+    <div class="col">
+      <div class="col-hd"><span class="dot yellow"></span>Wide node<span class="ct">2</span></div>
+      <div class="col-bd">
+        <div class="card high-priority">
+          <div class="name">Vendors / Stripe split</div>
+          <div class="preview">Vendors has 47 children — consider regrouping</div>
+          <div class="meta"><span>TagHealthJob</span><span></span></div>
+        </div>
+        <div class="card">
+          <div class="name">Engineering / * cleanup</div>
+          <div class="preview">Engineering has 38 direct children</div>
+          <div class="meta"><span>TagHealthJob</span><span></span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="drop-targets">
+    <div class="drop-target approve">↓ Drop to <strong>Approve as new</strong> ↓</div>
+    <div class="drop-target merge">↓ Drop to <strong>Merge into best match</strong> ↓</div>
+    <div class="drop-target reject">↓ Drop to <strong>Reject</strong> ↓</div>
+  </div>
+
+  <div class="design-notes">
+    <h3>Design notes — Option B</h3>
+    <p>Visual prioritization at a glance. Each Reason gets its own column so triage by category becomes a glance,
+    not a filter click. Drag-and-drop to drop zones automates the most common dispositions; clicking a card opens the
+    detail drawer (same as Option A's reading pane).</p>
+    <ul>
+      <li><strong>Strengths:</strong> queue health is visible immediately (column heights = problem distribution); social proof — drag feels gratifying; matches reviewer's mental model of "I'm clearing the merge column today".</li>
+      <li><strong>Weaknesses:</strong> 7+ columns is a lot; horizontal scrolling on smaller screens; drag UX needs careful keyboard fallback; harder to surface deep details inline.</li>
+      <li><strong>Best for:</strong> daily triage by an admin who works across all reasons; team leads who want to assign columns to junior reviewers.</li>
+      <li><strong>Distinctive:</strong> reason-as-column model; left-border priority bars (high-confidence merges flagged); drop-zone tray at the bottom replaces row-level buttons.</li>
+    </ul>
+  </div>
+
+</div>
+
+<script>
+  // Simple drag visualization (cosmetic only)
+  document.querySelectorAll('.card').forEach(c => {
+    c.draggable = true;
+    c.addEventListener('dragstart', () => c.classList.add('dragging'));
+    c.addEventListener('dragend', () => c.classList.remove('dragging'));
+  });
+</script>
+</body>
+</html>

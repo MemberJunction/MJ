@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>ContentSource Configuration · Option A — stepped wizard</title>
+<link rel="stylesheet" href="mockup.css" />
+<style>
+  .wiz-shell { display: grid; grid-template-columns: 280px 1fr; gap: 20px; }
+  .wiz-steps {
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 10px;
+    padding: 18px 0;
+  }
+  .wiz-step {
+    padding: 12px 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    border-left: 3px solid transparent;
+    color: var(--mj-text-secondary);
+  }
+  .wiz-step:hover { background: var(--mj-bg-surface-hover); }
+  .wiz-step.active { background: var(--mj-brand-primary-tint); border-left-color: var(--mj-brand-primary); color: var(--mj-text-primary); font-weight: 600; }
+  .wiz-step.done .num { background: var(--mj-status-success); border-color: var(--mj-status-success); color: #fff; }
+  .wiz-step .num {
+    width: 26px; height: 26px;
+    border-radius: 50%;
+    border: 2px solid var(--mj-border-strong);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700;
+    color: var(--mj-text-muted);
+    background: var(--mj-bg-surface);
+  }
+  .wiz-step.active .num { border-color: var(--mj-brand-primary); color: var(--mj-brand-primary); }
+  .wiz-step .meta { display: flex; flex-direction: column; gap: 2px; }
+  .wiz-step .lbl { font-size: 13px; }
+  .wiz-step .sub { font-size: 11px; color: var(--mj-text-muted); }
+
+  .wiz-body {
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 10px;
+    overflow: hidden;
+    min-height: 700px;
+    display: flex; flex-direction: column;
+  }
+  .wiz-hd { padding: 22px 28px 18px; border-bottom: 1px solid var(--mj-border-default); }
+  .wiz-hd h2 { margin: 0 0 6px; font-size: 22px; font-weight: 700; }
+  .wiz-hd .sub { color: var(--mj-text-secondary); font-size: 13px; max-width: 720px; line-height: 1.5; }
+  .wiz-content { padding: 24px 28px; flex: 1; }
+  .wiz-ft { padding: 14px 28px; border-top: 1px solid var(--mj-border-default); display: flex; justify-content: space-between; background: var(--mj-bg-surface-card); }
+
+  .mode-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .mode-card {
+    border: 2px solid var(--mj-border-default);
+    border-radius: 10px;
+    padding: 18px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: var(--mj-bg-surface);
+    transition: all .15s;
+  }
+  .mode-card:hover { border-color: var(--mj-brand-primary-light); }
+  .mode-card.selected {
+    border-color: var(--mj-brand-primary);
+    background: var(--mj-brand-primary-tint);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
+  }
+  .mode-card .mode-hd { display: flex; gap: 12px; align-items: flex-start; }
+  .mode-card .icon { width: 40px; height: 40px; border-radius: 8px; background: var(--mj-bg-surface-sunken); display: inline-flex; align-items: center; justify-content: center; font-size: 22px; }
+  .mode-card.selected .icon { background: var(--mj-brand-primary); color: #fff; }
+  .mode-card h3 { margin: 0; font-size: 15px; font-weight: 700; }
+  .mode-card .tag-line { color: var(--mj-text-secondary); font-size: 12px; }
+  .mode-card .desc { color: var(--mj-text-secondary); font-size: 13px; line-height: 1.5; margin: 0; }
+  .mode-card .when { font-size: 11px; color: var(--mj-text-muted); border-top: 1px dashed var(--mj-border-default); padding-top: 8px; margin-top: auto; }
+
+  .summary-aside {
+    background: var(--mj-bg-surface-card);
+    border-radius: 8px;
+    padding: 14px 16px;
+    border-left: 3px solid var(--mj-brand-primary);
+    margin-top: 18px;
+  }
+  .summary-aside h4 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--mj-brand-primary); }
+  .summary-aside dl { display: grid; grid-template-columns: 180px 1fr; gap: 4px 12px; font-size: 12px; margin: 0; }
+  .summary-aside dt { color: var(--mj-text-muted); }
+  .summary-aside dd { margin: 0; color: var(--mj-text-primary); }
+</style>
+</head>
+<body>
+
+<div class="mockup-ribbon">
+  <span><strong>Mockup A:</strong> ContentSource Configuration — stepped wizard</span>
+  <span><a href="index.html">← Back to index</a> · <strong>A</strong> · <a href="#">B</a> · <a href="#">C</a></span>
+</div>
+
+<header class="mj-app-header">
+  <div class="logo"><span class="logo-mark">MJ</span> MJ Explorer</div>
+  <div class="breadcrumbs">
+    <span>Knowledge Hub</span><span class="sep">›</span>
+    <span>Classify</span><span class="sep">›</span>
+    <span>Sources</span><span class="sep">›</span>
+    <span class="current">HubSpot · Help Center</span>
+  </div>
+  <div class="right">
+    <span><strong>Editing</strong> · unsaved</span>
+    <span class="avatar">AN</span>
+  </div>
+</header>
+
+<div class="page wide">
+
+  <div class="page-title">
+    <div>
+      <h1>Configure HubSpot · Help Center</h1>
+      <div class="subtitle">Step 2 of 4 · Pick a taxonomy posture, narrow the visible tree, set thresholds and budgets</div>
+    </div>
+    <div class="flex gap-8">
+      <button class="btn">Cancel</button>
+      <button class="btn primary">Save changes</button>
+    </div>
+  </div>
+
+  <div class="wiz-shell">
+    <aside class="wiz-steps">
+      <div class="wiz-step done">
+        <span class="num">✓</span>
+        <span class="meta">
+          <span class="lbl">1 · Source basics</span>
+          <span class="sub">Type, ownership, schedule</span>
+        </span>
+      </div>
+      <div class="wiz-step active">
+        <span class="num">2</span>
+        <span class="meta">
+          <span class="lbl">2 · Taxonomy posture</span>
+          <span class="sub">How freely tags can grow</span>
+        </span>
+      </div>
+      <div class="wiz-step">
+        <span class="num">3</span>
+        <span class="meta">
+          <span class="lbl">3 · Scope &amp; root</span>
+          <span class="sub">Which tags are visible</span>
+        </span>
+      </div>
+      <div class="wiz-step">
+        <span class="num">4</span>
+        <span class="meta">
+          <span class="lbl">4 · Thresholds</span>
+          <span class="sub">Match · Suggest bands</span>
+        </span>
+      </div>
+      <div class="wiz-step">
+        <span class="num">5</span>
+        <span class="meta">
+          <span class="lbl">5 · Budgets</span>
+          <span class="sub">Tags · tokens · cost</span>
+        </span>
+      </div>
+      <div class="wiz-step">
+        <span class="num">6</span>
+        <span class="meta">
+          <span class="lbl">6 · Review &amp; activate</span>
+          <span class="sub">Run preview against fixtures</span>
+        </span>
+      </div>
+    </aside>
+
+    <section class="wiz-body">
+      <div class="wiz-hd">
+        <h2>Pick a taxonomy posture</h2>
+        <p class="sub">
+          Each ContentSource picks one of four postures along the curated-↔-free-form spectrum. You can change this later.
+          What you pick affects whether the autotagger creates new tags, asks for human review, or stays inside a fixed list.
+        </p>
+      </div>
+
+      <div class="wiz-content">
+
+        <div class="mode-cards">
+          <label class="mode-card">
+            <div class="mode-hd">
+              <div class="icon">🔒</div>
+              <div>
+                <h3>Constrained</h3>
+                <div class="tag-line">Curated tags only · no auto-creation</div>
+              </div>
+            </div>
+            <p class="desc">
+              Tags are picked from your existing taxonomy. If the classifier isn't confident enough about an existing
+              tag, the item is sent to <strong>Suggestions</strong> — it will not invent a new one.
+            </p>
+            <div class="when">Best for: regulated content, finance, customer-support categorizations.</div>
+          </label>
+
+          <label class="mode-card selected">
+            <div class="mode-hd">
+              <div class="icon">⚖️</div>
+              <div>
+                <h3>Hybrid</h3>
+                <div class="tag-line">Curated + suggested · never silent creation</div>
+              </div>
+            </div>
+            <p class="desc">
+              Auto-match is enabled, but the classifier never auto-creates. Anything the classifier wants to invent
+              shows up in the <strong>Suggestions Inbox</strong> for human approval. <em>(Recommended starting point.)</em>
+            </p>
+            <div class="when">Best for: most teams. Pairs well with a daily review cadence.</div>
+          </label>
+
+          <label class="mode-card">
+            <div class="mode-hd">
+              <div class="icon">🌱</div>
+              <div>
+                <h3>Auto-grow</h3>
+                <div class="tag-line">Bounded auto-creation · respects governance</div>
+              </div>
+            </div>
+            <p class="desc">
+              The classifier creates new tags freely under your <strong>tag root</strong>, but per-tag governance still
+              applies — frozen subtrees, MaxChildren, MaxDescendantDepth all gate creation, with denials routed to Suggestions.
+            </p>
+            <div class="when">Best for: rapid-evolution corpora (engineering wikis, ticket triage).</div>
+          </label>
+
+          <label class="mode-card">
+            <div class="mode-hd">
+              <div class="icon">🌊</div>
+              <div>
+                <h3>Free-flow</h3>
+                <div class="tag-line">Anything goes · use with care</div>
+              </div>
+            </div>
+            <p class="desc">
+              No governance gating. The classifier creates whatever tags it likes. Tag Health will still surface merge
+              candidates and wide-node alerts after the fact.
+            </p>
+            <div class="when">Best for: discovery / R&amp;D. Not recommended for production tenants.</div>
+          </label>
+        </div>
+
+        <div class="summary-aside">
+          <h4>What you've picked so far</h4>
+          <dl>
+            <dt>Source name</dt><dd>HubSpot · Help Center</dd>
+            <dt>Source type</dt><dd>HubSpot Knowledge Base API</dd>
+            <dt>Schedule</dt><dd>Every 6 hours · last run 2 hours ago</dd>
+            <dt>Taxonomy mode</dt><dd><strong style="color: var(--mj-brand-primary);">Hybrid</strong> · curated + suggested</dd>
+            <dt>Tag root</dt><dd><span class="muted">— pick on next step —</span></dd>
+            <dt>Match threshold</dt><dd><span class="muted">— default 0.85, tunable on step 4 —</span></dd>
+          </dl>
+        </div>
+
+      </div>
+
+      <div class="wiz-ft">
+        <button class="btn">← Back</button>
+        <div class="flex gap-8">
+          <button class="btn">Skip to review</button>
+          <button class="btn primary">Continue: Scope &amp; root →</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- preview of next step (a peek at the threshold step so reviewers can judge the slider design) -->
+  <h2 style="margin: 36px 0 8px; font-size: 16px;">Sneak peek — Step 4: Thresholds</h2>
+  <p class="muted" style="margin: 0 0 12px;">Showing how the same wizard handles the paired threshold sliders.</p>
+
+  <section class="wiz-body" style="min-height: auto;">
+    <div class="wiz-hd">
+      <h2>Set match and suggestion thresholds</h2>
+      <p class="sub">
+        Two cosine-similarity bands. Above <strong>MatchThreshold</strong>, the classifier auto-applies the existing tag.
+        Between <strong>SuggestThreshold</strong> and MatchThreshold, the item routes to the Suggestions Inbox. Below SuggestThreshold,
+        Auto-grow / Free-flow may invent a new tag (Hybrid won't).
+      </p>
+    </div>
+    <div class="wiz-content">
+      <div class="threshold-track" style="margin: 32px 0 22px; height: 30px;">
+        <div class="marker" style="left: 70%; background: var(--mj-status-warning); width: 4px;"><span class="lbl" style="top: -22px;">SuggestThreshold 0.70</span></div>
+        <div class="marker" style="left: 85%; background: var(--mj-status-success); width: 4px;"><span class="lbl" style="top: -22px;">MatchThreshold 0.85</span></div>
+      </div>
+
+      <div class="form-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 18px;">
+        <div class="field">
+          <label>MatchThreshold (auto-apply at or above)</label>
+          <input class="input" value="0.85" />
+          <span class="hint">Cosine similarity. Higher = stricter. Default 0.85.</span>
+        </div>
+        <div class="field">
+          <label>SuggestThreshold (route to inbox at or above)</label>
+          <input class="input" value="0.70" />
+          <span class="hint">Must be lower than MatchThreshold. Default 0.05 below match.</span>
+        </div>
+      </div>
+
+      <div class="summary-aside">
+        <h4>What this means in practice</h4>
+        <ul style="margin: 0 0 0 16px; line-height: 1.6; font-size: 12px;">
+          <li>Score ≥ <strong>0.85</strong> → tag auto-applied · no human in the loop</li>
+          <li><strong>0.70</strong> ≤ score &lt; 0.85 → Suggestions Inbox · reason "Below threshold"</li>
+          <li>Score &lt; <strong>0.70</strong> → in Hybrid: Suggestions; in AutoGrow: governance gates new-tag creation</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <div class="design-notes">
+    <h3>Design notes — Option A</h3>
+    <p>Wizard layout: each major decision (mode, scope, thresholds, budgets) gets a dedicated step with copy that
+    teaches as it asks. Mode-cards on step 2 are the centerpiece — picking taxonomy posture is the most
+    consequential choice and deserves big targets with explicit "best for" guidance. The bottom-of-page
+    sneak-peek of the threshold step shows how the paired sliders are framed.</p>
+    <ul>
+      <li><strong>Strengths:</strong> first-time setup is gentle; "summary so far" panel always visible; mode cards make tradeoffs explicit; perfect for a sales-engineering demo.</li>
+      <li><strong>Weaknesses:</strong> 4–6 clicks to change one knob; power users will want to skip steps; takes screen real estate.</li>
+      <li><strong>Best for:</strong> initial source onboarding; non-technical operators.</li>
+      <li><strong>Distinctive:</strong> mode-as-card with icons + "best for" copy; persistent summary aside; threshold-band ribbon visualization carried over from the Suggestions Inbox.</li>
+    </ul>
+  </div>
+
+</div>
+
+<script>
+  document.querySelectorAll('.mode-card').forEach(c => c.addEventListener('click', () => {
+    document.querySelectorAll('.mode-card').forEach(x => x.classList.remove('selected'));
+    c.classList.add('selected');
+  }));
+  document.querySelectorAll('.wiz-step').forEach(s => s.addEventListener('click', () => {
+    document.querySelectorAll('.wiz-step').forEach(x => { if (!x.classList.contains('done')) x.classList.remove('active'); });
+    s.classList.add('active');
+  }));
+</script>
+</body>
+</html>

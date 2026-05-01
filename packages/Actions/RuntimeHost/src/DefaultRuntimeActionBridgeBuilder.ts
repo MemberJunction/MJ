@@ -23,7 +23,7 @@ import { buildRuntimeActionBridgeHandlers, getRuntimeActionBridgePreamble } from
  * configuration runs. If nothing registers (e.g., this package isn't loaded),
  * ActionEngine falls through to pure-compute mode — a safe degradation.
  */
-@RegisterClass(RuntimeActionBridgeBuilder)
+@RegisterClass(RuntimeActionBridgeBuilder, undefined, undefined, true)
 export class DefaultRuntimeActionBridgeBuilder extends RuntimeActionBridgeBuilder {
     // The inherited constructor from `BaseSingleton` is `protected`; we
     // redeclare it here (still protected, still calling super()) so that

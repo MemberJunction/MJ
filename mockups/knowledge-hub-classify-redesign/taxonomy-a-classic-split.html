@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Taxonomy Admin · Option A — classic split</title>
+<link rel="stylesheet" href="mockup.css" />
+<style>
+  .tax-shell { display: grid; grid-template-columns: 360px 1fr; gap: 0; height: calc(100vh - 200px); min-height: 760px; border: 1px solid var(--mj-border-default); border-radius: 10px; overflow: hidden; background: var(--mj-bg-surface); }
+  .tax-side { border-right: 1px solid var(--mj-border-default); display: flex; flex-direction: column; overflow: hidden; background: var(--mj-bg-surface-card); }
+  .tax-side .side-toolbar { padding: 12px 14px; border-bottom: 1px solid var(--mj-border-default); display: flex; gap: 6px; align-items: center; background: var(--mj-bg-surface); }
+  .tax-tree-body { flex: 1; overflow-y: auto; padding: 10px 8px; }
+
+  .tnode {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .tnode:hover { background: var(--mj-bg-surface-hover); }
+  .tnode.selected { background: var(--mj-brand-primary-tint); color: var(--mj-brand-primary); font-weight: 600; }
+  .tnode .twist { width: 12px; color: var(--mj-text-muted); font-size: 10px; }
+  .tnode .name { flex: 1; }
+  .tnode .icons { display: flex; gap: 3px; }
+  .tnode .icons .ic {
+    width: 16px; height: 16px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 3px;
+    font-size: 10px;
+  }
+  .ic.global   { background: #dcfce7; color: #15803d; }
+  .ic.scoped   { background: #ede9fe; color: #6d28d9; }
+  .ic.frozen   { background: #e0e7ff; color: #3730a3; }
+  .ic.no-grow  { background: #fef3c7; color: #92400e; }
+  .ic.review   { background: #fce7f3; color: #9d174d; }
+  .ic.count    { background: var(--mj-bg-surface-sunken); color: var(--mj-text-muted); padding: 0 5px; min-width: 18px; }
+
+  .tchildren { padding-left: 18px; border-left: 1px dashed var(--mj-border-default); margin-left: 10px; }
+
+  .tax-form { overflow-y: auto; padding: 0; background: var(--mj-bg-surface); }
+  .form-hd {
+    padding: 18px 24px 14px;
+    border-bottom: 1px solid var(--mj-border-default);
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+  }
+  .form-hd .crumbs { font-size: 12px; color: var(--mj-text-muted); margin-bottom: 4px; }
+  .form-hd h2 { margin: 0; font-size: 22px; font-weight: 700; }
+  .form-hd .badge-row { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+
+  .form-section { padding: 18px 24px; border-bottom: 1px solid var(--mj-border-subtle); }
+  .form-section h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--mj-text-muted); margin: 0 0 12px; font-weight: 700; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .form-grid.three { grid-template-columns: 1fr 1fr 1fr; }
+
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; padding: 8px 0; border-bottom: 1px dashed var(--mj-border-subtle); }
+  .toggle-row:last-child { border-bottom: 0; }
+  .toggle-row .label { display: flex; flex-direction: column; gap: 2px; }
+  .toggle-row .label .t { font-size: 13px; font-weight: 600; }
+  .toggle-row .label .d { font-size: 11px; color: var(--mj-text-muted); max-width: 380px; line-height: 1.4; }
+  .switch {
+    position: relative;
+    width: 36px; height: 20px;
+    background: var(--mj-color-neutral-300);
+    border-radius: 10px; cursor: pointer; transition: background .15s;
+  }
+  .switch::after {
+    content: ""; position: absolute; top: 2px; left: 2px;
+    width: 16px; height: 16px; border-radius: 50%; background: #fff;
+    transition: left .15s;
+  }
+  .switch.on { background: var(--mj-brand-primary); }
+  .switch.on::after { left: 18px; }
+
+  .scope-chip-list { display: flex; flex-wrap: wrap; gap: 6px; }
+  .stats-strip {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+    padding: 0 24px 18px;
+  }
+</style>
+</head>
+<body>
+
+<div class="mockup-ribbon">
+  <span><strong>Mockup A:</strong> Taxonomy Admin — classic tree-on-left, governance form on the right</span>
+  <span><a href="index.html">← Back to index</a> · <strong>A</strong> · <a href="#">B</a> · <a href="#">C</a></span>
+</div>
+
+<header class="mj-app-header">
+  <div class="logo"><span class="logo-mark">MJ</span> MJ Explorer</div>
+  <div class="breadcrumbs">
+    <span>Knowledge Hub</span><span class="sep">›</span>
+    <span>Classify</span><span class="sep">›</span>
+    <span class="current">Taxonomy</span>
+  </div>
+  <div class="right">
+    <span><strong>1,247</strong> tags · <strong>4</strong> roots</span>
+    <span class="avatar">AN</span>
+  </div>
+</header>
+
+<div class="page wide">
+
+  <div class="page-title">
+    <div>
+      <h1>Taxonomy</h1>
+      <div class="subtitle">Curate the tag hierarchy · governance · scope · synonyms</div>
+    </div>
+    <div class="flex gap-8">
+      <button class="btn">Export tree</button>
+      <button class="btn">Bulk import</button>
+      <button class="btn primary">+ New tag</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab">Pipeline</div>
+    <div class="tab">Sources</div>
+    <div class="tab active">Taxonomy <span class="count">1,247</span></div>
+    <div class="tab">Suggestions <span class="count">247</span></div>
+    <div class="tab">Tag Health</div>
+    <div class="tab">Logs</div>
+  </div>
+
+  <div class="tax-shell">
+    <aside class="tax-side">
+      <div class="side-toolbar">
+        <input class="input" style="flex: 1; padding: 5px 9px; font-size: 12px;" placeholder="Search 1,247 tags…" />
+        <button class="btn xs">⤢</button>
+        <button class="btn xs">⤡</button>
+      </div>
+      <div class="tax-tree-body">
+
+        <div class="tnode">
+          <span class="twist">▼</span><span class="name">Technology</span>
+          <div class="icons"><span class="ic global" title="Global">🌐</span><span class="ic count">412</span></div>
+        </div>
+        <div class="tchildren">
+          <div class="tnode">
+            <span class="twist">▼</span><span class="name">AI / Machine Learning</span>
+            <div class="icons"><span class="ic scoped" title="Scoped">🔒</span><span class="ic count">187</span></div>
+          </div>
+          <div class="tchildren">
+            <div class="tnode selected">
+              <span class="twist">▶</span><span class="name">Generative AI</span>
+              <div class="icons">
+                <span class="ic scoped" title="Scoped to Acme + Globex">🔒</span>
+                <span class="ic frozen" title="Frozen">❄</span>
+                <span class="ic count">412</span>
+              </div>
+            </div>
+            <div class="tnode"><span class="twist">▶</span><span class="name">LLMs</span><div class="icons"><span class="ic count">891</span></div></div>
+            <div class="tnode"><span class="twist">▶</span><span class="name">AI Agents</span><div class="icons"><span class="ic review" title="RequiresReview">!</span><span class="ic count">233</span></div></div>
+            <div class="tnode"><span class="twist">▶</span><span class="name">Prompt Engineering</span><div class="icons"><span class="ic count">156</span></div></div>
+            <div class="tnode"><span class="twist">▶</span><span class="name">Vector Search</span><div class="icons"><span class="ic count">87</span></div></div>
+          </div>
+
+          <div class="tnode"><span class="twist">▶</span><span class="name">Languages</span><div class="icons"><span class="ic no-grow" title="AutoGrow off">🚫</span><span class="ic count">38</span></div></div>
+          <div class="tnode"><span class="twist">▶</span><span class="name">Databases</span><div class="icons"><span class="ic count">47</span></div></div>
+          <div class="tnode"><span class="twist">▶</span><span class="name">Frameworks</span><div class="icons"><span class="ic count">62</span></div></div>
+          <div class="tnode"><span class="twist">▶</span><span class="name">Infrastructure</span><div class="icons"><span class="ic count">112</span></div></div>
+          <div class="tnode"><span class="twist">▶</span><span class="name">Security</span><div class="icons"><span class="ic frozen" title="Frozen">❄</span><span class="ic count">94</span></div></div>
+        </div>
+
+        <div class="tnode">
+          <span class="twist">▼</span><span class="name">Compliance</span>
+          <div class="icons"><span class="ic frozen" title="Frozen">❄</span><span class="ic count">89</span></div>
+        </div>
+        <div class="tchildren">
+          <div class="tnode"><span class="twist">▶</span><span class="name">PCI-DSS</span><div class="icons"><span class="ic frozen" title="Frozen">❄</span><span class="ic count">23</span></div></div>
+          <div class="tnode"><span class="twist">▶</span><span class="name">SOC2</span><div class="icons"><span class="ic frozen" title="Frozen">❄</span><span class="ic count">17</span></div></div>
+          <div class="tnode"><span class="twist">▶</span><span class="name">HIPAA</span><div class="icons"><span class="ic frozen" title="Frozen">❄</span><span class="ic count">14</span></div></div>
+          <div class="tnode"><span class="twist">▶</span><span class="name">GDPR</span><div class="icons"><span class="ic frozen" title="Frozen">❄</span><span class="ic count">21</span></div></div>
+        </div>
+
+        <div class="tnode"><span class="twist">▶</span><span class="name">Product</span><div class="icons"><span class="ic count">241</span></div></div>
+        <div class="tnode"><span class="twist">▶</span><span class="name">Customer</span><div class="icons"><span class="ic count">198</span></div></div>
+        <div class="tnode"><span class="twist">▶</span><span class="name">HR</span><div class="icons"><span class="ic scoped">🔒</span><span class="ic review">!</span><span class="ic count">87</span></div></div>
+        <div class="tnode"><span class="twist">▶</span><span class="name">Finance</span><div class="icons"><span class="ic review">!</span><span class="ic count">73</span></div></div>
+        <div class="tnode"><span class="twist">▶</span><span class="name">Vendors <span class="muted" style="font-weight: 400; font-size: 11px;">(47 children)</span></span><div class="icons" title="Wide-node alert"><span class="ic" style="background:#ffedd5; color:#9a3412;">⚠</span><span class="ic count">47</span></div></div>
+
+      </div>
+    </aside>
+
+    <section class="tax-form">
+      <div class="form-hd">
+        <div>
+          <div class="crumbs">Technology › AI / Machine Learning › <strong style="color: var(--mj-text-primary);">Generative AI</strong></div>
+          <h2>Generative AI</h2>
+          <div class="badge-row">
+            <span class="badge brand">Active</span>
+            <span class="chip scoped">🔒 Scoped: 2 tenants</span>
+            <span class="badge warning">❄ Frozen subtree</span>
+            <span class="badge">412 items tagged</span>
+            <span class="badge info">Embedded · text-embedding-3-small</span>
+          </div>
+        </div>
+        <div class="flex gap-8">
+          <button class="btn">View items</button>
+          <button class="btn">Move…</button>
+          <button class="btn">Merge…</button>
+          <button class="btn danger">Deprecate</button>
+        </div>
+      </div>
+
+      <div class="stats-strip">
+        <div class="metric brand">
+          <span class="lbl">Items tagged</span>
+          <span class="val">412</span>
+          <span class="delta">+34 last 7d</span>
+        </div>
+        <div class="metric">
+          <span class="lbl">Direct children</span>
+          <span class="val">3</span>
+          <span class="delta dim">of MaxChildren <strong>10</strong></span>
+        </div>
+        <div class="metric success">
+          <span class="lbl">Avg confidence</span>
+          <span class="val">0.91</span>
+          <span class="delta">healthy</span>
+        </div>
+        <div class="metric warn">
+          <span class="lbl">Pending suggestions</span>
+          <span class="val">7</span>
+          <span class="delta down">below threshold</span>
+        </div>
+      </div>
+
+      <!-- Identity -->
+      <div class="form-section">
+        <h3>Identity</h3>
+        <div class="form-grid">
+          <div class="field">
+            <label>Display name</label>
+            <input class="input" value="Generative AI" />
+          </div>
+          <div class="field">
+            <label>Slug (canonical name)</label>
+            <input class="input" value="generative-ai" />
+          </div>
+          <div class="field" style="grid-column: span 2;">
+            <label>Description</label>
+            <textarea class="input" rows="2">AI systems that produce novel content (text, images, audio, code) given a prompt. Used for tagging articles, tickets and notes about LLM-driven product features.</textarea>
+          </div>
+          <div class="field">
+            <label>Parent</label>
+            <input class="input" value="Technology / AI / Machine Learning" />
+          </div>
+          <div class="field">
+            <label>Status</label>
+            <select class="input"><option>Active</option><option>Deprecated</option><option>Merged</option></select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Governance -->
+      <div class="form-section">
+        <h3>Governance · how the autotagger may grow this subtree</h3>
+
+        <div class="toggle-row">
+          <div class="label">
+            <span class="t">Allow auto-grow under this tag</span>
+            <span class="d">Lets the classifier create child tags below this one when it sees novel content. Off = constrained subtree.</span>
+          </div>
+          <div class="switch on"></div>
+        </div>
+
+        <div class="toggle-row">
+          <div class="label">
+            <span class="t">Freeze this subtree</span>
+            <span class="d">Locks this entire subtree. Even if AutoGrow is on globally, no new tags will be created here.</span>
+          </div>
+          <div class="switch on"></div>
+        </div>
+
+        <div class="toggle-row">
+          <div class="label">
+            <span class="t">Requires review for matches</span>
+            <span class="d">When set, even high-confidence matches are routed to the suggestion queue first.</span>
+          </div>
+          <div class="switch"></div>
+        </div>
+
+        <div class="form-grid three" style="margin-top: 14px;">
+          <div class="field">
+            <label>Max children</label>
+            <input class="input" value="10" />
+            <span class="hint">Hard cap on direct children.</span>
+          </div>
+          <div class="field">
+            <label>Max descendant depth</label>
+            <input class="input" value="2" />
+            <span class="hint">From this node down. 0 = leaf-only.</span>
+          </div>
+          <div class="field">
+            <label>Min confidence</label>
+            <input class="input" value="0.85" />
+            <span class="hint">Floor for matches against this tag.</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scope -->
+      <div class="form-section">
+        <h3>Scope · who can see and tag with this</h3>
+
+        <div class="toggle-row">
+          <div class="label">
+            <span class="t">Global tag (visible to all tenants)</span>
+            <span class="d">Off = restricted to the scope rows below. Toggle is locked while scope rows exist.</span>
+          </div>
+          <div class="switch"></div>
+        </div>
+
+        <div class="muted mt-8" style="font-size: 12px;">Visible only inside these scope tuples:</div>
+        <div class="scope-chip-list mt-8">
+          <span class="chip scoped">Company · Acme Corp <span class="x">×</span></span>
+          <span class="chip scoped">Company · Globex Inc. <span class="x">×</span></span>
+          <button class="btn sm">+ Add scope</button>
+        </div>
+
+        <div class="muted mt-16" style="font-size: 12px;">
+          ⓘ Children inherit this scope automatically. Promotion to global requires admin approval and unfreezes the subtree.
+        </div>
+      </div>
+
+      <!-- Synonyms -->
+      <div class="form-section">
+        <h3>Synonyms · alternate names that resolve to this tag</h3>
+        <div class="scope-chip-list">
+          <span class="chip">GenAI <span class="muted" style="font-size: 10px;">manual</span> <span class="x">×</span></span>
+          <span class="chip">Gen AI <span class="muted" style="font-size: 10px;">manual</span> <span class="x">×</span></span>
+          <span class="chip">generative-ai <span class="muted" style="font-size: 10px;">imported</span> <span class="x">×</span></span>
+          <span class="chip" style="background:#fef3c7; color:#92400e; border-color:#fde68a;">AI generation <span class="muted" style="font-size: 10px;">LLM · pending</span> <span class="x">×</span></span>
+          <input class="input" placeholder="+ add synonym…" style="font-size: 12px; padding: 4px 10px; min-width: 140px;" />
+        </div>
+        <div class="muted mt-8" style="font-size: 12px;">
+          ⓘ Yellow chips are LLM-suggested and won't resolve until a human approves.
+        </div>
+      </div>
+
+      <!-- Embedding -->
+      <div class="form-section" style="border-bottom: 0;">
+        <h3>Embedding cache</h3>
+        <div class="form-grid">
+          <div class="field">
+            <label>Embedding model</label>
+            <input class="input" value="text-embedding-3-small (OpenAI)" disabled />
+          </div>
+          <div class="field">
+            <label>Last refreshed</label>
+            <input class="input" value="2 days ago · vector dim 1536" disabled />
+          </div>
+        </div>
+        <button class="btn sm">Recompute embedding</button>
+      </div>
+
+    </section>
+  </div>
+
+  <div class="design-notes">
+    <h3>Design notes — Option A</h3>
+    <p>The reference design. Tree-on-left mirrors the existing autotagging-pipeline component, so adoption cost is
+    near zero. The form on the right collapses governance (toggles), scope (chip list), and synonyms (chip list) into
+    one scrollable surface, with a stats strip at the top so reviewers see "is this tag healthy?" before editing.
+    The tree icons (🌐 global, 🔒 scoped, ❄ frozen, 🚫 no-grow, ! requires-review, ⚠ wide-node) carry a lot of meaning
+    in tiny pixels — they're the most distinctive visual element.</p>
+    <ul>
+      <li><strong>Strengths:</strong> familiar, scannable, governance fits naturally in the form, tree icons make scope/freeze instantly visible.</li>
+      <li><strong>Weaknesses:</strong> bulk operations across nodes require multi-select in the tree (which the icon legend mostly precludes); not great for "show me every frozen tag in the org".</li>
+      <li><strong>Best for:</strong> day-to-day curation by a single owner per subtree.</li>
+      <li><strong>Distinctive:</strong> icon legend on the tree; toggle-row with inline description; stats strip pinned above the form.</li>
+    </ul>
+  </div>
+
+</div>
+
+<script>
+  document.querySelectorAll('.switch').forEach(s => s.addEventListener('click', () => s.classList.toggle('on')));
+  document.querySelectorAll('.tnode').forEach(n => n.addEventListener('click', () => {
+    document.querySelectorAll('.tnode').forEach(x => x.classList.remove('selected'));
+    n.classList.add('selected');
+  }));
+</script>
+</body>
+</html>
