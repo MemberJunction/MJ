@@ -352,7 +352,7 @@ The "what to do when `CREATE OR REPLACE VIEW` rejects the change" path. PG raise
 
 `packages/CodeGenLib/src/__tests__/integration/pg-codegen-sprocs.integration.test.ts` — 15 integration tests proving the 7 baseline CodeGen sprocs work on PG: `spGetPrimaryKeyForTable`, `spSetDefaultColumnWidthWhereNeeded`, `spUpdateEntityFieldRelatedEntityNameFieldMap`, `spUpdateExistingEntitiesFromSchema`, `spUpdateExistingEntityFieldsFromSchema`, `spUpdateSchemaInfoFromDatabase`, `spDeleteUnneededEntityFields`.
 
-**Pairs with:** `cd36ae6d86` on the `pg-migration-files` branch (`V202604220000__v5.28.x__Port_Missing_CodeGen_Sprocs.pg-only.sql`) which actually adds the ported sprocs to the migrations.
+**Pairs with:** `cd36ae6d86` on the `pg-migration-files` branch (`V202604220000__v5.29.x__Port_Missing_CodeGen_Sprocs.pg-only.sql`) which actually adds the ported sprocs to the migrations.
 
 **Why this matters:** Without these sprocs, CodeGen's metadata-management phase fails on PG. The T-SQL versions use SQL Server-specific features (sys.* catalog, STRING_SPLIT, IIF, table variables, SELECT...INTO) that the converter cannot translate — so they had to be hand-ported. The integration test ensures the ports stay correct as the schema evolves.
 
@@ -403,7 +403,7 @@ Tightened the GH Actions workflow: better cache key, explicit `MJ_CODEGEN_STRICT
 
 ## Cross-Branch: Sproc port migration (`cd36ae6d86` on `pg-migration-files`)
 
-**1 new migration: `V202604220000__v5.28.x__Port_Missing_CodeGen_Sprocs.pg-only.sql`**
+**1 new migration: `V202604220000__v5.29.x__Port_Missing_CodeGen_Sprocs.pg-only.sql`**
 
 Hand-ports 7 baseline CodeGen sprocs to PG plpgsql (paired with the `80416d1845` integration test above). The `.pg-only` suffix signals that this migration has no T-SQL counterpart — it exists solely because the converter cannot translate the T-SQL versions of these sprocs.
 

@@ -1,6 +1,8 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo, Metadata, RunView, LogError } from '@memberjunction/core';
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { MJTagEntity, MJTaggedItemEntity } from '@memberjunction/core-entities';
+import { MJTagEntity, MJTaggedItemEntity, MJTagScopeEntity, MJTagSynonymEntity } from '@memberjunction/core-entities';
+import { TagScopeContext } from './TagScopeContext';
+import { TagScopeFilterBuilder } from './TagScopeFilterBuilder';
 
 /**
  * Tree node representing a tag in its hierarchical taxonomy.
@@ -35,17 +37,34 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
     }
 
     private _Tags: MJTagEntity[] = [];
+    private _TagScopes: MJTagScopeEntity[] = [];
+    private _TagSynonyms: MJTagSynonymEntity[] = [];
+
+    /** TagID → list of TagScope rows, populated lazily after Config(). */
+    private _scopesByTagID: Map<string, MJTagScopeEntity[]> | null = null;
+
+    /** lowercased synonym text → TagID, populated lazily after Config(). */
+    private _synonymIndex: Map<string, string> | null = null;
 
     /** All loaded Tag entities */
     public get Tags(): MJTagEntity[] {
         return this._Tags;
     }
 
+    /** All loaded TagScope rows. */
+    public get TagScopes(): MJTagScopeEntity[] {
+        return this._TagScopes;
+    }
+
+    /** All loaded TagSynonym rows. */
+    public get TagSynonyms(): MJTagSynonymEntity[] {
+        return this._TagSynonyms;
+    }
+
     /**
-     * Initialize the engine by loading Tags from the database.
-     * @param forceRefresh - If true, reload even if already loaded
-     * @param contextUser - Required for server-side operations
-     * @param provider - Optional metadata provider override
+     * Initialize the engine by loading Tags + TagScopes + TagSynonyms from the
+     * database. Scopes and synonyms are loaded eagerly because both are
+     * consulted in hot paths (visibility filtering, ResolveTag synonym tier).
      */
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
         const configs: Partial<BaseEnginePropertyConfig>[] = [
@@ -54,8 +73,87 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
                 EntityName: 'MJ: Tags',
                 PropertyName: '_Tags'
             },
+            {
+                Type: 'entity',
+                EntityName: 'MJ: Tag Scopes',
+                PropertyName: '_TagScopes'
+            },
+            {
+                Type: 'entity',
+                EntityName: 'MJ: Tag Synonyms',
+                PropertyName: '_TagSynonyms'
+            },
         ];
         await this.Load(configs, provider, forceRefresh, contextUser);
+        this.rebuildScopeIndex();
+        this.rebuildSynonymIndex();
+    }
+
+    /** Returns the TagScope rows attached to the given Tag (always non-null). */
+    public GetScopesForTag(tagID: string): MJTagScopeEntity[] {
+        if (!this._scopesByTagID) this.rebuildScopeIndex();
+        return this._scopesByTagID!.get(tagID) ?? [];
+    }
+
+    /**
+     * Resolve a synonym (or tag name) to a Tag, applying scope filtering when
+     * a context is supplied. Case-insensitive on the synonym. Returns
+     * `undefined` if no match or the matched tag isn't visible in scope.
+     */
+    public GetTagBySynonym(synonym: string, ctx?: TagScopeContext): MJTagEntity | undefined {
+        if (!this._synonymIndex) this.rebuildSynonymIndex();
+        const tagID = this._synonymIndex!.get(synonym.trim().toLowerCase());
+        if (!tagID) return undefined;
+        const tag = this.GetTagByID(tagID);
+        if (!tag || tag.Status !== 'Active') return undefined;
+        if (ctx) {
+            const filter = TagScopeFilterBuilder.Instance.buildInMemoryFilter(ctx, this.scopesByTagIDMap());
+            if (!filter(tag)) return undefined;
+        }
+        return tag;
+    }
+
+    /**
+     * Return the subset of `Tags` visible under the supplied context. When
+     * `ctx` is omitted, returns all `Active` tags (legacy behavior).
+     */
+    public GetVisibleTags(ctx?: TagScopeContext): MJTagEntity[] {
+        const filter = TagScopeFilterBuilder.Instance.buildInMemoryFilter(ctx, this.scopesByTagIDMap());
+        return this._Tags.filter(filter);
+    }
+
+    private scopesByTagIDMap(): Map<string, Array<{ScopeEntityID: string; ScopeRecordID: string}>> {
+        if (!this._scopesByTagID) this.rebuildScopeIndex();
+        const out = new Map<string, Array<{ScopeEntityID: string; ScopeRecordID: string}>>();
+        for (const [tagID, rows] of this._scopesByTagID!) {
+            out.set(tagID, rows.map(r => ({ ScopeEntityID: r.ScopeEntityID, ScopeRecordID: r.ScopeRecordID })));
+        }
+        return out;
+    }
+
+    private rebuildScopeIndex(): void {
+        const map = new Map<string, MJTagScopeEntity[]>();
+        for (const row of this._TagScopes) {
+            const list = map.get(row.TagID);
+            if (list) list.push(row);
+            else map.set(row.TagID, [row]);
+        }
+        this._scopesByTagID = map;
+    }
+
+    private rebuildSynonymIndex(): void {
+        const map = new Map<string, string>();
+        // Tag names themselves are implicit synonyms for back-compat with
+        // ResolveTag's exact-match tier — but we only insert explicit Synonym
+        // rows here so the ResolveTag synonym pre-tier doesn't shadow the
+        // exact-match tier. The exact-match tier lives in GetTagByName.
+        for (const row of this._TagSynonyms) {
+            const key = row.Synonym?.trim().toLowerCase();
+            if (key && !map.has(key)) {
+                map.set(key, row.TagID);
+            }
+        }
+        this._synonymIndex = map;
     }
 
     // ========================================================================
@@ -74,12 +172,21 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
     /**
      * Find a tag by its Name using case-insensitive string comparison.
      * Only returns tags with Status='Active' (excludes merged, deprecated, and deleted tags).
+     *
+     * When a `ctx` is supplied, the returned tag must also be visible under
+     * that scope (global, or owned by one of the context's scope rows).
+     *
      * @param name - The tag name to search for
-     * @returns The matching active tag, or undefined if not found
+     * @param ctx - Optional scope filter
+     * @returns The matching active+visible tag, or undefined if not found
      */
-    public GetTagByName(name: string): MJTagEntity | undefined {
+    public GetTagByName(name: string, ctx?: TagScopeContext): MJTagEntity | undefined {
         const lowerName = name.trim().toLowerCase();
-        return this._Tags.find(t => t.Name.trim().toLowerCase() === lowerName && t.Status === 'Active');
+        const candidate = this._Tags.find(t => t.Name.trim().toLowerCase() === lowerName && t.Status === 'Active');
+        if (!candidate) return undefined;
+        if (!ctx) return candidate;
+        const filter = TagScopeFilterBuilder.Instance.buildInMemoryFilter(ctx, this.scopesByTagIDMap());
+        return filter(candidate) ? candidate : undefined;
     }
 
     /**
@@ -119,34 +226,49 @@ export class TagEngineBase extends BaseEngine<TagEngineBase> {
 
     /**
      * Build a hierarchical tree of TagTreeNode objects for LLM prompt injection.
+     *
+     * When `ctx` is supplied, only tags visible under that scope are included.
+     * Hidden tags are pruned from the tree; their visible children, if any,
+     * are NOT promoted to the next level (we keep the structure honest — a
+     * hidden parent's children are also hidden, even if those children are
+     * marked global, because their position in the taxonomy is anchored to
+     * the hidden parent). For the rare case where you want global descendants
+     * of a hidden parent visible, query with `globalOnly: true`.
+     *
      * @param rootID - If provided, only build the subtree rooted at this tag.
      *                 If omitted, build the full forest from all root-level tags.
+     * @param ctx - Optional scope filter
      * @returns Array of top-level TagTreeNode objects with nested Children
      */
-    public GetTaxonomyTree(rootID?: string): TagTreeNode[] {
+    public GetTaxonomyTree(rootID?: string, ctx?: TagScopeContext): TagTreeNode[] {
+        const filter = ctx
+            ? TagScopeFilterBuilder.Instance.buildInMemoryFilter(ctx, this.scopesByTagIDMap())
+            : null;
+
         if (rootID) {
             const root = this.GetTagByID(rootID);
-            if (!root) {
-                return [];
-            }
-            return [this.buildTreeNode(root)];
+            if (!root) return [];
+            if (filter && !filter(root)) return [];
+            return [this.buildTreeNode(root, filter)];
         }
-        // Build forest from all root-level tags (those with no parent)
         const rootTags = this._Tags.filter(t => t.ParentID == null);
-        return rootTags.map(t => this.buildTreeNode(t));
+        return rootTags
+            .filter(t => !filter || filter(t))
+            .map(t => this.buildTreeNode(t, filter));
     }
 
     /**
-     * Recursively build a TagTreeNode from a tag entity.
+     * Recursively build a TagTreeNode from a tag entity, optionally pruning
+     * children that fail the visibility filter.
      */
-    private buildTreeNode(tag: MJTagEntity): TagTreeNode {
-        const children = this.GetChildTags(tag.ID);
+    private buildTreeNode(tag: MJTagEntity, filter?: ((t: MJTagEntity) => boolean) | null): TagTreeNode {
+        const children = this.GetChildTags(tag.ID).filter(c => !filter || filter(c));
         return {
             ID: tag.ID,
             Name: tag.Name,
             DisplayName: tag.DisplayName,
             Description: tag.Description,
-            Children: children.map(c => this.buildTreeNode(c))
+            Children: children.map(c => this.buildTreeNode(c, filter))
         };
     }
 
