@@ -122,33 +122,13 @@ export class QueryParameterProcessor {
                 continue;
             }
 
-            // Use default value if not provided
-            let finalValue = value;
-            if ((finalValue === undefined || finalValue === null) && paramDef.DefaultValue !== null) {
-                try {
-                    // Parse default value based on type
-                    switch (paramDef.Type) {
-                        case 'number':
-                            finalValue = Number(paramDef.DefaultValue);
-                            break;
-                        case 'boolean':
-                            finalValue = paramDef.DefaultValue.toLowerCase() === 'true';
-                            break;
-                        case 'date':
-                            finalValue = new Date(paramDef.DefaultValue);
-                            break;
-                        case 'array':
-                            finalValue = JSON.parse(paramDef.DefaultValue);
-                            break;
-                        default:
-                            finalValue = paramDef.DefaultValue;
-                    }
-                } catch (e: unknown) {
-                    const msg = e instanceof Error ? e.message : String(e);
-                    errors.push(`Failed to parse default value for parameter '${paramDef.Name}': ${msg}`);
-                    continue;
-                }
-            }
+            // DefaultValue is informational metadata only — it is NOT injected into
+            // the template context. The SQL template is the single source of truth for
+            // default behavior via {% else %} blocks or Nunjucks | default() filters.
+            // Attempting to parse DefaultValue as JavaScript caused a class of bugs
+            // where SQL expressions (GETDATE(), ('Cancelled','Refunded'), etc.) were
+            // rejected by the JS type parser.
+            const finalValue = value;
 
             // Type conversion and validation
             if (finalValue !== undefined && finalValue !== null) {
