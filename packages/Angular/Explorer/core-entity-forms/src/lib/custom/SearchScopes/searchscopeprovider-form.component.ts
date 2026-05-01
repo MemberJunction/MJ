@@ -76,7 +76,7 @@ export class MJSearchScopeProviderFormComponentExtended extends MJSearchScopePro
 
     override async ngOnInit(): Promise<void> {
         await super.ngOnInit();
-        await this.LoadProviderCatalog();
+        await this.loadProviderCatalog();
     }
 
     /**
@@ -85,7 +85,7 @@ export class MJSearchScopeProviderFormComponentExtended extends MJSearchScopePro
      * form — the dropdown just disables itself, leaving the underlying generated
      * textbox accessible via `EditMode`.
      */
-    private async LoadProviderCatalog(): Promise<void> {
+    private async loadProviderCatalog(): Promise<void> {
         try {
             const rv = new RunView();
             const [rowsResult, registeredKeys] = await Promise.all([
@@ -94,7 +94,7 @@ export class MJSearchScopeProviderFormComponentExtended extends MJSearchScopePro
                     OrderBy: 'Name',
                     ResultType: 'simple',
                 }),
-                this.FetchRegisteredDriverClasses(),
+                this.fetchRegisteredDriverClasses(),
             ]);
 
             if (!rowsResult.Success) {
@@ -126,7 +126,7 @@ export class MJSearchScopeProviderFormComponentExtended extends MJSearchScopePro
      * on the server. Returns `[]` on any failure — the dropdown still renders
      * from the DB rows; we just lose the "(not registered)" badge.
      */
-    private async FetchRegisteredDriverClasses(): Promise<string[]> {
+    private async fetchRegisteredDriverClasses(): Promise<string[]> {
         try {
             const dataProvider = Metadata.Provider as GraphQLDataProvider;
             const response = await dataProvider.ExecuteGQL(
