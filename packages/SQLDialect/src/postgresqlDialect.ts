@@ -184,6 +184,45 @@ export class PostgreSQLDialect extends SQLDialect {
         return value ? 'true' : 'false';
     }
 
+    /**
+     * PostgreSQL has no `ISNULL` keyword; the standard is `COALESCE` (which
+     * SQL Server also supports). PG generated SPs/functions emit COALESCE
+     * everywhere a null-coalescing wrap is needed.
+     */
+    IsNull(expr: string, fallback: string): string {
+        return `COALESCE(${expr}, ${fallback})`;
+    }
+
+    /**
+     * PostgreSQL's n-ary null-coalescing is also `COALESCE`. Same form as
+     * the two-arg `IsNull` since PG has no `ISNULL` to differentiate from.
+     */
+    Coalesce(expr: string, fallback: string): string {
+        return `COALESCE(${expr}, ${fallback})`;
+    }
+
+    /**
+     * PostgreSQL function parameters use a `p_<snake_case_name>` convention
+     * (no `@`-prefix syntax in PG). The snake-case transform converts the
+     * canonical PascalCase identifier MJ uses everywhere into PG's preferred
+     * shape — e.g. `MyParam` → `p_my_param`.
+     */
+    ParameterRef(name: string): string {
+        const snake = name
+            .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+            .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
+            .toLowerCase()
+            .replace(/__+/g, '_');
+        return `p_${snake}`;
+    }
+
+    /**
+     * PostgreSQL functions use the `DEFAULT <value>` clause for parameter defaults.
+     */
+    ParameterDefault(value: string): string {
+        return ` DEFAULT ${value}`;
+    }
+
     CurrentTimestampUTC(): string {
         return "(NOW() AT TIME ZONE 'UTC')";
     }
@@ -198,6 +237,15 @@ export class PostgreSQLDialect extends SQLDialect {
 
     CastToUUID(expr: string): string {
         return `CAST(${expr} AS UUID)`;
+    }
+
+    /**
+     * PostgreSQL strict typing requires an explicit `::UUID` cast when
+     * comparing the empty-GUID sentinel against a UUID-typed column.
+     * Without it, PG raises "operator does not exist: uuid = text".
+     */
+    EmptyUUIDLiteral(): string {
+        return `${super.EmptyUUIDLiteral()}::UUID`;
     }
 
     // ─── INSERT/UPDATE Return Patterns ───────────────────────────────

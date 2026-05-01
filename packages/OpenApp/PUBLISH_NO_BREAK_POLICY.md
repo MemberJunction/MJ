@@ -2,7 +2,7 @@
 
 **Status:** Adopted at the 2026-04-29 cross-app migration meeting; applies prospectively from each app's next published version going forward.
 **Applies to:** All MemberJunction OpenApps.
-**Source of record:** §3.2 of [plans/cross-app-migration-ordering.md](../plans/cross-app-migration-ordering.md).
+**Source of record:** §3.2 of [plans/cross-app-migration-ordering.md](https://github.com/MemberJunction/MJ/blob/plan/cross-app-migration-ordering/plans/cross-app-migration-ordering.md).
 
 ## The rule
 
@@ -59,7 +59,7 @@ When an app genuinely needs to make a breaking change — drop, narrow, rename, 
 
 ## Why this works
 
-If every app obeys this rule going forward, the only ordering problem the OpenApp installer needs to solve is the dependency graph derived from each app's manifest. (Formalizing that installer model is the Pillar 3 work — §4.1 of [plans/cross-app-migration-ordering.md](../plans/cross-app-migration-ordering.md) — and isn't fully in place yet, but the policy is what makes it *sufficient* once it ships.) The "drop X in app A after app B has dropped its FK to X" scenario only arises when an app violates the policy. With the policy in force, cross-schema interleaving stops being a requirement and the simpler "install each app's migrations in dependency order" model is enough.
+If every app obeys this rule going forward, the only ordering problem the OpenApp installer needs to solve is the dependency graph derived from each app's manifest. (Formalizing that installer model is the Pillar 3 work — §4.1 of [plans/cross-app-migration-ordering.md](https://github.com/MemberJunction/MJ/blob/plan/cross-app-migration-ordering/plans/cross-app-migration-ordering.md) — and isn't fully in place yet, but the policy is what makes it *sufficient* once it ships.) The "drop X in app A after app B has dropped its FK to X" scenario only arises when an app violates the policy. With the policy in force, cross-schema interleaving stops being a requirement and the simpler "install each app's migrations in dependency order" model is enough.
 
 This is why the architecture document calls the policy a **pillar**: the tooling (Pillar 1, tolerant SP signatures; Pillar 3, OpenApp dependency-order installation) is necessary but not sufficient on its own. Without the policy, a single app dropping a column can cascade-break every downstream consumer's migration history regardless of how the tooling orders things.
 
@@ -163,7 +163,7 @@ ALTER TABLE ${flyway:defaultSchema}.MyTable
 
 This policy is enforced primarily by review. Migration PRs that drop tables, drop columns, narrow types, rename entities/columns, or drop columns whose names appear as SP parameters should be flagged. When a breaking change is genuinely needed, the PR description should propose the major version bump path instead of attempting the change in-place.
 
-Tooling support to catch some of these mechanically at install time is described in §4.3 of [plans/cross-app-migration-ordering.md](../plans/cross-app-migration-ordering.md) (pre-install OpenApp manifest validation). That tooling isn't in place yet; review is the gate until it lands.
+Tooling support to catch some of these mechanically at install time is described in §4.3 of [plans/cross-app-migration-ordering.md](https://github.com/MemberJunction/MJ/blob/plan/cross-app-migration-ordering/plans/cross-app-migration-ordering.md) (pre-install OpenApp manifest validation). That tooling isn't in place yet; review is the gate until it lands.
 
 ## How this applies to versions already in the wild
 
@@ -171,7 +171,7 @@ The policy is **prospective**. Past published versions of any app stay as they a
 
 ## See also
 
-- [plans/cross-app-migration-ordering.md](../plans/cross-app-migration-ordering.md) — the architecture document this policy is part of
+- [plans/cross-app-migration-ordering.md](https://github.com/MemberJunction/MJ/blob/plan/cross-app-migration-ordering/plans/cross-app-migration-ordering.md) — the architecture document this policy is part of
 - §3.1 of that plan — Pillar 1 (tolerant SP signatures), the tooling that makes this policy practical
 - §4.1 of that plan — Pillar 3 (OpenApp dependency-order installation), the installer model that makes this policy *sufficient*
 - §6.3 of that plan — the BAC/BCSaaS lift, treated as a one-time exception

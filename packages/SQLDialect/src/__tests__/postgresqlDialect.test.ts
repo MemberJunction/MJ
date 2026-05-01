@@ -58,6 +58,46 @@ describe('PostgreSQLDialect', () => {
         });
     });
 
+    describe('NullLiteral / IsNullLiteral', () => {
+        it('NullLiteral returns NULL', () => {
+            expect(dialect.NullLiteral).toBe('NULL');
+        });
+
+        it('IsNullLiteral matches case-insensitively', () => {
+            expect(dialect.IsNullLiteral('NULL')).toBe(true);
+            expect(dialect.IsNullLiteral('null')).toBe(true);
+            expect(dialect.IsNullLiteral('Null')).toBe(true);
+            expect(dialect.IsNullLiteral('  NULL  ')).toBe(true);
+        });
+
+        it('IsNullLiteral rejects non-NULL values', () => {
+            expect(dialect.IsNullLiteral('false')).toBe(false);
+            expect(dialect.IsNullLiteral('0')).toBe(false);
+            expect(dialect.IsNullLiteral("'Active'")).toBe(false);
+            expect(dialect.IsNullLiteral('')).toBe(false);
+        });
+    });
+
+    describe('ParameterRef', () => {
+        it('converts PascalCase to p_-prefixed snake_case', () => {
+            expect(dialect.ParameterRef('Name')).toBe('p_name');
+            expect(dialect.ParameterRef('UserViewMaxRows')).toBe('p_user_view_max_rows');
+            expect(dialect.ParameterRef('ID')).toBe('p_id');
+        });
+
+        it('handles consecutive capitals correctly', () => {
+            expect(dialect.ParameterRef('FullTextSearchEnabled')).toBe('p_full_text_search_enabled');
+        });
+    });
+
+    describe('ParameterDefault', () => {
+        it('returns " DEFAULT value" with leading space', () => {
+            expect(dialect.ParameterDefault('NULL')).toBe(' DEFAULT NULL');
+            expect(dialect.ParameterDefault('0')).toBe(' DEFAULT 0');
+            expect(dialect.ParameterDefault("'Active'")).toBe(" DEFAULT 'Active'");
+        });
+    });
+
     describe('CurrentTimestampUTC', () => {
         it('should return NOW() AT TIME ZONE UTC', () => {
             expect(dialect.CurrentTimestampUTC()).toBe("(NOW() AT TIME ZONE 'UTC')");
@@ -437,6 +477,16 @@ describe('PostgreSQLDialect', () => {
     describe('Coalesce (inherited)', () => {
         it('should return COALESCE expression', () => {
             expect(dialect.Coalesce('col1', "'default'")).toBe("COALESCE(col1, 'default')");
+        });
+    });
+
+    describe('IsNull', () => {
+        it('emits COALESCE on PostgreSQL (no ISNULL keyword in PG)', () => {
+            expect(dialect.IsNull('col1', "'default'")).toBe("COALESCE(col1, 'default')");
+        });
+
+        it('handles parameter-ref / column-ref pairs cleanly', () => {
+            expect(dialect.IsNull('p_status', '"Status"')).toBe('COALESCE(p_status, "Status")');
         });
     });
 
