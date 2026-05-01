@@ -10,10 +10,33 @@
   "registry": "MJ",
   "status": "Active",
   "dataRequirements": {
-    "queries": [{
-      "name": "Customer List",
-      "categoryPath": "Sales/Reports",
-      "fields": ["CustomerID", "CustomerName", "Email", "TotalOrders", "TotalSpent"]
-    }]
+    "queries": [
+      {
+        "name": "Customer List",
+        "categoryPath": "Sales/Reports",
+        "fields": [
+          {
+            "name": "CustomerID",
+            "type": "uniqueidentifier"
+          },
+          {
+            "name": "CustomerName",
+            "type": "nvarchar"
+          },
+          {
+            "name": "Email",
+            "type": "nvarchar"
+          },
+          {
+            "name": "TotalOrders",
+            "type": "nvarchar"
+          },
+          {
+            "name": "TotalSpent",
+            "type": "nvarchar"
+          }
+        ]
+      }
+    ]
   }
 }

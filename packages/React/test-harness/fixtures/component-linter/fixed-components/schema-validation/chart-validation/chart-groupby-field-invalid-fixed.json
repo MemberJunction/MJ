@@ -10,10 +10,25 @@
   "registry": "MJ",
   "status": "Active",
   "dataRequirements": {
-    "queries": [{
-      "name": "Sales By Category",
-      "categoryPath": "Sales/Reports",
-      "fields": ["Category", "Revenue", "OrderCount"]
-    }]
+    "queries": [
+      {
+        "name": "Sales By Category",
+        "categoryPath": "Sales/Reports",
+        "fields": [
+          {
+            "name": "Category",
+            "type": "nvarchar"
+          },
+          {
+            "name": "Revenue",
+            "type": "decimal"
+          },
+          {
+            "name": "OrderCount",
+            "type": "int"
+          }
+        ]
+      }
+    ]
   }
 }

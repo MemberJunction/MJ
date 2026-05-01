@@ -108,8 +108,9 @@ describe('Chart.js Canvas Container Lint Rule', () => {
     // Load the validator JS from the file system and inject into the cache
     const validatorSource = loadValidatorSource('check-canvas-container.js');
 
+    // Add test rules additively — do NOT clearCache() as that would wipe
+    // DB-loaded rules needed by other tests running in the same process
     const cache = LibraryLintCache.getInstance();
-    cache.clearCache();
     cache.addTestLibraryRules('Chart.js', {
       initialization: {
         constructorName: 'Chart',
