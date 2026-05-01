@@ -10,10 +10,33 @@
   "registry": "MJ",
   "status": "Active",
   "dataRequirements": {
-    "queries": [{
-      "name": "Upcoming Events",
-      "categoryPath": "Events/Reports",
-      "fields": ["EventID", "EventName", "EventDate", "Location", "AttendeeCount"]
-    }]
+    "queries": [
+      {
+        "name": "Upcoming Events",
+        "categoryPath": "Events/Reports",
+        "fields": [
+          {
+            "name": "EventID",
+            "type": "uniqueidentifier"
+          },
+          {
+            "name": "EventName",
+            "type": "nvarchar"
+          },
+          {
+            "name": "EventDate",
+            "type": "datetimeoffset"
+          },
+          {
+            "name": "Location",
+            "type": "nvarchar"
+          },
+          {
+            "name": "AttendeeCount",
+            "type": "int"
+          }
+        ]
+      }
+    ]
   }
 }
