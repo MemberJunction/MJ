@@ -199,11 +199,15 @@ export class MJApplicationEntityServer extends MJApplicationEntity {
             const md = this.ProviderToUse as any as IMetadataProvider;
             const rv = this.RunViewProviderToUse;
 
-            // Load all data in a single RunViews call
+            // Load all data in a single RunViews call.
+            // IsActive filter is applied in JS post-fetch — `IsActive = 1` works on SQL
+            // Server (BIT) but fails on PostgreSQL (BOOLEAN) with `operator does not
+            // exist: boolean = integer`. Filtering client-side avoids the dialect
+            // dependency for a small, indexed table.
             const [usersResult, allUserAppsResult] = await rv.RunViews([
                 {
                     EntityName: 'MJ: Users',
-                    ExtraFilter: 'IsActive = 1',
+                    ExtraFilter: '',
                     ResultType: 'simple'
                 },
                 {
@@ -221,7 +225,7 @@ export class MJApplicationEntityServer extends MJApplicationEntity {
                 throw new Error(`Failed to load user applications: ${allUserAppsResult.ErrorMessage}`);
             }
 
-            const users = usersResult.Results || [];
+            const users = (usersResult.Results || []).filter((u: any) => u.IsActive);
             const allUserApps = allUserAppsResult.Results || [];
 
             LogStatus(`Found ${users.length} active users`);
