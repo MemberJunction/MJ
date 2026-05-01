@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Tag Synonyms · Option A — inline-edit</title>
+<link rel="stylesheet" href="mockup.css" />
+<style>
+  .syn-shell { display: grid; grid-template-columns: 360px 1fr; gap: 20px; }
+  .tag-card-side {
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 12px;
+    overflow: hidden;
+    height: fit-content;
+  }
+  .tag-card-side .hd {
+    padding: 18px 20px;
+    background: linear-gradient(135deg, #e6f1f9 0%, #fff 100%);
+    border-bottom: 1px solid var(--mj-border-default);
+  }
+  .tag-card-side .hd h2 { margin: 0; font-size: 18px; }
+  .tag-card-side .hd .crumbs { font-size: 11px; color: var(--mj-text-muted); margin-bottom: 4px; }
+  .tag-card-side .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 14px 16px; }
+  .tag-card-side .stats .stat { background: var(--mj-bg-surface-card); border-radius: 6px; padding: 8px; }
+  .tag-card-side .stats .v { font-size: 18px; font-weight: 700; }
+  .tag-card-side .stats .l { font-size: 10px; text-transform: uppercase; color: var(--mj-text-muted); }
+
+  .syn-panel {
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 12px;
+    padding: 0;
+    overflow: hidden;
+  }
+  .syn-panel .panel-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface-card);
+  }
+  .syn-panel .panel-tabs .pt {
+    padding: 12px 18px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--mj-text-secondary);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+  }
+  .syn-panel .panel-tabs .pt.active {
+    color: var(--mj-brand-primary);
+    border-bottom-color: var(--mj-brand-primary);
+    font-weight: 600;
+    background: var(--mj-bg-surface);
+  }
+
+  .syn-input-row {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--mj-border-default);
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  .syn-input-row .input { flex: 1; }
+
+  .syn-list { padding: 14px 18px; }
+  .syn-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    padding: 10px 12px;
+    border-radius: 8px;
+    margin-bottom: 6px;
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-default);
+  }
+  .syn-row:hover { background: var(--mj-bg-surface-hover); }
+  .syn-row.pending { background: #fffbeb; border-color: #fde68a; }
+  .syn-row .name { font-weight: 600; flex: 1; font-size: 14px; }
+  .syn-row .source-pill { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--mj-bg-surface-sunken); color: var(--mj-text-secondary); }
+  .syn-row .source-pill.manual { background: #dcfce7; color: #15803d; }
+  .syn-row .source-pill.imported { background: #dbeafe; color: #1d4ed8; }
+  .syn-row .source-pill.merged { background: #ede9fe; color: #6d28d9; }
+  .syn-row .source-pill.llm { background: #fef3c7; color: #92400e; }
+  .syn-row .added { font-size: 11px; color: var(--mj-text-muted); white-space: nowrap; }
+  .syn-row .x { color: var(--mj-text-muted); cursor: pointer; padding: 2px 6px; border-radius: 4px; }
+  .syn-row .x:hover { background: #fee2e2; color: var(--mj-status-error-text); }
+
+  .pending-bar {
+    background: #fef3c7;
+    border-bottom: 1px solid #fde68a;
+    padding: 10px 18px;
+    display: flex; gap: 10px; align-items: center;
+    font-size: 13px; color: #78350f;
+  }
+</style>
+</head>
+<body>
+
+<div class="mockup-ribbon">
+  <span><strong>Mockup A:</strong> Tag Synonyms — inline on the tag form (representative)</span>
+  <span><a href="index.html">← Back to index</a></span>
+</div>
+
+<header class="mj-app-header">
+  <div class="logo"><span class="logo-mark">MJ</span> MJ Explorer</div>
+  <div class="breadcrumbs">
+    <span>Knowledge Hub</span><span class="sep">›</span>
+    <span>Classify</span><span class="sep">›</span>
+    <span>Taxonomy</span><span class="sep">›</span>
+    <span class="current">Generative AI · Synonyms</span>
+  </div>
+  <div class="right">
+    <span><strong>4</strong> active · <strong>2</strong> pending</span>
+    <span class="avatar">AN</span>
+  </div>
+</header>
+
+<div class="page wide">
+  <div class="page-title">
+    <div>
+      <h1>Synonyms · Generative AI</h1>
+      <div class="subtitle">Alternate names that resolve to this tag · queried before any new-tag creation</div>
+    </div>
+  </div>
+
+  <div class="syn-shell">
+
+    <aside class="tag-card-side">
+      <div class="hd">
+        <div class="crumbs">Technology › AI / Machine Learning</div>
+        <h2>Generative AI</h2>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="v">412</div><div class="l">items tagged</div></div>
+        <div class="stat"><div class="v">6</div><div class="l">total synonyms</div></div>
+        <div class="stat"><div class="v">189</div><div class="l">synonym hits/30d</div></div>
+        <div class="stat"><div class="v">2</div><div class="l">pending review</div></div>
+      </div>
+      <hr class="divider" style="margin: 0;" />
+      <div style="padding: 14px 18px;">
+        <div class="muted" style="font-size: 11px;">Tag governance</div>
+        <div class="flex gap-8 mt-8" style="flex-wrap: wrap;">
+          <span class="badge brand">Active</span>
+          <span class="chip scoped">🔒 Scoped: 2 tenants</span>
+          <span class="badge warning">❄ Frozen subtree</span>
+        </div>
+      </div>
+      <div style="padding: 12px 18px; border-top: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); display: flex; gap: 6px;">
+        <a href="#" class="btn sm">View tag</a>
+        <a href="#" class="btn sm">Scope</a>
+        <a href="#" class="btn sm" style="background: var(--mj-bg-surface-active); color: var(--mj-brand-primary); font-weight: 600;">Synonyms</a>
+        <a href="#" class="btn sm">Items</a>
+      </div>
+    </aside>
+
+    <section class="syn-panel">
+      <div class="panel-tabs">
+        <div class="pt active">Active <span class="badge" style="margin-left: 6px;">4</span></div>
+        <div class="pt">Pending review <span class="badge warning" style="margin-left: 6px;">2</span></div>
+        <div class="pt">Hit log</div>
+      </div>
+
+      <div class="pending-bar">
+        <span style="font-weight: 700;">⚠ 2 LLM-suggested synonyms need review.</span>
+        <span>They won't resolve until approved.</span>
+        <span class="grow"></span>
+        <button class="btn sm">Review now</button>
+      </div>
+
+      <div class="syn-input-row">
+        <span style="font-size: 13px; color: var(--mj-text-muted); font-weight: 600;">Add synonym:</span>
+        <input class="input" placeholder='e.g. "GenAI" — comma or enter to add multiple' />
+        <select class="input" style="width: 130px;">
+          <option>Source: Manual</option>
+          <option>Imported</option>
+          <option>Merged</option>
+        </select>
+        <button class="btn primary">+ Add</button>
+      </div>
+
+      <div class="syn-list">
+
+        <div class="syn-row">
+          <div class="name">GenAI</div>
+          <span class="source-pill manual">Manual</span>
+          <span class="added">Added Mar 14 · by amith</span>
+          <span class="x" title="Remove">✕</span>
+        </div>
+
+        <div class="syn-row">
+          <div class="name">Gen AI</div>
+          <span class="source-pill manual">Manual</span>
+          <span class="added">Added Mar 14 · by amith</span>
+          <span class="x">✕</span>
+        </div>
+
+        <div class="syn-row">
+          <div class="name">generative-ai</div>
+          <span class="source-pill imported">Imported</span>
+          <span class="added">Imported Feb 28</span>
+          <span class="x">✕</span>
+        </div>
+
+        <div class="syn-row">
+          <div class="name">GenAI tools</div>
+          <span class="source-pill merged">Merged</span>
+          <span class="added">Auto-added when "GenAI tools" was merged into this tag</span>
+          <span class="x">✕</span>
+        </div>
+
+        <hr class="divider" />
+
+        <div class="muted" style="font-size: 12px; margin-bottom: 10px;">Pending — won't resolve until approved:</div>
+
+        <div class="syn-row pending">
+          <div class="name">AI generation</div>
+          <span class="source-pill llm">LLM</span>
+          <span class="added">Suggested by classifier · Apr 28 · seen 14× this week</span>
+          <button class="btn xs success">✓ Approve</button>
+          <button class="btn xs danger">✕ Reject</button>
+        </div>
+
+        <div class="syn-row pending">
+          <div class="name">artificial generation</div>
+          <span class="source-pill llm">LLM</span>
+          <span class="added">Suggested by classifier · Apr 30 · seen 3× this week</span>
+          <button class="btn xs success">✓ Approve</button>
+          <button class="btn xs danger">✕ Reject</button>
+        </div>
+
+      </div>
+
+      <div style="padding: 12px 18px; border-top: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); font-size: 12px; color: var(--mj-text-muted); display: flex; justify-content: space-between;">
+        <span>ⓘ Each synonym = MJ:TagSynonym row · case-insensitive · uniqueness enforced per tag</span>
+        <span>6 synonyms total · last hit 14 minutes ago</span>
+      </div>
+    </section>
+
+  </div>
+
+  <div class="panel mt-24">
+    <div class="panel-hd"><h2>Recent resolution hits</h2><span class="hd-meta">last 50 events · this 30 days</span></div>
+    <div class="panel-bd flush">
+      <table class="tbl">
+        <thead><tr><th>When</th><th>Free text matched</th><th>Synonym used</th><th>Source content</th><th>Confidence</th></tr></thead>
+        <tbody>
+          <tr><td class="muted">14m ago</td><td>"GenAI"</td><td><span class="chip">GenAI</span></td><td><a href="#">HubSpot · "Building with GenAI"</a></td><td class="bold mono">exact</td></tr>
+          <tr><td class="muted">2h ago</td><td>"genAI"</td><td><span class="chip">GenAI</span></td><td><a href="#">Confluence · GenAI Guidelines</a></td><td class="bold mono">exact</td></tr>
+          <tr><td class="muted">5h ago</td><td>"generative-ai"</td><td><span class="chip">generative-ai</span></td><td><a href="#">Salesforce note</a></td><td class="bold mono">exact</td></tr>
+          <tr><td class="muted">yesterday</td><td>"Gen AI strategy"</td><td><span class="chip">Gen AI</span></td><td><a href="#">Sharepoint · Q2 plan</a></td><td class="bold mono">exact</td></tr>
+          <tr><td class="muted">2d ago</td><td>"GenAI tools"</td><td><span class="chip">GenAI tools</span></td><td><a href="#">HubSpot · article</a></td><td class="bold mono">exact</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="design-notes">
+    <h3>Design notes — Option A</h3>
+    <p>Synonyms live on the tag form itself, in their own tab. The pending-bar at the top forces LLM-suggested
+    synonyms through human approval — they're shown in a distinct yellow row style. Source pill is a colored chip
+    so you can scan a list of dozens and see "where did this come from?" at a glance. The hit-log panel below
+    shows synonyms doing their job — a confidence-builder for skeptical admins.</p>
+    <ul>
+      <li><strong>Strengths:</strong> low-friction; lives in the natural place (the tag); pending-review channel keeps LLM auto-additions from polluting the active set; hit-log proves the value.</li>
+      <li><strong>Weaknesses:</strong> hard to scan synonyms across all tags (need a separate page for that); 50+ synonyms on one tag would scroll forever.</li>
+      <li><strong>Best for:</strong> typical 2–10 synonyms per tag; reviewing LLM auto-suggestions in context.</li>
+      <li><strong>Distinctive:</strong> colored source-pill taxonomy; pending-bar yellow strip; hit-log panel below for trust-building.</li>
+    </ul>
+    <hr class="divider" />
+    <p class="muted"><strong>B and C variants (described in index, not built):</strong>
+    <em>B (dedicated page)</em> would aggregate all synonyms across all tags into one searchable page — useful for de-dup audits.
+    <em>C (chip stack with bulk paste)</em> would feature a "paste a CSV" dialog for importing 100s of synonyms at once.</p>
+  </div>
+
+</div>
+</body>
+</html>
