@@ -198,9 +198,12 @@ describe.skipIf(!hasPGMigrations)('v5 migration regression — committed PG file
     }
   });
 
-  it('should have zero EntityField sequence collisions in committed files', () => {
+  it.skipIf(SKIP_HEAVY_IN_CI)('should have zero EntityField sequence collisions in committed files', () => {
     // Scans every .pg.sql file — metadata_sync files run 100K+ lines each, so
-    // parsing the full set is legitimately slow on cold disk.
+    // parsing the full set is legitimately slow on cold disk. Skipped on CI by
+    // default (gated behind CI_HEAVY_REGRESSION=true) for the same reason as
+    // the conversion regression tests above; this keeps the standard unit-test
+    // gate fast while preserving full coverage on local dev runs and nightly.
     const result = deduplicateEntityFieldSequences(PG_MIGRATIONS_DIR, true);
     // KNOWN DEBT: V202603042042__v5.8.x__Integration_System.pg.sql contains 2
     // duplicate-EntityField INSERTs guarded by `IF NOT EXISTS` (runtime-idempotent

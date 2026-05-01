@@ -72,7 +72,7 @@ Each fix is categorized by whether it should be automated in the pipeline, inclu
 
 ### B2. `spGetPrimaryKeyForTable` function
 **What:** CodeGen calls this during entity validation. Exists on SQL Server but was never ported to PG baseline.
-**Pipeline fix:** **DONE** — included in the dedicated `.pg-only.sql` sproc-port migration (`V202604220000__v5.28.x__Port_Missing_CodeGen_Sprocs.pg-only.sql`). Covered by integration tests in `packages/CodeGenLib/src/__tests__/integration/pg-codegen-sprocs.integration.test.ts`.
+**Pipeline fix:** **DONE** — included in the dedicated `.pg-only.sql` sproc-port migration (`V202604220000__v5.29.x__Port_Missing_CodeGen_Sprocs.pg-only.sql`). Covered by integration tests in `packages/CodeGenLib/src/__tests__/integration/pg-codegen-sprocs.integration.test.ts`.
 **Status:** ✅ Shipped.
 
 ### B3. CodeGen helper stored procedures (7 total)
@@ -262,7 +262,7 @@ These files exist only in PG form — there is no T-SQL counterpart to convert. 
 **Why hand-written:** Pairs with F2 — the converter cannot translate the T-SQL inline TVF/scalar definitions in V202604090003. This file runs first (earlier timestamp) and provides the working PG versions.
 
 ### G5. CodeGen sproc port
-**File:** `migrations-pg/v5/V202604220000__v5.28.x__Port_Missing_CodeGen_Sprocs.pg-only.sql`
+**File:** `migrations-pg/v5/V202604220000__v5.29.x__Port_Missing_CodeGen_Sprocs.pg-only.sql`
 **What:** Hand-port of 7 baseline CodeGen sprocs: `spGetPrimaryKeyForTable`, `spSetDefaultColumnWidthWhereNeeded`, `spUpdateEntityFieldRelatedEntityNameFieldMap` (also fixes a pre-existing arity bug in the T-SQL version), `spUpdateExistingEntitiesFromSchema`, `spUpdateExistingEntityFieldsFromSchema`, `spUpdateSchemaInfoFromDatabase`, `spDeleteUnneededEntityFields`.
 **Why hand-written:** The T-SQL versions use SQL Server features the converter has no rule for: `sys.*` catalog joins, `STRING_SPLIT`, `IIF`, table variables, tempdb temp tables, `SELECT ... INTO`. Each had to be reimplemented in plpgsql by a human. Covered by 15 integration tests in `packages/CodeGenLib/src/__tests__/integration/pg-codegen-sprocs.integration.test.ts`.
 
