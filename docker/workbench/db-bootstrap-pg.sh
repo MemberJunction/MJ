@@ -64,29 +64,41 @@ if [ "$1" = "--status" ]; then
     exit 0
 fi
 
-# ─── Run PostgreSQL migrations ─────────────────────────────────────────────────
-PG_MIGRATIONS_DIR="$MJ_DIR/migrations-postgres"
+# ─── Run PostgreSQL migrations via mj migrate ─────────────────────────────────
+# Uses Skyway (via @memberjunction/cli) for checksum tracking, version history,
+# and idempotent reruns — the same machinery the SQL Server path uses. Raw psql
+# -f loops are a dead end because they don't record what was applied.
+PG_MIGRATIONS_DIR="$MJ_DIR/migrations-pg/v5"
 
 if [ -d "$PG_MIGRATIONS_DIR" ]; then
     echo "Running PostgreSQL migrations from $PG_MIGRATIONS_DIR..."
+    echo "  (via mj migrate — tracked in __mj.skyway_schema_history)"
     echo ""
 
-    # Execute migration files in sorted order
-    # Convention: same as Flyway/Skyway naming (V, B, R prefixes)
-    for SQL_FILE in $(find "$PG_MIGRATIONS_DIR" -name "*.sql" -type f | sort); do
-        FILENAME=$(basename "$SQL_FILE")
-        echo "  Executing: $FILENAME"
-        psql -h "$PG_HOST" -p "$PG_PORT" -U "$PG_USER" -d "$PG_DATABASE" \
-            -f "$SQL_FILE" -v ON_ERROR_STOP=1 2>&1 | tail -3
-        echo ""
-    done
+    cd "$MJ_DIR"
 
+    # mj migrate reads dbPlatform, dbHost, dbDatabase, etc. from mj.config.cjs.
+    # In the workbench, that config is seeded by the entrypoint with dbPlatform:'postgresql'.
+    if ! command -v mj >/dev/null 2>&1; then
+        echo "  ERROR: 'mj' CLI not found on PATH."
+        echo "  Install with: npm install -g @memberjunction/cli"
+        exit 1
+    fi
+
+    mj migrate --verbose
+    MIGRATE_STATUS=$?
+
+    if [ $MIGRATE_STATUS -ne 0 ]; then
+        echo ""
+        echo "  ERROR: mj migrate failed with exit code $MIGRATE_STATUS"
+        exit $MIGRATE_STATUS
+    fi
+
+    echo ""
     echo "  Migrations complete!"
 else
     echo "  No PostgreSQL migrations directory found at $PG_MIGRATIONS_DIR"
-    echo "  This is expected if you haven't generated the PostgreSQL baseline yet."
-    echo ""
-    echo "  The postgres-implementation branch will create this directory."
+    echo "  Run 'mj migrate convert' in the MJ repo to generate migrations-pg/v5/ first."
 fi
 
 echo ""

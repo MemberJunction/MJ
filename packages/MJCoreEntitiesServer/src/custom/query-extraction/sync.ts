@@ -1,4 +1,4 @@
-import { IMetadataProvider, IRunViewProvider, LogError, UserInfo } from "@memberjunction/core";
+import { IMetadataProvider, IRunViewProvider, LogError, RunMaybeSerial, UserInfo } from "@memberjunction/core";
 import {
     MJQueryParameterEntity,
     MJQueryFieldEntity,
@@ -112,7 +112,7 @@ export async function SyncParameters(
             ep => !extractedParamNames.includes(ep.Name.toLowerCase())
         );
 
-        const promises: Promise<boolean>[] = [];
+        const factories: (() => Promise<boolean>)[] = [];
 
         // Add new parameters
         for (const param of paramsToAdd) {
@@ -120,7 +120,7 @@ export async function SyncParameters(
                 'MJ: Query Parameters', contextUser
             );
             applyParameterValues(newParam, queryID, param);
-            promises.push(newParam.Save());
+            factories.push(() => newParam.Save());
         }
 
         // Update existing parameters if properties changed
@@ -129,18 +129,16 @@ export async function SyncParameters(
                 p => p.name.toLowerCase() === existingParam.Name.toLowerCase()
             );
             if (extractedParam && updateParameterIfChanged(existingParam, extractedParam)) {
-                promises.push(existingParam.Save());
+                factories.push(() => existingParam.Save());
             }
         }
 
         // Remove stale parameters
         for (const paramToRemove of paramsToRemove) {
-            promises.push(paramToRemove.Delete());
+            factories.push(() => paramToRemove.Delete());
         }
 
-        if (promises.length > 0) {
-            await Promise.all(promises);
-        }
+        await RunMaybeSerial(metadataProvider, factories);
     } catch (e) {
         LogError(`Failed to sync parameters for query ${queryID}:`, e);
         throw e;
@@ -246,7 +244,7 @@ export async function SyncFields(
             ef => !fieldNamesToSync.includes(ef.Name.toLowerCase())
         );
 
-        const promises: Promise<boolean>[] = [];
+        const factories: (() => Promise<boolean>)[] = [];
 
         // Add new fields
         for (let i = 0; i < fieldsToAdd.length; i++) {
@@ -255,7 +253,7 @@ export async function SyncFields(
                 'MJ: Query Fields', contextUser
             );
             applyFieldValues(newField, queryID, field, i + 1, metadataProvider);
-            promises.push(newField.Save());
+            factories.push(() => newField.Save());
         }
 
         // Update existing fields if properties changed
@@ -266,19 +264,17 @@ export async function SyncFields(
             if (extractedField) {
                 const globalIndex = extractedFields.indexOf(extractedField);
                 if (updateFieldIfChanged(existingField, extractedField, globalIndex + 1, metadataProvider)) {
-                    promises.push(existingField.Save());
+                    factories.push(() => existingField.Save());
                 }
             }
         }
 
         // Remove stale fields
         for (const fieldToRemove of fieldsToRemove) {
-            promises.push(fieldToRemove.Delete());
+            factories.push(() => fieldToRemove.Delete());
         }
 
-        if (promises.length > 0) {
-            await Promise.all(promises);
-        }
+        await RunMaybeSerial(metadataProvider, factories);
     } catch (e) {
         LogError(`Failed to sync fields for query ${queryID}:`, e);
         throw e;
@@ -440,7 +436,7 @@ export async function SyncEntities(
             ee => !entityMappings.some(mapping => UUIDsEqual(mapping.entityID, ee.EntityID))
         );
 
-        const promises: Promise<boolean>[] = [];
+        const factories: (() => Promise<boolean>)[] = [];
 
         for (const mapping of entitiesToAdd) {
             const newEntity = await metadataProvider.GetEntityObject<MJQueryEntityEntity>(
@@ -450,16 +446,14 @@ export async function SyncEntities(
             newEntity.EntityID = mapping.entityID;
             newEntity.DetectionMethod = 'AI';
             newEntity.AutoDetectConfidenceScore = 1.0;
-            promises.push(newEntity.Save());
+            factories.push(() => newEntity.Save());
         }
 
         for (const entityToRemove of entitiesToRemove) {
-            promises.push(entityToRemove.Delete());
+            factories.push(() => entityToRemove.Delete());
         }
 
-        if (promises.length > 0) {
-            await Promise.all(promises);
-        }
+        await RunMaybeSerial(metadataProvider, factories);
     } catch (e) {
         LogError(`Failed to sync entities for query ${queryID}:`, e);
         throw e;
@@ -483,7 +477,7 @@ export async function SyncDependencies(
     isSaved: boolean
 ): Promise<void> {
     if (resolvedRefs.length === 0) {
-        await RemoveAllRecords(queryID, 'MJ: Query Dependencies', contextUser, runViewProvider, isSaved);
+        await RemoveAllRecords(queryID, 'MJ: Query Dependencies', contextUser, runViewProvider, isSaved, metadataProvider);
         return;
     }
 
@@ -519,7 +513,7 @@ export async function SyncDependencies(
             )
         );
 
-        const promises: Promise<boolean>[] = [];
+        const factories: (() => Promise<boolean>)[] = [];
 
         // Add new dependencies
         for (const dep of depsToAdd) {
@@ -532,7 +526,7 @@ export async function SyncDependencies(
             newDep.Alias = dep.alias;
             newDep.ParameterMapping = dep.parameterMapping ? JSON.stringify(dep.parameterMapping) : null;
             newDep.DetectionMethod = 'Auto';
-            promises.push(newDep.Save());
+            factories.push(() => newDep.Save());
         }
 
         // Update existing dependencies if properties changed
@@ -542,18 +536,16 @@ export async function SyncDependencies(
                      existingDep.ReferencePath === d.referencePath
             );
             if (extractedDep && updateDependencyIfChanged(existingDep, extractedDep)) {
-                promises.push(existingDep.Save());
+                factories.push(() => existingDep.Save());
             }
         }
 
         // Remove stale dependencies
         for (const depToRemove of depsToRemove) {
-            promises.push(depToRemove.Delete());
+            factories.push(() => depToRemove.Delete());
         }
 
-        if (promises.length > 0) {
-            await Promise.all(promises);
-        }
+        await RunMaybeSerial(metadataProvider, factories);
     } catch (e) {
         LogError(`Failed to sync dependencies for query ${queryID}:`, e);
         throw e;
@@ -597,7 +589,8 @@ export async function RemoveAllRecords(
     entityName: string,
     contextUser: UserInfo,
     runViewProvider: IRunViewProvider,
-    isSaved: boolean
+    isSaved: boolean,
+    metadataProvider?: IMetadataProvider
 ): Promise<void> {
     try {
         if (!isSaved) return;
@@ -612,12 +605,10 @@ export async function RemoveAllRecords(
             throw new Error(`Failed to load existing ${entityName}: ${existingResult.ErrorMessage}`);
         }
 
-        const records = existingResult.Results || [];
-        const deletePromises = records.map((record: { Delete: () => Promise<boolean> }) => record.Delete());
+        const records = (existingResult.Results || []) as Array<{ Delete: () => Promise<boolean> }>;
+        const deleteFactories = records.map(record => () => record.Delete());
 
-        if (deletePromises.length > 0) {
-            await Promise.all(deletePromises);
-        }
+        await RunMaybeSerial(metadataProvider, deleteFactories);
     } catch (e) {
         LogError(`Failed to remove ${entityName} for query ${queryID}:`, e);
         throw e;

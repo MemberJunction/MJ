@@ -563,7 +563,7 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
   // Database connection settings (from environment variables)
   dbType: (process.env.DB_TYPE as 'mssql' | 'postgresql') ?? 'mssql',
   dbHost: process.env.DB_HOST ?? 'localhost',
-  dbPort: 1433,
+  dbPort: parseInt(process.env.DB_PORT ?? '1433', 10),
   dbDatabase: process.env.DB_DATABASE ?? '',
   codeGenLogin: process.env.CODEGEN_DB_USERNAME ?? '',
   codeGenPassword: process.env.CODEGEN_DB_PASSWORD ?? '',

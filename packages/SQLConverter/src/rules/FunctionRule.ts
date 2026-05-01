@@ -13,6 +13,7 @@ export class FunctionRule implements IConversionRule {
   AppliesTo: StatementType[] = ['CREATE_FUNCTION'];
   Priority = 35;
   BypassSqlglot = true;
+  BypassJustification = 'T-SQL CREATE FUNCTION (scalar UDFs, table-valued functions, inline TVFs) has substantial syntactic and semantic differences from PG functions: RETURNS TABLE syntax, BEGIN ATOMIC vs LANGUAGE plpgsql, schema binding, deterministic markers, IF/ELSE/WHILE control flow, and type system. sqlglot translation is incomplete and error-prone for this surface.';
 
   PostProcess(sql: string, _originalSQL: string, context: ConversionContext): string {
     const upper = sql.toUpperCase();

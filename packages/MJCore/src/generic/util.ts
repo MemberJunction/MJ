@@ -4,16 +4,29 @@ import { LogError } from "./logging";
 import type { UserInfo } from "./securityInfo";
 
 /**
+ * Minimal structural shape consulted by `RunMaybeSerial`. Anything that exposes
+ * a boolean `IsInTransaction` (e.g. a `DatabaseProviderBase` subclass) qualifies.
+ * The check is purely structural and tolerates objects that don't expose the
+ * flag (in which case the helper defaults to parallel execution).
+ */
+export interface TransactionAwareProvider {
+    readonly IsInTransaction: boolean;
+}
+
+/**
  * Returns the TypeScript type that corresponds to the SQL type passed in
  */
 export function TypeScriptTypeFromSQLType(sqlType: string): 'string' | 'number' | 'boolean' | 'Date' {
     switch (sqlType.trim().toLowerCase()) {
         case 'text':
         case 'char':
+        case 'character': // PG returns this for CHAR(N)
+        case 'character varying': // PG returns this for VARCHAR(N)
         case 'varchar':
         case 'ntext':
         case 'nchar':
         case 'nvarchar':
+        case 'citext': // PostgreSQL case-insensitive text
         case 'uniqueidentifier': //treat this as a string
         case 'uuid': // PostgreSQL UUID type
         case 'bytea': // PostgreSQL binary data, treat as string (base64)
@@ -275,6 +288,47 @@ export function Concurrent<V>(concurrency: number, funcs: (() => Promise<V>)[]):
       else if (index === funcs.length) Promise.all(p).then(resolve).catch(reject);
     }
   });
+}
+
+/**
+ * Runs a list of save/work factories with transaction-aware concurrency:
+ *   - If `provider.IsInTransaction` is `true`, runs them sequentially via
+ *     `await` (no microtask interleaving, no contention on the single
+ *     transaction-bound connection).
+ *   - Otherwise, fans them out concurrently via `Promise.all`.
+ *
+ * Use this anywhere you would normally write `Promise.all(items.map(save))`
+ * but a single shared transaction is in flight. The PostgreSQL provider
+ * holds its active transaction on a single `pg.PoolClient`, so concurrent
+ * `Save()` calls would queue up on that one client anyway — and worse,
+ * combined with non-DB async work (e.g. embedding compute), the queue can
+ * deadlock. Sequential execution avoids that entirely.
+ *
+ * SQL Server preserves the original parallelism: `IsInTransaction` is
+ * `false` by default on `DatabaseProviderBase`, and the SQL Server provider
+ * doesn't override it.
+ *
+ * Pass factory functions (`() => Promise<T>`) rather than already-started
+ * promises so saves only start when we're ready to await them.
+ *
+ * @param provider — the active data provider (used to read transaction state)
+ * @param factories — work units to run; each is invoked when its turn comes
+ * @returns the results in input order
+ */
+export async function RunMaybeSerial<T>(
+    provider: unknown,
+    factories: (() => Promise<T>)[]
+): Promise<T[]> {
+    if (factories.length === 0) return [];
+    const inTx = !!(provider as TransactionAwareProvider | null | undefined)?.IsInTransaction;
+    if (inTx) {
+        const results: T[] = [];
+        for (const fn of factories) {
+            results.push(await fn());
+        }
+        return results;
+    }
+    return Promise.all(factories.map(fn => fn()));
 }
 
 /**

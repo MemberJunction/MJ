@@ -9,18 +9,41 @@
     "entities": [
       {
         "name": "Products",
-        "fields": ["ID", "Name", "Category", "Price"],
-        "sortFields": ["Name", "Category"]
+        "fields": [
+          "ID",
+          "Name",
+          "Category",
+          "Price"
+        ],
+        "sortFields": [
+          "Name",
+          "Category"
+        ]
       }
     ],
     "queries": [
       {
         "name": "CategorySummary",
         "categoryPath": "Reports/Products",
-        "fields": ["CategoryName", "ProductCount"],
-        "entityNames": ["Products"],
+        "fields": [
+          {
+            "name": "CategoryName",
+            "type": "nvarchar"
+          },
+          {
+            "name": "ProductCount",
+            "type": "int"
+          }
+        ],
+        "entityNames": [
+          "Products"
+        ],
         "parameters": [
-          { "name": "activeOnly", "type": "boolean", "required": false }
+          {
+            "name": "activeOnly",
+            "type": "boolean",
+            "required": false
+          }
         ]
       }
     ]

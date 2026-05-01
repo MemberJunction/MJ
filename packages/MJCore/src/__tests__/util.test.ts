@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { FormatValue, SQLFullType, SQLMaxLength, TypeScriptTypeFromSQLType } from '../generic/util';
+import { describe, it, expect, vi } from 'vitest';
+import { FormatValue, RunMaybeSerial, SQLFullType, SQLMaxLength, TypeScriptTypeFromSQLType } from '../generic/util';
 
 describe('FormatValue / FormatValueInternal', () => {
     describe('SQL Server types', () => {
@@ -178,5 +178,74 @@ describe('TypeScriptTypeFromSQLType', () => {
         it('maps bool to boolean', () => {
             expect(TypeScriptTypeFromSQLType('bool')).toBe('boolean');
         });
+    });
+});
+
+describe('RunMaybeSerial', () => {
+    it('returns empty array when no factories', async () => {
+        const result = await RunMaybeSerial({ IsInTransaction: true }, []);
+        expect(result).toEqual([]);
+    });
+
+    it('runs factories in parallel when no transaction is active', async () => {
+        const order: number[] = [];
+        const make = (n: number, delay: number) => async () => {
+            await new Promise(resolve => setTimeout(resolve, delay));
+            order.push(n);
+            return n;
+        };
+        // Without a tx: longer-delay first should still finish last (parallel start)
+        const results = await RunMaybeSerial({ IsInTransaction: false }, [
+            make(1, 30),
+            make(2, 10),
+            make(3, 20),
+        ]);
+        expect(results).toEqual([1, 2, 3]); // results in input order
+        expect(order).toEqual([2, 3, 1]);    // completion order reflects parallelism
+    });
+
+    it('runs factories sequentially when a transaction is active', async () => {
+        const order: number[] = [];
+        let active = 0;
+        let maxConcurrent = 0;
+        const make = (n: number) => async () => {
+            active++;
+            maxConcurrent = Math.max(maxConcurrent, active);
+            await new Promise(resolve => setTimeout(resolve, 10));
+            order.push(n);
+            active--;
+            return n;
+        };
+        const results = await RunMaybeSerial({ IsInTransaction: true }, [
+            make(1),
+            make(2),
+            make(3),
+        ]);
+        expect(results).toEqual([1, 2, 3]);
+        expect(order).toEqual([1, 2, 3]); // strict sequential order
+        expect(maxConcurrent).toBe(1);    // never more than one in flight
+    });
+
+    it('does not invoke later factories if an earlier one rejects (in transaction)', async () => {
+        const calls: number[] = [];
+        const ok = (n: number) => async () => { calls.push(n); return n; };
+        const fail = () => async () => { calls.push(-1); throw new Error('boom'); };
+        await expect(
+            RunMaybeSerial({ IsInTransaction: true }, [ok(1), fail(), ok(2)])
+        ).rejects.toThrow('boom');
+        expect(calls).toEqual([1, -1]); // third factory never ran
+    });
+
+    it('treats provider without IsInTransaction as parallel (default)', async () => {
+        const fn = vi.fn(async () => 1);
+        await RunMaybeSerial({}, [fn, fn, fn]);
+        expect(fn).toHaveBeenCalledTimes(3);
+    });
+
+    it('accepts null/undefined provider as parallel (default)', async () => {
+        const results1 = await RunMaybeSerial(null, [async () => 'a']);
+        const results2 = await RunMaybeSerial(undefined, [async () => 'b']);
+        expect(results1).toEqual(['a']);
+        expect(results2).toEqual(['b']);
     });
 });
