@@ -67,7 +67,11 @@ export class AIAgentRunTimelineComponent extends BaseAngularComponent implements
   ) {
     super();}
   
-  ngOnInit() {
+  async ngOnInit() {
+    // AIEngineBase is deferred at startup; ensure it's loaded before timeline
+    // items render — getStepIconInfo / sub-agent lookups read .Agents synchronously.
+    await AIEngineBase.Instance.EnsureLoaded();
+
     // Initialize observables from the data helper
     this.steps$ = this.dataHelper.steps$;
     this.subRuns$ = this.dataHelper.subRuns$;

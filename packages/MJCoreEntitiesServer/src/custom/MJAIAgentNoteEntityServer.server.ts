@@ -45,6 +45,11 @@ export class MJAIAgentNoteEntityServer extends MJAIAgentNoteEntity {
             //    - Anything else (Revoked/Archived, or cleared embedding) → drop the vector
             //      entry. The original vector metadata still holds a reference to the stale
             //      entity instance, so leaving it would leak into future retrievals.
+            //
+            //    AIEngine is registered as deferred — if we're saving before its initial
+            //    background load completes, the underlying vector service is null and the
+            //    update would silently no-op. EnsureLoaded blocks until the engine is ready.
+            await AIEngine.Instance.EnsureLoaded();
             if (this.Status === 'Active' && this.EmbeddingVector) {
                 AIEngine.Instance.AddOrUpdateSingleNoteEmbedding(this);
             } else {
