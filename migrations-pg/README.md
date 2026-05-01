@@ -23,7 +23,10 @@ If you're reviewing the PR, **start here.** This page indexes the docs in recomm
 
 ### 3. Verification + testing (10–15 min — the rigor)
 
-- **[TESTING_GUIDE.md](TESTING_GUIDE.md)**
+- **[V5_30_PR_REVIEW_GUIDE.md](V5_30_PR_REVIEW_GUIDE.md)**
+  Step-by-step reviewer walkthrough specifically for this PR. Take a fresh PostgreSQL database from zero to a running MemberJunction instance: create DB → apply migrations → CodeGen → MJAPI bootup. Use this when you're actively reviewing the PR.
+
+- **[../plans/pg-migration-architecture/PG_MIGRATION_TESTING_GUIDE.md](../plans/pg-migration-architecture/PG_MIGRATION_TESTING_GUIDE.md)**
   Comprehensive reference for every test, audit, and verification run during this PR's development:
   - Unit tests across SQLConverter (856), CodeGenLib (477), PostgreSQLDataProvider (90), monorepo (321 packages)
   - Database-level verification: per-migration completeness audit, schema dump diff, snapshot scripts, autoQuoter coverage
@@ -57,5 +60,5 @@ If you're reviewing the PR, **start here.** This page indexes the docs in recomm
 
 - **What this PR does:** brings MJ to a state where it runs end-to-end on PostgreSQL — including managed PG (RDS, Aurora, Cloud SQL, Azure) — on dev machines and self-hosted environments. Runtime fixes (autoQuoter), converter fixes (case-insensitive AS, sequence dedup, regression test gating), CodeGen fixes (PG output path), Skyway 0.6.0 integration, helper scripts, comprehensive docs.
 - **Migration content:** lives in the companion `pg-migration-files` PR — full v5.0–v5.30 PG migration history, all rewritten to be managed-PG safe. Both PRs merge together.
-- **Verification done during this PR's development:** per-migration audit (0/5,721 declared objects missing across 107 migrations on the canonical state), schema dump diffs, snapshot scripts, autoQuoter coverage (19/19 GraphQL queries pass on PG). See [TESTING_GUIDE.md](TESTING_GUIDE.md).
+- **Verification done during this PR's development:** per-migration audit (0/5,721 declared objects missing across 107 migrations on the canonical state), schema dump diffs, snapshot scripts, autoQuoter coverage (19/19 GraphQL queries pass on PG). See [PG_MIGRATION_TESTING_GUIDE.md](../plans/pg-migration-architecture/PG_MIGRATION_TESTING_GUIDE.md).
 - **Known gaps deferred to v5.30.1:** v5.30 metadata sync (workaround: `mj sync push --dir metadata`), RDS dry-run (high confidence from local PG 18 testing, not yet observed on actual RDS).

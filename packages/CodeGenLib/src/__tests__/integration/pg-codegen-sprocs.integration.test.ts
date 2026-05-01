@@ -3,7 +3,7 @@
  *
  * Regression guard for the 7 baseline metadata-management sprocs ported to PG
  * plpgsql in the `pg-migration-files` branch's
- * V202604220000__v5.28.x__Port_Missing_CodeGen_Sprocs.pg-only.sql migration.
+ * V202604220000__v5.29.x__Port_Missing_CodeGen_Sprocs.pg-only.sql migration.
  * Without these, fresh PG installs fall over in CodeGen's metadata phase with
  * `function X does not exist` errors.
  *
@@ -23,7 +23,7 @@
  *   1. The `__mj` schema created
  *   2. The v5 baseline applied (B202602151200__v5.0__Baseline.pg.sql)
  *   3. The 7-sproc port migration applied
- *      (V202604220000__v5.28.x__Port_Missing_CodeGen_Sprocs.pg-only.sql
+ *      (V202604220000__v5.29.x__Port_Missing_CodeGen_Sprocs.pg-only.sql
  *       from the `pg-migration-files` branch)
  *   4. The helper views that the ported sprocs reference (vwSQLSchemas,
  *      vwSQLTablesAndEntities, vwSQLColumnsAndEntityFields, vwForeignKeys,
@@ -81,7 +81,7 @@ describeIfPG('PG CodeGen sprocs — integration', () => {
         if (missing.length > 0) {
             throw new Error(
                 `Target PG database is missing these sprocs: ${missing.join(', ')}. ` +
-                `Apply V202604220000__v5.28.x__Port_Missing_CodeGen_Sprocs.pg-only.sql ` +
+                `Apply V202604220000__v5.29.x__Port_Missing_CodeGen_Sprocs.pg-only.sql ` +
                 `from the pg-migration-files branch before running these tests.`
             );
         }
