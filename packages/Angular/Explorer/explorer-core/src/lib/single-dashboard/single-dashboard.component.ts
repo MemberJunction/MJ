@@ -81,7 +81,7 @@ export class SingleDashboardComponent extends BaseDashboard implements OnInit {
     const d = this.ResourceData;
     const config = this.ResourceData.Configuration;
     if (this.ResourceData) {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       let uiConfig: any = {items:[]};
       this.dashboardEntity = await md.GetEntityObject<MJDashboardEntityExtended>('MJ: Dashboards');
       if (this.ResourceData.ResourceRecordID && this.ResourceData.ResourceRecordID.length > 0) {

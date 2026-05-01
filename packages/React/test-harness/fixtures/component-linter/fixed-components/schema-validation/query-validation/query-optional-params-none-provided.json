@@ -10,13 +10,48 @@
       {
         "name": "Invoice Line Items by Product",
         "categoryPath": "Demo",
-        "fields": ["ID", "Product", "Quantity", "TotalPrice"],
-        "entityNames": ["Invoice Line Items"],
+        "fields": [
+          {
+            "name": "ID",
+            "type": "uniqueidentifier"
+          },
+          {
+            "name": "Product",
+            "type": "nvarchar"
+          },
+          {
+            "name": "Quantity",
+            "type": "int"
+          },
+          {
+            "name": "TotalPrice",
+            "type": "decimal"
+          }
+        ],
+        "entityNames": [
+          "Invoice Line Items"
+        ],
         "parameters": [
-          { "name": "ProductID", "type": "number", "isRequired": false },
-          { "name": "Category", "type": "string", "isRequired": false },
-          { "name": "StartDate", "type": "string", "isRequired": false },
-          { "name": "EndDate", "type": "string", "isRequired": false }
+          {
+            "name": "ProductID",
+            "type": "number",
+            "isRequired": false
+          },
+          {
+            "name": "Category",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "StartDate",
+            "type": "string",
+            "isRequired": false
+          },
+          {
+            "name": "EndDate",
+            "type": "string",
+            "isRequired": false
+          }
         ]
       }
     ]

@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, ViewChild, ChangeDetectorRef } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJDialogRef } from '@memberjunction/ng-ui-components';
 import { MJProjectEntity } from '@memberjunction/core-entities';
 import { UserInfo, Metadata } from '@memberjunction/core';
@@ -341,7 +342,7 @@ const DEFAULT_PROJECT_ICONS = [
     }
   `]
 })
-export class ProjectFormModalComponent implements OnInit {
+export class ProjectFormModalComponent extends BaseAngularComponent implements OnInit  {
   @Input() dialogRef!: MJDialogRef;
   @Input() project: MJProjectEntity | null = null;
   @Input() environmentId!: string;
@@ -361,7 +362,8 @@ export class ProjectFormModalComponent implements OnInit {
   public availableColors = DEFAULT_PROJECT_COLORS;
   public availableIcons = DEFAULT_PROJECT_ICONS;
 
-  constructor(private cdr: ChangeDetectorRef) {}
+  constructor(private cdr: ChangeDetectorRef) {
+  super();}
 
   ngOnInit(): void {
     this.isEditMode = this.project != null;
@@ -403,7 +405,7 @@ export class ProjectFormModalComponent implements OnInit {
     this.showNameError = false;
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const project = this.project || await md.GetEntityObject<MJProjectEntity>('MJ: Projects', this.currentUser);
 
       project.Name = this.formData.name.trim();

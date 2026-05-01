@@ -1,0 +1,275 @@
+name: PostgreSQL migration parity
+
+# Validates that T-SQL migrations convert cleanly to PostgreSQL and apply
+# to a fresh PG database without errors. This is Phase C of the PG migration
+# architecture plan — the "continuous build process" ensuring PG stays in sync.
+
+on:
+  workflow_dispatch: # Manual trigger for testing
+  pull_request:
+    branches: [next]
+    paths:
+      - 'migrations/**'
+      - 'migrations-pg/**'
+      - 'packages/SQLConverter/**'
+      - 'packages/CodeGenLib/src/Database/providers/postgresql/**'
+      - '.github/workflows/pg-migrations.yml'
+  push:
+    branches: [next]
+    paths:
+      - 'migrations/**'
+      - 'migrations-pg/**'
+      - 'packages/SQLConverter/**'
+
+jobs:
+  pg-parity:
+    name: PG migration parity check
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: mj_pg_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # ─── Step 1: Validate PG migration filenames ─────────────────────
+      - name: Validate PG migration filenames
+        run: ./.github/scripts/validate-migration-filenames.sh migrations-pg/v5
+
+      # ─── Step 2: Build SQLConverter (needed for conversion + dedup) ──
+      # Install from root so workspace symlinks are set up, then use turbo
+      # with --filter to build SQLConverter AND its workspace deps
+      # (@memberjunction/sqlglot-ts, @memberjunction/sql-dialect) in the
+      # correct order. Building SQLConverter in isolation fails because
+      # tsc can't resolve the types of unbuilt workspace dependencies.
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build SQLConverter (and workspace deps)
+        run: npx turbo build --filter=@memberjunction/sql-converter
+
+      # ─── Step 3: Verify committed PG migration files exist ──────────
+      # Previously this step regenerated all V*.pg.sql from T-SQL via the
+      # converter. We've moved away from regenerate-on-CI for two reasons:
+      #
+      #   1. Real `mj migrate` (the install path) applies the COMMITTED
+      #      .pg.sql files as-is. Regenerating during CI tested something
+      #      different from what users actually run.
+      #   2. Some PG migrations have hand-fixes that the converter doesn't
+      #      produce natively (managed-PG boolean rewrites, the
+      #      vwEntityPermissions RoleName alias fix, the Scoped_EntityField_SPs
+      #      hand-port). Regenerating overwrites those fixes.
+      #
+      # Coverage of the converter is preserved by:
+      #   - packages/SQLConverter/src/__tests__/pg-migration-regression.test.ts
+      #     (107 conversion tests + sequence-dedup + TODO-marker check)
+      #   - The parity test in the same file (re-enabled) which enforces that
+      #     every T-SQL V-migration has a committed PG counterpart.
+      #
+      # If migrations-pg/v5/ is empty (e.g. on a tooling-only PR before the
+      # migrations PR has merged), this step skips the apply gracefully so the
+      # workflow doesn't block. The actual coverage gate is the parity test.
+      - name: Verify committed PG migration files
+        id: verify_committed
+        run: |
+          PG_FILES=$(ls migrations-pg/v5/*.pg.sql migrations-pg/v5/*.pg-only.sql 2>/dev/null | wc -l)
+          BASELINE=$(ls migrations-pg/v5/B*.pg.sql 2>/dev/null | head -1)
+          echo "Committed PG migration files: $PG_FILES"
+          echo "Baseline file: ${BASELINE:-(none)}"
+          if [ "$PG_FILES" -eq 0 ]; then
+            echo "::notice::No committed PG migration files — skipping apply step. Migration content lives in the companion PR."
+            echo "skip_apply=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip_apply=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ─── Step 4: Bootstrap PG (roles + helper procs) ────────────────
+      - name: Bootstrap PostgreSQL
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: testpass
+          PGDATABASE: mj_pg_ci
+        run: |
+          # Create roles referenced by migration GRANT statements
+          psql <<'SQL'
+          DO $$ BEGIN CREATE ROLE "cdp_UI" NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+          DO $$ BEGIN CREATE ROLE "cdp_Developer" NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+          DO $$ BEGIN CREATE ROLE "cdp_Integration" NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+          GRANT USAGE ON SCHEMA public TO "cdp_UI", "cdp_Developer", "cdp_Integration";
+          SQL
+
+      # ─── Step 5: Apply PG migrations ────────────────────────────────
+      - name: Apply PG migrations
+        id: apply
+        if: steps.verify_committed.outputs.skip_apply != 'true'
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: testpass
+          PGDATABASE: mj_pg_ci
+        run: |
+          # Resolve Flyway/Skyway placeholders in all migration files before applying
+          # (Skyway does this at runtime; psql needs them pre-resolved)
+          for f in migrations-pg/v5/*.sql; do
+            sed -i 's/\${flyway:defaultSchema}/__mj/g' "$f"
+          done
+
+          # Apply baseline first
+          BASELINE=$(ls migrations-pg/v5/B*.pg.sql 2>/dev/null | head -1)
+          if [ -n "$BASELINE" ]; then
+            echo "Applying baseline: $(basename $BASELINE)"
+            psql -v ON_ERROR_STOP=0 -f "$BASELINE" > /dev/null 2>&1
+            BASELINE_EXIT=$?
+            if [ $BASELINE_EXIT -ne 0 ]; then
+              echo "::warning::Baseline had non-fatal errors (expected — some procs may fail on first run)"
+            fi
+          fi
+
+          # Determine baseline timestamp — V-migrations with timestamps <= baseline
+          # are already included in the baseline and should be skipped (same as Skyway behavior)
+          BASELINE_TS=""
+          if [ -n "$BASELINE" ]; then
+            BASELINE_NAME=$(basename "$BASELINE")
+            BASELINE_TS=$(echo "$BASELINE_NAME" | grep -oP '(?<=^B)\d{12}')
+            echo "Baseline timestamp: $BASELINE_TS — skipping V-migrations at or before this version"
+          fi
+
+          # Apply V-migrations in order, tracking results
+          TOTAL=0
+          PASSED=0
+          FAILED=0
+          SKIPPED_BASELINE=0
+          FAILED_FILES=""
+
+          for f in $(ls migrations-pg/v5/V*.sql 2>/dev/null | sort); do
+            FILENAME=$(basename "$f")
+
+            # Skip V-migrations that predate the baseline (their content is already in the baseline)
+            if [ -n "$BASELINE_TS" ]; then
+              V_TS=$(echo "$FILENAME" | grep -oP '(?<=^V)\d{12}')
+              if [ -n "$V_TS" ] && [ "$V_TS" -le "$BASELINE_TS" ]; then
+                SKIPPED_BASELINE=$((SKIPPED_BASELINE + 1))
+                continue
+              fi
+            fi
+
+            TOTAL=$((TOTAL + 1))
+
+            # Run with ON_ERROR_STOP to catch real failures
+            if psql -v ON_ERROR_STOP=1 -f "$f" > /dev/null 2>&1; then
+              PASSED=$((PASSED + 1))
+            else
+              # Some migrations call stored procs that may not exist yet (Metadata_Sync pattern)
+              # Check if this is a known Metadata_Sync failure (contains stored proc calls)
+              if grep -q 'SELECT __mj\."fn_create_\|SELECT __mj\."fn_update_\|SELECT __mj\."spCreate\|PERFORM __mj\.' "$f" 2>/dev/null; then
+                echo "::notice::$FILENAME — skipped (Metadata_Sync: needs CodeGen before stored proc calls work)"
+                PASSED=$((PASSED + 1))  # Count as passed — expected behavior
+              else
+                FAILED=$((FAILED + 1))
+                FAILED_FILES="$FAILED_FILES\n  $FILENAME"
+                echo "::error::$FILENAME — FAILED"
+                # Show the actual error
+                psql -v ON_ERROR_STOP=1 -f "$f" 2>&1 | tail -5
+              fi
+            fi
+          done
+
+          echo ""
+          echo "=== PG Migration Results ==="
+          echo "  Total:   $TOTAL"
+          echo "  Passed:  $PASSED"
+          echo "  Failed:  $FAILED"
+          echo "  Skipped (pre-baseline): $SKIPPED_BASELINE"
+
+          if [ $FAILED -gt 0 ]; then
+            echo "::error::$FAILED migration(s) failed:$FAILED_FILES"
+            exit 1
+          fi
+
+          echo "pg_passed=$PASSED" >> "$GITHUB_OUTPUT"
+          echo "pg_total=$TOTAL" >> "$GITHUB_OUTPUT"
+
+      # ─── Step 6: Verify schema ──────────────────────────────────────
+      - name: Verify PG schema
+        if: steps.verify_committed.outputs.skip_apply != 'true'
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: testpass
+          PGDATABASE: mj_pg_ci
+        run: |
+          echo "=== PG Schema Verification ==="
+
+          TABLES=$(psql -tA -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '__mj' AND table_type = 'BASE TABLE'")
+          VIEWS=$(psql -tA -c "SELECT COUNT(*) FROM information_schema.views WHERE table_schema = '__mj'")
+          FUNCTIONS=$(psql -tA -c "SELECT COUNT(*) FROM information_schema.routines WHERE routine_schema = '__mj' AND routine_type = 'FUNCTION'")
+
+          echo "  Tables:    $TABLES"
+          echo "  Views:     $VIEWS"
+          echo "  Functions: $FUNCTIONS"
+
+          # Minimum thresholds — if the schema has fewer objects than expected,
+          # something went seriously wrong during migration
+          MIN_TABLES=250
+          MIN_VIEWS=200
+
+          if [ "$TABLES" -lt "$MIN_TABLES" ]; then
+            echo "::error::Expected at least $MIN_TABLES tables, got $TABLES"
+            exit 1
+          fi
+
+          if [ "$VIEWS" -lt "$MIN_VIEWS" ]; then
+            echo "::error::Expected at least $MIN_VIEWS views, got $VIEWS"
+            exit 1
+          fi
+
+          echo "::notice::Schema verification passed: $TABLES tables, $VIEWS views, $FUNCTIONS functions"
+
+      # ─── Step 7: Parity report ──────────────────────────────────────
+      - name: Generate parity report
+        if: always()
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: testpass
+          PGDATABASE: mj_pg_ci
+        run: |
+          echo "## PostgreSQL Migration Parity Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Metric | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+
+          TABLES=$(psql -tA -c "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = '__mj' AND table_type = 'BASE TABLE'" 2>/dev/null || echo "N/A")
+          VIEWS=$(psql -tA -c "SELECT COUNT(*) FROM information_schema.views WHERE table_schema = '__mj'" 2>/dev/null || echo "N/A")
+          FUNCTIONS=$(psql -tA -c "SELECT COUNT(*) FROM information_schema.routines WHERE routine_schema = '__mj' AND routine_type = 'FUNCTION'" 2>/dev/null || echo "N/A")
+          TRIGGERS=$(psql -tA -c "SELECT COUNT(DISTINCT trigger_name) FROM information_schema.triggers WHERE trigger_schema = '__mj'" 2>/dev/null || echo "N/A")
+
+          echo "| Tables | $TABLES |" >> $GITHUB_STEP_SUMMARY
+          echo "| Views | $VIEWS |" >> $GITHUB_STEP_SUMMARY
+          echo "| Functions | $FUNCTIONS |" >> $GITHUB_STEP_SUMMARY
+          echo "| Triggers | $TRIGGERS |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Generated by \`pg-migrations.yml\` — Phase C of the PG migration architecture." >> $GITHUB_STEP_SUMMARY

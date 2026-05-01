@@ -7,6 +7,7 @@ export class ExtendedPropertyRule implements IConversionRule {
   AppliesTo: StatementType[] = ['EXTENDED_PROPERTY'];
   Priority = 90;
   BypassSqlglot = true;
+  BypassJustification = 'T-SQL EXEC sp_addextendedproperty calls have no direct PG equivalent — they map to PG COMMENT ON TABLE/COLUMN statements with different argument structure. Hand-parsing the @level0type/@level1type/@level2type pattern is far cleaner than attempting sqlglot conversion.';
 
   PostProcess(sql: string, _originalSQL: string, context: ConversionContext): string {
     // Strip BEGIN TRY wrapper: extract just the EXEC sp_addextendedproperty call.

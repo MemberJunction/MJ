@@ -12,7 +12,7 @@ export class BufferDeletePostAction extends BufferBaseAction {
     const { Params } = params;
 
     try {
-      const authError = await this.ensureAuthenticated(Params);
+      const authError = await this.ensureAuthenticated(params);
       if (authError) return authError;
 
       const postId = this.getParamValue(Params, 'PostID') as string | null;

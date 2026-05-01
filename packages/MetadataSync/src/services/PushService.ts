@@ -194,7 +194,7 @@ export class PushService {
     try {
       // Initialize SQL logger if enabled and not dry-run
       if (sqlLogger.enabled && !options.dryRun) {
-        const provider = Metadata.Provider as GenericDatabaseProvider;
+        const provider = Metadata.Provider as GenericDatabaseProvider; // global-provider-ok: metadata sync operates on the configured provider only
         
         if (options.verbose) {
           callbacks?.onLog?.(`SQL logging enabled: ${sqlLogger.enabled}`);
@@ -430,7 +430,7 @@ export class PushService {
           await this.writeDeferredFiles(options, callbacks);
         }
       } catch (error) {
-        // Rollback transaction on error
+        // Rollback transaction on error.
         if (!options.dryRun) {
           callbacks?.onLog?.('\n⚠️  Rolling back database transaction due to error...');
           await transactionManager.rollbackTransaction();
@@ -781,7 +781,7 @@ export class PushService {
     entityConfig?: EntityConfig,
     allowDefer: boolean = true
   ): Promise<ProcessRecordResult> {
-    const metadata = new Metadata();
+    const metadata = new Metadata(); // global-provider-ok: metadata sync operates on the configured provider only
     const { record, entityName, parentContext, id: recordId } = flattenedRecord;
 
     // Accumulate warnings locally instead of mutating this.warnings directly.
@@ -1688,7 +1688,7 @@ export class PushService {
     }
 
     // Perform comprehensive deletion audit
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: metadata sync operates on the configured provider only
     const auditor = new DeletionAuditor(
       md,
       this.contextUser

@@ -9,7 +9,7 @@
  * @module @memberjunction/ai-agents
  */
 
-import { LogStatus, LogError, Metadata, UserInfo } from '@memberjunction/core';
+import { LogStatus, LogError, Metadata, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { DuplicateRecordDetector } from '@memberjunction/ai-vector-dupe';
 
 /**
@@ -178,13 +178,14 @@ export class KnowledgeAgent {
     public async ExecuteServerTool(
         toolName: string,
         parameters: Record<string, unknown>,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<{ Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string }> {
         LogStatus(`KnowledgeAgent: Executing server tool "${toolName}"`);
 
         switch (toolName) {
             case 'search_knowledge':
-                return this.executeSearchKnowledge(parameters, contextUser);
+                return this.executeSearchKnowledge(parameters, contextUser, provider);
             case 'create_entity_document':
                 return this.executeCreateEntityDocument(parameters, contextUser);
             case 'run_vectorization':
@@ -233,7 +234,8 @@ export class KnowledgeAgent {
      */
     private async executeSearchKnowledge(
         parameters: Record<string, unknown>,
-        _contextUser: UserInfo
+        _contextUser: UserInfo,
+        providerArg?: IMetadataProvider
     ): Promise<{ Success: boolean; Data?: Record<string, unknown>; ErrorMessage?: string }> {
         try {
             const query = String(parameters['query'] || '');
@@ -244,7 +246,7 @@ export class KnowledgeAgent {
             const maxResults = Number(parameters['maxResults']) || 20;
             const entityFilter = parameters['entityNames'] as string[] | undefined;
 
-            const provider = Metadata.Provider as { ExecuteGQL?: (query: string, variables: Record<string, unknown>) => Promise<Record<string, unknown>> };
+            const provider = (providerArg ?? Metadata.Provider) as { ExecuteGQL?: (query: string, variables: Record<string, unknown>) => Promise<Record<string, unknown>> };
             if (!provider?.ExecuteGQL) {
                 return { Success: false, ErrorMessage: 'GraphQL provider not available for search' };
             }

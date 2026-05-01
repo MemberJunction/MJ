@@ -102,7 +102,7 @@ export class FacebookSearchPostsAction extends FacebookBaseAction {
             }
 
             // Initialize OAuth
-            if (!await this.initializeOAuth(companyIntegrationId)) {
+            if (!await this.initializeOAuth(companyIntegrationId, params)) {
                 return {
                 Success: false,
                 Message: 'Failed to initialize Facebook OAuth connection',

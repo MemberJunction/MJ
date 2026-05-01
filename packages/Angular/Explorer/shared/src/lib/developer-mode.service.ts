@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { Metadata, RunView } from '@memberjunction/core';
+import { Metadata, RunView, IMetadataProvider } from '@memberjunction/core';
 import { MJUserEntity, MJUserSettingEntity } from '@memberjunction/core-entities';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 
@@ -38,6 +38,21 @@ export class DeveloperModeService {
     private _isDeveloper$ = new BehaviorSubject<boolean>(false);
     private _initialized = false;
     private _currentUser: MJUserEntity | null = null;
+
+    /**
+     * Optional explicit metadata provider. Set via `setProvider()` from a
+     * caller with provider context. Falls back to `Metadata.Provider` when
+     * not set.
+     */
+    private _provider: IMetadataProvider | null = null;
+
+    public set Provider(value: IMetadataProvider | null) {
+        this._provider = value;
+    }
+
+    public get Provider(): IMetadataProvider {
+        return this._provider ?? Metadata.Provider;
+    }
 
     // Role names that qualify as "developer"
     private static readonly DEVELOPER_ROLES = [
@@ -188,7 +203,7 @@ export class DeveloperModeService {
      */
     private async checkDeveloperRole(user: MJUserEntity): Promise<boolean> {
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.Provider);
 
             // Get user's roles via the User Roles junction table
             const userRolesResult = await rv.RunView<{ RoleID: string }>({

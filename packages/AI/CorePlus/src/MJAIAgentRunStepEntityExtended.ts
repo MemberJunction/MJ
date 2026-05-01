@@ -1,4 +1,4 @@
-import { BaseEntity, CompositeKey, LogErrorEx, Metadata } from "@memberjunction/core";
+import { BaseEntity, CompositeKey, LogErrorEx, IMetadataProvider } from "@memberjunction/core";
 import { MJActionExecutionLogEntity, MJAIAgentRunStepEntity, MJAIPromptRunEntity } from "@memberjunction/core-entities";
 import { RegisterClass } from "@memberjunction/global";
 import { MJAIAgentRunEntityExtended } from "./MJAIAgentRunEntityExtended";
@@ -83,7 +83,7 @@ export class MJAIAgentRunStepEntityExtended extends MJAIAgentRunStepEntity {
         }
         
         // Handle extended properties based on StepType
-        const md = new Metadata();
+        const md = this.ProviderToUse as unknown as IMetadataProvider;
         
         if (this.StepType === 'Prompt' && __promptRun) {
             this._promptRun = await md.GetEntityObject<MJAIPromptRunEntity>('MJ: AI Prompt Runs', this.ContextCurrentUser);
@@ -117,7 +117,7 @@ export class MJAIAgentRunStepEntityExtended extends MJAIAgentRunStepEntity {
         try {
             if (this.ID?.length > 0 && this.TargetLogID?.length > 0) {
                 // only do this for existing records
-                const md = new Metadata();
+                const md = this.ProviderToUse as unknown as IMetadataProvider;
                 switch (this.StepType) {
                     case "Actions":
                         this._actionExecutionLog = await md.GetEntityObject<MJActionExecutionLogEntity>("MJ: Action Execution Logs", this.ContextCurrentUser);

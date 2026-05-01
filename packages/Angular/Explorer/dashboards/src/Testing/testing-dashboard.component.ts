@@ -5,6 +5,7 @@ import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { ResourceData } from '@memberjunction/core-entities';
 import { TestingDialogService, TestingExecutionService, ActiveRun } from '@memberjunction/ng-testing';
+import { TestingInstrumentationService } from './services/testing-instrumentation.service';
 
 interface TestingDashboardState {
   activeTab: string;
@@ -56,7 +57,8 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
   constructor(
     private cdr: ChangeDetectorRef,
     public testingDialogService: TestingDialogService,
-    private executionService: TestingExecutionService
+    private executionService: TestingExecutionService,
+    private instrumentationService: TestingInstrumentationService
   ) {
     super();
     this.setupStateManagement();
@@ -170,6 +172,7 @@ export class TestingDashboardComponent extends BaseDashboard implements AfterVie
   initDashboard(): void {
     try {
       this.isLoading = true;
+      this.instrumentationService.Provider = this.ProviderToUse;
     } catch (error) {
       console.error('Error initializing Testing dashboard:', error);
       this.Error.emit(new Error('Failed to initialize Testing dashboard. Please try again.'));

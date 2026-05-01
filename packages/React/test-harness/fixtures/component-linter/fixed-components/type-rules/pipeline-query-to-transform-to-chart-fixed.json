@@ -10,10 +10,29 @@
   "registry": "MJ",
   "status": "Active",
   "dataRequirements": {
-    "queries": [{
-      "name": "Sales Analytics",
-      "categoryPath": "Sales/Reports",
-      "fields": ["SaleID", "SaleDate", "Revenue", "ProductID"]
-    }]
+    "queries": [
+      {
+        "name": "Sales Analytics",
+        "categoryPath": "Sales/Reports",
+        "fields": [
+          {
+            "name": "SaleID",
+            "type": "uniqueidentifier"
+          },
+          {
+            "name": "SaleDate",
+            "type": "datetimeoffset"
+          },
+          {
+            "name": "Revenue",
+            "type": "decimal"
+          },
+          {
+            "name": "ProductID",
+            "type": "uniqueidentifier"
+          }
+        ]
+      }
+    ]
   }
 }

@@ -2,6 +2,42 @@
 
 Fully automated, unattended pipeline that converts SQL Server migrations to PostgreSQL, validates them, and produces a comprehensive parity report. Designed to run overnight without user interaction.
 
+## New Tooling (Phase A/B/C — April 2026)
+
+The following tools are now available and should be used instead of manual conversion steps:
+
+### CLI Commands
+- **`mj migrate convert`** — Batch-converts T-SQL migrations to PG using the rule-based SQLConverter pipeline. Auto-runs `deduplicateEntityFieldSequences()` as a post-step to fix `UQ_EntityField_EntityID_Sequence` collisions.
+- **`mj migrate create "Description"`** — Scaffolds a new migration file with proper naming. Detects `dbPlatform` from config to produce `.pg.sql` or `.sql` with platform-idiomatic templates.
+- **`mj migrate`** — Runs migrations via Skyway. When `dbPlatform: 'postgresql'`, automatically uses `PostgresProvider` and reads from `migrations-pg/`.
+
+### Programmatic API
+```typescript
+import { convertFile, getRulesForDialects, deduplicateEntityFieldSequences, generateParityReport } from '@memberjunction/sql-converter';
+
+// Convert a single file
+const rules = getRulesForDialects('tsql', 'postgres');
+convertFile({ Source: 'migrations/v5/V*.sql', SourceIsFile: true, OutputFile: 'migrations-pg/v5/V*.pg.sql', Rules: rules, IncludeHeader: false });
+
+// Fix sequence collisions across all converted files
+deduplicateEntityFieldSequences('migrations-pg/v5');
+
+// Generate parity report
+const report = generateParityReport('migrations/v5', 'migrations-pg/v5');
+console.log(`Parity: ${report.parity}, Coverage: ${report.coveragePercent}%`);
+```
+
+### CI Workflow
+`.github/workflows/pg-migrations.yml` — Triggered on PRs to `next` that change migrations, SQLConverter, or CodeGenLib. Spins up a PG 17 container, converts T-SQL→PG, applies migrations, verifies schema counts, and generates a parity report in GitHub Step Summary.
+
+### Two-Pass Migration Workflow
+Fresh PG installs require: `mj migrate` (DDL) → `mj codegen` → `mj migrate` (Metadata_Sync). This is because Metadata_Sync migrations call stored procs whose signatures are updated by CodeGen. The CI workflow handles this automatically.
+
+### Reference Docs
+- `plans/pg-migration-architecture/DEV_ON_PG_GUIDE.md` — Developer guide for running MJ on PG
+- `plans/pg-migration-architecture/PG_MANUAL_FIXES_CATALOG.md` — Comprehensive catalog of every manual fix and automation status
+- `migrations-pg/TESTING_GUIDE.md` — Reviewer guide for validating migration files
+
 **You (local Claude Code) are the orchestrator.** You manage Docker, delegate all heavy work to Claude Code running autonomously inside the `claude-dev` container, and report results to the user. You NEVER manually edit migration files or fix SQL — all fixes go through the toolchain. If the toolchain can't handle a pattern, you document it for user review.
 
 ## Database Naming Convention

@@ -6,6 +6,7 @@ import { Metadata, RunView } from '@memberjunction/core';
 import { MJApplicationEntity, MJApplicationEntityEntity, MJEntityEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface ApplicationDialogData {
   application?: MJApplicationEntity;
   mode: 'create' | 'edit';
@@ -31,7 +32,7 @@ export interface ApplicationDialogResult {
   templateUrl: './application-dialog.component.html',
   styleUrls: ['./application-dialog.component.css']
 })
-export class ApplicationDialogComponent implements OnInit, OnDestroy, OnChanges {
+export class ApplicationDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy, OnChanges {
   @Input() data: ApplicationDialogData | null = null;
   @Input() visible = false;
   @Output() result = new EventEmitter<ApplicationDialogResult>();
@@ -39,8 +40,7 @@ export class ApplicationDialogComponent implements OnInit, OnDestroy, OnChanges 
   private fb = inject(FormBuilder);
   private cdr = inject(ChangeDetectorRef);
   private ngZone = inject(NgZone);
-  private metadata = new Metadata();
-
+  private get metadata() { return this.ProviderToUse; }
   public applicationForm: FormGroup;
   public isLoading = false;
   public error: string | null = null;
@@ -64,6 +64,7 @@ export class ApplicationDialogComponent implements OnInit, OnDestroy, OnChanges 
   public isFullscreen = false;
 
   constructor() {
+    super();
     this.applicationForm = this.fb.group({
       name: ['', [Validators.required, Validators.maxLength(100)]],
       description: ['']
@@ -114,7 +115,7 @@ export class ApplicationDialogComponent implements OnInit, OnDestroy, OnChanges 
   }
 
   private async loadAllEntities(): Promise<void> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<MJEntityEntity>({
       EntityName: 'MJ: Entities',
       ResultType: 'entity_object',
@@ -165,7 +166,7 @@ export class ApplicationDialogComponent implements OnInit, OnDestroy, OnChanges 
 
   private async loadApplicationEntities(applicationId: string): Promise<void> {
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJApplicationEntityEntity>({
         EntityName: 'MJ: Application Entities',
         ExtraFilter: `ApplicationID='${applicationId}'`,

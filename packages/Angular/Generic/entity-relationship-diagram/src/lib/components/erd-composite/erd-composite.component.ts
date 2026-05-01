@@ -1,8 +1,9 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild } from '@angular/core';
 import { Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
-import { EntityInfo, EntityFieldInfo, Metadata } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJEntityERDComponent } from '../mj-entity-erd.component';
 import { EntitySelectedEvent, OpenEntityRecordEvent } from '../mj-entity-erd.component';
 import { ERDConfig, ERDState } from '../../interfaces/erd-types';
@@ -21,6 +22,8 @@ export interface ERDCompositeState {
   panPosition: { x: number; y: number };
   fieldsSectionExpanded: boolean;
   relationshipsSectionExpanded: boolean;
+  /** User's preferred layout algorithm — 'schema-grid' (default) or 'dagre'. */
+  layoutAlgorithm?: 'schema-grid' | 'dagre';
 }
 
 /**
@@ -71,7 +74,7 @@ export interface ERDCompositeState {
   templateUrl: './erd-composite.component.html',
   styleUrls: ['./erd-composite.component.css']
 })
-export class ERDCompositeComponent implements OnInit, OnDestroy {
+export class ERDCompositeComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   @ViewChild(MJEntityERDComponent) mjEntityErd!: MJEntityERDComponent;
 
   /** Whether the ERD is in a refreshing state */
@@ -174,7 +177,7 @@ export class ERDCompositeComponent implements OnInit, OnDestroy {
 
   private async loadData(): Promise<void> {
     // Load entities from metadata (always needed for allEntityFields and relationship lookups)
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     this.entities = md.Entities;
 
     // Load all entity fields from entities
@@ -249,6 +252,14 @@ export class ERDCompositeComponent implements OnInit, OnDestroy {
 
   public onEntitySelected(entity: EntityInfo): void {
     this.selectedEntity = entity;
+
+    // Bring the entity into view in the diagram and emit nodeSelected
+    // upstream so the focus + highlight logic kicks in.  Done in a
+    // microtask so the [focusEntityId] binding flushes first and the
+    // inner diagram has the new focus state when we ask it to center.
+    queueMicrotask(() => {
+      this.mjEntityErd?.zoomToEntity(entity.ID);
+    });
 
     this.emitStateChange();
     this.emitUserStateChange();
@@ -362,6 +373,7 @@ export class ERDCompositeComponent implements OnInit, OnDestroy {
       panPosition: { x: 0, y: 0 },
       fieldsSectionExpanded: this.fieldsSectionExpanded,
       relationshipsSectionExpanded: this.relationshipsSectionExpanded,
+      layoutAlgorithm: this.mjEntityErd?.erdDiagram?.activeLayout ?? 'schema-grid',
     };
   }
 
@@ -393,6 +405,13 @@ export class ERDCompositeComponent implements OnInit, OnDestroy {
       }
     } else {
       this.selectedEntity = null;
+    }
+
+    // Restore preferred layout algorithm.  Deferred to microtask so the
+    // diagram has mounted by the time we set it.
+    if (state.layoutAlgorithm) {
+      const algo = state.layoutAlgorithm;
+      queueMicrotask(() => this.mjEntityErd?.erdDiagram?.setLayoutAlgorithm(algo));
     }
 
     this.applyFilters();

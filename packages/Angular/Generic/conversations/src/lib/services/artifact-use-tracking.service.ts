@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Metadata, UserInfo } from '@memberjunction/core';
+import { Metadata, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { MJArtifactUseEntity } from '@memberjunction/core-entities';
 
 /**
@@ -10,6 +10,19 @@ import { MJArtifactUseEntity } from '@memberjunction/core-entities';
     providedIn: 'root'
 })
 export class ArtifactUseTrackingService {
+    private _provider: IMetadataProvider | null = null;
+
+    /**
+     * Set the metadata provider this service should use. When unset, falls back to Metadata.Provider.
+     */
+    public set Provider(value: IMetadataProvider | null) {
+        this._provider = value;
+    }
+
+    public get Provider(): IMetadataProvider {
+        return this._provider ?? Metadata.Provider;
+    }
+
     /**
      * Track that a user viewed an artifact
      */
@@ -60,8 +73,8 @@ export class ArtifactUseTrackingService {
                 return;
             }
 
-            const md = new Metadata();
-            const usage = await md.GetEntityObject<MJArtifactUseEntity>('MJ: Artifact Uses');
+            const md = this.Provider;
+            const usage = await md.GetEntityObject<MJArtifactUseEntity>('MJ: Artifact Uses', currentUser);
 
             usage.ArtifactVersionID = artifactVersionId;
             usage.UserID = currentUser.ID;

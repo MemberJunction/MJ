@@ -23,7 +23,7 @@ export class AgentService {
 
     try {
       await initializeMJProvider();
-      this.metadata = new Metadata();
+      this.metadata = new Metadata(); // global-provider-ok: CLI tool, single-provider context
       this.contextUser = await this.getContextUser();
       this.initialized = true;
     } catch (error: any) {

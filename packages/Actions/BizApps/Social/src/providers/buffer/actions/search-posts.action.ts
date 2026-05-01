@@ -51,7 +51,7 @@ export class BufferSearchPostsAction extends BufferBaseAction {
       const limit = (this.getParamValue(Params, 'Limit') as number | null) || 100;
       const offset = (this.getParamValue(Params, 'Offset') as number | null) || 0;
 
-      const authError = await this.ensureAuthenticated(Params);
+      const authError = await this.ensureAuthenticated(params);
       if (authError) return authError;
 
       const organizationId = await this.resolveOrganizationId(Params);

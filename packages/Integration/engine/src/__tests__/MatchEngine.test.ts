@@ -17,11 +17,23 @@ vi.mock('@memberjunction/core', async () => {
             }
         },
         Metadata: class MockMetadata {
+            // Multi-provider migration: MatchEngine uses this.ProviderToUse which falls back
+            // to Metadata.Provider. Expose a static Provider with the methods/properties the
+            // engine needs.
+            static Provider = {
+                Entities: [{ Name: 'Contacts', FirstPrimaryKey: { Name: 'ID' } }],
+                EntityByName(name: string) {
+                    return this.Entities.find((e: { Name: string }) => e.Name === name);
+                },
+            };
             get Entities() {
                 return [{
                     Name: 'Contacts',
                     FirstPrimaryKey: { Name: 'ID' },
                 }];
+            }
+            EntityByName(name: string) {
+                return this.Entities.find(e => e.Name === name);
             }
         },
     };

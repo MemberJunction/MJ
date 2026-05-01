@@ -10,13 +10,45 @@
       {
         "name": "MonthlySalesReport",
         "categoryPath": "Reports/Sales",
-        "fields": ["ProductName", "Amount", "SaleDate"],
-        "entityNames": ["Invoices", "Products"],
+        "fields": [
+          {
+            "name": "ProductName",
+            "type": "nvarchar"
+          },
+          {
+            "name": "Amount",
+            "type": "int"
+          },
+          {
+            "name": "SaleDate",
+            "type": "datetimeoffset"
+          }
+        ],
+        "entityNames": [
+          "Invoices",
+          "Products"
+        ],
         "parameters": [
-          { "name": "year", "type": "number", "required": true },
-          { "name": "month", "type": "number", "required": true },
-          { "name": "region", "type": "string", "required": true },
-          { "name": "includeReturns", "type": "boolean", "required": false }
+          {
+            "name": "year",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "month",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "region",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "includeReturns",
+            "type": "boolean",
+            "required": false
+          }
         ]
       }
     ]

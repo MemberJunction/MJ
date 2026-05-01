@@ -76,13 +76,16 @@ describe('GrantRule', () => {
       expect(result).toContain('GRANT EXECUTE ON FUNCTION');
     });
 
-    it('should skip EXECUTE grant on function not in CreatedFunctions', () => {
+    it('should emit EXECUTE grant even when function is defined in earlier migration', () => {
+      // Many v5.x migrations contain pure GRANT files (e.g. Grant_Dataset_SP_Execute_Permissions)
+      // that target sprocs defined in the baseline or an earlier migration. Previously
+      // we skipped these grants, silently dropping permissions. Now we emit them and let
+      // PG fail loudly at apply time if the sproc genuinely doesn't exist.
       const ctx = createConversionContext('tsql', 'postgres');
-      // Don't add spMissingProc to CreatedFunctions
-      const sql = 'GRANT EXECUTE ON [__mj].[spMissingProc] TO [cdp_Developer]';
+      const sql = 'GRANT EXECUTE ON [__mj].[spDefinedEarlier] TO [cdp_Developer]';
       const result = convert(sql, ctx);
-      expect(result).toContain('-- SKIPPED (function not created)');
-      expect(result).not.toContain('GRANT EXECUTE ON FUNCTION');
+      expect(result).not.toContain('-- SKIPPED');
+      expect(result).toContain('GRANT EXECUTE ON FUNCTION');
     });
 
     it('should convert EXECUTE grant when function IS in CreatedFunctions', () => {
@@ -104,11 +107,15 @@ describe('GrantRule', () => {
   });
 
   describe('GRANT on views', () => {
-    it('should skip GRANT on view not in CreatedViews', () => {
+    it('should emit GRANT on view even when view is defined in earlier migration', () => {
+      // Same rationale as the function case: views typically live in the baseline
+      // and are referenced by grants in later migrations. Skipping silently dropped
+      // permissions; now we emit and let PG fail loudly if the view is missing.
       const ctx = createConversionContext('tsql', 'postgres');
       const sql = 'GRANT SELECT ON [__mj].[vwActiveUsers] TO [cdp_Developer]';
       const result = convert(sql, ctx);
-      expect(result).toContain('-- SKIPPED (view not created)');
+      expect(result).not.toContain('-- SKIPPED');
+      expect(result).toContain('GRANT SELECT');
     });
 
     it('should allow GRANT on view that IS in CreatedViews', () => {

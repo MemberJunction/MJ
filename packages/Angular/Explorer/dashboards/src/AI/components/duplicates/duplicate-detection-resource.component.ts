@@ -377,7 +377,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
 
     /** Phase 2: Load runs, details, and matches via RunViews batch. */
     private async loadRunData(): Promise<void> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const [runsResult, detailsResult, matchesResult] = await rv.RunViews([
             {
                 EntityName: 'MJ: Duplicate Runs',
@@ -453,7 +453,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         this.cdr.detectChanges();
 
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const dupeRun = await md.GetEntityObject<MJDuplicateRunEntity>('MJ: Duplicate Runs');
             dupeRun.NewRecord();
 
@@ -475,7 +475,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
 
             dupeRun.EntityID = entityInfo.ID;
 
-            dupeRun.StartedByUserID = new Metadata().CurrentUser.ID;
+            dupeRun.StartedByUserID = this.ProviderToUse.CurrentUser.ID;
             dupeRun.StartedAt = new Date();
             dupeRun.ProcessingStatus = 'In Progress';
             dupeRun.ApprovalStatus = 'Pending';
@@ -769,7 +769,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
     }
 
     private subscribeToPipelineProgress(pipelineRunID: string): void {
-        const provider = Metadata.Provider as GraphQLDataProvider;
+        const provider = this.ProviderToUse as GraphQLDataProvider;
         const subscriptionQuery = `
             subscription PipelineProgress($pipelineRunID: String!) {
                 PipelineProgress(pipelineRunID: $pipelineRunID) {
@@ -1168,8 +1168,8 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             if (!parentKeyValue) return;
 
             // Query the related entity for records pointing at this parent via the FK field
-            const rv = new RunView();
-            const md = new Metadata();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+            const md = this.ProviderToUse;
             const relatedEntityInfo = md.Entities.find(e => e.Name === relatedEntityName);
             const nameField = relatedEntityInfo?.NameField;
             const pkFieldName = relatedEntityInfo?.FirstPrimaryKey?.Name || 'ID';
@@ -1341,7 +1341,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
                 }));
             }
 
-            const result = await Metadata.Provider.MergeRecords(request);
+            const result = await this.ProviderToUse.MergeRecords(request);
 
             if (result.Success) {
                 MJNotificationService.Instance.CreateSimpleNotification(
@@ -1454,7 +1454,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         if (whereClauses.length === 0) return;
 
         // Single RunView with all records OR'd together
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<Record<string, unknown>>({
             EntityName: group.EntityName,
             ExtraFilter: whereClauses.join(' OR '),
@@ -1463,7 +1463,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
 
         if (result.Success && result.Results) {
             // Get entity info to know primary key field name
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const entityInfo = md.Entities.find(e => e.Name === group.EntityName);
             const pkFieldName = entityInfo?.FirstPrimaryKey?.Name || 'ID';
 
@@ -1481,7 +1481,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
      * Each record's deps are stored in ComparisonDependencies keyed by composite key string.
      */
     private async loadComparisonDependencies(group: DuplicateGroup): Promise<void> {
-        const provider = Metadata.Provider;
+        const provider = this.ProviderToUse;
         const keyStrings: string[] = [group.RecordId];
         for (const m of group.Matches) {
             if (m.MatchRecordID) {
@@ -1552,7 +1552,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
             });
 
         // Get entity field info for display names and ordering
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const entityInfo = md.Entities.find(e => e.Name === this.ComparisonGroup!.EntityName);
         const entityFields = entityInfo?.Fields ?? [];
 
@@ -1633,7 +1633,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
      */
     private resolveMatchName(entityName: string, matchRecordID: string, meta: RecordMetadataInfo): string {
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const entityInfo = md.Entities.find(e => e.Name === entityName);
             if (entityInfo) {
                 const nameFields = entityInfo.Fields
@@ -1667,7 +1667,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
      */
     private resolveRecordName(metadata: RecordMetadataInfo, entityName: string, recordID: string): string {
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const entityInfo = md.Entities.find(e => e.Name === entityName);
             if (entityInfo) {
                 const nameFields = entityInfo.Fields
@@ -1776,7 +1776,7 @@ export class DuplicateDetectionResourceComponent extends BaseResourceComponent i
         this.cdr.detectChanges();
 
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const tg = await md.CreateTransactionGroup();
             for (const match of group.Matches) {
                 match.ApprovalStatus = status;

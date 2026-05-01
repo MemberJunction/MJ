@@ -134,7 +134,9 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       if (!this.record.IsSaved) {
         this.StartEditMode();
       }
-      const md = new Metadata();
+      const md = this.ProviderToUse;
+      // Bind FormStateService to the same provider this form is using.
+      this.formStateService.Provider = md;
       this._isFavorite = await md.GetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.PrimaryKey);
       this.FavoriteInitDone = true;
 
@@ -364,7 +366,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   protected async InternalSaveRecord(): Promise<boolean> {
     if (this.record) {
       if (this._pendingRecords.length > 0) {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const tg = await md.CreateTransactionGroup();
         this.record.TransactionGroup = tg;
         await this.record.Save();
@@ -459,8 +461,8 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   }
 
   public async SetFavoriteStatus(isFavorite: boolean) {
-    const md = new Metadata();
-    await md.SetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.PrimaryKey, isFavorite);
+    const md = this.ProviderToUse;
+    await md.SetRecordFavoriteStatus(md.CurrentUser.ID, this.record.EntityInfo.Name, this.record.PrimaryKey, isFavorite, md.CurrentUser);
     this._isFavorite = isFavorite;
   }
 
@@ -605,7 +607,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   }
 
   public async ShowDependencies() {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const dep = await md.GetRecordDependencies(this.record.EntityInfo.Name, this.record.PrimaryKey);
     console.log('Dependencies for: ' + this.record.EntityInfo.Name + ' ' + this.record.PrimaryKey.ToString());
     console.log(dep);
@@ -630,8 +632,8 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
       return [];
     }
 
-    const rv = new RunView();
-    const md = new Metadata();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+    const md = this.ProviderToUse;
 
     const rvResult: RunViewResult<MJListEntity> = await rv.RunView({
       EntityName: 'MJ: Lists',
@@ -648,7 +650,7 @@ export abstract class BaseFormComponent extends BaseRecordComponent implements A
   }
 
   public async GetRecordDependencies(): Promise<RecordDependency[]> {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const dependencies: RecordDependency[] = await md.GetRecordDependencies(this.record.EntityInfo.Name, this.record.PrimaryKey);
     return dependencies;
   }

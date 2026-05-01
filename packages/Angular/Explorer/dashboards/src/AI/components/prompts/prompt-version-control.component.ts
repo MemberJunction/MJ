@@ -1,10 +1,11 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy } from '@angular/core';
-import { Metadata, CompositeKey, LogError, LogStatus } from '@memberjunction/core';
+import { CompositeKey, LogError, LogStatus, Metadata } from '@memberjunction/core';
 import { MJRecordChangeEntity, MJTemplateContentEntity } from '@memberjunction/core-entities';
 import { Subject, BehaviorSubject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 interface PromptVersion {
   id: string;
@@ -42,7 +43,7 @@ interface FieldDifference {
   templateUrl: './prompt-version-control.component.html',
   styleUrls: ['./prompt-version-control.component.css']
 })
-export class PromptVersionControlComponent implements OnInit, OnDestroy {
+export class PromptVersionControlComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   @Input() prompt: MJAIPromptEntityExtended | null = null;
   @Input() autoLoad = true;
   @Input() showRestoreActions = true;
@@ -87,7 +88,7 @@ export class PromptVersionControlComponent implements OnInit, OnDestroy {
   
   private destroy$ = new Subject<void>();
   
-  constructor(private notificationService: MJNotificationService) {}
+  constructor(private notificationService: MJNotificationService) { super(); }
   
   ngOnInit(): void {
     this.loadAvailablePrompts();
@@ -114,12 +115,13 @@ export class PromptVersionControlComponent implements OnInit, OnDestroy {
       this.error = null;
       this.loadingMessage = 'Loading version history...';
       
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const primaryKey = new CompositeKey();
       primaryKey.KeyValuePairs.push({ FieldName: 'ID', Value: this.prompt.ID });
       
-      // Get record changes using the new method
-      this.recordChanges = await md.GetRecordChanges<MJRecordChangeEntity>('MJ: AI Prompts', primaryKey);
+      // Get record changes using the new method (GetRecordChanges is on Metadata, not IMetadataProvider)
+      const mdForChanges = md as unknown as Metadata;
+      this.recordChanges = await mdForChanges.GetRecordChanges<MJRecordChangeEntity>('MJ: AI Prompts', primaryKey);
       
       if (this.recordChanges.length === 0) {
         this.versions = [];
@@ -178,7 +180,7 @@ export class PromptVersionControlComponent implements OnInit, OnDestroy {
       
       // Note: We would need a way to get historical template content
       // For now, we'll get current template content and note this limitation
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       for (const templateId of templateIds) {
         try {
           const templateContent = await md.GetEntityObject<MJTemplateContentEntity>('MJ: Template Contents', md.CurrentUser);
@@ -323,7 +325,7 @@ export class PromptVersionControlComponent implements OnInit, OnDestroy {
       this.isLoading = true;
       this.loadingMessage = 'Restoring version...';
       
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const promptToRestore = await md.GetEntityObject<MJAIPromptEntityExtended>('MJ: AI Prompts', md.CurrentUser);
       await promptToRestore.Load(this.prompt.ID);
       
@@ -533,7 +535,7 @@ export class PromptVersionControlComponent implements OnInit, OnDestroy {
 
   private async loadAvailablePrompts(): Promise<void> {
     try {
-      const metadata = new Metadata();
+      const metadata = this.ProviderToUse;
       const promptEntity = await metadata.GetEntityObject<MJAIPromptEntityExtended>('MJ: AI Prompts');
       const prompts = await promptEntity.GetAll();
       this.availablePrompts = prompts.sort((a: MJAIPromptEntityExtended, b: MJAIPromptEntityExtended) => a.Name.localeCompare(b.Name));

@@ -1,6 +1,7 @@
 import { UserInfo } from './securityInfo';
 import { LogError } from './logging';
 import { RunView } from '../views/runView';
+import { IMetadataProvider } from './interfaces';
 
 /**
  * Canonical permission action vocabulary. Every provider maps its domain-specific
@@ -92,14 +93,15 @@ export interface IPermissionProvider {
         user: UserInfo,
         resourceType: string,
         resourceId: string | null,
-        action: PermissionAction
+        action: PermissionAction,
+        provider?: IMetadataProvider
     ): Promise<PermissionCheckResult>;
 
     /**
      * Get all effective permissions a user has on a specific resource. Returns an empty
      * array when the user has no access.
      */
-    GetEffectivePermissions(user: UserInfo, resourceType: string, resourceId: string): Promise<NormalizedPermission[]>;
+    GetEffectivePermissions(user: UserInfo, resourceType: string, resourceId: string, provider?: IMetadataProvider): Promise<NormalizedPermission[]>;
 
     /**
      * Get all resources within this domain that the user has access to. Powers the
@@ -107,13 +109,13 @@ export interface IPermissionProvider {
      *
      * @param resourceType Optional filter to one resource type within the domain.
      */
-    GetUserResources(user: UserInfo, resourceType?: string): Promise<NormalizedPermission[]>;
+    GetUserResources(user: UserInfo, resourceType?: string, provider?: IMetadataProvider): Promise<NormalizedPermission[]>;
 
     /**
      * Get all permissions granted on a specific resource across every grantee. Powers
      * the Sharing Center's "Resource Access Report" view.
      */
-    GetResourcePermissions(resourceType: string, resourceId: string): Promise<NormalizedPermission[]>;
+    GetResourcePermissions(resourceType: string, resourceId: string, provider?: IMetadataProvider): Promise<NormalizedPermission[]>;
 
     /**
      * Get all permissions this user has granted to other users within this domain.
@@ -127,7 +129,7 @@ export interface IPermissionProvider {
      * Default implementation on {@link PermissionProviderBase} returns `[]`, so
      * providers that don't support this shape don't have to override.
      */
-    GetPermissionsGrantedByUser(grantor: UserInfo): Promise<NormalizedPermission[]>;
+    GetPermissionsGrantedByUser(grantor: UserInfo, provider?: IMetadataProvider): Promise<NormalizedPermission[]>;
 
     /**
      * Get all permissions where this user is the direct grantee AND someone *else* is
@@ -137,7 +139,7 @@ export interface IPermissionProvider {
      *
      * Default returns `[]` — role-only subsystems have no "shared with me" concept.
      */
-    GetPermissionsSharedWithUser(grantee: UserInfo): Promise<NormalizedPermission[]>;
+    GetPermissionsSharedWithUser(grantee: UserInfo, provider?: IMetadataProvider): Promise<NormalizedPermission[]>;
 
     /**
      * The resource type names this provider operates on, suitable for populating
@@ -147,9 +149,13 @@ export interface IPermissionProvider {
      * Rules) return the live catalog. An empty array means "not enumerable" —
      * consumers can fall back to free-text input.
      *
+     * @param provider Optional metadata provider whose catalog to read. Falls back to
+     *   `Metadata.Provider` when omitted; pass an explicit provider in multi-tenant
+     *   contexts so the picker reflects the right server's entities.
+     *
      * Default implementation returns `[]`.
      */
-    GetResourceTypes(): string[];
+    GetResourceTypes(provider?: IMetadataProvider): string[];
 }
 
 /**
@@ -180,21 +186,22 @@ export abstract class PermissionProviderBase implements IPermissionProvider {
         user: UserInfo,
         resourceType: string,
         resourceId: string | null,
-        action: PermissionAction
+        action: PermissionAction,
+        provider?: IMetadataProvider
     ): Promise<PermissionCheckResult>;
 
-    abstract GetEffectivePermissions(user: UserInfo, resourceType: string, resourceId: string): Promise<NormalizedPermission[]>;
+    abstract GetEffectivePermissions(user: UserInfo, resourceType: string, resourceId: string, provider?: IMetadataProvider): Promise<NormalizedPermission[]>;
 
-    abstract GetUserResources(user: UserInfo, resourceType?: string): Promise<NormalizedPermission[]>;
+    abstract GetUserResources(user: UserInfo, resourceType?: string, provider?: IMetadataProvider): Promise<NormalizedPermission[]>;
 
-    abstract GetResourcePermissions(resourceType: string, resourceId: string): Promise<NormalizedPermission[]>;
+    abstract GetResourcePermissions(resourceType: string, resourceId: string, provider?: IMetadataProvider): Promise<NormalizedPermission[]>;
 
     /**
      * Default implementation returns `[]` — role-only providers don't support user-granted
      * sharing. User-granted-sharing providers (Dashboards, Artifacts, Collections, Resource
      * Permissions, Access Control Rules) should override this to query their source table.
      */
-    async GetPermissionsGrantedByUser(_grantor: UserInfo): Promise<NormalizedPermission[]> {
+    async GetPermissionsGrantedByUser(_grantor: UserInfo, _provider?: IMetadataProvider): Promise<NormalizedPermission[]> {
         return [];
     }
 
@@ -203,7 +210,7 @@ export abstract class PermissionProviderBase implements IPermissionProvider {
      * concept. User-grantee providers should override this to return only permissions where
      * `grantee` is the direct grantee AND someone else is the grantor/owner.
      */
-    async GetPermissionsSharedWithUser(_grantee: UserInfo): Promise<NormalizedPermission[]> {
+    async GetPermissionsSharedWithUser(_grantee: UserInfo, _provider?: IMetadataProvider): Promise<NormalizedPermission[]> {
         return [];
     }
 
@@ -211,7 +218,7 @@ export abstract class PermissionProviderBase implements IPermissionProvider {
      * Default implementation returns `[]` — providers should override to advertise
      * their supported resource types (see {@link IPermissionProvider.GetResourceTypes}).
      */
-    GetResourceTypes(): string[] {
+    GetResourceTypes(_provider?: IMetadataProvider): string[] {
         return [];
     }
 

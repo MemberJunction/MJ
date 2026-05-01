@@ -1479,7 +1479,7 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
     protected override destroy$ = new Subject<void>();
 
     // User settings persistence
-    private metadata = new Metadata();
+    private metadata = this.ProviderToUse;
     private userSettingEntity: MJUserSettingEntity | null = null;
     private saveSettingsTimeout: ReturnType<typeof setTimeout> | null = null;
     private settingsLoaded = false;

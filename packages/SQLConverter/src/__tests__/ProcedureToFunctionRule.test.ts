@@ -436,7 +436,12 @@ END`;
       expect(result).not.toContain('COLLATE');
     });
 
-    it('should skip function when referenced view was not created in the file', () => {
+    it('should emit function even when referenced view is defined in earlier migration', () => {
+      // Previously we skipped these sprocs, but that silently left the database with
+      // outdated signatures (e.g. v5.15 Prefill never regenerated spCreateAIModel,
+      // so v5.23 Metadata_Sync crashed calling the 13-arg version). Now we emit
+      // the sproc — the referenced view lives in the baseline or an earlier
+      // migration and will exist by the time this one runs.
       const ctx = createConversionContext('tsql', 'postgres');
       // Do NOT add vwMissingView to ctx.CreatedViews
       const input = `CREATE PROCEDURE [__mj].[spCreateMissing]
@@ -449,9 +454,9 @@ BEGIN
 END`;
 
       const result = rule.PostProcess!(input, input, ctx);
-      expect(result).toContain('SKIPPED');
+      expect(result).toContain('CREATE OR REPLACE FUNCTION');
       expect(result).toContain('vwMissingView');
-      expect(result).not.toContain('CREATE OR REPLACE FUNCTION');
+      expect(result).not.toContain('-- SKIPPED');
     });
 
     it('should convert suser_sname() to current_user', () => {

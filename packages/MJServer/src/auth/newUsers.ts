@@ -24,7 +24,7 @@ export class NewUserBase {
                 }
             }
 
-            const md: Metadata = new Metadata();
+            const md: Metadata = new Metadata(); // global-provider-ok: new-user creation runs in the JWT auth flow, before AppContext.providers is built
             const user = await md.GetEntityObject<MJUserEntity>('MJ: Users', contextUser) // To-Do - change this to be a different defined user for the user creation process
             user.NewRecord();
             user.Name = email;
@@ -46,7 +46,7 @@ export class NewUserBase {
             // Create the user and all of its role/application/app-entity records atomically.
             // If any Save fails partway through, the whole provisioning rolls back so we never
             // leave a half-created user with partial roles/applications behind.
-            const provider = Metadata.Provider as DatabaseProviderBase;
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: new-user creation runs in the JWT auth flow, before AppContext.providers is built
             await provider.BeginTransaction();
             try {
                 if (!await user.Save()) {

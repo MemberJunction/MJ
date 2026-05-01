@@ -87,7 +87,7 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
     private static readonly PREFS_KEY = 'VersionHistory.Diff.UserPreferences';
     private preferencesLoaded = false;
     protected override destroy$ = new Subject<void>();
-    private metadata = new Metadata();
+    private metadata = this.ProviderToUse;
 
     constructor(private cdr: ChangeDetectorRef) {
         super();
@@ -118,7 +118,7 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
             this.IsLoading = true;
             this.cdr.markForCheck();
 
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<MJVersionLabelEntityType>({
                 EntityName: 'MJ: Version Labels',
                 ExtraFilter: "Status = 'Active'",
@@ -181,7 +181,7 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
             this.cdr.markForCheck();
 
             // Load label items for comparison
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const fromItems = await this.loadLabelItems(rv, this.FromLabelId);
 
             if (this.DiffMode === 'label-to-label') {
@@ -569,7 +569,7 @@ export class VersionHistoryDiffResourceComponent extends BaseResourceComponent i
         if (!oldChangeId || !newChangeId) return [];
 
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const [oldResult, newResult] = await rv.RunViews([
                 {
                     EntityName: 'MJ: Record Changes',

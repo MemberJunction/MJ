@@ -199,7 +199,7 @@ export class TypeContext {
     const fields = new Map<string, FieldTypeInfo>();
 
     try {
-      const md = new Metadata();
+      const md = new Metadata(); // global-provider-ok: test/demo harness, single-provider context
       const entity = md.Entities.find(e => e.Name === entityName);
 
       if (entity) {

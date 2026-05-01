@@ -25,6 +25,11 @@
       "description": "Check for Chart.register() when using tree-shaking",
       "severity": "medium",
       "validate": "@file:check-chart-registration.js"
+    },
+    "checkCanvasContainer": {
+      "description": "Validate canvas parent has position: relative and explicit height for Chart.js rendering",
+      "severity": "high",
+      "validate": "@file:check-canvas-container.js"
     }
   }
 }

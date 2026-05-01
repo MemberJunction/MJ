@@ -1,5 +1,6 @@
 import { Resolver, Query, Mutation, Arg, Ctx, ObjectType, Field, InputType } from "type-graphql";
-import { CompositeKey, LocalCacheManager, Metadata, RunView, UserInfo, LogError } from "@memberjunction/core";
+import { CompositeKey, LocalCacheManager, Metadata, RunView, UserInfo, LogError, IMetadataProvider } from "@memberjunction/core";
+import { GetReadOnlyProvider, GetReadWriteProvider } from "../util.js";
 import { CronExpressionHelper } from "@memberjunction/scheduling-engine";
 import {
     MJCompanyIntegrationEntity,
@@ -780,7 +781,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     ): Promise<DiscoverObjectsOutput> {
         try {
             const user = this.getAuthenticatedUser(ctx);
-            const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user);
+            const provider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: true }) as unknown as IMetadataProvider;
+            const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user, provider);
 
             // Cast through unknown to bridge duplicate package type declarations
             // (integration-engine resolves its own node_modules copies of core/core-entities)
@@ -818,7 +820,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     ): Promise<ListSourceObjectsOutput> {
         try {
             const user = this.getAuthenticatedUser(ctx);
-            const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user);
+            const provider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: true }) as unknown as IMetadataProvider;
+            const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user, provider);
 
             // Use the engine cache for already-persisted IntegrationObject
             // rows — single in-memory read instead of a per-call DB roundtrip.
@@ -918,7 +921,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     ): Promise<DiscoverFieldsOutput> {
         try {
             const user = this.getAuthenticatedUser(ctx);
-            const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user);
+            const provider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: true }) as unknown as IMetadataProvider;
+            const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user, provider);
 
             // Cast through unknown to bridge duplicate package type declarations
             const discoverFields = connector.DiscoverFields.bind(connector) as
@@ -952,7 +956,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     ): Promise<ConnectionTestOutput> {
         try {
             const user = this.getAuthenticatedUser(ctx);
-            const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user);
+            const provider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: true }) as unknown as IMetadataProvider;
+            const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user, provider);
 
             // Cast through unknown to bridge duplicate package type declarations
             const testConnection = connector.TestConnection.bind(connector) as
@@ -984,7 +989,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     ): Promise<DefaultConfigOutput> {
         try {
             const user = this.getAuthenticatedUser(ctx);
-            const { connector } = await this.resolveConnector(companyIntegrationID, user);
+            const provider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: true }) as unknown as IMetadataProvider;
+            const { connector } = await this.resolveConnector(companyIntegrationID, user, provider);
 
             const config = connector.GetDefaultConfiguration();
             if (!config) {
@@ -1032,7 +1038,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     ): Promise<SchemaPreviewOutput> {
         try {
             const user = this.getAuthenticatedUser(ctx);
-            const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user);
+            const provider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: true }) as unknown as IMetadataProvider;
+            const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user, provider);
 
             // Introspect schema from the external system
             const introspect = connector.IntrospectSchema.bind(connector) as
@@ -1059,7 +1066,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 AdditionalSchemaInfoPath: process.env.RSU_ADDITIONAL_SCHEMA_INFO_PATH ?? 'additionalSchemaInfo.json',
                 MigrationsDir: process.env.RSU_MIGRATIONS_PATH ?? 'migrations/rsu',
                 MetadataDir: process.env.RSU_METADATA_DIR ?? 'metadata',
-                ExistingTables: this.buildExistingTables(targetConfigs),
+                ExistingTables: this.buildExistingTables(targetConfigs, provider),
                 EntitySettingsForTargets: {}
             };
 
@@ -1112,7 +1119,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     ): Promise<PreviewDataOutput> {
         try {
             const user = this.getAuthenticatedUser(ctx);
-            const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user);
+            const provider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: true }) as unknown as IMetadataProvider;
+            const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user, provider);
 
             const fetchChanges = connector.FetchChanges.bind(connector) as
                 (ctx: unknown) => Promise<{ Records: Array<{ ExternalID: string; ObjectType: string; Fields: Record<string, unknown> }>; HasMore: boolean }>;
@@ -1268,11 +1276,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
     /** Builds a lookup of object name → { objectDescription, fields: fieldName → description } from the connector's static metadata. */
     /** Build ExistingTableInfo[] from MJ Metadata for tables that already exist in the target schemas. */
-    private buildExistingTables(targetConfigs: TargetTableConfig[]): ExistingTableInfo[] {
-        const md = new Metadata();
+    private buildExistingTables(targetConfigs: TargetTableConfig[], provider: IMetadataProvider): ExistingTableInfo[] {
         const result: ExistingTableInfo[] = [];
         for (const config of targetConfigs) {
-            const entity = md.Entities.find(e =>
+            const entity = provider.Entities.find(e =>
                 e.SchemaName.toLowerCase() === config.SchemaName.toLowerCase() &&
                 e.BaseTable.toLowerCase() === config.TableName.toLowerCase()
             );
@@ -1597,9 +1604,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      */
     private async resolveConnector(
         companyIntegrationID: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider: IMetadataProvider
     ): Promise<{ connector: BaseIntegrationConnector; companyIntegration: MJCompanyIntegrationEntity }> {
-        const md = new Metadata();
+        const md = provider;
 
         // Load the CompanyIntegration record
         const companyIntegration = await md.GetEntityObject<MJCompanyIntegrationEntity>(
@@ -1657,9 +1665,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      */
     private async testConnectionForCI(
         companyIntegrationID: string,
-        user: UserInfo
+        user: UserInfo,
+        provider: IMetadataProvider
     ): Promise<ConnectionTestResult> {
-        const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user);
+        const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user, provider);
         const testFn = connector.TestConnection.bind(connector) as
             (ci: unknown, u: unknown) => Promise<ConnectionTestResult>;
         return testFn(companyIntegration, user);
@@ -1681,11 +1690,11 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
      */
     private async snapshotCredentialValues(
         credentialID: string | undefined,
-        user: UserInfo
+        user: UserInfo,
+        provider: IMetadataProvider
     ): Promise<string | undefined> {
         if (!credentialID) return undefined;
-        const md = new Metadata();
-        const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', user);
+        const credential = await provider.GetEntityObject<MJCredentialEntity>('MJ: Credentials', user);
         const loaded = await credential.InnerLoad(CompositeKey.FromID(credentialID));
         return loaded ? credential.Values : undefined;
     }
@@ -1699,7 +1708,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         oldConfiguration: string | undefined,
         oldExternalSystemID: string | undefined,
         oldCredentialValues: string | undefined,
-        user: UserInfo
+        user: UserInfo,
+        provider: IMetadataProvider
     ): Promise<void> {
         try {
             // Revert CI fields
@@ -1710,8 +1720,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
             // Revert credential values
             if (oldCredentialValues !== undefined && ci.CredentialID) {
-                const md = new Metadata();
-                const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', user);
+                const credential = await provider.GetEntityObject<MJCredentialEntity>('MJ: Credentials', user);
                 const loaded = await credential.InnerLoad(CompositeKey.FromID(ci.CredentialID));
                 if (loaded) {
                     credential.Values = oldCredentialValues;
@@ -1788,7 +1797,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     ): Promise<CreateConnectionOutput> {
         try {
             const user = this.getAuthenticatedUser(ctx);
-            const md = new Metadata();
+            const md = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
 
             // 1. Create Credential record with encrypted values
             const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', user);
@@ -1824,7 +1833,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
             // 3. Optionally test the connection; rollback on failure
             if (testConnection) {
-                const testResult = await this.testConnectionForCI(ci.ID, user);
+                const testResult = await this.testConnectionForCI(ci.ID, user, md);
                 if (!testResult.Success) {
                     await this.rollbackCreatedConnection(ci, credential);
                     return {
@@ -1870,13 +1879,13 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     ): Promise<MutationResultOutput> {
         try {
             const user = this.getAuthenticatedUser(ctx);
-            const md = new Metadata();
+            const md = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
             const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
             const loaded = await ci.InnerLoad(CompositeKey.FromID(companyIntegrationID));
             if (!loaded) return { Success: false, Message: 'CompanyIntegration not found' };
 
             // Snapshot old values for rollback if testConnection is requested
-            const oldCredentialValues = credentialValues ? await this.snapshotCredentialValues(ci.CredentialID, user) : undefined;
+            const oldCredentialValues = credentialValues ? await this.snapshotCredentialValues(ci.CredentialID, user, md) : undefined;
             const oldConfiguration = ci.Configuration;
             const oldExternalSystemID = ci.ExternalSystemID;
 
@@ -1901,9 +1910,9 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
             // Optionally test the connection; revert on failure
             if (testConnection) {
-                const testResult = await this.testConnectionForCI(companyIntegrationID, user);
+                const testResult = await this.testConnectionForCI(companyIntegrationID, user, md);
                 if (!testResult.Success) {
-                    await this.revertUpdateConnection(ci, oldConfiguration, oldExternalSystemID, oldCredentialValues, user);
+                    await this.revertUpdateConnection(ci, oldConfiguration, oldExternalSystemID, oldCredentialValues, user, md);
                     return { Success: false, Message: `Connection test failed: ${testResult.Message}. Changes have been reverted.` };
                 }
                 return { Success: true, Message: 'Updated and connection test passed' };
@@ -1926,7 +1935,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     ): Promise<MutationResultOutput> {
         try {
             const user = this.getAuthenticatedUser(ctx);
-            const md = new Metadata();
+            const md = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
             const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
             const loaded = await ci.InnerLoad(CompositeKey.FromID(companyIntegrationID));
             if (!loaded) return { Success: false, Message: 'CompanyIntegration not found' };
@@ -1949,7 +1958,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     ): Promise<MutationResultOutput> {
         try {
             const user = this.getAuthenticatedUser(ctx);
-            const md = new Metadata();
+            const md = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
             const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
             const loaded = await ci.InnerLoad(CompositeKey.FromID(companyIntegrationID));
             if (!loaded) return { Success: false, Message: 'CompanyIntegration not found' };
@@ -1976,7 +1985,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     ): Promise<CreateEntityMapsOutput> {
         try {
             const user = this.getAuthenticatedUser(ctx);
-            const md = new Metadata();
+            const md = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
 
             // Batch resolve entity names → IDs using cached Metadata
             const namesToResolve = entityMaps.filter(m => m.EntityName && !m.EntityID).map(m => m.EntityName as string);
@@ -2074,7 +2083,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     ): Promise<ApplySchemaOutput> {
         try {
             const user = this.getAuthenticatedUser(ctx);
-            const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user);
+            const provider = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
+            const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user, provider);
 
             const introspect = connector.IntrospectSchema.bind(connector) as
                 (ci: unknown, u: unknown) => Promise<SourceSchemaInfo>;
@@ -2099,7 +2109,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                 AdditionalSchemaInfoPath: process.env.RSU_ADDITIONAL_SCHEMA_INFO_PATH ?? 'additionalSchemaInfo.json',
                 MigrationsDir: process.env.RSU_MIGRATIONS_PATH ?? 'migrations/rsu',
                 MetadataDir: process.env.RSU_METADATA_DIR ?? 'metadata',
-                ExistingTables: this.buildExistingTables(targetConfigs),
+                ExistingTables: this.buildExistingTables(targetConfigs, provider),
                 EntitySettingsForTargets: {}
             };
 
@@ -2147,6 +2157,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     ): Promise<ApplySchemaBatchOutput> {
         try {
             const user = this.getAuthenticatedUser(ctx);
+            const provider = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
             const validatedPlatform = this.validatePlatform(platform);
             const pipelineInputs: RSUPipelineInput[] = [];
             const itemResults: ApplySchemaBatchItemOutput[] = [];
@@ -2155,7 +2166,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             for (const item of items) {
                 try {
                     const { schemaOutput, rsuInput } = await this.buildSchemaForConnector(
-                        item.CompanyIntegrationID, item.Objects, validatedPlatform, user, skipGitCommit, skipRestart
+                        item.CompanyIntegrationID, item.Objects, validatedPlatform, user, skipGitCommit, skipRestart, provider
                     );
                     pipelineInputs.push(rsuInput);
                     itemResults.push({
@@ -2218,10 +2229,11 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     ): Promise<ApplyAllOutput> {
         try {
             const user = this.getAuthenticatedUser(ctx);
+            const provider = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
             const validatedPlatform = this.validatePlatform(platform);
 
             // Step 1: Resolve connector and derive schema name
-            const { connector, companyIntegration } = await this.resolveConnector(input.CompanyIntegrationID, user);
+            const { connector, companyIntegration } = await this.resolveConnector(input.CompanyIntegrationID, user, provider);
             const schemaName = this.deriveSchemaName(companyIntegration.Integration);
 
             // Step 1b: Ensure IntegrationEngine cache is populated so IntrospectSchema's
@@ -2310,7 +2322,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
             // Step 3: Build schema and RSU pipeline input
             const { schemaOutput, rsuInput } = await this.buildSchemaForConnector(
-                input.CompanyIntegrationID, objects, validatedPlatform, user, skipGitCommit, skipRestart
+                input.CompanyIntegrationID, objects, validatedPlatform, user, skipGitCommit, skipRestart, provider
             );
 
             // Step 4: Inject integration post-restart payload into RSU input.
@@ -2368,9 +2380,9 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // If restart happened, this code never executes (process died).
             // If skipRestart=true, we can do entity maps now.
             if (skipRestart) {
-                await Metadata.Provider.Refresh();
+                await provider.Refresh();
                 const entityMapsCreated = await this.createEntityAndFieldMaps(
-                    input.CompanyIntegrationID, objects, connector, companyIntegration, schemaName, user,
+                    input.CompanyIntegrationID, objects, connector, companyIntegration, schemaName, user, provider,
                     input.DefaultSyncDirection ?? 'Pull'
                 );
                 const createdMapIDs = entityMapsCreated.map(em => em.EntityMapID).filter(Boolean);
@@ -2394,7 +2406,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                             companyIntegration.Integration,
                             input.CronExpression,
                             input.ScheduleTimezone,
-                            user
+                            user,
+                            provider
                         ) ?? undefined;
                     } catch (schedErr) {
                         console.warn(`[Integration] Schedule creation failed: ${schedErr}`);
@@ -2460,14 +2473,14 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         companyIntegration: MJCompanyIntegrationEntity,
         schemaName: string,
         user: UserInfo,
+        provider: IMetadataProvider,
         defaultSyncDirection: string = 'Pull'
     ): Promise<ApplyAllEntityMapCreated[]> {
-        const md = new Metadata();
         const results: ApplyAllEntityMapCreated[] = [];
 
         for (const obj of objects) {
             const entityMapResult = await this.createSingleEntityMap(
-                companyIntegrationID, obj, connector, companyIntegration, schemaName, user, md, defaultSyncDirection
+                companyIntegrationID, obj, connector, companyIntegration, schemaName, user, provider, defaultSyncDirection
             );
             if (entityMapResult) {
                 results.push(entityMapResult);
@@ -2484,7 +2497,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         companyIntegration: MJCompanyIntegrationEntity,
         schemaName: string,
         user: UserInfo,
-        md: Metadata,
+        md: IMetadataProvider,
         defaultSyncDirection: string = 'Pull'
     ): Promise<ApplyAllEntityMapCreated | null> {
         // Find the entity by schema + table name
@@ -2533,7 +2546,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         connector: BaseIntegrationConnector,
         companyIntegration: MJCompanyIntegrationEntity,
         user: UserInfo,
-        md: Metadata
+        md: IMetadataProvider
     ): Promise<number> {
         let fieldCount = 0;
         try {
@@ -2609,9 +2622,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         user: UserInfo,
         skipGitCommit: boolean,
         skipRestart: boolean,
+        provider: IMetadataProvider,
         prefetchedSourceSchema?: SourceSchemaInfo
     ): Promise<{ schemaOutput: SchemaBuilderOutput; rsuInput: RSUPipelineInput }> {
-        const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user);
+        const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user, provider);
 
         // If the caller already ran IntrospectSchema (e.g. IntegrationApplyAllBatch),
         // reuse it. The legacy path was running introspect TWICE per apply — once
@@ -2652,7 +2666,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             AdditionalSchemaInfoPath: process.env.RSU_ADDITIONAL_SCHEMA_INFO_PATH ?? 'additionalSchemaInfo.json',
             MigrationsDir: process.env.RSU_MIGRATIONS_PATH ?? 'migrations/rsu',
             MetadataDir: process.env.RSU_METADATA_DIR ?? 'metadata',
-            ExistingTables: this.buildExistingTables(targetConfigs),
+            ExistingTables: this.buildExistingTables(targetConfigs, provider),
             EntitySettingsForTargets: {}
         };
 
@@ -2866,7 +2880,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     ): Promise<CreateScheduleOutput> {
         try {
             const user = this.getAuthenticatedUser(ctx);
-            const md = new Metadata();
+            const md = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
             const rv = new RunView();
 
             // Find IntegrationSync job type
@@ -2926,7 +2940,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     ): Promise<MutationResultOutput> {
         try {
             const user = this.getAuthenticatedUser(ctx);
-            const md = new Metadata();
+            const md = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
             const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', user);
             const loaded = await job.InnerLoad(CompositeKey.FromID(scheduledJobID));
             if (!loaded) return { Success: false, Message: 'ScheduledJob not found' };
@@ -2955,7 +2969,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         try {
             this.getAuthenticatedUser(ctx); // verify caller is authenticated
             const sysUser = this.getSystemUser();
-            const md = new Metadata();
+            const md = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
             const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', sysUser);
             const loaded = await job.InnerLoad(CompositeKey.FromID(scheduledJobID));
             if (!loaded) return { Success: false, Message: 'ScheduledJob not found' };
@@ -2980,7 +2994,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         try {
             this.getAuthenticatedUser(ctx); // verify caller is authenticated
             const sysUser = this.getSystemUser(); // use system user for delete operations
-            const md = new Metadata();
+            const md = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
 
             // Unlink from CI if provided
             if (companyIntegrationID) {
@@ -3034,7 +3048,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             }
 
             // Now delete job runs + job in a transaction
-            const tg = await Metadata.Provider.CreateTransactionGroup();
+            const tg = await md.CreateTransactionGroup();
             if (jobRunsResult.Success) {
                 for (const run of jobRunsResult.Results) {
                     run.TransactionGroup = tg;
@@ -3163,7 +3177,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     ): Promise<MutationResultOutput> {
         try {
             const user = this.getAuthenticatedUser(ctx);
-            const md = new Metadata();
+            const md = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
             const errors: string[] = [];
 
             for (const update of updates) {
@@ -3206,9 +3220,9 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         try {
             this.getAuthenticatedUser(ctx);
             const sysUser = this.getSystemUser();
-            const md = new Metadata();
+            const md = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
             const rv = new RunView();
-            const tg = await Metadata.Provider.CreateTransactionGroup();
+            const tg = await md.CreateTransactionGroup();
             const errors: string[] = [];
 
             for (const entityMapID of entityMapIDs) {
@@ -3328,7 +3342,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     ): Promise<IntegrationStatusOutput> {
         try {
             const user = this.getAuthenticatedUser(ctx);
-            const md = new Metadata();
+            const md = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: true }) as unknown as IMetadataProvider;
             const ci = await md.GetEntityObject<MJCompanyIntegrationEntity>('MJ: Company Integrations', user);
             const loaded = await ci.InnerLoad(CompositeKey.FromID(companyIntegrationID));
             if (!loaded) return { Success: false, Message: 'Not found' };
@@ -3427,7 +3441,8 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     ): Promise<ConnectorCapabilitiesOutput> {
         try {
             const user = this.getAuthenticatedUser(ctx);
-            const { connector } = await this.resolveConnector(companyIntegrationID, user);
+            const provider = GetReadOnlyProvider(ctx.providers, { allowFallbackToReadWrite: true }) as unknown as IMetadataProvider;
+            const { connector } = await this.resolveConnector(companyIntegrationID, user, provider);
 
             return {
                 Success: true,
@@ -3462,6 +3477,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
     ): Promise<ApplyAllBatchOutput> {
         try {
             const user = this.getAuthenticatedUser(ctx);
+            const provider = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
             const validatedPlatform = this.validatePlatform(platform);
 
             // Bust RunView caches for integration metadata BEFORE Config(true).
@@ -3478,7 +3494,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             // Phase 1: Build schema for each connector in parallel
             const buildResults = await Promise.allSettled(
                 input.Connectors.map(async (connInput) => {
-                    const { connector, companyIntegration } = await this.resolveConnector(connInput.CompanyIntegrationID, user);
+                    const { connector, companyIntegration } = await this.resolveConnector(connInput.CompanyIntegrationID, user, provider);
                     const schemaName = this.deriveSchemaName(companyIntegration.Integration);
                     console.log(
                         `[IntegrationApplyAllBatch] connector=${companyIntegration.Integration} ` +
@@ -3601,7 +3617,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     });
 
                     const { schemaOutput, rsuInput } = await this.buildSchemaForConnector(
-                        connInput.CompanyIntegrationID, objects, validatedPlatform, user, skipGitCommit, skipRestart, sourceSchema
+                        connInput.CompanyIntegrationID, objects, validatedPlatform, user, skipGitCommit, skipRestart, provider, sourceSchema
                     );
 
                     // Build per-object field map for pending file
@@ -3719,10 +3735,10 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
 
                 if (skipRestart) {
                     // Entity maps, field maps, sync
-                    await Metadata.Provider.Refresh();
+                    await provider.Refresh();
                     const entityMapsCreated = await this.createEntityAndFieldMaps(
                         build.connInput.CompanyIntegrationID, build.objects, build.connector,
-                        build.companyIntegration, build.schemaName, user,
+                        build.companyIntegration, build.schemaName, user, provider,
                         build.connInput.DefaultSyncDirection ?? 'Pull'
                     );
                     connResult.EntityMapsCreated = entityMapsCreated;
@@ -3747,7 +3763,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
                     if (build.connInput.CronExpression) {
                         const scheduleResult = await this.createScheduleForConnector(
                             build.connInput.CompanyIntegrationID, integrationName,
-                            build.connInput.CronExpression, build.connInput.ScheduleTimezone, user
+                            build.connInput.CronExpression, build.connInput.ScheduleTimezone, user, provider
                         );
                         if (scheduleResult) connResult.ScheduledJobID = scheduleResult;
                     }
@@ -3793,10 +3809,11 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         integrationName: string,
         cronExpression: string,
         timezone: string | undefined,
-        user: UserInfo
+        user: UserInfo,
+        provider: IMetadataProvider
     ): Promise<string | null> {
         try {
-            const md = new Metadata();
+            const md = provider;
             const rv = new RunView();
 
             // Find IntegrationSync job type
@@ -3857,7 +3874,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         try {
             this.getAuthenticatedUser(ctx); // verify caller is authenticated
             const sysUser = this.getSystemUser(); // use system user for cascade delete
-            const md = new Metadata();
+            const md = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
             const rv = new RunView();
 
             // Step 1: Load CompanyIntegration
@@ -3866,7 +3883,7 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
             if (!ciLoaded) return { Success: false, Message: 'CompanyIntegration not found' };
 
             // Cascade delete in FK-safe order using TransactionGroup
-            const tg = await Metadata.Provider.CreateTransactionGroup();
+            const tg = await md.CreateTransactionGroup();
             let fieldMapsDeleted = 0;
             let entityMapsDeleted = 0;
             let schedulesDeleted = 0;
@@ -4046,9 +4063,9 @@ export class IntegrationDiscoveryResolver extends ResolverBase {
         try {
             const user = this.getAuthenticatedUser(ctx);
             const validatedPlatform = this.validatePlatform(platform);
-            const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user);
+            const md = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
+            const { connector, companyIntegration } = await this.resolveConnector(companyIntegrationID, user, md);
             const schemaName = this.deriveSchemaName(companyIntegration.Integration);
-            const md = new Metadata();
             const rv = new RunView();
 
             // Step 1: Get existing entity maps for this CompanyIntegration

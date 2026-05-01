@@ -56,9 +56,15 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
     const actual = await importOriginal<Record<string, unknown>>();
     class MockRunView {
         async RunView() { return { Success: true, Results: [] }; }
+        // Multi-provider migration: source code now uses RunView.FromMetadataProvider(p)
+        // instead of `new RunView()` to thread the per-request provider. The mock only needs
+        // to return a working instance — the test doesn't assert anything about the provider.
+        static FromMetadataProvider(_p: unknown) { return new MockRunView(); }
     }
     class MockMetadata {
         async GetEntityObject() { return {}; }
+        // Tests access the global default via Metadata.Provider as the migration's fallback.
+        static Provider = { GetEntityObject: async () => ({}) };
     }
     class MockUserInfo {}
     return {

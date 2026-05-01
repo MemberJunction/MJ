@@ -1,4 +1,4 @@
-import { BaseEntity } from '@memberjunction/core';
+import { BaseEntity, IMetadataProvider, Metadata } from '@memberjunction/core';
 import {
     ArchiveRecordContext,
     ArchiveRecordResult,
@@ -16,6 +16,17 @@ import {
  * to make them discoverable via the MJ ClassFactory.
  */
 export abstract class BaseArchiveDriver {
+    /** Optional metadata provider; falls back to Metadata.Provider when not set. */
+    private _provider: IMetadataProvider | undefined;
+
+    public set Provider(value: IMetadataProvider | undefined) {
+        this._provider = value;
+    }
+
+    public get Provider(): IMetadataProvider {
+        return this._provider ?? Metadata.Provider;
+    }
+
     /**
      * Determines whether a given record should be archived based on its current field values.
      * @param context - The archive context including record, field config, etc.

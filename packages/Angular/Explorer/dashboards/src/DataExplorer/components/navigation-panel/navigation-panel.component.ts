@@ -1,8 +1,9 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ViewChild } from '@angular/core';
-import { EntityInfo, Metadata, CompositeKey } from '@memberjunction/core';
+import { EntityInfo, CompositeKey } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { TreeBranchConfig, TreeLeafConfig, TreeNode, TreeComponent } from '@memberjunction/ng-trees';
 import { RecentItem, FavoriteItem, AppEntityGroup } from '../../models/explorer-state.interface';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 /**
  * Event emitted when a record should be opened in a full tab
@@ -26,7 +27,7 @@ export interface SelectRecordEvent {
   templateUrl: './navigation-panel.component.html',
   styleUrls: ['./navigation-panel.component.css']
 })
-export class NavigationPanelComponent implements OnChanges {
+export class NavigationPanelComponent extends BaseAngularComponent implements OnChanges {
   @Input() entities: EntityInfo[] = [];
   @Input() selectedEntityName: string | null = null;
   @Input() favorites: FavoriteItem[] = [];
@@ -59,7 +60,7 @@ export class NavigationPanelComponent implements OnChanges {
   /** Emitted when a nav panel app group is toggled */
   @Output() appGroupToggled = new EventEmitter<string>();
 
-  private metadata = new Metadata();
+  private get metadata() { return this.ProviderToUse; }
 
   // Tree configuration for entity list
   public treeBranchConfig: TreeBranchConfig = {

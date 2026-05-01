@@ -681,7 +681,7 @@ export class SearchResultsResource extends BaseResourceComponent {
             // Group results by entity to build efficient queries
             const byEntity = new Map<string, string[]>();
             for (const result of this.allResults) {
-                const md = new Metadata();
+                const md = this.ProviderToUse;
                 const entity = md.Entities.find(e => e.Name === result.EntityName);
                 if (!entity) continue;
                 const list = byEntity.get(entity.ID) || [];
@@ -691,7 +691,7 @@ export class SearchResultsResource extends BaseResourceComponent {
 
             // Query Tagged Items for all record IDs across all entities
             const tagAggregates = new Map<string, { count: number; totalWeight: number }>();
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
             for (const [entityID, recordIDs] of byEntity) {
                 if (recordIDs.length === 0) continue;

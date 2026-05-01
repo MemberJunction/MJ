@@ -47,7 +47,8 @@ import {
 import { TreeComponent } from '../tree/tree.component';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
-import { Metadata, CompositeKey } from '@memberjunction/core';
+import { CompositeKey } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UUIDsEqual } from '@memberjunction/global';
 
 /**
@@ -67,7 +68,7 @@ interface DropdownPosition {
     templateUrl: './tree-dropdown.component.html',
     styleUrls: ['./tree-dropdown.component.css']
 })
-export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
+export class TreeDropdownComponent extends BaseAngularComponent implements OnInit, OnDestroy, AfterViewInit {
     // ========================================
     // Tree Configuration (passed to inner tree)
     // ========================================
@@ -251,7 +252,7 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
     constructor(
         private readonly cdr: ChangeDetectorRef,
         private readonly renderer: Renderer2
-    ) {}
+    ) { super(); }
 
     // ========================================
     // Lifecycle
@@ -1104,7 +1105,7 @@ export class TreeDropdownComponent implements OnInit, OnDestroy, AfterViewInit {
         }
 
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
 
             if (Array.isArray(val)) {
                 // Multiple selection

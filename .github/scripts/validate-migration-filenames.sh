@@ -208,7 +208,7 @@ main() {
         # The trailing /. trick ensures the glob expands to directory paths
         # without a trailing slash, producing cleaner error messages.
         MIGRATION_DIRS=()
-        for d in migrations/v*/; do
+        for d in migrations/v*/ migrations-pg/v*/; do
             [ -d "$d" ] && MIGRATION_DIRS+=("${d%/}")
         done
     fi

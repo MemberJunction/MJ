@@ -6,6 +6,7 @@
 import {
     UserInfo,
     Metadata,
+    IMetadataProvider,
     LogError,
     LogStatusEx,
     IsVerboseLoggingEnabled
@@ -64,7 +65,40 @@ export const DEFAULT_TEST_TIMEOUT_MS = 300000;
  * ```
  */
 export abstract class BaseTestDriver {
-    protected _metadata: Metadata = new Metadata();
+    /**
+     * Metadata provider used by the driver for entity access. Set explicitly via the
+     * `Provider` setter; falls back to the global `Metadata.Provider` when not set.
+     * The engine (or test harness) should set this to thread a transaction-scoped provider.
+     */
+    protected _provider: IMetadataProvider | null = null;
+
+    /**
+     * The metadata provider this driver uses. Falls back to the global `Metadata.Provider`
+     * when the engine hasn't injected an explicit provider — multi-tenant servers should
+     * always set this so each driver run binds to the right database connection.
+     */
+    public get Provider(): IMetadataProvider {
+        return this._provider ?? (new Metadata() as unknown as IMetadataProvider);
+    }
+    public set Provider(value: IMetadataProvider | null) {
+        this._provider = value;
+    }
+
+    /**
+     * @deprecated Use the `Provider` setter instead. Retained for backward compatibility.
+     */
+    public SetProvider(provider: IMetadataProvider): void {
+        this._provider = provider;
+    }
+
+    /**
+     * @deprecated Use `_provider` (IMetadataProvider) instead. Retained for backward compatibility with subclasses
+     * that referenced the previous `_metadata: Metadata` field directly. Returns the same underlying provider
+     * cast to the legacy `Metadata` shape.
+     */
+    protected get _metadata(): Metadata {
+        return this.Provider as unknown as Metadata;
+    }
 
     /**
      * Execute the test.

@@ -2,7 +2,8 @@ import {
     Component, Input, Output, EventEmitter,
     OnChanges, SimpleChanges, ChangeDetectionStrategy, ChangeDetectorRef, inject
 } from '@angular/core';
-import { Metadata, EntityInfo } from '@memberjunction/core';
+import { EntityInfo } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import {
     EntityCardVariant, CardTemplate, CardDisplayField,
     CancelableCardEvent, CardRecordEvent,
@@ -61,7 +62,7 @@ import {
     styleUrls: ['./entity-card.component.css'],
     changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class MJEntityCardComponent implements OnChanges {
+export class MJEntityCardComponent extends BaseAngularComponent implements OnChanges {
     private cdr = inject(ChangeDetectorRef);
 
     // ================================================================
@@ -341,7 +342,7 @@ export class MJEntityCardComponent implements OnChanges {
         if (this.Entity) return this.Entity;
         if (!this.EntityName) return null;
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             return md.Entities.find(e => e.Name === this.EntityName) ?? null;
         } catch {
             return null;
@@ -369,7 +370,7 @@ export class MJEntityCardComponent implements OnChanges {
             };
         }
 
-        return GenerateCardTemplateFromMetadata(entityName, metadataKeys, this.ResolvedMaxFields);
+        return GenerateCardTemplateFromMetadata(entityName, metadataKeys, this.ResolvedMaxFields, this.ProviderToUse);
     }
 
     private resolveTitle(): string {

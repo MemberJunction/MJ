@@ -10,10 +10,29 @@
       {
         "name": "ActiveUsers",
         "categoryPath": "Admin/Users",
-        "fields": ["ID", "Name", "Email"],
-        "entityNames": ["Users"],
+        "fields": [
+          {
+            "name": "ID",
+            "type": "uniqueidentifier"
+          },
+          {
+            "name": "Name",
+            "type": "nvarchar"
+          },
+          {
+            "name": "Email",
+            "type": "nvarchar"
+          }
+        ],
+        "entityNames": [
+          "Users"
+        ],
         "parameters": [
-          { "name": "IsActive", "type": "bit", "isRequired": true }
+          {
+            "name": "IsActive",
+            "type": "bit",
+            "isRequired": true
+          }
         ]
       }
     ]

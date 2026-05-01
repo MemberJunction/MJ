@@ -8,6 +8,7 @@ export class CreateIndexRule implements IConversionRule {
   AppliesTo: StatementType[] = ['CREATE_INDEX'];
   Priority = 70;
   BypassSqlglot = true;
+  BypassJustification = 'Custom output adds CREATE INDEX IF NOT EXISTS for idempotency, strips T-SQL filegroup syntax (ON [PRIMARY]), removes WITH NOCHECK, truncates index names to PG\'s 63-char limit (with hash suffix), and quotes column names with PascalCase. sqlglot does not apply MJ\'s naming conventions or idempotency wrappers.';
 
   PostProcess(sql: string, _originalSQL: string, _context: ConversionContext): string {
     let result = convertIdentifiers(sql);

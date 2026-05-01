@@ -1,11 +1,12 @@
 import express, { Request, Response, NextFunction, Router } from 'express';
 import cors from 'cors';
 import { createHash } from 'crypto';
-import { 
-  Metadata, 
-  RunView, 
+import {
+  Metadata,
+  RunView,
   LogStatus,
-  LogError
+  LogError,
+  IMetadataProvider
 } from '@memberjunction/core';
 import { MJComponentEntity, MJComponentRegistryEntity } from '@memberjunction/core-entities';
 import { setupSQLServerClient, SQLServerProviderConfigData } from '@memberjunction/sqlserver-dataprovider';
@@ -43,6 +44,19 @@ export class ComponentRegistryAPIServer {
   protected readOnlyPool: sql.ConnectionPool | null = null;
   protected dataSources: DataSourceInfo[] = [];
   protected options: ComponentRegistryServerOptions;
+  private _provider: IMetadataProvider | null = null;
+
+  /**
+   * Optional metadata provider override. Server bootstrap is process-wide so this typically
+   * uses the global default; callers may set `instance.Provider = providerToUse` for tests
+   * or multi-tenant overrides.
+   */
+  public get Provider(): IMetadataProvider {
+    return this._provider ?? (this.metadata as unknown as IMetadataProvider);
+  }
+  public set Provider(value: IMetadataProvider | null) {
+    this._provider = value;
+  }
 
   constructor(options: ComponentRegistryServerOptions = {}) {
     // Set default options
@@ -62,7 +76,7 @@ export class ComponentRegistryAPIServer {
       this.router = express.Router();
     }
 
-    this.metadata = new Metadata();
+    this.metadata = (this._provider as unknown as Metadata) ?? new Metadata();
   }
   
   /**
@@ -151,7 +165,7 @@ export class ComponentRegistryAPIServer {
     await setupSQLServerClient(config);
     
     // Initialize metadata and log entity count like MJServer does
-    const md = new Metadata();
+    const md = this.Provider;
     LogStatus(`Database connection established. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
     
     // Create data sources array

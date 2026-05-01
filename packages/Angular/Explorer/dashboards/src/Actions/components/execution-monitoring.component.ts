@@ -109,7 +109,7 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     try {
       this.isLoading = true;
       
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const [executionsResult, actionsResult] = await rv.RunViews([
         {
           EntityName: 'MJ: Action Execution Logs', 

@@ -148,20 +148,20 @@ const FILTER_IMPLEMENTATIONS: Record<string, (value: any) => any> = {
     
     sqlLikeContains: (value: any) => {
         if (value === null || value === undefined) return 'NULL';
-        const escaped = String(value).replace(/'/g, "''").replace(/%/g, '[%]').replace(/_/g, '[_]');
-        return `'%${escaped}%'`;
+        const stripped = stripBoundaryWildcards(String(value), 'both');
+        return `'%${escapeLikeValue(stripped, 'sqlserver')}%'`;
     },
 
     sqlLikeBegins: (value: any) => {
         if (value === null || value === undefined) return 'NULL';
-        const escaped = String(value).replace(/'/g, "''").replace(/%/g, '[%]').replace(/_/g, '[_]');
-        return `'${escaped}%'`;
+        const stripped = stripBoundaryWildcards(String(value), 'trailing');
+        return `'${escapeLikeValue(stripped, 'sqlserver')}%'`;
     },
 
     sqlLikeEnds: (value: any) => {
         if (value === null || value === undefined) return 'NULL';
-        const escaped = String(value).replace(/'/g, "''").replace(/%/g, '[%]').replace(/_/g, '[_]');
-        return `'%${escaped}'`;
+        const stripped = stripBoundaryWildcards(String(value), 'leading');
+        return `'%${escapeLikeValue(stripped, 'sqlserver')}'`;
     },
 
     sqlNoKeywordsExpression: (value: any) => {
@@ -263,6 +263,25 @@ function createPlatformSqlIdentifier(platform: DatabasePlatform): (value: unknow
 }
 
 /**
+ * Strips leading and/or trailing SQL LIKE wildcard characters (%) from a value.
+ * The sqlLike* filters add their own wildcards, so any user-supplied wildcards at
+ * the boundaries are redundant and cause double-wrapping bugs (e.g. '%[%]value[%]%').
+ *
+ * @param value  The raw parameter value
+ * @param side   Which boundary to strip: 'leading', 'trailing', or 'both'
+ */
+function stripBoundaryWildcards(value: string, side: 'leading' | 'trailing' | 'both'): string {
+    switch (side) {
+        case 'leading':
+            return value.replace(/^%+/, '');
+        case 'trailing':
+            return value.replace(/%+$/, '');
+        case 'both':
+            return value.replace(/^%+/, '').replace(/%+$/, '');
+    }
+}
+
+/**
  * Escapes literal % and _ characters inside a LIKE value in a platform-aware way.
  * SQL Server uses bracket escaping [%] [_]; PostgreSQL uses backslash escaping \% \_.
  */
@@ -281,21 +300,24 @@ function escapeLikeValue(value: string, platform: DatabasePlatform): string {
 function createPlatformSqlLikeContains(platform: DatabasePlatform): (value: any) => string {
     return (value: any) => {
         if (value === null || value === undefined) return 'NULL';
-        return `'%${escapeLikeValue(String(value), platform)}%'`;
+        const stripped = stripBoundaryWildcards(String(value), 'both');
+        return `'%${escapeLikeValue(stripped, platform)}%'`;
     };
 }
 
 function createPlatformSqlLikeBegins(platform: DatabasePlatform): (value: any) => string {
     return (value: any) => {
         if (value === null || value === undefined) return 'NULL';
-        return `'${escapeLikeValue(String(value), platform)}%'`;
+        const stripped = stripBoundaryWildcards(String(value), 'trailing');
+        return `'${escapeLikeValue(stripped, platform)}%'`;
     };
 }
 
 function createPlatformSqlLikeEnds(platform: DatabasePlatform): (value: any) => string {
     return (value: any) => {
         if (value === null || value === undefined) return 'NULL';
-        return `'%${escapeLikeValue(String(value), platform)}'`;
+        const stripped = stripBoundaryWildcards(String(value), 'leading');
+        return `'%${escapeLikeValue(stripped, platform)}'`;
     };
 }
 

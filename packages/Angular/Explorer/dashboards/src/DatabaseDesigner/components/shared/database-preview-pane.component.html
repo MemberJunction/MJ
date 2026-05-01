@@ -1,0 +1,57 @@
+<div class="preview-pane">
+
+  <!-- ── Tab switcher ──────────────────────────────────────────────────── -->
+  <div class="preview-tabs" role="tablist">
+    <button
+      type="button"
+      role="tab"
+      class="preview-tab"
+      [class.active]="ActiveTab === 'diagram'"
+      [attr.aria-selected]="ActiveTab === 'diagram'"
+      (click)="SelectTab('diagram')">
+      <i class="fa-solid fa-diagram-project"></i>
+      Diagram
+    </button>
+    <button
+      type="button"
+      role="tab"
+      class="preview-tab"
+      [class.active]="ActiveTab === 'sql'"
+      [attr.aria-selected]="ActiveTab === 'sql'"
+      (click)="SelectTab('sql')">
+      <i class="fa-solid fa-code"></i>
+      SQL
+    </button>
+    <div class="preview-tabs-spacer"></div>
+    <span class="preview-tabs-hint">Updates as you edit</span>
+  </div>
+
+  <!-- ── Tab body ──────────────────────────────────────────────────────── -->
+  <div class="preview-body">
+
+    @if (ActiveTab === 'diagram') {
+      <mj-erd-diagram
+        class="preview-erd"
+        [nodes]="ErdNodes"
+        [focusNodeId]="FocusNodeId"
+        [focusDepth]="1"
+        [readOnly]="true"
+        [showHeader]="false"
+        [config]="ErdConfig">
+      </mj-erd-diagram>
+    }
+
+    @if (ActiveTab === 'sql') {
+      <mj-code-editor
+        class="preview-sql"
+        [value]="SqlText"
+        language="sql"
+        [readonly]="true"
+        [lineWrapping]="false"
+        setup="minimal">
+      </mj-code-editor>
+    }
+
+  </div>
+
+</div>

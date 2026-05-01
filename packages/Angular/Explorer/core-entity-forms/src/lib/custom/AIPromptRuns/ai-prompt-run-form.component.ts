@@ -157,7 +157,7 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
     private async loadRelatedData() {
         this.isLoadingRelatedData = true;
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             
             // Load prompt
             if (this.record.PromptID) {
@@ -195,7 +195,7 @@ export class MJAIPromptRunFormComponentExtended extends MJAIPromptRunFormCompone
     private async loadChildRuns() {
         if (!this.record.ID) return;
         
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<MJAIPromptRunEntityExtended>({
             EntityName: 'MJ: AI Prompt Runs',
             ExtraFilter: `ParentID='${this.record.ID}'`,

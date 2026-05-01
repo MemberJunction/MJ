@@ -1,0 +1,41 @@
+<div class="step-review">
+
+  @if (IsValidating) {
+    <div class="step-banner step-banner-validating">
+      <i class="fa-solid fa-spinner fa-spin"></i>
+      Validating schema…
+    </div>
+  } @else if (ValidationErrors.length === 0 && AsEntityTableSpec) {
+    <div class="step-banner step-banner-success">
+      <i class="fa-solid fa-circle-check"></i>
+      Schema validated — review the definition below, then click <strong>Create Entity</strong> to build it.
+    </div>
+  }
+
+  @if (ValidationErrors.length > 0) {
+    <div class="step-banner step-banner-error">
+      @for (err of ValidationErrors; track $index) {
+        <div class="banner-err-item">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          {{ err }}
+        </div>
+      }
+    </div>
+  }
+
+  @if (TableDefinition.Description) {
+    <p class="entity-description">{{ TableDefinition.Description }}</p>
+  }
+
+  <mj-database-review-panel
+    [TableDefinition]="AsEntityTableSpec"
+    ModificationType="create">
+  </mj-database-review-panel>
+
+  @if (ERDMermaidBlock) {
+    <div class="erd-container">
+      <mj-markdown [data]="ERDMermaidBlock"></mj-markdown>
+    </div>
+  }
+
+</div>

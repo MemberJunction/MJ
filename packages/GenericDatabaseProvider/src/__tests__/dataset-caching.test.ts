@@ -201,13 +201,19 @@ describe('Dataset Caching in GetDatasetByName', () => {
         expect(result.Results[0].Results).toEqual(entityData);
         // 2 SQL calls: metadata + batch
         expect(provider.executeSQLCalls).toHaveLength(2);
-        // Write-through to cache
+        // Write-through to cache. Match the full SetRunViewResult signature —
+        // GenericDatabaseProvider invokes it with all 7 args (fingerprint,
+        // params, results, maxUpdatedAt, aggregateResults?, totalRowCount?,
+        // provider?), and toHaveBeenCalledWith is arity-strict.
         expect(cacheSetSpy).toHaveBeenCalledTimes(1);
         expect(cacheSetSpy).toHaveBeenCalledWith(
-            expect.any(String),        // fingerprint
-            expect.any(Object),        // synthetic params
-            entityData,                // results
-            '2026-03-01T00:00:00.000Z' // maxUpdatedAt
+            expect.any(String),         // fingerprint
+            expect.any(Object),         // synthetic params
+            entityData,                 // results
+            '2026-03-01T00:00:00.000Z', // maxUpdatedAt
+            undefined,                  // aggregateResults
+            undefined,                  // totalRowCount
+            expect.anything()           // provider (multi-provider migration: GenericDatabaseProvider passes `this`)
         );
     });
 

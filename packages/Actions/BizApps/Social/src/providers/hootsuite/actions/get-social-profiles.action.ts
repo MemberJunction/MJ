@@ -17,7 +17,7 @@ export class HootSuiteGetSocialProfilesAction extends HootSuiteBaseAction {
         try {
             // Initialize OAuth
             const companyIntegrationId = this.getParamValue(Params, 'CompanyIntegrationID');
-            if (!await this.initializeOAuth(companyIntegrationId)) {
+            if (!await this.initializeOAuth(companyIntegrationId, params)) {
                 throw new Error('Failed to initialize OAuth connection');
             }
 

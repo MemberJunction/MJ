@@ -1,8 +1,9 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectorRef, ChangeDetectionStrategy, OnInit, OnDestroy, HostListener } from '@angular/core';
 import { MJCredentialEntity, MJCredentialTypeEntity, MJCredentialCategoryEntity } from '@memberjunction/core-entities';
-import { Metadata, RunView } from '@memberjunction/core';
+import { RunView } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 interface FieldSchemaProperty {
     name: string;
@@ -35,7 +36,7 @@ interface CredentialValues {
     styleUrls: ['./credential-edit-panel.component.css'],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class CredentialEditPanelComponent implements OnInit, OnDestroy {
+export class CredentialEditPanelComponent extends BaseAngularComponent implements OnInit, OnDestroy {
     @Input() credential: MJCredentialEntity | null = null;
     @Input() credentialTypes: MJCredentialTypeEntity[] = [];
     @Input() isOpen = false;
@@ -63,9 +64,9 @@ export class CredentialEditPanelComponent implements OnInit, OnDestroy {
     public schemaFields: FieldSchemaProperty[] = [];
     public showSecretFields: Set<string> = new Set();
 
-    private _metadata = new Metadata();
+    private get _metadata() { return this.ProviderToUse; }
 
-    constructor(private cdr: ChangeDetectorRef) {}
+    constructor(private cdr: ChangeDetectorRef) { super(); }
 
     ngOnInit(): void {
         this.loadCategories();
@@ -170,7 +171,7 @@ export class CredentialEditPanelComponent implements OnInit, OnDestroy {
 
     private async loadCategories(): Promise<void> {
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<MJCredentialCategoryEntity>({
                 EntityName: 'MJ: Credential Categories',
                 OrderBy: 'Name',

@@ -1,5 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
-import { RunView, BaseEntity, Metadata, CompositeKey } from '@memberjunction/core';
+import { RunView, BaseEntity, CompositeKey } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJTaggedItemEntity, KnowledgeHubMetadataEngine } from '@memberjunction/core-entities';
 import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { WordCloudItem, WordCloudItemEvent } from '@memberjunction/ng-word-cloud';
@@ -41,7 +42,7 @@ export interface RelatedRecord {
     templateUrl: './record-tags.component.html',
     styleUrls: ['./record-tags.component.css']
 })
-export class RecordTagsComponent implements OnInit {
+export class RecordTagsComponent extends BaseAngularComponent implements OnInit {
     @Input() Record!: BaseEntity;
     @Output() PanelClosed = new EventEmitter<void>();
     /** Whether to show the "Open Record" button on related record rows. Default true. */
@@ -94,7 +95,7 @@ export class RecordTagsComponent implements OnInit {
         const entityID = this.Record.EntityInfo.ID;
         const recordID = this.Record.PrimaryKey.Values();
 
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<MJTaggedItemEntity>({
             EntityName: 'MJ: Tagged Items',
             ExtraFilter: `EntityID='${entityID}' AND RecordID='${recordID}'`,
@@ -275,7 +276,7 @@ export class RecordTagsComponent implements OnInit {
 
             // Find other records that share these tags
             const tagFilter = tagIDs.map(id => `TagID='${id}'`).join(' OR ');
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const relatedResult = await rv.RunView<{
                 TagID: string; EntityID: string; RecordID: string;
                 Tag: string; Entity: string; Weight: number;
@@ -322,7 +323,7 @@ export class RecordTagsComponent implements OnInit {
                 .slice(0, 10);
 
             // Map to RelatedRecord format
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             return sorted.map(r => {
                 const entityInfo = md.Entities.find(e => e.Name === r.EntityName);
                 return {
@@ -345,7 +346,7 @@ export class RecordTagsComponent implements OnInit {
      * Resolve display names for related records using GetEntityRecordNames.
      */
     private async ResolveRelatedRecordNames(): Promise<void> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         for (const related of this.RelatedRecords) {
             try {
                 const entityInfo = md.Entities.find(e => e.Name === related.EntityName);

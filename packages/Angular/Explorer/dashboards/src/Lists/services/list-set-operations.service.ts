@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { RunView } from '@memberjunction/core';
+import { RunView, Metadata, IMetadataProvider } from '@memberjunction/core';
 import { MJListEntity, MJListDetailEntity } from '@memberjunction/core-entities';
 import { BehaviorSubject, Observable } from 'rxjs';
 
@@ -93,6 +93,14 @@ const VENN_COLORS = [
   providedIn: 'root'
 })
 export class ListSetOperationsService {
+  private _provider: IMetadataProvider | null = null;
+  /** Set the metadata provider this service should use. Components should call this after injection. */
+  public set Provider(value: IMetadataProvider | null) {
+      this._provider = value;
+  }
+  public get Provider(): IMetadataProvider {
+      return this._provider ?? Metadata.Provider;
+  }
   private loadingSubject = new BehaviorSubject<boolean>(false);
   public loading$: Observable<boolean> = this.loadingSubject.asObservable();
 
@@ -116,7 +124,7 @@ export class ListSetOperationsService {
       const listIds = lists.map(l => l.ID);
       const listIdFilter = listIds.map(id => `'${id}'`).join(',');
 
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.Provider);
       const result = await rv.RunView<{ ListID: string; RecordID: string }>({
         EntityName: 'MJ: List Details',
         ExtraFilter: `ListID IN (${listIdFilter})`,
@@ -319,7 +327,7 @@ export class ListSetOperationsService {
     if (missingIds.length === 0) return;
 
     const listIdFilter = missingIds.map(id => `'${id}'`).join(',');
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
 
     const result = await rv.RunView<{ ListID: string; RecordID: string }>({
       EntityName: 'MJ: List Details',

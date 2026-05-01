@@ -2,6 +2,7 @@ import { Component, OnInit, ChangeDetectorRef, NgZone } from '@angular/core';
 import { Metadata } from '@memberjunction/core';
 import { MJUserEntity } from '@memberjunction/core-entities';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 /**
  * Displays read-only account information for the current user.
  * Shows name, email, role, creation date, and last login.
@@ -12,12 +13,13 @@ import { MJUserEntity } from '@memberjunction/core-entities';
   templateUrl: './account-info.component.html',
   styleUrls: ['./account-info.component.css']
 })
-export class AccountInfoComponent implements OnInit {
+export class AccountInfoComponent extends BaseAngularComponent implements OnInit {
   IsLoading = true;
   CurrentUser: MJUserEntity | null = null;
   ErrorMessage = '';
 
-  constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {}
+  constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {
+    super();}
 
   async ngOnInit(): Promise<void> {
     await this.LoadAccountInfo();
@@ -28,7 +30,7 @@ export class AccountInfoComponent implements OnInit {
     this.ErrorMessage = '';
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const userInfo = md.CurrentUser;
 
       // Load full user entity for additional details
