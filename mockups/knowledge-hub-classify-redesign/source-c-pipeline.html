@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>ContentSource Configuration · Option C — pipeline canvas</title>
+<link rel="stylesheet" href="mockup.css" />
+<style>
+  .pipeline-canvas {
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 12px;
+    padding: 36px 28px 32px;
+    background-image:
+      radial-gradient(circle at 12px 12px, rgba(15,23,42,0.04) 1px, transparent 1px);
+    background-size: 24px 24px;
+    overflow: hidden;
+  }
+
+  .stages {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+    gap: 0;
+    align-items: stretch;
+    position: relative;
+  }
+  .stage {
+    background: var(--mj-bg-surface);
+    border: 2px solid var(--mj-border-default);
+    border-radius: 14px;
+    padding: 16px 14px;
+    position: relative;
+    box-shadow: var(--mj-shadow-sm);
+    margin: 0 12px;
+    cursor: pointer;
+    transition: box-shadow .15s, transform .15s, border-color .15s;
+  }
+  .stage:hover { box-shadow: var(--mj-shadow-md); transform: translateY(-2px); }
+  .stage.selected { border-color: var(--mj-brand-primary); box-shadow: 0 0 0 4px color-mix(in srgb, var(--mj-brand-primary) 14%, transparent); }
+  .stage::after, .stage::before {
+    content: ''; position: absolute; top: 50%; transform: translateY(-50%);
+    width: 24px; height: 2px; background: var(--mj-color-neutral-300);
+  }
+  .stage::after { right: -24px; }
+  .stage::before { left: -24px; }
+  .stages .stage:first-child::before { display: none; }
+  .stages .stage:last-child::after { display: none; }
+
+  .stage .ic { width: 40px; height: 40px; border-radius: 8px; background: var(--mj-brand-primary-tint); color: var(--mj-brand-primary); display: inline-flex; align-items: center; justify-content: center; font-size: 20px; margin-bottom: 8px; }
+  .stage .nm { font-size: 14px; font-weight: 700; }
+  .stage .desc { font-size: 11px; color: var(--mj-text-muted); line-height: 1.45; margin: 4px 0 10px; }
+
+  .stage .knobs { display: flex; flex-direction: column; gap: 6px; }
+  .stage .knob {
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    padding: 5px 8px;
+    font-size: 11px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .stage .knob .k-name { color: var(--mj-text-muted); }
+  .stage .knob .k-val { font-family: ui-monospace, monospace; font-weight: 700; }
+
+  .stage.gate .ic { background: #fef3c7; color: #b45309; }
+  .stage.queue .ic { background: #fce7f3; color: #9d174d; }
+  .stage.sink .ic { background: #dcfce7; color: #15803d; }
+
+  .detail-pane {
+    margin-top: 24px;
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 12px;
+    padding: 22px;
+  }
+  .detail-pane h3 { margin: 0 0 14px; font-size: 16px; }
+  .branch-arrow {
+    margin-top: 18px;
+    background: var(--mj-bg-surface-card);
+    border: 1px dashed var(--mj-border-default);
+    border-radius: 10px;
+    padding: 16px;
+    display: flex;
+    gap: 24px;
+    align-items: center;
+    justify-content: space-around;
+  }
+  .branch-arrow .arrow {
+    text-align: center; padding: 8px 16px;
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 8px;
+    min-width: 160px;
+  }
+  .branch-arrow .arrow.q { border-left: 3px solid var(--mj-status-warning); }
+  .branch-arrow .arrow.match { border-left: 3px solid var(--mj-status-success); }
+  .branch-arrow .arrow.new { border-left: 3px solid var(--mj-brand-primary); }
+  .branch-arrow .arrow.cancel { border-left: 3px solid var(--mj-status-error); }
+</style>
+</head>
+<body>
+
+<div class="mockup-ribbon">
+  <span><strong>Mockup C:</strong> ContentSource Configuration — pipeline canvas</span>
+  <span><a href="index.html">← Back to index</a> · <a href="source-a-wizard.html">A</a> · <a href="source-b-dense-form.html">B</a> · <strong>C</strong></span>
+</div>
+
+<header class="mj-app-header">
+  <div class="logo"><span class="logo-mark">MJ</span> MJ Explorer</div>
+  <div class="breadcrumbs">
+    <span>Knowledge Hub</span><span class="sep">›</span>
+    <span>Classify</span><span class="sep">›</span>
+    <span>Sources</span><span class="sep">›</span>
+    <span class="current">HubSpot · Help Center</span>
+  </div>
+  <div class="right">
+    <span class="badge">Pipeline view</span>
+    <span class="avatar">AN</span>
+  </div>
+</header>
+
+<div class="page wide">
+
+  <div class="page-title">
+    <div>
+      <h1>HubSpot · Help Center</h1>
+      <div class="subtitle">Visual flow · click any stage to configure its knobs</div>
+    </div>
+    <div class="flex gap-8">
+      <div class="segmented">
+        <span class="seg">Wizard</span>
+        <span class="seg">Form</span>
+        <span class="seg active">Pipeline</span>
+      </div>
+      <button class="btn">Test run</button>
+      <button class="btn primary">Save</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab">Pipeline</div>
+    <div class="tab active">Sources <span class="count">8</span></div>
+    <div class="tab">Taxonomy</div>
+    <div class="tab">Suggestions</div>
+    <div class="tab">Tag Health</div>
+    <div class="tab">Logs</div>
+  </div>
+
+  <div class="pipeline-canvas">
+
+    <div class="stages">
+      <div class="stage">
+        <div class="ic">📥</div>
+        <div class="nm">Ingest</div>
+        <div class="desc">Pull articles from HubSpot KB API</div>
+        <div class="knobs">
+          <div class="knob"><span class="k-name">Schedule</span><span class="k-val">6h</span></div>
+          <div class="knob"><span class="k-name">Languages</span><span class="k-val">en, fr</span></div>
+        </div>
+      </div>
+
+      <div class="stage gate">
+        <div class="ic">⚖️</div>
+        <div class="nm">Budget gate</div>
+        <div class="desc">Pause run if budgets exceeded</div>
+        <div class="knobs">
+          <div class="knob"><span class="k-name">Max tokens</span><span class="k-val">2.0M</span></div>
+          <div class="knob"><span class="k-name">Max cost</span><span class="k-val">$15</span></div>
+          <div class="knob"><span class="k-name">Max new tags</span><span class="k-val">50</span></div>
+        </div>
+      </div>
+
+      <div class="stage selected">
+        <div class="ic">🤖</div>
+        <div class="nm">Classify</div>
+        <div class="desc">LLM extracts tag candidates per item</div>
+        <div class="knobs">
+          <div class="knob"><span class="k-name">Mode</span><span class="k-val">Hybrid</span></div>
+          <div class="knob"><span class="k-name">Tag root</span><span class="k-val">AI/ML</span></div>
+          <div class="knob"><span class="k-name">Share taxonomy</span><span class="k-val">Yes</span></div>
+        </div>
+      </div>
+
+      <div class="stage gate">
+        <div class="ic">🎯</div>
+        <div class="nm">Resolve</div>
+        <div class="desc">Synonym → exact → fuzzy → semantic</div>
+        <div class="knobs">
+          <div class="knob"><span class="k-name">MatchThreshold</span><span class="k-val">0.85</span></div>
+          <div class="knob"><span class="k-name">SuggestThreshold</span><span class="k-val">0.70</span></div>
+          <div class="knob"><span class="k-name">Per-item cap</span><span class="k-val">3</span></div>
+        </div>
+      </div>
+
+      <div class="stage sink">
+        <div class="ic">🏷️</div>
+        <div class="nm">Apply</div>
+        <div class="desc">Write ContentItemTag rows</div>
+        <div class="knobs">
+          <div class="knob"><span class="k-name">Co-occurrence</span><span class="k-val">on</span></div>
+          <div class="knob"><span class="k-name">Tag Health</span><span class="k-val">post-run</span></div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="branch-arrow">
+      <div class="arrow match">
+        <div class="bold">Score ≥ 0.85</div>
+        <div class="muted" style="font-size: 11px;">Auto-match → Apply</div>
+      </div>
+      <div class="arrow q">
+        <div class="bold">0.70 – 0.85</div>
+        <div class="muted" style="font-size: 11px;">→ Suggestions Inbox</div>
+      </div>
+      <div class="arrow new">
+        <div class="bold">&lt; 0.70</div>
+        <div class="muted" style="font-size: 11px;">Hybrid → Suggestions · AutoGrow → governance gate</div>
+      </div>
+      <div class="arrow cancel">
+        <div class="bold">Budget hit</div>
+        <div class="muted" style="font-size: 11px;">Pause + resume next run</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Detail pane for selected stage (Classify) -->
+  <div class="detail-pane">
+    <div class="flex between center mb-8">
+      <h3>Classify · LLM tag extraction</h3>
+      <span class="muted" style="font-size: 12px;">3 knobs configurable here</span>
+    </div>
+
+    <div class="cfg-grid" style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px;">
+      <div class="field">
+        <label>Taxonomy mode</label>
+        <select class="input"><option>Hybrid (curated + suggested)</option><option>Constrained</option><option>AutoGrow</option><option>FreeFlow</option></select>
+        <span class="hint">Determines whether new tags can be created or always go to suggestions.</span>
+      </div>
+      <div class="field">
+        <label>Tag root</label>
+        <input class="input" value="Technology / AI / Machine Learning" />
+        <span class="hint">Limits the LLM's view to this subtree. Empty = whole taxonomy.</span>
+      </div>
+      <div class="field">
+        <label>Share taxonomy with LLM</label>
+        <select class="input"><option>Yes</option><option>No</option></select>
+        <span class="hint">Yes = include tag list in prompt (more tokens, better matches).</span>
+      </div>
+    </div>
+
+    <div class="nudge" style="background: #fffbeb; border-left: 3px solid var(--mj-status-warning); padding: 8px 12px; border-radius: 4px; font-size: 12px; color: #78350f; margin-top: 14px;">
+      <strong>Tip:</strong> Hybrid mode is the safest starting point — every novel tag goes to the
+      <a href="suggestions-a-inbox.html">Suggestions Inbox</a> for a human pass. Switch to AutoGrow once you trust the classifier.
+    </div>
+  </div>
+
+  <div class="design-notes">
+    <h3>Design notes — Option C</h3>
+    <p>Visualizes the actual classify pipeline as nodes with their knobs. Click any stage to expand its config in the
+    detail pane below. The branching arrow strip shows where each item ends up based on score / budget. Beautiful
+    onboarding tool — explains the system and configures it in one view.</p>
+    <ul>
+      <li><strong>Strengths:</strong> teaches the architecture; "where does this knob fit in the flow?" is answered visually; the most demoable.</li>
+      <li><strong>Weaknesses:</strong> expensive to build and maintain; ergonomically slower than B for repeated edits; needs custom layout logic for branching.</li>
+      <li><strong>Best for:</strong> sales engineering; first-time admins; explaining the system to a stakeholder.</li>
+      <li><strong>Distinctive:</strong> stage-as-node, knobs-as-pills inside each node; branching arrow strip with color-coded outcomes; selected-stage detail pane below.</li>
+    </ul>
+  </div>
+
+</div>
+
+<script>
+  document.querySelectorAll('.stage').forEach(s => s.addEventListener('click', () => {
+    document.querySelectorAll('.stage').forEach(x => x.classList.remove('selected'));
+    s.classList.add('selected');
+  }));
+</script>
+</body>
+</html>

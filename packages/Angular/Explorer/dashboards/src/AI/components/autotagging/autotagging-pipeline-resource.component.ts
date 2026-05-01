@@ -1162,12 +1162,15 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     }
 
     private buildNavItems(): void {
+        // Classify dashboard owns the autotag pipeline run-management surface.
+        // Tag Library + Taxonomy moved to the canonical "Tags" dashboard
+        // (TagsResourceComponent under Knowledge Hub) — this nav intentionally
+        // omits them. The underlying state + methods remain in this file as
+        // dead code for the moment; a follow-up will strip them.
         this.NavItems = [
             { Tab: 'pipeline', Icon: 'fa-solid fa-gauge-high', Label: 'Pipeline', BadgeText: this.IsRunning ? 'Live' : '', BadgeClass: 'nav-badge-live' },
             { Tab: 'sources', Icon: 'fa-solid fa-database', Label: 'Sources', BadgeText: String(this.contentSourcesRaw.length), BadgeClass: '' },
             { Tab: 'types', Icon: 'fa-solid fa-sliders', Label: 'Content Types', BadgeText: String(this.contentTypesRaw.length), BadgeClass: '' },
-            { Tab: 'tags', Icon: 'fa-solid fa-tag', Label: 'Tag Library', BadgeText: String(this.totalContentTagCount), BadgeClass: '' },
-            { Tab: 'taxonomy', Icon: 'fa-solid fa-sitemap', Label: 'Taxonomy', BadgeText: String(this.tagsRaw.length || ''), BadgeClass: '' },
         ];
     }
 

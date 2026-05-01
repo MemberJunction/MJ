@@ -15,6 +15,13 @@
         "isDefault": true
       },
       {
+        "Label": "Tags",
+        "Icon": "fa-solid fa-sitemap",
+        "ResourceType": "Custom",
+        "DriverClass": "Tags",
+        "isDefault": false
+      },
+      {
         "Label": "Clusters",
         "Icon": "fa-solid fa-circle-nodes",
         "ResourceType": "Custom",
@@ -58,7 +65,7 @@
     "ID": "796EB8B2-B392-428B-839C-E9637C3D7EDB"
   },
   "sync": {
-    "lastModified": "2026-04-11T04:11:19.789Z",
-    "checksum": "44e3fe98472c42f46cf825e1d39ebc5259ac86646aa6f92972e0d88a33726fb1"
+    "lastModified": "2026-05-01T18:47:56.524Z",
+    "checksum": "ede1799605922038250fb7ec80cca4746f621c2abedb626ae95d3b48ec6dff7c"
   }
 }

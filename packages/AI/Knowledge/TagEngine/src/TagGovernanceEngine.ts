@@ -1,7 +1,57 @@
 import { BaseSingleton, UUIDsEqual } from '@memberjunction/global';
 import { UserInfo, Metadata, RunView, LogError, LogStatus, IMetadataProvider } from '@memberjunction/core';
-import { MJTagEntity, MJTagAuditLogEntity, MJContentItemTagEntity, MJTaggedItemEntity } from '@memberjunction/core-entities';
+import { MJTagEntity, MJTagAuditLogEntity, MJContentItemTagEntity, MJTaggedItemEntity, MJTagSynonymEntity, MJTagSuggestionEntity, MJTagScopeEntity } from '@memberjunction/core-entities';
 import { TagEngine } from './TagEngine';
+import { TagEngineBase } from '@memberjunction/tag-engine-base';
+
+/**
+ * Conventional `Reason` values written to `MJ:Tag Suggestions.Reason`.
+ * The DB column is free-form for forward compatibility; this union covers the
+ * full set the autotagger and Tag Health emitters use today.
+ */
+export type TagSuggestionReason =
+    | 'BelowThreshold'
+    | 'ConstrainedMode'
+    | 'AmbiguousMatch'
+    | 'ParentFrozen'
+    | 'AutoGrowDisabled'
+    | 'MaxChildrenExceeded'
+    | 'MaxDepthExceeded'
+    | 'BelowMinWeight'
+    | 'RequiresReview'
+    | 'MaxItemTagsExceeded'
+    | 'MergeCandidate'
+    | 'LowUsage'
+    | 'WideNode';
+
+/**
+ * Result of `ValidateAutoGrow` — either ok, or blocked with a reason that
+ * maps directly to a `TagSuggestion.Reason` value.
+ */
+export type AutoGrowValidationResult =
+    | { ok: true }
+    | { ok: false; reason: TagSuggestionReason; details?: string };
+
+/**
+ * Parameters accepted by `EnqueueSuggestion`.
+ */
+export interface EnqueueSuggestionParams {
+    proposedName: string;
+    proposedParentID?: string | null;
+    bestMatchTagID?: string | null;
+    bestMatchScore?: number | null;
+    reason: TagSuggestionReason;
+    sourceContentItemID?: string | null;
+    sourceContentSourceID?: string | null;
+    sourceText?: string | null;
+}
+
+/**
+ * Strategies passed to `PromoteSuggestion`.
+ */
+export type PromoteSuggestionStrategy =
+    | { kind: 'create-new' }
+    | { kind: 'merge-into-existing'; targetTagID: string };
 
 /**
  * Result of a tag merge operation.
@@ -80,8 +130,17 @@ export class TagGovernanceEngine extends BaseSingleton<TagGovernanceEngine> {
         let totalTaggedItemsMoved = 0;
 
         for (const sourceID of sourceTagIDs) {
+            // Capture source name before status change so synonym carry uses the original.
+            const sourceTag = TagEngine.Instance.GetTagByID(sourceID);
+            const sourceName = sourceTag?.Name ?? '';
+
             const itemsMoved = await this.repointContentItemTags(sourceID, survivingTagID, contextUser);
             const taggedItemsMoved = await this.repointTaggedItems(sourceID, survivingTagID, contextUser);
+
+            // Carry source's synonyms (and source's own name) onto surviving tag.
+            if (sourceName) {
+                await this.carrySynonymsOnMerge(sourceID, sourceName, survivingTagID, contextUser);
+            }
 
             await this.markTagAsMerged(sourceID, survivingTagID, contextUser);
 
@@ -395,6 +454,295 @@ export class TagGovernanceEngine extends BaseSingleton<TagGovernanceEngine> {
             throw new Error(`TagGovernanceEngine: Failed to create new tag "${name}": ${tag.LatestResult?.Message ?? 'Unknown error'}`);
         }
         return tag;
+    }
+
+    // ========================================================================
+    // Per-tag governance enforcement (Phase 1c.5)
+    // ========================================================================
+
+    /**
+     * Walk the proposed parent's ancestor chain and decide whether the
+     * autotagger may auto-create a new child under it. Returns the first
+     * blocking reason found (so reviewer messages can be precise) or `ok:true`.
+     *
+     * Caller responsibilities:
+     *   - `weight` is the classifier confidence; `BelowMinWeight` is checked
+     *     against the proposed parent's `MinWeight`.
+     *   - `proposedParentID == null` means "create a root" — only the global
+     *     IsFrozen / IsLeaf governance applies.
+     *   - The caller must have ensured `TagEngine.Config()` ran so
+     *     `GetTagByID` returns the up-to-date entity instances.
+     */
+    public async ValidateAutoGrow(
+        proposedParentID: string | null,
+        weight: number,
+        contextUser: UserInfo
+    ): Promise<AutoGrowValidationResult> {
+        if (!proposedParentID) {
+            // Root creation — no per-tag governance to walk. We allow it; the
+            // taxonomy mode (Constrained/AutoGrow/etc.) is the gate at root.
+            return { ok: true };
+        }
+
+        await TagEngine.Instance.Config(false, contextUser);
+
+        const proposedParent = TagEngine.Instance.GetTagByID(proposedParentID);
+        if (!proposedParent) {
+            return { ok: false, reason: 'AutoGrowDisabled', details: `Proposed parent tag ${proposedParentID} not found.` };
+        }
+
+        // Direct-parent constraints (depth-0)
+        if (proposedParent.AllowAutoGrow === false) {
+            return { ok: false, reason: 'AutoGrowDisabled', details: `Tag "${proposedParent.Name}" has AllowAutoGrow=0.` };
+        }
+        if (proposedParent.MinWeight != null && weight < proposedParent.MinWeight) {
+            return { ok: false, reason: 'BelowMinWeight', details: `Weight ${weight} < MinWeight ${proposedParent.MinWeight} on tag "${proposedParent.Name}".` };
+        }
+        if (proposedParent.MaxChildren != null) {
+            const childCount = TagEngine.Instance.GetChildTags(proposedParent.ID).length;
+            if (childCount >= proposedParent.MaxChildren) {
+                return { ok: false, reason: 'MaxChildrenExceeded', details: `Tag "${proposedParent.Name}" has ${childCount}/${proposedParent.MaxChildren} children.` };
+            }
+        }
+
+        // Ancestor walk — IsFrozen and MaxDescendantDepth are enforced anywhere
+        // in the chain. We also count depth so MaxDescendantDepth can fire.
+        let depthBelowAncestor = 1; // proposedParent + new child = +1 from each ancestor's perspective
+        let cursor: MJTagEntity | undefined = proposedParent;
+        const visited = new Set<string>();
+        while (cursor) {
+            if (visited.has(cursor.ID)) break; // defensive — cycle guard
+            visited.add(cursor.ID);
+
+            if (cursor.IsFrozen) {
+                return { ok: false, reason: 'ParentFrozen', details: `Ancestor "${cursor.Name}" is IsFrozen=1.` };
+            }
+            if (cursor.MaxDescendantDepth != null && depthBelowAncestor > cursor.MaxDescendantDepth) {
+                return { ok: false, reason: 'MaxDepthExceeded', details: `New child would be at depth ${depthBelowAncestor} below "${cursor.Name}" (max ${cursor.MaxDescendantDepth}).` };
+            }
+
+            const parentID = cursor.ParentID;
+            if (!parentID) break;
+            cursor = TagEngine.Instance.GetTagByID(parentID);
+            depthBelowAncestor++;
+        }
+
+        return { ok: true };
+    }
+
+    /**
+     * Write a row to `MJ:Tag Suggestions`. Idempotency is the caller's
+     * responsibility — this method always inserts. Callers that need
+     * deduplication (e.g., Tag Health emitters) should query first.
+     */
+    public async EnqueueSuggestion(
+        params: EnqueueSuggestionParams,
+        contextUser: UserInfo
+    ): Promise<MJTagSuggestionEntity> {
+        const md = this.Provider;
+        const suggestion = await md.GetEntityObject<MJTagSuggestionEntity>('MJ: Tag Suggestions', contextUser);
+        suggestion.NewRecord();
+        suggestion.ProposedName = params.proposedName;
+        suggestion.ProposedParentID = params.proposedParentID ?? null;
+        suggestion.BestMatchTagID = params.bestMatchTagID ?? null;
+        suggestion.BestMatchScore = params.bestMatchScore ?? null;
+        suggestion.Reason = params.reason;
+        suggestion.SourceContentItemID = params.sourceContentItemID ?? null;
+        suggestion.SourceContentSourceID = params.sourceContentSourceID ?? null;
+        suggestion.SourceText = params.sourceText ?? null;
+        suggestion.Status = 'Pending';
+
+        const saved = await suggestion.Save();
+        if (!saved) {
+            throw new Error(`TagGovernanceEngine.EnqueueSuggestion: Failed to save suggestion: ${suggestion.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+        return suggestion;
+    }
+
+    /**
+     * Approve a pending suggestion. When the reviewer chose `merge-into-existing`,
+     * re-points any existing free-text `ContentItemTag` rows whose `Tag` text
+     * matches `ProposedName` to the merge target. When `create-new`, creates a
+     * fresh `MJ:Tag` (inheriting parent scope when applicable) and re-points
+     * the same set of free-text rows to the new tag.
+     *
+     * Returns the resolved tag (merge target or newly-created tag).
+     */
+    public async PromoteSuggestion(
+        suggestionID: string,
+        strategy: PromoteSuggestionStrategy,
+        contextUser: UserInfo
+    ): Promise<MJTagEntity> {
+        const md = this.Provider;
+        const suggestion = await md.GetEntityObject<MJTagSuggestionEntity>('MJ: Tag Suggestions', contextUser);
+        const loaded = await suggestion.Load(suggestionID);
+        if (!loaded) {
+            throw new Error(`TagGovernanceEngine.PromoteSuggestion: suggestion ${suggestionID} not found.`);
+        }
+        if (suggestion.Status !== 'Pending') {
+            throw new Error(`TagGovernanceEngine.PromoteSuggestion: suggestion ${suggestionID} is in status "${suggestion.Status}", not Pending.`);
+        }
+
+        let resolvedTag: MJTagEntity;
+        if (strategy.kind === 'merge-into-existing') {
+            resolvedTag = await this.loadTag(strategy.targetTagID, contextUser);
+            const moved = await this.repointContentItemTagsByName(suggestion.ProposedName, resolvedTag.ID, contextUser);
+            suggestion.Status = 'Merged';
+            suggestion.ResolvedTagID = resolvedTag.ID;
+            LogStatus(`TagGovernanceEngine.PromoteSuggestion: Merged "${suggestion.ProposedName}" into "${resolvedTag.Name}" (${moved} rows re-pointed).`);
+        } else {
+            // Create-new path. Inherit scope from parent when parent exists and is non-global.
+            resolvedTag = await this.createNewTagForSuggestion(suggestion, contextUser);
+            const moved = await this.repointContentItemTagsByName(suggestion.ProposedName, resolvedTag.ID, contextUser);
+            suggestion.Status = 'Approved';
+            suggestion.ResolvedTagID = resolvedTag.ID;
+            LogStatus(`TagGovernanceEngine.PromoteSuggestion: Created new tag "${resolvedTag.Name}" and re-pointed ${moved} content-item-tag row(s).`);
+        }
+
+        suggestion.ReviewedByUserID = contextUser.ID;
+        suggestion.ReviewedAt = new Date();
+        const saved = await suggestion.Save();
+        if (!saved) {
+            throw new Error(`TagGovernanceEngine.PromoteSuggestion: Failed to update suggestion ${suggestionID}: ${suggestion.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+        return resolvedTag;
+    }
+
+    /**
+     * Reject a pending suggestion with optional reviewer notes.
+     */
+    public async RejectSuggestion(
+        suggestionID: string,
+        reviewerNotes: string | null,
+        contextUser: UserInfo
+    ): Promise<void> {
+        const md = this.Provider;
+        const suggestion = await md.GetEntityObject<MJTagSuggestionEntity>('MJ: Tag Suggestions', contextUser);
+        const loaded = await suggestion.Load(suggestionID);
+        if (!loaded) {
+            throw new Error(`TagGovernanceEngine.RejectSuggestion: suggestion ${suggestionID} not found.`);
+        }
+        if (suggestion.Status !== 'Pending') {
+            throw new Error(`TagGovernanceEngine.RejectSuggestion: suggestion ${suggestionID} is in status "${suggestion.Status}", not Pending.`);
+        }
+        suggestion.Status = 'Rejected';
+        suggestion.ReviewerNotes = reviewerNotes ?? null;
+        suggestion.ReviewedByUserID = contextUser.ID;
+        suggestion.ReviewedAt = new Date();
+        const saved = await suggestion.Save();
+        if (!saved) {
+            throw new Error(`TagGovernanceEngine.RejectSuggestion: Failed to update suggestion ${suggestionID}: ${suggestion.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+    }
+
+    /**
+     * Re-point ContentItemTag rows whose free-text `Tag` matches the supplied
+     * name (case-insensitive) to the supplied TagID. Returns the count moved.
+     */
+    private async repointContentItemTagsByName(name: string, targetTagID: string, contextUser: UserInfo): Promise<number> {
+        const escaped = name.replace(/'/g, "''");
+        const rv = new RunView();
+        const result = await rv.RunView<MJContentItemTagEntity>({
+            EntityName: 'MJ: Content Item Tags',
+            ExtraFilter: `LOWER(Tag) = LOWER('${escaped}') AND (TagID IS NULL OR TagID <> '${targetTagID}')`,
+            ResultType: 'entity_object'
+        }, contextUser);
+        if (!result.Success) {
+            LogError(`TagGovernanceEngine.repointContentItemTagsByName: ${result.ErrorMessage}`);
+            return 0;
+        }
+        let moved = 0;
+        for (const row of result.Results) {
+            row.TagID = targetTagID;
+            const saved = await row.Save();
+            if (saved) moved++;
+        }
+        return moved;
+    }
+
+    /**
+     * Create a new tag from an Approved suggestion. Inherits parent scope by
+     * snapshotting the parent's TagScope rows; if parent is global or absent,
+     * the new tag is global.
+     */
+    private async createNewTagForSuggestion(suggestion: MJTagSuggestionEntity, contextUser: UserInfo): Promise<MJTagEntity> {
+        const tag = await this.createNewTag(suggestion.ProposedName, suggestion.ProposedParentID, contextUser);
+
+        if (suggestion.ProposedParentID) {
+            const parent = TagEngine.Instance.GetTagByID(suggestion.ProposedParentID);
+            if (parent && !parent.IsGlobal) {
+                const parentScopes = TagEngineBase.Instance.GetScopesForTag(parent.ID);
+                if (parentScopes.length > 0) {
+                    // Make the new child non-global and snapshot the parent's scope rows.
+                    tag.IsGlobal = false;
+                    const updateScope = await tag.Save();
+                    if (!updateScope) {
+                        LogError(`TagGovernanceEngine.createNewTagForSuggestion: Failed to set IsGlobal=0 on new child "${tag.Name}".`);
+                    }
+                    const md = this.Provider;
+                    for (const ps of parentScopes) {
+                        const scope = await md.GetEntityObject<MJTagScopeEntity>('MJ: Tag Scopes', contextUser);
+                        scope.NewRecord();
+                        scope.TagID = tag.ID;
+                        scope.ScopeEntityID = ps.ScopeEntityID;
+                        scope.ScopeRecordID = ps.ScopeRecordID;
+                        const ok = await scope.Save();
+                        if (!ok) {
+                            LogError(`TagGovernanceEngine.createNewTagForSuggestion: Failed to copy scope row for new tag "${tag.Name}": ${scope.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                        }
+                    }
+                }
+            }
+        }
+        return tag;
+    }
+
+    /**
+     * Carry source-tag synonyms (and the source's name itself, as a synonym)
+     * onto the surviving tag during a merge. Idempotent — won't duplicate
+     * existing rows. Called from MergeTags below.
+     */
+    private async carrySynonymsOnMerge(sourceTagID: string, sourceName: string, survivingTagID: string, contextUser: UserInfo): Promise<void> {
+        const rv = new RunView();
+        const [existingResult, sourceSynsResult] = await rv.RunViews([
+            { EntityName: 'MJ: Tag Synonyms', ExtraFilter: `TagID='${survivingTagID}'`, ResultType: 'simple', Fields: ['Synonym'] },
+            { EntityName: 'MJ: Tag Synonyms', ExtraFilter: `TagID='${sourceTagID}'`, ResultType: 'entity_object' },
+        ], contextUser);
+
+        const existingSet = new Set<string>();
+        if (existingResult.Success) {
+            for (const r of (existingResult.Results as Array<{Synonym: string}>)) {
+                if (r.Synonym) existingSet.add(r.Synonym.trim().toLowerCase());
+            }
+        }
+
+        const md = this.Provider;
+        const sourceNameKey = sourceName.trim().toLowerCase();
+        if (sourceNameKey && !existingSet.has(sourceNameKey)) {
+            const syn = await md.GetEntityObject<MJTagSynonymEntity>('MJ: Tag Synonyms', contextUser);
+            syn.NewRecord();
+            syn.TagID = survivingTagID;
+            syn.Synonym = sourceName;
+            syn.Source = 'Merged';
+            const ok = await syn.Save();
+            if (!ok) LogError(`TagGovernanceEngine.carrySynonymsOnMerge: Failed to add merged synonym "${sourceName}": ${syn.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            existingSet.add(sourceNameKey);
+        }
+
+        if (sourceSynsResult.Success) {
+            for (const sourceSyn of sourceSynsResult.Results as MJTagSynonymEntity[]) {
+                const key = sourceSyn.Synonym?.trim().toLowerCase();
+                if (!key || existingSet.has(key)) continue;
+                const syn = await md.GetEntityObject<MJTagSynonymEntity>('MJ: Tag Synonyms', contextUser);
+                syn.NewRecord();
+                syn.TagID = survivingTagID;
+                syn.Synonym = sourceSyn.Synonym;
+                syn.Source = 'Merged';
+                const ok = await syn.Save();
+                if (!ok) LogError(`TagGovernanceEngine.carrySynonymsOnMerge: Failed to copy synonym "${sourceSyn.Synonym}": ${syn.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                existingSet.add(key);
+            }
+        }
     }
 
     /**

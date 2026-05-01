@@ -1828,6 +1828,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Tag Scopes Section -->
+    <mj-collapsible-panel
+        SectionKey="mJTagScopes"
+        SectionName="Tag Scopes"
+        Icon="fa fa-tags"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJTagScopes')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Scopes','ScopeEntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tag Scopes')"
+                [AllowLoad]="IsSectionExpanded('mJTagScopes')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJTagScopes', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Generated Codes Section -->
     <mj-collapsible-panel
         SectionKey="mJGeneratedCodes"

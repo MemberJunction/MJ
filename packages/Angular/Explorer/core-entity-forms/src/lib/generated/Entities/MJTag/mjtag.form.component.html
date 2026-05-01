@@ -73,7 +73,7 @@
     <mj-collapsible-panel
         SectionKey="tagLifecycle"
         SectionName="Tag Lifecycle"
-        Icon="fa fa-sync-alt"
+        Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -100,6 +100,99 @@
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Tag Configuration Section -->
+    <mj-collapsible-panel
+        SectionKey="tagConfiguration"
+        SectionName="Tag Configuration"
+        Icon="fa fa-sliders-h"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="IsGlobal"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="AllowAutoGrow"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="IsFrozen"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="MaxChildren"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="MaxDescendantDepth"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="MinWeight"
+            Type="number"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="RequiresReview"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- AI Intelligence Section -->
+    <mj-collapsible-panel
+        SectionKey="aIIntelligence"
+        SectionName="AI Intelligence"
+        Icon="fa fa-brain"
+        [Form]="this"
+        [FormContext]="formContext">
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="EmbeddingVector"
+            Type="code"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="EmbeddingModelID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -184,6 +277,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Content Item Tags Section -->
+    <mj-collapsible-panel
+        SectionKey="mJContentItemTags"
+        SectionName="Content Item Tags"
+        Icon="fa fa-tag"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJContentItemTags')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Item Tags','TagID')"
+                [NewRecordValues]="NewRecordValues('MJ: Content Item Tags')"
+                [AllowLoad]="IsSectionExpanded('mJContentItemTags')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJContentItemTags', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Tag Co Occurrences (Tag B ID) Section -->
     <mj-collapsible-panel
         SectionKey="mJTagCoOccurrencesTagBID"
@@ -209,25 +327,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Content Item Tags Section -->
+    <!-- Tag Synonyms Section -->
     <mj-collapsible-panel
-        SectionKey="mJContentItemTags"
-        SectionName="Content Item Tags"
-        Icon="fa fa-tag"
+        SectionKey="mJTagSynonyms"
+        SectionName="Tag Synonyms"
+        Icon="fa fa-tags"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJContentItemTags')"
+        [BadgeCount]="GetSectionRowCount('mJTagSynonyms')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Content Item Tags','TagID')"
-                [NewRecordValues]="NewRecordValues('MJ: Content Item Tags')"
-                [AllowLoad]="IsSectionExpanded('mJContentItemTags')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Synonyms','TagID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tag Synonyms')"
+                [AllowLoad]="IsSectionExpanded('mJTagSynonyms')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJContentItemTags', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJTagSynonyms', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -284,25 +402,50 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Tags (Merged Into Tag) Section -->
+    <!-- Tag Suggestions (Proposed Parent) Section -->
     <mj-collapsible-panel
-        SectionKey="mJTagsMergedIntoTagID"
-        SectionName="Tags (Merged Into Tag)"
+        SectionKey="mJTagSuggestionsProposedParentID"
+        SectionName="Tag Suggestions (Proposed Parent)"
         Icon="fa fa-tags"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJTagsMergedIntoTagID')"
+        [BadgeCount]="GetSectionRowCount('mJTagSuggestionsProposedParentID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tags','MergedIntoTagID')"
-                [NewRecordValues]="NewRecordValues('MJ: Tags')"
-                [AllowLoad]="IsSectionExpanded('mJTagsMergedIntoTagID')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Suggestions','ProposedParentID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tag Suggestions')"
+                [AllowLoad]="IsSectionExpanded('mJTagSuggestionsProposedParentID')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJTagsMergedIntoTagID', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJTagSuggestionsProposedParentID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Tag Scopes Section -->
+    <mj-collapsible-panel
+        SectionKey="mJTagScopes"
+        SectionName="Tag Scopes"
+        Icon="fa fa-tags"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJTagScopes')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Scopes','TagID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tag Scopes')"
+                [AllowLoad]="IsSectionExpanded('mJTagScopes')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJTagScopes', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -328,6 +471,81 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTagAuditLogsTagID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Tags (Merged Into) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJTagsMergedIntoTagID"
+        SectionName="Tags (Merged Into)"
+        Icon="fa fa-tags"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJTagsMergedIntoTagID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tags','MergedIntoTagID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tags')"
+                [AllowLoad]="IsSectionExpanded('mJTagsMergedIntoTagID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJTagsMergedIntoTagID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Tag Suggestions (Best Match Tag) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJTagSuggestionsBestMatchTagID"
+        SectionName="Tag Suggestions (Best Match Tag)"
+        Icon="fa fa-tags"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJTagSuggestionsBestMatchTagID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Suggestions','BestMatchTagID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tag Suggestions')"
+                [AllowLoad]="IsSectionExpanded('mJTagSuggestionsBestMatchTagID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJTagSuggestionsBestMatchTagID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Tag Suggestions (Resolved Tag) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJTagSuggestionsResolvedTagID"
+        SectionName="Tag Suggestions (Resolved Tag)"
+        Icon="fa fa-tags"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJTagSuggestionsResolvedTagID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Suggestions','ResolvedTagID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tag Suggestions')"
+                [AllowLoad]="IsSectionExpanded('mJTagSuggestionsResolvedTagID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJTagSuggestionsResolvedTagID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
