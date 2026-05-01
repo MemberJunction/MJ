@@ -9,7 +9,7 @@
  * @module @memberjunction/search-engine
  */
 
-import { LogError, Metadata, UserInfo } from '@memberjunction/core';
+import { IRunViewProvider, LogError, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSearchProvider, SearchProviderConfig } from './ISearchProvider';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeConstraints } from './search.types';
@@ -57,7 +57,14 @@ export class FullTextSearchProvider extends BaseSearchProvider {
                 ? scopedEntityNames
                 : filters?.EntityNames;
 
-            const md = new Metadata();
+            // Multi-provider migration (v5.31+): use `this.Provider` instead of
+            // `new Metadata()`. Cast to IRunViewProvider to access FullTextSearch
+            // — only DB-backed providers expose it; remote providers don't.
+            const md = this.Provider as unknown as IRunViewProvider;
+            if (!md.FullTextSearch) {
+                LogError('FullTextSearchProvider: provider does not support FullTextSearch');
+                return [];
+            }
             const ftsResult = await md.FullTextSearch({
                 SearchText: effectiveQuery,
                 EntityNames: restrictedEntityNames,

@@ -194,7 +194,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
 
             if (event.Dashboards.length === 0) return;
 
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const tg = await md.CreateTransactionGroup();
             for (const dashboard of event.Dashboards) {
                 dashboard.TransactionGroup = tg;
@@ -227,7 +227,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
 
             if (event.Dashboards.length === 0) return;
 
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const currentUserId = md.CurrentUser.ID;
             const tg = await md.CreateTransactionGroup();
             const sharedDashboardIds: string[] = [];
@@ -320,7 +320,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             this.isLoading = true;
             this.cdr.detectChanges();
 
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             console.debug('[DashboardBrowserResource] Current user:', {
                 userId: md.CurrentUser?.ID,
                 userName: md.CurrentUser?.Name,
@@ -403,7 +403,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             );
 
             // Queue dashboard uncategorize saves first, then category deletes — single atomic transaction
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const tg = await md.CreateTransactionGroup();
 
             for (const dashboard of dashboardsToUncategorize) {
@@ -456,7 +456,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
         this.mode = 'view';
 
         // Compute permissions for the selected dashboard
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         this.selectedDashboardPermissions = DashboardEngine.Instance.GetDashboardPermissions(
             dashboard.ID,
             md.CurrentUser.ID
@@ -472,7 +472,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      */
     public editDashboard(dashboard: MJDashboardEntity): void {
         // Check if user has edit permission
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const permissions = DashboardEngine.Instance.GetDashboardPermissions(
             dashboard.ID,
             md.CurrentUser.ID
@@ -554,7 +554,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
 
         if (result.Action === 'save' && this.selectedDashboard) {
             // Recompute permissions after sharing changes
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             this.selectedDashboardPermissions = DashboardEngine.Instance.GetDashboardPermissions(
                 this.selectedDashboard.ID,
                 md.CurrentUser.ID
@@ -576,7 +576,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             this.isLoading = true;
             this.cdr.detectChanges();
 
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const dashboard = await md.GetEntityObject<MJDashboardEntity>('MJ: Dashboards');
 
             dashboard.Name = 'New Dashboard';
@@ -721,7 +721,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
                 compositeKey.SimpleLoadFromURLSegment(request.recordId);
                 // If simple load didn't work (single ID without field name), look up actual PK field
                 if (compositeKey.KeyValuePairs.length === 0) {
-                    const md = new Metadata();
+                    const md = this.ProviderToUse;
                     const entity = md.Entities.find(e => e.Name === request.entityName);
                     const pkFieldName = entity?.FirstPrimaryKey?.Name || 'ID';
                     compositeKey.LoadFromSingleKeyValuePair(pkFieldName, request.recordId);
@@ -751,7 +751,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             }
             case 'OpenQuery': {
                 // Navigate to query viewer
-                const md = new Metadata();
+                const md = this.ProviderToUse;
                 const queryInfo = md.Queries.find(q => UUIDsEqual(q.ID, request.queryId));
                 if (queryInfo) {
                     this.navigationService.OpenQuery(
@@ -777,7 +777,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
      * Resolve an application name to its ID
      */
     private resolveAppId(appName: string): string | undefined {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const app = md.Applications.find(a => a.Name.toLowerCase() === appName.toLowerCase());
         return app?.ID;
     }
@@ -918,7 +918,7 @@ export class DashboardBrowserResourceComponent extends BaseResourceComponent imp
             const engine = DashboardEngine.Instance;
             await engine.Config(false); // Wait for engine to load data
 
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const currentUserId = md.CurrentUser.ID;
 
             // Get data from engine - sort dashboards by updated date, categories by name

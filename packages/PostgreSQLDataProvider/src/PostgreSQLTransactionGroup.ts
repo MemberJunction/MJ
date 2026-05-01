@@ -12,7 +12,7 @@ export class PostgreSQLTransactionGroup extends TransactionGroupBase {
     protected async HandleSubmit(): Promise<TransactionResult[]> {
         const returnResults: TransactionResult[] = [];
         const items = this.PendingTransactions;
-        const pgProvider = Metadata.Provider as PostgreSQLDataProvider;
+        const pgProvider = Metadata.Provider as PostgreSQLDataProvider; // global-provider-ok: data provider implementation, owns its provider context
 
         if (items.length === 0) {
             return returnResults;

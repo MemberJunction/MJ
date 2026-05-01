@@ -1,0 +1,45 @@
+/* ── Dashboard root ───────────────────────────────────────────────────────── */
+
+.database-designer-dashboard {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--mj-bg-page);
+  overflow: hidden;
+  position: relative;
+}
+
+/* ── Content area ─────────────────────────────────────────────────────────── */
+
+.database-designer-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--mj-bg-surface);
+  border-radius: 8px;
+  margin: 16px;
+  box-shadow: 0 1px 4px color-mix(in srgb, var(--mj-border-strong) 20%, transparent);
+}
+
+/* ── Placeholder (pre-Phase 5d/5e wiring) ─────────────────────────────────── */
+
+.panel-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 60px 32px;
+  text-align: center;
+  color: var(--mj-text-muted);
+}
+
+.panel-placeholder i {
+  font-size: 2rem;
+}
+
+.panel-placeholder p {
+  margin: 0;
+  font-size: 0.95rem;
+}

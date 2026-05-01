@@ -1,9 +1,10 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectorRef, OnDestroy, ViewEncapsulation } from '@angular/core';
-import { EntityInfo, Metadata } from '@memberjunction/core';
+import { EntityInfo } from '@memberjunction/core';
 import { MJUserViewEntityExtended, UserViewEngine, ViewInfo } from '@memberjunction/core-entities';
 import { Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { UUIDsEqual } from '@memberjunction/global';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 /**
  * Represents a view in the dropdown
@@ -50,7 +51,7 @@ export interface SaveViewRequestedEvent {
   styleUrls: ['./view-selector.component.css'],
   encapsulation: ViewEncapsulation.None
 })
-export class ViewSelectorComponent implements OnChanges, OnDestroy {
+export class ViewSelectorComponent extends BaseAngularComponent implements OnChanges, OnDestroy {
   /**
    * The entity to load views for
    */
@@ -126,9 +127,9 @@ export class ViewSelectorComponent implements OnChanges, OnDestroy {
   public searchText: string = '';
 
   private destroy$ = new Subject<void>();
-  private metadata = new Metadata();
+  private get metadata() { return this.ProviderToUse; }
 
-  constructor(private cdr: ChangeDetectorRef) {}
+  constructor(private cdr: ChangeDetectorRef) { super(); }
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['entity']) {

@@ -12,7 +12,7 @@
  * @module @memberjunction/search-engine
  */
 
-import { LogError, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogError, Metadata, UserInfo } from '@memberjunction/core';
 import { MJGlobal } from '@memberjunction/global';
 import { SearchSource, SearchFilters, SearchResultItem, ScopeConstraints } from './search.types';
 
@@ -67,6 +67,19 @@ export abstract class BaseSearchProvider {
 
     /** Config from the SearchProvider metadata record, set during Initialize() */
     protected config: SearchProviderConfig | null = null;
+
+    /** Optional metadata provider; falls back to Metadata.Provider when not explicitly set. */
+    private _provider: IMetadataProvider | undefined;
+
+    /** Set the metadata provider used by this search provider for entity lookups. */
+    public set Provider(value: IMetadataProvider | undefined) {
+        this._provider = value;
+    }
+
+    /** Get the metadata provider used by this search provider, falling back to the global default. */
+    public get Provider(): IMetadataProvider {
+        return this._provider ?? Metadata.Provider;
+    }
 
     /**
      * Initialize the provider with configuration from the SearchProvider entity.

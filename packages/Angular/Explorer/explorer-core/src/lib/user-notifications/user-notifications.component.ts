@@ -6,6 +6,7 @@ import { SafeJSONParse , UUIDsEqual } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ApplicationManager } from '@memberjunction/ng-base-application';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 /**
  * Radio button filter options for notification read status
  */
@@ -52,7 +53,7 @@ interface NotificationUrlInfo {
   templateUrl: './user-notifications.component.html',
   styleUrls: ['./user-notifications.component.css']
 })
-export class UserNotificationsComponent implements OnInit, AfterViewInit {
+export class UserNotificationsComponent extends BaseAngularComponent implements OnInit, AfterViewInit {
   @ViewChild('allRadio') allRadio!: ElementRef<HTMLInputElement>;
   @ViewChild('unreadRadio') unreadRadio!: ElementRef<HTMLInputElement>;
   @ViewChild('readRadio') readRadio!: ElementRef<HTMLInputElement>;
@@ -67,7 +68,8 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
     public sharedService: SharedService,
     private navigationService: NavigationService,
     private appManager: ApplicationManager
-  ) {}
+  ) {
+    super();}
 
   async ngOnInit() {
     this.loadNotificationTypes();
@@ -252,7 +254,7 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
       }
       else {
         // the passed in param is just a plain object, so we need to load the entity
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         notificationEntity = await md.GetEntityObject<MJUserNotificationEntity>('MJ: User Notifications');
         await notificationEntity.Load(notificationId);  
         notificationEntity.Unread = !bRead;  
@@ -285,7 +287,7 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
   }
 
   public async TestTransactionGroupVariables() {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const transGroup = await md.CreateTransactionGroup();
 
     const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations');
@@ -324,7 +326,7 @@ export class UserNotificationsComponent implements OnInit, AfterViewInit {
 
   public async markAll(bRead: boolean) {
     // Use transaction group for batching - all saves are queued and sent in one round-trip
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const transGroup = await md.CreateTransactionGroup();
 
     // Queue all saves - no need to await individual saves since transaction group queues them

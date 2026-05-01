@@ -1,7 +1,8 @@
 import { Component, OnInit, EventEmitter, Output, ChangeDetectorRef } from '@angular/core';
-import { Metadata, RunView } from '@memberjunction/core';
+import { RunView } from '@memberjunction/core';
 import { MJAPIScopeEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 /** Scope tree node structure */
 interface ScopeTreeNode {
     scope: MJAPIScopeEntity;
@@ -20,10 +21,10 @@ interface ScopeTreeNode {
     templateUrl: './api-scopes-panel.component.html',
     styleUrls: ['./api-scopes-panel.component.css']
 })
-export class APIScopesPanelComponent implements OnInit {
+export class APIScopesPanelComponent extends BaseAngularComponent implements OnInit {
     @Output() ScopeUpdated = new EventEmitter<void>();
 
-    private md = new Metadata();
+    private get md() { return this.ProviderToUse; }
     private cdr: ChangeDetectorRef;
 
     // Loading states
@@ -69,6 +70,7 @@ export class APIScopesPanelComponent implements OnInit {
     public readonly Categories = ['Entities', 'Agents', 'Admin', 'Actions', 'Queries', 'Reports', 'Communication', 'Other'];
 
     constructor(cdr: ChangeDetectorRef) {
+        super();
         this.cdr = cdr;
     }
 
@@ -82,7 +84,7 @@ export class APIScopesPanelComponent implements OnInit {
     public async loadData(): Promise<void> {
         this.IsLoading = true;
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<MJAPIScopeEntity>({
                 EntityName: 'MJ: API Scopes',
                 OrderBy: 'FullPath',

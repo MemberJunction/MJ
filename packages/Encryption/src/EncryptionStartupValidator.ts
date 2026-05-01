@@ -47,14 +47,14 @@ export class EncryptionStartupValidator extends BaseSingleton<EncryptionStartupV
      * 1. Checks that no entity fields have `Encrypt=true` with a null `EncryptionKeyID`
      * 2. Validates that all active encryption keys have accessible key material
      */
-    public async HandleStartup(contextUser?: UserInfo, _provider?: IMetadataProvider): Promise<void> {
+    public async HandleStartup(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
         const engine = EncryptionEngine.Instance;
         await engine.Config(false, contextUser);
 
         let hasErrors = false;
 
         // Phase 1: Check for fields marked Encrypt=true but missing EncryptionKeyID
-        const misconfiguredFields = this.findMisconfiguredEncryptedFields();
+        const misconfiguredFields = this.findMisconfiguredEncryptedFields(provider);
         if (misconfiguredFields.length > 0) {
             this.logMisconfiguredFieldsWarning(misconfiguredFields);
             hasErrors = true;
@@ -86,8 +86,8 @@ export class EncryptionStartupValidator extends BaseSingleton<EncryptionStartupV
     /**
      * Finds entity fields that have Encrypt=true but no EncryptionKeyID set.
      */
-    private findMisconfiguredEncryptedFields(): Array<{ entityName: string; fieldName: string }> {
-        const md = new Metadata();
+    private findMisconfiguredEncryptedFields(provider?: IMetadataProvider): Array<{ entityName: string; fieldName: string }> {
+        const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
         const misconfigured: Array<{ entityName: string; fieldName: string }> = [];
 
         for (const entity of md.Entities) {

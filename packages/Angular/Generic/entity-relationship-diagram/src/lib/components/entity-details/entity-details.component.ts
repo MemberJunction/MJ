@@ -1,6 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ViewChild, ElementRef } from '@angular/core';
-import { EntityInfo, EntityFieldInfo, EntityFieldValueInfo, Metadata } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, EntityFieldValueInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 /**
  * Event emitted when requesting to open an entity record.
@@ -23,7 +24,7 @@ export interface EntityDetailsOpenRecordEvent {
   templateUrl: './entity-details.component.html',
   styleUrls: ['./entity-details.component.css']
 })
-export class EntityDetailsComponent implements OnChanges {
+export class EntityDetailsComponent extends BaseAngularComponent implements OnChanges {
   @ViewChild('fieldsListContainer', { static: false }) fieldsListContainer!: ElementRef;
   @ViewChild('relationshipsListContainer', { static: false }) relationshipsListContainer!: ElementRef;
 
@@ -150,7 +151,7 @@ export class EntityDetailsComponent implements OnChanges {
     relatedEntityIds.delete(entityId);
 
     // Convert to actual EntityInfo objects
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const allEntities = md.Entities;
     const retVals: EntityInfo[] = [];
     relatedEntityIds.forEach(id => {
@@ -225,7 +226,7 @@ export class EntityDetailsComponent implements OnChanges {
     event.stopPropagation();
     if (field.RelatedEntityID) {
       // Find the related entity and select it in the ERD
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const relatedEntity = md.Entities.find(e => UUIDsEqual(e.ID, field.RelatedEntityID));
       if (relatedEntity) {
         this.entitySelected.emit(relatedEntity);

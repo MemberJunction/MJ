@@ -151,7 +151,7 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
 
   ngOnInit() {
     super.ngOnInit();
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     this.currentUser = md.CurrentUser;
 
     // Subscribe to artifact state changes
@@ -290,7 +290,7 @@ export class ChatCollectionsResource extends BaseResourceComponent implements On
       return;
     }
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<{ Name: string }>({
         EntityName: 'MJ: Collections',
         Fields: ['Name'],

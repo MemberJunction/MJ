@@ -286,7 +286,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       return origExecuteSQLWithPool.call(this, pool, query, parameters, contextUser);
     };
 
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: bootstrap
     console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
   } else {
     // ─── SQL Server Path (existing behavior) ───────────────────────
@@ -328,7 +328,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     const config = new SQLServerProviderConfigData(pool, mj_core_schema, cacheRefreshInterval);
     await setupSQLServerClient(config);
     tPhase = lap('Metadata + Provider Setup', tPhase);
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: bootstrap
     console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
 
     // Set up CodeGen-credentialed provider for RSU DDL operations (CREATE TABLE, CREATE SCHEMA, etc.)
@@ -420,7 +420,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       enablePubSub: true,
       enableLogging: true,
     });
-    (Metadata.Provider as GenericDatabaseProvider).SetLocalStorageProvider(redisProvider);
+    (Metadata.Provider as GenericDatabaseProvider).SetLocalStorageProvider(redisProvider); // global-provider-ok: bootstrap (Redis cache wiring)
     await redisProvider.StartListening();
 
     // Connect Redis pub/sub events to LocalCacheManager callback dispatch
@@ -451,7 +451,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // LocalCacheManager may have already been initialized (with in-memory provider)
   // during engine loading. SetStorageProvider migrates cached data to Redis.
   if (process.env.REDIS_URL) {
-    await LocalCacheManager.Instance.SetStorageProvider(Metadata.Provider.LocalStorageProvider);
+    await LocalCacheManager.Instance.SetStorageProvider(Metadata.Provider.LocalStorageProvider); // global-provider-ok: bootstrap
     console.log('LocalCacheManager: storage provider swapped to Redis');
   }
   // Ensure LocalCacheManager is initialized (no-op if already done during engine loading)
@@ -465,7 +465,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       evictionSweepIntervalMs: (cs.evictionSweepIntervalSeconds ?? 300) * 1000,
       verboseLogging: cs.verboseLogging ?? false,
     };
-    await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider, cacheConfig);
+    await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider, cacheConfig); // global-provider-ok: bootstrap
     console.log('LocalCacheManager initialized with cache config:', JSON.stringify({
       maxMemoryMB: cs.maxMemoryMB ?? 150,
       maxPercentOfCachePerEntity: cs.maxPercentOfCachePerEntity ?? 50,
@@ -945,8 +945,7 @@ async function processRSUPendingWork(): Promise<void> {
 
   for (const item of pendingItems) {
     try {
-      const md = new Metadata();
-
+      const md = new Metadata(); // global-provider-ok: server startup recovery — runs once before any per-request context exists
       // Get system user for server-side operations
       const systemUser = UserCache.Instance.Users.find(u => u.Type?.trim().toLowerCase() === 'owner') ?? UserCache.Instance.Users[0];
       if (!systemUser) {
@@ -954,7 +953,7 @@ async function processRSUPendingWork(): Promise<void> {
         continue;
       }
 
-      await Metadata.Provider.Refresh();
+      await Metadata.Provider.Refresh(); // global-provider-ok: server startup recovery — one-shot global cache refresh
 
       // Resolve connector
       const rv = new RunView();
@@ -1223,7 +1222,7 @@ async function refreshUserCacheFromPG(pgPool: import('pg').Pool, coreSchema: str
         ...user,
         UserRoles: roles.filter((role: Record<string, unknown>) => UUIDsEqual(role.UserID as string, user.ID as string)),
       };
-      return new UserInfo(Metadata.Provider, userWithRoles);
+      return new UserInfo(Metadata.Provider, userWithRoles); // global-provider-ok: bootstrap (UserCache initialization)
     });
     // Access the UserCache internals to set users
     const cache = UserCache.Instance;

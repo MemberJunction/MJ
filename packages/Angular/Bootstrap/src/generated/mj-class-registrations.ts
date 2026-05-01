@@ -41,7 +41,7 @@ import {
     MJCommunicationProviderEntityExtended,
 } from '@memberjunction/communication-types';
 
-// @memberjunction/core-entities (344 classes)
+// @memberjunction/core-entities (335 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -72,7 +72,6 @@ import {
     MJAIAgentRunEntity,
     MJAIAgentRunMediaEntity,
     MJAIAgentRunStepEntity,
-    MJAIAgentSearchScopeEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
@@ -325,15 +324,7 @@ import {
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
-    MJSearchExecutionLogEntity,
     MJSearchProviderEntity,
-    MJSearchScopeEntity,
-    MJSearchScopeEntityEntity,
-    MJSearchScopeExternalIndexEntity,
-    MJSearchScopePermissionEntity,
-    MJSearchScopeProviderEntity,
-    MJSearchScopeStorageAccountEntity,
-    MJSearchScopeTestQueryEntity,
     MJSkillEntity,
     MJStateProvinceEntity,
     MJTagAuditLogEntity,
@@ -450,7 +441,7 @@ import {
     WebURLPartComponent,
 } from '@memberjunction/ng-dashboard-viewer';
 
-// @memberjunction/ng-dashboards (74 classes)
+// @memberjunction/ng-dashboards (75 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -484,6 +475,7 @@ import {
     DashboardBrowserResourceComponent,
     DataExplorerDashboardComponent,
     DataExplorerResourceComponent,
+    DatabaseDesignerDashboardComponent,
     DuplicateDetectionResourceComponent,
     EntityAdminDashboardComponent,
     EntityIntegrationComponent,
@@ -604,7 +596,6 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJAIAgentRunEntity,
     MJAIAgentRunMediaEntity,
     MJAIAgentRunStepEntity,
-    MJAIAgentSearchScopeEntity,
     MJAIAgentStepEntity,
     MJAIAgentStepPathEntity,
     MJAIAgentTypeEntity,
@@ -857,15 +848,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJScheduledJobRunEntity,
     MJScheduledJobTypeEntity,
     MJSchemaInfoEntity,
-    MJSearchExecutionLogEntity,
     MJSearchProviderEntity,
-    MJSearchScopeEntity,
-    MJSearchScopeEntityEntity,
-    MJSearchScopeExternalIndexEntity,
-    MJSearchScopePermissionEntity,
-    MJSearchScopeProviderEntity,
-    MJSearchScopeStorageAccountEntity,
-    MJSearchScopeTestQueryEntity,
     MJSkillEntity,
     MJStateProvinceEntity,
     MJTagAuditLogEntity,
@@ -992,6 +975,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     DashboardBrowserResourceComponent,
     DataExplorerDashboardComponent,
     DataExplorerResourceComponent,
+    DatabaseDesignerDashboardComponent,
     DuplicateDetectionResourceComponent,
     EntityAdminDashboardComponent,
     EntityIntegrationComponent,
@@ -1055,7 +1039,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 488;
+export const CLASS_REGISTRATIONS_COUNT = 480;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [

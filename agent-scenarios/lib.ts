@@ -126,6 +126,12 @@ export async function bootstrapMJ(pool: sql.ConnectionPool): Promise<{ arie: Use
         UserRoles: userRolesRows,
     } as ConstructorParameters<typeof UserInfo>[1]);
 
+    // Multi-provider migration (v5.31+): explicit AIEngine.Config is now required.
+    // The fast-start cache used to populate Agents lazily on first access; the
+    // refactor moved that into AIEngineBase which requires Config() to be invoked
+    // explicitly with a contextUser.
+    await AIEngine.Instance.Config(false, arie);
+
     const sage = AIEngine.Instance.Agents.find(a => a.ID.toUpperCase() === SAGE_AGENT_ID.toUpperCase());
     if (!sage) throw new Error(`Sage agent not found in AIEngine`);
     return { arie, sage: sage as unknown as MJAIAgentEntity };

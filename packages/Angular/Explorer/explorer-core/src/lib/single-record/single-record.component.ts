@@ -8,13 +8,14 @@ import { BaseFormComponent, FormNavigationEvent, FormNotificationEvent } from '@
 import { NavigationService, RecentAccessService, SharedService } from '@memberjunction/ng-shared';
 
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 @Component({
   standalone: false,
   selector: 'mj-single-record',
   templateUrl: './single-record.component.html',
   styleUrls: ['./single-record.component.css']
 })
-export class SingleRecordComponent implements OnInit, AfterViewInit, OnDestroy {
+export class SingleRecordComponent extends BaseAngularComponent implements OnInit, AfterViewInit, OnDestroy {
   @ViewChild(Container, {static: true}) formContainer!: Container;
   @Input() public PrimaryKey: CompositeKey = new CompositeKey();
   @Input() public entityName: string | null = '';
@@ -29,6 +30,7 @@ export class SingleRecordComponent implements OnInit, AfterViewInit, OnDestroy {
   private cdr = inject(ChangeDetectorRef);
 
   constructor (private route: ActivatedRoute) {
+    super();
     this.recentAccessService = new RecentAccessService();
   }
 
@@ -68,7 +70,7 @@ export class SingleRecordComponent implements OnInit, AfterViewInit, OnDestroy {
 
     const formReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormComponent, entityName);
     
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const entity = md.Entities.find(e => {
       return e.Name === entityName
     });

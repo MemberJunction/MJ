@@ -21,6 +21,14 @@ const { mockRunViewFn, mockEntities } = vi.hoisted(() => {
 vi.mock('@memberjunction/core', () => {
     class MockMetadata {
         get Entities() { return mockEntities; }
+        EntityByName(name: string) { return mockEntities.find(e => e.Name === name); }
+        // Multi-provider migration: EntitySearchProvider uses this.ProviderToUse, which falls
+        // back to Metadata.Provider. Expose a static Provider that returns the same
+        // mockEntities list so the search has a metadata catalog to walk.
+        static Provider = {
+            get Entities() { return mockEntities; },
+            EntityByName(name: string) { return mockEntities.find(e => e.Name === name); },
+        };
     }
     class MockRunView {
         RunView = mockRunViewFn;

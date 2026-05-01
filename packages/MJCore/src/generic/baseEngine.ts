@@ -314,7 +314,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * Returns the metadata provider to use for the engine. If a provider is set via the Config method, that provider will be used, otherwise the default provider will be used.
      */
     public get ProviderToUse(): IMetadataProvider {
-        return this._provider || Metadata.Provider;
+        return this._provider || Metadata.Provider; // global-provider-ok: explicit fallback in BaseEngine accessor
     }
 
     /**
@@ -665,7 +665,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     ): Promise<boolean> {
         try {
             const recordData = JSON.parse(recordDataJSON);
-            const md = new Metadata();
+            // Use this engine's bound provider (ProviderToUse) instead of `new Metadata()` so
+            // multi-provider client setups instantiate entities against the correct server.
+            const md = this.ProviderToUse;
             // Find the proper entity name with original casing from the config
             const originalEntityName = matchingConfigs[0].EntityName!;
             const entity = await md.GetEntityObject(originalEntityName, this._contextUser);

@@ -19,6 +19,12 @@ vi.mock('@memberjunction/core', async () => {
     class MockMetadata {
         EntityByName(name: string) { return mockEntityByName(name); }
         Entities = [];
+        // Static Provider so SearchEnricher's `Metadata.Provider` fallback
+        // resolves when tests bypass Config().
+        static Provider = {
+            EntityByName: (_name: string) => null,
+            Entities: [],
+        };
     }
     class MockRunView {
         RunView = mockRunViewFn;
@@ -35,7 +41,7 @@ vi.mock('@memberjunction/core', async () => {
 import { SearchEngine } from '../generic/SearchEngine';
 import type { SearchResultItem, SearchStreamEvent, SearchParams } from '../generic/search.types';
 import { BaseSearchProvider } from '../generic/ISearchProvider';
-import type { UserInfo } from '@memberjunction/core';
+import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 
 function createUser(id: string): UserInfo {
     return { ID: id, Name: 'Test User', Email: 't@example.com' } as UserInfo;
@@ -109,6 +115,14 @@ class TestSearchEngine extends SearchEngine {
 
     public override async filterByPermissions(results: SearchResultItem[]): Promise<SearchResultItem[]> {
         return results;
+    }
+    // Stub IMetadataProvider — the merged multi-provider refactor reads
+    // `this.Base.ProviderToUse` which isn't initialized when tests bypass Config().
+    protected override get ProviderToUse(): IMetadataProvider {
+        return {
+            EntityByName: (_name: string) => null,
+            Entities: [],
+        } as unknown as IMetadataProvider;
     }
 }
 

@@ -1,6 +1,7 @@
 import { Component, EventEmitter, Input, Type } from '@angular/core';
 import { DataSnapshot } from '@memberjunction/core';
 import { MJArtifactVersionEntity } from '@memberjunction/core-entities';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { IArtifactViewerComponent } from '../interfaces/artifact-viewer-plugin.interface';
 
 /**
@@ -77,7 +78,7 @@ export interface ArtifactViewerTab {
   standalone: false,
   template: ''
 })
-export abstract class BaseArtifactViewerPluginComponent implements IArtifactViewerComponent {
+export abstract class BaseArtifactViewerPluginComponent extends BaseAngularComponent implements IArtifactViewerComponent {
   /**
    * The artifact version to display
    */

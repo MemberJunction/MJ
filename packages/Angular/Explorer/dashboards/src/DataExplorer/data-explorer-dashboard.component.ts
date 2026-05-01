@@ -76,7 +76,7 @@ import {
 @RegisterClass(BaseDashboard, 'DataExplorer')
 export class DataExplorerDashboardComponent extends BaseDashboard implements OnInit, OnDestroy, OnChanges {
   protected override destroy$ = new Subject<void>();
-  private metadata = new Metadata();
+  private metadata = this.ProviderToUse;
 
   /** Reference to the filter input for keyboard shortcuts */
   @ViewChild('filterInput') filterInputRef: ElementRef<HTMLInputElement> | undefined;
@@ -599,6 +599,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     const urlState = this.buildDeepLinkFromParams(rawParams);
 
     // Set context for state service (enables context-specific settings)
+    this.stateService.Provider = this.ProviderToUse;
     await this.stateService.setContext(this.entityFilter);
     this.state = this.stateService.CurrentState;
 
@@ -856,7 +857,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
   private async loadApplicationEntityIds(applicationId: string): Promise<void> {
     this.applicationEntityIds.clear();
 
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<MJApplicationEntityEntity>({
       EntityName: 'MJ: Application Entities',
       ExtraFilter: `ApplicationID = '${applicationId}'`,
@@ -1214,7 +1215,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
     this.cdr.detectChanges();
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
 
       // Build GridState in Kendo-compatible format
       const gridState = this.buildGridState(event);
@@ -1697,8 +1698,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
     if (!targetId || !this.selectedEntity) return;
 
-    const md = new Metadata();
-    const rv = new RunView();
+    const md = this.ProviderToUse;
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     try {
       const result = await rv.RunView<MJUserViewEntityExtended>({
         EntityName: 'MJ: User Views',
@@ -2170,8 +2171,8 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
       throw new Error('No entity selected for export');
     }
 
-    const md = new Metadata();
-    const rv = new RunView();
+    const md = this.ProviderToUse;
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
     // Build the run view params based on current state
     const baseParams = {
@@ -2336,7 +2337,7 @@ export class DataExplorerDashboardComponent extends BaseDashboard implements OnI
 
     try {
       // Load the record
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<Record<string, unknown>>({
         EntityName: entityName,
         ExtraFilter: `ID='${recordId}'`,

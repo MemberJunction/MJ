@@ -255,6 +255,27 @@ export class RunActionParams<TContext = any> {
     * which makes timeout-origin debugging straightforward.
     */
    public AbortSignal?: AbortSignal;
+
+   /**
+    * Optional metadata provider to use for entity lookups and data access during this action run.
+    *
+    * **Why this matters for transaction isolation in multi-provider scenarios:**
+    * MemberJunction supports running multiple providers in the same process (e.g., a transaction-scoped
+    * provider for a unit-of-work, alongside the default global provider). When an action runs inside a
+    * transaction, it MUST use the same provider that owns the transaction so that all reads/writes
+    * happen on the same connection and participate in the same transaction.
+    *
+    * If `Provider` is not supplied, action implementations fall back to the default global provider via
+    * `new Metadata()`. This preserves backward compatibility for single-provider deployments and for
+    * existing callers that don't yet thread a provider through.
+    *
+    * Action implementations should use the pattern:
+    * ```typescript
+    * const md = params.Provider ?? new Metadata();
+    * ```
+    * to honor the caller's provider when supplied while remaining backward compatible.
+    */
+   public Provider?: IMetadataProvider;
 };
  
 

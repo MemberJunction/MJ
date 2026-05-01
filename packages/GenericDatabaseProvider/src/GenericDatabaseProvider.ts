@@ -406,7 +406,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         contextUser?: UserInfo,
     ): Promise<void> {
         // Get the current provider instance
-        const provider = Metadata.Provider as GenericDatabaseProvider;
+        const provider = Metadata.Provider as GenericDatabaseProvider; // global-provider-ok: data provider implementation, owns its provider context
         if (provider && provider._sqlLoggingSessions.size > 0) {
             await provider._logSqlStatement(query, parameters, description, false, isMutation, simpleSQLFallback, contextUser);
         }
@@ -1693,7 +1693,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (result.status !== 'error' && result.results && LocalCacheManager.Instance.IsInitialized) {
             const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString);
             const maxUpdatedAt = result.maxUpdatedAt || new Date().toISOString();
-            await LocalCacheManager.Instance.SetRunViewResult(fingerprint, params, result.results, maxUpdatedAt, undefined, result.rowCount);
+            await LocalCacheManager.Instance.SetRunViewResult(fingerprint, params, result.results, maxUpdatedAt, undefined, result.rowCount, this);
         }
         return result;
     }
@@ -3028,7 +3028,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     ? this.extractMaxUpdatedAtFromRows(itemData, dateFieldToCheck)
                     : new Date(0).toISOString();
                 const syntheticParams = { EntityName: entityName } as RunViewParams;
-                await cache.SetRunViewResult(uncachedFingerprints[i], syntheticParams, itemData, maxUpdatedAt);
+                await cache.SetRunViewResult(uncachedFingerprints[i], syntheticParams, itemData, maxUpdatedAt, undefined, undefined, this);
             }
 
             sqlResults.push({

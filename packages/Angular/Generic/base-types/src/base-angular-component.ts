@@ -18,7 +18,7 @@ export abstract class BaseAngularComponent {
    * Returns either the default Metadata provider or the one specified in the Provider property, if it was specified
    */
   public get ProviderToUse(): IMetadataProvider {
-    return this.Provider || Metadata.Provider;
+    return this.Provider ?? Metadata.Provider;
   }  
 
   /**

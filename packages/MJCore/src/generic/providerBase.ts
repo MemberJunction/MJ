@@ -4,7 +4,7 @@ import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageP
 import { RunQueryParams } from "./runQuery";
 import { LocalCacheManager } from "./localCacheManager";
 import { ApplicationInfo } from "../generic/applicationInfo";
-import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
+import { AuditLogTypeInfo, AuthorizationInfo, AuthorizationRoleInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
 import { MJGlobal, NormalizeUUID, SafeJSONParse, UUIDsEqual } from "@memberjunction/global";
 import { TelemetryManager } from "./telemetryManager";
@@ -103,6 +103,12 @@ export const AllMetadataArrays = [
     { key: 'AllRowLevelSecurityFilters', class: RowLevelSecurityFilterInfo },
     { key: 'AllAuditLogTypes', class: AuditLogTypeInfo},
     { key: 'AllAuthorizations', class: AuthorizationInfo},
+    /**
+     * Flat join-table records linking authorizations to roles.
+     * Consumed lazily by `AuthorizationInfo.Roles` — no post-processing
+     * in `GetAllMetadata` is required.  Mirrors the QueryFields pattern.
+     */
+    { key: 'AllAuthorizationRoles', class: AuthorizationRoleInfo},
     { key: 'AllQueryCategories', class: QueryCategoryInfo},
     { key: 'AllQueries', class: QueryInfo },
     { key: 'AllQueryFields', class: QueryFieldInfo },
@@ -817,11 +823,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     public async FullTextSearch(params: FullTextSearchParams, contextUser?: UserInfo): Promise<FullTextSearchResult> {
         const startTime = Date.now();
         try {
-            const md = new Metadata();
             const maxRows = params.MaxRowsPerEntity ?? 10;
 
-            // Get all FTS-enabled entities
-            const ftsEntities = this.resolveFTSEntities(md, params.EntityNames);
+            // Use this provider's metadata directly — `this` implements IMetadataProvider, so
+            // its Entities reflect the schema for the database this provider is connected to.
+            // (The previous `new Metadata()` reached for the global default provider, which is
+            // wrong in multi-provider client setups.)
+            const ftsEntities = this.resolveFTSEntities(this, params.EntityNames);
             if (ftsEntities.length === 0) {
                 return {
                     Success: true,
@@ -893,7 +901,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * Resolve which entities to search. Filters to only FTS-enabled entities.
      * If entityNames provided, intersects with the FTS-enabled set.
      */
-    private resolveFTSEntities(md: Metadata, entityNames?: string[]): EntityInfo[] {
+    private resolveFTSEntities(md: IMetadataProvider, entityNames?: string[]): EntityInfo[] {
         const allEntities = md.Entities.filter(e => e.FullTextSearchEnabled);
 
         if (!entityNames || entityNames.length === 0) {
@@ -1749,7 +1757,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     primaryKeyFieldName,
                     checkResult.maxUpdatedAt || new Date().toISOString(),
                     checkResult.rowCount || 0,
-                    checkResult.aggregateResults // Pass fresh aggregate results (can't be differentially computed)
+                    checkResult.aggregateResults, // Pass fresh aggregate results (can't be differentially computed)
+                    this
                 );
 
                 if (merged) {
@@ -1803,7 +1812,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     checkResult.results || [],
                     checkResult.maxUpdatedAt,
                     checkResult.aggregateResults, // Include aggregate results in cache
-                    checkResult.rowCount
+                    checkResult.rowCount,
+                    this
                 ).catch(e => LogError(`Failed to update cache: ${e}`));
             }
 
@@ -1923,7 +1933,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 result.Results,
                 maxUpdatedAt,
                 result.AggregateResults,
-                result.TotalRowCount
+                result.TotalRowCount,
+                this
             );
         } else if (this.shouldAutoCache(params, result)) {
             // Server-side auto-cache: small, unfiltered, unsorted results are
@@ -1937,7 +1948,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 result.Results,
                 maxUpdatedAt,
                 result.AggregateResults,
-                result.TotalRowCount
+                result.TotalRowCount,
+                this
             );
             LogStatusEx({ message: `  📦 [Auto-Cache] RunView "${params.EntityName || params.ViewName || 'unknown'}" — ${result.Results.length} rows auto-cached (small + unfiltered)`, verboseOnly: true });
         }
@@ -2003,7 +2015,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     results[i].Results,
                     maxUpdatedAt,
                     results[i].AggregateResults,
-                    results[i].TotalRowCount
+                    results[i].TotalRowCount,
+                    this
                 ));
             } else if (this.shouldAutoCache(params[i], results[i])) {
                 const maxUpdatedAt = this.extractMaxUpdatedAt(results[i].Results);
@@ -2013,7 +2026,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     results[i].Results,
                     maxUpdatedAt,
                     results[i].AggregateResults,
-                    results[i].TotalRowCount
+                    results[i].TotalRowCount,
+                    this
                 ));
                 LogStatusEx({ message: `    📦 [Auto-Cache] RunViews "${params[i].EntityName || params[i].ViewName || 'unknown'}" — ${results[i].Results.length} rows auto-cached (small + unfiltered)`, verboseOnly: true });
             }
@@ -2460,7 +2474,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
         // first, let's check to see if we have an existing Metadata.Provider registered, if so
         // unless our data.IgnoreExistingMetadata is set to true, we will not refresh the metadata
-        if (Metadata.Provider && !data.IgnoreExistingMetadata) {
+        if (Metadata.Provider && !data.IgnoreExistingMetadata) { // global-provider-ok: bootstrap checks for an existing global registration
             // we have an existing globally registered provider AND we are not
             // requested to ignore the existing metadata, so we will not refresh it
             if (this.CopyMetadataFromGlobalProvider()) {
@@ -2620,8 +2634,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     protected CopyMetadataFromGlobalProvider(): boolean {
         try {
-            if (Metadata.Provider && Metadata.Provider !== this && Metadata.Provider.AllMetadata) { 
-                this._localMetadata = this.CloneAllMetadata(Metadata.Provider.AllMetadata);
+            if (Metadata.Provider && Metadata.Provider !== this && Metadata.Provider.AllMetadata) { // global-provider-ok: this method literally clones FROM the global provider on bootstrap
+                this._localMetadata = this.CloneAllMetadata(Metadata.Provider.AllMetadata); // global-provider-ok: bootstrap clone path
                 return true;
             }
             return false;
@@ -2874,6 +2888,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      */
     public get Authorizations(): AuthorizationInfo[] {
         return this._localMetadata.AllAuthorizations;
+    }
+    /**
+     * Gets the flat collection of authorization-role assignments.
+     * Consumed lazily by {@link AuthorizationInfo.Roles} — consumers should
+     * prefer accessing roles through `AuthorizationInfo.Roles` rather than
+     * filtering this array directly.
+     * @returns Array of AuthorizationRoleInfo join-table objects
+     */
+    public get AuthorizationRoles(): AuthorizationRoleInfo[] {
+        return this._localMetadata.AllAuthorizationRoles;
     }
     /**
      * Gets all saved queries in the system.

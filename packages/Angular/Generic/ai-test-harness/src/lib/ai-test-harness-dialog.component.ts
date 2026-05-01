@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, ViewChild, ChangeDetectorRef, AfterViewInit } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJAIAgentEntityExtended, MJAIPromptEntityExtended, MJAIPromptRunEntityExtended } from '@memberjunction/ai-core-plus';
 import { Metadata } from '@memberjunction/core';
 import { AITestHarnessComponent } from './ai-test-harness.component';
@@ -136,7 +137,7 @@ export interface AITestHarnessDialogData {
         }
     `]
 })
-export class AITestHarnessDialogComponent implements OnInit, AfterViewInit {
+export class AITestHarnessDialogComponent extends BaseAngularComponent implements OnInit, AfterViewInit  {
     /** Reference to the embedded test harness component */
     @ViewChild('testHarness', { static: false }) testHarness!: AITestHarnessComponent;
     
@@ -158,7 +159,8 @@ export class AITestHarnessDialogComponent implements OnInit, AfterViewInit {
     /** Event emitted when the dialog should be closed */
     @Output() closeDialog = new EventEmitter<void>();
     
-    constructor(private cdr: ChangeDetectorRef) {}
+    constructor(private cdr: ChangeDetectorRef) {
+    super();}
     
     /**
      * Initializes the dialog component by loading agent/prompt data and configuring
@@ -174,7 +176,7 @@ export class AITestHarnessDialogComponent implements OnInit, AfterViewInit {
             this.title = this.data.title;
         }
         
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         
         // Load entity based on mode
         if (this.mode === 'agent' || (!this.data.promptId && !this.data.prompt)) {
@@ -300,7 +302,7 @@ export class AITestHarnessDialogComponent implements OnInit, AfterViewInit {
      */
     private async loadFromPromptRun(promptRunId: string): Promise<void> {
         console.log('🔄 Loading from prompt run:', promptRunId);
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const promptRun = await md.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs');
         
         if (await promptRun.Load(promptRunId)) {

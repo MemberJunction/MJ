@@ -12,6 +12,7 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { RunView } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { GlobalFilterState } from '../../../interfaces/analytics-preferences.interface';
 
@@ -771,7 +772,7 @@ const PAGE_SIZE = 25;
         }
     `]
 })
-export class AnalyticsPromptRunsComponent implements OnInit, OnDestroy {
+export class AnalyticsPromptRunsComponent extends BaseAngularComponent implements OnInit, OnDestroy {
     private cdr = inject(ChangeDetectorRef);
     private destroy$ = new Subject<void>();
     private isInitialized = false;
@@ -998,7 +999,7 @@ export class AnalyticsPromptRunsComponent implements OnInit, OnDestroy {
         this.cdr.detectChanges();
 
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const cutoff = this.getTimeRangeCutoff(this._timeRange);
             const filter = cutoff ? `RunAt >= '${cutoff.toISOString()}'` : '';
 

@@ -961,8 +961,8 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
     this.isLoading = true;
 
     try {
-      const md = new Metadata();
-      const rv = new RunView();
+      const md = this.ProviderToUse;
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const userId = md.CurrentUser?.ID;
 
       const [categoriesResult, listsResult] = await rv.RunViews([
@@ -1219,7 +1219,7 @@ export class ListsCategoriesResource extends BaseResourceComponent implements On
     const categoryName = this.dialogName;
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       let category: MJListCategoryEntity;
 
       if (this.editingCategory) {

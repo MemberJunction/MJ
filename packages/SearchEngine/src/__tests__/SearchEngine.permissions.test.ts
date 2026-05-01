@@ -36,7 +36,7 @@ vi.mock('@memberjunction/core', async () => {
 
 import { SearchEngine } from '../generic/SearchEngine';
 import type { SearchResultItem } from '../generic/search.types';
-import type { UserInfo, EntityInfo } from '@memberjunction/core';
+import type { UserInfo, EntityInfo, IMetadataProvider } from '@memberjunction/core';
 
 class TestSearchEngine extends SearchEngine {
     public async TestFilterByPermissions(
@@ -44,6 +44,15 @@ class TestSearchEngine extends SearchEngine {
         contextUser: UserInfo,
     ): Promise<SearchResultItem[]> {
         return this.filterByPermissions(results, contextUser);
+    }
+    // Stub IMetadataProvider that delegates to the existing mocks. The merged
+    // multi-provider refactor reads `this.Base.ProviderToUse` which isn't
+    // initialized when tests bypass Config().
+    protected override get ProviderToUse(): IMetadataProvider {
+        return {
+            EntityByName: (name: string) => mockEntityByName(name),
+            Entities: [],
+        } as unknown as IMetadataProvider;
     }
 }
 

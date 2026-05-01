@@ -11,6 +11,7 @@ import {
   NgZone
 } from '@angular/core';
 import { trigger, transition, style, animate } from '@angular/animations';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { RunView, RunViewParams, Metadata, EntityInfo, EntityFieldInfo, AggregateResult, AggregateValue, AggregateExpression } from '@memberjunction/core';
@@ -164,7 +165,7 @@ ModuleRegistry.registerModules([AllCommunityModule]);
     ])
   ]
 })
-export class EntityDataGridComponent implements OnInit, OnDestroy {
+export class EntityDataGridComponent extends BaseAngularComponent implements OnInit, OnDestroy  {
   // ========================================
   // Data Source Inputs (RunViewParams-based)
   // ========================================
@@ -1463,7 +1464,8 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
     private elementRef: ElementRef,
     private exportService: ExportService,
     private ngZone: NgZone
-  ) {}
+  ) {
+  super();}
 
   // ========================================
   // Lifecycle Hooks
@@ -1599,7 +1601,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       } else if (this._params.EntityName) {
         // Dynamic view - just get entity metadata
         this._viewEntity = null;
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         this._entityInfo = md.Entities.find(e => e.Name === this._params!.EntityName) || null;
 
         // Reset columns to force regeneration from metadata when switching to dynamic view
@@ -1674,7 +1676,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
       return viewEntity.ViewEntityInfo;
     }
 
-    const md = new Metadata();
+    const md = this.ProviderToUse;
 
     // Second try: Look up by Entity name (virtual field that returns entity name)
     if (viewEntity.Entity) {
@@ -1948,7 +1950,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
         return;
       }
 
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
       // Build the ExtraFilter from params or view entity
       let extraFilter: string | undefined;
@@ -2932,7 +2934,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
           }));
       }
 
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<Record<string, unknown>>({
         ...runViewParams,
         ResultType: 'simple',
@@ -3066,7 +3068,7 @@ export class EntityDataGridComponent implements OnInit, OnDestroy {
           runViewParams.StartRow = startRow;
           runViewParams.MaxRows = blockSize;
 
-          const rv = new RunView();
+          const rv = RunView.FromMetadataProvider(this.ProviderToUse);
           const result = await rv.RunView<Record<string, unknown>>({
             ...runViewParams,
             ResultType: 'simple',

@@ -464,7 +464,7 @@ export class DefaultArchiveDriver extends BaseArchiveDriver {
         document: ArchiveDocument
     ): Promise<string[]> {
         const entityName = document.entityName;
-        const md = new Metadata();
+        const md = this.Provider;
         const record = await md.GetEntityObject(entityName, context.ContextUser);
 
         const compositeKey = new CompositeKey(

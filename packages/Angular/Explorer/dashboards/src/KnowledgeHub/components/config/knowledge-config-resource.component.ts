@@ -788,7 +788,7 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
         this.cdr.detectChanges();
 
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const index = await md.GetEntityObject<MJVectorIndexEntity>('MJ: Vector Indexes');
             index.NewRecord();
             index.Name = this.NewIndexName.trim();
@@ -825,7 +825,7 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
         if (!idx) return;
 
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const entity = await md.GetEntityObject<MJVectorIndexEntity>('MJ: Vector Indexes');
             const loaded = await entity.Load(indexId);
             if (!loaded) {
@@ -860,7 +860,7 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
         this.cdr.detectChanges();
 
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const entity = await md.GetEntityObject<MJVectorDatabaseEntity>('MJ: Vector Databases');
             const loaded = await entity.Load(provider.ID);
             if (!loaded) {
@@ -913,7 +913,7 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
             this.loadEntityDocumentsAndThresholds(engine.GetActiveEntityDocuments());
 
             // AI Models and Credentials come from different domains — fetch via RunView
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const [modelsResult, credentialsResult] = await rv.RunViews([
                 { EntityName: 'MJ: AI Models', ResultType: 'simple' },
                 { EntityName: 'MJ: Credentials', ExtraFilter: 'IsActive = 1', Fields: ['ID', 'Name'], ResultType: 'simple' }
@@ -937,7 +937,7 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
         this.cdr.detectChanges();
 
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const allEntities = md.Entities;
             const ftsEntities: FTSEntityRecord[] = [];
 

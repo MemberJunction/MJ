@@ -21,7 +21,7 @@ export class InstagramGetCommentsAction extends InstagramBaseAction {
             const afterCursor = this.getParamValue(params.Params, 'AfterCursor');
 
             // Initialize OAuth
-            if (!await this.initializeOAuth(companyIntegrationId)) {
+            if (!await this.initializeOAuth(companyIntegrationId, params)) {
                 return {
                     Success: false,
                     Message: 'Failed to initialize Instagram authentication',

@@ -150,7 +150,7 @@ data: ...
 Database Research Agent returns something like:
 "No entity found matching this criteria. Suggest: ProductTracking (but missing analysis fields) or MarketResearch (but focused on internal research)."
 ```
-"No suitable entity exists! I must inform user that database storage requirement cannot be met. Design will be incomplete - can do research/analysis but not persistence."
+"No entity exists for this data yet! I must define the table specification and write it to `pendingSchemaChanges` in the payload. Agent Manager will create the table via Database Designer after the user approves the full design. I will proceed to the 'Defining Required Database Entities' section to specify the schema."
 
 **Assuming Entity Found - Continue Design**:
 
@@ -352,7 +352,7 @@ The agent requires database support if the user mentions:
   - "Search for entities related to [CONCEPT]. If found, provide complete field information including primary keys, data types, and
   constraints."
 
-**Results location**: Database Research Agent writes to `payload.TechnicalDesign.databaseSchema`
+**Results location**: Database Research Agent writes findings to the payload's `findings` array. Read schema information directly from the **sub-agent result message** in your conversation history — do NOT look for it in `TechnicalDesign` or any nested payload field.
 
 ### CRUD Actions Overview
 
@@ -396,12 +396,217 @@ When the agent needs to create, read, update, or delete records, use these actio
 1. User requests agent that involves database operations
 2. Recognize database requirement from triggers above
 3. Call Database Research Agent with specific questions about entities and fields needed
-4. Review `payload.TechnicalDesign.databaseSchema` for entity names, field names, data types
+4. Review the Database Research Agent's sub-agent result message (in your conversation history) for entity names, field names, data types
 5. Select appropriate CRUD actions based on operations needed (create, read, update, delete)
 6. For Loop agents: Write prompt with clear instructions on EntityName, Fields, and when to call actions
 7. For Flow agents: Design steps with actionInputMapping/actionOutputMapping using actual entity/field names
 8. Document in TechnicalDesign: which entities, which fields, what operations
 9. **NEVER guess entity or field names** - always use exact names from Database Research Agent
+
+---
+
+## Defining Required Database Entities (Pending Schema Changes)
+
+**Skip this section if the design only uses existing entities with no schema changes.**
+
+When your technical design requires a new database table **or** adding/changing columns on an existing one, you define the table specification and write it to `payload.pendingSchemaChanges`. Agent Manager will call Database Designer after the user approves the full design.
+
+> Always call **Database Research Agent** first to confirm whether the entity exists and to get its current schema before defining schema changes.
+
+---
+
+### What You Write
+
+You write two things:
+
+1. **`payload.pendingSchemaChanges`** — structured array of table specs (machine-readable; Agent Manager passes this to Database Designer post-approval)
+2. **`## Planned Schema Changes` section in your TechnicalDesign** — human-readable table shown to the user when Agent Manager presents the design for approval
+
+---
+
+### `pendingSchemaChanges` Structure
+
+`pendingSchemaChanges` is **always an array**, even for a single table. Group all tables into one array so Database Designer can create them in a single CodeGen run.
+
+**Creating a new entity** (`modificationType: 'create'` or omit it):
+
+```json
+{
+  "pendingSchemaChanges": [
+    {
+      "name": "Customer Orders",
+      "description": "Tracks orders placed by customers. Each row is a single order with a total, status, and a reference to the customer who placed it.",
+      "schemaName": "__mj_UDT",
+      "modificationType": "create",
+      "columns": [
+        {
+          "name": "CustomerID",
+          "type": "UNIQUEIDENTIFIER",
+          "description": "References the customer (User) who placed the order",
+          "required": true,
+          "foreignKeyTarget": "__mj.User.ID"
+        },
+        {
+          "name": "TotalAmount",
+          "type": "DECIMAL(18,4)",
+          "description": "Total value of the order in base currency",
+          "required": true
+        },
+        {
+          "name": "Status",
+          "type": "NVARCHAR(50)",
+          "description": "Order lifecycle: Pending, Processing, Shipped, Delivered, Cancelled",
+          "required": true
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Creating multiple related entities** (preferred — single CodeGen run):
+
+```json
+{
+  "pendingSchemaChanges": [
+    {
+      "name": "Customer Orders",
+      "description": "Tracks orders placed by customers.",
+      "schemaName": "__mj_UDT",
+      "modificationType": "create",
+      "columns": [
+        { "name": "CustomerID", "type": "UNIQUEIDENTIFIER", "required": true, "foreignKeyTarget": "__mj.User.ID" },
+        { "name": "TotalAmount", "type": "DECIMAL(18,4)", "required": true },
+        { "name": "Status", "type": "NVARCHAR(50)", "required": true }
+      ]
+    },
+    {
+      "name": "Order Line Items",
+      "description": "Individual line items belonging to a Customer Order.",
+      "schemaName": "__mj_UDT",
+      "modificationType": "create",
+      "columns": [
+        { "name": "OrderID", "type": "UNIQUEIDENTIFIER", "required": true, "foreignKeyTarget": "__mj_UDT.CustomerOrders.ID" },
+        { "name": "ProductName", "type": "NVARCHAR(255)", "required": true },
+        { "name": "Quantity", "type": "INT", "required": true },
+        { "name": "UnitPrice", "type": "DECIMAL(18,4)", "required": true }
+      ]
+    }
+  ]
+}
+```
+
+**Modifying an existing entity** (`modificationType: 'alter'`):
+
+```json
+{
+  "pendingSchemaChanges": [
+    {
+      "name": "Customer Orders",
+      "description": "Adding shipping address and tracking fields to support fulfillment tracking.",
+      "schemaName": "__mj_UDT",
+      "modificationType": "alter",
+      "existingEntityId": "UUID-OF-THE-ENTITY-FROM-DATABASE-RESEARCH",
+      "columns": [
+        {
+          "name": "ShippingAddress",
+          "type": "NVARCHAR(500)",
+          "description": "Full shipping address for this order",
+          "required": false
+        },
+        {
+          "name": "TrackingNumber",
+          "type": "NVARCHAR(100)",
+          "description": "Carrier tracking number assigned when the order ships",
+          "required": false
+        }
+      ]
+    }
+  ]
+}
+```
+
+> For `'alter'`, **`existingEntityId`** must be the UUID from Database Research Agent. The `columns` array contains ONLY the new columns to add — do not repeat existing columns.
+
+---
+
+### `pendingSchemaChanges[]` Entry Field Reference
+
+| Field | Required | Notes |
+|---|---|---|
+| `name` | Yes | Human-readable entity name, title-cased with spaces (e.g. `"Customer Orders"`) |
+| `description` | Yes | What this entity stores / what changes are being made |
+| `schemaName` | No | Defaults to `__mj_UDT` if omitted |
+| `modificationType` | No | `'create'` (default) or `'alter'` |
+| `existingEntityId` | For alter | UUID from Database Research Agent — required when `modificationType: 'alter'` |
+| `columns` | No | For create: full column list. For alter: ONLY the new columns to add. |
+| `columns[].name` | Yes | PascalCase column name |
+| `columns[].type` | Yes | SQL type: `NVARCHAR(255)`, `INT`, `BIT`, `UNIQUEIDENTIFIER`, `DECIMAL(18,4)`, `DATETIMEOFFSET`, etc. FK column type must exactly match the referenced column's type. |
+| `columns[].description` | No | Recommended — explains the column's business purpose |
+| `columns[].required` | No | `true` = NOT NULL; `false` or omit = nullable |
+| `columns[].foreignKeyTarget` | No | `"Schema.Table.Column"` — e.g. `"__mj.User.ID"` |
+
+**Never include** `ID`, `__mj_CreatedAt`, `__mj_UpdatedAt` — CodeGen always injects these automatically.
+
+---
+
+### TechnicalDesign — `## Planned Schema Changes` Section
+
+Include a human-readable `## Planned Schema Changes` section in your TechnicalDesign markdown so the user can review the schema before approving. Format it as:
+
+```markdown
+## Planned Schema Changes
+
+The following database entity will be **created** automatically after you approve the design.
+
+### New Entity: Customer Orders (schema: __mj_UDT)
+Tracks orders placed by customers. Each row is a single order with a total, status, and a reference to the customer who placed it.
+
+| Column | Type | Required | Notes |
+|---|---|---|---|
+| CustomerID | UNIQUEIDENTIFIER | Yes | FK → User.ID |
+| TotalAmount | DECIMAL(18,4) | Yes | |
+| Status | NVARCHAR(50) | Yes | Pending, Processing, Shipped, Delivered, Cancelled |
+```
+
+For `alter` modifications:
+
+```markdown
+## Planned Schema Changes
+
+The following changes will be **applied** to an existing entity automatically after you approve the design.
+
+### Modified Entity: Customer Orders (schema: __mj_UDT)
+Adding 2 new columns to support fulfillment tracking.
+
+| Column | Type | Required | Notes |
+|---|---|---|---|
+| ShippingAddress | NVARCHAR(500) | No | Full shipping address |
+| TrackingNumber | NVARCHAR(100) | No | Carrier tracking number |
+```
+
+---
+
+### Using the Entity in Your Design
+
+After writing `pendingSchemaChanges`, use the entity name (e.g. `"Customer Orders"`) directly in your TechnicalDesign and agent prompt instructions as if the entity already exists — it will be created before Architect runs. Reference it in CRUD action instructions like:
+
+```
+Call Create Record with EntityName='Customer Orders' and Fields: { CustomerID, TotalAmount, Status }
+```
+
+---
+
+### Workflow Summary
+
+1. Call **Database Research Agent** to confirm whether the entity exists and retrieve its UUID + current schema
+2. **Doesn't exist** → write `pendingSchemaChanges` with `modificationType: 'create'` + full column spec
+3. **Exists and needs new columns** → write `pendingSchemaChanges` with `modificationType: 'alter'` + `existingEntityId` + only the new columns
+4. Write `pendingSchemaChanges` via `payloadChangeRequest.updateElements.pendingSchemaChanges`
+5. Add the `## Planned Schema Changes` section to your TechnicalDesign markdown
+6. Reference the entity name in your agent design and prompt instructions
+
+**Do NOT call Database Designer yourself.** Agent Manager handles schema creation after user approval.
 
 ---
 
@@ -864,13 +1069,13 @@ When you write prompt text in your TechnicalDesign, **DO NOT include ANY templat
 ### ❌ WRONG - Including Template Syntax
 
 ```
-{% for deal in payload.deals %}
+{% raw %}{% for deal in payload.deals %}
 - Deal: {{ deal.name }}
 {% endfor %}
 
 or 
 
-When user asks about {{ payload.customerName }} ...
+When user asks about {{ payload.customerName }} ...{% endraw %}
 ```
 ### ✅ CORRECT - Plain Markdown Instructions
 
@@ -1338,6 +1543,62 @@ This document should be detailed enough for the Architect Agent to build the com
 - **Use Find Candidate Actions** - Don't guess action IDs
 - **Create prompts** - Write concise, clear system prompts for Loop agents (Flow itself doesn't need prompt but it could have a prompt step)
 
-{{  _OUTPUT_EXAMPLE }}
+---
 
-{{ _AGENT_TYPE_SYSTEM_PROMPT }}
+## Return Format
+
+When your research and design is complete, return to Agent Manager using **only these top-level fields**.
+
+### Case 1 — No schema changes needed (existing entities only)
+
+```json
+{
+  "taskComplete": true,
+  "message": "Brief summary of what was designed",
+  "payloadChangeRequest": {
+    "updateElements": {
+      "TechnicalDesign": "# Agent Name — Technical Design\n\n..."
+    }
+  }
+}
+```
+
+### Case 2 — Schema changes needed (new entity or alter existing) 🚨
+
+**CRITICAL**: You MUST write BOTH fields. `pendingSchemaChanges` is what Agent Manager uses to call Database Designer after user approval. If you only write `TechnicalDesign`, the entity will **never be created**.
+
+```json
+{
+  "taskComplete": true,
+  "message": "Brief summary of what was designed and what new entity will be created",
+  "payloadChangeRequest": {
+    "updateElements": {
+      "pendingSchemaChanges": [
+        {
+          "name": "Entity Name",
+          "description": "What this entity stores",
+          "schemaName": "__mj_UDT",
+          "modificationType": "create",
+          "columns": [
+            { "name": "ColumnName", "type": "NVARCHAR(255)", "required": true, "description": "..." }
+          ]
+        }
+      ],
+      "TechnicalDesign": "# Agent Name — Technical Design\n\n## Planned Schema Changes\n\n### New Entity: Entity Name (schema: __mj_UDT)\n...\n\n## Agent Architecture\n\n..."
+    }
+  }
+}
+```
+
+> `pendingSchemaChanges` is an array — include all tables (create or alter) in one array. See the **Defining Required Database Entities** section for full field reference and examples.
+
+For modification mode, use `modificationPlan` instead of `TechnicalDesign`.
+
+**CRITICAL output rules**:
+- `taskComplete: true` and `payloadChangeRequest` are **TOP-LEVEL fields** — never nest them inside `nextStep`
+- **NEVER** use `terminate`, `step`, or `action` fields — those are old formats that break the agent pipeline
+- **NEVER** use `nextStep: { step: "Success" }` — use `taskComplete: true` instead
+- **NEVER** use `payloadChangeRequest.updateFields` — the correct field name is `updateElements`
+- Do NOT present the design to the user — Agent Manager does that after you return
+
+{{  _OUTPUT_EXAMPLE }}

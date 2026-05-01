@@ -200,7 +200,7 @@ export class AgentRequestsResourceComponent extends BaseResourceComponent implem
         this.cdr.detectChanges();
 
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const [requestsResult, typesResult] = await rv.RunViews([
                 {
                     EntityName: 'MJ: AI Agent Requests',

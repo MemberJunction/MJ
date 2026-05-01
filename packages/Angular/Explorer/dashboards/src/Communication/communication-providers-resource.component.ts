@@ -317,7 +317,7 @@ export class CommunicationProvidersResourceComponent extends BaseResourceCompone
             this.isLoading = true;
             this.cdr.detectChanges();
 
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const yesterday = new Date();
             yesterday.setDate(yesterday.getDate() - 1);
             const yesterdayIso = yesterday.toISOString();
@@ -385,7 +385,7 @@ export class CommunicationProvidersResourceComponent extends BaseResourceCompone
 
     public configureProvider(provider: MJCommunicationProviderEntity): void {
         const pk = new CompositeKey();
-        pk.LoadFromEntityInfoAndRecord(new Metadata().Entities.find(e => e.Name === 'MJ: Communication Providers')!, provider);
+        pk.LoadFromEntityInfoAndRecord(this.ProviderToUse.Entities.find(e => e.Name === 'MJ: Communication Providers')!, provider);
         this.navService.OpenEntityRecord('MJ: Communication Providers', pk);
     }
 

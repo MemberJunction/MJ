@@ -195,6 +195,7 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
 
   async ngOnInit(): Promise<void> {
     super.ngOnInit();
+    this.dataService.Provider = this.ProviderToUse;
     await this.LoadIntegrations();
     this.NotifyLoadComplete();
   }
@@ -600,7 +601,7 @@ export class MappingWorkspaceComponent extends BaseResourceComponent implements 
 
   private LoadDBSchemas(): void {
     if (this.DBSchemas.length > 0) return;
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const schemaSet = new Set<string>();
     for (const entity of md.Entities) {
       if (entity.SchemaName) {

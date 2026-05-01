@@ -16,6 +16,7 @@ import {
     type Theme
 } from 'ag-grid-community';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 // Register AG Grid modules
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -45,7 +46,7 @@ interface ParamRowData {
     templateUrl: './template-params-grid.component.html',
     styleUrls: ['./template-params-grid.component.css']
 })
-export class TemplateParamsGridComponent implements OnInit, OnChanges {
+export class TemplateParamsGridComponent extends BaseAngularComponent implements OnInit, OnChanges {
     @Input() template: MJTemplateEntity | null = null;
     @Input() editMode: boolean = false;
 
@@ -107,7 +108,7 @@ export class TemplateParamsGridComponent implements OnInit, OnChanges {
 
         this.isLoading = true;
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const results = await rv.RunView<MJTemplateParamEntity>({
                 EntityName: 'MJ: Template Params',
                 ExtraFilter: `TemplateID='${this.template.ID}'`,
@@ -342,7 +343,7 @@ export class TemplateParamsGridComponent implements OnInit, OnChanges {
         if (!this.template?.ID) return null;
 
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const newParam = await md.GetEntityObject<MJTemplateParamEntity>('MJ: Template Params');
             newParam.TemplateID = this.template.ID;
             newParam.Type = 'Scalar';

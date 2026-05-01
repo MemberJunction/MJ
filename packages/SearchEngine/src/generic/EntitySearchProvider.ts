@@ -8,7 +8,7 @@
  * @module @memberjunction/search-engine
  */
 
-import { LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSearchProvider } from './ISearchProvider';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeConstraints, ScopeEntityConstraint } from './search.types';
@@ -55,7 +55,11 @@ export class EntitySearchProvider extends BaseSearchProvider {
                 return [];
             }
 
-            const md = new Metadata();
+            // Multi-provider migration (v5.31+): use `this.Provider` instead of
+            // `new Metadata()` so the search honors a non-default IMetadataProvider
+            // when the calling component supplies one. Falls back to the global
+            // default when unset.
+            const md = this.Provider;
             // Build the scoped subset: if scopeConstraints.Entities is provided, use those
             // verbatim (they already went through the scope's Nunjucks-rendered ExtraFilter +
             // UserSearchString pipeline). Otherwise fall back to legacy AllowUserSearchAPI
@@ -70,7 +74,7 @@ export class EntitySearchProvider extends BaseSearchProvider {
             // Debug: log scoped entities and their search fields
             LogStatus(`EntitySearchProvider: Searching ${scoped.length} entities for "${effectiveQuery}"${scopeConstraints ? ' (scoped)' : ''}`);
             for (const e of scoped.slice(0, 3)) {
-                const entity = md.Entities.find(ent => ent.Name === e.EntityName);
+                const entity = md.EntityByName(e.EntityName);
                 if (entity) {
                     const searchFields = entity.Fields.filter(f => f.IncludeInUserSearchAPI);
                     LogStatus(`  Entity "${e.EntityName}": ${searchFields.length} searchable fields [${searchFields.slice(0, 5).map(f => f.Name).join(', ')}${searchFields.length > 5 ? '...' : ''}]`);
@@ -115,7 +119,7 @@ export class EntitySearchProvider extends BaseSearchProvider {
      *   optional `filters.EntityNames` restriction) and wrap each in a trivial constraint.
      */
     private buildScopedEntityList(
-        md: Metadata,
+        md: IMetadataProvider,
         scopeConstraints: ScopeConstraints | undefined,
         filters: SearchFilters | undefined
     ): ScopeEntityConstraint[] {
@@ -126,7 +130,7 @@ export class EntitySearchProvider extends BaseSearchProvider {
 
         const unscoped = this.getSearchableEntities(md, filters);
         return unscoped.map(e => {
-            const info = md.Entities.find(x => x.Name === e.Name);
+            const info = md.EntityByName(e.Name);
             return {
                 EntityID: info?.ID ?? '',
                 EntityName: e.Name,
@@ -138,7 +142,7 @@ export class EntitySearchProvider extends BaseSearchProvider {
      * Get the list of entities eligible for search, optionally filtered by name.
      */
     private getSearchableEntities(
-        md: Metadata,
+        md: IMetadataProvider,
         filters: SearchFilters | undefined
     ): { Name: string }[] {
         let entities = md.Entities.filter(e => e.AllowUserSearchAPI);
@@ -198,8 +202,8 @@ export class EntitySearchProvider extends BaseSearchProvider {
         entityName: string,
         query: string
     ): SearchResultItem[] {
-        const md = new Metadata();
-        const entityInfo = md.Entities.find(e => e.Name === entityName);
+        const md = this.Provider;
+        const entityInfo = md.EntityByName(entityName);
         const queryLower = query.toLowerCase();
 
         // Get searchable fields and classify them by importance

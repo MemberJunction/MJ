@@ -1,4 +1,4 @@
-import { Metadata, EntityFieldInfo, EntityInfo } from '@memberjunction/core';
+import { Metadata, EntityFieldInfo, EntityInfo, IMetadataProvider } from '@memberjunction/core';
 
 /**
  * A single field entry prepared for display in cards, tooltips, and detail panels.
@@ -41,9 +41,10 @@ const INTERNAL_METADATA_KEYS = new Set([
  */
 export function PrioritizeFieldsForDisplay(
     entityName: string,
-    metadata: Record<string, unknown>
+    metadata: Record<string, unknown>,
+    provider?: IMetadataProvider
 ): DisplayFieldEntry[] {
-    const entityInfo = FindEntityInfo(entityName);
+    const entityInfo = FindEntityInfo(entityName, provider);
     const fieldMap = BuildFieldMap(entityInfo);
 
     const entries: DisplayFieldEntry[] = [];
@@ -72,9 +73,10 @@ export function PrioritizeFieldsForDisplay(
 export function GetPrimaryDisplayFields(
     entityName: string,
     metadata: Record<string, unknown>,
-    maxFields: number = 4
+    maxFields: number = 4,
+    provider?: IMetadataProvider
 ): DisplayFieldEntry[] {
-    const all = PrioritizeFieldsForDisplay(entityName, metadata);
+    const all = PrioritizeFieldsForDisplay(entityName, metadata, provider);
     const defaultInView = all.filter(f => f.IsDefaultInView);
     if (defaultInView.length > 0) {
         return defaultInView.slice(0, maxFields);
@@ -89,9 +91,10 @@ export function GetPrimaryDisplayFields(
  */
 export function GetRecordDisplayName(
     entityName: string,
-    metadata: Record<string, unknown>
+    metadata: Record<string, unknown>,
+    provider?: IMetadataProvider
 ): string {
-    const entityInfo = FindEntityInfo(entityName);
+    const entityInfo = FindEntityInfo(entityName, provider);
     if (entityInfo) {
         const nameField = entityInfo.Fields.find(f => f.IsNameField);
         if (nameField && metadata[nameField.Name] != null) {
@@ -111,10 +114,10 @@ export function GetRecordDisplayName(
 
 // ─── Internal Helpers ─────────────────────────────────────────────────────
 
-function FindEntityInfo(entityName: string): EntityInfo | null {
+function FindEntityInfo(entityName: string, provider?: IMetadataProvider): EntityInfo | null {
     try {
-        const md = new Metadata();
-        return md.Entities.find(e => e.Name === entityName) ?? null;
+        const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
+        return md.EntityByName(entityName) ?? null;
     } catch {
         return null;
     }

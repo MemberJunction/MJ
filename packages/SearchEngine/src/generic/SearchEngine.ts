@@ -20,7 +20,7 @@
  * @module @memberjunction/search-engine
  */
 
-import { EntityInfo, EntityPermissionType, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { EntityInfo, EntityPermissionType, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import {
     SearchEngineBase,
     MJSearchProviderEntity,
@@ -165,6 +165,11 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         return SearchEngineBase.Instance;
     }
 
+    /** Resolve the metadata provider via SearchEngineBase (which extends BaseEngine and tracks ProviderToUse). */
+    protected get ProviderToUse(): IMetadataProvider {
+        return this.Base.ProviderToUse;
+    }
+
     /**
      * Initialize the search engine by reading active SearchProvider records
      * from SearchEngineBase (which caches them via BaseEngine) and
@@ -202,6 +207,9 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         for (const record of providerRecords) {
             await this.initializeProvider(record, contextUser);
         }
+
+        // Propagate the metadata provider to the enricher for entity lookups
+        this._enricher.Provider = this.ProviderToUse;
 
         // Sort by priority (lower = higher priority)
         this._providerEntries.sort((a, b) => a.Priority - b.Priority);
@@ -921,6 +929,9 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                 Priority: record.Priority,
             };
 
+            // Propagate the engine's metadata provider to the search provider for entity lookups
+            provider.Provider = this.ProviderToUse;
+
             // Initialize the provider
             await provider.Initialize(config, contextUser);
 
@@ -1127,7 +1138,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         permitted: SearchResultItem[]
     ): Promise<void> {
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             let entity: EntityInfo | null = null;
             try {
                 entity = md.EntityByName(entityName);

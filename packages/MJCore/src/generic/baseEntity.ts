@@ -696,6 +696,16 @@ export class BaseEntityEvent {
      * where baseEntity is null but the entity name is known from the remote notification.
      */
     entityName?: string;
+
+    /**
+     * The metadata provider associated with the entity that raised this event. Required for
+     * `remote-invalidate` events where `baseEntity` is null and listeners (e.g. LocalCacheManager,
+     * BaseEngine) need to resolve entity metadata from the correct provider in multi-provider
+     * scenarios. For other event types, baseEntity.ProviderToUse is the source of truth and this
+     * field can be omitted; listeners should fall back to `baseEntity?.ProviderToUse` and finally
+     * to `Metadata.Provider` when no provider is available.
+     */
+    provider?: IMetadataProvider;
 }
 
 /**
@@ -974,9 +984,10 @@ export abstract class BaseEntity<T = unknown> {
         const parentEntityInfo = this.EntityInfo.ParentEntityInfo;
         if (!parentEntityInfo) return;
 
-        // Create the parent entity via Metadata.Provider for proper class factory
-        // resolution and provider routing
-        this._parentEntity = await Metadata.Provider.GetEntityObject(
+        // Create the parent entity via this entity's provider so multi-provider scenarios
+        // route the parent through the same connection — not the global default.
+        const parentProvider = this.ProviderToUse as unknown as IMetadataProvider;
+        this._parentEntity = await parentProvider.GetEntityObject(
             parentEntityInfo.Name,
             this._contextCurrentUser
         );
@@ -1061,8 +1072,10 @@ export abstract class BaseEntity<T = unknown> {
      * child's data, and recursively discovers further children.
      */
     private async createAndLinkChildEntity(childEntityName: string): Promise<void> {
-        // Create child via Metadata.Provider for proper class factory resolution
-        const childEntity = await Metadata.Provider.GetEntityObject<BaseEntity>(
+        // Create child via this entity's provider so the child shares the same connection
+        // (correct in multi-provider scenarios — never the global default).
+        const childProvider = this.ProviderToUse as unknown as IMetadataProvider;
+        const childEntity = await childProvider.GetEntityObject<BaseEntity>(
             childEntityName,
             this._contextCurrentUser
         );
@@ -1283,9 +1296,18 @@ export abstract class BaseEntity<T = unknown> {
      * Used for raising events within the BaseEntity and can be used by sub-classes to raise events that are specific to the entity.
      */
     protected RaiseEvent(type: BaseEntityEvent["type"], payload: any, saveSubType: BaseEntityEvent["saveSubType"] = undefined) {
+        // Resolve the entity's bound provider once so every consumer (local subscribers
+        // AND MJGlobal listeners) receives consistent provider context. This matters in
+        // multi-provider scenarios — listeners like LocalCacheManager / BaseEngine need to
+        // know which provider produced the event to scope cache invalidation, metadata
+        // lookups, and engine state correctly. Cast through unknown because BaseEntity
+        // exposes ProviderToUse as IEntityDataProvider; the event consumers want the
+        // metadata-side view of the same instance.
+        const provider = this.ProviderToUse as unknown as IMetadataProvider | undefined;
+
         // this is the local event handler that is specific to THIS instance of the entity object
         LogDebug(`BaseEntity.RaiseEvent() - ${type === 'save' ? 'save:' + saveSubType : type} event raised for ${this.EntityInfo.Name}, about to call this._eventSubject.next()`);
-        this._eventSubject.next({type: type, payload: payload, saveSubType: saveSubType, baseEntity: this});
+        this._eventSubject.next({type: type, payload: payload, saveSubType: saveSubType, baseEntity: this, provider});
 
         // this next call is to MJGlobal to let everyone who cares knows that we had an event on an entity object
         // we broadcast save/delete/load events and their _started counterparts
@@ -1296,6 +1318,7 @@ export abstract class BaseEntity<T = unknown> {
             event.payload = payload;
             event.type = type;
             event.saveSubType = saveSubType;
+            event.provider = provider;
 
             LogDebug(`BaseEntity.RaiseEvent() - ${type === 'save' ? 'save:' + saveSubType : type} event raised for ${this.EntityInfo.Name}, about to call MJGlobal.RaiseEvent()`);
             MJGlobal.Instance.RaiseEvent({
@@ -2422,7 +2445,9 @@ export abstract class BaseEntity<T = unknown> {
      * Internal helper method for the class and sub-classes - used to easily get the Active User which is either the ContextCurrentUser, if defined, or the Metadata.Provider.CurrentUser if not.
      */
     protected get ActiveUser(): UserInfo {
-        return this.ContextCurrentUser || Metadata.Provider.CurrentUser; // use the context user ahead of the Provider.Current User - this is for SERVER side ops where the user changes per request
+        // Use the entity's bound provider (per-instance) before falling back to the global
+        // default — multi-provider correctness for server requests with per-request users.
+        return this.ContextCurrentUser || (this.ProviderToUse as unknown as IMetadataProvider)?.CurrentUser || Metadata.Provider.CurrentUser; // global-provider-ok: final fallback when no provider is bound
     }
 
     /**
@@ -2441,8 +2466,9 @@ export abstract class BaseEntity<T = unknown> {
             return;
         }
 
-        // Cache it via the provider's public API
-        Metadata.Provider.SetCachedRecordName(this.EntityInfo.Name, this.PrimaryKey, recordName);
+        // Cache it via this entity's provider so the cache lives on the right connection.
+        const md = this.ProviderToUse as unknown as IMetadataProvider;
+        md.SetCachedRecordName(this.EntityInfo.Name, this.PrimaryKey, recordName);
     }
 
     /**
@@ -2454,7 +2480,7 @@ export abstract class BaseEntity<T = unknown> {
     public CheckPermissions(type: EntityPermissionType, throwError: boolean): boolean {
         const u: UserInfo = this.ActiveUser;
         if (!u)
-            throw new Error('No user set - either the context user for the entity object must be set, or the Metadata.Provider.CurrentUser must be set');
+            throw new Error('No user set - either the context user for the entity object must be set, or the Metadata.Provider.CurrentUser must be set'); // global-provider-ok: error message text
 
         // Virtual entities are read-only — block Create, Update, Delete at the ORM level
         // This catches server-side code calling .Save()/.Delete() directly, which bypasses the API layer flags
@@ -3061,7 +3087,8 @@ export abstract class BaseEntity<T = unknown> {
         childCheck: { HasChildren: boolean; ChildEntityName: string },
         parentOptions: EntityDeleteOptions
     ): Promise<boolean> {
-        const childEntity = await Metadata.Provider.GetEntityObject<BaseEntity>(
+        const cascadeProvider = this.ProviderToUse as unknown as IMetadataProvider;
+        const childEntity = await cascadeProvider.GetEntityObject<BaseEntity>(
             childCheck.ChildEntityName,
             this._contextCurrentUser
         );
@@ -3096,10 +3123,13 @@ export abstract class BaseEntity<T = unknown> {
     public static async ResolveLeafEntity(
         entityName: string,
         primaryKey: CompositeKey,
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<{ LeafEntityName: string; IsLeaf: boolean }> {
-        const md = new Metadata();
-        const entityInfo = md.EntityByName(entityName);
+        // Resolve metadata via the caller-supplied provider so multi-provider client setups
+        // walk the entity hierarchy of the right server. Fall back to the global default.
+        const md = provider ?? Metadata.Provider;
+        const entityInfo = md?.EntityByName(entityName);
         if (!entityInfo) {
             return { LeafEntityName: entityName, IsLeaf: true };
         }
@@ -3399,6 +3429,7 @@ export abstract class BaseEntity<T = unknown> {
      */
     protected async GenerateEmbedding(field: EntityField, vectorField: EntityField, modelField: EntityField): Promise<boolean> {
         try {
+            if (this._skipEmbeddings) return true;
             if (!this.IsSaved || field.Dirty) {
                 if (field.Value?.trim().length > 0) {
                     // recalc vector
@@ -3449,7 +3480,17 @@ export abstract class BaseEntity<T = unknown> {
      * however it is possible for the string in the map to be any unique key relative to the object so you could have vectors
      * that embed multiple fields if desired.
      */
-    private _vectors: Map<string, number[]> = new Map<string, number[]>();  
+    private _vectors: Map<string, number[]> = new Map<string, number[]>();
+
+    /**
+     * When true, GenerateEmbedding() returns immediately without computing vectors.
+     * Set this before calling Save() in batch/sync contexts where embedding computation
+     * should be deferred (e.g., CLI sync operations where loading the embedding model
+     * per-process is expensive and vectors can be computed later by the API server).
+     */
+    private _skipEmbeddings: boolean = false;
+    public get SkipEmbeddings(): boolean { return this._skipEmbeddings; }
+    public set SkipEmbeddings(value: boolean) { this._skipEmbeddings = value; }
 
     /**
      * Utility storage for vector embeddings that represent the active record. Each string in the Map can be any unique key relative to the object so you can

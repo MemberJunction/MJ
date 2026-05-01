@@ -7,7 +7,7 @@
  * @module @memberjunction/ai-mcp-client/oauth/OAuthAuditLogger
  */
 
-import { Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { Metadata, RunView, UserInfo, LogError, LogStatus, IMetadataProvider } from '@memberjunction/core';
 import { MJAuditLogEntity } from '@memberjunction/core-entities';
 
 /**
@@ -270,7 +270,8 @@ export class OAuthAuditLogger {
         description: string,
         details: Record<string, unknown>,
         connectionId: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<void> {
         try {
             // Get the audit log type ID
@@ -285,7 +286,7 @@ export class OAuthAuditLogger {
             const entityId = await this.getMCPConnectionEntityId(contextUser);
 
             // Create the audit log record
-            const md = new Metadata();
+            const md = provider ?? (new Metadata() as unknown as IMetadataProvider);
             const auditLog = await md.GetEntityObject<MJAuditLogEntity>('MJ: Audit Logs', contextUser);
             auditLog.NewRecord();
 

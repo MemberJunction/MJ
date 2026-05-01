@@ -1,5 +1,5 @@
 import { Component, OnInit, OnDestroy, Input, Output, EventEmitter } from '@angular/core';
-import { RunView, Metadata } from '@memberjunction/core';
+import { RunView } from '@memberjunction/core';
 import {
   MJArtifactEntity,
   MJArtifactVersionEntity,
@@ -10,6 +10,7 @@ import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { UUIDsEqual } from '@memberjunction/global';
 import { Subject, debounceTime, distinctUntilChanged } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 export interface ArtifactLoadResult {
   spec: ComponentSpec;
@@ -25,7 +26,7 @@ export interface ArtifactLoadResult {
   templateUrl: './artifact-load-dialog.component.html',
   styleUrl: './artifact-load-dialog.component.css'
 })
-export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
+export class ArtifactLoadDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   @Input() Visible = false;
   @Output() Close = new EventEmitter<ArtifactLoadResult | undefined>();
 
@@ -65,7 +66,7 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
   previewError: string | null = null;
   showJsonPreview = false;
 
-  private metadata = new Metadata();
+  private get metadata() { return this.ProviderToUse; }
   private destroy$ = new Subject<void>();
   private searchSubject = new Subject<string>();
 
@@ -93,7 +94,7 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
   async loadArtifacts() {
     this.isLoading = true;
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const startRow = this.currentPage * this.pageSize;
 
       const result = await rv.RunView<MJArtifactEntity>({
@@ -127,7 +128,7 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
         return;
       }
 
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJCollectionEntity>({
         EntityName: 'MJ: Collections',
         ExtraFilter: `UserID = '${currentUserId}' OR ID IN (
@@ -157,7 +158,7 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
 
     // Load artifacts in this collection
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJArtifactEntity>({
         EntityName: 'MJ: Artifacts',
         ExtraFilter: `ID IN (
@@ -197,7 +198,7 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
 
     // User email filter
     if (this.userEmail?.trim()) {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const schemaName = md.EntityByName("MJ: Users")?.SchemaName || "__mj";
       filters.push(`UserID IN (SELECT ID FROM ${schemaName}.vwUsers WHERE Email LIKE '%${this.userEmail.trim()}%')`);
     }
@@ -217,7 +218,7 @@ export class ArtifactLoadDialogComponent implements OnInit, OnDestroy {
   async loadVersions(artifactId: string) {
     this.isLoadingVersions = true;
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJArtifactVersionEntity>({
         EntityName: 'MJ: Artifact Versions',
         ExtraFilter: `ArtifactID = '${artifactId}'`,

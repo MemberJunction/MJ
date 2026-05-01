@@ -596,7 +596,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         }
 
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const entityInfo = md.Entities.find(e => e.Name === entityName);
             
             if (!entityInfo) {
@@ -771,7 +771,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             this.subAgents = [...childAgents];
 
             // Load related sub-agents (Relationship-based)
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const relationshipsResult = await rv.RunView<MJAIAgentRelationshipEntity>({
                 EntityName: 'MJ: AI Agent Relationships',
                 ExtraFilter: `AgentID='${this.record.ID}' AND Status='Active'`,
@@ -963,7 +963,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 await this.applySearchFilter();
             } else {
                 // Need to load from database
-                const rv = new RunView();
+                const rv = RunView.FromMetadataProvider(this.ProviderToUse);
                 const result = await rv.RunView<MJAIAgentRunEntityExtended>({
                     EntityName: 'MJ: AI Agent Runs',
                     Fields: [
@@ -1032,7 +1032,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         }
         
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             this.agentType = await md.GetEntityObject<MJAIAgentTypeEntity>('MJ: AI Agent Types');
             if (this.agentType) {
                 await this.agentType.Load(this.record.TypeID);
@@ -1262,7 +1262,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
 
     private async refreshPermissionState(): Promise<void> {
         if (!this.record?.ID) return;
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<{ID: string}>({
             EntityName: 'MJ: AI Agent Permissions',
             Fields: ['ID'],
@@ -1509,7 +1509,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                         }
                         
                         // Add to pending changes (defer until save)
-                        const md = new Metadata();
+                        const md = this.ProviderToUse;
                         for (const prompt of newPrompts) {
                             const agentPrompt = await md.GetEntityObject<MJAIAgentPromptEntity>('MJ: AI Agent Prompts');
                             agentPrompt.NewRecord();
@@ -1612,7 +1612,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                     }
                     
                     // Add to pending changes (defer until save)
-                    const md = new Metadata();
+                    const md = this.ProviderToUse;
                     for (const action of newActions) {
                         const agentAction = await md.GetEntityObject<MJAIAgentActionEntity>('MJ: AI Agent Actions');
                         agentAction.NewRecord();
@@ -1906,7 +1906,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         }
 
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<MJAIAgentRunEntityExtended>({
                 EntityName: 'MJ: AI Agent Runs',
                 Fields: [
@@ -2059,7 +2059,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                     if (result && result.prompt) {
                         try {
                             // Get current user using proper MJ pattern
-                            const md = new Metadata();
+                            const md = this.ProviderToUse;
                             const currentUserId = md.CurrentUser.ID;
 
                             // Add the prompt to PendingRecords (will be saved with agent)
@@ -2179,7 +2179,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                         this.PendingRecords.splice(pendingAddIndex, 1);
                     } else {
                         // Find the existing AI Agent Prompt link record for deferred deletion
-                        const rv = new RunView();
+                        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
                         const linkResult = await rv.RunView<MJAIAgentPromptEntity>({
                             EntityName: 'MJ: AI Agent Prompts',
                             ExtraFilter: `AgentID='${this.record.ID}' AND PromptID='${prompt.ID}'`,
@@ -2278,7 +2278,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                         }
                         
                         // Add to pending changes (defer until save)
-                        const md = new Metadata();
+                        const md = this.ProviderToUse;
                         for (const agent of newAgents) {
                             const subAgentToUpdate = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents');
                             await subAgentToUpdate.Load(agent.ID);
@@ -2364,7 +2364,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                         this.PendingRecords.splice(pendingAddIndex, 1);
                     } else {
                         // Add to pending removals (will restore to root agent)
-                        const md = new Metadata();
+                        const md = this.ProviderToUse;
                         const subAgentToUpdate = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents');
                         await subAgentToUpdate.Load(subAgent.ID);
                         subAgentToUpdate.ParentID = null; // Will become a root agent
@@ -2585,7 +2585,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                     this.PendingRecords.splice(pendingAddIndex, 1);
                 } else {
                     // Find the existing AI Agent Action link record for deferred deletion
-                    const rv = new RunView();
+                    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
                     const linkResult = await rv.RunView<MJAIAgentActionEntity>({
                         EntityName: 'MJ: AI Agent Actions',
                         ExtraFilter: `AgentID='${this.record.ID}' AND ActionID='${action.ID}'`,
@@ -2854,7 +2854,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 this.selectedContextCompressionPrompt = null;
             }
 
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const transactionGroup = await md.CreateTransactionGroup();
 
             // Set transaction group on main record first

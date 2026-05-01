@@ -12,6 +12,7 @@ import {
 } from '../../../services/ai-instrumentation.service';
 import { GlobalFilterState } from '../../../interfaces/analytics-preferences.interface';
 import { TimeSeriesConfig } from '../../charts/time-series-chart.component';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 // ─── Local Interfaces ──────────────────────────────────────────────
 
@@ -478,7 +479,7 @@ interface ErrorHotspot {
     }
   `]
 })
-export class AnalyticsExecutiveSummaryComponent implements OnInit, OnDestroy {
+export class AnalyticsExecutiveSummaryComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   // ─── Inputs / Outputs ────────────────────────────────────────────
 
   private _timeRange = '24h';
@@ -530,6 +531,7 @@ export class AnalyticsExecutiveSummaryComponent implements OnInit, OnDestroy {
   // ─── Lifecycle ───────────────────────────────────────────────────
 
   ngOnInit(): void {
+    this.instrumentationService.Provider = this.ProviderToUse;
     this.subscribeToStreams();
     this.applyDateRange();
     this.isInitialized = true;
@@ -677,6 +679,7 @@ export class AnalyticsExecutiveSummaryComponent implements OnInit, OnDestroy {
 
     // Temporarily set date range to previous period, capture KPIs, then restore
     const previousService = new AIInstrumentationService();
+    previousService.Provider = this.ProviderToUse;
     previousService.setDateRange(prevStart, prevEnd);
 
     // We subscribe to the previousService's kpis$ once
