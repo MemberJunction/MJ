@@ -11,7 +11,7 @@ import { MJSearchScopeEntity, MJSearchScopePermissionEntity } from '@memberjunct
  * who creates a scope through any UI (Knowledge Hub dashboard's + New, the
  * full custom form's New, or programmatic via `Save()` on a fresh entity)
  * gets a Forbidden response the moment they try to use the scope they
- * just created — a UX trap that breaks the SEARCH_USAGE.md walkthrough's
+ * just created — a UX trap that breaks the plans/search-scopes-rag-plus/SEARCH_USAGE.md walkthrough's
  * §3 → §4 flow.
  *
  * The grant goes to the user identified by `this.ContextCurrentUser` (the

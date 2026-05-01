@@ -860,17 +860,29 @@ The branch ships four external SearchProvider classes (Phase 5):
 **What you're demonstrating:** the registration plumbing — these classes
 appear in the SearchScope Providers dropdown and can be selected.
 
-**Steps:**
+**Steps (P5.5 dropdown — commit `28bb630fbc`):**
 1. On a SearchScope record form, scroll to **Search Scope Providers**.
 2. Click **New**.
-3. In the new SearchScopeProvider tab, click into **Search Provider Name**
-   and type `elast`.
-4. The autocomplete resolves `Elasticsearch` (DriverClass=`ElasticsearchSearchProvider`).
-5. Clear and type `type`, `azure`, `open` to confirm the other three are
-   also discoverable.
+3. In the new SearchScopeProvider tab, click **Search Provider** — a
+   `<select>` dropdown enumerates all 8 registered providers in
+   `Name — DriverClass` format (Database, Database Full-Text, Semantic,
+   File Storage, plus the four externals: Elasticsearch, Typesense,
+   Azure AI Search, OpenSearch).
+4. Each option is annotated with whether the provider's DriverClass is
+   currently registered with the server's ClassFactory; if it isn't,
+   the suffix " (not registered on this server)" appears.
+5. Pick `Database — EntitySearchProvider`. Save. The grid row's
+   `Search Provider Name` column shows `Database`.
 
-**What you should see:** all four external provider records resolve via
-typeahead. Selecting and saving one adds it to the scope's Providers list.
+**What you should see:** the dropdown returns all 8 providers; the four
+externals' annotation depends on whether the optional peer dep is
+installed (Section 8.x below). Selecting and saving one adds it to the
+scope's Providers list.
+
+**Underneath:** the `AvailableSearchProviders` GraphQL query exposes
+the runtime catalog from `BaseSearchProvider.GetAvailableProviders()`.
+The form reads from `MJ: Search Providers` rows for the FK targets and
+overlays the runtime list as a status hint.
 
 **The peer-dep gap:** at runtime, when MJAPI evaluates the scope, the engine
 calls `Initialize` on each provider. The external providers attempt
@@ -892,7 +904,78 @@ To actually use one of these providers:
 
 **Cross-reference:** RAG_plan P5.1-5.5, commit `6b24f82fa7` (the export fix
 that made the registrations actually run), `metadata/search-providers/.search-providers.json`
-(the seed records), commit `cfa2b723fb` (seeding).
+(the seed records), commit `cfa2b723fb` (seeding), commit `28bb630fbc`
+(P5.5 provider dropdown).
+
+### 8.6 In-process vector index over an embedded entity column
+
+Several core entities ship with `EmbeddingVector` + `EmbeddingModelID`
+columns that are auto-populated on `Save()` — `MJ: Queries`,
+`MJ: AI Agent Notes`, `MJ: AI Agent Examples`. The data is there but
+the engine doesn't know about it until you wire an `MJVectorIndex`
+row pointing at the column.
+
+**`SimpleVectorDatabase`** (in `@memberjunction/ai-vectors-memory`) is
+the in-process driver — `VectorDBBase` backed by an entity column,
+cosine similarity via `SimpleVectorService`, no external service
+required. Suitable for dev / agent-memory / small-medium corpora
+(≤ ~50K rows).
+
+**Steps (verified live on the workbench — see `Demo-Queries-Vector` setup):**
+
+```sql
+-- Register the database
+INSERT INTO __mj.VectorDatabase (Name, ClassKey, DefaultURL, Description)
+VALUES ('Demo-Memory-Queries', 'SimpleVectorDatabase', 'memory://queries',
+        'In-process vector DB over MJ: Queries.EmbeddingVector');
+
+-- Register the index
+INSERT INTO __mj.VectorIndex (
+    Name, Description, VectorDatabaseID, EmbeddingModelID,
+    ExternalID, Dimensions, Metric, ProviderConfig
+) VALUES (
+    'Demo-Queries-Vector',
+    'Persistent index over MJ: Queries.EmbeddingVector',
+    '<VectorDatabase.ID>',
+    '1d45aa65-41ec-4572-9ecd-ab2826c9b059',  -- mpnet 768d (must match save-time model)
+    'queries-demo', 768, 'cosine',
+    '{"entityName":"MJ: Queries","vectorField":"EmbeddingVector","filter":"EmbeddingVector IS NOT NULL","titleField":"Name","snippetField":"Description"}'
+);
+```
+
+**Restart MJAPI**, then in the global "Search everything…" bar type
+a query whose embedding overlaps the indexed corpus (e.g. `artifacts`).
+The dropdown will surface `MJ: Queries` rows ranked by cosine similarity
+alongside the regular Entity LIKE / FullText hits — `RRF` fuses them
+when a record matches via more than one provider.
+
+**What we observed on this workbench's 15 embedded Query rows for
+"artifacts"**: 5 vector hits surfaced, 4 with literal "artifact" in the
+name (`GetConversationArtifactsForAgent` at 67%) and one
+(`ExternalChangeDetection_DetectDeletions` at 59%) that has no
+literal "artifact" in its Name field — proves the embedding's semantic
+match is doing real work.
+
+**Coexistence with `AllowUserSearchAPI`**: `MJ: Queries` ships with
+`AllowUserSearchAPI=false`, so even after wiring the vector index the
+LIKE-based EntitySearchProvider still skips it. To get fused scores
+across both providers, also flip the entity flag:
+
+```sql
+UPDATE __mj.Entity SET AllowUserSearchAPI = 1 WHERE Name = 'MJ: Queries';
+```
+
+That's a wider-blast-radius change (the entity becomes available in
+any other surface that respects `AllowUserSearchAPI`), so make it
+deliberately rather than as part of the vector wiring.
+
+**Cross-reference:** commit `d4cd55e186` (`SimpleVectorDatabase`
+introduction), commit `caf81f129b` (multi-provider score-evidence
+preservation in fusion — required for the in-process driver to combine
+correctly with EntitySearchProvider), commit `b79fcd5a1a` (`VectorDBBase.QueryIndex(params, contextUser?)`
+contract), commit `500c0633fe` (no API key required), the
+"How to enable vector search for an existing entity (in-process)"
+section in `guides/SEARCH_SCOPES_AND_RAG_GUIDE.md`.
 
 ---
 
@@ -1085,3 +1168,10 @@ definition.
 | `721de85ce0` | `MJSearchScopeEntityServer` auto-grants the creating user a Manage-level `SearchScopePermission` on every new scope, so freshly-created scopes are immediately usable for Live Preview without a separate permission step |
 | `fc2b5b28c2` | Knowledge Hub Search Scopes sidebar dedups by ID and synchronously appends new scopes (preventing UQ_SearchScope_Name collisions on rapid + New clicks) |
 | `dea32401ff` | Single-resource workspace mode no longer swallows the form when clicking + New on a related-entity panel — `NavigationService.handleSingleResourceModeTransition` now routes cross-resource nav through `OpenTabForced` so the existing tab is preserved and the new one is activated atomically |
+| `caf81f129b` | `SearchFusion` preserves multi-provider score evidence — when the same RecordID appears in two providers' result lists, both `ScoreBreakdown` contributions are merged. Previously the second provider's contribution was silently dropped, defeating RRF's "boost records that multiple providers agree on" semantics. Caught by S16 (the agent-end-to-end test for Queries vector search) where a record scored 0.74 by Vector + 0.21 by Entity ranked at the bottom of the fused list instead of #1 |
+| `2fab78cf5e` | Tier-1 input hardening. Null/undefined Query no longer crashes with `Cannot read properties of null (reading 'trim')` — surfaces a clean Failure result with `Query cannot be empty`. `EntitySearchProvider` strips SQL LIKE wildcards (`%`, `_`, `[`, `]`) from the query before passing to RunView's UserSearchString — closes a LIKE-injection vector that let `Query="%"` match every row. `SearchFusion.Fuse` defensively filters items with non-finite Score (NaN/Infinity), empty/non-string RecordID, and null payloads |
+| `28bb630fbc` | P5.5 — `MJSearchScopeProviderFormComponentExtended` replaces the generated form's plain SearchProviderID textbox with a `<select>` dropdown sourced from `MJ: Search Providers` rows, annotated with whether each DriverClass is registered with the server's ClassFactory. New `AvailableSearchProviders` GraphQL resolver exposes `BaseSearchProvider.GetAvailableProviders()` to the browser |
+| `d4cd55e186` | New `SimpleVectorDatabase` in-process VectorDBBase driver. Backs onto an entity column (typically `EmbeddingVector`), uses cosine via `SimpleVectorService`. Suitable for dev / agent-memory / small-medium corpora — no external service required. Documented in §8.6 |
+| `b79fcd5a1a` | `VectorDBBase.QueryIndex(params, contextUser?)` — `contextUser` is now a proper second parameter, matching MJ's `RunView(params, contextUser)` convention. Replaces an earlier `filter.__contextUser` smuggle. All 4 implementations (Pinecone/Qdrant/pgvector/SimpleVectorDatabase) accept the new signature |
+| `500c0633fe` | `SimpleVectorDatabase` constructor accepts an empty/missing `apiKey` and substitutes a placeholder. The base `VectorDBBase` constructor rejects empty keys (designed for Pinecone/Qdrant which authenticate via API key) — but the in-process driver has no remote auth target. Deployments no longer need to set `AI_VENDOR_API_KEY__SIMPLEVECTORDATABASE` |
+| `34656c0677` | Migrations consolidated. The 6 hand-authored DDL files + 5 CodeGen-emitted regenerations now ship as a single `V202605011700__v5.32.x__Search_Scopes_And_RAG_Plus.sql` with a header banner, per-section dividers, and a hand-authored / CodeGen-output separator. Same content; one Flyway entry instead of 11 |

@@ -22,7 +22,7 @@
  *   - All state flows through @Input/@Output
  *   - Parent owns persistence coordination if needed — rows are saved in-place on edit
  *
- * ## Runtime-generic by design (re P6.2 in RAG_plan.md)
+ * ## Runtime-generic by design (re P6.2 in plans/search-scopes-rag-plus/RAG_plan.md)
  *
  * The plan asked whether this grid should adopt the strongly-typed entity API
  * (`record.Field` accessors) instead of `BaseEntity.Get/Set`. It cannot:

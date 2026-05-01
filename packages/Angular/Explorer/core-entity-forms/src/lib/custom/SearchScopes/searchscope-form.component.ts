@@ -282,7 +282,7 @@ export class MJSearchScopeFormComponentExtended extends MJSearchScopeFormCompone
     /**
      * P4.2 — fusion weight sliders for each canonical SearchEngine source type.
      * Backed by `SearchScope.ScopeConfig.fusionWeights` JSON (the runtime path
-     * — see RAG_plan.md §8 Multi-Scope RRF Fusion). Plan task originally
+     * — see plans/search-scopes-rag-plus/RAG_plan.md §8 Multi-Scope RRF Fusion). Plan task originally
      * proposed `SearchScopeProvider.Weight` but that column doesn't exist in
      * Phase 1; the JSON path is the actual contract the SearchEngine reads.
      */

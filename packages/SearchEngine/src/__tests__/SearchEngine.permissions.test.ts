@@ -1,7 +1,7 @@
 /**
  * Tests for SearchEngine's `filterByPermissions` safety net.
  *
- * Closes the P2A.8 / RAG_plan.md §5.4 PM-10 gap: even when the resolver allows
+ * Closes the P2A.8 / plans/search-scopes-rag-plus/RAG_plan.md §5.4 PM-10 gap: even when the resolver allows
  * the search and the agent has SearchScopeAccess='All', records the calling
  * user cannot read at the entity layer must NEVER appear in the result.
  *
