@@ -947,7 +947,7 @@ END $$`;
     COALESCE(character_maximum_length, 0) AS "Length",
     COALESCE(numeric_precision, 0) AS "Precision",
     COALESCE(numeric_scale, 0) AS "Scale",
-    CASE WHEN is_nullable = 'YES' THEN 1 ELSE 0 END AS "AllowsNull"
+    CASE WHEN is_nullable = 'YES' THEN TRUE ELSE FALSE END AS "AllowsNull"
 FROM information_schema.columns
 WHERE table_schema = '${schema}'
   AND table_name = '${viewName}'
@@ -1903,12 +1903,12 @@ numbered_rows AS (
       e."Name" AS "EntityName",
       re."ID" AS "RelatedEntityID",
       fk."referenced_column" AS "RelatedEntityFieldName",
-      CASE WHEN sf."FieldName" = 'Name' THEN 1 ELSE 0 END AS "IsNameField",
-      CASE WHEN pk."ColumnName" IS NOT NULL THEN 1 ELSE 0 END AS "IsPrimaryKey",
+      CASE WHEN sf."FieldName" = 'Name' THEN TRUE ELSE FALSE END AS "IsNameField",
+      CASE WHEN pk."ColumnName" IS NOT NULL THEN TRUE ELSE FALSE END AS "IsPrimaryKey",
       CASE
-            WHEN pk."ColumnName" IS NOT NULL THEN 1
-            WHEN uk."ColumnName" IS NOT NULL THEN 1
-            ELSE 0
+            WHEN pk."ColumnName" IS NOT NULL THEN TRUE
+            WHEN uk."ColumnName" IS NOT NULL THEN TRUE
+            ELSE FALSE
       END AS "IsUnique",
       ROW_NUMBER() OVER (PARTITION BY sf."EntityID", sf."FieldName" ORDER BY (SELECT NULL)) AS rn
    FROM
@@ -1940,12 +1940,12 @@ ORDER BY "EntityID", "Sequence";
      * Builds the CASE expression for AllowUpdateAPI in the pending entity fields query.
      */
     private buildAllowUpdateAPICase(): string {
-        return `CASE WHEN sf."IsVirtual" = true THEN 0
-           WHEN sf."FieldName" = '${EntityInfo.CreatedAtFieldName}' THEN 0
-           WHEN sf."FieldName" = '${EntityInfo.UpdatedAtFieldName}' THEN 0
-           WHEN sf."FieldName" = '${EntityInfo.DeletedAtFieldName}' THEN 0
-           WHEN pk."ColumnName" IS NOT NULL THEN 0
-           ELSE 1
+        return `CASE WHEN sf."IsVirtual" = true THEN FALSE
+           WHEN sf."FieldName" = '${EntityInfo.CreatedAtFieldName}' THEN FALSE
+           WHEN sf."FieldName" = '${EntityInfo.UpdatedAtFieldName}' THEN FALSE
+           WHEN sf."FieldName" = '${EntityInfo.DeletedAtFieldName}' THEN FALSE
+           WHEN pk."ColumnName" IS NOT NULL THEN FALSE
+           ELSE TRUE
       END AS "AllowUpdateAPI"`;
     }
 
