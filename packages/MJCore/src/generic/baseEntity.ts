@@ -721,10 +721,36 @@ export abstract class BaseEntity<T = unknown> {
 
     /**
      * Runtime field instances for this record — one `EntityField` per column in `_EntityInfo.Fields`.
-     * Each holds the current value, old value, dirty state, and per-field validation. Populated
-     * in `init()` and used as the primary data store for Get/Set/Save/validate.
+     * Each holds the current value, old value, dirty state, and per-field validation.
+     *
+     * **Lazy hydration**: Fields are NOT built up-front in the constructor / `init()`. Instead they
+     * are constructed on first need by `hydrateFieldsIfNeeded()`. Until then, this array is empty
+     * and reads come from `_raw`. This makes constructing entities from cache data near-instant —
+     * the per-row Field allocation cost (the dominant overhead for engine warm-loads) only happens
+     * if a consumer actually mutates the record or invokes a Field-walking operation (Save, Validate,
+     * Dirty, .Fields accessor, etc.).
+     *
+     * Always read via the `Fields` getter — it auto-hydrates. Direct `_Fields` reads from inside
+     * `BaseEntity` are reserved for paths that have already triggered hydration or paths that
+     * deliberately want to inspect hydration state (e.g., `Dirty` getter).
      */
     private _Fields: EntityField[] = [];
+
+    /**
+     * Tracks whether `_Fields` has been populated. `false` while in "raw mode" (data accessible
+     * via `_raw` but no EntityField instances built yet); flips to `true` after the first call to
+     * `hydrateFieldsIfNeeded()`. One-way transition.
+     */
+    private _fieldsHydrated: boolean = false;
+
+    /**
+     * Raw data populated by `LoadFromData()` BEFORE field hydration. When non-null and
+     * `_fieldsHydrated === false`, `Get()` reads from this map instead of walking `_Fields`.
+     * Cleared/superseded by the hydration step which copies values into actual EntityField
+     * instances. Keeping it after hydration would not be useful — `_Fields` becomes the
+     * authoritative source.
+     */
+    private _raw: Record<string, unknown> | null = null;
 
     /**
      * Whether a database record has been loaded into this instance (via `Load`, `NewRecord`,
@@ -1504,6 +1530,8 @@ export abstract class BaseEntity<T = unknown> {
     }
 
     get Fields(): EntityField[] {
+        // Caller wants to walk Fields — promote raw data into real EntityField instances now.
+        this.hydrateFieldsIfNeeded();
         return this._Fields;
     }
 
@@ -1517,11 +1545,14 @@ export abstract class BaseEntity<T = unknown> {
             return null;
         }
 
+        // Lookup needs an EntityField instance to return — hydrate.
+        this.hydrateFieldsIfNeeded();
+
         const lcase = fieldName.trim().toLowerCase(); // do this once as we will use it multiple times
 
         if (this._fieldCache === null) {
             this._fieldCache = new Map<string, EntityField>();
-            for (const f of this.Fields) {
+            for (const f of this._Fields) {
                 if (!this._fieldCache.has(f.Name.trim().toLowerCase())) {
                     this._fieldCache.set(f.Name.trim().toLowerCase(), f);
                 }
@@ -1541,12 +1572,15 @@ export abstract class BaseEntity<T = unknown> {
             return null;
         }
 
+        // Lookup needs an EntityField instance to return — hydrate.
+        this.hydrateFieldsIfNeeded();
+
         const lcase = codeName.trim().toLowerCase();
 
         if (this._codeNameCache === null) {
             this._codeNameCache = new Map<string, EntityField>();
             // First-write-wins on duplicate code names — matches prior Array.find() behavior
-            for (const f of this.Fields) {
+            for (const f of this._Fields) {
                 const codeKey = f.CodeName.trim().toLowerCase();
                 if (!this._codeNameCache.has(codeKey)) {
                     this._codeNameCache.set(codeKey, f);
@@ -1561,8 +1595,11 @@ export abstract class BaseEntity<T = unknown> {
      * Returns true if the object is Dirty, meaning something has changed since it was last saved to the database, and false otherwise. For new records, this will always return true.
      */
     get Dirty(): boolean {
-        return !this.IsSaved ||
-               this.Fields.some(f => f.Dirty) ||
+        if (!this.IsSaved) return true;
+        // Raw mode means LoadFromData populated us but no mutation has happened — nothing can be
+        // dirty. Avoid hydrating just to check.
+        if (!this._fieldsHydrated) return this._parentEntity?.Dirty ?? false;
+        return this._Fields.some(f => f.Dirty) ||
                (this._parentEntity?.Dirty ?? false);
     }
 
@@ -1678,15 +1715,33 @@ export abstract class BaseEntity<T = unknown> {
         if (this._parentEntity && this._parentEntityFieldNames?.has(FieldName)) {
             return this._parentEntity.Get(FieldName); // recursive for N-level chains
         }
-        else {
-            const field = this.GetFieldByName(FieldName);
-            if (field != null) {
-                // if the field is a date and the value is a string, convert it to a date
-                if (field.EntityFieldInfo.TSType === EntityFieldTSType.Date && (typeof field.Value === 'string' || typeof field.Value === 'number') ) {
-                    field.Value = new Date(field.Value);
-                }
-                return field.Value;
+
+        // Raw mode fast path: read directly from the cached data without building EntityField
+        // instances. This is the dominant cost in engine warm-loads — generated typed getters
+        // (e.g. `get Name() { return this.Get('Name'); }`) flow through here, so a consumer that
+        // only iterates and reads (`engine.Models.find(m => m.ID === x).Name`) never triggers
+        // hydration. Cache data uses exact SQL column names so no case-insensitive scan needed.
+        if (!this._fieldsHydrated && this._raw) {
+            const value = this._raw[FieldName];
+            if (value === undefined) return null;
+            // Date conversion mirrors the hydrated path. Mutating _raw to cache the converted
+            // Date avoids reparsing on every read.
+            const fi = this._EntityInfo?.Fields.find(f => f.Name === FieldName);
+            if (fi?.TSType === EntityFieldTSType.Date && (typeof value === 'string' || typeof value === 'number')) {
+                const d = new Date(value);
+                this._raw[FieldName] = d;
+                return d;
             }
+            return value;
+        }
+
+        const field = this.GetFieldByName(FieldName);
+        if (field != null) {
+            // if the field is a date and the value is a string, convert it to a date
+            if (field.EntityFieldInfo.TSType === EntityFieldTSType.Date && (typeof field.Value === 'string' || typeof field.Value === 'number') ) {
+                field.Value = new Date(field.Value);
+            }
+            return field.Value;
         }
 
         // if we get here, didn't find it
@@ -1959,15 +2014,63 @@ export abstract class BaseEntity<T = unknown> {
         this._resultHistory = [];
         this._recordLoaded = false;
         this._Fields = [];
+        this._fieldsHydrated = false;
+        this._raw = null;
         this._fieldCache = null;
         this._codeNameCache = null;
-        if (this.EntityInfo) {
-            for (const rawField of this.EntityInfo.Fields) {
-                const key = this.EntityInfo.Name + '.' + rawField.Name;
-                // support for sub-classes of the EntityField class
-                const newField = MJGlobal.Instance.ClassFactory.CreateInstance<EntityField>(EntityField, key, rawField);
-                this.Fields.push(newField);
+        // Field construction is deferred to hydrateFieldsIfNeeded(). Constructor / init() stays
+        // O(1). The work happens on first call to a Field-walking method (Save, Validate, .Fields,
+        // .Set, etc.) — for read-only consumers (e.g. engine cache iteration via typed getters)
+        // it never runs.
+    }
+
+    /**
+     * Lazily builds `_Fields` from `EntityInfo.Fields` and populates them from `_raw` if present.
+     * Idempotent: subsequent calls are O(1). One-way: once hydrated, the entity stays hydrated for
+     * the rest of its lifetime.
+     *
+     * Called automatically by:
+     *   - `Set()` / `SetMany()` (mutation requires Field instances for dirty tracking)
+     *   - `Fields` getter (consumer wants the array)
+     *   - `GetFieldByName()` / `GetFieldByCodeName()` (lookups)
+     *   - `Save()` / `Delete()` / `Validate()` / `ValidateAsync()` (need full Field state)
+     *
+     * Pure readers via the generated `get FieldName()` → `Get('FieldName')` path stay in raw mode
+     * and never trigger hydration.
+     */
+    private hydrateFieldsIfNeeded(): void {
+        if (this._fieldsHydrated) return;
+        this._fieldsHydrated = true;
+
+        if (!this.EntityInfo) return;
+
+        // 1. Allocate one EntityField per column. Same construction the old `init()` used to do
+        //    up-front — we just deferred it.
+        for (const rawField of this.EntityInfo.Fields) {
+            const key = this.EntityInfo.Name + '.' + rawField.Name;
+            const newField = MJGlobal.Instance.ClassFactory.CreateInstance<EntityField>(EntityField, key, rawField);
+            this._Fields.push(newField);
+        }
+
+        // 2. If we have raw data from LoadFromData, populate Fields. The first set of each Field
+        //    runs through the EntityField setter with `_NeverSet=true`, which simultaneously sets
+        //    Value AND OldValue (so the field is not marked dirty). This matches the old
+        //    SetMany(replaceOldValues=true) semantics on initial load.
+        if (this._raw) {
+            for (const field of this._Fields) {
+                const value = this._raw[field.Name];
+                if (value !== undefined) {
+                    // Date conversion mirrors what SetLocal / Get does for raw string/number dates.
+                    if (field.EntityFieldInfo.TSType === EntityFieldTSType.Date && (typeof value === 'string' || typeof value === 'number')) {
+                        field.Value = new Date(value);
+                    } else {
+                        field.Value = value;
+                    }
+                }
             }
+            // Raw data has been promoted into Fields — release the reference so we don't carry
+            // duplicate state.
+            this._raw = null;
         }
     }
 
@@ -2740,6 +2843,53 @@ export abstract class BaseEntity<T = unknown> {
             this._parentEntity.Hydrate(data);
         }
 
+        // ── Fast path: raw-mode load ────────────────────────────────────────────
+        // First load of a fresh instance, plain object input, non-IS-A entity, no per-field
+        // active-status assertions or other side effects needed up front. Store the raw data
+        // and defer building EntityField instances until something actually needs them.
+        // This is the dominant warm-load case (cache restore in TransformSimpleObjectToEntityObject
+        // populating engine arrays of read-only data) and was previously the per-row bottleneck.
+        const isPlainObject = data && typeof data === 'object' && !Array.isArray(data) && !(data instanceof Date);
+        const canTakeFastPath =
+            isPlainObject &&
+            !this._fieldsHydrated &&
+            this._Fields.length === 0 &&
+            !this._parentEntity &&
+            !this.EntityInfo?.IsParentType;
+
+        if (canTakeFastPath) {
+            this._raw = data as Record<string, unknown>;
+
+            // Mirror the "are PKs present?" check that the hydrated path does, but read straight
+            // from the raw data so we don't trigger hydration.
+            const pks = this.EntityInfo?.PrimaryKeys ?? [];
+            let allPksPresent = pks.length > 0;
+            for (const pkInfo of pks) {
+                const v = this._raw[pkInfo.Name];
+                if (v === null || v === undefined) {
+                    allPksPresent = false;
+                    break;
+                }
+            }
+
+            if (pks.length === 0) {
+                LogError(`BaseEntity.LoadFromData() called on ${this.EntityInfo?.Name} with no primary keys defined. This is an error state and should not happen.`);
+                this._recordLoaded = false;
+                this._everSaved = false;
+            } else {
+                this._recordLoaded = allPksPresent;
+                this._everSaved = allPksPresent;
+                // Note: CacheRecordName() walks Fields, which would hydrate. Defer it — name caching
+                // is an optional optimization, not a correctness requirement, and the next path that
+                // actually needs Fields will trigger hydration anyway. For non-parent entities the
+                // child-entity discovery is a sync no-op so we skip the await as well.
+            }
+            return true;
+        }
+
+        // ── Slow / correct path ────────────────────────────────────────────────
+        // Hits when: subsequent LoadFromData call on an already-loaded instance, IS-A entity
+        // (parent or child), or non-plain-object input. Preserves original semantics exactly.
         this.SetMany(data, true, _replaceOldValues, true); // ignore non-existent fields, but DO replace old values based on the provided param
         // now, check to see if we have the primary key set, if so, we should consider ourselves
         // loaded from the database and set the _recordLoaded flag to true along with the _everSaved flag

@@ -1011,6 +1011,8 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         // updates from saves/deletes on the entities it tracks.
         const engine = KnowledgeHubMetadataEngine.Instance;
         await engine.Config(false);
+        // AIEngineBase is deferred at startup; ensure loaded before reading .VectorDatabases.
+        await AIEngineBase.Instance.EnsureLoaded();
 
         this.entityDocuments = engine.EntityDocuments;
         this.vectorDatabases = AIEngineBase.Instance.VectorDatabases;
@@ -1394,6 +1396,8 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
             throw new Error(`Entity "${entityName}" not found in metadata`);
         }
 
+        // AIEngineBase is deferred at startup; ensure loaded before findSuggestionPrompt reads .Prompts.
+        await AIEngineBase.Instance.EnsureLoaded();
         const prompt = this.findSuggestionPrompt();
         const provider = this.ProviderToUse as GraphQLDataProvider;
         if (!provider) {

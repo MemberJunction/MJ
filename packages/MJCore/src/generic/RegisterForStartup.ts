@@ -3,7 +3,6 @@ import { UserInfo } from "./securityInfo";
 import { IMetadataProvider } from "./interfaces";
 import { Metadata } from "./metadata";
 import { LocalCacheManager } from "./localCacheManager";
-import { ProviderBase } from "./providerBase";
 
 /**
  * Options for the @RegisterForStartup decorator
@@ -29,6 +28,25 @@ export interface RegisterForStartupOptions {
      * Human-readable description for logging/debugging
      */
     description?: string;
+
+    /**
+     * When true, the engine's HandleStartup() is fired during startup but NOT awaited.
+     * The shell/app boot sequence proceeds without waiting for the engine to finish loading.
+     *
+     * Use for engines that aren't required for first paint (e.g., admin-only or
+     * feature-specific engines like AIEngineBase, IntegrationEngineBase).
+     *
+     * **Consumer contract:** code that reads engine state MUST call
+     * `await Engine.Instance.EnsureLoaded()` (or `Config(false)`) first. BaseEngine
+     * load is idempotent — a concurrent caller waits for the in-flight load promise
+     * rather than re-loading, so the cost is just one microtask when the load is
+     * already done or already running.
+     *
+     * Failures during deferred startup are logged according to `severity` but never
+     * propagate up — they cannot abort the app boot since boot has already completed.
+     * Default: false.
+     */
+    deferred?: boolean;
 }
 
 /**
@@ -345,8 +363,17 @@ export class StartupManager extends BaseSingleton<StartupManager> {
 
 
         const startTime = Date.now();
-        const registrations = this.GetRegistrations();
-        const groups = this.GroupByPriority(registrations);
+        const allRegistrations = this.GetRegistrations();
+
+        // Split into synchronous (awaited, gates startup completion) and deferred
+        // (fired but not awaited; consumers must call Engine.Instance.EnsureLoaded()
+        // before reading state). Deferred engines start AFTER sync engines complete
+        // so they don't compete with the shell-render-critical batch for the same
+        // GraphQL coalesce window.
+        const syncRegistrations = allRegistrations.filter(r => !r.options.deferred);
+        const deferredRegistrations = allRegistrations.filter(r => r.options.deferred);
+
+        const groups = this.GroupByPriority(syncRegistrations);
         const results: LoadResult[] = [];
 
         for (const group of groups) {
@@ -406,10 +433,6 @@ export class StartupManager extends BaseSingleton<StartupManager> {
 
         this._loadCompleted = true;
 
-        // All engines have finished loading — close the fast-start window so
-        // subsequent RunViews use normal server-validated caching.
-        ProviderBase.ConsumeFastStartupMode();
-
         // Log per-engine timing summary so slow engines are visible
         const totalMs = Date.now() - startTime;
         const sorted = [...results].sort((a, b) => b.durationMs - a.durationMs);
@@ -418,11 +441,54 @@ export class StartupManager extends BaseSingleton<StartupManager> {
         );
         console.log(`[StartupManager] All engines loaded in ${totalMs}ms:\n${lines.join('\n')}`);
 
+        // Fire deferred engines AFTER sync completes — fire-and-forget, no await.
+        // The Promise here is never awaited; consumers reach a deferred engine via
+        // its own .EnsureLoaded() call which dedupes against the in-flight load
+        // (BaseEngine._loadingSubject handles concurrent callers).
+        if (deferredRegistrations.length > 0) {
+            this.KickOffDeferredEngines(deferredRegistrations, contextUser, provider);
+        }
+
         return {
             success: results.every(r => r.success || r.severity !== 'fatal'),
             results,
             totalDurationMs: totalMs
         };
+    }
+
+    /**
+     * Fires HandleStartup() for each deferred registration in parallel without
+     * awaiting. Logs per-engine completion / failure so the dev console shows
+     * when background loads finish. Errors are logged at the registration's
+     * configured severity but never propagate — the app boot has already
+     * returned by the time this runs.
+     */
+    private KickOffDeferredEngines(
+        registrations: StartupRegistration[],
+        contextUser?: UserInfo,
+        provider?: IMetadataProvider
+    ): void {
+        const names = registrations.map(r => r.constructor.name).join(', ');
+        console.log(`[StartupManager] Kicking off ${registrations.length} deferred engine(s) in background: [${names}]`);
+
+        for (const reg of registrations) {
+            const loadStart = Date.now();
+            // Intentionally no await — consumers will rendezvous via EnsureLoaded()
+            reg.getInstance().HandleStartup(contextUser, provider).then(() => {
+                reg.loadedAt = new Date();
+                reg.loadDurationMs = Date.now() - loadStart;
+                console.log(`[StartupManager] ⏱️  Deferred engine loaded: ${reg.constructor.name} (${reg.loadDurationMs}ms)`);
+            }).catch((error: unknown) => {
+                const durationMs = Date.now() - loadStart;
+                const severity = reg.options.severity || 'error';
+                if (severity === 'error') {
+                    console.error(`[StartupManager] Deferred engine failed: ${reg.constructor.name} (${durationMs}ms)`, error);
+                } else if (severity === 'warn') {
+                    console.warn(`[StartupManager] Deferred engine warning: ${reg.constructor.name} (${durationMs}ms)`, error);
+                }
+                // 'silent' / 'fatal' — fatal is meaningless for deferred since boot already returned
+            });
+        }
     }
 
     /**

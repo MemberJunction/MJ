@@ -39,6 +39,9 @@ export class MJAIAgentExampleEntityServer extends MJAIAgentExampleEntity {
             if (!saved) return false;
 
             // 3. Sync the in-memory vector service with the just-persisted Status.
+            //    AIEngine is registered as deferred — EnsureLoaded blocks until the
+            //    background load completes so the underlying vector service exists.
+            await AIEngine.Instance.EnsureLoaded();
             if (this.Status === 'Active' && this.EmbeddingVector) {
                 AIEngine.Instance.AddOrUpdateSingleExampleEmbedding(this);
             } else {
