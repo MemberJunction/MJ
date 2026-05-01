@@ -103,12 +103,14 @@ the Search Scopes & RAG+ initiative). Highlights:
   Angular Observable surface for the `StreamScopedSearch`
   mutation + `SearchStreamEvents` subscription.
 
-**Migrations**
-- `V202604280730__Add_SearchScopePermission.sql`
-- `V202604281100__Add_SearchScope_RerankerBudget.sql`
-- `V202604281130__Add_SearchExecutionLog.sql`
-- `V202604281200__Add_SearchScopeTestQuery.sql`
-- `V202604291522__Fix_SearchScopePermission_UniqueConstraints.sql`
+**Migration**
+- `V202605011700__v5.32.x__Search_Scopes_And_RAG_Plus.sql` —
+  consolidated. Contains six DDL sections (Phase 1 baseline,
+  `SearchScopePermission`, `SearchScope.RerankerBudgetCents`,
+  `SearchExecutionLog`, `SearchScopeTestQuery`, unique-constraint
+  fix) followed by five CodeGen runs that regenerate the entity
+  metadata, sprocs, views, and permission grants for all of the
+  above.
 
 **Test suite**
 - 17 end-to-end agent scenarios (s01–s17) under `agent-scenarios/`,
