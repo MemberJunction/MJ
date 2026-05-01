@@ -22,12 +22,6 @@ module.exports = {
    * ====================
    */
 
-  // The codegen-lib's DEFAULT_CODEGEN_CONFIG hardcodes dbPort to 1433 and ignores
-  // DB_PORT from the environment, so it has to be overridden here for repos whose
-  // workbench DB listens on a non-standard port. Honor DB_PORT when set, fall back
-  // to 1433 otherwise.
-  dbPort: process.env.DB_PORT ? Number(process.env.DB_PORT) : 1433,
-
   // Include __mj schema for MJ framework development
   // Default excludes __mj since end-users shouldn't modify core entities
   excludeSchemas: ['sys', 'staging'],
