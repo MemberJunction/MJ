@@ -20,6 +20,9 @@ export * from './components/requests/agent-requests-resource.component';
 // Autotagging Pipeline
 export * from './components/autotagging/autotagging-pipeline-resource.component';
 
+// Tag Governance (Taxonomy + Suggestions Inbox + Tag Health)
+export * from './components/tag-governance/tag-governance-resource.component';
+
 // Vector Management
 export * from './components/vectors/vector-management-resource.component';
 

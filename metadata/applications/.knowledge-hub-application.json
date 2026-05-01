@@ -15,6 +15,13 @@
         "isDefault": true
       },
       {
+        "Label": "Tag Governance",
+        "Icon": "fa-solid fa-sitemap",
+        "ResourceType": "Custom",
+        "DriverClass": "TagGovernance",
+        "isDefault": false
+      },
+      {
         "Label": "Clusters",
         "Icon": "fa-solid fa-circle-nodes",
         "ResourceType": "Custom",
@@ -58,7 +65,7 @@
     "ID": "796EB8B2-B392-428B-839C-E9637C3D7EDB"
   },
   "sync": {
-    "lastModified": "2026-04-11T04:11:19.789Z",
-    "checksum": "44e3fe98472c42f46cf825e1d39ebc5259ac86646aa6f92972e0d88a33726fb1"
+    "lastModified": "2026-05-01T18:03:42.860Z",
+    "checksum": "1be7c701e9e7bdeec96c877269097ff2bd47c5eaac1ebaa0516b5b8bdf73dc71"
   }
 }
