@@ -110,9 +110,15 @@ export class NewUserBase {
                         LogStatus(`Created User Application ${application.Name} for new user ${user.Name}`);
 
                         const rv: RunView = new RunView();
+                        // Filter on ApplicationID in SQL (server-side), then on DefaultForNewUser
+                        // in JS (client-side). Doing the boolean check in SQL via "= 1" works on
+                        // SQL Server (BIT) but fails on PostgreSQL (BOOLEAN) with `operator does
+                        // not exist: boolean = integer`. A typical Application Entity table is
+                        // small enough that JS-side filtering is negligible, and this avoids
+                        // dialect-specific SQL.
                         const rvResult: RunViewResult<MJApplicationEntityEntityType> = await rv.RunView({
                             EntityName: 'MJ: Application Entities',
-                            ExtraFilter: `ApplicationID = '${application.ID}' and DefaultForNewUser = 1`,
+                            ExtraFilter: `ApplicationID = '${application.ID}'`,
                         }, contextUser);
 
                         if(!rvResult.Success){
@@ -120,9 +126,11 @@ export class NewUserBase {
                             continue;
                         }
 
-                        LogStatus(`Creating ${rvResult.Results.length} User Application Entities for User Application ${application.Name} for new user ${user.Name}`);
+                        const defaultForNewUserEntities = rvResult.Results.filter(e => e.DefaultForNewUser);
 
-                        for(const [index, appEntity] of rvResult.Results.entries()){
+                        LogStatus(`Creating ${defaultForNewUserEntities.length} User Application Entities for User Application ${application.Name} for new user ${user.Name}`);
+
+                        for(const [index, appEntity] of defaultForNewUserEntities.entries()){
                             const userAppEntity: MJUserApplicationEntityEntity = await md.GetEntityObject<MJUserApplicationEntityEntity>('MJ: User Application Entities', contextUser);
                             userAppEntity.NewRecord();
                             userAppEntity.UserApplicationID = userApplication.ID;
