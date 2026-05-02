@@ -314,10 +314,8 @@ export class SearchService {
                     await StartupManager.Instance.Startup();
 
                     const engine = UserInfoEngine.Instance;
-                    console.log('[SearchService] After Startup — engine.Loaded:', engine.Loaded, 'UserSettings count:', engine.UserSettings.length);
 
                     const json = engine.GetSetting(RECENT_SEARCHES_KEY);
-                    console.log('[SearchService] GetSetting("' + RECENT_SEARCHES_KEY + '"):', json?.substring(0, 100));
 
                     if (json) {
                         const parsed = JSON.parse(json) as RecentSearchJson[];
