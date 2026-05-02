@@ -10,7 +10,7 @@
  *   ]
  */
 
-import { NgModule, ModuleWithProviders } from '@angular/core';
+import { NgModule, ModuleWithProviders, enableProdMode, isDevMode } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { MJExplorerAppComponent } from './explorer-app.component';
@@ -64,6 +64,19 @@ export class MJExplorerAppModule {
    * Should be called once in the root application module.
    */
   static forRoot(environment: MJEnvironmentConfig): ModuleWithProviders<MJExplorerAppModule> {
+    // Enable Angular's production mode before bootstrap completes. This
+    // disables development-only assertions (extra change-detection passes,
+    // assert-equality checks) and shaves real time off every digest cycle.
+    // Safe to call from forRoot() because @NgModule decorator metadata for
+    // the consumer's AppModule is evaluated BEFORE platformBrowserDynamic()
+    // .bootstrapModule() runs, so this lands in time. enableProdMode() is
+    // idempotent and guards against being called twice — also why we gate
+    // on `isDevMode()` (avoids the "called too late" warning if bootstrap
+    // somehow already ran in a hot-reload scenario).
+    if (environment.production && isDevMode()) {
+      enableProdMode();
+    }
+
     // Pull in the SW providers conditionally based on the environment kill
     // switch. The module is always loaded (so the toast component injection
     // works), but `enabled: false` means no actual worker is registered and
