@@ -65,7 +65,7 @@ Without this, dark-mode users see a brief light-mode flash on every load before 
 <script>
   (function () {
     try {
-      var saved = localStorage.getItem('mj-login-theme');
+      var saved = localStorage.getItem('mj-theme');
       var isDark = saved
         ? saved === 'dark'
         : window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -75,7 +75,16 @@ Without this, dark-mode users see a brief light-mode flash on every load before 
 </script>
 ```
 
-Reads the same `mj-login-theme` localStorage key that `MJExplorerAppComponent` writes when the user toggles theme. Falls back to OS `prefers-color-scheme`. Wrapped in try/catch so localStorage exceptions (Safari private mode, disabled storage) can never block app load.
+Reads `mj-theme`, the unified theme key written by:
+
+- `ThemeService.applyBaseThemeAttribute()` post-login — mirrors the resolved base theme (`light` or `dark`), including the OS-resolved value for `'system'` preference
+- `MJExplorerAppComponent.ToggleTheme()` when the user toggles theme on the login screen
+
+The three readers (this inline script, `MJExplorerAppComponent.applyLoginTheme`, `ThemeService`) all share `mj-theme` as the single source of truth, so they paint in sync with no flash.
+
+`mj-theme` is preserved across logout by `MJExplorerAuthBase.preservedLocalStorageKeys` so the login screen continues to show the user's last theme without flashing back to OS default.
+
+Falls back to OS `prefers-color-scheme` on true first visits with no saved preference. Wrapped in try/catch so localStorage exceptions (Safari private mode, disabled storage) can never block app load.
 
 Combined with the SW app-shell pre-cache, dark-mode users see correct theme paint within ~100ms of navigation start.
 
