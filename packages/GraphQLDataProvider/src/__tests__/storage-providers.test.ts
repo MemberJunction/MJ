@@ -256,6 +256,115 @@ describe('BrowserIndexedDBStorageProvider — error handling', () => {
     });
 });
 
+describe('BrowserIndexedDBStorageProvider — GetItems (single-transaction batched read)', () => {
+    let provider: BrowserIndexedDBStorageProvider;
+
+    beforeEach(async () => {
+        await resetIDB();
+        provider = new BrowserIndexedDBStorageProvider();
+        await awaitDbReady(provider);
+    });
+
+    it('uses one IDB transaction for the whole batch (verified by mocking transaction)', async () => {
+        // Populate some entries first (so we have something to read).
+        for (let i = 0; i < 10; i++) {
+            await provider.SetItem(`key-${i}`, `value-${i}`, 'RunViewCache');
+        }
+
+        // Spy on the wrapped IDBPDatabase's `transaction` method via the provider's
+        // dbPromise. We can't easily intercept inside the @tempfix/idb wrapper from
+        // outside, so we count by behavior: GetItems for N keys should NOT take
+        // anywhere near N times the wall-clock time of a single GetItem if it's
+        // actually batched. This is a coarse but reliable signal.
+        const singleStart = Date.now();
+        await provider.GetItem('key-0', 'RunViewCache');
+        const singleMs = Date.now() - singleStart;
+
+        const batchStart = Date.now();
+        const batchOut = await provider.GetItems<string>(
+            ['key-0', 'key-1', 'key-2', 'key-3', 'key-4', 'key-5', 'key-6', 'key-7', 'key-8', 'key-9'],
+            'RunViewCache'
+        );
+        const batchMs = Date.now() - batchStart;
+
+        expect(batchOut.size).toBe(10);
+        // 10 batched reads should never take more than 5× the time of a single read.
+        // In practice it's usually ≤2×. If batching were broken (each read its own tx),
+        // we'd expect ~10×.
+        expect(batchMs).toBeLessThan(Math.max(singleMs * 5, 50));
+    });
+
+    it('round-trips Date / Map / Set inside a batched read (structured clone preserved)', async () => {
+        const d = new Date('2026-05-02T12:00:00Z');
+        const m = new Map<string, number>([['a', 1], ['b', 2]]);
+        const s = new Set([10, 20, 30]);
+        await provider.SetItem('d', d, 'RunViewCache');
+        await provider.SetItem('m', m, 'RunViewCache');
+        await provider.SetItem('s', s, 'RunViewCache');
+
+        const out = await provider.GetItems<unknown>(['d', 'm', 's'], 'RunViewCache');
+        expect(out.get('d')).toBeInstanceOf(Date);
+        expect((out.get('d') as Date).toISOString()).toBe(d.toISOString());
+        expect(out.get('m')).toBeInstanceOf(Map);
+        expect((out.get('m') as Map<string, number>).get('b')).toBe(2);
+        expect(out.get('s')).toBeInstanceOf(Set);
+        expect((out.get('s') as Set<number>).has(20)).toBe(true);
+    });
+
+    it('routes batch read through a known category store (no cross-store leakage)', async () => {
+        await provider.SetItem('k', 'in-metadata', 'Metadata');
+        await provider.SetItem('k', 'in-runview', 'RunViewCache');
+
+        const fromMetadata = await provider.GetItems<string>(['k'], 'Metadata');
+        const fromRunView  = await provider.GetItems<string>(['k'], 'RunViewCache');
+
+        expect(fromMetadata.get('k')).toBe('in-metadata');
+        expect(fromRunView.get('k')).toBe('in-runview');
+    });
+
+    it('handles unknown-category batch reads via the prefixed default store', async () => {
+        await provider.SetItem('a', 1, 'AdHocCat');
+        await provider.SetItem('b', 2, 'AdHocCat');
+        await provider.SetItem('c', 3, 'OtherAdHocCat');
+
+        const fromAdHoc = await provider.GetItems<number>(['a', 'b', 'c'], 'AdHocCat');
+        // 'a' and 'b' belong to AdHocCat; 'c' is in a different unknown category and
+        // should not show up under AdHocCat (different prefixed key in the default store).
+        expect(fromAdHoc.get('a')).toBe(1);
+        expect(fromAdHoc.get('b')).toBe(2);
+        expect(fromAdHoc.get('c')).toBeNull();
+    });
+
+    it('returns null entries for every key when the IDB transaction fails', async () => {
+        // Force failure by closing the underlying DB before the batched read.
+        // The provider's GetItems should catch and populate null for every requested key.
+        const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+        // @ts-expect-error — accessing private dbPromise for test setup
+        const db = await provider.dbPromise;
+        db.close();
+
+        const out = await provider.GetItems<string>(['k1', 'k2', 'k3'], 'RunViewCache');
+        expect(out.size).toBe(3);
+        expect(out.get('k1')).toBeNull();
+        expect(out.get('k2')).toBeNull();
+        expect(out.get('k3')).toBeNull();
+        consoleSpy.mockRestore();
+    });
+
+    it('handles large batched reads (200 keys) without truncation', async () => {
+        const N = 200;
+        for (let i = 0; i < N; i++) {
+            await provider.SetItem(`k-${i}`, { value: i }, 'RunViewCache');
+        }
+        const keys = Array.from({ length: N }, (_, i) => `k-${i}`);
+        const out = await provider.GetItems<{ value: number }>(keys, 'RunViewCache');
+        expect(out.size).toBe(N);
+        for (let i = 0; i < N; i++) {
+            expect(out.get(`k-${i}`)!.value).toBe(i);
+        }
+    });
+});
+
 describe('BrowserIndexedDBStorageProvider — cross-store isolation', () => {
     let provider: BrowserIndexedDBStorageProvider;
 

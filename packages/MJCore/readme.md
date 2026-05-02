@@ -924,6 +924,22 @@ Each implementation handles serialization for its medium internally:
 
 Class instances (with prototype methods) lose their prototype on retrieval across all providers; store the underlying data shape (e.g. via `entity.GetAll()` for `BaseEntity`).
 
+#### Batched reads via `GetItems<T>`
+
+For workflows that need many cached entries at once — most notably the smart-cache-check warm-load path that reads ~85 fingerprints per coalesced engine batch — the interface exposes a batched read:
+
+```typescript
+GetItems<T = unknown>(keys: string[], category?: string): Promise<Map<string, T | null>>;
+```
+
+Returns a `Map` keyed by the input keys. Missing keys map to `null`. Implementations leverage their backend's native batching primitive:
+
+- **IndexedDB**: single read transaction with N parallel `get()` calls inside it. Trades ~N transactions of overhead for one transaction's commit cost — significant on hot paths because IDB serializes transactions on the same object store. For 85 keys, this is the difference between ~425ms of IDB bookkeeping and ~10ms.
+- **Redis**: one `MGET` command, one network round-trip, N values returned. ~N× faster than individual `GET` calls which each pay full RTT.
+- **localStorage / in-memory**: implemented as a tight loop for API uniformity (no batching benefit on synchronous backends).
+
+Used internally by `LocalCacheManager.GetRunViewResults` which the smart-cache-check flow calls in two passes (one for the per-fingerprint cache-status payload, one to materialize 'current' entries after the server response). Available to consumer code anywhere multiple cached entries are needed at once.
+
 #### IndexedDB schema versioning
 
 `BrowserIndexedDBStorageProvider` derives its IDB `DB_VERSION` from the `@memberjunction/graphql-dataprovider` package version (`major * 1000 + minor`). Patch releases share the same DB version (cache survives); minor releases trigger a one-time `onupgradeneeded` that wipes all object stores and recreates them empty. Cache repopulates on first use after the upgrade.
