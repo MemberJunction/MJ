@@ -667,11 +667,34 @@ For comprehensive information about IS-A relationships in MemberJunction:
 
 ## Caching & Real-Time Sync
 
-This package provides browser-side storage providers (`BrowserIndexedDBStorageProvider`, `BrowserLocalStorageProvider`) for `LocalCacheManager`, and subscribes to `CACHE_INVALIDATION` GraphQL events to keep browser data fresh when other users or servers modify entities.
+This package provides browser-side storage providers for `LocalCacheManager` and subscribes to `CACHE_INVALIDATION` GraphQL events to keep browser data fresh when other users or servers modify entities.
 
-`setupGraphQLClient` orchestrates a deterministic warm-load path: after `provider.Config(...)` loads the cached `AllMetadata` blob from IndexedDB (gzip-compressed), it calls `provider.preValidateAndRefresh()` to confirm the cache is current via a single batched timestamp round-trip. If current, fast-start engages and engines trust their local IndexedDB caches without per-view smart-cache-check round-trips during `StartupManager.Startup()`. If stale, metadata is refreshed in place and fast-start is disabled so engines fall through to smart-cache-check.
+### Storage providers
 
-For the full architecture — including differential updates, the fast-start window, Redis cross-server sync, session-based deduplication, and deployment topologies — see the [**Caching & Pub/Sub Guide**](/guides/CACHING_AND_PUBSUB_GUIDE.md).
+| Provider | Backing store | Key features |
+|---|---|---|
+| `BrowserIndexedDBStorageProvider` | IndexedDB | **Native object storage via structured clone** (no JSON parse/stringify on the hot path), per-category object stores, version-bumped wipe on minor releases |
+| `BrowserLocalStorageProvider` | `localStorage` | Generic-typed `SetItem<T>` / `GetItem<T>` with internal JSON serialization, key-prefix-based category isolation |
+
+Both implement the generic-typed `ILocalStorageProvider` interface defined in `@memberjunction/core` — see that package's README for interface details.
+
+### IndexedDB schema versioning (auto-derived from package version)
+
+`BrowserIndexedDBStorageProvider` ties its IDB `DB_VERSION` to this package's `package.json` version (`major * 1000 + minor`):
+
+- **5.30.x** → DB version `5030`
+- **5.31.x** → DB version `5031`
+- **6.0.x**  → DB version `6000`
+
+Patch releases keep the same DB version, so frequent patch deploys don't force users into cold-cache loads. Each minor release triggers a one-time `onupgradeneeded` that wipes all object stores; caches repopulate on first use.
+
+The version is generated at build time by `scripts/generate-version.mjs` (runs as a `prebuild`/`pretest` step) into `src/version.generated.ts`. To force an extra wipe within the same minor (rare — emergency hotfix scenario), bump the `MANUAL_CACHE_REVISION` constant at the top of `storage-providers.ts`.
+
+### Warm-load orchestration
+
+`setupGraphQLClient` orchestrates a deterministic warm-load path: after `provider.Config(...)` loads the cached `AllMetadata` blob from IndexedDB (gzip-compressed), it calls `provider.preValidateAndRefresh()` to confirm the cache is current via a single batched timestamp round-trip. If current, engines trust their local caches and route per-view requests through `RunViewsWithCacheCheck` — a fingerprint-only GraphQL call that returns either a "current" marker (use local cache) or fresh data for stale entries.
+
+For the full architecture — differential updates, Redis cross-server sync, session-based deduplication, and deployment topologies — see the [**Caching & Pub/Sub Guide**](/guides/CACHING_AND_PUBSUB_GUIDE.md).
 
 ## Dependencies
 

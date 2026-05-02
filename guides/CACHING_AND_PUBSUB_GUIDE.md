@@ -591,17 +591,41 @@ if (this._entityIndex.get(normalizedName)?.size === 0) {
 
 ## Storage Providers
 
-LocalCacheManager delegates actual storage to an `ILocalStorageProvider` implementation. The interface is simple but powerful:
+LocalCacheManager delegates actual storage to an `ILocalStorageProvider` implementation. The interface is **generic-typed** — `T` flows from caller through to the retrieved value:
 
 ```typescript
 interface ILocalStorageProvider {
-    GetItem(key: string, category?: string): Promise<string | null>;
-    SetItem(key: string, value: string, category?: string): Promise<void>;
+    GetItem<T = unknown>(key: string, category?: string): Promise<T | null>;
+    SetItem<T>(key: string, value: T, category?: string): Promise<void>;
     Remove(key: string, category?: string): Promise<void>;
     ClearCategory?(category: string): Promise<void>;
     GetCategoryKeys?(category: string): Promise<string[]>;
 }
 ```
+
+### Native object storage vs. JSON serialization
+
+Each implementation handles serialization for its medium internally — callers see the same object-typed interface regardless of backend:
+
+| Provider | Storage format | Type fidelity |
+|---|---|---|
+| `BrowserIndexedDBStorageProvider` | **Native objects via structured clone** | Preserves `Date`, `Map`, `Set`, typed arrays, nested objects |
+| `BrowserLocalStorageProvider` | JSON-serialized internally | `Date` → ISO string; `Map`/`Set` → plain objects |
+| `RedisLocalStorageProvider` | JSON-serialized internally | Same JSON limitations as localStorage |
+| `InMemoryLocalStorageProvider` | Native references (no copy) | Full identity preserved |
+
+**Why this matters**: IndexedDB's structured clone is implemented in browser-native C++ — significantly faster than JS-level `JSON.parse`/`JSON.stringify`. For cache-heavy workloads (engine warm load, dashboard refreshes) this is a measurable win. The previous string-based interface forced a sandwich of `JSON.stringify` (write) + `JSON.parse` (read) that we no longer pay for IDB-backed cache hits.
+
+```typescript
+// Generic typing flows end-to-end — no manual JSON.parse, no casting
+interface CachedRunViewData { results: unknown[]; maxUpdatedAt: string; }
+
+await provider.SetItem<CachedRunViewData>(fp, { results, maxUpdatedAt }, 'RunViewCache');
+const cached = await provider.GetItem<CachedRunViewData>(fp, 'RunViewCache');
+// cached: CachedRunViewData | null
+```
+
+**Class instances lose their prototype on retrieval** across all providers. Store the underlying data shape (e.g. via `entity.GetAll()` for `BaseEntity`) — methods aren't preserved by structured clone or JSON.
 
 ### Category Namespaces
 
@@ -643,13 +667,26 @@ graph TD
 
 **Location**: `packages/GraphQLDataProvider/src/storage-providers.ts`
 
-- **Database name**: `MJ_Metadata`, **Version**: 3
+- **Database name**: `MJ_Metadata`
+- **DB version**: auto-derived from package version as `major * 1000 + minor` (e.g. `5.30.x` → `5030`, `5.31.x` → `5031`, `6.0.x` → `6000`). See "Version-bumped wipe" below.
+- **Native object storage** via IndexedDB's structured clone algorithm — `Date`, `Map`, `Set`, typed arrays, and nested objects are preserved. No JSON.parse/JSON.stringify on the hot path.
 - **Dedicated object stores** for known categories: `mj:default`, `mj:Metadata`, `mj:RunViewCache`, `mj:RunQueryCache`, `mj:DatasetCache`
 - Unknown categories: prefixed keys stored in the default store
-- Automatic upgrade handling (v3 removes legacy `Metadata_KVPairs` store)
-- Graceful fallback to in-memory if IndexedDB fails (e.g., private browsing mode in some browsers)
-- **Key format**: `[mj]:[category]:[key]`
+- **Cross-tab handling**: when another tab triggers a DB upgrade, the local connection's `onversionchange` fires and we close gracefully so the upgrade isn't blocked
 - **This is what `GraphQLDataProvider.LocalStorageProvider` resolves to** in browser environments. The `LocalStorageProvider` / `_localStorageProvider` / `localStorageRootKey` names are historical — the actual backend is IndexedDB.
+
+#### Version-bumped wipe (zero-config schema migrations)
+
+Bumping any minor version of `@memberjunction/graphql-dataprovider` automatically increments the IDB `DB_VERSION`, which fires `onupgradeneeded` on the next page load. The handler drops every object store (cached data may be from any prior schema/format) and recreates them fresh — caches repopulate on first use after the upgrade.
+
+This is intentional design:
+
+- **Patch releases share the DB version** (5.30.0, 5.30.1, 5.30.2 all use DB version `5030`) — frequent patch deploys don't trigger cold-cache loads
+- **Minor releases get a clean cache** — sidesteps the entire "did this PR change cache format?" review burden
+- **Cost**: one slow page load per user per minor (~1s back to the cold-load path) — negligible for monthly LTS cadence
+- **Emergency override**: bump `MANUAL_CACHE_REVISION` in `storage-providers.ts` to force a wipe within a single minor release
+
+The version number is generated at build time by `packages/GraphQLDataProvider/scripts/generate-version.mjs` (a `prebuild`/`pretest` script that reads `package.json` and writes `src/version.generated.ts`). No human action required when bumping versions through the normal changeset flow.
 
 #### Framework Metadata Blob: gzip-Compressed
 
