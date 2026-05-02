@@ -16,6 +16,7 @@ Quick reference for what landed in this release for PG and what's deferred.
 
   All 5 verified equivalent to their SQL Server sources by applying both files to fresh DBs at v5.30 pre-test baseline and diffing schema deltas (tables, columns, constraints, indexes, routines, views) — see `scripts/snapshot-{ss,pg}.sh` + `scripts/README-migration-equivalence.md`.
 - **PG-only fix migration** — `V202604282300__v5.30.x__Fix_vwEntityPermissions_RoleName_Alias.pg-only.sql` recreates the v5.0 baseline view that had an unquoted `as RoleName` alias case-folding to `rolename` on PG.
+- **PG-only fix migration** — `V202604301930__v5.30.x__Add_vwEntitiesWithMissingBaseTables.pg-only.sql` adds the `vwEntitiesWithMissingBaseTables` view that the v5.0 baseline's wrapped `DO` block silently failed to create. CodeGen depends on it during the metadata-management phase; without it `mj codegen` against PG fails with `relation __mj.vwEntitiesWithMissingBaseTables does not exist`. Same query as the SS source — a `LEFT JOIN information_schema.tables` to find Entity rows whose backing table no longer exists.
 
 ## Managed PostgreSQL (RDS/Aurora/Cloud SQL/Azure)
 
@@ -35,7 +36,7 @@ identical so no schema drift; just history-row hash updates.
 
 ## ⚠️ Required post-install step for fresh PG installs
 
-The v5.30 baseline (`B202604301800__v5.30__PG_Baseline.pg.sql`) contains every schema change from v5.0–v5.30 (tables, columns, views, functions, indexes, constraints) and metadata syncs through v5.29. **It does not contain v5.30 metadata-only updates** — those were deferred (see below). After a fresh install, you must run:
+The migration set (v5.0 baseline `B202602151200__v5.0__Baseline.pg.sql` plus 106 V*.pg.sql / *.pg-only.sql files through v5.30) brings a fresh PG database to the v5.30 schema and metadata-syncs through v5.29. **It does not include v5.30 metadata-only updates** — those were deferred (see "What's deferred" below). After a fresh install, you must run:
 
 ```bash
 mj sync push --dir metadata
@@ -43,10 +44,31 @@ mj sync push --dir metadata
 
 This applies the v5.30 metadata changes from canonical source files in `metadata/` (new AI prompts, agent definitions, entity descriptions, etc.). Without this step, your install will have v5.30 schema but stale metadata.
 
+## ⚠️ Known v5.30 limits on PG
+
+Verified by end-to-end testing on 2026-05-01 against a fresh PG install:
+
+**Works on a fresh v5.30 PG install:**
+- ✅ All 107 migration files apply cleanly (`ON_ERROR_STOP=1`, zero failures)
+- ✅ MJAPI boots, loads 312 entities, exposes 1,376 GraphQL query fields and 1,016 mutations
+- ✅ Read queries on any entity work via Explorer / GraphQL
+- ✅ CRUD mutations on **v5.0–v5.29 entities** work end-to-end (their `fn_create_*` / `fn_update_*` / `fn_delete_*` sprocs ship in the migration set)
+
+**Deferred to v5.30.1:**
+- ❌ **`mj codegen` against PG** is blocked on multiple boolean/integer type mismatches in code shipped by PR #2208 (the PG codegen support work). Specifically:
+  - CodeGenLib's `PostgreSQLCodeGenProvider.ts` has CASE expressions that return `1`/`0` (SS-style) for output columns whose downstream consumers expect BOOLEAN
+  - The view `vwSQLColumnsAndEntityFields` returns `INTEGER` for `AutoIncrement` and `IsVirtual` while `spUpdateExistingEntityFieldsFromSchema` compares them with `TRUE` (boolean)
+  - These are systemic — one fix surfaces the next layer
+- ❌ **CRUD mutations on v5.30-introduced entities** (`MJ: System Events`, anything in `Runtime_Actions_Schema` / `Memory_Consolidation_Schema`) fail at runtime because their CRUD sprocs were never generated (CodeGen failed before reaching them). These entities are read-only on PG until v5.30.1.
+
+The `mj codegen` blockers are not in this migrations PR's scope — they live in `packages/CodeGenLib` and in the view/sproc bodies introduced by PR #2208. A follow-up PR will fix them and ship the v5.30 CRUD sprocs as a regenerated `CodeGen_Run_*.pg.sql` migration.
+
 ## What's deferred to v5.30.1
 
 ### v5.30 coverage
-- **`V202604271430__v5.30.x__Metadata_Sync.sql`** — 964k-line auto-generated metadata dump. Hits a converter string-literal escape bug at the `${formatted}` JS template literal pattern in stored Query SQL. The right fix is to regenerate via `mj sync push` from a known-correct state rather than repair generated content. **Workaround for fresh installs: `mj sync push --dir metadata` after applying baseline.** This is captured above in the "Required post-install step" section.
+- **`V202604271430__v5.30.x__Metadata_Sync.sql`** — 964k-line auto-generated metadata dump. Hits a converter string-literal escape bug at the `${formatted}` JS template literal pattern in stored Query SQL. The right fix is to regenerate via `mj sync push` from a known-correct state rather than repair generated content. **Workaround for fresh installs: `mj sync push --dir metadata` after applying migrations.** This is captured above in the "Required post-install step" section.
+- **`V202604292210__v5.31.x__Create_UDT_Schema.sql`** — v5.31-tagged UDT schema migration that landed in the SS migration set ahead of the v5.31 release. PG port deferred to land alongside v5.31. Exempted in the SQLConverter parity test via `PENDING_V5_30_PORTS`.
+- **`mj codegen` against PG + v5.30 entity CRUD** — see "Known v5.30 limits on PG" section above. Blocked on bugs in code shipped by PR #2208; tracked separately for v5.30.1.
 
 ### Converter rule gaps surfaced this round (Category A in the manual fixes catalog)
 - A5: `sys.check_constraints` + `sys.columns` dynamic-name lookup → `pg_constraint` joins
@@ -58,7 +80,7 @@ This applies the v5.30 metadata changes from canonical source files in `metadata
 - Performance smoke test on a realistic dataset (1M+ rows in busy entities)
 - Actual managed-PG (RDS) install dry-run
 - Connection pooling and operational hardening guide
-- Parity test (`should have a PG counterpart for every T-SQL V-migration`) is currently `it.skip(...)` in `pg-migration-regression.test.ts`. It is meaningful only on the historical-migrations path (`pg-migration-files` worktree branch). On the baseline path (this PR) there are no committed V*.pg.sql to map to T-SQL sources, so the test would always show 100% missing — re-enable only if the historical path is selected for merge.
+- Parity test (`should have a PG counterpart for every T-SQL V-migration`) in `pg-migration-regression.test.ts` is **enabled** as of this PR. It enforces 1:1 SS↔PG file parity with two documented exemptions in `PENDING_V5_30_PORTS` (the v5.30 Metadata_Sync and the v5.31 UDT schema files). Future SS migrations without a PG counterpart will fail this gate unless explicitly added to the exemption set.
 
 ## How to verify a new migration port locally
 

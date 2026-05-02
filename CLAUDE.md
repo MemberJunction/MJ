@@ -205,6 +205,8 @@ The `/guides/` folder contains comprehensive best practices guides for specific 
   - How the auto-generated lazy config is produced by `mj codegen manifest --lazy-config`
   - Troubleshooting lazy loading issues
 
+- **[BaseEntity Server-Side Patterns](guides/BASE_ENTITY_SERVER_PATTERNS.md)**: Use **before** writing a new server-side entity subclass under `MJCoreEntitiesServer`. Covers the persisted-embedding pattern (`Save()` + `EmbedTextLocal` + engine cache sync), cross-record invariants via `ValidateAsync` (NOT DB triggers), and FK cleanup before delete. Reference implementations: `MJAIAgentNoteEntityServer`, `MJTagEntityServer`, `MJTagScopeEntityServer`. Lift the recipes from there — don't reinvent.
+
 When building dashboards, creating new Angular applications, comparing UUIDs, or implementing complex UI features, **read the relevant guide first** to ensure consistency with established patterns.
 
 ---

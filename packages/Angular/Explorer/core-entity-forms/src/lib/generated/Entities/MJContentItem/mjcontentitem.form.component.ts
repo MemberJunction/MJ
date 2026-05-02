@@ -23,7 +23,8 @@ export class MJContentItemFormComponent extends BaseFormComponent {
             { sectionKey: 'mJContentItemAttributes', sectionName: 'Content Item Attributes', isExpanded: false },
             { sectionKey: 'mJContentItemTags', sectionName: 'Content Item Tags', isExpanded: false },
             { sectionKey: 'mJContentItemDuplicatesContentItemAID', sectionName: 'Content Item Duplicates (Content Item A ID)', isExpanded: false },
-            { sectionKey: 'mJContentItemDuplicatesContentItemBID', sectionName: 'Content Item Duplicates (Content Item B ID)', isExpanded: false }
+            { sectionKey: 'mJContentItemDuplicatesContentItemBID', sectionName: 'Content Item Duplicates (Content Item B ID)', isExpanded: false },
+            { sectionKey: 'mJTagSuggestions', sectionName: 'Tag Suggestions', isExpanded: false }
         ]);
     }
 }

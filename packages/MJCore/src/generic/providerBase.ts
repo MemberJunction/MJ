@@ -197,38 +197,6 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     /** Timer handle for the coalesce flush */
     private _coalesceTimer: ReturnType<typeof setTimeout> | null = null;
 
-    // ── Fast Startup Mode ─────────────────────────────────────────────
-    /**
-     * When enabled, the first round of RunViews calls after startup will
-     * trust the local IndexedDB/localStorage cache without server validation.
-     * This eliminates the smart cache check round-trips during initial load,
-     * making warm page refreshes near-instant.
-     *
-     * After the first round of engine loads completes, FastStartupMode
-     * automatically disables itself so subsequent data access uses normal
-     * server validation.
-     *
-     * Only applies to client-side providers (TrustLocalCacheCompletely=false).
-     * Set to false to disable.
-     */
-    public static FastStartupMode: boolean = true;
-
-    /** Tracks whether fast startup has been consumed (auto-disables after startup completes) */
-    private static _fastStartupConsumed = false;
-
-    /**
-     * Marks the fast-startup window as closed. After this call, all RunViews
-     * requests will use normal server-validated caching instead of trusting
-     * local IndexedDB unconditionally. Called by StartupManager after all
-     * engines have completed their initial load.
-     */
-    public static ConsumeFastStartupMode(): void {
-        if (!ProviderBase._fastStartupConsumed) {
-            ProviderBase._fastStartupConsumed = true;
-            LogStatusEx({ message: '⚡ [Fast-Start] Startup complete — fast-start mode disabled, server validation re-enabled', verboseOnly: false });
-        }
-    }
-
     // ── Request Deduplication + Linger Window ──────────────────────────
     /**
      * How long (ms) a resolved RunViews result stays available for instant
@@ -1388,58 +1356,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             contextUser?.ID
         );
 
-        // Client-side providers use smart cache check (lightweight server validation)
-        // Server-side providers trust the cache completely and fall through to
-        // the traditional flow which returns cached data immediately on hit.
+        // Client-side providers route any CacheLocal params through smart-cache-check:
+        // a single batched GraphQL call sends fingerprints (hashes + counts) per view,
+        // the server confirms current vs stale, and only stale views return data.
+        // Server-side providers trust the cache completely and fall through to the
+        // traditional flow which returns cached data immediately on hit.
         if (!this.TrustLocalCacheCompletely) {
-            // FastStartupMode: on the first engine load after a page refresh, trust
-            // the local IndexedDB cache without server validation. This eliminates
-            // the RunViewsWithCacheCheck round-trips that dominate warm-load TTI.
-            // After the first batch of engine loads, auto-disable so subsequent
-            // requests use normal server validation for data freshness.
-            const useFastStartup = ProviderBase.FastStartupMode
-                && !ProviderBase._fastStartupConsumed
-                && LocalCacheManager.Instance.IsInitialized
-                && params.some(p => p.CacheLocal);
-
-            if (useFastStartup) {
-                // Check if we actually have cached data for ALL params.
-                // Use Promise.all to parallelize IndexedDB reads — sequential awaits
-                // cause ~100ms Zone.js scheduling overhead per read, which adds up to
-                // 10+ seconds across 86+ views.
-                const cacheCheckResults = await Promise.all(
-                    params.map(async (param) => {
-                        if (!param.CacheLocal) return true; // non-cached params don't block
-                        const fp = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
-                        const cached = await LocalCacheManager.Instance.GetRunViewResult(fp);
-                        return cached != null;
-                    })
-                );
-                const allHaveCachedData = cacheCheckResults.every(Boolean);
-
-                if (allHaveCachedData) {
-                    // Do NOT consume the fast-start flag here — multiple engines fire
-                    // RunViews in parallel during StartupManager.Startup(), and each one
-                    // should benefit from the local cache. StartupManager.Startup() will
-                    // call ConsumeFastStartupMode() after all engines complete.
-                    const entityNames = params.map(p => p.EntityName || p.ViewName || '?').join(', ');
-                    LogStatusEx({
-                        message: `⚡ [Fast-Start] Trusting local cache for ${params.length} views [${entityNames}] — skipping server validation`,
-                        verboseOnly: false
-                    });
-                    // Fall through to the traditional flow below which will return cached data
-                } else {
-                    // Not all params have cached data — use normal smart cache check
-                    const useSmartCacheCheck = params.some(p => p.CacheLocal);
-                    if (useSmartCacheCheck) {
-                        return this.prepareSmartCacheCheckParams(params, telemetryEventId, contextUser);
-                    }
-                }
-            } else if (!useFastStartup) {
-                const useSmartCacheCheck = params.some(p => p.CacheLocal);
-                if (useSmartCacheCheck && LocalCacheManager.Instance.IsInitialized) {
-                    return this.prepareSmartCacheCheckParams(params, telemetryEventId, contextUser);
-                }
+            const useSmartCacheCheck = params.some(p => p.CacheLocal);
+            if (useSmartCacheCheck && LocalCacheManager.Instance.IsInitialized) {
+                return this.prepareSmartCacheCheckParams(params, telemetryEventId, contextUser);
             }
         }
 
@@ -2496,7 +2421,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (!this.TrustLocalCacheCompletely && !hardRefresh && !this._localMetadata?.AllEntities?.length) {
             await this.LoadLocalMetadataFromStorage();
             if (this._localMetadata?.AllEntities?.length) {
-                LogStatusEx({ message: `⚡ [Fast-Start] Loaded ${this._localMetadata.AllEntities.length} entities from local cache — deferring server validation`, verboseOnly: false });
+                LogStatusEx({ message: `⚡ [Metadata Cache] Loaded ${this._localMetadata.AllEntities.length} entities from local cache — pre-validating before engine startup`, verboseOnly: false });
 
                 // Do NOT kick off background validation here — it writes to IndexedDB
                 // which contends with engine RunView cache reads during StartupManager.
@@ -2548,7 +2473,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         try {
             const needsRefresh = await this.CheckToSeeIfRefreshNeeded(providerToUse);
             if (needsRefresh) {
-                LogStatusEx({ message: `⚡ [Fast-Start] Background check: metadata is stale — refreshing...`, verboseOnly: false });
+                LogStatusEx({ message: `⚡ [Metadata Cache] Background check: metadata is stale — refreshing...`, verboseOnly: false });
                 const start = Date.now();
                 const res = await this.GetAllMetadata(providerToUse, false);
                 const elapsed = Date.now() - start;
@@ -2556,13 +2481,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     this.UpdateLocalMetadata(res);
                     this._latestLocalMetadataTimestamps = this._latestRemoteMetadataTimestamps;
                     await this.SaveLocalMetadataToStorage();
-                    LogStatusEx({ message: `⚡ [Fast-Start] Background refresh complete (${elapsed}ms) — metadata updated in place`, verboseOnly: false });
+                    LogStatusEx({ message: `⚡ [Metadata Cache] Background refresh complete (${elapsed}ms) — metadata updated in place`, verboseOnly: false });
                 }
             } else {
-                LogStatusEx({ message: `⚡ [Fast-Start] Background check: metadata is current — no refresh needed`, verboseOnly: false });
+                LogStatusEx({ message: `⚡ [Metadata Cache] Background check: metadata is current — no refresh needed`, verboseOnly: false });
             }
         } catch (e) {
-            LogError(`[Fast-Start] Background validation failed: ${e}`);
+            LogError(`[Metadata Cache] Background validation failed: ${e}`);
             // Not critical — app continues with cached metadata
         }
     }
@@ -2570,33 +2495,27 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     /**
      * Synchronous pre-validation of cached metadata before engine startup.
      *
-     * This is the deterministic counterpart to {@link backgroundValidateAndRefresh}: instead
-     * of letting engines fast-start against potentially-stale cached data and self-healing
-     * a few seconds later, we make one timestamp round-trip up front. The flow:
+     * On a warm load we serve the metadata graph from IndexedDB so the app can boot
+     * without pulling MBs of metadata from the server. Before engines run, this method
+     * makes one batched timestamp round-trip to confirm the snapshot is still current:
      *
-     *   - **Cached metadata is current** → keep `FastStartupMode` enabled. Engines trust
-     *     their local IndexedDB caches without per-view smart-cache-check round-trips,
-     *     and we have just verified at the framework metadata level that nothing has
-     *     drifted since this client last loaded.
-     *   - **Cached metadata is stale** → refresh framework metadata in place, then call
-     *     {@link ProviderBase.ConsumeFastStartupMode} to disable fast-start. Engines
-     *     proceed through the normal smart-cache-check path so each per-view cache is
-     *     re-validated against the server.
+     *   - **Cached metadata is current** → engines proceed against the cached snapshot.
+     *     Their RunViews calls go through the normal smart-cache-check path which
+     *     batches per-view fingerprints to the server — efficient and authoritative.
+     *   - **Cached metadata is stale** → refresh framework metadata in place before
+     *     engines start, then proceed normally.
      *
      * Cost on the warm-current path is one batched timestamp fetch (~50–200 ms depending
      * on RTT). On the warm-stale path we additionally pay the full metadata fetch but
      * avoid serving stale data to the UI in the first place.
      *
-     * Caller contract: invoke this before `StartupManager.Startup()` so engines see the
-     * correct fast-start state from their first `RunViews()` call. Failures here are
-     * non-fatal — the engine layer's smart-cache-check + event-based invalidation
-     * remain as a safety net.
+     * Caller contract: invoke this before `StartupManager.Startup()`.
      */
     public async preValidateAndRefresh(providerToUse?: IMetadataProvider): Promise<void> {
         try {
             const needsRefresh = await this.CheckToSeeIfRefreshNeeded(providerToUse);
             if (needsRefresh) {
-                LogStatusEx({ message: `⚡ [Fast-Start] Pre-validation: metadata is stale — refreshing before engine startup and disabling fast-start`, verboseOnly: false });
+                LogStatusEx({ message: `⚡ [Metadata Cache] Pre-validation: metadata is stale — refreshing before engine startup`, verboseOnly: false });
                 const start = Date.now();
                 const res = await this.GetAllMetadata(providerToUse, false);
                 const elapsed = Date.now() - start;
@@ -2604,19 +2523,13 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     this.UpdateLocalMetadata(res);
                     this._latestLocalMetadataTimestamps = this._latestRemoteMetadataTimestamps;
                     await this.SaveLocalMetadataToStorage();
-                    LogStatusEx({ message: `⚡ [Fast-Start] Pre-validation refresh complete (${elapsed}ms) — engines will smart-cache-check`, verboseOnly: false });
+                    LogStatusEx({ message: `⚡ [Metadata Cache] Pre-validation refresh complete (${elapsed}ms)`, verboseOnly: false });
                 }
-                // Force engines through the normal smart-cache-check path. This re-validates
-                // each per-view IndexedDB cache against the server rather than trusting it.
-                ProviderBase.ConsumeFastStartupMode();
             } else {
-                LogStatusEx({ message: `⚡ [Fast-Start] Pre-validation: metadata is current — fast-start engaged`, verboseOnly: false });
+                LogStatusEx({ message: `⚡ [Metadata Cache] Pre-validation: metadata is current`, verboseOnly: false });
             }
         } catch (e) {
-            LogError(`[Fast-Start] Pre-validation failed: ${e instanceof Error ? e.message : String(e)} — falling back to smart-cache-check`);
-            // On failure, disable fast-start so engines validate per-view rather than
-            // trusting potentially-stale cache against a known-unknown server state.
-            ProviderBase.ConsumeFastStartupMode();
+            LogError(`[Metadata Cache] Pre-validation failed: ${e instanceof Error ? e.message : String(e)} — engines will smart-cache-check`);
         }
     }
 
@@ -3087,7 +3000,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 actualContextUser = loadKeyOrContextUser as UserInfo;
             }
 
-            const entity: EntityInfo = this.Metadata.Entities.find(e => e.Name == entityName);
+            const entity: EntityInfo = this.EntityByName(entityName);
             if (entity) {
                 // Use the MJGlobal Class Factory to do our object instantiation - we do NOT use metadata for this anymore, doesn't work well to have file paths with node dynamically at runtime
                 // type reference registration by any module via MJ Global is the way to go as it is reliable across all platforms.
@@ -3217,16 +3130,6 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     public async GetAndCacheDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider): Promise<DatasetResultType> {
         // first see if we have anything in cache at all, no reason to check server dates if we dont
         if (await this.IsDatasetCached(datasetName, itemFilters)) {
-            // FastStartupMode: on warm loads, trust the cached dataset without server validation.
-            // Same pattern as FastStartupMode for RunViews — serve from IndexedDB immediately.
-            if (ProviderBase.FastStartupMode && !this.TrustLocalCacheCompletely) {
-                LogStatusEx({
-                    message: `⚡ [Fast-Start] Serving cached dataset "${datasetName}" from local cache — skipping server validation`,
-                    verboseOnly: false
-                });
-                return this.GetCachedDataset(datasetName, itemFilters);
-            }
-
             // compare the local version, if exists to the server version dates
             if (await this.IsDatasetCacheUpToDate(datasetName, itemFilters)) {
                 // we're up to date, all we need to do is get the local cache and return it
@@ -3627,15 +3530,15 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 this.UpdateLocalMetadata(metadata);
                 const totalMs = Date.now() - overallStart;
                 LogStatusEx({
-                    message: `[Fast-Start Cache] Load complete: read=${readMs}ms, parse=${parseMs}ms, deserialize=${deserializeMs}ms, total=${totalMs}ms, entities=${metadata.AllEntities?.length ?? 0}`,
-                    verboseOnly: false
+                    message: `[Metadata Cache] Load complete: read=${readMs}ms, parse=${parseMs}ms, deserialize=${deserializeMs}ms, total=${totalMs}ms, entities=${metadata.AllEntities?.length ?? 0}`,
+                    verboseOnly: true
                 });
             } else {
-                LogError('[Fast-Start Cache] MetadataFromSimpleObject returned undefined — cache deserialization failed. Check console for per-item errors above.');
+                LogError('[Metadata Cache] MetadataFromSimpleObject returned undefined — cache deserialization failed. Check console for per-item errors above.');
             }
         }
         catch (e) {
-            LogError(`[Fast-Start Cache] LoadLocalMetadataFromStorage failed: ${e instanceof Error ? e.message : String(e)}`);
+            LogError(`[Metadata Cache] LoadLocalMetadataFromStorage failed: ${e instanceof Error ? e.message : String(e)}`);
         }
     }
 
@@ -3717,14 +3620,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     const elapsed = Date.now() - start;
                     const ratio = jsonString.length > 0 ? (base64.length / jsonString.length * 100).toFixed(1) : '?';
                     LogStatusEx({
-                        message: `[Fast-Start Cache] Save complete: ${elapsed}ms, raw=${(jsonString.length / 1024 / 1024).toFixed(1)}MB, compressed=${(base64.length / 1024 / 1024).toFixed(1)}MB (${ratio}%)`,
-                        verboseOnly: false
+                        message: `[Metadata Cache] Save complete: ${elapsed}ms, raw=${(jsonString.length / 1024 / 1024).toFixed(1)}MB, compressed=${(base64.length / 1024 / 1024).toFixed(1)}MB (${ratio}%)`,
+                        verboseOnly: true
                     });
                     return;
                 }
                 catch (compressErr) {
                     // Compression failed — fall through to uncompressed save
-                    LogError(`[Fast-Start Cache] Compression failed, falling back to uncompressed: ${compressErr instanceof Error ? compressErr.message : String(compressErr)}`);
+                    LogError(`[Metadata Cache] Compression failed, falling back to uncompressed: ${compressErr instanceof Error ? compressErr.message : String(compressErr)}`);
                 }
             }
 
@@ -3734,12 +3637,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
             const elapsed = Date.now() - start;
             LogStatusEx({
-                message: `[Fast-Start Cache] Save complete (uncompressed): ${elapsed}ms, size=${(jsonString.length / 1024 / 1024).toFixed(1)}MB`,
-                verboseOnly: false
+                message: `[Metadata Cache] Save complete (uncompressed): ${elapsed}ms, size=${(jsonString.length / 1024 / 1024).toFixed(1)}MB`,
+                verboseOnly: true
             });
         }
         catch (e) {
-            LogError(`[Fast-Start Cache] SaveLocalMetadataToStorage failed: ${e instanceof Error ? e.message : String(e)}`);
+            LogError(`[Metadata Cache] SaveLocalMetadataToStorage failed: ${e instanceof Error ? e.message : String(e)}`);
         }
     }
 
