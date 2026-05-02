@@ -33,6 +33,16 @@ class FailingInitExtension extends BaseServerExtension {
     }
 }
 
+class SkippedInitExtension extends BaseServerExtension {
+    async Initialize(_app: Application, _config: ServerExtensionConfig): Promise<ExtensionInitResult> {
+        return { Success: false, Skipped: true, Message: 'Not configured' };
+    }
+    async Shutdown(): Promise<void> {}
+    async HealthCheck(): Promise<ExtensionHealthResult> {
+        return { Healthy: false, Name: 'SkippedInitExtension' };
+    }
+}
+
 class ThrowingInitExtension extends BaseServerExtension {
     async Initialize(): Promise<ExtensionInitResult> {
         throw new Error('Unexpected init crash');
@@ -170,6 +180,22 @@ describe('ServerExtensionLoader', () => {
             await loader.LoadExtensions(mockApp, configs);
 
             expect(loader.ExtensionCount).toBe(0);
+        });
+
+        it('should not log an error when extension returns Skipped: true', async () => {
+            registerExtensionInFactory('SkippedExt', new SkippedInitExtension());
+            const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+            const configs: ServerExtensionConfig[] = [
+                { Enabled: true, DriverClass: 'SkippedExt', RootPath: '/skip', Settings: {} }
+            ];
+
+            await loader.LoadExtensions(mockApp, configs);
+
+            expect(loader.ExtensionCount).toBe(0);
+            // No "failed to initialize" error should have been logged.
+            const errorCalls = errorSpy.mock.calls.flat().join(' ');
+            expect(errorCalls).not.toContain('failed to initialize');
+            errorSpy.mockRestore();
         });
 
         it('should skip extensions that throw during Initialize', async () => {

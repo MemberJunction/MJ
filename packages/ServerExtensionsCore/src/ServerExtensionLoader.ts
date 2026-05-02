@@ -195,6 +195,8 @@ export class ServerExtensionLoader {
                 if (result.RegisteredRoutes && result.RegisteredRoutes.length > 0) {
                     LogStatus(`  Routes: ${result.RegisteredRoutes.join(', ')}`);
                 }
+            } else if (result.Skipped) {
+                LogStatus(`Server extension '${driverClass}' skipped: ${result.Message}`);
             } else {
                 LogError(`Server extension '${driverClass}' failed to initialize: ${result.Message}`);
             }

@@ -90,6 +90,14 @@ export class TeamsMessagingExtension extends BaseServerExtension {
             const appTenantId = settings.MicrosoftAppTenantId ?? process.env.MICROSOFT_APP_TENANT_ID ?? '';
             const appType = settings.MicrosoftAppType ?? process.env.MICROSOFT_APP_TYPE ?? (appTenantId ? 'SingleTenant' : 'MultiTenant');
 
+            // Pre-flight: skip silently if the extension is enabled but not actually
+            // configured. This is the common case for users who haven't set up an Azure
+            // Bot yet — emit a quiet status, not a noisy error.
+            const skipReason = this.detectUnconfigured(settings, appId, appPassword);
+            if (skipReason) {
+                return { Success: false, Skipped: true, Message: skipReason };
+            }
+
             // Create Bot Framework authentication
             const botFrameworkAuth = new ConfigurationBotFrameworkAuthentication({
                 MicrosoftAppId: appId,
@@ -158,6 +166,31 @@ export class TeamsMessagingExtension extends BaseServerExtension {
                 Message: `Failed to initialize Teams extension: ${message}`
             };
         }
+    }
+
+    /**
+     * Return a reason string if the extension is enabled but not actually configured
+     * (placeholder context email, missing app credentials). Returning a non-null value
+     * causes `Initialize()` to skip silently rather than throw a misleading error.
+     */
+    private detectUnconfigured(
+        settings: MessagingAdapterSettings,
+        appId: string,
+        appPassword: string
+    ): string | null {
+        const email = settings.ContextUserEmail?.trim();
+        if (!email || email.toLowerCase() === 'your-service-account@company.com') {
+            return 'ContextUserEmail not configured (set MJ_BOT_CONTEXT_USER_EMAIL or update mj.config.cjs)';
+        }
+
+        if (!appId) {
+            return 'MicrosoftAppId not configured (set MICROSOFT_APP_ID)';
+        }
+        if (!appPassword) {
+            return 'MicrosoftAppPassword not configured (set MICROSOFT_APP_PASSWORD)';
+        }
+
+        return null;
     }
 
     /**

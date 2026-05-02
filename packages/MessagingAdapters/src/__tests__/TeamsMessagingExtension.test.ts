@@ -162,6 +162,49 @@ describe('TeamsMessagingExtension', () => {
         });
     });
 
+    describe('Initialize — silent skip when not configured', () => {
+        it('should skip (not fail) when ContextUserEmail is the placeholder default', async () => {
+            const app = createMockApp();
+            const config = createConfig({ ContextUserEmail: 'your-service-account@company.com' });
+
+            const result = await extension.Initialize(app, config);
+
+            expect(result.Success).toBe(false);
+            expect(result.Skipped).toBe(true);
+            expect(result.Message).toContain('ContextUserEmail');
+        });
+
+        it('should skip when MicrosoftAppId is missing (no env fallback)', async () => {
+            const origId = process.env.MICROSOFT_APP_ID;
+            delete process.env.MICROSOFT_APP_ID;
+
+            const app = createMockApp();
+            const config = createConfig({ MicrosoftAppId: undefined });
+
+            const result = await extension.Initialize(app, config);
+
+            expect(result.Skipped).toBe(true);
+            expect(result.Message).toContain('MicrosoftAppId');
+
+            if (origId !== undefined) process.env.MICROSOFT_APP_ID = origId;
+        });
+
+        it('should skip when MicrosoftAppPassword is missing (no env fallback)', async () => {
+            const origPw = process.env.MICROSOFT_APP_PASSWORD;
+            delete process.env.MICROSOFT_APP_PASSWORD;
+
+            const app = createMockApp();
+            const config = createConfig({ MicrosoftAppPassword: undefined });
+
+            const result = await extension.Initialize(app, config);
+
+            expect(result.Skipped).toBe(true);
+            expect(result.Message).toContain('MicrosoftAppPassword');
+
+            if (origPw !== undefined) process.env.MICROSOFT_APP_PASSWORD = origPw;
+        });
+    });
+
     describe('Shutdown', () => {
         it('should clean up adapter and cloud adapter references', async () => {
             const app = createMockApp();

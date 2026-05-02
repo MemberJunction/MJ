@@ -106,9 +106,17 @@ export class SlackMessagingExtension extends BaseServerExtension {
             if (!settings.ExplorerBaseURL && process.env.MJ_EXPLORER_BASE_URL) {
                 settings.ExplorerBaseURL = process.env.MJ_EXPLORER_BASE_URL;
             }
-            LogStatus(`[Slack] Extension settings keys: ${Object.keys(settings).join(', ')}, ExplorerBaseURL=${settings.ExplorerBaseURL ?? 'NOT SET'}`);
-            this.signingSecret = settings.SigningSecret ?? '';
             this.connectionMode = settings.ConnectionMode ?? 'http';
+
+            // Pre-flight: skip silently if the extension is enabled but not actually
+            // configured. This is the common case for users who haven't set up a Slack
+            // app yet — emit a quiet status, not a noisy error.
+            const skipReason = this.detectUnconfigured(settings);
+            if (skipReason) {
+                return { Success: false, Skipped: true, Message: skipReason };
+            }
+
+            this.signingSecret = settings.SigningSecret ?? '';
 
             // Create and initialize the Slack adapter + interactivity client
             this.adapter = new SlackAdapter(settings);
@@ -130,6 +138,33 @@ export class SlackMessagingExtension extends BaseServerExtension {
                 Message: `Failed to initialize Slack extension: ${message}`
             };
         }
+    }
+
+    /**
+     * Return a reason string if the extension is enabled but not actually configured
+     * (placeholder context email, missing tokens). Returning a non-null value causes
+     * `Initialize()` to skip silently rather than throw a misleading error.
+     */
+    private detectUnconfigured(settings: MessagingAdapterSettings): string | null {
+        const email = settings.ContextUserEmail?.trim();
+        if (!email || email.toLowerCase() === 'your-service-account@company.com') {
+            return 'ContextUserEmail not configured (set MJ_BOT_CONTEXT_USER_EMAIL or update mj.config.cjs)';
+        }
+
+        if (this.connectionMode === 'socket') {
+            if (!settings.AppToken) {
+                return 'Socket Mode requires AppToken (set SLACK_APP_TOKEN)';
+            }
+        } else {
+            if (!settings.BotToken) {
+                return 'BotToken not configured (set SLACK_BOT_TOKEN)';
+            }
+            if (!settings.SigningSecret) {
+                return 'SigningSecret not configured (set SLACK_SIGNING_SECRET)';
+            }
+        }
+
+        return null;
     }
 
     /**
