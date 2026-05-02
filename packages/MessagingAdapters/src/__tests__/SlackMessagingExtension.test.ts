@@ -214,6 +214,48 @@ describe('SlackMessagingExtension', () => {
         });
     });
 
+    describe('Initialize — silent skip when not configured', () => {
+        it('should skip (not fail) when ContextUserEmail is the placeholder default', async () => {
+            const app = createMockApp();
+            const config = createConfig({ ContextUserEmail: 'your-service-account@company.com' });
+
+            const result = await extension.Initialize(app, config);
+
+            expect(result.Success).toBe(false);
+            expect(result.Skipped).toBe(true);
+            expect(result.Message).toContain('ContextUserEmail');
+        });
+
+        it('should skip when BotToken is missing in HTTP mode', async () => {
+            const app = createMockApp();
+            const config = createConfig({ BotToken: undefined });
+
+            const result = await extension.Initialize(app, config);
+
+            expect(result.Skipped).toBe(true);
+            expect(result.Message).toContain('BotToken');
+        });
+
+        it('should skip when SigningSecret is missing in HTTP mode', async () => {
+            const app = createMockApp();
+            const config = createConfig({ SigningSecret: undefined });
+
+            const result = await extension.Initialize(app, config);
+
+            expect(result.Skipped).toBe(true);
+            expect(result.Message).toContain('SigningSecret');
+        });
+
+        it('should skip Socket Mode when AppToken is missing', async () => {
+            const app = createMockApp();
+            const config = createConfig({ ConnectionMode: 'socket', AppToken: undefined });
+
+            const result = await extension.Initialize(app, config);
+
+            expect(result.Skipped).toBe(true);
+        });
+    });
+
     describe('handleWebhook', () => {
         async function getWebhookHandler(ext: SlackMessagingExtension): (req: Request, res: Response) => Promise<void> {
             const app = createMockApp();
