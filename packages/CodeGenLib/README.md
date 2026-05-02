@@ -62,6 +62,8 @@ flowchart TD
     style Output fill:#2d8659,stroke:#1a5c3a,color:#fff
 ```
 
+> **Authoring constraint:** every SQL artifact CodeGen emits ships in a Flyway migration that customer databases will replay forever. The [Publish-Then-No-Breaking-Changes Policy](../OpenApp/PUBLISH_NO_BREAK_POLICY.md) governs what schema changes are safe to feed into CodeGen: within a published OpenApp major version, only additive changes are allowed (new tables, new optional columns, widened types, new optional SP parameters). Dropping or renaming columns, narrowing types, and adding required parameters break historical migrations and require a major version bump.
+
 ## Key Features
 
 - **Full-Stack Synchronization**: A single schema change propagates to TypeScript entities, Angular forms, SQL procedures, and GraphQL resolvers automatically
