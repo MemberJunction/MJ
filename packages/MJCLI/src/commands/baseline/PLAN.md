@@ -1,6 +1,6 @@
 # Baseline Migration Builder + Comparator — Plan
 
-Status: **Proposal — awaiting review**. No implementation code yet.
+Status: **Proposal — awaiting final go-ahead to implement**. No implementation code yet.
 
 ## Goal
 
@@ -17,22 +17,22 @@ Working with what the database actually contains (not what we think the SQL says
 ### Dialects
 
 - **MSSQL is the source-of-truth dialect.** Single introspector + single T-SQL emitter.
-- **PostgreSQL** is produced by running the generated MSSQL baseline through the existing **`@memberjunction/sql-converter`** + **pg-migrate** toolchain (the `/pg-migrate` slash command + supporting utilities already in this repo). No separate PG introspector or emitter — we leverage the established translation pipeline.
-- This means: build T-SQL baseline once → convert to PG → apply both → verify end-state on each dialect against its respective V-stack.
+- **PostgreSQL** baseline is produced by running the generated MSSQL baseline through the existing **`/pg-migrate`** flow (which uses `@memberjunction/sql-converter` and the established translation pipeline).
+- The PG baseline is then verified by applying it to a fresh PG DB and comparing against a fresh PG DB built from `migrations-pg/v{N}/` (the PG-native V-stack) — same shape as the MSSQL verification, just on the PG side.
 
 ## Output filename format
 
 ```
-B{YYYYMMDDHHMM}__v{Major}.{Minor}.{Patch}__Baseline.sql
+B{YYYYMMDDHHMM}__v{Major}.{Minor}.X__Baseline.sql
 ```
 
-Example: `B202605021947__v3.1.0__Baseline.sql`
+Example: `B202605021947__v3.1.X__Baseline.sql`
 
-- `YYYYMMDDHHMM` is the file's generation timestamp in UTC.
-- `v{Major}.{Minor}.{Patch}` is the baseline version stamp passed via `--baseline-version`.
-- `__Baseline.sql` is the literal description suffix.
+- `YYYYMMDDHHMM` — UTC generation timestamp.
+- `v{Major}.{Minor}.X` — `Major.Minor` is the baseline version stamp passed via `--baseline-version`; the patch component is the **literal letter `X`** because patch versions never carry migrations.
+- `__Baseline.sql` — literal description suffix.
 
-The PG counterpart (after conversion) gets the same stem in `migrations-pg/v{N}/`.
+The PG counterpart (after `/pg-migrate` conversion) gets the same stem in `migrations-pg/v{N}/`.
 
 ## Components
 
@@ -41,27 +41,25 @@ The PG counterpart (after conversion) gets the same stem in `migrations-pg/v{N}/
 Live under `packages/MJCLI/src/commands/baseline/`:
 
 - `mj baseline build` — connects to a live MSSQL DB, introspects + dumps all data, emits the T-SQL `B{ts}__v{ver}__Baseline.sql`.
-- `mj baseline convert` — runs the generated T-SQL baseline through `@memberjunction/sql-converter` to produce the PG equivalent. (Thin wrapper around existing pg-migrate machinery; may be unnecessary if `/pg-migrate` already does this — TBD on review.)
 - `mj baseline compare` — diffs two live DBs object-by-object **and row-by-row**.
-- `mj baseline roundtrip` — convenience wrapper: build → apply to fresh DB → compare → report. For `--dialect postgres`, also runs the conversion step before the apply.
+- `mj baseline roundtrip` — convenience wrapper: build → apply to fresh DB → compare → report. For `--dialect postgres`, runs `/pg-migrate` conversion before the apply step and compares against `migrations-pg/v{N}/`.
 
 #### `mj baseline build`
 
 Flags:
 - `--connection <name>` — named connection from `mj.config.cjs` (MSSQL DB containing the applied V-stack)
 - `--out <dir>` — output directory (default: `./migrations/v{next}/`); filename auto-generated per format above
-- `--baseline-version <ver>` — required, format `Major.Minor.Patch`
+- `--baseline-version <Major.Minor>` — required, e.g. `3.1` (yields `v3.1.X`)
 - `--exclude-data <comma-list>` — opt-out of data dump for specific tables (default: only `flyway_schema_history`)
 - `--exclude-schemas <comma-list>` — schemas to skip
 - `--object-types <comma-list>` — `tables,views,procs,functions,triggers,sequences,indexes,fks,checks,defaults` (default: all)
 - `--batch-size <n>` — INSERT batching for data dump (default: 1000 rows per `INSERT ... VALUES (...), (...)`)
 - `--dry-run` — show counts and emit to stdout; don't write file
 
-**Data dump rules:**
-- **Every row of every table by default** — this is non-negotiable per spec.
+**Data dump rules (default = every row of every table):**
 - Stable ordering: ORDER BY primary key (or all columns if no PK) so the output is byte-identical across runs.
-- Identity / sequence handling: `SET IDENTITY_INSERT <table> ON` around inserts to identity tables; `DBCC CHECKIDENT` to reset seeds at end. PG equivalent handled by the converter.
-- Computed columns: skipped.
+- Identity handling: `SET IDENTITY_INSERT <table> ON` around inserts to identity tables; `DBCC CHECKIDENT` to reset seeds at end.
+- Computed columns: skipped in INSERT lists.
 - BLOB/binary: emitted as `0x...` literals.
 - Datetime/datetimeoffset: emitted with full precision and explicit format strings.
 
@@ -70,15 +68,15 @@ Flags:
 Flags:
 - `--left <connection>` and `--right <connection>` — DBs to compare
 - `--scope <comma-list>` — subset of object types
-- `--row-compare full|hash|counts|none` — **default `full`** (per spec: super critical, every row verified). `hash` available as faster fallback.
+- `--row-compare full|hash|counts|none` — **default `full`** (row-by-row, super critical, every row verified). `hash` available as faster fallback.
 - `--row-hash-algo sha256|md5|checksum_agg` — when `--row-compare hash`; default `sha256` (HASHBYTES on MSSQL).
 - `--ignore <regex>` — skip matching object names (default: `^flyway_schema_history$`)
 - `--out <dir>` — write JSON + Markdown reports
 - `--fail-on-diff` — exit non-zero on any difference
 
-**`full` mode does:** ORDER BY PK (or all cols), stream rows from both sides, compare value-by-value, report first N (default 100) mismatching rows per table with column-level diff. Memory-bounded by streaming. Yes, this is slow on large tables — that's the cost of "super critical verified."
+**`full` mode:** ORDER BY PK (or all cols), stream rows from both sides, compare value-by-value, report first N (default 100) mismatching rows per table with column-level diff. Memory-bounded by streaming.
 
-**`hash` mode does:** per-table SHA-256 over the canonicalized row stream. Faster, still cryptographically deterministic, but only tells you "different" not "where."
+**`hash` mode:** per-table SHA-256 over the canonicalized row stream. Faster, still cryptographically deterministic, but only tells you "different" not "where."
 
 #### `mj baseline roundtrip`
 
@@ -90,7 +88,7 @@ Flags:
 - `--out <dir>` — directory for baseline file + reports
 - All `compare` flags pass through
 
-For `--dialect postgres`: builds T-SQL baseline against MSSQL source, converts to PG via existing toolchain, applies converted baseline to fresh PG DB, compares against PG V-stack DB.
+For `--dialect postgres`: builds T-SQL baseline against MSSQL source, runs `/pg-migrate` conversion, applies converted baseline to fresh PG DB, compares against PG V-stack DB built from `migrations-pg/v{N}/`.
 
 ### 2. Shared core
 
@@ -100,10 +98,10 @@ Under `packages/MJCLI/src/baseline/`:
 - `introspector.ts` — single MSSQL introspector using `sys.*` + `INFORMATION_SCHEMA`; uses `OBJECT_DEFINITION()` for SP/view/function/trigger bodies (byte-faithful)
 - `data-dumper.ts` — streams every row of every table into deterministic INSERT batches; honors batch size, ordering rules, identity/computed/BLOB rules
 - `emitter.ts` — `SchemaSnapshot + DataDumps → T-SQL string`; canonical formatting, stable ordering, dependency-aware (sequences → tables → indexes → defaults → checks → identity-on → data → identity-off → views → functions → procs → triggers → FKs)
-- `comparator.ts` — `(SchemaSnapshot+Data, SchemaSnapshot+Data) → DiffReport`; structural + row-by-row in `full` mode
+- `comparator.ts` — `(SchemaSnapshot+Data, SchemaSnapshot+Data) → DiffReport`; structural + row-by-row in `full` mode (works on both MSSQL and PG via the generic provider)
 - `report.ts` — JSON + Markdown rendering
 
-For PG, no separate introspector/emitter — we lean on `@memberjunction/sql-converter` + the existing `/pg-migrate` flow. The comparator runs natively against PG via the generic provider for the verification step.
+For PG, no separate introspector/emitter — `/pg-migrate` does the conversion. The comparator runs natively against PG via the generic provider for the verification step.
 
 ### 3. Progress UX (oclif + ora)
 
@@ -128,7 +126,7 @@ For long-running data dumps and `full` row compares: progress is per-table with 
 2. Drops + creates `MJ_BL_Stack` and `MJ_BL_New`
 3. `mj migrate` against `MJ_BL_Stack` with the configured V-stack
 4. `mj baseline build --connection MJ_BL_Stack --out /tmp/baseline/`
-5. (PG only) runs the generated T-SQL through the converter to produce the PG version
+5. (PG only) runs `/pg-migrate` conversion to produce the PG version of the baseline
 6. Applies the baseline file to `MJ_BL_New`
 7. `mj baseline compare --left MJ_BL_Stack --right MJ_BL_New --row-compare full --fail-on-diff`
 8. Tees the report to `/workspace/MJ/.workbench/baseline-compare-<ts>.{json,md}`
@@ -152,11 +150,14 @@ The slash command also sets up its own work plan (TodoWrite) so a long-running r
 - Unit (vitest): emitter determinism (snapshot → identical bytes across runs/machines); comparator (synthetic snapshots with known structural + row-level diffs); data-dumper determinism (same DB → identical INSERT bytes)
 - Integration: `baseline-roundtrip.sh` against existing MJ V-stack on **both** MSSQL and PG; must exit 0 with `--row-compare full`
 
-## Open questions for review
+## Resolved decisions
 
-1. **PG verification source.** When we generate a baseline against MSSQL and convert to PG, what do we compare it against — a fresh PG DB built from `migrations-pg/v5/` (the PG-native V-stack), or a fresh PG DB built from converting the MSSQL V-stack at apply-time? The former is more honest to the existing PG release artifacts; the latter would tautologically pass. Recommend the former.
-2. **Baseline file size.** "All rows" on a fully-populated MJ DB could be hundreds of MB+. OK with that being committed to the repo, or do we want a size threshold + `--exclude-data` guidance for large/transactional tables (e.g. logs, run history)?
-3. **Patch component in version.** `Major.Minor.Patch` always required, or default `.0` if omitted?
+- **Filename format:** `B{YYYYMMDDHHMM}__v{Major}.{Minor}.X__Baseline.sql` — literal `X` for patch (patch versions don't carry migrations).
+- **PG strategy:** generate MSSQL T-SQL baseline → `/pg-migrate` to produce PG version → verify against `migrations-pg/v{N}/` V-stack just like MSSQL. No separate PG introspector.
+- **Data dump:** all rows, all columns, every table by default. This is shippable metadata, not transactional/log data — file size is fine. (Running this against a populated prod DB would be silly; that's not the use case.)
+- **Default row-compare:** `full` (row-by-row, super critical verified).
+- **Default package boundary:** inside `packages/MJCLI/src/baseline/`.
+- **Skyway:** unchanged at `^0.6.0`.
 
 ## Out of scope (for now)
 
@@ -168,4 +169,4 @@ The slash command also sets up its own work plan (TodoWrite) so a long-running r
 
 - Branch: `claude/add-baseline-migration-builder-slWZ9` (this branch)
 - Base: `next`
-- Linked work: none (single-repo). Skyway stays at `^0.6.0`.
+- Linked work: none (single-repo).
