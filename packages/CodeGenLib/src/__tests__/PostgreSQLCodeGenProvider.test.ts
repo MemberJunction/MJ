@@ -496,14 +496,16 @@ describe('PostgreSQLCodeGenProvider', () => {
     });
 
     describe('generateUpdateFieldString', () => {
-        it('should generate SET clause with quoted identifiers', () => {
+        it('should generate SET clause with quoted identifiers and tolerant merge semantics', () => {
             const entity = createMockEntity();
             const result = provider.generateUpdateFieldString(entity.Fields);
 
-            expect(result).toContain('"Name" = p_name');
-            expect(result).toContain('"Email" = p_email');
+            // Tolerant SP merge wrap: omitting a parameter preserves the existing value.
+            // PostgreSQL has no ISNULL keyword; it emits COALESCE.
+            expect(result).toContain('"Name" = COALESCE(p_name, "Name")');
+            expect(result).toContain('"Email" = COALESCE(p_email, "Email")');
             // Should NOT include PK
-            expect(result).not.toContain('"ID" = p_id');
+            expect(result).not.toContain('"ID" = ');
         });
     });
 
