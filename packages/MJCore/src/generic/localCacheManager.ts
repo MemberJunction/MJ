@@ -1239,29 +1239,86 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         try {
             // Native object read — IDB structured-clones the result back, no JSON.parse needed.
             const parsed = await this._storageProvider.GetItem<CachedRunViewData>(fingerprint, CacheCategory.RunViewCache);
-
-            if (parsed) {
-                this.recordAccess(fingerprint);
-                this._stats.hits++;
-                const results = parsed.results || [];
-                const result: CachedRunViewResult = {
-                    results,
-                    maxUpdatedAt: parsed.maxUpdatedAt,
-                    rowCount: results.length,
-                    totalRowCount: parsed.totalRowCount
-                };
-                // Include aggregate results if they were cached
-                if (parsed.aggregateResults) {
-                    result.aggregateResults = parsed.aggregateResults;
-                }
-                return result;
-            }
+            return this.materializeCachedRunViewResult(fingerprint, parsed);
         } catch (e) {
             LogError(`LocalCacheManager.GetRunViewResult failed: ${e}`);
+            this._stats.misses++;
+            return null;
+        }
+    }
+
+    /**
+     * Batched retrieval for many cached RunView results in a single underlying
+     * IndexedDB transaction (or Redis MGET, or one in-memory pass — depends on
+     * provider). N keys, one call.
+     *
+     * Returns a `Map` keyed by fingerprint. Missing entries map to `null`. The
+     * map preserves the order of the input array's first occurrence of each key.
+     *
+     * **Why this exists**: the smart-cache-check flow reads N cached entries in
+     * two passes — once to build the per-fingerprint cacheStatus payload, then
+     * again after the server response to materialize "current" entries. Per-key
+     * `GetItem` calls serialize across IDB transactions; one batched read trades
+     * ~N transactions of overhead for a single transaction's commit cost.
+     *
+     * Hits/misses are accounted per fingerprint just like {@link GetRunViewResult}.
+     *
+     * @param fingerprints - Cache fingerprints to look up. Duplicates are
+     *                       deduplicated; the returned map has one entry per unique key.
+     * @returns Map from fingerprint to {@link CachedRunViewResult} (or `null` if not cached).
+     *          Always returns a map (possibly empty); never throws.
+     */
+    public async GetRunViewResults(fingerprints: string[]): Promise<Map<string, CachedRunViewResult | null>> {
+        const out = new Map<string, CachedRunViewResult | null>();
+        if (!this._storageProvider || !this._config.enabled || fingerprints.length === 0) {
+            // Still preserve the contract: each requested key gets an entry.
+            for (const fp of new Set(fingerprints)) out.set(fp, null);
+            return out;
         }
 
-        this._stats.misses++;
-        return null;
+        try {
+            const raw = await this._storageProvider.GetItems<CachedRunViewData>(fingerprints, CacheCategory.RunViewCache);
+            for (const [fp, parsed] of raw) {
+                out.set(fp, this.materializeCachedRunViewResult(fp, parsed));
+            }
+            return out;
+        } catch (e) {
+            LogError(`LocalCacheManager.GetRunViewResults failed: ${e}`);
+            // Defensive: count every requested key as a miss and return null entries.
+            for (const fp of new Set(fingerprints)) {
+                this._stats.misses++;
+                out.set(fp, null);
+            }
+            return out;
+        }
+    }
+
+    /**
+     * Shared helper used by both `GetRunViewResult` and `GetRunViewResults` to
+     * unwrap the persisted shape into the consumer-facing `CachedRunViewResult`,
+     * recording the appropriate hit/miss + access-tracking side effects.
+     */
+    private materializeCachedRunViewResult(
+        fingerprint: string,
+        parsed: CachedRunViewData | null | undefined
+    ): CachedRunViewResult | null {
+        if (!parsed) {
+            this._stats.misses++;
+            return null;
+        }
+        this.recordAccess(fingerprint);
+        this._stats.hits++;
+        const results = parsed.results || [];
+        const result: CachedRunViewResult = {
+            results,
+            maxUpdatedAt: parsed.maxUpdatedAt,
+            rowCount: results.length,
+            totalRowCount: parsed.totalRowCount,
+        };
+        if (parsed.aggregateResults) {
+            result.aggregateResults = parsed.aggregateResults;
+        }
+        return result;
     }
 
     /**
