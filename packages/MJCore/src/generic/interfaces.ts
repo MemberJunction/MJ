@@ -404,6 +404,32 @@ export interface ILocalStorageProvider {
     GetItem<T = unknown>(key: string, category?: string): Promise<T | null>;
 
     /**
+     * Batched retrieval — reads N values for N keys in one logical operation.
+     *
+     * Returns a `Map` keyed by the input key strings. Missing keys map to `null`.
+     * The map preserves the original key set so callers can index by key without
+     * relying on array-position alignment.
+     *
+     * **Why batch?** IndexedDB serializes transactions on the same object store —
+     * `Promise.all([...N GetItem calls])` looks parallel but pays per-transaction
+     * setup cost (~3–10ms each) for every key. A single transaction with N
+     * `get()` calls amortizes that overhead. Redis can use `MGET`/pipelines.
+     * In-memory implementations have no real win but implement consistently for
+     * a uniform API.
+     *
+     * Implementations are free to fall back to per-key reads internally if the
+     * underlying medium doesn't support batching — the contract is just "read
+     * all of these as efficiently as you can". An empty `keys` array returns
+     * an empty map without touching the storage backend.
+     *
+     * @typeParam T - Expected type of all stored values. Caller-controlled.
+     * @param keys - The keys to retrieve. Duplicates are deduplicated; the
+     *               returned map has one entry per unique key.
+     * @param category - Optional category for key isolation (applies to all keys)
+     */
+    GetItems<T = unknown>(keys: string[], category?: string): Promise<Map<string, T | null>>;
+
+    /**
      * Stores a value. Callers should pass plain data (objects/arrays/primitives/Date/etc).
      * Implementations handle any serialization required by the medium:
      *  - **IndexedDB**: stores natively via structured clone (no string conversion)
