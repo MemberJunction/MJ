@@ -1,7 +1,7 @@
 .slide-panel-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.35);
+    background: var(--mj-bg-overlay);
     z-index: 1000;
     animation: fadeIn 0.2s ease;
 }
@@ -13,11 +13,11 @@
     bottom: 0;
     width: 520px;
     max-width: 90vw;
-    background: #f8fafc;
+    background: var(--mj-bg-surface-card);
     z-index: 1001;
     display: flex;
     flex-direction: column;
-    box-shadow: -4px 0 20px rgba(0, 0, 0, 0.12);
+    box-shadow: -4px 0 20px color-mix(in srgb, var(--mj-text-primary) 12%, transparent);
     transform: translateX(100%);
     transition: transform 0.25s ease;
 }
@@ -31,8 +31,8 @@
     justify-content: space-between;
     align-items: center;
     padding: 16px 20px;
-    background: linear-gradient(135deg, #0d3b66 0%, #1a6fb5 100%);
-    color: #fff;
+    background: linear-gradient(135deg, var(--mj-brand-secondary) 0%, var(--mj-brand-primary) 100%);
+    color: var(--mj-text-inverse);
     flex-shrink: 0;
 }
 
@@ -56,7 +56,7 @@
 }
 
 .close-btn:hover {
-    color: #fff;
+    color: var(--mj-text-inverse);
     background: rgba(255, 255, 255, 0.15);
 }
 

@@ -52,7 +52,7 @@
     background-position: center center;
     vertical-align: middle;
     line-height: 32px;
-    box-shadow: inset 0 0 1px #999, inset 0 0 10px rgba(0, 0, 0, 0.2);
+    box-shadow: inset 0 0 1px var(--mj-text-disabled), var(--mj-shadow-inner);
     margin-left: 5px;
 }
 
@@ -64,7 +64,7 @@
 }
 
 .red {
-    color: #d9534f;
+    color: var(--mj-status-error);
 }
 
 // Chart
@@ -108,7 +108,7 @@
     #txtSearch {
         width: 300px;
         height: 30px;
-        border: 1px solid #ccc;
+        border: 1px solid var(--mj-border-strong);
         border-radius: 5px;
         margin-right: 5px;
         margin-left: 10px;
@@ -116,7 +116,7 @@
 }
 
 .item {
-    border: 1px solid #e1e0e1;
+    border: 1px solid var(--mj-border-default);
     border-radius: 5px;
     padding: 12px 10px;
     font-size: 16px;
@@ -132,9 +132,9 @@
 
 .item.active,
 .employee.active {
-    background-color: #f55f54;
-    color: #fff;
-    border-color: #f55f54;
+    background-color: var(--mj-status-error);
+    color: var(--mj-text-inverse);
+    border-color: var(--mj-status-error);
     z-index: 10;
 }
 

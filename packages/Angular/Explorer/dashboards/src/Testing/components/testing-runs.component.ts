@@ -286,9 +286,9 @@ interface FilteredStats {
                   <span class="feedback-label">Correct:</span>
                   <span class="feedback-value">
                     @if (SelectedRun.humanIsCorrect === true) {
-                      <i class="fa-solid fa-check" style="color: #22c55e"></i> Yes
+                      <i class="fa-solid fa-check" style="color: var(--mj-status-success)"></i> Yes
                     } @else if (SelectedRun.humanIsCorrect === false) {
-                      <i class="fa-solid fa-times" style="color: #ef4444"></i> No
+                      <i class="fa-solid fa-times" style="color: var(--mj-status-error)"></i> No
                     } @else {
                       --
                     }

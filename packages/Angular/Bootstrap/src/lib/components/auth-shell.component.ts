@@ -44,7 +44,7 @@ import { MJEnvironmentConfig, MJ_ENVIRONMENT } from '../bootstrap.types';
     }
 
     .error-container h2 {
-      color: #d32f2f;
+      color: var(--mj-status-error);
       margin-bottom: 10px;
     }
   `]

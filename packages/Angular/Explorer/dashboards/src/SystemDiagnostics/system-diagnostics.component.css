@@ -1922,9 +1922,20 @@
     font-weight: 500;
 }
 
-/* PerfMon Chart Styles */
+/* PerfMon Chart Styles
+ * ====================
+ * design-token-exempt: deliberate categorical "performance-monitor terminal" theme.
+ *
+ * The perfmon panel is intentionally styled as a dark CRT-style performance
+ * monitor regardless of the MJ light/dark theme — it's a categorical aesthetic
+ * (same exemption category as code editor backgrounds and chart data colors).
+ * The values below form a SCOPED local design system (--perfmon-*) so the
+ * panel can be re-skinned in one place without touching individual rules. Do
+ * NOT replace these with --mj-* semantic tokens; doing so would make the panel
+ * follow MJ light mode and lose the deliberate monitor look. Series colors are
+ * categorical chart data and must stay distinct.
+ */
 .perfmon-section {
-    /* Scoped terminal theme variables */
     --perfmon-bg: #1a1a2e;
     --perfmon-bg-deep: #0d0d1a;
     --perfmon-accent: #00ff88;

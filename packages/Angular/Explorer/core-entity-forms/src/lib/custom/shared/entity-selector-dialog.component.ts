@@ -193,7 +193,7 @@ export interface EntitySelectorConfig {
 
         .entity-item:hover {
             border-color: var(--mj-brand-primary);
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            box-shadow: var(--mj-shadow-md);
         }
 
         .entity-item.selected {
@@ -252,8 +252,8 @@ export interface EntitySelectorConfig {
         }
 
         .status-badge.active {
-            background: #d4edda;
-            color: #28a745;
+            background: var(--mj-status-success-bg);
+            color: var(--mj-status-success-text);
         }
     `]
 })

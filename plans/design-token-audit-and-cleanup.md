@@ -140,3 +140,22 @@ Order is by combination of severity + isolation (start with files that are entir
 - Migrating existing `--mj-color-*` primitive references — only fixing raw hex/rgb.
 - Restructuring component CSS for organization or naming. Touch only color-related declarations.
 - Bootstrap utility-class consolidation beyond the immediate hardcoded-color fix in `_utilities.scss`.
+
+## Phase 2 — Remaining Files (Future Work)
+
+A broader sweep after this PR landed identified additional component files with **smaller numbers** of hex/rgba violations (typically 1–5 per file) that were not in the original audit. These should be tackled as a Phase 2 effort using the same hex→token mapping table. Rough list (non-exhaustive — re-scan before starting):
+
+- `packages/Angular/Generic/conversations/**` (multiple components: chat area, navigation, notification, share, members, agent process panels)
+- `packages/Angular/Generic/ai-test-harness/**` (window, dialog, agent execution monitor/node)
+- `packages/Angular/Generic/flow-editor/src/lib/components/flow-status-bar.component.ts`, `flow-toolbar.component.ts`
+- `packages/Angular/Generic/flow-editor/src/lib/agent-editor/agent-step-list.component.ts`, `agent-properties-panel.component.css`
+- `packages/Angular/Generic/filter-builder/**` (filter-builder.component.ts, filter-group.component.css)
+- `packages/Angular/Generic/query-viewer/**` (query-data-grid, query-info-panel)
+- `packages/Angular/Generic/artifacts/**` (artifact-viewer-panel, artifact-version-history, artifact-type-plugin-viewer)
+- `packages/Angular/Generic/ng-map-view/src/lib/map-view.component.css`
+- `packages/Angular/Generic/Testing/src/lib/components/test-run-dialog.component.ts`
+- `packages/Angular/Generic/react/src/lib/components/mj-react-component.component.ts`
+- `packages/Angular/Explorer/dashboards/src/Lists/components/venn-diagram/venn-diagram.component.ts`
+- Remaining hex declarations in `packages/Angular/Explorer/dashboards/src/SystemDiagnostics/system-diagnostics.component.css` (D3 chart axis fills outside the perfmon block)
+
+This Phase 2 work should follow the same methodology and exemption rules established in this PR.

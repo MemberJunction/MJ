@@ -4,9 +4,9 @@
     justify-content: space-between;
     padding: 6px 12px;
     font-size: 13px;
-    color: var(--mj-text-secondary, #666);
-    border-top: 1px solid var(--mj-border-color, #e0e0e0);
-    background: var(--mj-surface, #fafafa);
+    color: var(--mj-text-secondary);
+    border-top: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface-card);
 }
 
 .pager-summary {
@@ -26,17 +26,17 @@
     width: 28px;
     height: 28px;
     padding: 0;
-    border: 1px solid var(--mj-border-color, #d0d0d0);
+    border: 1px solid var(--mj-border-strong);
     border-radius: 4px;
-    background: var(--mj-surface, #fff);
-    color: var(--mj-text-primary, #333);
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-primary);
     cursor: pointer;
     transition: background 0.15s, border-color 0.15s;
 }
 
 .pager-btn:hover:not(:disabled) {
-    background: var(--mj-hover-bg, #e8e8e8);
-    border-color: var(--mj-border-hover, #999);
+    background: var(--mj-bg-surface-hover);
+    border-color: var(--mj-text-disabled);
 }
 
 .pager-btn:disabled {
@@ -52,5 +52,5 @@
 
 .pager-loading {
     margin-left: 6px;
-    color: var(--mj-accent, #0078d4);
+    color: var(--mj-brand-primary);
 }

@@ -29,23 +29,26 @@ mj-flow-node {
 /* Selected state — applied by Foblex on the host fNode element */
 .f-selected .mj-flow-node-body {
   border-color: var(--mj-brand-primary);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25), 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 25%, transparent), var(--mj-shadow-md);
 }
 
 /* Status variants */
 .mj-flow-node-body--start {
   border: 2px solid var(--mj-status-success);
   background: color-mix(in srgb, var(--mj-status-success) 5%, var(--mj-bg-surface));
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.12), 0 2px 8px rgba(16, 185, 129, 0.15);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-status-success) 12%, transparent),
+              0 2px 8px color-mix(in srgb, var(--mj-status-success) 15%, transparent);
 }
 
 .mj-flow-node-body--start:hover {
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18), 0 4px 16px rgba(16, 185, 129, 0.2);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-status-success) 18%, transparent),
+              0 4px 16px color-mix(in srgb, var(--mj-status-success) 20%, transparent);
 }
 
 .f-selected .mj-flow-node-body--start {
   border-color: var(--mj-status-success);
-  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3), 0 4px 12px rgba(16, 185, 129, 0.15);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-status-success) 30%, transparent),
+              0 4px 12px color-mix(in srgb, var(--mj-status-success) 15%, transparent);
 }
 
 .mj-flow-node-body--disabled {
@@ -64,18 +67,21 @@ mj-flow-node {
 }
 
 .mj-flow-node-body--warning {
-  border: 2px solid #ea580c;
+  border: 2px solid var(--mj-status-warning);
   background: color-mix(in srgb, var(--mj-status-warning) 5%, var(--mj-bg-surface));
-  box-shadow: 0 0 0 2px rgba(234, 88, 12, 0.15), 0 2px 8px rgba(234, 88, 12, 0.1);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-status-warning) 15%, transparent),
+              0 2px 8px color-mix(in srgb, var(--mj-status-warning) 10%, transparent);
 }
 
 .mj-flow-node-body--warning:hover {
-  box-shadow: 0 0 0 2px rgba(234, 88, 12, 0.25), 0 4px 16px rgba(234, 88, 12, 0.15);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-status-warning) 25%, transparent),
+              0 4px 16px color-mix(in srgb, var(--mj-status-warning) 15%, transparent);
 }
 
 .f-selected .mj-flow-node-body--warning {
-  border-color: #ea580c;
-  box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.3), 0 4px 12px rgba(234, 88, 12, 0.15);
+  border-color: var(--mj-status-warning);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-status-warning) 30%, transparent),
+              0 4px 12px color-mix(in srgb, var(--mj-status-warning) 15%, transparent);
 }
 
 .mj-flow-node-body--error {
@@ -144,13 +150,13 @@ mj-flow-node {
   font-size: 9px;
   font-weight: 700;
   letter-spacing: 0.5px;
-  color: white;
+  color: var(--mj-text-inverse);
   background: var(--mj-status-success);
   border: none;
   border-radius: var(--mj-radius-sm);
   padding: 2px 6px;
   line-height: 1.4;
-  box-shadow: 0 1px 3px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--mj-status-success) 30%, transparent);
 }
 
 /* Status indicator */
@@ -160,7 +166,7 @@ mj-flow-node {
 
 .mj-flow-node-status--success { color: var(--mj-status-success); }
 .mj-flow-node-status--error { color: var(--mj-status-error); }
-.mj-flow-node-status--warning { color: #ea580c; }
+.mj-flow-node-status--warning { color: var(--mj-status-warning); }
 .mj-flow-node-status--running { color: var(--mj-brand-primary); }
 .mj-flow-node-status--disabled { color: var(--mj-text-disabled); }
 .mj-flow-node-status--pending { color: var(--mj-status-warning); }
@@ -193,19 +199,19 @@ mj-flow-node {
   gap: 5px;
   margin: 2px 8px 6px;
   padding: 4px 8px;
-  background: #fff7ed;
-  border: 1px solid #fed7aa;
+  background: var(--mj-status-warning-bg);
+  border: 1px solid var(--mj-status-warning-border);
   border-radius: 5px;
   font-size: 10px;
   font-weight: 600;
-  color: #c2410c;
+  color: var(--mj-status-warning-text);
   line-height: 1.3;
 }
 
 .mj-flow-node-warning-banner i {
   font-size: 10px;
   flex-shrink: 0;
-  color: #ea580c;
+  color: var(--mj-status-warning);
 }
 
 .mj-flow-node-warning-banner span {
@@ -253,12 +259,12 @@ mj-flow-node {
 }
 
 .mj-flow-node-body--loop:hover {
-  box-shadow: 0 4px 14px rgba(245, 158, 11, 0.12), 0 2px 4px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--mj-status-warning) 12%, transparent), var(--mj-shadow-sm);
 }
 
 .f-selected .mj-flow-node-body--loop {
   border-color: var(--mj-status-warning);
-  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.25), 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-status-warning) 25%, transparent), var(--mj-shadow-md);
 }
 
 /* Loop section container */
@@ -274,17 +280,17 @@ mj-flow-node {
   padding: 3px 0 6px;
   font-size: 10px;
   font-weight: 500;
-  color: #92400e;
+  color: var(--mj-status-warning-text);
   letter-spacing: 0.2px;
 }
 
 .mj-flow-loop-iteration-icon {
   font-size: 9px;
-  color: #d97706;
+  color: var(--mj-status-warning);
 }
 
 .mj-flow-loop-max {
-  color: #b45309;
+  color: var(--mj-status-warning-text);
   opacity: 0.7;
 }
 
@@ -342,9 +348,9 @@ mj-flow-node {
 
 /* Empty body card — no body type selected */
 .mj-flow-loop-body--empty {
-  border-color: #fbbf24;
+  border-color: var(--mj-status-warning-border);
   border-style: dashed;
-  background: #fffef5;
+  background: color-mix(in srgb, var(--mj-status-warning) 4%, var(--mj-bg-surface));
 }
 
 .mj-flow-loop-body-empty {
@@ -354,12 +360,12 @@ mj-flow-node {
   padding: 8px 10px;
   font-size: 10px;
   font-weight: 500;
-  color: #b45309;
+  color: var(--mj-status-warning-text);
 }
 
 .mj-flow-loop-body-empty i {
   font-size: 11px;
-  color: #d97706;
+  color: var(--mj-status-warning);
 }
 
 /* Item variable badge */
@@ -458,9 +464,9 @@ mj-flow-node {
 
 @keyframes mj-flow-node-pulse {
   0%, 100% {
-    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.3);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
   }
   50% {
-    box-shadow: 0 0 0 6px rgba(59, 130, 246, 0);
+    box-shadow: 0 0 0 6px transparent;
   }
 }

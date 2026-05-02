@@ -12,7 +12,7 @@ import { MJTestRubricFormComponent } from '../../generated/Entities/MJTestRubric
     <div class="rubric-form">
       <div class="rubric-header">
         <h2><i class="fas fa-clipboard-list"></i> {{ record.Name || 'Test Rubric' }}</h2>
-        <span class="status-badge" [style.background-color]="record.Status === 'Active' ? '#4caf50' : '#9e9e9e'">
+        <span class="status-badge" [style.background-color]="record.Status === 'Active' ? 'var(--mj-status-success)' : 'var(--mj-text-disabled)'">
           {{ record.Status }}
         </span>
       </div>

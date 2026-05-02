@@ -1142,10 +1142,10 @@ export class MJTestSuiteFormComponentExtended extends MJTestSuiteFormComponent i
           tooltipParts.push(`<div style="display:inline-block; padding:2px 8px; border-radius:4px; background:${statusColors[result.status]}; color:white; font-size:11px; font-weight:600">${result.status}</div>`);
         }
         if (this.evalPreferences.showHuman) {
-          tooltipParts.push(`<div style="margin-top:4px"><span style="color:#f59e0b">👤</span> <strong>Human:</strong> <span style="color:#94a3b8">Needs review</span></div>`);
+          tooltipParts.push(`<div style="margin-top:4px"><span style="color:var(--mj-status-warning)">👤</span> <strong>Human:</strong> <span style="color:var(--mj-text-disabled)">Needs review</span></div>`);
         }
         if (this.evalPreferences.showAuto && result.score != null) {
-          tooltipParts.push(`<div style="margin-top:4px"><span style="color:#3b82f6">🤖</span> <strong>Auto:</strong> ${(result.score * 100).toFixed(1)}%</div>`);
+          tooltipParts.push(`<div style="margin-top:4px"><span style="color:var(--mj-status-info)">🤖</span> <strong>Auto:</strong> ${(result.score * 100).toFixed(1)}%</div>`);
         }
         const durationText = result.duration != null ? `<div><strong>Duration:</strong> ${result.duration.toFixed(2)}s</div>` : '';
 
