@@ -182,9 +182,13 @@ describe('ServerExtensionLoader', () => {
             expect(loader.ExtensionCount).toBe(0);
         });
 
-        it('should not log an error when extension returns Skipped: true', async () => {
+        it('should stay silent (no error, no status) when extension returns Skipped: true and verbose is off', async () => {
             registerExtensionInFactory('SkippedExt', new SkippedInitExtension());
             const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+            const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+            const origVerbose = process.env.MJ_VERBOSE;
+            delete process.env.MJ_VERBOSE;
+
             const configs: ServerExtensionConfig[] = [
                 { Enabled: true, DriverClass: 'SkippedExt', RootPath: '/skip', Settings: {} }
             ];
@@ -192,10 +196,35 @@ describe('ServerExtensionLoader', () => {
             await loader.LoadExtensions(mockApp, configs);
 
             expect(loader.ExtensionCount).toBe(0);
-            // No "failed to initialize" error should have been logged.
             const errorCalls = errorSpy.mock.calls.flat().join(' ');
+            const logCalls = logSpy.mock.calls.flat().join(' ');
             expect(errorCalls).not.toContain('failed to initialize');
+            // The skip line is verbose-only; with MJ_VERBOSE unset it must not appear.
+            expect(logCalls).not.toContain('skipped:');
+
             errorSpy.mockRestore();
+            logSpy.mockRestore();
+            if (origVerbose !== undefined) process.env.MJ_VERBOSE = origVerbose;
+        });
+
+        it('should log skipped message when MJ_VERBOSE is enabled', async () => {
+            registerExtensionInFactory('SkippedExt', new SkippedInitExtension());
+            const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+            const origVerbose = process.env.MJ_VERBOSE;
+            process.env.MJ_VERBOSE = 'true';
+
+            const configs: ServerExtensionConfig[] = [
+                { Enabled: true, DriverClass: 'SkippedExt', RootPath: '/skip', Settings: {} }
+            ];
+
+            await loader.LoadExtensions(mockApp, configs);
+
+            const logCalls = logSpy.mock.calls.flat().join(' ');
+            expect(logCalls).toContain('skipped:');
+
+            logSpy.mockRestore();
+            if (origVerbose === undefined) delete process.env.MJ_VERBOSE;
+            else process.env.MJ_VERBOSE = origVerbose;
         });
 
         it('should skip extensions that throw during Initialize', async () => {
