@@ -30,6 +30,7 @@
     "@memberjunction/ng-bootstrap": "5.30.1",
     "@memberjunction/ng-conversations": "5.30.1",
     "@memberjunction/ng-explorer-core": "5.30.1",
+    "@memberjunction/ng-explorer-service-worker": "5.30.1",
     "@memberjunction/ng-feedback": "5.30.1",
     "@memberjunction/ng-notifications": "5.30.1",
     "@memberjunction/ng-shared": "5.30.1",

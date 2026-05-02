@@ -18,6 +18,7 @@ import { MJEnvironmentConfig, MJ_ENVIRONMENT, MJ_STARTUP_VALIDATION } from '@mem
 import { ShellModule, StartupValidationService, SystemValidationBannerComponent, ServerConnectivityBannerComponent } from '@memberjunction/ng-explorer-core';
 import { ConversationsModule } from '@memberjunction/ng-conversations';
 import { FeedbackModule } from '@memberjunction/ng-feedback';
+import { MJServiceWorkerModule, UpdateNotificationComponent } from '@memberjunction/ng-explorer-service-worker';
 
 @NgModule({
   declarations: [
@@ -30,6 +31,7 @@ import { FeedbackModule } from '@memberjunction/ng-feedback';
     SystemValidationBannerComponent,  // Standalone component
     ServerConnectivityBannerComponent,  // Standalone component
     ConversationsModule,
+    UpdateNotificationComponent,  // Standalone — bottom-right "Update available" toast (no-op when SW disabled)
     FeedbackModule.forRoot({
       appName: 'MemberJunction Explorer',
       title: 'Report an Issue',
@@ -62,6 +64,14 @@ export class MJExplorerAppModule {
    * Should be called once in the root application module.
    */
   static forRoot(environment: MJEnvironmentConfig): ModuleWithProviders<MJExplorerAppModule> {
+    // Pull in the SW providers conditionally based on the environment kill
+    // switch. The module is always loaded (so the toast component injection
+    // works), but `enabled: false` means no actual worker is registered and
+    // SwUpdate.isEnabled returns false.
+    const swModule = MJServiceWorkerModule.forRoot({
+      enabled: !!(environment.production && environment.enableServiceWorker)
+    });
+
     return {
       ngModule: MJExplorerAppModule,
       providers: [
@@ -72,7 +82,8 @@ export class MJExplorerAppModule {
         {
           provide: MJ_STARTUP_VALIDATION,
           useClass: StartupValidationService
-        }
+        },
+        ...(swModule.providers ?? [])
       ]
     };
   }
