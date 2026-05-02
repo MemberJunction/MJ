@@ -813,6 +813,32 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
+     * Returns true when the field's `spUpdate` / `spCreate` procedure
+     * exposes a `<Param>_Clear` companion parameter — i.e. the field is
+     * nullable and has a non-NULL database default. Codegen emits the
+     * companion so a caller can disambiguate "leave unchanged / apply
+     * default" (omit the parameter) from "explicitly set this column to
+     * NULL" (`<Param>_Clear = 1`). Without it, the SP body's
+     * `ISNULL(@Param, [Col])` merge silently substitutes the existing
+     * value or default, and a literal NULL can never be persisted.
+     *
+     * Save-time callers in subclasses use this to decide whether to also
+     * emit the `_Clear` companion parameter when the entity intentionally
+     * sets such a field to NULL. Predicate is dialect-agnostic and stays
+     * in sync with `CodeGenLib`'s `needsClearCompanion`. The strip-parens
+     * loop normalizes SQL Server's wrapped scalar defaults
+     * (e.g. `((NULL))`); PG defaults are bare and pass through unchanged.
+     */
+    protected NeedsClearCompanion(ef: EntityFieldInfo): boolean {
+        if (!ef.AllowsNull || !ef.HasDefaultValue) return false;
+        let v = ef.DefaultValue.trim();
+        while (v.startsWith('(') && v.endsWith(')')) {
+            v = v.substring(1, v.length - 1).trim();
+        }
+        return v.toLowerCase() !== 'null';
+    }
+
+    /**
      * Virtual hook for platform-specific datetime field adjustments.
      * Default implementation is a no-op (returns rows unchanged).
      *
