@@ -6,7 +6,8 @@
   "typings": "./dist/public-api.d.ts",
   "files": [
     "/dist",
-    "/ngsw-config.json"
+    "/ngsw-config.json",
+    "/scripts"
   ],
   "scripts": {
     "test": "vitest run",
