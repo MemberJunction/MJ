@@ -79,9 +79,11 @@ Reads the same `mj-login-theme` localStorage key that `MJExplorerAppComponent` w
 
 Combined with the SW app-shell pre-cache, dark-mode users see correct theme paint within ~100ms of navigation start.
 
-### Optional #2: Build-time SW cache-shape gate
+### Backport for older versions: build-time SW cache-shape gate
 
-Optional safety net against future Angular releases that introduce new build-output filename prefixes (`runtime-*`, `vendor-*`, etc.) that our `ngsw-config.json` doesn't classify. Without this gate, such a change would silently bypass the SW cache for those new files. The gate fails the build with a diagnostic listing the unrecognized filenames so the issue is caught at consumer build time, not in production.
+**MJExplorer ships this by default starting with the same release as this package** — new installs get the build-time defense automatically.
+
+If you're maintaining an older MJExplorer-based app and want the same safety net, add the snippet below to your `package.json`. The gate guards against future Angular releases that introduce new build-output filename prefixes (`runtime-*`, `vendor-*`, etc.) that our `ngsw-config.json` doesn't classify. Without it, such a change would silently bypass the SW cache for those new files. The gate fails the build with a diagnostic listing the unrecognized filenames so the issue is caught at your build time, not in production.
 
 Add to your app's `package.json` scripts:
 
