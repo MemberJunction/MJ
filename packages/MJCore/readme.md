@@ -895,14 +895,42 @@ unsubscribe();
 
 `LocalCacheManager` and `ProviderBase` delegate persistence to an `ILocalStorageProvider`. MemberJunction ships with several implementations:
 
-| Provider | Package | Environment | Persistence |
-|----------|---------|-------------|-------------|
-| `InMemoryLocalStorageProvider` | `@memberjunction/core` | Server (Node.js) | None — data lost on restart |
-| `BrowserLocalStorageProvider` | `@memberjunction/graphql-dataprovider` | Browser | `localStorage` |
-| `BrowserIndexedDBStorageProvider` | `@memberjunction/graphql-dataprovider` | Browser | IndexedDB |
-| `RedisLocalStorageProvider` | [`@memberjunction/redis-provider`](../RedisProvider/) | Server (Node.js) | Redis — shared across instances, survives restarts |
+| Provider | Package | Environment | Persistence | Storage Format |
+|----------|---------|-------------|-------------|----------------|
+| `InMemoryLocalStorageProvider` | `@memberjunction/core` | Server (Node.js) | None — data lost on restart | Native references (no serialization) |
+| `BrowserLocalStorageProvider` | `@memberjunction/graphql-dataprovider` | Browser | `localStorage` | JSON-serialized internally |
+| `BrowserIndexedDBStorageProvider` | `@memberjunction/graphql-dataprovider` | Browser | IndexedDB | **Native objects via structured clone** |
+| `RedisLocalStorageProvider` | [`@memberjunction/redis-provider`](../RedisProvider/) | Server (Node.js) | Redis — shared across instances, survives restarts | JSON-serialized internally |
 
 For production server deployments, the Redis provider is recommended. See the [`@memberjunction/redis-provider` README](../RedisProvider/) for setup instructions.
+
+#### Generic-typed interface
+
+`ILocalStorageProvider` is generic — `SetItem<T>(key, value, category?)` and `GetItem<T>(key, category?)` thread the value's type through the call:
+
+```typescript
+interface UserCacheEntry { userId: string; roles: string[]; }
+
+await provider.SetItem<UserCacheEntry>('user:1', { userId: 'u-1', roles: ['admin'] }, 'Users');
+const user = await provider.GetItem<UserCacheEntry>('user:1', 'Users');
+//          ^^^^^ typed as UserCacheEntry | null — no .parse(), no casting
+```
+
+Each implementation handles serialization for its medium internally:
+
+- **IndexedDB** stores objects natively via the structured clone algorithm — `Date`, `Map`, `Set`, typed arrays, and nested objects are preserved as-is on retrieval. **No JSON.parse on read** — significantly faster for cache-heavy workloads.
+- **localStorage** and **Redis** JSON-encode/decode internally because their underlying media are string-only. `Date` instances become ISO strings on round-trip; `Map`/`Set` become plain objects.
+- **In-memory** stores object references directly — same identity returned on read.
+
+Class instances (with prototype methods) lose their prototype on retrieval across all providers; store the underlying data shape (e.g. via `entity.GetAll()` for `BaseEntity`).
+
+#### IndexedDB schema versioning
+
+`BrowserIndexedDBStorageProvider` derives its IDB `DB_VERSION` from the `@memberjunction/graphql-dataprovider` package version (`major * 1000 + minor`). Patch releases share the same DB version (cache survives); minor releases trigger a one-time `onupgradeneeded` that wipes all object stores and recreates them empty. Cache repopulates on first use after the upgrade.
+
+This is intentional: it sidesteps the "did this PR change cache format?" review burden — every minor naturally rolls forward to a clean cache. The cost is one slow page load per user per minor (~1s vs. the warm-load path), which is negligible for monthly LTS cadence and well below the perceptual threshold for "instant" on subsequent loads.
+
+For emergency mid-minor cache schema changes, set `MANUAL_CACHE_REVISION` in `storage-providers.ts` to force an extra wipe within the same minor release.
 
 > **Comprehensive Guide**: For a deep dive into the full caching architecture — LocalCacheManager internals, differential updates, eviction policies, BaseEngine integration, Redis cross-server sync, GraphQL cache invalidation subscriptions, and deployment topologies — see the [**Caching & Pub/Sub Guide**](/guides/CACHING_AND_PUBSUB_GUIDE.md).
 

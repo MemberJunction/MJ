@@ -457,7 +457,10 @@ describe('RedisLocalStorageProvider', () => {
             expect(event.CacheKey).toBe('myKey');
             expect(event.Category).toBe('testCat');
             expect(event.Action).toBe('set');
-            expect(event.Data).toBe('myValue');
+            // SetItem now JSON-serializes the value internally (provider is generic-typed).
+            // The pub/sub Data field carries the serialized payload so subscribers can
+            // re-deserialize without re-querying Redis.
+            expect(event.Data).toBe(JSON.stringify('myValue'));
             expect(event.SourceServerId).toBe(MOCK_PROCESS_UUID);
             expect(event.Timestamp).toBeTypeOf('number');
         });
@@ -690,6 +693,96 @@ describe('RedisLocalStorageProvider', () => {
                 expect.stringContaining('failed to parse message')
             );
             await pubsubProvider.Disconnect();
+        });
+    });
+
+    // ────────────────────────────────────────────────────────────────────────
+    // Generic typing — internal JSON serialization for non-string values
+    // ────────────────────────────────────────────────────────────────────────
+    describe('generic typing — internal JSON conversion', () => {
+        it('round-trips a plain object via JSON serialization', async () => {
+            interface UserCacheEntry {
+                userId: string;
+                roles: string[];
+                count: number;
+            }
+            const user: UserCacheEntry = { userId: 'u-1', roles: ['admin'], count: 42 };
+            await provider.SetItem<UserCacheEntry>('u', user, 'Users');
+            const out = await provider.GetItem<UserCacheEntry>('u', 'Users');
+            expect(out).toEqual(user);
+            expect(out!.roles).toContain('admin');
+            expect(out!.count).toBe(42);
+        });
+
+        it('round-trips an array', async () => {
+            const arr = [1, 2, 3, { four: 4 }];
+            await provider.SetItem('arr', arr, 'Test');
+            const out = await provider.GetItem<typeof arr>('arr', 'Test');
+            expect(out).toEqual(arr);
+        });
+
+        it('round-trips a number', async () => {
+            await provider.SetItem('n', 42, 'Test');
+            const out = await provider.GetItem<number>('n', 'Test');
+            expect(out).toBe(42);
+        });
+
+        it('round-trips a boolean', async () => {
+            await provider.SetItem('b', true, 'Test');
+            const out = await provider.GetItem<boolean>('b', 'Test');
+            expect(out).toBe(true);
+        });
+
+        it('round-trips null (stored as JSON "null", returned as null)', async () => {
+            await provider.SetItem('n', null, 'Test');
+            const out = await provider.GetItem('n', 'Test');
+            expect(out).toBeNull();
+        });
+
+        it('returns null for a corrupt (non-JSON) value already in Redis', async () => {
+            // Simulate a legacy entry written by some non-MJ process directly into Redis
+            const client = provider.Client;
+            const rawKey = 'mj:Test:legacy';
+            await (client.set as ReturnType<typeof vi.fn>).mockImplementationOnce(
+                async (_k: string, _v: string) => {
+                    (provider.Client._store as Map<string, string>).set(rawKey, 'this is not JSON {{{');
+                    return 'OK';
+                }
+            );
+            await client.set(rawKey, 'this is not JSON {{{');
+
+            const out = await provider.GetItem<string>('legacy', 'Test');
+            expect(out).toBeNull();
+        });
+
+        it('Date objects survive round-trip as ISO strings (JSON limitation)', async () => {
+            // Documented JSON limitation: Date → ISO string on stringify; comes back as string.
+            // Not as nice as IndexedDB structured clone, but still usable.
+            const d = new Date('2026-05-02T12:00:00.000Z');
+            await provider.SetItem('d', d, 'Test');
+            const out = await provider.GetItem<string>('d', 'Test');
+            expect(out).toBe('2026-05-02T12:00:00.000Z');
+        });
+
+        it('does not throw when storing un-JSON-serializable values (logs internally)', async () => {
+            // Functions can't be JSON-serialized — JSON.stringify drops them.
+            // The wrapping object IS still serializable, just with the function field omitted.
+            const obj = {
+                value: 7,
+                fn: () => 'oops',
+            };
+            await expect(provider.SetItem('weird', obj, 'Test')).resolves.toBeUndefined();
+            const out = await provider.GetItem<typeof obj>('weird', 'Test');
+            expect(out!.value).toBe(7);
+            expect(out!.fn).toBeUndefined();  // function silently dropped by JSON
+        });
+
+        it('SetItem with an object that has a circular reference does not throw', async () => {
+            // Circular refs make JSON.stringify throw — provider should catch and log.
+            const a: { name: string; self?: unknown } = { name: 'a' };
+            a.self = a;
+            await expect(provider.SetItem('circ', a, 'Test')).resolves.toBeUndefined();
+            expect(await provider.GetItem('circ', 'Test')).toBeNull();
         });
     });
 });
