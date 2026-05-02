@@ -988,9 +988,9 @@ export class SQLServerDataProvider
       // `_Clear` companion. Otherwise the SP body's `ISNULL(@Param, [Col])`
       // (update) or default-substitution (create) would silently keep the
       // existing value or apply the default — a literal NULL could never
-      // be persisted. Predicate is shared with codegen via
-      // GenericDatabaseProvider.NeedsClearCompanion.
-      if ((value === null || value === undefined) && this.NeedsClearCompanion(f)) {
+      // be persisted. Predicate lives on EntityFieldInfo where it logically
+      // belongs (pure metadata) and stays in sync with codegen.
+      if ((value === null || value === undefined) && f.NeedsClearCompanion) {
         execParams.push(`@${f.CodeName}_Clear=1`);
         simpleParams += `, @${f.CodeName}_Clear=1`;
       }
