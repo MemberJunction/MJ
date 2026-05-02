@@ -380,10 +380,17 @@ import {
     ZhipuLLM,
 } from '@memberjunction/ai-zhipu';
 
-// NOTE (manual fix): @memberjunction/archiving-action and -engine were removed
-// from the workspace; their import blocks and class refs below stripped to keep
-// the manifest building. Re-running `mj codegen manifest` will regenerate this
-// file cleanly without these references.
+// @memberjunction/archiving-action (3 classes)
+import {
+    ArchiveDataAction,
+    RestoreRecordAction,
+    RunAllActiveArchivesAction,
+} from '@memberjunction/archiving-action';
+
+// @memberjunction/archiving-engine (1 classes)
+import {
+    DefaultArchiveDriver,
+} from '@memberjunction/archiving-engine';
 
 // @memberjunction/codegen-lib (4 classes)
 import {
@@ -541,7 +548,7 @@ import {
     XMLParserAction,
 } from '@memberjunction/core-actions';
 
-// @memberjunction/core-entities (335 classes)
+// @memberjunction/core-entities (338 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -830,6 +837,9 @@ import {
     MJTagAuditLogEntity,
     MJTagCoOccurrenceEntity,
     MJTagEntity,
+    MJTagScopeEntity,
+    MJTagSuggestionEntity,
+    MJTagSynonymEntity,
     MJTaggedItemEntity,
     MJTaskDependencyEntity,
     MJTaskEntity,
@@ -880,7 +890,7 @@ import {
     ResourcePermissionProvider,
 } from '@memberjunction/core-entities';
 
-// @memberjunction/core-entities-server (15 classes)
+// @memberjunction/core-entities-server (16 classes)
 import {
     MJAIAgentExampleEntityServer,
     MJAIAgentNoteEntityServer,
@@ -894,6 +904,7 @@ import {
     MJDuplicateRunEntityServer,
     MJQueryEntityServer,
     MJTagEntityServer,
+    MJTagScopeEntityServer,
     MJTemplateContentEntityServer,
     MJUserViewEntityServer,
     MJVectorIndexEntityServer,
@@ -1238,6 +1249,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     VertexLLM,
     xAILLM,
     ZhipuLLM,
+    ArchiveDataAction,
+    RestoreRecordAction,
+    RunAllActiveArchivesAction,
+    DefaultArchiveDriver,
     EntityDataGridRelatedEntityGenerator,
     JoinGridRelatedEntityGenerator,
     PostgreSQLCodeGenProvider,
@@ -1653,6 +1668,9 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJTagAuditLogEntity,
     MJTagCoOccurrenceEntity,
     MJTagEntity,
+    MJTagScopeEntity,
+    MJTagSuggestionEntity,
+    MJTagSynonymEntity,
     MJTaggedItemEntity,
     MJTaskDependencyEntity,
     MJTaskEntity,
@@ -1713,6 +1731,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJDuplicateRunEntityServer,
     MJQueryEntityServer,
     MJTagEntityServer,
+    MJTagScopeEntityServer,
     MJTemplateContentEntityServer,
     MJUserViewEntityServer,
     MJVectorIndexEntityServer,
@@ -1782,7 +1801,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 739;
+export const CLASS_REGISTRATIONS_COUNT = 743;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
@@ -1829,6 +1848,8 @@ export const CLASS_REGISTRATIONS_PACKAGES = [
     '@memberjunction/ai-vertex',
     '@memberjunction/ai-xai',
     '@memberjunction/ai-zhipu',
+    '@memberjunction/archiving-action',
+    '@memberjunction/archiving-engine',
     '@memberjunction/codegen-lib',
     '@memberjunction/communication-ms-graph',
     '@memberjunction/communication-sendgrid',
