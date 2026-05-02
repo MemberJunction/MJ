@@ -628,13 +628,14 @@ SELECT * FROM delete_result`;
             // SP's `_Clear` companion. Otherwise the SP body's COALESCE merge
             // (update) or default-substitution (create) silently keeps the
             // existing value or applies the default — a literal NULL could
-            // never be persisted. Predicate is shared with codegen via
-            // GenericDatabaseProvider.NeedsClearCompanion. Companion param
-            // name is rendered through pgDialect.ParameterRef to match the
-            // snake-case shape codegen emits for `_Clear` params (newly
-            // generated procs only — baseline-converted procs predate this
-            // companion mechanism and won't ever have one).
-            if ((value === null || value === undefined) && this.NeedsClearCompanion(field)) {
+            // never be persisted. Predicate lives on EntityFieldInfo where
+            // it logically belongs (pure metadata) and stays in sync with
+            // codegen. Companion param name is rendered through
+            // pgDialect.ParameterRef to match the snake-case shape codegen
+            // emits for `_Clear` params (newly generated procs only —
+            // baseline-converted procs predate this companion mechanism
+            // and won't ever have one).
+            if ((value === null || value === undefined) && field.NeedsClearCompanion) {
                 const clearParamName = pgDialect.ParameterRef(field.CodeName + '_Clear');
                 paramValues.push(true);
                 placeholders.push(`${clearParamName} => $${paramIndex + 1}`);
