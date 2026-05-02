@@ -24,6 +24,25 @@ import { catchError, filter, takeUntil } from 'rxjs/operators';
  * returns `false` and this service is effectively a no-op. The shell can
  * always subscribe; it just never receives an emission.
  */
+/**
+ * How often (in ms) to ask the SW to check for a new manifest while the tab
+ * is visible. 15 minutes balances responsiveness against pointless network
+ * chatter on idle tabs. Checks are skipped while the tab is hidden (Page
+ * Visibility API), and a check is also fired immediately when the tab becomes
+ * visible after being backgrounded.
+ *
+ * Override via `MJServiceWorkerOptions.pollIntervalMs`.
+ */
+const DEFAULT_POLL_INTERVAL_MS = 15 * 60 * 1000;
+
+/**
+ * Window-attached debug handle. Type-safe accessor avoids polluting the global
+ * namespace with `any`. Use from DevTools console:
+ *   __mjUpdateNotificationService__.checkForUpdate()
+ *   __mjUpdateNotificationService__.isUpdateAvailable
+ */
+const WINDOW_DEBUG_KEY = '__mjUpdateNotificationService__';
+
 @Injectable({ providedIn: 'root' })
 export class UpdateNotificationService implements OnDestroy {
     private readonly _updateAvailable$ = new BehaviorSubject<boolean>(false);
@@ -32,6 +51,15 @@ export class UpdateNotificationService implements OnDestroy {
 
     /** Last `VERSION_READY` event captured (for diagnostics / tests). */
     private _lastVersionEvent: VersionReadyEvent | null = null;
+
+    /** Handle from `setInterval` for the periodic poll; cleared in ngOnDestroy. */
+    private _pollHandle: ReturnType<typeof setInterval> | null = null;
+
+    /** Bound listener for `visibilitychange`; needs the same reference for removal. */
+    private _visibilityListener: (() => void) | null = null;
+
+    /** Effective poll interval — set in `startAutoCheck()`. */
+    private _pollIntervalMs = DEFAULT_POLL_INTERVAL_MS;
 
     constructor() {
         if (this._swUpdate.isEnabled) {
@@ -54,7 +82,66 @@ export class UpdateNotificationService implements OnDestroy {
                     this._lastVersionEvent = event;
                     this._updateAvailable$.next(true);
                 });
+
+            this.startAutoCheck(DEFAULT_POLL_INTERVAL_MS);
+            this.exposeDebugHandle();
         }
+    }
+
+    /**
+     * Start a periodic update check on the given interval. Called automatically
+     * by the constructor with `DEFAULT_POLL_INTERVAL_MS`. Consumers may call
+     * this again with a different interval to retune at runtime — the previous
+     * timer is cleared first.
+     *
+     * Pass `0` (or any non-positive number) to disable periodic checking.
+     * Polling is automatically suspended while the tab is hidden and resumed
+     * (with an immediate check) when the tab becomes visible again.
+     */
+    public startAutoCheck(intervalMs: number): void {
+        this.stopAutoCheck();
+        this._pollIntervalMs = intervalMs;
+        if (!this._swUpdate.isEnabled || intervalMs <= 0) return;
+
+        this._pollHandle = setInterval(() => {
+            // Only fire when visible. Hidden tabs catch up via the
+            // visibilitychange handler.
+            if (typeof document === 'undefined' || !document.hidden) {
+                void this.checkForUpdate();
+            }
+        }, intervalMs);
+
+        if (typeof document !== 'undefined') {
+            this._visibilityListener = () => {
+                if (!document.hidden) void this.checkForUpdate();
+            };
+            document.addEventListener('visibilitychange', this._visibilityListener);
+        }
+    }
+
+    /** Stop the periodic poll started by `startAutoCheck()`. */
+    public stopAutoCheck(): void {
+        if (this._pollHandle !== null) {
+            clearInterval(this._pollHandle);
+            this._pollHandle = null;
+        }
+        if (this._visibilityListener && typeof document !== 'undefined') {
+            document.removeEventListener('visibilitychange', this._visibilityListener);
+            this._visibilityListener = null;
+        }
+    }
+
+    /**
+     * Attach this service to `window.__mjUpdateNotificationService__` so it can
+     * be poked from the DevTools console. Useful for ops/QA verification of the
+     * update-detection roundtrip without code changes.
+     *
+     * No-op in non-browser contexts.
+     */
+    private exposeDebugHandle(): void {
+        if (typeof window === 'undefined') return;
+        // Cast through unknown to avoid a global declaration just for the debug hook.
+        (window as unknown as Record<string, unknown>)[WINDOW_DEBUG_KEY] = this;
     }
 
     /**
@@ -146,6 +233,7 @@ export class UpdateNotificationService implements OnDestroy {
     }
 
     ngOnDestroy(): void {
+        this.stopAutoCheck();
         this._destroy$.next();
         this._destroy$.complete();
         this._updateAvailable$.complete();
