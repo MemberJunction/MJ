@@ -323,6 +323,132 @@ export function runStorageProviderContractTests(
                 expect(out).toBeNull();
             });
         });
+
+        // ──────────────────────────────────────────────────────────────────
+        // GetItems — batched read
+        // ──────────────────────────────────────────────────────────────────
+        describe('GetItems (batched read)', () => {
+            it('returns an empty Map for an empty input array (does not touch storage)', async () => {
+                const out = await provider.GetItems<string>([]);
+                expect(out).toBeInstanceOf(Map);
+                expect(out.size).toBe(0);
+            });
+
+            it('returns one entry per requested key, all null when nothing is stored', async () => {
+                const out = await provider.GetItems<string>(['a', 'b', 'c']);
+                expect(out.size).toBe(3);
+                expect(out.get('a')).toBeNull();
+                expect(out.get('b')).toBeNull();
+                expect(out.get('c')).toBeNull();
+            });
+
+            it('round-trips multiple keys with mixed types', async () => {
+                await provider.SetItem('s', 'string-value');
+                await provider.SetItem('n', 42);
+                await provider.SetItem('o', { nested: { deep: true } });
+                const out = await provider.GetItems<unknown>(['s', 'n', 'o']);
+                expect(out.get('s')).toBe('string-value');
+                expect(out.get('n')).toBe(42);
+                expect(out.get('o')).toEqual({ nested: { deep: true } });
+            });
+
+            it('returns null for missing keys interleaved with hits', async () => {
+                await provider.SetItem('present-1', 'v1');
+                await provider.SetItem('present-2', 'v2');
+                const out = await provider.GetItems<string>(['present-1', 'missing', 'present-2', 'also-missing']);
+                expect(out.size).toBe(4);
+                expect(out.get('present-1')).toBe('v1');
+                expect(out.get('missing')).toBeNull();
+                expect(out.get('present-2')).toBe('v2');
+                expect(out.get('also-missing')).toBeNull();
+            });
+
+            it('respects category isolation', async () => {
+                await provider.SetItem('shared', 'A', 'CatA');
+                await provider.SetItem('shared', 'B', 'CatB');
+                const fromA = await provider.GetItems<string>(['shared'], 'CatA');
+                const fromB = await provider.GetItems<string>(['shared'], 'CatB');
+                expect(fromA.get('shared')).toBe('A');
+                expect(fromB.get('shared')).toBe('B');
+            });
+
+            it('deduplicates input keys (same key requested twice → one map entry)', async () => {
+                await provider.SetItem('k', 'v');
+                const out = await provider.GetItems<string>(['k', 'k', 'k']);
+                expect(out.size).toBe(1);
+                expect(out.get('k')).toBe('v');
+            });
+
+            it('preserves typed reads for complex shapes', async () => {
+                interface UserCacheEntry { userId: string; roles: string[]; }
+                await provider.SetItem<UserCacheEntry>('u-1', { userId: 'u-1', roles: ['admin'] }, 'Users');
+                await provider.SetItem<UserCacheEntry>('u-2', { userId: 'u-2', roles: ['editor'] }, 'Users');
+                const out = await provider.GetItems<UserCacheEntry>(['u-1', 'u-2', 'u-3'], 'Users');
+                expect(out.get('u-1')!.roles).toContain('admin');
+                expect(out.get('u-2')!.roles).toContain('editor');
+                expect(out.get('u-3')).toBeNull();
+            });
+
+            it('handles a large number of keys efficiently', async () => {
+                // Populate 200 keys, then batch-read all 200 + 50 missing ones.
+                for (let i = 0; i < 200; i++) {
+                    await provider.SetItem(`k-${i}`, i);
+                }
+                const requestKeys = [
+                    ...Array.from({ length: 200 }, (_, i) => `k-${i}`),
+                    ...Array.from({ length: 50 }, (_, i) => `missing-${i}`),
+                ];
+                const out = await provider.GetItems<number>(requestKeys);
+                expect(out.size).toBe(250);
+                for (let i = 0; i < 200; i++) {
+                    expect(out.get(`k-${i}`)).toBe(i);
+                }
+                for (let i = 0; i < 50; i++) {
+                    expect(out.get(`missing-${i}`)).toBeNull();
+                }
+            });
+
+            it('handles category-prefixed keys without collisions', async () => {
+                // Two categories with overlapping key names — confirms each batch read
+                // only returns entries from the requested category.
+                await provider.SetItem('a', 'cat-A-val', 'CategoryA');
+                await provider.SetItem('a', 'cat-B-val', 'CategoryB');
+                await provider.SetItem('b', 'cat-A-only', 'CategoryA');
+
+                const fromA = await provider.GetItems<string>(['a', 'b'], 'CategoryA');
+                expect(fromA.get('a')).toBe('cat-A-val');
+                expect(fromA.get('b')).toBe('cat-A-only');
+
+                const fromB = await provider.GetItems<string>(['a', 'b'], 'CategoryB');
+                expect(fromB.get('a')).toBe('cat-B-val');
+                expect(fromB.get('b')).toBeNull();
+            });
+
+            it('reflects writes that occurred before the batch read', async () => {
+                await provider.SetItem('k1', 'first');
+                await provider.SetItem('k1', 'second');  // overwrite
+                const out = await provider.GetItems<string>(['k1']);
+                expect(out.get('k1')).toBe('second');
+            });
+
+            it('reflects deletions before the batch read', async () => {
+                await provider.SetItem('k', 'v');
+                await provider.Remove('k');
+                const out = await provider.GetItems<string>(['k']);
+                expect(out.get('k')).toBeNull();
+            });
+
+            it('result Map iteration order matches the unique-key set from input order', async () => {
+                await provider.SetItem('alpha', 1);
+                await provider.SetItem('beta', 2);
+                await provider.SetItem('gamma', 3);
+                // Request in this order with a duplicate; the returned map should reflect
+                // the unique keys in insertion order.
+                const out = await provider.GetItems<number>(['gamma', 'alpha', 'beta', 'gamma']);
+                expect(Array.from(out.keys())).toEqual(['gamma', 'alpha', 'beta']);
+                expect(Array.from(out.values())).toEqual([3, 1, 2]);
+            });
+        });
     });
 }
 

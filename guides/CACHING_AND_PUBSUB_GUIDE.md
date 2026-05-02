@@ -596,6 +596,7 @@ LocalCacheManager delegates actual storage to an `ILocalStorageProvider` impleme
 ```typescript
 interface ILocalStorageProvider {
     GetItem<T = unknown>(key: string, category?: string): Promise<T | null>;
+    GetItems<T = unknown>(keys: string[], category?: string): Promise<Map<string, T | null>>;
     SetItem<T>(key: string, value: T, category?: string): Promise<void>;
     Remove(key: string, category?: string): Promise<void>;
     ClearCategory?(category: string): Promise<void>;
@@ -626,6 +627,25 @@ const cached = await provider.GetItem<CachedRunViewData>(fp, 'RunViewCache');
 ```
 
 **Class instances lose their prototype on retrieval** across all providers. Store the underlying data shape (e.g. via `entity.GetAll()` for `BaseEntity`) — methods aren't preserved by structured clone or JSON.
+
+### Batched reads (`GetItems`)
+
+Hot paths that need many cached entries at once — most notably the smart-cache-check warm-load path that reads ~85 fingerprints per coalesced engine bundle — use `GetItems<T>(keys, category?)` to batch reads through the backend's native batching primitive:
+
+| Provider | Backing primitive | Cost saved |
+|---|---|---|
+| `BrowserIndexedDBStorageProvider` | Single read transaction with N parallel `get()` calls | ~3–10ms per per-key transaction overhead × N keys → one transaction's commit cost |
+| `RedisLocalStorageProvider` | Single `MGET` command | (N – 1) network round-trips |
+| `BrowserLocalStorageProvider` / `InMemoryLocalStorageProvider` | Tight loop | Negligible (synchronous backends) |
+
+`LocalCacheManager` exposes a typed wrapper, `GetRunViewResults(fingerprints: string[])`, that delegates to `GetItems` and threads the cache hit/miss accounting through. The smart-cache-check flow uses it in two passes:
+
+1. **Pre-network pass** in `prepareSmartCacheCheckParams`: read all per-fingerprint cache statuses in one batch to build the GraphQL request payload
+2. **Post-network pass** in `executeSmartCacheCheck`: read all 'current' fingerprints' actual cached data in one batch, distribute to per-param processors
+
+Before this, both passes did per-fingerprint reads inside `Promise.all` — looked parallel, but IDB serializes transactions on the same object store and Redis paid full RTT per `GET`. For an 8-engine warm-load bundle of ~85 fingerprints this dropped from ~170 IDB transactions / network round-trips to 2.
+
+The deserialization cost on retrieval is also avoided per pass — the batched implementation deserializes (or structured-clones) once per backend call instead of N times.
 
 ### Category Namespaces
 

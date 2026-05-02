@@ -29,6 +29,10 @@ function createMockRedisInstance() {
 
     const instance = {
         get: vi.fn((key: string) => Promise.resolve(store.get(key) ?? null)),
+        // ioredis MGET returns string|null per requested key, in order.
+        mget: vi.fn((...keys: string[]) =>
+            Promise.resolve(keys.map(k => (store.has(k) ? store.get(k)! : null)))
+        ),
         set: vi.fn((key: string, value: string) => {
             store.set(key, value);
             return Promise.resolve('OK');
@@ -783,6 +787,152 @@ describe('RedisLocalStorageProvider', () => {
             a.self = a;
             await expect(provider.SetItem('circ', a, 'Test')).resolves.toBeUndefined();
             expect(await provider.GetItem('circ', 'Test')).toBeNull();
+        });
+    });
+
+    // ────────────────────────────────────────────────────────────────────────
+    // GetItems — batched read via MGET pipeline
+    // ────────────────────────────────────────────────────────────────────────
+    describe('GetItems (batched read via MGET)', () => {
+        it('issues exactly one MGET call for N keys (not N individual GETs)', async () => {
+            await provider.SetItem('k1', 'v1', 'Test');
+            await provider.SetItem('k2', 'v2', 'Test');
+            await provider.SetItem('k3', 'v3', 'Test');
+
+            const client = provider.Client;
+            (client.get as ReturnType<typeof vi.fn>).mockClear();
+            (client.mget as ReturnType<typeof vi.fn>).mockClear();
+
+            const out = await provider.GetItems<string>(['k1', 'k2', 'k3'], 'Test');
+
+            expect(out.size).toBe(3);
+            expect(out.get('k1')).toBe('v1');
+            expect(out.get('k2')).toBe('v2');
+            expect(out.get('k3')).toBe('v3');
+            // Verify we used MGET, not N individual GETs
+            expect(client.mget).toHaveBeenCalledTimes(1);
+            expect(client.get).not.toHaveBeenCalled();
+        });
+
+        it('passes keys as variadic args to MGET (ioredis API contract)', async () => {
+            await provider.SetItem('k1', 'v1', 'Test');
+            await provider.SetItem('k2', 'v2', 'Test');
+
+            const client = provider.Client;
+            (client.mget as ReturnType<typeof vi.fn>).mockClear();
+
+            await provider.GetItems<string>(['k1', 'k2'], 'Test');
+
+            // mget should be called with two separate args, not a single array
+            const call = (client.mget as ReturnType<typeof vi.fn>).mock.calls[0];
+            expect(call.length).toBe(2);
+            expect(call[0]).toContain('k1');
+            expect(call[1]).toContain('k2');
+        });
+
+        it('returns null for missing keys interleaved with hits', async () => {
+            await provider.SetItem('present-1', { id: 1 }, 'Test');
+            await provider.SetItem('present-2', { id: 2 }, 'Test');
+
+            const out = await provider.GetItems<{ id: number }>(
+                ['present-1', 'missing', 'present-2'],
+                'Test'
+            );
+            expect(out.get('present-1')).toEqual({ id: 1 });
+            expect(out.get('missing')).toBeNull();
+            expect(out.get('present-2')).toEqual({ id: 2 });
+        });
+
+        it('treats corrupt JSON entries as cache misses (per-key, not whole batch)', async () => {
+            // Stuff a corrupt entry directly into the underlying mock store.
+            await provider.SetItem('good', 'value', 'Test');
+            const client = provider.Client as unknown as { _store: Map<string, string> };
+            client._store.set('mj:Test:bad', 'this is not JSON {{{');
+
+            const out = await provider.GetItems<string>(['good', 'bad'], 'Test');
+            expect(out.get('good')).toBe('value');
+            expect(out.get('bad')).toBeNull();
+        });
+
+        it('returns null for every requested key when MGET fails (fail-open)', async () => {
+            const client = provider.Client;
+            (client.mget as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+                new Error('Connection lost')
+            );
+
+            const out = await provider.GetItems<string>(['k1', 'k2', 'k3'], 'Test');
+            expect(out.size).toBe(3);
+            expect(out.get('k1')).toBeNull();
+            expect(out.get('k2')).toBeNull();
+            expect(out.get('k3')).toBeNull();
+        });
+
+        it('returns empty Map for empty input without touching Redis', async () => {
+            const client = provider.Client;
+            (client.mget as ReturnType<typeof vi.fn>).mockClear();
+
+            const out = await provider.GetItems<string>([]);
+            expect(out.size).toBe(0);
+            expect(client.mget).not.toHaveBeenCalled();
+        });
+
+        it('deduplicates input keys before issuing MGET', async () => {
+            await provider.SetItem('k', 'v', 'Test');
+
+            const client = provider.Client;
+            (client.mget as ReturnType<typeof vi.fn>).mockClear();
+
+            const out = await provider.GetItems<string>(['k', 'k', 'k'], 'Test');
+            expect(out.size).toBe(1);
+            expect(out.get('k')).toBe('v');
+            // Underlying MGET should have been called with one key, not three
+            const call = (client.mget as ReturnType<typeof vi.fn>).mock.calls[0];
+            expect(call.length).toBe(1);
+        });
+
+        it('respects category isolation in batched reads', async () => {
+            await provider.SetItem('shared', 'A-val', 'CategoryA');
+            await provider.SetItem('shared', 'B-val', 'CategoryB');
+
+            const fromA = await provider.GetItems<string>(['shared'], 'CategoryA');
+            const fromB = await provider.GetItems<string>(['shared'], 'CategoryB');
+
+            expect(fromA.get('shared')).toBe('A-val');
+            expect(fromB.get('shared')).toBe('B-val');
+        });
+
+        it('handles mixed-type batched reads (objects + arrays + primitives)', async () => {
+            await provider.SetItem('obj', { x: 1 }, 'Mix');
+            await provider.SetItem('arr', [1, 2, 3], 'Mix');
+            await provider.SetItem('num', 42, 'Mix');
+            await provider.SetItem('str', 'hello', 'Mix');
+            await provider.SetItem('bool', true, 'Mix');
+
+            const out = await provider.GetItems<unknown>(['obj', 'arr', 'num', 'str', 'bool'], 'Mix');
+            expect(out.get('obj')).toEqual({ x: 1 });
+            expect(out.get('arr')).toEqual([1, 2, 3]);
+            expect(out.get('num')).toBe(42);
+            expect(out.get('str')).toBe('hello');
+            expect(out.get('bool')).toBe(true);
+        });
+
+        it('handles a large batch (100 keys) in one MGET call', async () => {
+            const N = 100;
+            for (let i = 0; i < N; i++) {
+                await provider.SetItem(`k-${i}`, i, 'Bulk');
+            }
+
+            const client = provider.Client;
+            (client.mget as ReturnType<typeof vi.fn>).mockClear();
+
+            const keys = Array.from({ length: N }, (_, i) => `k-${i}`);
+            const out = await provider.GetItems<number>(keys, 'Bulk');
+
+            expect(out.size).toBe(N);
+            for (let i = 0; i < N; i++) {
+                expect(out.get(`k-${i}`)).toBe(i);
+            }
+            expect(client.mget).toHaveBeenCalledTimes(1);
         });
     });
 });

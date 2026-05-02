@@ -214,6 +214,7 @@ The interface is **generic-typed** — `T` flows from caller through to retrieve
 | Method | Description |
 |--------|-------------|
 | `GetItem<T>(key, category?)` | Retrieves a cached value. **JSON-deserializes internally** — returns the typed object. Returns `null` on miss, corrupt entry, or Redis unavailability. |
+| `GetItems<T>(keys, category?)` | **Batched read via Redis `MGET`** — one command, one network round-trip, N values. Returns `Map<string, T \| null>`. Missing/corrupt entries map to `null` per-key without failing the batch. ~N× faster than individual `GetItem` calls which each pay full RTT. |
 | `SetItem<T>(key, value, category?, ttlSeconds?)` | Stores a value with optional TTL. **JSON-serializes internally** — pass plain objects/arrays/primitives. Uses pipeline for atomic set + category tracking. |
 | `Remove(key, category?)` | Deletes a key and removes it from category tracking. |
 | `ClearCategory(category)` | Deletes all keys in a category using the tracking Set. |

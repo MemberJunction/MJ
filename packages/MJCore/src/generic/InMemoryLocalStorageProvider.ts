@@ -36,6 +36,20 @@ export class InMemoryLocalStorageProvider implements ILocalStorageProvider {
         return (value === undefined ? null : (value as T));
     }
 
+    public async GetItems<T = unknown>(keys: string[], category?: string): Promise<Map<string, T | null>> {
+        // In-memory has no batching benefit (Map.get is already O(1)) — just read each key
+        // and assemble the result map. Implementing the API for contract uniformity.
+        const out = new Map<string, T | null>();
+        if (keys.length === 0) return out;
+        const categoryMap = this.getCategoryMap(category || InMemoryLocalStorageProvider.DEFAULT_CATEGORY);
+        // Dedupe via Set so duplicate input keys don't produce duplicate map entries
+        for (const key of new Set(keys)) {
+            const value = categoryMap.get(key);
+            out.set(key, value === undefined ? null : (value as T));
+        }
+        return out;
+    }
+
     public async SetItem<T>(key: string, value: T, category?: string): Promise<void> {
         const categoryMap = this.getCategoryMap(category || InMemoryLocalStorageProvider.DEFAULT_CATEGORY);
         categoryMap.set(key, value);
