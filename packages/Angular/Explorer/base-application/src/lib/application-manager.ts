@@ -160,12 +160,18 @@ export class ApplicationManager {
   /**
    * Subscribe to UserInfoEngine data changes to automatically sync our observables
    * when UserApplication records are modified.
+   *
+   * Match on EntityName (the stable public identifier) rather than PropertyName —
+   * PropertyName is the engine's internal backing-field name (e.g. `_UserApplications`
+   * with an underscore prefix), which is an implementation detail that has bitten
+   * consumers before. EntityName is the documented contract on every config and
+   * never changes shape.
    */
   private subscribeToEngineChanges(): void {
     const engine = UserInfoEngine.Instance;
     engine.DataChange$.subscribe(event => {
       // When UserApplications data changes in the engine, sync our observables
-      if (event.config.PropertyName === 'UserApplications') {
+      if (event.config.EntityName?.trim().toLowerCase() === 'mj: user applications') {
         this.syncFromEngine();
       }
     });
@@ -210,11 +216,19 @@ export class ApplicationManager {
   /**
    * Reload the user's application configuration.
    * Call this after changes to UserApplication records to refresh the app list.
+   *
+   * Forces UserInfoEngine to refresh from the server before reading state — without
+   * this, the engine's own debounced refresh (via DataChange$ event subscription)
+   * may not have fired yet (default 1500ms debounce when Filter is present), and
+   * `engine.UserApplications` would still hold stale data.
    */
   async ReloadUserApplications(): Promise<void> {
     this.loading$.next(true);
 
     try {
+      // Force-refresh the engine so we read freshly-loaded UserApplications,
+      // not whatever's still queued behind the entity-event debounce.
+      await UserInfoEngine.Instance.Config(true, this.Provider.CurrentUser, this.Provider);
       await this.loadUserApplicationConfig();
     } finally {
       this.loading$.next(false);

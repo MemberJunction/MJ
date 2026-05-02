@@ -176,27 +176,6 @@ describe('ProviderBase Server-Side Guards', () => {
     });
 
     // -----------------------------------------------------------------------
-    // FastStartupMode guard
-    // -----------------------------------------------------------------------
-    describe('FastStartupMode is client-only', () => {
-        it('should be enabled by default', () => {
-            expect(ProviderBase.FastStartupMode).toBe(true);
-        });
-
-        it('FastStartupMode guard prevents server-side activation', () => {
-            // RunViews fast-start checks: if (!this.TrustLocalCacheCompletely)
-            // Datasets fast-start checks: if (FastStartupMode && !this.TrustLocalCacheCompletely)
-            const server = new ServerTestProvider();
-            const wouldFastStart = ProviderBase.FastStartupMode && !server.ExposedTrustLocalCacheCompletely;
-            expect(wouldFastStart).toBe(false);
-
-            const client = new ClientTestProvider();
-            const clientWouldFastStart = ProviderBase.FastStartupMode && !client.ExposedTrustLocalCacheCompletely;
-            expect(clientWouldFastStart).toBe(true);
-        });
-    });
-
-    // -----------------------------------------------------------------------
     // Metadata fast-start (stale-while-revalidate) guard
     // -----------------------------------------------------------------------
     describe('Metadata fast-start (SWR) is client-only', () => {
@@ -256,13 +235,10 @@ describe('ProviderBase Server-Side Guards', () => {
             // Coalescing: guarded by !TrustLocalCacheCompletely
             expect(ProviderBase.CoalesceWindowMs > 0 && !trust).toBe(false);
 
-            // FastStartupMode for RunViews: guarded by !TrustLocalCacheCompletely
+            // Smart-cache-check (the fast-start replacement): guarded by !TrustLocalCacheCompletely
             expect(!trust).toBe(false);
 
-            // FastStartupMode for datasets: guarded by FastStartupMode && !TrustLocalCacheCompletely
-            expect(ProviderBase.FastStartupMode && !trust).toBe(false);
-
-            // Metadata SWR: guarded by !TrustLocalCacheCompletely
+            // Metadata cache pre-validation: guarded by !TrustLocalCacheCompletely
             expect(!trust && !false /* hardRefresh */ && !false /* hasMetadata */).toBe(false);
         });
 
@@ -272,7 +248,6 @@ describe('ProviderBase Server-Side Guards', () => {
 
             expect(ProviderBase.CoalesceWindowMs > 0 && !trust).toBe(true);
             expect(!trust).toBe(true);
-            expect(ProviderBase.FastStartupMode && !trust).toBe(true);
             expect(!trust && !false && !false).toBe(true);
         });
     });
@@ -282,11 +257,9 @@ describe('ProviderBase Server-Side Guards', () => {
     // -----------------------------------------------------------------------
     describe('Static optimization settings', () => {
         const originalCoalesce = ProviderBase.CoalesceWindowMs;
-        const originalFastStartup = ProviderBase.FastStartupMode;
 
         afterEach(() => {
             ProviderBase.CoalesceWindowMs = originalCoalesce;
-            ProviderBase.FastStartupMode = originalFastStartup;
         });
 
         it('CoalesceWindowMs can be disabled by setting to 0', () => {
@@ -294,13 +267,6 @@ describe('ProviderBase Server-Side Guards', () => {
             const client = new ClientTestProvider();
             const wouldCoalesce = ProviderBase.CoalesceWindowMs > 0 && !client.ExposedTrustLocalCacheCompletely;
             expect(wouldCoalesce).toBe(false);
-        });
-
-        it('FastStartupMode can be disabled', () => {
-            ProviderBase.FastStartupMode = false;
-            const client = new ClientTestProvider();
-            const wouldFastStart = ProviderBase.FastStartupMode && !client.ExposedTrustLocalCacheCompletely;
-            expect(wouldFastStart).toBe(false);
         });
     });
 });

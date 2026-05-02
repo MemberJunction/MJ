@@ -279,13 +279,14 @@ export class TaskDetailPanelComponent implements OnInit, OnChanges {
     this.loadAgentInfo();
   }
 
-  private loadAgentInfo(): void {
+  private async loadAgentInfo(): Promise<void> {
     if (!this.task?.AgentID) {
       this.agent = null;
       return;
     }
 
-    // Get agent from AIEngineBase
+    // AIEngineBase is deferred at startup; ensure loaded before reading .Agents.
+    await AIEngineBase.Instance.EnsureLoaded();
     const agents = AIEngineBase.Instance.Agents;
     this.agent = agents.find((a: MJAIAgentEntityExtended) => UUIDsEqual(a.ID, this.task.AgentID)) || null;
   }
