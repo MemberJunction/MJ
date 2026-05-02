@@ -1,11 +1,36 @@
 # MemberJunction Explorer — Service Worker App-Shell Pre-Cache
 
-**Status**: Proposed (planning only — not yet committed to)
-**Author**: TBD
-**Lead**: TBD (assigned only if approved to proceed)
+**Status**: ✅ **Approved — shipping** (PR #2512)
+**Author**: Amith Nagarajan
 **Target**: MJExplorer (browser-side perceived-performance optimization)
-**Estimated effort**: ~3–4 days focused work + ~1–2 weeks staging soak before production
 **Last updated**: 2026-05-02
+
+> **Decision**: Shipping in PR #2512. The kill switch (`enableServiceWorker: false` in `environment.ts` + remove the `serviceWorker` line from `angular.json`) lets us turn this fully off in a single redeploy if anything misbehaves. Blast radius bounded; perf upside meaningful. See [Honest Risk Assessment](#honest-risk-assessment) below.
+
+---
+
+## Implementation Status
+
+### ✅ Completed in PR #2512
+
+- **`@memberjunction/ng-explorer-service-worker`** (new shipped npm package)
+  - `MJServiceWorkerModule.forRoot({ enabled, pollIntervalMs })` — wraps `ServiceWorkerModule.register` with `registerWhenStable:30000`
+  - `UpdateNotificationService` — RxJS wrapper around `SwUpdate.versionUpdates`; auto-poll on a 15-minute default cadence; suspends polling while tab is hidden; fires immediate check when tab regains visibility; window debug hook (`__mjUpdateNotificationService__`) for ops/QA console use
+  - `<mj-update-notification>` standalone toast — slide-up entrance, pulsing brand-tinted icon, two-line title/subtitle layout, "Reload now" + "Later" + dedicated × close, all MJ design tokens, `prefers-reduced-motion` aware
+  - `ngsw-config.json` shipped at package root — pre-tuned (app-shell prefetch, lazy assets, GraphQL/auth/MSAL exclusions); cache strategy updates flow to consumers via `npm update`
+  - 11 unit tests, all passing
+- **Wired into `@memberjunction/ng-explorer-app`** — `MJExplorerAppModule.forRoot(environment)` now internally calls `MJServiceWorkerModule.forRoot({ enabled: production && enableServiceWorker })` and renders `<mj-update-notification />` in the shell. Consumers get SW + UI transparently — no `app.module.ts` / `app.component.ts` edits needed.
+- **`enableServiceWorker?: boolean`** documented on `MJEnvironmentConfig` in `@memberjunction/ng-bootstrap` with JSDoc.
+- **MJExplorer net change: ONE LINE in `angular.json`** pointing the build's `serviceWorker` config at the shipped `node_modules/@memberjunction/ng-explorer-service-worker/ngsw-config.json`. Zero TypeScript / template / module changes in MJExplorer.
+- **End-to-end verification**: confirmed in local prod build that registration, asset caching, manifest detection on tab refocus, manual `checkForUpdate()` from console, downloaded-version waiting state, and reload-to-activate all work as designed across multiple successive build cycles.
+
+### Remaining work for the assignee (sub-phases 1.3–1.5)
+
+- **1.3** — `docs/operations/SERVICE_WORKER_RUNBOOK.md` (kill-switch procedure, cache wipe, rollback playbook, how to recognize stuck-cache support tickets)
+- **1.4** — Cross-browser smoke (Safari iOS/macOS, Firefox, Edge — Chrome already verified)
+- **1.5** — Production rollout (staging soak, internal canary, gradual prod enable, monitoring)
+- Strip the `(test build #N)` markers left in the toast copy from the verification cycles (one-line cleanup before merge to main)
+- Cross-link the runbook from `guides/CACHING_AND_PUBSUB_GUIDE.md`
 
 ---
 
@@ -524,6 +549,48 @@ If we have real-user metrics (RUM) infrastructure, we can validate empirically. 
 3. **Does our hosting setup serve the right headers?** — Need to verify `Service-Worker-Allowed: /` is sent for `ngsw-worker.js` in all our deploy environments (self-hosted vs. hosted, etc.).
 4. **Are we OK with the placeholder MJ icons during sub-phase 1.1, or should design ship branded icons first?** — Probably OK to ship placeholders to staging; need branded for production.
 5. **Do we want SW for self-hosted deployments by default, or opt-in?** — Recommend: ON by default for the hosted SaaS; OFF by default for self-hosted (since we can't guarantee their hosting setup), with a clear way to opt in.
+
+---
+
+## Honest Risk Assessment
+
+After the implementation in PR #2512, here is a candid pros/cons review for reviewers. Nothing on the cons list is catastrophic given the safety hatches; this is shared so the team has full visibility before approving the merge.
+
+### Real downsides (none catastrophic, all manageable)
+
+**Operational**
+- **Recovery from a bad SW deploy isn't instant.** Kill switch (`enableServiceWorker: false` → rebuild → deploy) requires affected users to reload at least once for their browser to fetch the new manifest and unregister the SW. A really stuck user might need to manually "Clear site data." The runbook (sub-phase 1.3) needs to spell this out clearly so on-call doesn't fumble it during a real incident.
+- **Debugging gets harder.** "Is it the SW serving stale code?" becomes a question on every bug report. New triage step for support.
+- **Staging persistence.** A bad staging deploy can stick in QA browsers longer than expected. Not a prod risk, but a workflow paper-cut.
+
+**Browser-specific**
+- **iOS Safari** is the wild card. Apple aggressively evicts SW caches under storage pressure or even just disuse — users on iPad might not see the speedup as reliably as Chrome users. Worth measuring before claiming the perf win in mobile contexts (sub-phase 1.4).
+- **Incognito/private mode** disables SW persistence between sessions. No bug, just zero benefit there.
+
+**Configuration footguns** (for whoever maintains `ngsw-config.json`)
+- **GraphQL/auth exclusions are path-based.** We exclude `/graphql`, `/auth/**`, `/**/?msal*`, `/**/*__*`. If MJAPI ever moves the GraphQL endpoint or auth providers change their URL conventions, the SW would start intercepting them. Anyone editing API routes or auth config needs to remember to check `ngsw-config.json` lives in `@memberjunction/ng-explorer-service-worker`.
+- **Adding a new "always go to network" pattern** requires editing `ngsw-config.json` and waiting for a new MJ npm release. Workaround documented in the package README: consumer copies `ngsw-config.json` locally and points `angular.json` at the local copy.
+
+**Code coupling to avoid**
+- **No future feature should *depend on* the SW being on.** If someone later adds push notifications or background sync that assumes SW availability, the kill switch becomes a feature-killer instead of a safety hatch. Worth a team guideline: **SW is a perf optimization, never a feature dependency.**
+
+**Minor**
+- **Bundle size**: `@angular/service-worker` adds ~12KB gzipped at runtime. Negligible.
+- **First-visit cost**: SW prefetches the full app-shell on first install, so a user who visits exactly once pays bandwidth for assets they never use again. Trivial unless we have lots of single-visit users (we don't).
+
+### Why we're shipping anyway
+
+- **Single-line kill switch** in `environment.ts` (`enableServiceWorker: true → false`) plus removing one line from `angular.json` fully disables the system. Worst-case incident response is "ship a build with the flag flipped" — same blast radius as any other config change.
+- **The SW is opt-in for downstream consumers.** Anyone building on MJ who doesn't want it gets the no-op fallback automatically — they simply skip the `angular.json` edit.
+- **Failure mode is bounded**: even with a bad SW deploy, users see the *previous* working version until they reload. That's a much better failure mode than most caching layers.
+- **The implementation has comprehensive observability hooks** — `UpdateNotificationService` exposes state via observables and a window debug handle (`__mjUpdateNotificationService__`) that ops/QA can use without code changes.
+- **End-to-end verified** locally across multiple update cycles. The auto-detect, tab-refocus check, manual check, and graceful update flow all work as designed.
+
+### What we'll watch in production (sub-phase 1.5)
+
+1. Any uptick in "cleared site data fixed it" support tickets after first deploy
+2. Whether the perceived warm-load improvement materializes on iOS as much as on desktop Chrome
+3. Whether ops finds the kill switch + runbook recovery path acceptable in a real incident drill (we should run one before claiming GA)
 
 ---
 
