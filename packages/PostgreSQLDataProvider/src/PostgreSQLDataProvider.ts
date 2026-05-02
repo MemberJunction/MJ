@@ -9,6 +9,7 @@ import {
     CompositeKey,
     EntityDependency,
     BaseEntity,
+    BaseEntityResult,
     SaveSQLResult,
     DeleteSQLResult,
     LogError,
@@ -458,6 +459,55 @@ SELECT * FROM delete_result`;
         }
 
         return { fullSQL: simpleSQL, simpleSQL, parameters: paramValues };
+    }
+
+    /**
+     * PostgreSQL spDelete sprocs return a single-column result that confirms the delete.
+     * Two shapes coexist in the wild:
+     *   - Legacy (baseline migration V202602170015): `RETURNS TABLE("_result_id" UUID)` —
+     *     uses `_result_id` because PL/pgSQL flagged the natural `RETURNS TABLE("ID")`
+     *     against `WHERE "ID" = p_id` as ambiguous before `#variable_conflict use_column`
+     *     was adopted in the codegen template. Most existing PG installs still have these.
+     *   - Current codegen output: `RETURNS TABLE("<PKName>" UUID)` (matches framework
+     *     contract directly) — emitted only after a fresh codegen pass replaces the
+     *     baseline sproc.
+     *
+     * The base `ValidateDeleteResult` only knows the second shape, so deletes against
+     * legacy sprocs return false despite the row actually being deleted. This override
+     * accepts either shape: a single non-null UUID column whose value matches the
+     * expected primary key counts as success.
+     */
+    protected override ValidateDeleteResult(
+        entity: BaseEntity,
+        rawResult: Record<string, unknown>[],
+        entityResult: BaseEntityResult,
+    ): boolean {
+        if (!rawResult || rawResult.length === 0) return false;
+        const deletedRecord = rawResult[0];
+
+        // Compound PK: every PK column must be present and match. Legacy `_result_id`
+        // shape doesn't apply here — only single-PK entities use it.
+        if (entity.PrimaryKeys.length > 1) {
+            for (const key of entity.PrimaryKeys) {
+                if (key.Value !== deletedRecord[key.Name]) {
+                    entityResult.Message = `Delete failed: record with primary key ${key.Name}=${key.Value} not found`;
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        // Single PK: accept either the PK-named column (current codegen) or `_result_id`
+        // (legacy baseline sproc). A null value in either means the sproc reported zero
+        // rows affected — record was already gone.
+        const pk = entity.PrimaryKeys[0];
+        const pkValue = deletedRecord[pk.Name];
+        const legacyValue = deletedRecord['_result_id'];
+        if (pkValue === pk.Value || legacyValue === pk.Value) {
+            return true;
+        }
+        entityResult.Message = `Delete failed: record with primary key ${pk.Name}=${pk.Value} not found`;
+        return false;
     }
 
     // ─── SQL Building Helpers ────────────────────────────────────────

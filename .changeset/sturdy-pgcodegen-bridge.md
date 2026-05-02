@@ -3,9 +3,10 @@
 "@memberjunction/codegen-lib": patch
 "@memberjunction/server": patch
 "@memberjunction/core-entities-server": patch
+"@memberjunction/postgresql-dataprovider": patch
 ---
 
-PG toolchain fixes that unblock fresh PostgreSQL installs end-to-end — `mj codegen` runs cleanly, the v5.31 migration conversion path completes, and first-time sign-in (plus other framework-emitted runtime queries) no longer crashes on `boolean = integer` errors.
+PG toolchain fixes that unblock fresh PostgreSQL installs end-to-end — `mj codegen` runs cleanly, the v5.31 migration conversion path completes, first-time sign-in no longer crashes on `boolean = integer` errors, and `BaseEntity.Delete()` against PG correctly recognizes successful deletions.
 
 **SQLConverter** — Two new handlers in `ConditionalDDLRule` for SS-specific patterns that previously survived into PG output untranslated:
 
@@ -19,3 +20,5 @@ Plus `DialectHeaderBuilder` no longer emits an `UPDATE pg_cast` statement that r
 **MJServer** — Two framework-level call sites (`auth/newUsers.ts` and `resolvers/IntegrationDiscoveryResolver.ts`) passed `IsActive = 1` / `DefaultForNewUser = 1` BIT-style booleans as RunView ExtraFilter strings. Crashed every first-time sign-in on PG. Rewritten to do UUID/string filtering server-side via SQL and boolean filtering client-side in JS — dialect-agnostic, no infrastructure changes.
 
 **MJCoreEntitiesServer** — `MJApplicationEntityServer.server.ts` had the same `IsActive = 1` pattern when fanning out UserApplication records on app save. Same JS-side rewrite for parity.
+
+**PostgreSQLDataProvider** — Adds the `ValidateDeleteResult` override that the Phase-2 Save/Delete refactor (Feb 2026) added for SQL Server but missed for PG. PG `spDelete<Entity>` sprocs return their result column as `"_result_id"` (baseline migration convention, originally chosen to avoid PL/pgSQL `RETURNS TABLE("ID")` + `WHERE "ID" = p_id` ambiguity), but the framework's default validation only knows the new PK-named shape — so every Delete against an unmodified PG install reported "record not found" *despite the row actually being deleted*. The override accepts either shape and supports compound PKs.

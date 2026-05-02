@@ -345,4 +345,70 @@ describe('PostgreSQLDataProvider', () => {
             expect(quoter.quoteFieldNamesInToken('VALID', fields)).toBe('VALID');
         });
     });
+
+    describe('ValidateDeleteResult', () => {
+        // The override must accept both result shapes that PG sprocs use:
+        //   - Legacy `{ "_result_id": <uuid> }` from baseline migration sprocs
+        //   - Current `{ "<PKName>": <uuid> }` from latest codegen template
+        // and reject anything that doesn't match the expected primary key.
+
+        type Validator = {
+            ValidateDeleteResult(
+                entity: { PrimaryKeys: { Name: string; Value: unknown }[] },
+                rawResult: Record<string, unknown>[],
+                entityResult: { Message?: string },
+            ): boolean;
+        };
+
+        function buildEntity(pks: { Name: string; Value: unknown }[]) {
+            return { PrimaryKeys: pks } as unknown as Parameters<Validator['ValidateDeleteResult']>[0];
+        }
+
+        let validator: Validator;
+        beforeEach(() => {
+            validator = provider as unknown as Validator;
+        });
+
+        it('returns true when single-PK result matches via PK-named column (current codegen shape)', () => {
+            const entity = buildEntity([{ Name: 'ID', Value: 'abc' }]);
+            const result = { Message: '' };
+            expect(validator.ValidateDeleteResult(entity, [{ ID: 'abc' }], result)).toBe(true);
+        });
+
+        it('returns true when single-PK result matches via legacy _result_id column', () => {
+            const entity = buildEntity([{ Name: 'ID', Value: 'abc' }]);
+            const result = { Message: '' };
+            expect(validator.ValidateDeleteResult(entity, [{ _result_id: 'abc' }], result)).toBe(true);
+        });
+
+        it('returns false and sets message when single-PK result has wrong value', () => {
+            const entity = buildEntity([{ Name: 'ID', Value: 'expected' }]);
+            const result: { Message?: string } = {};
+            expect(validator.ValidateDeleteResult(entity, [{ _result_id: 'wrong' }], result)).toBe(false);
+            expect(result.Message).toContain('ID=expected');
+        });
+
+        it('returns false when sproc reports zero rows (NULL result)', () => {
+            const entity = buildEntity([{ Name: 'ID', Value: 'abc' }]);
+            const result: { Message?: string } = {};
+            expect(validator.ValidateDeleteResult(entity, [{ _result_id: null }], result)).toBe(false);
+            expect(result.Message).toContain('ID=abc');
+        });
+
+        it('returns false on empty result', () => {
+            const entity = buildEntity([{ Name: 'ID', Value: 'abc' }]);
+            expect(validator.ValidateDeleteResult(entity, [], { Message: '' })).toBe(false);
+        });
+
+        it('compound PK requires every key matched by name (legacy _result_id is single-PK only)', () => {
+            const entity = buildEntity([
+                { Name: 'TagAID', Value: 'a1' },
+                { Name: 'TagBID', Value: 'b1' },
+            ]);
+            const result: { Message?: string } = {};
+            expect(validator.ValidateDeleteResult(entity, [{ TagAID: 'a1', TagBID: 'b1' }], result)).toBe(true);
+            expect(validator.ValidateDeleteResult(entity, [{ _result_id: 'a1' }], { Message: '' })).toBe(false);
+            expect(validator.ValidateDeleteResult(entity, [{ TagAID: 'a1', TagBID: 'wrong' }], result)).toBe(false);
+        });
+    });
 });
