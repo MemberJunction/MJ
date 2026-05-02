@@ -11,8 +11,19 @@
           "/favicon.ico",
           "/index.html",
           "/manifest.webmanifest",
-          "/*.css",
-          "/*.js"
+          "/main-*.js",
+          "/polyfills-*.js",
+          "/styles-*.css"
+        ]
+      }
+    },
+    {
+      "name": "lazy-chunks",
+      "installMode": "lazy",
+      "updateMode": "prefetch",
+      "resources": {
+        "files": [
+          "/chunk-*.js"
         ]
       }
     },
@@ -23,6 +34,7 @@
       "resources": {
         "files": [
           "/assets/**",
+          "/media/**",
           "/*.(svg|cur|jpg|jpeg|png|apng|webp|avif|gif|otf|ttf|woff|woff2|ico)"
         ]
       }
