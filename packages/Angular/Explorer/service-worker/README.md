@@ -53,11 +53,13 @@ If you skip the angular.json edit, no `ngsw-worker.js` is built and the runtime 
 
 These are recommended but not required. The SW works fine without them — they're polish items that depend on consumer-side files we can't reach from this npm package.
 
-### Optional #1: Inline theme preload script (eliminates first-paint theme flash)
+### Backport for older versions: inline theme preload script
 
-Without this, dark-mode users will see a brief light-mode flash on every load before MJ's bootstrap code applies their saved theme. The Angular bootstrap path is too late to set the theme before first paint — the script must be inline in `<head>` of `index.html`. Since we can't inject HTML into a consumer's `index.html` from an npm package, this lives on the consumer side.
+**MJExplorer ships this by default starting with the same release as this package** — new installs get instant correct theming for free, no action required.
 
-Add to your app's `src/index.html` inside `<head>`, anywhere before any stylesheets:
+If you're maintaining an older MJExplorer-based app (or a non-Explorer app that uses MJ's theme system) and want the same benefit, add the snippet below to your app's `src/index.html` inside `<head>`, anywhere before any stylesheets. We can't inject HTML into your `index.html` from an npm package, so this lives on the consumer side.
+
+Without this, dark-mode users see a brief light-mode flash on every load before MJ's bootstrap code applies their saved theme. The Angular bootstrap path is too late to set the theme before first paint — the script must be inline in `<head>`.
 
 ```html
 <script>
@@ -75,7 +77,7 @@ Add to your app's `src/index.html` inside `<head>`, anywhere before any styleshe
 
 Reads the same `mj-login-theme` localStorage key that `MJExplorerAppComponent` writes when the user toggles theme. Falls back to OS `prefers-color-scheme`. Wrapped in try/catch so localStorage exceptions (Safari private mode, disabled storage) can never block app load.
 
-Combined with the SW app-shell pre-cache, dark-mode users see correct theme paint within ~100ms of navigation start. Without it, the app still works — they just see a brief light flash.
+Combined with the SW app-shell pre-cache, dark-mode users see correct theme paint within ~100ms of navigation start.
 
 ### Optional #2: Build-time SW cache-shape gate
 
