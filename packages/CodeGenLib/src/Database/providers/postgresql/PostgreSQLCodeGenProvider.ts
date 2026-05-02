@@ -1508,12 +1508,28 @@ WHERE p.prokind IN ('f', 'p')
             `${pgDialect.QuoteIdentifier(k.Name)} = p_${this.toSnakeCase(k.CodeName)}`
         ).join(' AND ');
 
+        // Composite-PK tables: every PK column has AllowUpdateAPI=0, so generateInsertFieldString
+        // filters them all out. Prepend them to finalColumns/finalValues so the INSERT is valid.
+        // (The single-PK uniqueidentifier case is already handled above via v_new_id.)
+        let finalColumns = insertColumns;
+        let finalValues = insertValues;
+        if (entity.PrimaryKeys.length > 1) {
+            const pkColumns = entity.PrimaryKeys
+                .map((k: EntityFieldInfo) => pgDialect.QuoteIdentifier(k.Name))
+                .join(',\n            ');
+            const pkValues = entity.PrimaryKeys
+                .map((k: EntityFieldInfo) => `p_${this.toSnakeCase(k.CodeName)}`)
+                .join(',\n            ');
+            finalColumns = `${pkColumns},\n            ${insertColumns}`;
+            finalValues = `${pkValues},\n            ${insertValues}`;
+        }
+
         return {
             preInsert: '',
             returningClause: '',
             selectClause: `SELECT * FROM ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}\n    WHERE ${selectWhere}`,
-            finalColumns: insertColumns,
-            finalValues: insertValues,
+            finalColumns,
+            finalValues,
         };
     }
 
