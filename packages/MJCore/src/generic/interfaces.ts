@@ -388,19 +388,37 @@ export class EntityRecordNameResult  {
  */
 export interface ILocalStorageProvider {
     /**
-     * Retrieves an item from storage.
+     * Retrieves a value from storage. The implementation is responsible for any
+     * deserialization required by the underlying medium:
+     *  - **IndexedDB**: returns the value directly via structured clone (Date/Map/Set/typed arrays preserved, no parse needed)
+     *  - **localStorage / Redis**: deserializes from JSON internally
+     *  - **In-memory**: returns the stored reference
+     *
+     * Returns `null` for missing keys or corrupt entries.
+     *
+     * @typeParam T - Expected type of the stored value. Caller-controlled — the provider does
+     *                not validate the runtime shape against this type. Falls back to `unknown`.
      * @param key - The key to retrieve
      * @param category - Optional category for key isolation (e.g., 'RunViewCache', 'Metadata')
      */
-    GetItem(key: string, category?: string): Promise<string | null>;
+    GetItem<T = unknown>(key: string, category?: string): Promise<T | null>;
 
     /**
-     * Stores an item in storage.
+     * Stores a value. Callers should pass plain data (objects/arrays/primitives/Date/etc).
+     * Implementations handle any serialization required by the medium:
+     *  - **IndexedDB**: stores natively via structured clone (no string conversion)
+     *  - **localStorage / Redis**: serializes to JSON internally
+     *  - **In-memory**: stores the reference directly
+     *
+     * **Class instances lose their prototype on retrieval** — store the underlying data
+     * (e.g. via `entity.GetAll()`) and reconstruct on read if needed.
+     *
+     * @typeParam T - Type of the value being stored. Caller-controlled.
      * @param key - The key to store under
      * @param value - The value to store
      * @param category - Optional category for key isolation
      */
-    SetItem(key: string, value: string, category?: string): Promise<void>;
+    SetItem<T>(key: string, value: T, category?: string): Promise<void>;
 
     /**
      * Removes an item from storage.

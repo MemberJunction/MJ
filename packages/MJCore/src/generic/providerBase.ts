@@ -3229,9 +3229,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const ls = this.LocalStorageProvider;
         if (ls) {
             const key = this.GetDatasetCacheKey(datasetName, itemFilters);
-            const val = await ls.GetItem(key);
-            if (val) {
-                const dataset = JSON.parse(val);
+            // Native object read — IDB structured-clones, localStorage / Redis JSON-decode internally.
+            const dataset = await ls.GetItem<DatasetResultType>(key);
+            if (dataset) {
                 return dataset;
             }
         }
@@ -3247,11 +3247,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const ls = this.LocalStorageProvider;
         if (ls) {
             const key = this.GetDatasetCacheKey(datasetName, itemFilters);
-            const val = JSON.stringify(dataset);
-            await ls.SetItem(key, val);
-            const dateKey = key + '_date';
-            const dateVal = dataset.LatestUpdateDate.toISOString();
-            await ls.SetItem(dateKey, dateVal);
+            // Native object storage — no JSON.stringify on the hot path.
+            await ls.SetItem<DatasetResultType>(key, dataset);
+            // Date is stored as ISO string for forward-compatibility across providers
+            // (Redis can't natively round-trip Date; localStorage requires string).
+            await ls.SetItem<string>(key + '_date', dataset.LatestUpdateDate.toISOString());
         }
     }
 
@@ -3491,12 +3491,20 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
             const overallStart = Date.now();
 
-            // Load timestamps
-            this._latestLocalMetadataTimestamps = JSON.parse(await ls.GetItem(this.LocalStoragePrefix + ProviderBase.localStorageTimestampsKey));
+            // Load timestamps. The metadata snapshot path intentionally uses string storage
+            // for two reasons:
+            //  1. The compressed path (gzip + base64) needs to round-trip a string.
+            //  2. Both shapes (`AllMetadata`, timestamps map) are large enough that the small
+            //     parse cost is dwarfed by I/O and compression — and the compression saves
+            //     several MB on disk.
+            // Explicitly type as `string` so the JSON.parse calls below remain type-safe under
+            // the now-generic ILocalStorageProvider.
+            const tsRaw = await ls.GetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageTimestampsKey);
+            this._latestLocalMetadataTimestamps = tsRaw ? JSON.parse(tsRaw) : null;
 
             // Read raw data from storage
             const readStart = Date.now();
-            const raw = await ls.GetItem(this.LocalStoragePrefix + ProviderBase.localStorageAllMetadataKey);
+            const raw = await ls.GetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageAllMetadataKey);
             const readMs = Date.now() - readStart;
 
             if (!raw) return;
@@ -3504,7 +3512,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // Decompress if stored in compressed format, otherwise parse directly
             const parseStart = Date.now();
             let temp: any;
-            const format = await ls.GetItem(this.LocalStoragePrefix + ProviderBase.localStorageFormatKey);
+            const format = await ls.GetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageFormatKey);
             if (format === 'gzip' && typeof raw === 'string') {
                 // Compressed path: base64 → binary → gzip decompress → JSON parse
                 const binary = ProviderBase.base64ToArrayBuffer(raw);
@@ -3599,8 +3607,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
             const start = Date.now();
 
-            // Save timestamps
-            await ls.SetItem(this.LocalStoragePrefix + ProviderBase.localStorageTimestampsKey, JSON.stringify(this._latestLocalMetadataTimestamps));
+            // Save timestamps as a JSON string. The metadata snapshot path intentionally uses
+            // string storage so the compressed (gzip+base64) format below can round-trip cleanly
+            // through providers that don't support binary natively.
+            await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageTimestampsKey, JSON.stringify(this._latestLocalMetadataTimestamps));
 
             // Serialize the AllMetadata object
             const jsonString = JSON.stringify(this._localMetadata);
@@ -3614,8 +3624,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     const compressedBuffer = await new Response(compressedStream).arrayBuffer();
                     const base64 = ProviderBase.arrayBufferToBase64(compressedBuffer);
 
-                    await ls.SetItem(this.LocalStoragePrefix + ProviderBase.localStorageAllMetadataKey, base64);
-                    await ls.SetItem(this.LocalStoragePrefix + ProviderBase.localStorageFormatKey, 'gzip');
+                    await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageAllMetadataKey, base64);
+                    await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageFormatKey, 'gzip');
 
                     const elapsed = Date.now() - start;
                     const ratio = jsonString.length > 0 ? (base64.length / jsonString.length * 100).toFixed(1) : '?';
@@ -3632,8 +3642,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }
 
             // Fallback: uncompressed save (older environments without CompressionStream)
-            await ls.SetItem(this.LocalStoragePrefix + ProviderBase.localStorageAllMetadataKey, jsonString);
-            await ls.SetItem(this.LocalStoragePrefix + ProviderBase.localStorageFormatKey, 'json');
+            await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageAllMetadataKey, jsonString);
+            await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageFormatKey, 'json');
 
             const elapsed = Date.now() - start;
             LogStatusEx({
