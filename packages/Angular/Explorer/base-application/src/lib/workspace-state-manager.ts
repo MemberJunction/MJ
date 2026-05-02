@@ -142,7 +142,7 @@ export class WorkspaceStateManager {
       this.workspace$.next(workspace);
 
       // Parse configuration or create default
-      const configJson = workspace.Get('Configuration') as string;
+      const configJson = workspace.Configuration;
 
       const config = configJson
         ? JSON.parse(configJson) as WorkspaceConfiguration
@@ -156,7 +156,7 @@ export class WorkspaceStateManager {
       const workspace = await md.GetEntityObject<MJWorkspaceEntity>('MJ: Workspaces', md.CurrentUser);
       workspace.UserID = userId;
       workspace.Name = 'Default';
-      workspace.Set('Configuration', JSON.stringify(createDefaultWorkspaceConfiguration()));
+      workspace.Configuration = JSON.stringify(createDefaultWorkspaceConfiguration());
 
       const saveResult = await workspace.Save();
 
@@ -178,7 +178,7 @@ export class WorkspaceStateManager {
     const config = this.configuration$.value;
 
     if (workspace && config) {
-      workspace.Set('Configuration', JSON.stringify(config));
+      workspace.Configuration = JSON.stringify(config);
       await workspace.Save();
     }
   }
