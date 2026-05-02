@@ -58,6 +58,41 @@ describe('SQLServerDialect', () => {
         });
     });
 
+    describe('NullLiteral / IsNullLiteral', () => {
+        it('NullLiteral returns NULL', () => {
+            expect(dialect.NullLiteral).toBe('NULL');
+        });
+
+        it('IsNullLiteral matches case-insensitively', () => {
+            expect(dialect.IsNullLiteral('NULL')).toBe(true);
+            expect(dialect.IsNullLiteral('null')).toBe(true);
+            expect(dialect.IsNullLiteral('Null')).toBe(true);
+            expect(dialect.IsNullLiteral('  NULL  ')).toBe(true);
+        });
+
+        it('IsNullLiteral rejects non-NULL values', () => {
+            expect(dialect.IsNullLiteral('0')).toBe(false);
+            expect(dialect.IsNullLiteral('1')).toBe(false);
+            expect(dialect.IsNullLiteral("'Active'")).toBe(false);
+            expect(dialect.IsNullLiteral('')).toBe(false);
+        });
+    });
+
+    describe('ParameterRef', () => {
+        it('returns @-prefixed PascalCase', () => {
+            expect(dialect.ParameterRef('Name')).toBe('@Name');
+            expect(dialect.ParameterRef('UserViewMaxRows')).toBe('@UserViewMaxRows');
+        });
+    });
+
+    describe('ParameterDefault', () => {
+        it('returns " = value" with leading space', () => {
+            expect(dialect.ParameterDefault('NULL')).toBe(' = NULL');
+            expect(dialect.ParameterDefault('0')).toBe(' = 0');
+            expect(dialect.ParameterDefault("'Active'")).toBe(" = 'Active'");
+        });
+    });
+
     describe('CurrentTimestampUTC', () => {
         it('should return GETUTCDATE()', () => {
             expect(dialect.CurrentTimestampUTC()).toBe('GETUTCDATE()');
@@ -302,9 +337,13 @@ describe('SQLServerDialect', () => {
         });
     });
 
-    describe('IsNull (inherited)', () => {
-        it('should use COALESCE under the hood', () => {
-            expect(dialect.IsNull('col1', "'default'")).toBe("COALESCE(col1, 'default')");
+    describe('IsNull', () => {
+        it('emits native ISNULL on SQL Server (T-SQL convention)', () => {
+            expect(dialect.IsNull('col1', "'default'")).toBe("ISNULL(col1, 'default')");
+        });
+
+        it('handles parameter-ref / column-ref pairs cleanly', () => {
+            expect(dialect.IsNull('@MyParam', '[Status]')).toBe('ISNULL(@MyParam, [Status])');
         });
     });
 });
