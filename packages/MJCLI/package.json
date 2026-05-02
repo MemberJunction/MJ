@@ -82,7 +82,10 @@
     "fast-glob": "^3.3.3",
     "figlet": "^1.10.0",
     "fs-extra": "^11.3.3",
+    "mssql": "^11.0.1",
     "ora-classic": "^5.4.2",
+    "pg": "^8.13.1",
+    "pg-query-stream": "^4.7.1",
     "recast": "^0.23.11",
     "simple-git": "^3.30.0",
     "zod": "~3.24.4"
@@ -91,6 +94,7 @@
     "@oclif/prettier-config": "^0.2.1",
     "@types/figlet": "^1.7.0",
     "@types/fs-extra": "^11.0.4",
+    "@types/pg": "^8.11.10",
     "oclif": "^4.22.73",
     "rimraf": "6.1.2",
     "tsx": "^4.21.0",
