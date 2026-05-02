@@ -154,8 +154,11 @@ export class SQLCodeGenBase {
             // ALWAYS use the first filter where we only include entities that have IncludeInAPI = 1
             // Entities are already sorted by name in PostProcessEntityMetadata (see providerBase.ts)
             const baselineEntities = entities.filter(e => e.IncludeInAPI);
-            const includedEntities = baselineEntities.filter(e => configInfo.excludeSchemas.find(s => s.toLowerCase() === e.SchemaName.toLowerCase()) === undefined); //only include entities that are NOT in the excludeSchemas list
-            const excludedEntities = baselineEntities.filter(e => configInfo.excludeSchemas.find(s => s.toLowerCase() === e.SchemaName.toLowerCase()) !== undefined); //only include entities that ARE in the excludeSchemas list in this array
+
+            // OPTIMIZATION: Use a Set for O(1) lookups instead of O(n) array finds to improve performance
+            const excludeSchemasSet = new Set(configInfo.excludeSchemas.map(s => s.toLowerCase()));
+            const includedEntities = baselineEntities.filter(e => !excludeSchemasSet.has(e.SchemaName.toLowerCase())); //only include entities that are NOT in the excludeSchemas list
+            const excludedEntities = baselineEntities.filter(e => excludeSchemasSet.has(e.SchemaName.toLowerCase())); //only include entities that ARE in the excludeSchemas list in this array
 
             // Initialize temp batch files for each schema
             // These will be populated as SQL is generated and will be used for actual execution

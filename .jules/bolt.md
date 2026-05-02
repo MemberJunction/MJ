@@ -1,0 +1,3 @@
+## 2024-05-02 - [O(n^2) Find in Filter Array Operations]
+**Learning:** In code generation and metadata handling, multiple iterations over large entity lists are common. Nested `Array.find()` inside `Array.filter()` operations with string lowercasing can create significant hidden O(n*m) performance bottlenecks that compound when run against large entity sets during code generation.
+**Action:** When repeatedly filtering collections against an exclusion/inclusion list, always precompute a `Set` of the normalized (e.g. lowercased) strings to change the lookup from O(m) to O(1) and eliminate repeated string allocations, improving overall complexity from O(n*m) to O(n+m).
