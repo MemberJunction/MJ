@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectionStrategy, ChangeDetectorRef, inject, OnChanges, SimpleChanges, OnDestroy } from '@angular/core';
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
-import { BaseEntity, EntityFieldInfo, Metadata, CompositeKey, KeyValuePair, RunView } from '@memberjunction/core';
-import { ValidationErrorInfo } from '@memberjunction/global';
+import { BaseEntity, EntityFieldInfo, CompositeKey, KeyValuePair, RunView } from '@memberjunction/core';
+import { ValidationErrorInfo, EscapeHTML } from '@memberjunction/global';
 import { FormContext } from '../types/form-types';
 import { FormNavigationEvent } from '../types/navigation-events';
 
@@ -45,9 +45,9 @@ export interface FKSuggestion {
   selector: 'mj-form-field',
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './form-field.component.html',
-  styleUrls: ['./form-field.component.css']
+  styleUrls: ['./form-field.component.css'],
 })
-export class MjFormFieldComponent extends BaseAngularComponent implements OnChanges, OnDestroy  {
+export class MjFormFieldComponent extends BaseAngularComponent implements OnChanges, OnDestroy {
   private cdr = inject(ChangeDetectorRef);
 
   /** The entity record containing this field */
@@ -71,9 +71,15 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   set Type(value: 'textbox' | 'textarea' | 'number' | 'datepicker' | 'checkbox' | 'select' | 'autocomplete' | 'code' | 'dropdownlist' | 'numerictextbox') {
     // Normalize deprecated Kendo type names to modern equivalents
     switch (value) {
-      case 'dropdownlist':  this._type = 'select'; break;
-      case 'numerictextbox': this._type = 'number'; break;
-      default:              this._type = value; break;
+      case 'dropdownlist':
+        this._type = 'select';
+        break;
+      case 'numerictextbox':
+        this._type = 'number';
+        break;
+      default:
+        this._type = value;
+        break;
     }
   }
   get Type(): 'textbox' | 'textarea' | 'number' | 'datepicker' | 'checkbox' | 'select' | 'autocomplete' | 'code' {
@@ -99,10 +105,14 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   // ---- Deprecated camelCase aliases (backward compat) ----
 
   /** @deprecated Use [Record] instead */
-  @Input('record') set _deprecatedRecord(value: BaseEntity) { this.Record = value; }
+  @Input('record') set _deprecatedRecord(value: BaseEntity) {
+    this.Record = value;
+  }
 
   /** @deprecated Use [FormContext] instead */
-  @Input('formContext') set _deprecatedFormContext(value: FormContext | undefined) { this.FormContext = value; }
+  @Input('formContext') set _deprecatedFormContext(value: FormContext | undefined) {
+    this.FormContext = value;
+  }
 
   /** Whether to hide this field when empty in read-only mode. Default: true */
   @Input() HideWhenEmptyInReadOnlyMode = true;
@@ -123,7 +133,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
 
   /** Get EntityFieldInfo metadata for this field */
   get FieldInfo(): EntityFieldInfo | undefined {
-    return this.Record?.EntityInfo?.Fields?.find(f => f.Name === this.FieldName);
+    return this.Record?.EntityInfo?.Fields?.find((f) => f.Name === this.FieldName);
   }
 
   /** Display name from metadata or override */
@@ -138,7 +148,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     // friendly label (e.g., show "Parent" instead of "Parent ID")
     const nameFieldMap = this.FieldInfo?.RelatedEntityNameFieldMap;
     if (nameFieldMap) {
-      const nameField = this.Record?.EntityInfo?.Fields?.find(f => f.Name === nameFieldMap);
+      const nameField = this.Record?.EntityInfo?.Fields?.find((f) => f.Name === nameFieldMap);
       if (nameField) {
         return nameField.DisplayNameOrName;
       }
@@ -150,11 +160,18 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /** Display name with search highlighting applied */
   get HighlightedDisplayName(): string {
     const filter = this.FormContext?.sectionFilter?.trim();
-    if (!filter) return this.DisplayName;
+    if (!filter) return EscapeHTML(this.DisplayName);
 
-    const escaped = filter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(escaped, 'gi');
-    return this.DisplayName.replace(regex, '<mark class="mj-forms-search-highlight">$&</mark>');
+    const matchIndex = this.DisplayName.toLowerCase().indexOf(filter.toLowerCase());
+    if (matchIndex === -1) {
+      return EscapeHTML(this.DisplayName);
+    }
+
+    const before = this.DisplayName.substring(0, matchIndex);
+    const match = this.DisplayName.substring(matchIndex, matchIndex + filter.length);
+    const after = this.DisplayName.substring(matchIndex + filter.length);
+
+    return `${EscapeHTML(before)}<mark class="mj-forms-search-highlight">${EscapeHTML(match)}</mark>${EscapeHTML(after)}`;
   }
 
   /** Current field value */
@@ -181,7 +198,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /** Whether this field has been modified (dirty). Only shown for saved records (not new). */
   get IsDirty(): boolean {
     if (!this.Record || !this.Record.IsSaved) return false;
-    const field = this.Record.Fields?.find(f => f.Name === this.FieldName);
+    const field = this.Record.Fields?.find((f) => f.Name === this.FieldName);
     return field?.Dirty ?? false;
   }
 
@@ -216,7 +233,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     // Otherwise use form-level errors from save failure (covers untouched fields)
     const contextErrors = this.FormContext?.validationErrors;
     if (contextErrors && contextErrors.length > 0) {
-      return contextErrors.filter(e => e.Source === this.FieldName);
+      return contextErrors.filter((e) => e.Source === this.FieldName);
     }
     return [];
   }
@@ -224,29 +241,29 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   /** Whether to show validation messages (touched OR form-level showValidation) */
   get ShowValidation(): boolean {
     if (!this.EditMode || this.IsFieldReadOnly) return false;
-    return this._touched || (this.FormContext?.showValidation === true);
+    return this._touched || this.FormContext?.showValidation === true;
   }
 
   /** Whether this field has active error-level validation failures to display */
   get ShowErrors(): boolean {
-    return this.ShowValidation && this.FieldErrors.some(e => e.Type === 'Failure');
+    return this.ShowValidation && this.FieldErrors.some((e) => e.Type === 'Failure');
   }
 
   /** Whether this field has active warning-level validation issues to display */
   get ShowWarnings(): boolean {
-    return this.ShowValidation && !this.ShowErrors && this.FieldErrors.some(e => e.Type === 'Warning');
+    return this.ShowValidation && !this.ShowErrors && this.FieldErrors.some((e) => e.Type === 'Warning');
   }
 
   /** Error messages to render in the template */
   get DisplayErrors(): ValidationErrorInfo[] {
     if (!this.ShowValidation) return [];
-    return this.FieldErrors.filter(e => e.Type === 'Failure');
+    return this.FieldErrors.filter((e) => e.Type === 'Failure');
   }
 
   /** Warning messages to render in the template */
   get DisplayWarnings(): ValidationErrorInfo[] {
     if (!this.ShowValidation) return [];
-    return this.FieldErrors.filter(e => e.Type === 'Warning');
+    return this.FieldErrors.filter((e) => e.Type === 'Warning');
   }
 
   /**
@@ -261,7 +278,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     }
     try {
       const result = this.Record.Validate();
-      this._fieldErrors = result.Errors.filter(e => e.Source === this.FieldName);
+      this._fieldErrors = result.Errors.filter((e) => e.Source === this.FieldName);
     } catch {
       this._fieldErrors = [];
     }
@@ -282,7 +299,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     if (this.PossibleValuesOverride) return this.PossibleValuesOverride;
     const values = this.FieldInfo?.EntityFieldValues;
     if (values && values.length > 0) {
-      return values.map(v => v.Value);
+      return values.map((v) => v.Value);
     }
     return [];
   }
@@ -360,14 +377,16 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this._fkNameLoading = true;
     this._resolvedFKValue = fkValue;
 
-    const pk = new CompositeKey([{
-      FieldName: fieldInfo.RelatedEntityFieldName,
-      Value: fkValue
-    }]);
+    const pk = new CompositeKey([
+      {
+        FieldName: fieldInfo.RelatedEntityFieldName,
+        Value: fkValue,
+      },
+    ]);
 
     const md = this.ProviderToUse;
     md.GetEntityRecordName(fieldInfo.RelatedEntity, pk)
-      .then(name => {
+      .then((name) => {
         this._resolvedFKName = name || null;
         this._fkNameLoading = false;
         this.cdr.markForCheck();
@@ -395,21 +414,21 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   get DropdownPositionStyle(): Record<string, string> {
     if (this.OpenAbove) {
       return {
-        'position': 'fixed',
-        'bottom': (window.innerHeight - this.DropdownTop) + 'px',
-        'top': 'auto',
-        'left': this.DropdownLeft + 'px',
-        'width': this.DropdownWidth + 'px',
-        'z-index': '10000'
+        position: 'fixed',
+        bottom: window.innerHeight - this.DropdownTop + 'px',
+        top: 'auto',
+        left: this.DropdownLeft + 'px',
+        width: this.DropdownWidth + 'px',
+        'z-index': '10000',
       };
     }
     return {
-      'position': 'fixed',
-      'top': this.DropdownTop + 'px',
-      'bottom': 'auto',
-      'left': this.DropdownLeft + 'px',
-      'width': this.DropdownWidth + 'px',
-      'z-index': '10000'
+      position: 'fixed',
+      top: this.DropdownTop + 'px',
+      bottom: 'auto',
+      left: this.DropdownLeft + 'px',
+      width: this.DropdownWidth + 'px',
+      'z-index': '10000',
     };
   }
 
@@ -590,7 +609,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     if (!fieldInfo?.RelatedEntity) return;
 
     const md = this.ProviderToUse;
-    const relatedEntity = md.Entities.find(e => e.Name === fieldInfo.RelatedEntity);
+    const relatedEntity = md.Entities.find((e) => e.Name === fieldInfo.RelatedEntity);
     if (!relatedEntity) return;
 
     const nameField = relatedEntity.NameField;
@@ -605,9 +624,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     const pkFieldName = fieldInfo.RelatedEntityFieldName || 'ID';
 
     // Build Fields array, avoiding duplicates when nameField IS the PK
-    const fields = nameFieldName === pkFieldName
-      ? [pkFieldName]
-      : [pkFieldName, nameFieldName];
+    const fields = nameFieldName === pkFieldName ? [pkFieldName] : [pkFieldName, nameFieldName];
 
     const escapedQuery = query.replace(/'/g, "''");
 
@@ -617,13 +634,13 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       ExtraFilter: `[${nameFieldName}] LIKE '%${escapedQuery}%'`,
       MaxRows: 20,
       ResultType: 'simple',
-      Fields: fields
+      Fields: fields,
     });
 
     if (result.Success) {
-      this.FKSuggestions = result.Results.map(r => ({
+      this.FKSuggestions = result.Results.map((r) => ({
         PrimaryKeyValue: r[pkFieldName],
-        DisplayName: String(r[nameFieldName] || '')
+        DisplayName: String(r[nameFieldName] || ''),
       }));
       if (this.FKSuggestions.length > 0 && this._lastFKInputEl) {
         this.updateDropdownPosition(this._lastFKInputEl);
@@ -652,7 +669,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
   get FilteredPossibleValues(): string[] {
     if (!this._valueListFilter) return this.PossibleValues;
     const filter = this._valueListFilter.toLowerCase();
-    return this.PossibleValues.filter(v => v.toLowerCase().includes(filter));
+    return this.PossibleValues.filter((v) => v.toLowerCase().includes(filter));
   }
 
   /** Handle typing in the value list autocomplete */
@@ -808,7 +825,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
       Kind: 'record',
       EntityName: relatedEntityName,
       PrimaryKey: targetKey,
-      OpenInNewTab: event.ctrlKey || event.metaKey
+      OpenInNewTab: event.ctrlKey || event.metaKey,
     });
   }
 
@@ -823,7 +840,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     if (!email) return;
     this.Navigate.emit({
       Kind: 'email',
-      EmailAddress: email
+      EmailAddress: email,
     });
   }
 
@@ -839,7 +856,7 @@ export class MjFormFieldComponent extends BaseAngularComponent implements OnChan
     this.Navigate.emit({
       Kind: 'external-link',
       Url: url,
-      OpenInNewTab: true
+      OpenInNewTab: true,
     });
   }
 
