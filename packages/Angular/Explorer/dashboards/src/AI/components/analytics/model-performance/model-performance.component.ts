@@ -451,7 +451,10 @@ export class AnalyticsModelPerformanceComponent extends BaseAngularComponent imp
 
     private allRuns: PromptRunRecord[] = [];
 
-    ngOnInit(): void {
+    async ngOnInit(): Promise<void> {
+        // AIEngineBase is deferred at startup — make sure it's loaded before
+        // we read .Vendors / .Models from it.
+        await AIEngineBase.Instance.EnsureLoaded();
         this.loadVendorOptions();
         this.LoadData();
     }

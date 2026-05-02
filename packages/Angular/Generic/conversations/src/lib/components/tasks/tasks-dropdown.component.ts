@@ -524,6 +524,12 @@ export class TasksDropdownComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit() {
+    // AIEngineBase is deferred at startup; kick off the load early so the
+    // template helpers (getAgentIconClass / getAgentLogoUrl) find populated
+    // .Agents data when they're called from the template. Fire-and-forget —
+    // the helpers fall back to defaults until it's loaded.
+    AIEngineBase.Instance.EnsureLoaded();
+
     // Subscribe to ALL active tasks across ALL conversations
     this.activeTasksService.tasks$
       .pipe(takeUntil(this.destroy$))

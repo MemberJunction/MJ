@@ -256,7 +256,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const ls = this.LocalStorageProvider;
             if (ls) {
                 const key = this.LocalStoragePrefix + "sessionId";
-                const storedSession = await ls.GetItem(key);
+                // Session ID is a plain string — typed retrieval avoids the generic 'unknown' default.
+                const storedSession = await ls.GetItem<string>(key);
                 return storedSession;
             }
             return null;

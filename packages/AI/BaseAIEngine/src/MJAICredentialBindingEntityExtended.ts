@@ -21,6 +21,10 @@ export class MJAICredentialBindingEntityExtended extends MJAICredentialBindingEn
 
         // Only validate credential type if we have both a credential and can determine the vendor
         if (this.CredentialID) {
+            // AIEngineBase is deferred at startup; ensure loaded so vendor / model-vendor /
+            // prompt-model lookups in validateCredentialTypeMatch see populated cache data
+            // rather than empty arrays (which would silently skip validation).
+            await AIEngineBase.Instance.EnsureLoaded();
             await this.validateCredentialTypeMatch(result);
         }
 
