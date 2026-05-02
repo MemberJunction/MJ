@@ -30,6 +30,21 @@ export interface ThemeDefinition {
 const THEME_SETTING_KEY = 'Explorer.Theme';
 
 /**
+ * localStorage key the inline theme-preload script reads on first paint
+ * (before Angular boots) to apply the correct theme without flashing.
+ *
+ * The value is the **base theme** ('dark' or 'light'), NOT the full theme
+ * preference (which can be 'system' or a custom theme ID like 'izzy-dark').
+ * The preload script needs an unambiguous answer: should I set
+ * data-theme="dark" or not? Storing the base theme is the simplest
+ * contract: the script does `if (value === 'dark') setAttribute(...)`.
+ *
+ * Mirrored by ThemeService whenever the applied base theme changes,
+ * cleared on logout via Reset().
+ */
+const PRELOAD_BASE_THEME_KEY = 'mj-theme';
+
+/**
  * Built-in light theme definition
  */
 const LIGHT_THEME: ThemeDefinition = {
@@ -215,6 +230,14 @@ export class ThemeService {
         document.documentElement.removeAttribute('data-theme');
         document.documentElement.removeAttribute('data-theme-overlay');
 
+        // NOTE: we deliberately do NOT clear PRELOAD_BASE_THEME_KEY here.
+        // The unified theme key ('mj-theme') is the single source of truth
+        // shared with the login-screen toggle and the inline pre-paint script.
+        // Clearing it on logout would force the login screen back to OS
+        // default and cause a theme flash for the post-logout/pre-login
+        // window. The auth provider's clearClientCaches() preserves it for
+        // exactly this reason (see preservedLocalStorageKeys).
+
         // Disable all custom CSS links
         this.disableAllCustomCss();
     }
@@ -257,12 +280,24 @@ export class ThemeService {
     /**
      * Apply the base theme attribute to <html>.
      * 'dark' sets data-theme="dark"; 'light' removes it (matching existing convention).
+     *
+     * Also mirrors the base theme to localStorage under PRELOAD_BASE_THEME_KEY
+     * so the inline pre-bootstrap theme-preload script in index.html can apply
+     * the correct theme on first paint of the next page load — eliminating
+     * the brief light-mode flash dark-mode users would otherwise see.
      */
     private applyBaseThemeAttribute(baseTheme: 'light' | 'dark'): void {
         if (baseTheme === 'dark') {
             document.documentElement.setAttribute('data-theme', 'dark');
         } else {
             document.documentElement.removeAttribute('data-theme');
+        }
+        try {
+            window.localStorage.setItem(PRELOAD_BASE_THEME_KEY, baseTheme);
+        } catch (e) {
+            // localStorage exceptions (private mode, quota) are non-fatal here —
+            // the app still works, the user just may see a brief theme flash on
+            // their next reload.
         }
     }
 
