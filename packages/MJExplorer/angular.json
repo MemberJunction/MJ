@@ -56,7 +56,8 @@
                   "maximumWarning": "6kb"
                 }
               ],
-              "outputHashing": "all"
+              "outputHashing": "all",
+              "serviceWorker": "../../node_modules/@memberjunction/ng-explorer-service-worker/ngsw-config.json"
             },
             "staging": {
               "optimization": {
