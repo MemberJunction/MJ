@@ -183,6 +183,41 @@ export class ResourcePermissionProvider extends PermissionProviderBase {
         return results;
     }
 
+    /**
+     * Rows where this user is the direct grantee AND someone else is the grantor —
+     * the inverse of {@link GetPermissionsGrantedByUser}. Powers the Sharing
+     * Center's "Shared with me" tab for every resource type that writes through
+     * `MJ: Resource Permissions` (Conversations, Reports, User Views, etc.).
+     *
+     * Only Approved, User-grantee rows are returned. Role-inherited access is
+     * intentionally excluded — a personal "Shared with me" view shouldn't surface
+     * org-wide role grants. Self-grants (user shared a resource with themselves)
+     * are also filtered out.
+     */
+    override async GetPermissionsSharedWithUser(grantee: UserInfo): Promise<NormalizedPermission[]> {
+        const engine = ResourcePermissionEngine.Instance;
+        const results: NormalizedPermission[] = [];
+        for (const p of engine.Permissions ?? []) {
+            if (p.Type !== 'User' || !p.UserID) continue;
+            if (!UUIDsEqual(p.UserID, grantee.ID)) continue;
+            if (p.Status !== 'Approved') continue;
+            if (!p.SharedByUserID || UUIDsEqual(p.SharedByUserID, grantee.ID)) continue;
+
+            const actions = this.actionsForLevel(p.PermissionLevel);
+            if (actions.length === 0) continue;
+            const rt = engine.ResourceTypes.find((r) => UUIDsEqual(r.ID, p.ResourceTypeID));
+            results.push(this.buildNormalizedPermission({
+                resourceType: rt?.Name ?? p.ResourceTypeID,
+                resourceId: p.ResourceRecordID,
+                granteeType: 'User', granteeId: p.UserID, granteeName: p.User ?? undefined,
+                actions,
+                sourceRecordId: p.ID,
+                expiresAt: p.EndSharingAt ?? undefined,
+            }));
+        }
+        return results;
+    }
+
     private resolveResourceTypeId(resourceTypeName: string): string | null {
         const rt = ResourcePermissionEngine.Instance.ResourceTypes?.find(
             (t) => t.Name.toLowerCase() === resourceTypeName.toLowerCase()
