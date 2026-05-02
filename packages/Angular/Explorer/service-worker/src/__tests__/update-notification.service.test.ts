@@ -56,6 +56,11 @@ class TestableService extends UpdateNotificationService {
     protected override performReload(): void {
         this.reloadCalls++;
     }
+
+    /** Skip auto-poll setup in tests — we exercise checkForUpdate() directly. */
+    public override startAutoCheck(_intervalMs: number): void {
+        // no-op
+    }
 }
 
 describe('UpdateNotificationService', () => {

@@ -30,6 +30,19 @@ export interface MJServiceWorkerOptions {
      * competing with initial app boot for network bandwidth.
      */
     registrationStrategy?: string;
+
+    /**
+     * How often (in ms) UpdateNotificationService should ask the SW to check
+     * for a new manifest while the tab is visible. Defaults to 15 minutes.
+     * Pass `0` to disable periodic checking entirely (the SW's internal poll
+     * still runs, but on a much longer cadence — typically hours).
+     *
+     * Note: this is wired by `UpdateNotificationService` itself in its
+     * constructor; we don't currently provide a DI token for it. To override
+     * at runtime, inject `UpdateNotificationService` and call
+     * `service.startAutoCheck(yourIntervalMs)`.
+     */
+    pollIntervalMs?: number;
 }
 
 /**
