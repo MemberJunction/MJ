@@ -481,6 +481,8 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
             const clusterData = this.buildClusterDataForPrompt(this.Result);
             if (!clusterData) return;
 
+            // AIEngineBase is deferred at startup; ensure it's loaded before reading .Prompts.
+            await AIEngineBase.Instance.EnsureLoaded();
             // Look up the "Cluster Naming" prompt from AIEngineBase cached metadata
             const promptEntity = AIEngineBase.Instance.Prompts.find(p => p.Name === 'Cluster Naming');
             if (!promptEntity) {

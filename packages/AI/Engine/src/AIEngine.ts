@@ -380,6 +380,25 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     }
 
     /**
+     * Ensures AIEngine is fully loaded (both base metadata and server-specific
+     * capabilities like vector services) before the caller reads engine state.
+     * Idempotent: if already loaded, returns immediately. If a load is in flight
+     * (e.g. the deferred startup or another consumer triggered it), returns the
+     * same in-progress promise.
+     *
+     * Mirrors BaseEngine.EnsureLoaded — added here because AIEngine extends
+     * BaseSingleton (not BaseEngine) and has its own load orchestration to
+     * cover server-specific setup (`RefreshServerSpecificMetadata`).
+     *
+     * Use at any consumption point that touches AIEngine state, especially
+     * given AIEngineBase is registered as deferred at startup.
+     */
+    public async EnsureLoaded(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        if (this._loaded) return;
+        await this.Config(false, contextUser, provider);
+    }
+
+    /**
      * Internal loading logic - separated for clean promise management
      */
     private async innerLoad(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
