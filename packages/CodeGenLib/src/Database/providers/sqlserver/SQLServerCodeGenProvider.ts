@@ -172,6 +172,15 @@ ${whereClause}GO`;
                 selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE [${firstKey.Name}] = @ActualID`;
             }
         } else {
+            // Composite-PK tables: every PK column has AllowUpdateAPI=0, so generateInsertFieldString
+            // filters them all out. Add them back manually here so the INSERT is valid. (The
+            // single-PK uniqueidentifier case is already handled by the branch above.)
+            if (entity.PrimaryKeys.length > 1) {
+                for (const k of entity.PrimaryKeys) {
+                    additionalFieldList += ',\n                [' + k.Name + ']';
+                    additionalValueList += ',\n                @' + k.CodeName;
+                }
+            }
             selectInsertedRecord = `SELECT * FROM [${entity.SchemaName}].[${entity.BaseView}] WHERE `;
             let isFirst = true;
             for (const k of entity.PrimaryKeys) {
