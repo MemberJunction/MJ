@@ -895,14 +895,58 @@ unsubscribe();
 
 `LocalCacheManager` and `ProviderBase` delegate persistence to an `ILocalStorageProvider`. MemberJunction ships with several implementations:
 
-| Provider | Package | Environment | Persistence |
-|----------|---------|-------------|-------------|
-| `InMemoryLocalStorageProvider` | `@memberjunction/core` | Server (Node.js) | None — data lost on restart |
-| `BrowserLocalStorageProvider` | `@memberjunction/graphql-dataprovider` | Browser | `localStorage` |
-| `BrowserIndexedDBStorageProvider` | `@memberjunction/graphql-dataprovider` | Browser | IndexedDB |
-| `RedisLocalStorageProvider` | [`@memberjunction/redis-provider`](../RedisProvider/) | Server (Node.js) | Redis — shared across instances, survives restarts |
+| Provider | Package | Environment | Persistence | Storage Format |
+|----------|---------|-------------|-------------|----------------|
+| `InMemoryLocalStorageProvider` | `@memberjunction/core` | Server (Node.js) | None — data lost on restart | Native references (no serialization) |
+| `BrowserLocalStorageProvider` | `@memberjunction/graphql-dataprovider` | Browser | `localStorage` | JSON-serialized internally |
+| `BrowserIndexedDBStorageProvider` | `@memberjunction/graphql-dataprovider` | Browser | IndexedDB | **Native objects via structured clone** |
+| `RedisLocalStorageProvider` | [`@memberjunction/redis-provider`](../RedisProvider/) | Server (Node.js) | Redis — shared across instances, survives restarts | JSON-serialized internally |
 
 For production server deployments, the Redis provider is recommended. See the [`@memberjunction/redis-provider` README](../RedisProvider/) for setup instructions.
+
+#### Generic-typed interface
+
+`ILocalStorageProvider` is generic — `SetItem<T>(key, value, category?)` and `GetItem<T>(key, category?)` thread the value's type through the call:
+
+```typescript
+interface UserCacheEntry { userId: string; roles: string[]; }
+
+await provider.SetItem<UserCacheEntry>('user:1', { userId: 'u-1', roles: ['admin'] }, 'Users');
+const user = await provider.GetItem<UserCacheEntry>('user:1', 'Users');
+//          ^^^^^ typed as UserCacheEntry | null — no .parse(), no casting
+```
+
+Each implementation handles serialization for its medium internally:
+
+- **IndexedDB** stores objects natively via the structured clone algorithm — `Date`, `Map`, `Set`, typed arrays, and nested objects are preserved as-is on retrieval. **No JSON.parse on read** — significantly faster for cache-heavy workloads.
+- **localStorage** and **Redis** JSON-encode/decode internally because their underlying media are string-only. `Date` instances become ISO strings on round-trip; `Map`/`Set` become plain objects.
+- **In-memory** stores object references directly — same identity returned on read.
+
+Class instances (with prototype methods) lose their prototype on retrieval across all providers; store the underlying data shape (e.g. via `entity.GetAll()` for `BaseEntity`).
+
+#### Batched reads via `GetItems<T>`
+
+For workflows that need many cached entries at once — most notably the smart-cache-check warm-load path that reads ~85 fingerprints per coalesced engine batch — the interface exposes a batched read:
+
+```typescript
+GetItems<T = unknown>(keys: string[], category?: string): Promise<Map<string, T | null>>;
+```
+
+Returns a `Map` keyed by the input keys. Missing keys map to `null`. Implementations leverage their backend's native batching primitive:
+
+- **IndexedDB**: single read transaction with N parallel `get()` calls inside it. Trades ~N transactions of overhead for one transaction's commit cost — significant on hot paths because IDB serializes transactions on the same object store. For 85 keys, this is the difference between ~425ms of IDB bookkeeping and ~10ms.
+- **Redis**: one `MGET` command, one network round-trip, N values returned. ~N× faster than individual `GET` calls which each pay full RTT.
+- **localStorage / in-memory**: implemented as a tight loop for API uniformity (no batching benefit on synchronous backends).
+
+Used internally by `LocalCacheManager.GetRunViewResults` which the smart-cache-check flow calls in two passes (one for the per-fingerprint cache-status payload, one to materialize 'current' entries after the server response). Available to consumer code anywhere multiple cached entries are needed at once.
+
+#### IndexedDB schema versioning
+
+`BrowserIndexedDBStorageProvider` derives its IDB `DB_VERSION` from the `@memberjunction/graphql-dataprovider` package version (`major * 1000 + minor`). Patch releases share the same DB version (cache survives); minor releases trigger a one-time `onupgradeneeded` that wipes all object stores and recreates them empty. Cache repopulates on first use after the upgrade.
+
+This is intentional: it sidesteps the "did this PR change cache format?" review burden — every minor naturally rolls forward to a clean cache. The cost is one slow page load per user per minor (~1s vs. the warm-load path), which is negligible for monthly LTS cadence and well below the perceptual threshold for "instant" on subsequent loads.
+
+For emergency mid-minor cache schema changes, set `MANUAL_CACHE_REVISION` in `storage-providers.ts` to force an extra wipe within the same minor release.
 
 > **Comprehensive Guide**: For a deep dive into the full caching architecture — LocalCacheManager internals, differential updates, eviction policies, BaseEngine integration, Redis cross-server sync, GraphQL cache invalidation subscriptions, and deployment topologies — see the [**Caching & Pub/Sub Guide**](/guides/CACHING_AND_PUBSUB_GUIDE.md).
 

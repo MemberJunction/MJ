@@ -338,22 +338,37 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
     /**
      * Retrieves a value from Redis by key and optional category.
      *
+     * Redis stores values as strings — this method JSON-deserializes the stored value
+     * internally so callers see a typed object back. Returns `null` for missing keys,
+     * Redis unavailability, or corrupt JSON.
+     *
+     * @typeParam T - Expected type of the stored value. Caller-controlled.
      * @param key - The key to look up
      * @param category - Optional category for key isolation (defaults to `"default"`)
-     * @returns The stored string value, or `null` if the key doesn't exist or Redis is unavailable
      *
      * @example
      * ```typescript
-     * const value = await provider.GetItem('entity-metadata', 'Metadata');
+     * interface CachedEntity { ID: string; Name: string; }
+     * const value = await provider.GetItem<CachedEntity>('entity-metadata', 'Metadata');
      * if (value) {
-     *     const metadata = JSON.parse(value);
+     *     console.log(value.Name);  // already typed
      * }
      * ```
      */
-    public async GetItem(key: string, category?: string): Promise<string | null> {
+    public async GetItem<T = unknown>(key: string, category?: string): Promise<T | null> {
         try {
             const redisKey = this.buildKey(key, category ?? DEFAULT_CATEGORY);
-            return await this._client.get(redisKey);
+            const raw = await this._client.get(redisKey);
+            if (raw === null) return null;
+            try {
+                return JSON.parse(raw) as T;
+            } catch {
+                // Corrupt entry — treat as cache miss so the caller refetches.
+                if (this._enableLogging) {
+                    LogError(`Redis GetItem: failed to JSON.parse value at "${redisKey}" — treating as cache miss`);
+                }
+                return null;
+            }
         } catch (err) {
             if (this._enableLogging) {
                 LogError(`Redis GetItem failed for key "${key}": ${(err as Error).message}`);
@@ -363,7 +378,66 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
     }
 
     /**
+     * Batched read using Redis `MGET` — one command, one network round-trip,
+     * N values returned. For N keys this is ~N× faster than individual `GET`s
+     * which each pay full RTT.
+     *
+     * Inputs are deduplicated (same key requested twice → one Redis fetch, one
+     * map entry). Missing keys, corrupt JSON entries, and Redis errors all map
+     * to `null` for the affected key — callers see them as cache misses.
+     *
+     * @typeParam T - Expected type of all stored values. Caller-controlled.
+     * @param keys - The keys to retrieve.
+     * @param category - Optional category for key isolation.
+     */
+    public async GetItems<T = unknown>(keys: string[], category?: string): Promise<Map<string, T | null>> {
+        const out = new Map<string, T | null>();
+        if (keys.length === 0) return out;
+
+        try {
+            const cat = category ?? DEFAULT_CATEGORY;
+            const uniqueKeys = Array.from(new Set(keys));
+            const redisKeys = uniqueKeys.map(k => this.buildKey(k, cat));
+
+            // MGET returns an array of strings/nulls in the same order as the inputs.
+            // ioredis variadic call: pass keys as separate args.
+            const raws = await this._client.mget(...redisKeys);
+
+            for (let i = 0; i < uniqueKeys.length; i++) {
+                const raw = raws[i];
+                if (raw === null) {
+                    out.set(uniqueKeys[i], null);
+                    continue;
+                }
+                try {
+                    out.set(uniqueKeys[i], JSON.parse(raw) as T);
+                } catch {
+                    if (this._enableLogging) {
+                        LogError(`Redis GetItems: failed to JSON.parse value at "${redisKeys[i]}" — treating as cache miss`);
+                    }
+                    out.set(uniqueKeys[i], null);
+                }
+            }
+            return out;
+        } catch (err) {
+            if (this._enableLogging) {
+                LogError(`Redis GetItems failed for ${keys.length} keys: ${(err as Error).message}`);
+            }
+            // On error, return null entries for every requested key — callers see them as cache misses.
+            for (const key of new Set(keys)) {
+                out.set(key, null);
+            }
+            return out;
+        }
+    }
+
+    /**
      * Stores a value in Redis under the given key and optional category.
+     *
+     * Redis stores values as strings — this method JSON-serializes the value internally.
+     * Callers should pass plain data (objects/arrays/primitives). Class instances will
+     * lose their prototype on retrieval; functions, Maps, Sets, and Dates have JSON's
+     * usual limitations.
      *
      * If a `ttlSeconds` is provided, the key will automatically expire after that
      * duration. Otherwise, the configured `defaultTTLSeconds` is used. If neither
@@ -372,25 +446,38 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
      * The key is also added to a Redis Set that tracks all keys in the category,
      * enabling efficient `ClearCategory()` and `GetCategoryKeys()` operations.
      *
+     * @typeParam T - Type of the value being stored. Caller-controlled.
      * @param key - The key to store under
-     * @param value - The string value to store
+     * @param value - The value to store (will be JSON-serialized internally)
      * @param category - Optional category for key isolation (defaults to `"default"`)
      * @param ttlSeconds - Optional time-to-live in seconds. Overrides `defaultTTLSeconds` from config.
      *
      * @example
      * ```typescript
      * // Store with default TTL
-     * await provider.SetItem('view:users', JSON.stringify(results), 'RunViewCache');
+     * await provider.SetItem('view:users', { results, maxUpdatedAt }, 'RunViewCache');
      *
      * // Store with explicit 10-minute TTL
-     * await provider.SetItem('view:users', JSON.stringify(results), 'RunViewCache', 600);
+     * await provider.SetItem('view:users', { results }, 'RunViewCache', 600);
      * ```
      */
-    public async SetItem(key: string, value: string, category?: string, ttlSeconds?: number): Promise<void> {
+    public async SetItem<T>(key: string, value: T, category?: string, ttlSeconds?: number): Promise<void> {
         try {
             const cat = category ?? DEFAULT_CATEGORY;
             const redisKey = this.buildKey(key, cat);
             const categorySetKey = this.buildCategorySetKey(cat);
+
+            // Serialize once. We need the string for both the Redis SET and (optionally)
+            // the pub/sub publishChange payload, so build it up front.
+            let serialized: string;
+            try {
+                serialized = JSON.stringify(value);
+            } catch (err) {
+                if (this._enableLogging) {
+                    LogError(`Redis SetItem: failed to JSON.stringify value for "${redisKey}": ${(err as Error).message}`);
+                }
+                return;
+            }
 
             const effectiveTTL = ttlSeconds ?? this._defaultTTLSeconds;
 
@@ -398,9 +485,9 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
             const pipeline = this._client.pipeline();
 
             if (effectiveTTL && effectiveTTL > 0) {
-                pipeline.setex(redisKey, effectiveTTL, value);
+                pipeline.setex(redisKey, effectiveTTL, serialized);
             } else {
-                pipeline.set(redisKey, value);
+                pipeline.set(redisKey, serialized);
             }
 
             // Track this key in the category set for ClearCategory/GetCategoryKeys
@@ -409,7 +496,7 @@ export class RedisLocalStorageProvider implements ILocalStorageProvider {
             await pipeline.exec();
 
             // Publish cache change event for cross-server invalidation
-            this.publishChange(key, cat, 'set', value);
+            this.publishChange(key, cat, 'set', serialized);
         } catch (err) {
             if (this._enableLogging) {
                 LogError(`Redis SetItem failed for key "${key}": ${(err as Error).message}`);
