@@ -1,5 +1,38 @@
 # @memberjunction/ai-provider-bundle
 
+## 5.31.0
+
+### Patch Changes
+
+- 7ed7a4b: no metadata/migration changes
+- Updated dependencies [7ed7a4b]
+  - @memberjunction/ai-anthropic@5.31.0
+  - @memberjunction/ai-azure@5.31.0
+  - @memberjunction/ai-bedrock@5.31.0
+  - @memberjunction/ai-betty-bot@5.31.0
+  - @memberjunction/ai-blackforestlabs@5.31.0
+  - @memberjunction/ai-cerebras@5.31.0
+  - @memberjunction/ai-cohere@5.31.0
+  - @memberjunction/ai-elevenlabs@5.31.0
+  - @memberjunction/ai-fireworks@5.31.0
+  - @memberjunction/ai-gemini@5.31.0
+  - @memberjunction/ai-groq@5.31.0
+  - @memberjunction/ai-heygen@5.31.0
+  - @memberjunction/ai-inception@5.31.0
+  - @memberjunction/ai-lmstudio@5.31.0
+  - @memberjunction/ai-llamacpp@5.31.0
+  - @memberjunction/ai-local-embeddings@5.31.0
+  - @memberjunction/ai-minimax@5.31.0
+  - @memberjunction/ai-mistral@5.31.0
+  - @memberjunction/ai-ollama@5.31.0
+  - @memberjunction/ai-openai@5.31.0
+  - @memberjunction/ai-openrouter@5.31.0
+  - @memberjunction/ai-recommendations-rex@5.31.0
+  - @memberjunction/ai-vertex@5.31.0
+  - @memberjunction/ai-zhipu@5.31.0
+  - @memberjunction/ai-xai@5.31.0
+  - @memberjunction/ai-vectors-pinecone@5.31.0
+
 ## 5.30.1
 
 ### Patch Changes
