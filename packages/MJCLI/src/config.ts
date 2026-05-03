@@ -14,9 +14,20 @@ const MJ_REPO_URL = 'https://github.com/MemberJunction/MJ.git';
  * Default database configuration for MJCLI.
  * Database settings come from environment variables with sensible defaults.
  */
+// Resolve dbPlatform from env first, so dbPort can default sensibly per dialect.
+// MJAPI honors DB_TYPE for runtime; MJCLI now does the same so a single .env
+// drives both code paths consistently. Without this, mj migrate against a PG
+// .env silently constructed a SqlServerProvider and failed with ECONNRESET.
+const ENV_DB_PLATFORM = process.env.DB_TYPE === 'postgresql' || process.env.DB_TYPE === 'postgres'
+  ? 'postgresql' as const
+  : process.env.DB_TYPE === 'sqlserver' || process.env.DB_TYPE === 'mssql'
+    ? 'sqlserver' as const
+    : undefined;
+
 const DEFAULT_CLI_CONFIG = {
+  dbPlatform: ENV_DB_PLATFORM ?? 'sqlserver' as const,
   dbHost: process.env.DB_HOST ?? 'localhost',
-  dbPort: process.env.DB_PORT ? parseInt(process.env.DB_PORT) : 1433,
+  dbPort: process.env.DB_PORT ? parseInt(process.env.DB_PORT) : (ENV_DB_PLATFORM === 'postgresql' ? 5432 : 1433),
   dbDatabase: process.env.DB_DATABASE ?? '',
   dbEncrypt: process.env.DB_ENCRYPT !== undefined ? parseBooleanEnv(process.env.DB_ENCRYPT) : true,
   dbTrustServerCertificate: parseBooleanEnv(process.env.DB_TRUST_SERVER_CERTIFICATE),
@@ -308,9 +319,11 @@ export const getSkywayConfig = async (
     Migrations: {
       Locations: [cleanLocation],
       DefaultSchema: targetSchema,
-      // Only pass BaselineVersion if explicitly set in config;
-      // when omitted, Skyway auto-detects the latest B__baseline file.
-      ...(mjConfig.baselineVersion ? { BaselineVersion: mjConfig.baselineVersion } : {}),
+      // Skyway treats BaselineVersion '1' as a sentinel meaning "auto-select the highest-versioned
+      // B__ baseline file". Without this, Skyway leaves baselineVersion undefined, finds no
+      // baseline matching `undefined`, and silently skips the baseline file on fresh installs —
+      // which then fails on the next migration with "relation does not exist".
+      BaselineVersion: mjConfig.baselineVersion ?? '1',
       BaselineOnMigrate: mjConfig.baselineOnMigrate,
       OutOfOrder: mjConfig.outOfOrder,
     },
