@@ -4,6 +4,7 @@
 "@memberjunction/server": patch
 "@memberjunction/core-entities-server": patch
 "@memberjunction/postgresql-dataprovider": patch
+"@memberjunction/sql-dialect": patch
 ---
 
 PG toolchain fixes that unblock fresh PostgreSQL installs end-to-end — `mj codegen` runs cleanly, the v5.31 migration conversion path completes, first-time sign-in no longer crashes on `boolean = integer` errors, and `BaseEntity.Delete()` against PG correctly recognizes successful deletions.
@@ -22,3 +23,5 @@ Plus `DialectHeaderBuilder` no longer emits an `UPDATE pg_cast` statement that r
 **MJCoreEntitiesServer** — `MJApplicationEntityServer.server.ts` had the same `IsActive = 1` pattern when fanning out UserApplication records on app save. Same JS-side rewrite for parity.
 
 **PostgreSQLDataProvider** — Adds the `ValidateDeleteResult` override that the Phase-2 Save/Delete refactor (Feb 2026) added for SQL Server but missed for PG. PG `spDelete<Entity>` sprocs return their result column as `"_result_id"` (baseline migration convention, originally chosen to avoid PL/pgSQL `RETURNS TABLE("ID")` + `WHERE "ID" = p_id` ambiguity), but the framework's default validation only knows the new PK-named shape — so every Delete against an unmodified PG install reported "record not found" *despite the row actually being deleted*. The override accepts either shape and supports compound PKs.
+
+**SQLDialect + CodeGenLib (tolerant-SP `_Clear` companion)** — The base codegen template emitted nullable-column `_Clear` companion parameters with a hardcoded `bit` SQL type and a hardcoded `= 1` comparison in the CASE branches. SS works with `bit`/`= 1`; PG declares the parameter as `bit` (which exists but is a 1-character bit-string type, not boolean) and then compares with `= 1` (integer), failing at runtime with `operator does not exist: boolean = integer`. The previous fix (`914cd49079`) was a `sed`-rewrite of 123 occurrences in one PG migration file — replaced here with a source-level fix: a new `Dialect.BooleanParameterType()` (returns `'bit'` on SS, `'boolean'` on PG) and reuse of `Dialect.BooleanLiteral(true)` for the comparison. SS output is byte-identical (`bit DEFAULT 0` + `= 1`); PG output is now correct (`boolean DEFAULT false` + `= true`) at the source — no more sed band-aids needed for future codegen runs.

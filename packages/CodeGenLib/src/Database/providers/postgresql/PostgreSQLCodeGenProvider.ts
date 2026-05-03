@@ -669,7 +669,7 @@ END $$;
             // anyway — so the function compiles but every caller that passes
             // `0`/`false` fails type-checking. Emit native PG `boolean DEFAULT FALSE`.
             if (!ef.IsPrimaryKey && this.needsClearCompanion(ef)) {
-                parts.push(`${dialect.ParameterRef(ef.CodeName + '_Clear')} boolean${dialect.ParameterDefault('FALSE')}`);
+                parts.push(`${dialect.ParameterRef(ef.CodeName + '_Clear')} ${dialect.BooleanParameterType()}${dialect.ParameterDefault(dialect.BooleanLiteral(false))}`);
                 foundDefault = true;
             }
 

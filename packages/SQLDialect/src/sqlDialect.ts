@@ -202,6 +202,20 @@ export abstract class SQLDialect implements SQLParserDialect {
     abstract BooleanLiteral(value: boolean): string;
 
     /**
+     * Returns the SQL type token for a boolean parameter in a stored-procedure /
+     * function signature. Used by codegen when emitting tolerant-SP `_Clear`
+     * companion parameters and other boolean-typed params.
+     *
+     * SQL Server: `bit` (BIT type, 0/1)
+     * PostgreSQL: `boolean` (BOOLEAN type, TRUE/FALSE)
+     *
+     * Hardcoding `bit` everywhere worked on SQL Server but produced sprocs
+     * that PG rejected as `operator does not exist: boolean = integer` when
+     * the generated CASE compared a `bit`-declared parameter with `= 1`.
+     */
+    abstract BooleanParameterType(): string;
+
+    /**
      * Returns the current UTC timestamp expression.
      * SQL Server: GETUTCDATE(), PostgreSQL: NOW() AT TIME ZONE 'UTC'
      */

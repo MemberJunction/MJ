@@ -184,6 +184,10 @@ export class PostgreSQLDialect extends SQLDialect {
         return value ? 'true' : 'false';
     }
 
+    BooleanParameterType(): string {
+        return 'boolean';
+    }
+
     /**
      * PostgreSQL has no `ISNULL` keyword; the standard is `COALESCE` (which
      * SQL Server also supports). PG generated SPs/functions emit COALESCE
