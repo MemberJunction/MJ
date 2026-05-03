@@ -4025,7 +4025,7 @@ export class ManageMetadataBase {
                   for (const appUUID of apps) {
                      const sSQLInsertApplicationEntity = `INSERT INTO ${this.qs(mj_core_schema(), 'ApplicationEntity')}
                                        (${this.qi('ApplicationID')}, ${this.qi('EntityID')}, ${this.qi('Sequence')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')}) VALUES
-                                       ('${appUUID}', '${newEntityID}', (SELECT COALESCE(MAX(${this.qi('Sequence')}),0)+1 FROM ${this.qs(mj_core_schema(), 'ApplicationEntity')} WHERE ${this.qi('ApplicationID')} = '${appUUID}'), ${this.utcNow()}, ${this.utcNow()})`;
+                                       ('${appUUID}', '${newEntityID}', (SELECT COALESCE(MAX(${this.qi('Sequence')}),0)+1 FROM ${this.qs(mj_core_schema(), 'ApplicationEntity')} WHERE ${this.qi('ApplicationID')} = '${appUUID}'), ${this.utcNow()}, ${this.utcNow()});`;
                      await this.LogSQLAndExecute(pool, sSQLInsertApplicationEntity, `SQL generated to add new entity ${newEntityName} to application ID: '${appUUID}'`);
                   }
                }
@@ -4047,7 +4047,7 @@ export class ManageMetadataBase {
                   if (RoleID) {
                      const sSQLInsertPermission = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityPermission')}
                                                    (${this.qi('EntityID')}, ${this.qi('RoleID')}, ${this.qi('CanRead')}, ${this.qi('CanCreate')}, ${this.qi('CanUpdate')}, ${this.qi('CanDelete')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')}) VALUES
-                                                   ('${newEntityID}', '${RoleID}', ${this.boolLit(p.CanRead)}, ${this.boolLit(p.CanCreate)}, ${this.boolLit(p.CanUpdate)}, ${this.boolLit(p.CanDelete)}, ${this.utcNow()}, ${this.utcNow()})`;
+                                                   ('${newEntityID}', '${RoleID}', ${this.boolLit(p.CanRead)}, ${this.boolLit(p.CanCreate)}, ${this.boolLit(p.CanUpdate)}, ${this.boolLit(p.CanDelete)}, ${this.utcNow()}, ${this.utcNow()});`;
                      await this.LogSQLAndExecute(pool, sSQLInsertPermission, `SQL generated to add new permission for entity ${newEntityName} for role ${p.RoleName}`);
                   }
                   else
@@ -4302,7 +4302,7 @@ export class ManageMetadataBase {
          ${newEntityDefaults.UserViewMaxRows === undefined ? '' : ', ' + (newEntityDefaults.UserViewMaxRows)}
          , ${this.utcNow()}
          , ${this.utcNow()}
-      )
+      );
    `;
 
       return sSQLInsert;
