@@ -62,25 +62,43 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
     // ─── BASE VIEWS ──────────────────────────────────────────────────────
 
     /**
-     * Generates a PostgreSQL `CREATE OR REPLACE VIEW` statement for an entity's base view.
+     * Generates a PostgreSQL view-regeneration block for an entity's base view.
+     *
      * Includes all base table columns, parent/related field joins, and root field lateral
      * joins. Applies a soft-delete `WHERE` filter when the entity uses soft deletes.
      *
-     * **Non-destructive strategy.** Historically this method emitted
-     * `DROP VIEW IF EXISTS ... CASCADE;` before the CREATE, which let it handle every
-     * column-signature change — but also silently destroyed any dependent view, function,
-     * trigger, or GRANT on the view. When a later statement (or subsequent entity in the
-     * same run) failed, half the database's objects could be gone with no error surfaced.
+     * **Two-path emission (try-then-fallback).** The output wraps `CREATE OR REPLACE VIEW`
+     * in a `DO $$ ... EXCEPTION WHEN invalid_table_definition THEN DROP VIEW ... CASCADE;
+     * EXECUTE vsql; END $$` block. Why:
      *
-     * We now emit just `CREATE OR REPLACE VIEW`, which PostgreSQL accepts when the new
-     * column list is a prefix of the existing one plus optional trailing additions. Any
-     * incompatible change (rename, reorder, type change, removed column) fails with
-     * SQLSTATE `42P16 invalid_table_definition`. That error is intentionally allowed to
-     * propagate up through `executeSQLFileViaShell` → the per-entity batch loop → and is
-     * surfaced as a real regeneration failure. A follow-up pass will add a capture-drop-
-     * restore fallback for 42P16 that preserves dependents via `pg_depend` and
-     * `pg_get_viewdef` / `pg_get_functiondef`. Until that lands, 42P16 on PG is loud and
-     * actionable instead of silent and destructive.
+     *   - Happy path: `CREATE OR REPLACE VIEW` succeeds (new column list is a prefix of
+     *     the existing one plus optional trailing additions). Zero destruction. No
+     *     dependent views, functions, triggers, or grants are touched.
+     *
+     *   - Sad path: PG raises SQLSTATE `42P16 invalid_table_definition` for any column
+     *     rename / reorder / type change / removal. The exception handler runs
+     *     `DROP VIEW ... CASCADE` and re-executes the CREATE. Dependent codegen-managed
+     *     functions (spCreate/spUpdate/spDelete returning `SETOF vwFoo`) and dependent
+     *     views are CASCADE-dropped — they are regenerated later in the same codegen
+     *     output stream, so by the end of the run all dependents are restored to the new
+     *     shape. GRANTs on the view itself are also lost on the CASCADE; codegen always
+     *     re-emits permissions immediately after the view, so they come back too.
+     *
+     * The runtime-apply path also calls this, so the live DB applies the same DO block.
+     * `executeWithFallback` (the runtime helper) becomes a no-op for these statements
+     * because the DO block handles 42P16 internally — but it still runs as a safety net
+     * for any other failure modes.
+     *
+     * **What this DOES NOT preserve on the sad path:** non-codegen-managed dependent
+     * objects (e.g. a hand-written sproc against this view that codegen doesn't know
+     * about). Those would be CASCADE-dropped and not restored. MJ codegen-generated
+     * sprocs cover all standard CRUD pathways; bespoke sprocs against base views are
+     * extremely rare in practice. If a project does have them, they need to be re-applied
+     * after a 42P16 fallback fires.
+     *
+     * This pattern matches the v5.30.x fix migration `V202604282300` — which used the
+     * same DO/EXCEPTION construct to recreate `vwEntityPermissions` after the unquoted
+     * RoleName alias bug — proving the pattern is production-tested.
      *
      * Permissions are handled separately by sql_codegen.ts via generateViewPermissions().
      */
@@ -94,6 +112,16 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
         const fromParts = this.buildBaseViewFromParts(context, entity, alias);
         const quotedView = pgDialect.QuoteSchema(entity.SchemaName, viewName);
 
+        // Inner CREATE OR REPLACE statement (no trailing semicolon — embedded inside
+        // the DO block via dollar-quoted literal).
+        const createOrReplaceSQL = `CREATE OR REPLACE VIEW ${quotedView}
+AS
+SELECT
+    ${selectParts}
+FROM
+    ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} AS ${alias}${fromParts}
+${whereClause}`;
+
         return `
 ------------------------------------------------------------
 ----- BASE VIEW FOR ENTITY:      ${entity.Name}
@@ -101,13 +129,15 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
 -----               BASE TABLE:  ${entity.BaseTable}
 -----               PRIMARY KEY: ${entity.PrimaryKeys.map((pk: EntityFieldInfo) => pk.Name).join(', ')}
 ------------------------------------------------------------
-CREATE OR REPLACE VIEW ${quotedView}
-AS
-SELECT
-    ${selectParts}
-FROM
-    ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)} AS ${alias}${fromParts}
-${whereClause};
+DO $vw_regen$
+DECLARE
+  vsql CONSTANT TEXT := $vsql$${createOrReplaceSQL}$vsql$;
+BEGIN
+  EXECUTE vsql;
+EXCEPTION WHEN invalid_table_definition THEN
+  DROP VIEW IF EXISTS ${quotedView} CASCADE;
+  EXECUTE vsql;
+END $vw_regen$;
 `;
     }
 
