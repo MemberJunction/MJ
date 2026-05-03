@@ -493,6 +493,23 @@ describe('PostgreSQLCodeGenProvider', () => {
             const result = provider.generateCRUDParamString(entity.Fields, false);
             expect(result).not.toContain('virtual');
         });
+
+        // Tolerant-SP `_Clear` companion is emitted for nullable fields that have a
+        // non-NULL DB default. On SQL Server it's `bit DEFAULT 0` and `= 1` in CASE;
+        // on PostgreSQL it must be `boolean DEFAULT false` and `= true` — otherwise
+        // PG raises "operator does not exist: boolean = integer" at runtime.
+        it('should emit _Clear companion as `boolean DEFAULT false` (not `bit DEFAULT 0`)', () => {
+            const entity = createMockEntity({}, [
+                { ID: 'f1', Name: 'ID', IsPrimaryKey: true, Type: 'uniqueidentifier', Length: 16, AllowsNull: false, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: 'newsequentialid()' },
+                { ID: 'f2', Name: 'Status', IsPrimaryKey: false, Type: 'nvarchar', Length: 40, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: "'Active'" },
+            ]);
+            const result = provider.generateCRUDParamString(entity.Fields, true);
+            // PG-correct: boolean type + false default
+            // (ParameterRef lowercases the name in PG snake_case convention)
+            expect(result).toContain('p_status_clear boolean DEFAULT false');
+            // PG-incorrect: SS-style bit + 0 default
+            expect(result).not.toContain('p_status_clear bit DEFAULT 0');
+        });
     });
 
     describe('generateUpdateFieldString', () => {
@@ -506,6 +523,19 @@ describe('PostgreSQLCodeGenProvider', () => {
             expect(result).toContain('"Email" = COALESCE(p_email, "Email")');
             // Should NOT include PK
             expect(result).not.toContain('"ID" = ');
+        });
+
+        // _Clear companion CASE: on PG it must compare against `true`, not `1` —
+        // matches the `boolean DEFAULT false` parameter type and avoids
+        // "operator does not exist: boolean = integer" at runtime.
+        it('should emit `_Clear = true` in the CASE expression (not `_Clear = 1`)', () => {
+            const entity = createMockEntity({}, [
+                { ID: 'f1', Name: 'ID', IsPrimaryKey: true, Type: 'uniqueidentifier', Length: 16, AllowsNull: false, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: 'newsequentialid()' },
+                { ID: 'f2', Name: 'Status', IsPrimaryKey: false, Type: 'nvarchar', Length: 40, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: "'Active'" },
+            ]);
+            const result = provider.generateUpdateFieldString(entity.Fields);
+            expect(result).toContain('CASE WHEN p_status_clear = true THEN');
+            expect(result).not.toContain('CASE WHEN p_status_clear = 1 THEN');
         });
     });
 
