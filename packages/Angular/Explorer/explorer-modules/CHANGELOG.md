@@ -1,5 +1,21 @@
 # @memberjunction/ng-explorer-modules
 
+## 5.31.0
+
+### Patch Changes
+
+- 7ed7a4b: no metadata/migration changes
+- Updated dependencies [fc8b9b8]
+- Updated dependencies [7ed7a4b]
+- Updated dependencies [6779c1e]
+  - @memberjunction/ng-core-entity-forms@5.31.0
+  - @memberjunction/ng-explorer-core@5.31.0
+  - @memberjunction/ng-explorer-settings@5.31.0
+  - @memberjunction/ng-link-directives@5.31.0
+  - @memberjunction/ng-shared@5.31.0
+  - @memberjunction/ng-workspace-initializer@5.31.0
+  - @memberjunction/ng-container-directives@5.31.0
+
 ## 5.30.1
 
 ### Patch Changes

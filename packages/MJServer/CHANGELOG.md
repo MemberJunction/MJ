@@ -1,5 +1,114 @@
 # Change Log - @memberjunction/server
 
+## 5.31.0
+
+### Minor Changes
+
+- fc8b9b8: Autotagger scope & governance — per-tenant tag scoping, per-tag governance, persisted embeddings, suggestion queue, Tag Health, and a unified Tag Governance dashboard with full UI.
+
+  **Schema (one additive migration `V202605010846`)** — 9 new columns on `__mj.Tag` (governance + persisted embedding cache), three new tables (`__mj.TagScope` polymorphic M2M, `__mj.TagSynonym`, `__mj.TagSuggestion` review queue). Existing rows default to `IsGlobal=1` so behavior is unchanged out of the box. `IContentSourceConfiguration` JSON type extended with five net-new optional knobs (`SuggestThreshold`, `MaxNewTagsPerRun`, `MaxNewTagsPerItem`, `MaxTokensPerRun`, `MaxCostPerRun`) — CodeGen emits the typed accessor.
+
+  **Engine (`tag-engine` / `tag-engine-base` / `core-entities-server`)** — `MJTagEntityServer` + new `MJTagScopeEntityServer` enforce the `IsGlobal ⊕ TagScope` invariant via `ValidateAsync` (no DB triggers); persisted-embedding `Save()` hook + cold-start hydrate path replace the every-startup recompute. `TagEngineBase` eagerly loads scope + synonyms in `Config()` and exposes `GetVisibleTags / GetTagBySynonym / GetTagByName(name, ctx) / GetTaxonomyTree(rootID, ctx)`. New `TagScopeFilterBuilder` (`BaseSingleton`) produces SQL fragments + in-memory predicates + child-scope subset validator. `TagEngine.ResolveTag` widened with a `'hybrid'` mode and a `ResolveTagOptions` parameter — new 4+1-tier pipeline (synonym → exact → fuzzy → semantic with tiered confidence routing → governance-gated `handleNoMatch`). `SuggestThreshold` band routes to the suggestion queue; `createAndEmbedTag` snapshots parent scope onto new children when parent is non-global. `TagGovernanceEngine` adds `ValidateAutoGrow / EnqueueSuggestion / PromoteSuggestion / RejectSuggestion`; `MergeTags` carries source synonyms (`Source='Merged'`). New `TagHealthJob` with three idempotent emitters (merge / low-usage / wide-node), gated by `MJ_AUTOTAG_RUN_TAG_HEALTH=1` env or invokable on demand. New `TagEngine.RebuildTagEmbeddings(contextUser)` utility for post-model-change rebuilds.
+
+  **Autotag pipeline (`content-autotagging`)** — `ScopeContextResolver` derives per-source scope from `TagRootID`, `RunBudget` enforces per-run + per-item caps, new `OnAfterBatch` hook on `AutotagBaseEngine` gracefully pauses runs via the existing `CancellationRequested` machinery. `BridgeContentItemTagToTaxonomy` threads `scopeContext`, `SuggestThreshold`, source traceability, and an `onTagCreated` callback into `ResolveTag`. Per-item budget exhaustion collapses the effective mode to `hybrid` so further new tags route to suggestions instead of being auto-created.
+
+  **Server (`server` / `graphql-dataprovider`)** — new `TagGovernanceResolver` exposes `PromoteTagSuggestion` / `RejectTagSuggestion` / `RebuildTagEmbeddings` / `RunTagHealth` mutations so suggestion dispositions run transactionally on the server. Matching `GraphQLAIClient` methods + result interfaces.
+
+  **UI (`ng-dashboards` / `ng-core-entity-forms`)** — new `TagGovernanceResourceComponent` (registered as `'TagGovernance'`) — single dashboard with **left-nav** (top nav stays with the MJExplorer shell). Three sections built to the picked mockup options: Taxonomy (Option A — tree + governance/scope/synonyms detail-form, scope dialog with parent-subset validation), Suggestions (Option C — table + drawer with bulk actions and "if approved" preview), Tag Health (Option A — three summary cards + threshold tuning + run history + Rebuild stale embeddings). `MJContentSourceFormComponentExtended` gains a "Tag Pipeline Configuration" panel (Option B dense form) with mode picker cards, threshold sliders that auto-keep `SuggestThreshold < MatchThreshold`, scope+root, and budget fields — the existing JSON code editor stays available collapsed below as the advanced override. Multi-provider safe + UUID-compliant throughout.
+
+  **Tests** — 271 tests across the impacted packages, all green. New: 12 `TagScopeFilterBuilder`, 8 `ValidateAutoGrow`, 4 `TagHealthJob`, 7 `RunBudget`, 8 `ScopeContextResolver`, 18 `TagGovernanceResolver`, 18 `TagGovernance` dashboard, 23 `ContentSource` form (vitest newly enabled in `ng-core-entity-forms`).
+
+  **Documentation** — `guides/TAXONOMY_TAGGING_GUIDE.md` (~730 lines, 7 Mermaid diagrams) covers the entity model, autotag pipeline, 4+1-tier resolver, taxonomy modes, governance gates, scope inheritance, suggestion lifecycle, worked implementation guides, seeding patterns, and ops guidance. `guides/BASE_ENTITY_SERVER_PATTERNS.md` captures the persisted-embedding + `ValidateAsync` invariant + FK-cleanup-before-delete patterns this PR introduces so future agents lift the recipe rather than re-discover it. `mockups/knowledge-hub-classify-redesign/` ships 12 polished HTML mockups (3 options each across the 3 high-priority surfaces) that drove the UX direction.
+
+  Migration ordering: apply the SQL migration → run CodeGen → `mj sync push` for the JSON-type interface → build. The migration is additive and idempotent against `IsGlobal=1` defaults; existing customers see no behavior change until they opt in by setting per-tag governance flags or moving sources off the default `auto-grow` mode.
+
+### Patch Changes
+
+- 7ed7a4b: no metadata/migration changes
+- Updated dependencies [fc8b9b8]
+- Updated dependencies [cde4d2c]
+- Updated dependencies [7ed7a4b]
+- Updated dependencies [84494bb]
+- Updated dependencies [dfab537]
+- Updated dependencies [9457655]
+- Updated dependencies [60e7541]
+- Updated dependencies [28beaa4]
+- Updated dependencies [18be074]
+- Updated dependencies [17b8087]
+- Updated dependencies [6779c1e]
+- Updated dependencies [3c5176f]
+- Updated dependencies [e545a51]
+- Updated dependencies [132ce24]
+- Updated dependencies [de34786]
+- Updated dependencies [5db36d9]
+  - @memberjunction/core-entities@5.31.0
+  - @memberjunction/core-entities-server@5.31.0
+  - @memberjunction/tag-engine@5.31.0
+  - @memberjunction/tag-engine-base@5.31.0
+  - @memberjunction/graphql-dataprovider@5.31.0
+  - @memberjunction/ai-agent-manager-actions@5.31.0
+  - @memberjunction/ai-agent-manager@5.31.0
+  - @memberjunction/ai-agents@5.31.0
+  - @memberjunction/ai@5.31.0
+  - @memberjunction/ai-core-plus@5.31.0
+  - @memberjunction/aiengine@5.31.0
+  - @memberjunction/ai-mcp-client@5.31.0
+  - @memberjunction/computer-use-engine@5.31.0
+  - @memberjunction/ai-prompts@5.31.0
+  - @memberjunction/ai-provider-bundle@5.31.0
+  - @memberjunction/ai-vectordb@5.31.0
+  - @memberjunction/ai-vectors-pinecone@5.31.0
+  - @memberjunction/ai-vector-sync@5.31.0
+  - @memberjunction/api-keys@5.31.0
+  - @memberjunction/actions-apollo@5.31.0
+  - @memberjunction/actions-base@5.31.0
+  - @memberjunction/actions-bizapps-accounting@5.31.0
+  - @memberjunction/actions-bizapps-crm@5.31.0
+  - @memberjunction/actions-bizapps-formbuilders@5.31.0
+  - @memberjunction/actions-bizapps-lms@5.31.0
+  - @memberjunction/actions-bizapps-social@5.31.0
+  - @memberjunction/core-actions@5.31.0
+  - @memberjunction/actions@5.31.0
+  - @memberjunction/auth-providers@5.31.0
+  - @memberjunction/codegen-lib@5.31.0
+  - @memberjunction/communication-types@5.31.0
+  - @memberjunction/entity-communications-base@5.31.0
+  - @memberjunction/entity-communications-server@5.31.0
+  - @memberjunction/notifications@5.31.0
+  - @memberjunction/communication-ms-graph@5.31.0
+  - @memberjunction/communication-sendgrid@5.31.0
+  - @memberjunction/component-registry-client-sdk@5.31.0
+  - @memberjunction/config@5.31.0
+  - @memberjunction/doc-utils@5.31.0
+  - @memberjunction/encryption@5.31.0
+  - @memberjunction/external-change-detection@5.31.0
+  - @memberjunction/generic-database-provider@5.31.0
+  - @memberjunction/integration-engine@5.31.0
+  - @memberjunction/integration-schema-builder@5.31.0
+  - @memberjunction/interactive-component-types@5.31.0
+  - @memberjunction/core@5.31.0
+  - @memberjunction/data-context@5.31.0
+  - @memberjunction/data-context-server@5.31.0
+  - @memberjunction/global@5.31.0
+  - @memberjunction/queue@5.31.0
+  - @memberjunction/storage@5.31.0
+  - @memberjunction/postgresql-dataprovider@5.31.0
+  - @memberjunction/redis-provider@5.31.0
+  - @memberjunction/sql-dialect@5.31.0
+  - @memberjunction/sqlserver-dataprovider@5.31.0
+  - @memberjunction/scheduling-actions@5.31.0
+  - @memberjunction/scheduling-engine-base@5.31.0
+  - @memberjunction/scheduling-base-types@5.31.0
+  - @memberjunction/scheduling-engine@5.31.0
+  - @memberjunction/schema-engine@5.31.0
+  - @memberjunction/search-engine@5.31.0
+  - @memberjunction/server-extensions-core@5.31.0
+  - @memberjunction/skip-types@5.31.0
+  - @memberjunction/templates@5.31.0
+  - @memberjunction/testing-engine@5.31.0
+  - @memberjunction/testing-engine-base@5.31.0
+  - @memberjunction/version-history@5.31.0
+
 ## 5.30.1
 
 ### Patch Changes

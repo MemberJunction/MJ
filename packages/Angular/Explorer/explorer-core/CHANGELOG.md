@@ -1,5 +1,63 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 5.31.0
+
+### Patch Changes
+
+- 7ed7a4b: no metadata/migration changes
+- Updated dependencies [fc8b9b8]
+- Updated dependencies [cde4d2c]
+- Updated dependencies [7ed7a4b]
+- Updated dependencies [60e7541]
+- Updated dependencies [18be074]
+- Updated dependencies [17b8087]
+- Updated dependencies [6779c1e]
+- Updated dependencies [c8b6f8a]
+- Updated dependencies [de34786]
+- Updated dependencies [5db36d9]
+- Updated dependencies [0e3365f]
+  - @memberjunction/core-entities@5.31.0
+  - @memberjunction/graphql-dataprovider@5.31.0
+  - @memberjunction/ng-dashboards@5.31.0
+  - @memberjunction/ai-engine-base@5.31.0
+  - @memberjunction/ai-core-plus@5.31.0
+  - @memberjunction/ng-auth-services@5.31.0
+  - @memberjunction/ng-base-application@5.31.0
+  - @memberjunction/ng-entity-form-dialog@5.31.0
+  - @memberjunction/ng-entity-permissions@5.31.0
+  - @memberjunction/ng-explorer-settings@5.31.0
+  - @memberjunction/ng-list-detail-grid@5.31.0
+  - @memberjunction/ng-shared@5.31.0
+  - @memberjunction/ng-ai-test-harness@5.31.0
+  - @memberjunction/ng-artifacts@5.31.0
+  - @memberjunction/ng-base-forms@5.31.0
+  - @memberjunction/ng-base-types@5.31.0
+  - @memberjunction/ng-container-directives@5.31.0
+  - @memberjunction/ng-conversations@5.31.0
+  - @memberjunction/ng-dashboard-viewer@5.31.0
+  - @memberjunction/ng-entity-viewer@5.31.0
+  - @memberjunction/ng-export-service@5.31.0
+  - @memberjunction/ng-feedback@5.31.0
+  - @memberjunction/ng-file-storage@5.31.0
+  - @memberjunction/ng-generic-dialog@5.31.0
+  - @memberjunction/ng-notifications@5.31.0
+  - @memberjunction/ng-query-viewer@5.31.0
+  - @memberjunction/ng-record-changes@5.31.0
+  - @memberjunction/ng-record-selector@5.31.0
+  - @memberjunction/ng-record-tags@5.31.0
+  - @memberjunction/ng-resource-permissions@5.31.0
+  - @memberjunction/ng-search@5.31.0
+  - @memberjunction/ng-shared-generic@5.31.0
+  - @memberjunction/ng-ui-components@5.31.0
+  - @memberjunction/ng-user-avatar@5.31.0
+  - @memberjunction/ng-word-cloud@5.31.0
+  - @memberjunction/communication-types@5.31.0
+  - @memberjunction/entity-communications-client@5.31.0
+  - @memberjunction/core@5.31.0
+  - @memberjunction/export-engine@5.31.0
+  - @memberjunction/global@5.31.0
+  - @memberjunction/templates-base-types@5.31.0
+
 ## 5.30.1
 
 ### Patch Changes

@@ -1,5 +1,32 @@
 # @memberjunction/ng-query-viewer
 
+## 5.31.0
+
+### Patch Changes
+
+- 7ed7a4b: no metadata/migration changes
+- Updated dependencies [fc8b9b8]
+- Updated dependencies [cde4d2c]
+- Updated dependencies [7ed7a4b]
+- Updated dependencies [60e7541]
+- Updated dependencies [18be074]
+- Updated dependencies [17b8087]
+- Updated dependencies [6779c1e]
+- Updated dependencies [de34786]
+- Updated dependencies [5db36d9]
+- Updated dependencies [0e3365f]
+  - @memberjunction/core-entities@5.31.0
+  - @memberjunction/ng-base-types@5.31.0
+  - @memberjunction/ng-code-editor@5.31.0
+  - @memberjunction/ng-export-service@5.31.0
+  - @memberjunction/ng-markdown@5.31.0
+  - @memberjunction/ng-notifications@5.31.0
+  - @memberjunction/ng-pagination@5.31.0
+  - @memberjunction/ng-shared-generic@5.31.0
+  - @memberjunction/core@5.31.0
+  - @memberjunction/export-engine@5.31.0
+  - @memberjunction/global@5.31.0
+
 ## 5.30.1
 
 ### Patch Changes
