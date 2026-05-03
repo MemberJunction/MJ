@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-entity-relationship-diagram",
-  "version": "5.30.1",
+  "version": "5.31.0",
   "description": "MemberJunction: Entity Relationship Diagram (ERD) component for visualizing entity relationships using D3.js force-directed graphs",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
@@ -36,10 +36,10 @@
   "dependencies": {
     "@angular/forms": "21.1.3",
     "@dagrejs/dagre": "^1.1.8",
-    "@memberjunction/core": "5.30.1",
-    "@memberjunction/ng-base-types": "5.30.1",
-    "@memberjunction/global": "5.30.1",
-    "@memberjunction/ng-ui-components": "5.30.1",
+    "@memberjunction/core": "5.31.0",
+    "@memberjunction/ng-base-types": "5.31.0",
+    "@memberjunction/global": "5.31.0",
+    "@memberjunction/ng-ui-components": "5.31.0",
     "@types/d3": "^7.4.3",
     "angular-split": "^20.0.0",
     "d3": "^7.9.0",

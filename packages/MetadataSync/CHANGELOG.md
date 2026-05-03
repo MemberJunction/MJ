@@ -1,5 +1,36 @@
 # @memberjunction/metadata-sync
 
+## 5.31.0
+
+### Minor Changes
+
+- 60e7541: Add --incremental flag for push/pull, lazy embedding loading, indexed batch context lookups, batched pull queries
+
+### Patch Changes
+
+- 7ed7a4b: no metadata/migration changes
+- b3d88ff: Fix MetadataSync push skipping unchanged records unconditionally -- record level skip is now correctly gated behind --incremental
+- Updated dependencies [fc8b9b8]
+- Updated dependencies [cde4d2c]
+- Updated dependencies [7ed7a4b]
+- Updated dependencies [60e7541]
+- Updated dependencies [18be074]
+- Updated dependencies [17b8087]
+- Updated dependencies [6779c1e]
+- Updated dependencies [3c5176f]
+- Updated dependencies [de34786]
+- Updated dependencies [5db36d9]
+  - @memberjunction/core-entities@5.31.0
+  - @memberjunction/core-entities-server@5.31.0
+  - @memberjunction/graphql-dataprovider@5.31.0
+  - @memberjunction/config@5.31.0
+  - @memberjunction/generic-database-provider@5.31.0
+  - @memberjunction/core@5.31.0
+  - @memberjunction/global@5.31.0
+  - @memberjunction/postgresql-dataprovider@5.31.0
+  - @memberjunction/sqlserver-dataprovider@5.31.0
+  - @memberjunction/server-bootstrap-lite@5.31.0
+
 ## 5.30.1
 
 ### Patch Changes
