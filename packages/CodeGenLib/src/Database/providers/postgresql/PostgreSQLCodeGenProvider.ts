@@ -819,7 +819,10 @@ END $$;
 
     /** @inheritdoc */
     wrapInsertWithConflictGuard(_conflictCheckSQL: string): { prefix: string; suffix: string } {
-        return { prefix: '', suffix: 'ON CONFLICT DO NOTHING' };
+        // Suffix must include the trailing semicolon. SS's BEGIN...END block self-terminates,
+        // but PG's ON CONFLICT clause is just part of an INSERT — without ; the next INSERT
+        // run together as one malformed statement.
+        return { prefix: '', suffix: 'ON CONFLICT DO NOTHING;' };
     }
 
     // ─── METADATA MANAGEMENT: DDL OPERATIONS ─────────────────────────
@@ -830,7 +833,7 @@ END $$;
         const col = pgDialect.QuoteIdentifier(columnName);
         const nullClause = nullable ? 'NULL' : 'NOT NULL';
         const defaultClause = defaultExpression ? ` DEFAULT ${defaultExpression}` : '';
-        return `ALTER TABLE ${table} ADD COLUMN ${col} ${dataType} ${nullClause}${defaultClause}`;
+        return `ALTER TABLE ${table} ADD COLUMN ${col} ${dataType} ${nullClause}${defaultClause};`;
     }
 
     /** @inheritdoc */
@@ -838,14 +841,17 @@ END $$;
         const table = pgDialect.QuoteSchema(schema, tableName);
         const col = pgDialect.QuoteIdentifier(columnName);
         const nullAction = nullable ? 'DROP NOT NULL' : 'SET NOT NULL';
-        return `ALTER TABLE ${table} ALTER COLUMN ${col} TYPE ${dataType}, ALTER COLUMN ${col} ${nullAction}`;
+        return `ALTER TABLE ${table} ALTER COLUMN ${col} TYPE ${dataType}, ALTER COLUMN ${col} ${nullAction};`;
     }
 
     /** @inheritdoc */
     addDefaultConstraintSQL(schema: string, tableName: string, columnName: string, defaultExpression: string): string {
         const table = pgDialect.QuoteSchema(schema, tableName);
         const col = pgDialect.QuoteIdentifier(columnName);
-        return `ALTER TABLE ${table} ALTER COLUMN ${col} SET DEFAULT ${defaultExpression}`;
+        // Trailing ; required: appendToSQLLogFile uses \n\n as separator, not ;.
+        // SS hides this with BEGIN/END/GO; PG needs explicit terminators between
+        // statements in the generated CodeGen_Run_*.pg.sql migration.
+        return `ALTER TABLE ${table} ALTER COLUMN ${col} SET DEFAULT ${defaultExpression};`;
     }
 
     /**
@@ -878,7 +884,7 @@ BEGIN
 
    -- Also drop any column default
    ALTER TABLE ${table} ALTER COLUMN ${col} DROP DEFAULT;
-END $$`;
+END $$;`;
     }
 
     /** @inheritdoc */
@@ -887,7 +893,7 @@ END $$`;
         const typeStr = objectType === 'PROCEDURE' ? 'FUNCTION' : objectType;
         const qualifiedName = pgDialect.QuoteSchema(schema, name);
         const cascade = (objectType === 'PROCEDURE' || objectType === 'FUNCTION') ? ' CASCADE' : '';
-        return `DROP ${typeStr} IF EXISTS ${qualifiedName}${cascade}`;
+        return `DROP ${typeStr} IF EXISTS ${qualifiedName}${cascade};`;
     }
 
     // ─── METADATA MANAGEMENT: VIEW INTROSPECTION ─────────────────────

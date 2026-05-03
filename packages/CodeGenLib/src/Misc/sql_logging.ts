@@ -123,6 +123,18 @@ export class SQLLogging {
                 contents = `${comment}${contents}`;
             }
 
+            // Ensure each logged statement ends with a terminator. The file separator (\n\n) is
+            // not a statement boundary in PG; without ; the next INSERT runs together with the
+            // previous one as a single malformed statement. SS hides this with GO/BEGIN-END
+            // semantics, but PG requires explicit ;. We only append if the trimmed content
+            // doesn't already end with ; or GO (the SS batch separator).
+            const trimmed = contents.replace(/\s+$/, '');
+            const lastChar = trimmed.charAt(trimmed.length - 1);
+            const endsWithGo = /\bgo\s*$/i.test(trimmed);
+            if (lastChar !== ';' && !endsWithGo) {
+                contents = `${trimmed};\n`;
+            }
+
             contents = includeBatchSeparator
                 ? `${contents}\n${batchSeparator}\n\n`
                 : `${contents}\n\n`;
