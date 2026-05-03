@@ -16,6 +16,7 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { Metadata } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 /**
  * Response from the OAuth exchange endpoint
  */
@@ -48,7 +49,7 @@ const POLL_INTERVAL_MS = 500;
     templateUrl: './oauth-callback.component.html',
     styleUrls: ['./oauth-callback.component.css']
 })
-export class OAuthCallbackComponent implements OnInit, OnDestroy {
+export class OAuthCallbackComponent extends BaseAngularComponent implements OnInit, OnDestroy {
     /** Loading state while processing OAuth callback */
     public IsLoading = true;
 
@@ -77,7 +78,8 @@ export class OAuthCallbackComponent implements OnInit, OnDestroy {
         private route: ActivatedRoute,
         private router: Router,
         private cdr: ChangeDetectorRef
-    ) {}
+    ) {
+    super();}
 
     async ngOnInit(): Promise<void> {
         // Wait for the GraphQL provider to be ready, then process the callback
@@ -150,7 +152,7 @@ export class OAuthCallbackComponent implements OnInit, OnDestroy {
      */
     private isProviderReady(): boolean {
         try {
-            const provider = Metadata.Provider as GraphQLDataProvider;
+            const provider = this.ProviderToUse as GraphQLDataProvider;
             if (!provider) {
                 return false;
             }
@@ -237,7 +239,7 @@ export class OAuthCallbackComponent implements OnInit, OnDestroy {
      */
     private async exchangeCode(code: string, state: string): Promise<OAuthExchangeResponse> {
         // Get the GraphQL provider - we know it's ready at this point
-        const gqlProvider = Metadata.Provider as GraphQLDataProvider;
+        const gqlProvider = this.ProviderToUse as GraphQLDataProvider;
         const configData = gqlProvider.ConfigData;
 
         // Build the exchange endpoint URL from the GraphQL URL

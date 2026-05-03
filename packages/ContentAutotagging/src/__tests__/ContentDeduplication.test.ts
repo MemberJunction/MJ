@@ -25,6 +25,13 @@ vi.mock('@memberjunction/core', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@memberjunction/core')>();
   class MockMetadata {
     GetEntityObject = mockGetEntityObjectFn;
+    // Multi-provider migration: dedup logic uses this.ProviderToUse, which falls back to
+    // Metadata.Provider. Mirror the helper instance shape on the static via a lazy getter
+    // (vi.mock hoists the factory above any top-level `mockGetEntityObjectFn` declaration,
+    // so we can't reference it directly at class-init time — the getter resolves at call time).
+    static Provider = {
+      get GetEntityObject() { return mockGetEntityObjectFn; },
+    };
   }
   class MockRunView {
     RunView = mockRunViewFn;
@@ -133,6 +140,15 @@ describe('Content Deduplication', () => {
     vi.clearAllMocks();
     // Create engine instance directly (bypasses Config/singleton for unit tests)
     engine = new (AutotagBaseEngine as unknown as { new(): AutotagBaseEngine })();
+    // Multi-provider migration: AutotagBaseEngine uses this.ProviderToUse, which falls back
+    // to Metadata.Provider. Stub the engine's ProviderToUse getter so tests reach the
+    // mockGetEntityObjectFn directly instead of going through the (real) BaseEngine fallback.
+    Object.defineProperty(engine, 'ProviderToUse', {
+      get() {
+        return { GetEntityObject: mockGetEntityObjectFn };
+      },
+      configurable: true,
+    });
 
     // Default: RunView returns no results (no duplicates, no existing records)
     mockRunViewFn.mockResolvedValue({ Success: true, Results: [] });

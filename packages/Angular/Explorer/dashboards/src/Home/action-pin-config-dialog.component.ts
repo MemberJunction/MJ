@@ -1,6 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectorRef, ViewEncapsulation } from '@angular/core';
 import { RunView } from '@memberjunction/core';
 import { MJActionParamEntity } from '@memberjunction/core-entities';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 /**
  * One row in the param configuration table — either a preset-value or a runtime-prompted param.
@@ -61,7 +62,7 @@ const FA_ICON_PALETTE = [
     styleUrls: ['./action-pin-config-dialog.component.css'],
     encapsulation: ViewEncapsulation.None
 })
-export class ActionPinConfigDialogComponent implements OnChanges {
+export class ActionPinConfigDialogComponent extends BaseAngularComponent implements OnChanges {
     @Input() Visible = false;
     @Input() ActionID: string | null = null;
     @Input() ActionName: string | null = null;
@@ -80,7 +81,7 @@ export class ActionPinConfigDialogComponent implements OnChanges {
     public IsLoadingParams = false;
     public ErrorMessage: string | null = null;
 
-    constructor(private cdr: ChangeDetectorRef) {}
+    constructor(private cdr: ChangeDetectorRef) { super(); }
 
     ngOnChanges(changes: SimpleChanges): void {
         if (changes['Visible'] && this.Visible && this.ActionID) {
@@ -103,7 +104,7 @@ export class ActionPinConfigDialogComponent implements OnChanges {
         this.IsLoadingParams = true;
         this.cdr.markForCheck();
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<MJActionParamEntity>({
                 EntityName: 'MJ: Action Params',
                 ExtraFilter: `ActionID='${this.ActionID}' AND (Type='Input' OR Type='Both')`,

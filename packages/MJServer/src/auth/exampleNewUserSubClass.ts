@@ -16,7 +16,7 @@ import { MJUserEntity } from '@memberjunction/core-entities';
 export class ExampleNewUserSubClass extends NewUserBase {
   public override async createNewUser(firstName: string, lastName: string, email: string, linkedRecordType: string = 'None', linkedEntityId?: string, linkedEntityRecordId?: string): Promise<MJUserEntity | null> {
     try {
-      const md = new Metadata();
+      const md = new Metadata(); // global-provider-ok: new-user creation runs in the JWT auth flow, before AppContext.providers is built
 
       const contextUser = UserCache.Instance.Users.find(
         (u) => u.Email.trim().toLowerCase() === configInfo?.userHandling?.contextUserForNewUserCreation?.trim().toLowerCase()

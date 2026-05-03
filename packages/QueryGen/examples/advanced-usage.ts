@@ -109,7 +109,7 @@ async function generateQueriesForEntity(
   const validatedQueries: ValidatedQuery[] = [];
 
   // Load entity
-  const md = new Metadata();
+  const md = new Metadata();  // global-provider-ok: CLI example — single-provider context
   const entity = md.Entities.find(e => e.Name === entityName);
   if (!entity) {
     console.error(`✗ Entity '${entityName}' not found`);
@@ -140,7 +140,7 @@ async function generateQueriesForEntity(
   // Initialize services
   const embeddingService = new EmbeddingService(CUSTOM_CONFIG.embeddingModel!);
   const similaritySearch = new SimilaritySearch();
-  const dataProvider = Metadata.Provider.DatabaseConnection as DatabaseProviderBase;
+  const dataProvider = Metadata.Provider.DatabaseConnection as DatabaseProviderBase;  // global-provider-ok: CLI example — single-provider context
 
   // Embed golden queries once
   console.log('⟳ Embedding golden queries...');
@@ -277,7 +277,7 @@ async function main() {
   contextUser.FirstName = 'System';
   contextUser.LastName = 'User';
 
-  if (!Metadata.Provider) {
+  if (!Metadata.Provider) {  // global-provider-ok: CLI example — single-provider context
     console.error('ERROR: Metadata provider not configured');
     process.exit(1);
   }

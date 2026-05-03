@@ -8,13 +8,14 @@ import {
 } from '@angular/core';
 import { Subject, BehaviorSubject, combineLatest } from 'rxjs';
 import { takeUntil, debounceTime } from 'rxjs/operators';
-import { RunView, CompositeKey, Metadata } from '@memberjunction/core';
+import { RunView, CompositeKey } from '@memberjunction/core';
 import { MJTestEntity, MJTestSuiteEntity, MJTestSuiteTestEntity, MJTestTypeEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
 import { TestingDialogService } from '@memberjunction/ng-testing';
 import { TestEngineBase } from '@memberjunction/testing-engine-base';
 import { TestingInstrumentationService } from '../services/testing-instrumentation.service';
 import { UUIDsEqual } from '@memberjunction/global';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 // ---------------------------------------------------------------------------
 // Interfaces
@@ -1819,7 +1820,7 @@ interface TestRunStatRow {
     }
   `]
 })
-export class TestingExplorerComponent implements OnInit, OnDestroy {
+export class TestingExplorerComponent extends BaseAngularComponent implements OnInit, OnDestroy {
 
   private destroy$ = new Subject<void>();
 
@@ -1915,7 +1916,7 @@ export class TestingExplorerComponent implements OnInit, OnDestroy {
     private viewContainerRef: ViewContainerRef,
     public testingDialogService: TestingDialogService,
     public instrumentationService: TestingInstrumentationService
-  ) {}
+  ) { super(); }
 
   // ---------------------------------------------------------------------------
   // Lifecycle
@@ -2210,7 +2211,7 @@ export class TestingExplorerComponent implements OnInit, OnDestroy {
   }
 
   private async loadTestRunStats(): Promise<void> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<TestRunStatRow>({
       EntityName: 'MJ: Test Runs',
       Fields: ['ID', 'TestID', 'Status', 'Score', 'CostUSD', 'StartedAt', 'CompletedAt'],
@@ -2614,7 +2615,7 @@ export class TestingExplorerComponent implements OnInit, OnDestroy {
   }
 
   private async saveNewTest(): Promise<void> {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const test = await md.GetEntityObject<MJTestEntity>('MJ: Tests');
     test.NewRecord();
     test.Name = this.FormName.trim();
@@ -2632,7 +2633,7 @@ export class TestingExplorerComponent implements OnInit, OnDestroy {
   }
 
   private async saveNewSuite(): Promise<void> {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const suite = await md.GetEntityObject<MJTestSuiteEntity>('MJ: Test Suites');
     suite.NewRecord();
     suite.Name = this.FormName.trim();

@@ -74,7 +74,6 @@ const DEFAULT_MAX_SIZE_BYTES = 20 * 1024 * 1024; // 20MB
 const DEFAULT_MAX_COUNT_PER_MESSAGE = 10;
 const DEFAULT_MAX_DIMENSION = 4096;
 
-// this class handles execution of AI Actions
 @RegisterForStartup()
 export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _models: MJAIModelEntityExtended[] = [];
@@ -1286,10 +1285,13 @@ export class AIEngineBase extends BaseEngine<AIEngineBase> {
     }
 
     /**
-     * Utility method that will cache the result of a prompt in the AI Result Cache entity
+     * Utility method that will cache the result of a prompt in the AI Result Cache entity.
+     * Uses this engine's bound provider (`this.ProviderToUse`) so the cache record is written
+     * to the same connection the engine was configured against — multi-tenant correct in
+     * server contexts where each request's engine is bound to a per-request provider.
      */
     public async CacheResult(model: MJAIModelEntityExtended, prompt: MJAIPromptEntityExtended, promptText: string, resultText: string): Promise<boolean> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const cacheItem = await md.GetEntityObject<MJAIResultCacheEntity>('MJ: AI Result Cache', this.ContextUser);
         cacheItem.AIModelID = model.ID;
         cacheItem.AIPromptID = prompt.ID;

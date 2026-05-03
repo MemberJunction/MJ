@@ -1,25 +1,3 @@
--- ============================================================================
--- MemberJunction PostgreSQL Migration
--- Converted from SQL Server using TypeScript conversion pipeline
--- ============================================================================
-
--- Extensions
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- Schema
-CREATE SCHEMA IF NOT EXISTS __mj;
-SET search_path TO __mj, public;
-
--- Ensure backslashes in string literals are treated literally (not as escape sequences)
-SET standard_conforming_strings = on;
-
--- Implicit INTEGER -> BOOLEAN cast (SQL Server BIT columns accept 0/1 in INSERTs)
--- PostgreSQL has a built-in explicit-only INTEGER->bool cast. We upgrade it to implicit
--- so INSERT VALUES with 0/1 for BOOLEAN columns work like SQL Server BIT.
-UPDATE pg_cast SET castcontext = 'i'
-WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
-
 
 -- ===================== DDL: Tables, PKs, Indexes =====================
 
@@ -52,6 +30,8 @@ CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_Integration_CredentialTypeID" ON __
 
 DO $do$
 DECLARE
+  v_target_schema CONSTANT TEXT := '__mj';
+  v_target_name CONSTANT TEXT := 'vwIntegrations';
   vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwIntegrations"
 AS SELECT
     i.*,
@@ -62,20 +42,229 @@ LEFT OUTER JOIN
     __mj."CredentialType" AS "MJCredentialType_CredentialTypeID"
   ON
     i."CredentialTypeID" = "MJCredentialType_CredentialTypeID"."ID"$vsql$;
+  v_target_oid OID;
+  v_dep RECORD;
+  v_captured JSONB[] := ARRAY[]::JSONB[];
+  v_n INTEGER;
 BEGIN
   EXECUTE vsql;
 EXCEPTION WHEN invalid_table_definition THEN
-  DROP VIEW IF EXISTS __mj."vwIntegrations" CASCADE;
+  -- Column list changed; need CASCADE. Preserve dependent views first.
+  SELECT c.oid INTO v_target_oid
+  FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
+  WHERE n.nspname = v_target_schema AND c.relname = v_target_name AND c.relkind = 'v';
+  IF v_target_oid IS NOT NULL THEN
+    FOR v_dep IN
+      WITH RECURSIVE deps AS (
+        SELECT c.oid, c.relname AS name, n.nspname AS schema, 1 AS depth
+        FROM pg_rewrite r
+        JOIN pg_depend d ON d.objid = r.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE d.refobjid = v_target_oid AND d.deptype = 'n'
+          AND c.oid <> v_target_oid AND c.relkind = 'v'
+        UNION
+        SELECT c.oid, c.relname, n.nspname, p.depth + 1
+        FROM deps p
+        JOIN pg_rewrite r ON TRUE
+        JOIN pg_depend d ON d.objid = r.oid AND d.refobjid = p.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE c.relkind = 'v' AND c.oid <> p.oid
+      )
+      SELECT oid, name, schema, MAX(depth) AS max_depth,
+             pg_catalog.pg_get_viewdef(oid, true) AS viewdef
+      FROM deps GROUP BY oid, name, schema
+      ORDER BY MAX(depth) ASC
+    LOOP
+      v_captured := v_captured || jsonb_build_object(
+        'schema', v_dep.schema, 'name', v_dep.name, 'def', v_dep.viewdef);
+    END LOOP;
+  END IF;
+  EXECUTE format('DROP VIEW IF EXISTS %I.%I CASCADE', v_target_schema, v_target_name);
   EXECUTE vsql;
+  IF v_captured IS NOT NULL AND array_length(v_captured, 1) > 0 THEN
+    FOR v_n IN 1..array_length(v_captured, 1) LOOP
+      BEGIN
+        EXECUTE format('CREATE VIEW %I.%I AS %s',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', v_captured[v_n]->>'def');
+      EXCEPTION WHEN others THEN
+        RAISE WARNING 'Could not restore dependent view %.%: %',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', SQLERRM;
+      END;
+    END LOOP;
+  END IF;
 END;
 $do$;
 
 
 -- ===================== Stored Procedures (sp*) =====================
 
--- SKIPPED: References view "vwCompanyIntegrations" not created in this file (CodeGen will recreate)
+CREATE OR REPLACE FUNCTION __mj."spCreateCompanyIntegration"(
+    IN p_ID UUID DEFAULT NULL,
+    IN p_CompanyID UUID DEFAULT NULL,
+    IN p_IntegrationID UUID DEFAULT NULL,
+    IN p_IsActive BOOLEAN DEFAULT NULL,
+    IN p_AccessToken VARCHAR(255) DEFAULT NULL,
+    IN p_RefreshToken VARCHAR(255) DEFAULT NULL,
+    IN p_TokenExpirationDate TIMESTAMPTZ DEFAULT NULL,
+    IN p_APIKey VARCHAR(255) DEFAULT NULL,
+    IN p_ExternalSystemID VARCHAR(100) DEFAULT NULL,
+    IN p_IsExternalSystemReadOnly BOOLEAN DEFAULT NULL,
+    IN p_ClientID VARCHAR(255) DEFAULT NULL,
+    IN p_ClientSecret VARCHAR(255) DEFAULT NULL,
+    IN p_CustomAttribute1 VARCHAR(255) DEFAULT NULL,
+    IN p_Name VARCHAR(255) DEFAULT NULL,
+    IN p_SourceTypeID UUID DEFAULT NULL,
+    IN p_Configuration TEXT DEFAULT NULL,
+    IN p_CredentialID UUID DEFAULT NULL
+)
+RETURNS SETOF __mj."vwCompanyIntegrations" AS
+$$
+BEGIN
+IF p_ID IS NOT NULL THEN
+        -- User provided a value, use it
+        INSERT INTO __mj."CompanyIntegration"
+            (
+                "ID",
+                "CompanyID",
+                "IntegrationID",
+                "IsActive",
+                "AccessToken",
+                "RefreshToken",
+                "TokenExpirationDate",
+                "APIKey",
+                "ExternalSystemID",
+                "IsExternalSystemReadOnly",
+                "ClientID",
+                "ClientSecret",
+                "CustomAttribute1",
+                "Name",
+                "SourceTypeID",
+                "Configuration",
+                "CredentialID"
+            )
+        VALUES
+            (
+                p_ID,
+                p_CompanyID,
+                p_IntegrationID,
+                p_IsActive,
+                p_AccessToken,
+                p_RefreshToken,
+                p_TokenExpirationDate,
+                p_APIKey,
+                p_ExternalSystemID,
+                COALESCE(p_IsExternalSystemReadOnly, FALSE),
+                p_ClientID,
+                p_ClientSecret,
+                p_CustomAttribute1,
+                p_Name,
+                p_SourceTypeID,
+                p_Configuration,
+                p_CredentialID
+            );
+    ELSE
+        -- No value provided, let database use its default (e.g., gen_random_uuid())
+        INSERT INTO __mj."CompanyIntegration"
+            (
+                "CompanyID",
+                "IntegrationID",
+                "IsActive",
+                "AccessToken",
+                "RefreshToken",
+                "TokenExpirationDate",
+                "APIKey",
+                "ExternalSystemID",
+                "IsExternalSystemReadOnly",
+                "ClientID",
+                "ClientSecret",
+                "CustomAttribute1",
+                "Name",
+                "SourceTypeID",
+                "Configuration",
+                "CredentialID"
+            )
+        VALUES
+            (
+                p_CompanyID,
+                p_IntegrationID,
+                p_IsActive,
+                p_AccessToken,
+                p_RefreshToken,
+                p_TokenExpirationDate,
+                p_APIKey,
+                p_ExternalSystemID,
+                COALESCE(p_IsExternalSystemReadOnly, FALSE),
+                p_ClientID,
+                p_ClientSecret,
+                p_CustomAttribute1,
+                p_Name,
+                p_SourceTypeID,
+                p_Configuration,
+                p_CredentialID
+            );
+    END IF;
+    -- return the new record from the base view, which might have some calculated fields
+    RETURN QUERY SELECT * FROM __mj."vwCompanyIntegrations" WHERE "ID" = p_ID;
+END;
+$$ LANGUAGE plpgsql;
 
--- SKIPPED: References view "vwCompanyIntegrations" not created in this file (CodeGen will recreate)
+CREATE OR REPLACE FUNCTION __mj."spUpdateCompanyIntegration"(
+    IN p_ID UUID,
+    IN p_CompanyID UUID,
+    IN p_IntegrationID UUID,
+    IN p_IsActive BOOLEAN,
+    IN p_AccessToken VARCHAR(255),
+    IN p_RefreshToken VARCHAR(255),
+    IN p_TokenExpirationDate TIMESTAMPTZ,
+    IN p_APIKey VARCHAR(255),
+    IN p_ExternalSystemID VARCHAR(100),
+    IN p_IsExternalSystemReadOnly BOOLEAN,
+    IN p_ClientID VARCHAR(255),
+    IN p_ClientSecret VARCHAR(255),
+    IN p_CustomAttribute1 VARCHAR(255),
+    IN p_Name VARCHAR(255),
+    IN p_SourceTypeID UUID,
+    IN p_Configuration TEXT,
+    IN p_CredentialID UUID
+)
+RETURNS SETOF __mj."vwCompanyIntegrations" AS
+$$
+DECLARE
+    _v_row_count INTEGER;
+BEGIN
+UPDATE
+        __mj."CompanyIntegration"
+    SET
+        "CompanyID" = p_CompanyID,
+        "IntegrationID" = p_IntegrationID,
+        "IsActive" = p_IsActive,
+        "AccessToken" = p_AccessToken,
+        "RefreshToken" = p_RefreshToken,
+        "TokenExpirationDate" = p_TokenExpirationDate,
+        "APIKey" = p_APIKey,
+        "ExternalSystemID" = p_ExternalSystemID,
+        "IsExternalSystemReadOnly" = p_IsExternalSystemReadOnly,
+        "ClientID" = p_ClientID,
+        "ClientSecret" = p_ClientSecret,
+        "CustomAttribute1" = p_CustomAttribute1,
+        "Name" = p_Name,
+        "SourceTypeID" = p_SourceTypeID,
+        "Configuration" = p_Configuration,
+        "CredentialID" = p_CredentialID
+    WHERE
+        "ID" = p_ID;
+
+    GET DIAGNOSTICS _v_row_count = ROW_COUNT;
+
+    IF _v_row_count = 0 THEN
+        RETURN QUERY SELECT * FROM __mj."vwCompanyIntegrations" WHERE 1=0;
+    ELSE
+        RETURN QUERY SELECT * FROM __mj."vwCompanyIntegrations" WHERE "ID" = p_ID;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
 
 CREATE OR REPLACE FUNCTION __mj."spDeleteCompanyIntegration"(
     IN p_ID UUID
@@ -313,19 +502,19 @@ BEGIN
         16,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         'D512FF2E-A140-45A2-979A-20657AB77137',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -379,19 +568,19 @@ BEGIN
         16,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         '7E023DDF-82C6-4B0C-9650-8D35699B9FD0',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -405,7 +594,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '86c97642-5ce8-475a-b3bf-ce6e1857beb4'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('86c97642-5ce8-475a-b3bf-ce6e1857beb4', 'D512FF2E-A140-45A2-979A-20657AB77137', 'DD238F34-2837-EF11-86D4-6045BDEE16E6', 'CredentialTypeID', 'One To Many', 1, 1, 4, NOW(), NOW());
+        VALUES ('86c97642-5ce8-475a-b3bf-ce6e1857beb4', 'D512FF2E-A140-45A2-979A-20657AB77137', 'DD238F34-2837-EF11-86D4-6045BDEE16E6', 'CredentialTypeID', 'One To Many', TRUE, TRUE, 4, NOW(), NOW());
     END IF;
 END $$;
 
@@ -415,7 +604,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '385afc53-989f-4fc6-924d-cec4c8a9aa21'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('385afc53-989f-4fc6-924d-cec4c8a9aa21', '7E023DDF-82C6-4B0C-9650-8D35699B9FD0', 'DE238F34-2837-EF11-86D4-6045BDEE16E6', 'CredentialID', 'One To Many', 1, 1, 6, NOW(), NOW());
+        VALUES ('385afc53-989f-4fc6-924d-cec4c8a9aa21', '7E023DDF-82C6-4B0C-9650-8D35699B9FD0', 'DE238F34-2837-EF11-86D4-6045BDEE16E6', 'CredentialID', 'One To Many', TRUE, TRUE, 6, NOW(), NOW());
     END IF;
 END $$;
 
@@ -465,19 +654,19 @@ BEGIN
         200,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -486,24 +675,24 @@ BEGIN
 END $$;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '40AD55DC-4D32-4225-BBB9-FDD3CCD62EBA'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-                  SET "IncludeInUserSearchAPI" = 1
+                  SET "IncludeInUserSearchAPI" = TRUE
                   WHERE "ID" = '0F5817F0-6F36-EF11-86D4-6045BDEE16E6'
-                  AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+                  AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
-                  SET "IncludeInUserSearchAPI" = 1
+                  SET "IncludeInUserSearchAPI" = TRUE
                   WHERE "ID" = '345817F0-6F36-EF11-86D4-6045BDEE16E6'
-                  AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+                  AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
-                  SET "IncludeInUserSearchAPI" = 1
+                  SET "IncludeInUserSearchAPI" = TRUE
                   WHERE "ID" = '40AD55DC-4D32-4225-BBB9-FDD3CCD62EBA'
-                  AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+                  AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 /* Set categories for 12 fields */
 -- UPDATE Entity Field Category Info MJ: Integrations."Name"
 
@@ -514,7 +703,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '0E5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '0E5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Integrations."Description"
 
 UPDATE __mj."EntityField"
@@ -524,7 +713,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '0F5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '0F5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Integrations."NavigationBaseURL"
 
 UPDATE __mj."EntityField"
@@ -533,7 +722,7 @@ SET
    "ExtendedType" = 'URL',
    "CodeType" = NULL
 WHERE 
-   "ID" = '105817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '105817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Integrations."ClassName"
 
 UPDATE __mj."EntityField"
@@ -542,7 +731,7 @@ SET
    "ExtendedType" = 'Code',
    "CodeType" = 'TypeScript'
 WHERE 
-   "ID" = '345817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '345817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Integrations."ImportPath"
 
 UPDATE __mj."EntityField"
@@ -551,7 +740,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '355817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '355817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Integrations."BatchMaxRequestCount"
 
 UPDATE __mj."EntityField"
@@ -560,7 +749,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'B04217F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'B04217F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Integrations."BatchRequestWaitTime"
 
 UPDATE __mj."EntityField"
@@ -569,7 +758,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'B14217F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'B14217F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Integrations."CredentialTypeID"
 
 UPDATE __mj."EntityField"
@@ -580,7 +769,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '9A4502A9-0E22-4038-8341-01B9A9211E44' AND "AutoUpdateCategory" = 1;
+   "ID" = '9A4502A9-0E22-4038-8341-01B9A9211E44' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Integrations."CredentialType"
 
 UPDATE __mj."EntityField"
@@ -591,7 +780,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '40AD55DC-4D32-4225-BBB9-FDD3CCD62EBA' AND "AutoUpdateCategory" = 1;
+   "ID" = '40AD55DC-4D32-4225-BBB9-FDD3CCD62EBA' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Integrations."ID"
 
 UPDATE __mj."EntityField"
@@ -601,8 +790,8 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '0D5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Integrations."__mj_CreatedAt"
+   "ID" = '0D5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
+-- UPDATE Entity Field Category Info MJ: Integrations.__mj_CreatedAt
 
 UPDATE __mj."EntityField"
 SET 
@@ -610,8 +799,8 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '495817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Integrations."__mj_UpdatedAt"
+   "ID" = '495817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
+-- UPDATE Entity Field Category Info MJ: Integrations.__mj_UpdatedAt
 
 UPDATE __mj."EntityField"
 SET 
@@ -619,7 +808,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '4A5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '4A5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 /* Insert FieldCategoryInfo setting for entity */
 
 INSERT INTO __mj."EntitySetting" ("ID", "EntityID", "Name", "Value", "__mj_CreatedAt", "__mj_UpdatedAt")
@@ -638,7 +827,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '115817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '115817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."CompanyID"
 
 UPDATE __mj."EntityField"
@@ -647,7 +836,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '125817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '125817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."IntegrationID"
 
 UPDATE __mj."EntityField"
@@ -656,7 +845,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '135817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '135817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."IsActive"
 
 UPDATE __mj."EntityField"
@@ -665,7 +854,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '145817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '145817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."Name"
 
 UPDATE __mj."EntityField"
@@ -674,7 +863,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '64799DD4-A537-4B9C-897F-EC2AFE9A28D0' AND "AutoUpdateCategory" = 1;
+   "ID" = '64799DD4-A537-4B9C-897F-EC2AFE9A28D0' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."SourceTypeID"
 
 UPDATE __mj."EntityField"
@@ -683,7 +872,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'F647023E-D909-4ECB-B59D-EE477C274827' AND "AutoUpdateCategory" = 1;
+   "ID" = 'F647023E-D909-4ECB-B59D-EE477C274827' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."Company"
 
 UPDATE __mj."EntityField"
@@ -692,7 +881,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '365817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '365817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."Integration"
 
 UPDATE __mj."EntityField"
@@ -701,7 +890,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '375817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '375817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."IsExternalSystemReadOnly"
 
 UPDATE __mj."EntityField"
@@ -710,7 +899,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'B24217F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'B24217F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."AccessToken"
 
 UPDATE __mj."EntityField"
@@ -719,7 +908,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '155817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '155817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."RefreshToken"
 
 UPDATE __mj."EntityField"
@@ -728,7 +917,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '165817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '165817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."TokenExpirationDate"
 
 UPDATE __mj."EntityField"
@@ -737,7 +926,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '175817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '175817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."APIKey"
 
 UPDATE __mj."EntityField"
@@ -746,7 +935,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '185817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '185817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."ClientID"
 
 UPDATE __mj."EntityField"
@@ -755,7 +944,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'B34217F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'B34217F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."ClientSecret"
 
 UPDATE __mj."EntityField"
@@ -764,7 +953,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'B44217F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'B44217F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."CredentialID"
 
 UPDATE __mj."EntityField"
@@ -775,7 +964,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '131B9CC4-3755-46F6-925A-7E3A13BCDFD6' AND "AutoUpdateCategory" = 1;
+   "ID" = '131B9CC4-3755-46F6-925A-7E3A13BCDFD6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."ExternalSystemID"
 
 UPDATE __mj."EntityField"
@@ -784,7 +973,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '425817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '425817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."CustomAttribute1"
 
 UPDATE __mj."EntityField"
@@ -793,7 +982,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'C44217F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'C44217F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."Configuration"
 
 UPDATE __mj."EntityField"
@@ -802,7 +991,7 @@ SET
    "ExtendedType" = 'Code',
    "CodeType" = 'Other'
 WHERE 
-   "ID" = '987EAF20-227F-4043-BD87-06C9E01598F4' AND "AutoUpdateCategory" = 1;
+   "ID" = '987EAF20-227F-4043-BD87-06C9E01598F4' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."DriverClassName"
 
 UPDATE __mj."EntityField"
@@ -811,7 +1000,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '385817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '385817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."DriverImportPath"
 
 UPDATE __mj."EntityField"
@@ -820,7 +1009,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '395817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '395817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."LastRunID"
 
 UPDATE __mj."EntityField"
@@ -830,7 +1019,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '3A5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '3A5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."LastRunStartedAt"
 
 UPDATE __mj."EntityField"
@@ -839,7 +1028,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '3B5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '3B5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Company Integrations."LastRunEndedAt"
 
 UPDATE __mj."EntityField"
@@ -848,8 +1037,8 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '3C5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Company Integrations."__mj_CreatedAt"
+   "ID" = '3C5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
+-- UPDATE Entity Field Category Info MJ: Company Integrations.__mj_CreatedAt
 
 UPDATE __mj."EntityField"
 SET 
@@ -857,8 +1046,8 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '0D5917F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
--- UPDATE Entity Field Category Info MJ: Company Integrations."__mj_UpdatedAt"
+   "ID" = '0D5917F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
+-- UPDATE Entity Field Category Info MJ: Company Integrations.__mj_UpdatedAt
 
 UPDATE __mj."EntityField"
 SET 
@@ -866,26 +1055,29 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'E85817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'E85817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 
 
 -- ===================== FK & CHECK Constraints =====================
 
+
+-- Flush any pending deferred trigger events from prior DML so DDL below can proceed.
+SET CONSTRAINTS ALL IMMEDIATE;
+
 ALTER TABLE __mj."Integration"
-ADD CONSTRAINT FK_Integration_CredentialType
+ ADD CONSTRAINT "FK_Integration_CredentialType"
     FOREIGN KEY ("CredentialTypeID")
     REFERENCES __mj."CredentialType"("ID") DEFERRABLE INITIALLY DEFERRED;
 
 ALTER TABLE __mj."CompanyIntegration"
-ADD CONSTRAINT FK_CompanyIntegration_Credential
+ ADD CONSTRAINT "FK_CompanyIntegration_Credential"
     FOREIGN KEY ("CredentialID")
     REFERENCES __mj."Credential"("ID") DEFERRABLE INITIALLY DEFERRED;
 
 
 -- ===================== Grants =====================
 
--- SKIPPED (view not created): GRANT SELECT ON __mj."vwCompanyIntegrations" TO "cdp_UI", "cdp_Integration", "cdp_Developer"
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwCompanyIntegrations" TO "cdp_UI", "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate SQL for MJ: Company Integrations */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -898,16 +1090,12 @@ ADD CONSTRAINT FK_CompanyIntegration_Credential
 
 ------------------------------------------------------------
 ----- CREATE PROCEDURE FOR CompanyIntegration
-------------------------------------------------------------
+------------------------------------------------------------;
 
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spCreateCompanyIntegration" TO "cdp_Integration", "cdp_Developer"
-    
-
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateCompanyIntegration" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate Permissions for MJ: Company Integrations */
 
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spCreateCompanyIntegration" TO "cdp_Integration", "cdp_Developer"
-
-
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateCompanyIntegration" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Company Integrations */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -920,13 +1108,10 @@ ADD CONSTRAINT FK_CompanyIntegration_Credential
 
 ------------------------------------------------------------
 ----- UPDATE PROCEDURE FOR CompanyIntegration
-------------------------------------------------------------
+------------------------------------------------------------;
 
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spUpdateCompanyIntegration" TO "cdp_Integration", "cdp_Developer"
-
--- SKIPPED (function not created): GRANT EXECUTE ON __mj."spUpdateCompanyIntegration" TO "cdp_Integration", "cdp_Developer"
-
-
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateCompanyIntegration" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
+DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateCompanyIntegration" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spDelete SQL for MJ: Company Integrations */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -939,10 +1124,10 @@ ADD CONSTRAINT FK_CompanyIntegration_Credential
 
 ------------------------------------------------------------
 ----- DELETE PROCEDURE FOR CompanyIntegration
-------------------------------------------------------------
+------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCompanyIntegration" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Company Integrations */;
+/* spDelete Permissions for MJ: Company Integrations */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCompanyIntegration" TO "cdp_Integration", "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Index for Foreign Keys for Integration */
@@ -956,8 +1141,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteCompanyIntegration" TO "cdp_
 -----------------------------------------------------------------
 -- Index for foreign key CredentialTypeID in table Integration;
 
-GRANT SELECT ON __mj."vwIntegrations" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwIntegrations" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View Permissions SQL for MJ: Integrations */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -968,8 +1152,7 @@ GRANT SELECT ON __mj."vwIntegrations" TO "cdp_UI", "cdp_Developer", "cdp_Integra
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------;
 
-GRANT SELECT ON __mj."vwIntegrations" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwIntegrations" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate SQL for MJ: Integrations */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -985,7 +1168,7 @@ GRANT SELECT ON __mj."vwIntegrations" TO "cdp_UI", "cdp_Developer", "cdp_Integra
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateIntegration" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Integrations */;
+/* spCreate Permissions for MJ: Integrations */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateIntegration" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Integrations */
@@ -1019,10 +1202,10 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateIntegration" TO "cdp_Develop
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteIntegration" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Integrations */;
+/* spDelete Permissions for MJ: Integrations */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteIntegration" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* SQL text to insert new entity field */;
+/* SQL text to insert new entity field */
 
 
 -- ===================== Comments =====================

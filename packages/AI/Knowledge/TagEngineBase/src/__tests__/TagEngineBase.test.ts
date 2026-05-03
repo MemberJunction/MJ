@@ -22,10 +22,16 @@ vi.mock('@memberjunction/core', () => {
             });
         }
     }
+    const sharedMockProvider = new MockMetadata();
+    const sharedMockRunViewProvider = {
+        RunView: vi.fn().mockResolvedValue({ Success: true, Results: [] })
+    };
     return {
         BaseEngine: class BaseEngine<T> {
             public static getInstance<T>(): T { return new (this as unknown as new () => T)(); }
             protected async Load(): Promise<void> {}
+            public get ProviderToUse() { return sharedMockProvider; }
+            public get RunViewProviderToUse() { return sharedMockRunViewProvider; }
         },
         BaseEnginePropertyConfig: class {},
         IMetadataProvider: class {},
@@ -45,11 +51,21 @@ vi.mock('@memberjunction/global', () => ({
         return a.toLowerCase() === b.toLowerCase();
     },
     NormalizeUUID: (id: string) => id.toLowerCase(),
+    BaseSingleton: class<T> {
+        public constructor() {}
+        public static getInstance<T>(this: new () => T): T {
+            const ctor = this as unknown as { _inst?: T };
+            if (!ctor._inst) ctor._inst = new (this as unknown as new () => T)();
+            return ctor._inst as T;
+        }
+    },
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
     MJTagEntity: class {},
     MJTaggedItemEntity: class {},
+    MJTagScopeEntity: class {},
+    MJTagSynonymEntity: class {},
 }));
 
 import { TagEngineBase, TagTreeNode } from '../TagEngineBase';

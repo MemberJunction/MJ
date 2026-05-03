@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, OnChanges, SimpleChanges, ViewChild, ElementRef, AfterViewChecked, SecurityContext, ChangeDetectorRef } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { MJAIAgentEntityExtended, MJAIPromptEntityExtended, MJAIAgentRunEntityExtended, MJAIAgentRunStepEntityExtended, MJAIPromptRunEntityExtended } from "@memberjunction/ai-core-plus";
 import { MJTemplateParamEntity, MJAIConfigurationEntity } from '@memberjunction/core-entities';
@@ -150,7 +151,7 @@ export interface SavedConversation {
     templateUrl: './ai-test-harness.component.html',
     styleUrls: ['./ai-test-harness.component.css']
 })
-export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, AfterViewChecked {
+export class AITestHarnessComponent extends BaseAngularComponent implements OnInit, OnDestroy, OnChanges, AfterViewChecked  {
     /**
      * Creates a new AI Test Harness component instance.
      * @param sanitizer - Angular DomSanitizer for safe HTML rendering of formatted content
@@ -159,7 +160,8 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     constructor(
         private sanitizer: DomSanitizer,
         private cdr: ChangeDetectorRef
-    ) {}
+    ) {
+    super();}
     
     /** The mode of operation - either 'agent' or 'prompt' */
     @Input() mode: TestHarnessMode = 'agent';
@@ -389,7 +391,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
     private elapsedTimeInterval: any;
     
     /** MemberJunction metadata instance for entity operations */
-    private _metadata = new Metadata();
+    private _metadata = this.ProviderToUse;
     
     /** Track if input has been focused to prevent repeated focusing */
     private _hasFocused = false;
@@ -504,7 +506,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
 
     private subscribeToEvents() {
         // Set up direct GraphQL subscription for agent execution stream
-        const dataProvider = Metadata.Provider as GraphQLDataProvider;
+        const dataProvider = this.ProviderToUse as GraphQLDataProvider;
         const _providerPushStatusSub = dataProvider.PushStatusUpdates().subscribe(async (status: any) => {
             const message = JSON.parse(status.message || '{}');
             if (message?.resolver === 'RunAIAgentResolver') {
@@ -533,7 +535,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
                     // Update or create the agent run entity from the serialized data
                     if (!this.currentAgentRun) {
                         // First time - create the entity
-                        const md = new Metadata();
+                        const md = this.ProviderToUse;
                         this.currentAgentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs');
                     }
                     
@@ -771,7 +773,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      */
     private async loadAvailableConfigurations() {
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<MJAIConfigurationEntity>({
                 EntityName: 'MJ: AI Configurations',
                 ExtraFilter: `Status IN ('Active', 'Preview')`,
@@ -902,7 +904,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
             }
 
             try {
-                const rv = new RunView();
+                const rv = RunView.FromMetadataProvider(this.ProviderToUse);
                 const result = await rv.RunView<MJTemplateParamEntity>({
                     EntityName: 'MJ: Template Params',
                     ExtraFilter: `TemplateID='${prompt.TemplateID}'`,
@@ -1189,14 +1191,14 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      * @param runId - The ID of the agent run to load
      */
     private async loadAgentRun(runId: string): Promise<void> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const agentRunEntity = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs');
         await agentRunEntity.Load(runId);
         await this.internalLoadAgenRun(agentRunEntity);
     }
 
     private async loadAgentRunFromData(agentRunData: any): Promise<void> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const agentRunEntity = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs');
         await agentRunEntity.LoadFromData(agentRunData);
         await this.internalLoadAgenRun(agentRunEntity);
@@ -1320,7 +1322,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
 
         // Clear previous execution data when starting a new run
         // Create a proper agent run entity for live tracking
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         this.currentAgentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs');
         this.currentAgentRun.ID = `temp-${Date.now()}`;
         this.currentAgentRun.Status = 'Running';
@@ -1352,7 +1354,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
 
         try {
             // Get GraphQL data provider
-            const dataProvider = Metadata.Provider as GraphQLDataProvider;
+            const dataProvider = this.ProviderToUse as GraphQLDataProvider;
  
             // Build data context - include conversation state if available
             const dataContext = this.buildDataContext();
@@ -1563,7 +1565,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
 
         try {
             // Get GraphQL data provider
-            const dataProvider = Metadata.Provider as GraphQLDataProvider;
+            const dataProvider = this.ProviderToUse as GraphQLDataProvider;
 
             // Build template variables from user input
             const templateVariables = this.buildTemplateVariables();
@@ -3105,7 +3107,7 @@ export class AITestHarnessComponent implements OnInit, OnDestroy, OnChanges, Aft
      */
     private async loadFromPromptRun(promptRunId: string): Promise<void> {
         console.log('🔄 Loading from prompt run:', promptRunId);
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const promptRun = await md.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs');
         
         if (await promptRun.Load(promptRunId)) {

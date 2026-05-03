@@ -7,7 +7,7 @@
  * @module @memberjunction/ai-mcp-client/ExecutionLogger
  */
 
-import { Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { MJMCPToolExecutionLogEntity } from '@memberjunction/core-entities';
 import type { MCPLoggingConfig, MCPToolCallResult, MCPExecutionLogEntry } from './types.js';
 
@@ -60,7 +60,8 @@ export class ExecutionLogger {
         toolName: string,
         inputParams: Record<string, unknown>,
         config: MCPLoggingConfig,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<string | null> {
         // Skip if logging disabled
         if (!config.logToolCalls) {
@@ -68,7 +69,7 @@ export class ExecutionLogger {
         }
 
         try {
-            const md = new Metadata();
+            const md = provider ?? new Metadata();
             const logEntity = await md.GetEntityObject<MJMCPToolExecutionLogEntity>(
                 ExecutionLogger.LOG_ENTITY_NAME,
                 contextUser
@@ -125,14 +126,15 @@ export class ExecutionLogger {
         logId: string | null,
         result: MCPToolCallResult,
         config: MCPLoggingConfig,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<void> {
         if (!logId || !config.logToolCalls) {
             return;
         }
 
         try {
-            const md = new Metadata();
+            const md = provider ?? new Metadata();
             const logEntity = await md.GetEntityObject<MJMCPToolExecutionLogEntity>(
                 ExecutionLogger.LOG_ENTITY_NAME,
                 contextUser
@@ -197,14 +199,15 @@ export class ExecutionLogger {
         logId: string | null,
         error: Error | string,
         durationMs: number,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<void> {
         if (!logId) {
             return;
         }
 
         try {
-            const md = new Metadata();
+            const md = provider ?? new Metadata();
             const logEntity = await md.GetEntityObject<MJMCPToolExecutionLogEntity>(
                 ExecutionLogger.LOG_ENTITY_NAME,
                 contextUser
@@ -371,7 +374,8 @@ export class ExecutionLogger {
     async cleanup(
         connectionId: string | undefined,
         olderThanDays: number,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<number> {
         try {
             const cutoffDate = new Date();
@@ -383,7 +387,7 @@ export class ExecutionLogger {
                 filter += ` AND MCPServerConnectionID = '${connectionId}'`;
             }
 
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(provider);
             const result = await rv.RunView<{ ID: string }>({
                 EntityName: ExecutionLogger.LOG_ENTITY_NAME,
                 ExtraFilter: filter,
@@ -395,7 +399,7 @@ export class ExecutionLogger {
                 return 0;
             }
 
-            const md = new Metadata();
+            const md = provider ?? new Metadata();
             let deleted = 0;
 
             for (const log of result.Results) {

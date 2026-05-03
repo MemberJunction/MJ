@@ -72,7 +72,7 @@ export class MJInitializationService {
   async validateUserAccess(): Promise<InitializationResult> {
     await SharedService.RefreshData(true);
 
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: app bootstrap — runs once during initialization to validate the default provider's CurrentUser
 
     if (!md.CurrentUser) {
       return {

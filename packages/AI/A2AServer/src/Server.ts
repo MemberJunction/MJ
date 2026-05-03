@@ -1,4 +1,4 @@
-import { EntityInfo, LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
+import { EntityInfo, IMetadataProvider, LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from "@memberjunction/sqlserver-dataprovider";
 import { GetAPIKeyEngine } from "@memberjunction/api-keys";
 import express, { Request, Response, NextFunction } from 'express';
@@ -374,9 +374,22 @@ function setupRoutes() {
     });
 }
 
+/**
+ * Resolve the metadata provider for the current request.
+ *
+ * A2AServer doesn't yet expose a per-request `AppContext.providers` array — every request
+ * currently shares the process-global provider. When per-request provider plumbing lands,
+ * change THIS function to read from the request, and every downstream operation is
+ * automatically multi-tenant correct (because EntityOperations / AgentOperations and
+ * generateAgentCard already accept an injected provider).
+ */
+function resolveProviderForRequest(): IMetadataProvider {
+    return Metadata.Provider; // global-provider-ok: A2A server lacks per-request provider plumbing today; centralized boundary so future migration is one-line
+}
+
 async function generateAgentCard(): Promise<AgentCard> {
     const contextUser = UserCache.Instance.Users[0];
-    const md = new Metadata();
+    const md = resolveProviderForRequest();
     const entityCapabilities = getEntityCapabilities(md.Entities, contextUser);
     const agentCapabilities = await getAgentCapabilities(contextUser);
 
@@ -695,9 +708,12 @@ async function processTask(task: Task, authenticatedUser?: UserInfo, authContext
             throw new Error("No user context available for processing task");
         }
 
-        // Initialize operations handlers with the authenticated user
-        const entityOps = new EntityOperations();
-        const agentOps = new AgentOperations(contextUser);
+        // Initialize operations handlers with the authenticated user and the request's
+        // metadata provider so every downstream entity operation routes through the right
+        // connection (see resolveProviderForRequest for the multi-tenant migration plan).
+        const provider = resolveProviderForRequest();
+        const entityOps = new EntityOperations(provider);
+        const agentOps = new AgentOperations(contextUser, provider);
 
         // Extract text content and parse operation
         const textParts = lastMessage.parts.filter(p => p.type === 'text');

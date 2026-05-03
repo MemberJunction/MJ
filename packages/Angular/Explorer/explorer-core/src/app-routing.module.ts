@@ -5,7 +5,7 @@ import {
   AuthGuardService as AuthGuard
 } from './public-api';
 import { OAuthCallbackComponent } from './lib/oauth/oauth-callback.component';
-import { LogError, Metadata, StartupManager } from '@memberjunction/core';
+import { LogError, Metadata, StartupManager, IMetadataProvider } from '@memberjunction/core';
 import { SharedService, SYSTEM_APP_ID } from '@memberjunction/ng-shared';
 import { DetachedRouteHandle, RouteReuseStrategy } from '@angular/router';
 import { ApplicationManager, TabService } from '@memberjunction/ng-base-application';
@@ -124,6 +124,21 @@ export class ResourceResolver implements Resolve<void> {
   private readonly URL_DEBOUNCE_MS = 100; // Allow same URL after 100ms
   private loggedInPromise: Promise<void> | null = null;
 
+  /**
+   * Optional explicit metadata provider. The shell calls
+   * `setProvider(this.ProviderToUse)` after acquiring this resolver from DI.
+   * Falls back to `Metadata.Provider` for single-provider apps.
+   */
+  private _provider: IMetadataProvider | null = null;
+
+  public set Provider(value: IMetadataProvider | null) {
+      this._provider = value;
+  }
+
+  public get Provider(): IMetadataProvider {
+      return this._provider ?? Metadata.Provider;
+  }
+
   constructor(
     private sharedService: SharedService,
     private router: Router,
@@ -175,7 +190,7 @@ export class ResourceResolver implements Resolve<void> {
       return;
     }
 
-    const md = new Metadata();
+    const md = this.Provider;
     const applications = md.Applications;
 
     // Known resource types for app-scoped resource URLs

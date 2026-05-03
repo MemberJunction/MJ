@@ -60,7 +60,7 @@ export class PermissionsUserAccessResourceComponent extends BaseResourceComponen
         this.ErrorMessage = null;
         try {
             this.Users = await loadPermissionsUsers();
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             this.SelectedUserId = md.CurrentUser?.ID ?? null;
             if (this.SelectedUserId) {
                 await this.loadPermissionsForSelectedUser();

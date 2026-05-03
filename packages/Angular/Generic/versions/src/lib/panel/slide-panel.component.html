@@ -10,7 +10,8 @@
   <div
     class="sp-panel"
     [class.visible]="IsVisible"
-    [style.width.px]="WidthPx">
+    [style.width.px]="WidthPx"
+    [style.max-width]="(MaxWidthRatio * 100) + 'vw'">
     <!-- Resize handle -->
     @if (Resizable) {
       <div class="sp-resize-handle" (mousedown)="OnResizeStart($event)">

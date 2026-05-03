@@ -69,6 +69,13 @@
         "ResourceType": "Custom",
         "DriverClass": "ApplicationRolesResource",
         "isDefault": false
+      },
+      {
+        "Label": "Database Designer",
+        "Icon": "fa-solid fa-wand-magic-sparkles",
+        "ResourceType": "Custom",
+        "DriverClass": "DatabaseDesignerDashboard",
+        "isDefault": false
       }
     ]
   },
@@ -79,7 +86,7 @@
     "ID": "DBCB423E-F36B-1410-8DAC-00021F8B792E"
   },
   "sync": {
-    "lastModified": "2026-04-22T17:51:58.205Z",
-    "checksum": "e105cdc2029cf1b4fa459be7f9fc7fa77884619d298d8652a319d3c972ba23f7"
+    "lastModified": "2026-05-01T18:03:42.520Z",
+    "checksum": "63c28b105f9727f2aad59178efd7f9d2ddff4dd23ca5363cfd56ab6d0f077246"
   }
 }

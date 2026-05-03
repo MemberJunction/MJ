@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, OnInit, ChangeDetectorRef, ElementRef, ViewChild } from '@angular/core';
 import { MJActionEntity, MJActionParamEntity, UserInfoEngine } from '@memberjunction/core-entities';
-import { Metadata } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 // Setting key prefix for action run input caching
 const ACTION_INPUT_CACHE_PREFIX = '__ACTION_DASHBOARD__action-run-inputs/';
@@ -25,7 +25,7 @@ export interface ActionResult {
     templateUrl: './action-test-harness.component.html',
     styleUrls: ['./action-test-harness.component.css']
 })
-export class ActionTestHarnessComponent implements OnInit {
+export class ActionTestHarnessComponent extends BaseAngularComponent implements OnInit {
     @ViewChild('resultsSection') ResultsSectionRef!: ElementRef<HTMLDivElement>;
 
     // Private backing fields
@@ -79,7 +79,7 @@ export class ActionTestHarnessComponent implements OnInit {
 
     constructor(
         private cdr: ChangeDetectorRef
-    ) {}
+    ) { super(); }
 
     ngOnInit(): void {
         this.initializeParamValues();
@@ -306,7 +306,7 @@ export class ActionTestHarnessComponent implements OnInit {
             `;
 
             // Get GraphQL data provider from Metadata
-            const graphQLProvider = Metadata.Provider as GraphQLDataProvider;
+            const graphQLProvider = this.ProviderToUse as unknown as GraphQLDataProvider;
 
             // Convert params to ActionParamInput array format
             const actionParams = this.ParamValues.map(paramValue => {

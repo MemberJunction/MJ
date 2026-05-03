@@ -19,6 +19,14 @@ vi.mock('@memberjunction/core', () => {
     Entities: { ID: string; Name: string }[] = [];
     EntityByName = mockEntityByName;
     GetEntityObject = mockGetEntityObject;
+    // Multi-provider migration: engines now use this.ProviderToUse which falls back to
+    // Metadata.Provider. Tests previously mocked the Metadata helper class only; expose a
+    // static Provider reference returning the same shape so the fallback works in tests.
+    // Use a getter to avoid the top-of-file `vi.mock` hoisting forbidding direct access to
+    // the shared mock variables at class-init time.
+    static get Provider(): FakeMetadata {
+      return new FakeMetadata();
+    }
   }
   class FakeRunView {
     RunView = mockRunViewFn;

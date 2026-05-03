@@ -203,37 +203,34 @@ describe('QueryParameterProcessor.validateParameters', () => {
     });
   });
 
-  describe('default value handling', () => {
-    it('should apply default value when parameter is not provided', () => {
+  describe('default value handling (metadata only — not injected)', () => {
+    // DefaultValue is informational metadata. The SQL template handles defaults
+    // via {% else %} blocks or | default() filters. The processor does NOT inject
+    // DefaultValue into the template context.
+
+    it('should NOT inject default values — they are metadata only', () => {
       const defs = [makeParamDef({ Name: 'limit', Type: 'number', DefaultValue: '100' })];
       const result = QueryParameterProcessor.validateParameters({}, defs as never[]);
       expect(result.success).toBe(true);
-      expect(result.validatedParameters.limit).toBe(100);
+      expect(result.validatedParameters.limit).toBeUndefined();
     });
 
-    it('should apply string default value', () => {
-      const defs = [makeParamDef({ Name: 'status', Type: 'string', DefaultValue: 'active' })];
+    it('should succeed when optional param with SQL expression default is absent', () => {
+      // GETDATE() is a SQL function — the template handles it via {% else %}
+      const defs = [makeParamDef({ Name: 'RefDate', Type: 'date', DefaultValue: 'GETDATE()' })];
       const result = QueryParameterProcessor.validateParameters({}, defs as never[]);
       expect(result.success).toBe(true);
-      expect(result.validatedParameters.status).toBe('active');
+      expect(result.validatedParameters.RefDate).toBeUndefined();
     });
 
-    it('should apply boolean default value (SQL Server)', () => {
-      const defs = [makeParamDef({ Name: 'flag', Type: 'boolean', DefaultValue: 'true' })];
+    it('should succeed when optional param with SQL IN-list default is absent', () => {
+      const defs = [makeParamDef({ Name: 'statuses', Type: 'array', DefaultValue: "('Cancelled', 'Refunded')" })];
       const result = QueryParameterProcessor.validateParameters({}, defs as never[]);
       expect(result.success).toBe(true);
-      expect(result.validatedParameters.flag).toBe(1);
+      expect(result.validatedParameters.statuses).toBeUndefined();
     });
 
-    it('should apply boolean default value (PostgreSQL)', () => {
-      RunQuerySQLFilterManager.Instance.SetPlatform('postgresql');
-      const defs = [makeParamDef({ Name: 'flag', Type: 'boolean', DefaultValue: 'true' })];
-      const result = QueryParameterProcessor.validateParameters({}, defs as never[]);
-      expect(result.success).toBe(true);
-      expect(result.validatedParameters.flag).toBe(true);
-    });
-
-    it('should prefer provided value over default', () => {
+    it('should still validate and use explicitly provided values', () => {
       const defs = [makeParamDef({ Name: 'limit', Type: 'number', DefaultValue: '100' })];
       const result = QueryParameterProcessor.validateParameters({ limit: 50 }, defs as never[]);
       expect(result.success).toBe(true);

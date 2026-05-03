@@ -8,7 +8,7 @@ import { SQLServerDataProvider } from "@memberjunction/sqlserver-dataprovider";
 @RegisterClass(BaseEntity, 'MJ: Template Contents')
 export class MJTemplateContentEntityServer extends MJTemplateContentEntity {
     override async Save(options?: EntitySaveOptions): Promise<boolean> {
-        const provider = Metadata.Provider as SQLServerDataProvider;
+        const provider = this.ProviderToUse as unknown as SQLServerDataProvider;
 
         // Start a database transaction
         await provider.BeginTransaction();

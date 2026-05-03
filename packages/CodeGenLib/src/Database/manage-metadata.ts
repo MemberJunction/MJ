@@ -902,8 +902,8 @@ export class ManageMetadataBase {
             const setClauses: string[] = [];
             for (const [key, value] of attrs) {
                const paramName = `attr_${key}`;
-               // Convert boolean values to SQL BIT (1/0)
-               const sqlValue = typeof value === 'boolean' ? (value ? 1 : 0) : value;
+               // Pass booleans through — both mssql and pg drivers handle native boolean values
+               const sqlValue = value;
                queryParams[paramName] = sqlValue;
                setClauses.push(`${this.qi(key)} = @${paramName}`);
             }
@@ -1013,7 +1013,7 @@ export class ManageMetadataBase {
     * @returns
     */
    public async manageMetadata(pool: CodeGenConnection, currentUser: UserInfo): Promise<boolean> {
-      const md = new Metadata();
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
       // Auto-exclude platform-specific system schemas.
       // We mutate configInfo.excludeSchemas directly so that all downstream code
       // (including createExcludeTablesAndSchemasFilter) picks up the exclusions.
@@ -1117,7 +1117,7 @@ export class ManageMetadataBase {
          logStatus(`    > Created ${vecResult.createdCount} virtual entit${vecResult.createdCount === 1 ? 'y' : 'ies'} from config`);
          // Refresh metadata so manageVirtualEntities can find the newly-created entities
          // in the cache — otherwise EntityByName() returns null and field sync is silently skipped
-         const md = new Metadata();
+         const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
          await md.Refresh();
       }
 
@@ -1167,7 +1167,7 @@ export class ManageMetadataBase {
       // virtual entities are records defined in the entity metadata and do NOT define a distinct base table
       // but they do specify a base view. We DO NOT generate a base view for a virtual entity, we simply use it to figure
       // out the fields that should be in the entity definition and add/update/delete the entity definition to match what's in the view when this runs
-      const sql = `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntities')} WHERE VirtualEntity = 1`;
+      const sql = `SELECT * FROM ${this.qs(mj_core_schema(), 'vwEntities')} WHERE VirtualEntity = ${this.boolLit(true)}`;
       const virtualEntitiesResult = await this.runQuery(pool, sql);
       const virtualEntities = virtualEntitiesResult.recordset;
       let anyUpdates: boolean = false;
@@ -1197,7 +1197,7 @@ export class ManageMetadataBase {
          if (veFields && veFields.length > 0) {
             // we have 1+ fields, now loop through them and process each one
             // first though, remove any fields that are no longer in the view
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
             const entity = md.EntityByName(virtualEntity.Name)
             if (entity) {
                const removeList = [];
@@ -1249,7 +1249,7 @@ export class ManageMetadataBase {
       // if it exist it updates the entity field to match the view's data type and nullability attributes
 
       // first, get the entity definition
-      const md = new Metadata();
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
       const entity = md.EntityByName(virtualEntity.Name);
       let newEntityFieldUUID = null;
       let didUpdate: boolean = false;
@@ -1270,8 +1270,8 @@ export class ManageMetadataBase {
                                   SET
                                     Sequence=${fieldSequence},
                                     Type='${veField.Type}',
-                                    AllowsNull=${veField.AllowsNull ? 1 : 0},
-                                    ${makePrimaryKey ? 'IsPrimaryKey=1,IsUnique=1,' : ''}
+                                    AllowsNull=${this.boolLit(veField.AllowsNull)},
+                                    ${makePrimaryKey ? `IsPrimaryKey=${this.boolLit(true)},IsUnique=${this.boolLit(true)},` : ''}
                                     Length=${veField.Length},
                                     Precision=${veField.Precision},
                                     Scale=${veField.Scale}
@@ -1291,9 +1291,9 @@ export class ManageMetadataBase {
                                       ${q('Length')}, ${q('Precision')}, ${q('Scale')},
                                       ${q('Sequence')}, ${q('IsPrimaryKey')}, ${q('IsUnique')},
                                       ${q('__mj_CreatedAt')}, ${q('__mj_UpdatedAt')} )
-                            VALUES (  '${newEntityFieldUUID}', '${entity.ID}', '${veField.FieldName}', '${veField.Type}', ${veField.AllowsNull ? 1 : 0},
+                            VALUES (  '${newEntityFieldUUID}', '${entity.ID}', '${veField.FieldName}', '${veField.Type}', ${this.boolLit(veField.AllowsNull)},
                                        ${veField.Length}, ${veField.Precision}, ${veField.Scale},
-                                       ${fieldSequence}, ${makePrimaryKey ? 1 : 0}, ${makePrimaryKey ? 1 : 0},
+                                       ${fieldSequence}, ${this.boolLit(makePrimaryKey)}, ${this.boolLit(makePrimaryKey)},
                                        ${this.utcNow()}, ${this.utcNow()}
                                     )`;
             await this.LogSQLAndExecute(pool, sqlAdd, `SQL text to add virtual entity field ${veField.FieldName} for entity ${virtualEntity.Name}`);
@@ -1315,7 +1315,7 @@ export class ManageMetadataBase {
          return; // Feature not enabled, nothing to do
       }
 
-      const md = new Metadata();
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
       const virtualEntities = md.Entities.filter(e => e.VirtualEntity);
       if (virtualEntities.length === 0) {
          return;
@@ -1464,7 +1464,7 @@ export class ManageMetadataBase {
       }>;
    }> {
       const tableRefs = SQLParser.ExtractTableRefs(viewDefinition);
-      const md = new Metadata();
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
       const sourceEntities: Array<{
          Name: string;
          Description: string;
@@ -1599,13 +1599,13 @@ export class ManageMetadataBase {
 
       // Clear existing default PK (field #1 fallback) before applying LLM-identified PKs
       sqlStatements.push(`UPDATE ${this.qs(schema, 'EntityField')}
-                        SET IsPrimaryKey=0, IsUnique=0
-                        WHERE EntityID='${entity.ID}' AND IsPrimaryKey=1 AND IsSoftPrimaryKey=0`);
+                        SET IsPrimaryKey=${this.boolLit(false)}, IsUnique=${this.boolLit(false)}
+                        WHERE EntityID='${entity.ID}' AND IsPrimaryKey=${this.boolLit(true)} AND IsSoftPrimaryKey=${this.boolLit(false)}`);
 
       // Set LLM-identified PKs
       for (const pk of validPKs) {
          sqlStatements.push(`UPDATE ${this.qs(schema, 'EntityField')}
-                         SET IsPrimaryKey=1, IsUnique=1, IsSoftPrimaryKey=1
+                         SET IsPrimaryKey=${this.boolLit(true)}, IsUnique=${this.boolLit(true)}, IsSoftPrimaryKey=${this.boolLit(true)}
                          WHERE EntityID='${entity.ID}' AND Name='${pk}'`);
          logStatus(`         ✓ Set PK for ${entity.Name}.${pk} (LLM-identified)`);
       }
@@ -1630,7 +1630,7 @@ export class ManageMetadataBase {
          return false;
       }
 
-      const md = new Metadata();
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
       const sqlStatements: string[] = [];
 
       for (const fk of foreignKeys) {
@@ -1792,7 +1792,7 @@ export class ManageMetadataBase {
       let bSuccess = true;
       let anyUpdates = false;
 
-      const md = new Metadata();
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
       const childEntities = md.Entities.filter(e => e.IsChildType);
 
       if (childEntities.length === 0) {
@@ -1869,13 +1869,13 @@ export class ManageMetadataBase {
 
             if (needsUpdate) {
                const sqlUpdate = `UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
-                  SET IsVirtual=1,
+                  SET IsVirtual=${this.boolLit(true)},
                       Type='${parentField.Type}',
                       Length=${parentField.Length},
                       Precision=${parentField.Precision},
                       Scale=${parentField.Scale},
-                      AllowsNull=${parentField.AllowsNull ? 1 : 0},
-                      AllowUpdateAPI=1
+                      AllowsNull=${this.boolLit(parentField.AllowsNull)},
+                      AllowUpdateAPI=${this.boolLit(true)}
                   WHERE ID='${existingRow.ID}'`;
                await this.LogSQLAndExecute(pool, sqlUpdate,
                   `Update IS-A parent field ${parentField.Name} on ${childEntity.Name}`);
@@ -1896,9 +1896,9 @@ export class ManageMetadataBase {
                   ${q('__mj_CreatedAt')}, ${q('__mj_UpdatedAt')})
                VALUES (
                   '${newFieldID}', '${childEntity.ID}', '${parentField.Name}',
-                  '${parentField.Type}', ${parentField.AllowsNull ? 1 : 0},
+                  '${parentField.Type}', ${this.boolLit(parentField.AllowsNull)},
                   ${parentField.Length}, ${parentField.Precision}, ${parentField.Scale},
-                  ${sequence}, 1, 1, 0, 0,
+                  ${sequence}, ${this.boolLit(true)}, ${this.boolLit(true)}, ${this.boolLit(false)}, ${this.boolLit(false)},
                   ${this.utcNow()}, ${this.utcNow()})`;
             await this.LogSQLAndExecute(pool, sqlInsert,
                `Create IS-A parent field ${parentField.Name} on ${childEntity.Name}`);
@@ -1985,7 +1985,7 @@ export class ManageMetadataBase {
                        FROM ${this.qs(mj_core_schema(), 'vwEntityFields')}
                        WHERE
                              RelatedEntityID IS NOT NULL AND
-                             IsVirtual = 0 AND
+                             IsVirtual = ${this.boolLit(false)} AND
                              EntityID NOT IN (SELECT ID FROM ${this.qs(mj_core_schema(), 'Entity')} WHERE SchemaName IN (${excludeSchemas.map(s => `'${s}'`).join(',')}))
                        ORDER BY RelatedEntityID`;
          const entityFieldsResult = await this.runQuery(pool, sSQL);
@@ -2181,7 +2181,7 @@ export class ManageMetadataBase {
                        FROM ${this.qs(mj_core_schema(), 'vwEntityFields')}
                        WHERE
                              RelatedEntityID IS NOT NULL AND
-                             IsVirtual = 0 AND
+                             IsVirtual = ${this.boolLit(false)} AND
                              EntityID NOT IN (SELECT ID FROM ${this.qs(mj_core_schema(), 'Entity')} WHERE SchemaName IN (${excludeSchemas.map(s => `'${s}'`).join(',')}))
                        ORDER BY RelatedEntityID`;
          const entityFieldsResult = await this.runQuery(pool, sSQL);
@@ -2268,7 +2268,7 @@ export class ManageMetadataBase {
             }
 
             // if we get here we now need to refresh our metadata object
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
             await md.Refresh();
          }
          return true;
@@ -2342,7 +2342,7 @@ export class ManageMetadataBase {
     *    other lookup failure (e.g., name shape we didn't anticipate).
     */
    protected resolveEntityNamesToIDs(entityNames: string[]): string[] {
-      const md = new Metadata();
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
       const ids: string[] = [];
       for (const name of entityNames) {
          if (typeof name !== 'string' || name.trim().length === 0) continue;
@@ -2453,7 +2453,7 @@ export class ManageMetadataBase {
       // because entity.Fields and entity.PrimaryKeys won't reflect the updated flags
       if (configInfo.additionalSchemaInfo) {
          logStatus('      Refreshing metadata after applying soft PK/FK configuration...');
-         const md = new Metadata();
+         const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
          await md.Refresh();
          logStatus('      Metadata refresh complete');
       }
@@ -2520,7 +2520,7 @@ export class ManageMetadataBase {
                               FROM
                                  ${this.qs(mj_core_schema(), 'vwEntities')}
                               WHERE
-                                 VirtualEntity=0 AND
+                                 VirtualEntity=${this.boolLit(false)} AND
                                  DeleteType='Soft' AND
                                  SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})`;
          const entitiesResult = await this.runQuery(pool, sqlEntities);
@@ -2679,8 +2679,8 @@ export class ManageMetadataBase {
                               FROM
                                  ${this.qs(mj_core_schema(), 'vwEntities')}
                               WHERE
-                                 VirtualEntity = 0 AND
-                                 TrackRecordChanges = 1 AND
+                                 VirtualEntity = ${this.boolLit(false)} AND
+                                 TrackRecordChanges = ${this.boolLit(true)} AND
                                  SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})`;
          const entitiesResult = await this.runQuery(pool, sqlEntities);
       const entities = entitiesResult.recordset;
@@ -3025,19 +3025,19 @@ export class ManageMetadataBase {
             ${n.Length},
             ${n.Precision},
             ${n.Scale},
-            ${n.AllowsNull ? 1 : 0},
+            ${this.boolLit(n.AllowsNull)},
             ${quotedDefaultValue},
-            ${n.AutoIncrement ? 1 : 0},
-            ${n.AllowUpdateAPI ? 1 : 0},
-            ${n.IsVirtual ? 1 : 0},
+            ${this.boolLit(n.AutoIncrement)},
+            ${this.boolLit(n.AllowUpdateAPI)},
+            ${this.boolLit(n.IsVirtual)},
             ${n.RelatedEntityID && n.RelatedEntityID.length > 0 ? `'${n.RelatedEntityID}'` : 'NULL'},
             ${n.RelatedEntityFieldName && n.RelatedEntityFieldName.length > 0 ? `'${n.RelatedEntityFieldName}'` : 'NULL'},
-            ${n.IsNameField !== null ? n.IsNameField : 0},
-            ${n.FieldName === 'ID' || n.IsNameField ? 1 : 0},
-            ${n.RelatedEntityID && n.RelatedEntityID.length > 0 ? 1 : 0},
-            ${bDefaultInView ? 1 : 0},
-            ${n.IsPrimaryKey},
-            ${n.IsUnique},
+            ${this.boolLit(n.IsNameField !== null ? n.IsNameField : false)},
+            ${this.boolLit(n.FieldName === 'ID' || n.IsNameField)},
+            ${this.boolLit(n.RelatedEntityID && n.RelatedEntityID.length > 0)},
+            ${this.boolLit(bDefaultInView)},
+            ${this.boolLit(n.IsPrimaryKey)},
+            ${this.boolLit(n.IsUnique)},
             '${n.RelationshipDefaultDisplayType}',
             ${this.utcNow()},
             ${this.utcNow()}
@@ -3706,7 +3706,7 @@ export class ManageMetadataBase {
       const newEntities = newEntitiesResult.recordset;
 
          if (newEntities && newEntities.length > 0 ) {
-            const md = new Metadata()
+            const md = new Metadata() // global-provider-ok: codegen runs offline against a single provider
             const transaction = await pool.beginTransaction();
             try {
                // wrap in a transaction so we get all of it or none of it
@@ -3740,7 +3740,7 @@ export class ManageMetadataBase {
       // 1) entity has a field that is a primary key
       // validate all of these factors by getting the sql from SQL Server and check the result, if failure, shouldCreate=false and generate validation message, otherwise return empty validation message and true for shouldCreate.
 
-      const query = this.dbProvider.callRoutineSQL(Metadata.Provider.ConfigData.MJCoreSchemaName, 'spGetPrimaryKeyForTable', [`'${newEntity.TableName}'`, `'${newEntity.SchemaName}'`], ['TableName', 'SchemaName']);
+      const query = this.dbProvider.callRoutineSQL(Metadata.Provider.ConfigData.MJCoreSchemaName, 'spGetPrimaryKeyForTable', [`'${newEntity.TableName}'`, `'${newEntity.SchemaName}'`], ['TableName', 'SchemaName']); // global-provider-ok: codegen runs offline against a single provider
 
       try {
           const resultResult = await ds.query(query);
@@ -4047,7 +4047,7 @@ export class ManageMetadataBase {
                   if (RoleID) {
                      const sSQLInsertPermission = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityPermission')}
                                                    (${this.qi('EntityID')}, ${this.qi('RoleID')}, ${this.qi('CanRead')}, ${this.qi('CanCreate')}, ${this.qi('CanUpdate')}, ${this.qi('CanDelete')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')}) VALUES
-                                                   ('${newEntityID}', '${RoleID}', ${p.CanRead ? 1 : 0}, ${p.CanCreate ? 1 : 0}, ${p.CanUpdate ? 1 : 0}, ${p.CanDelete ? 1 : 0}, ${this.utcNow()}, ${this.utcNow()})`;
+                                                   ('${newEntityID}', '${RoleID}', ${this.boolLit(p.CanRead)}, ${this.boolLit(p.CanCreate)}, ${this.boolLit(p.CanUpdate)}, ${this.boolLit(p.CanDelete)}, ${this.utcNow()}, ${this.utcNow()})`;
                      await this.LogSQLAndExecute(pool, sSQLInsertPermission, `SQL generated to add new permission for entity ${newEntityName} for role ${p.RoleName}`);
                   }
                   else
@@ -4136,7 +4136,7 @@ export class ManageMetadataBase {
          return;
       }
 
-      const md = new Metadata();
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
       for (const roleDef of defaults.Roles) {
          const role = md.Roles.find(
             r => r.Name.trim().toLowerCase() === roleDef.RoleName.trim().toLowerCase()
@@ -4144,7 +4144,7 @@ export class ManageMetadataBase {
          if (role) {
             const sSQLInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'ApplicationRole')}
                                  (${this.qi('ApplicationID')}, ${this.qi('RoleID')}, ${this.qi('CanAccess')}, ${this.qi('CanAdmin')}) VALUES
-                                 ('${appId}', '${role.ID}', ${roleDef.CanAccess ? 1 : 0}, ${roleDef.CanAdmin ? 1 : 0})`;
+                                 ('${appId}', '${role.ID}', ${this.boolLit(roleDef.CanAccess)}, ${this.boolLit(roleDef.CanAdmin)})`;
             await this.LogSQLAndExecute(pool, sSQLInsert, `Adding role ${roleDef.RoleName} to application ${appName}`);
          } else {
             LogError(`Unable to find Role '${roleDef.RoleName}' for application ${appName}`);
@@ -4202,7 +4202,7 @@ export class ManageMetadataBase {
          const newAppID = await this.createNewApplication(pool, appUUID, schemaName, schemaName, currentUser);
          if (newAppID) {
             apps = [newAppID];
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
             await md.Refresh();
          } else {
             LogError(`   >>>> ERROR: Unable to create new application for schema ${schemaName}`);
@@ -4236,14 +4236,14 @@ export class ManageMetadataBase {
          return;
       }
 
-      const md = new Metadata();
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
       const permissions = configInfo.newEntityDefaults.PermissionDefaults.Permissions;
       for (const p of permissions) {
          const RoleID = md.Roles.find(r => r.Name.trim().toLowerCase() === p.RoleName.trim().toLowerCase())?.ID;
          if (RoleID) {
             const sSQLInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityPermission')}
                                  (${this.qi('EntityID')}, ${this.qi('RoleID')}, ${this.qi('CanRead')}, ${this.qi('CanCreate')}, ${this.qi('CanUpdate')}, ${this.qi('CanDelete')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')}) VALUES
-                                 ('${entityId}', '${RoleID}', ${p.CanRead ? 1 : 0}, ${p.CanCreate ? 1 : 0}, ${p.CanUpdate ? 1 : 0}, ${p.CanDelete ? 1 : 0}, ${this.utcNow()}, ${this.utcNow()})`;
+                                 ('${entityId}', '${RoleID}', ${this.boolLit(p.CanRead)}, ${this.boolLit(p.CanCreate)}, ${this.boolLit(p.CanUpdate)}, ${this.boolLit(p.CanDelete)}, ${this.utcNow()}, ${this.utcNow()})`;
             await this.LogSQLAndExecute(pool, sSQLInsert, `SQL generated to add permission for entity ${entityName} for role ${p.RoleName}`);
          } else {
             LogError(`   >>>> ERROR: Unable to find Role ID for role ${p.RoleName} to add permissions for entity ${entityName}`);
@@ -4289,16 +4289,16 @@ export class ManageMetadataBase {
          '${newEntity.TableName}',
          'vw${generatePluralName(newEntity.TableName, {capitalizeFirstLetterOnly: true}) + (newEntitySuffix && newEntitySuffix.length > 0 ? newEntitySuffix : '')}',
          '${newEntity.SchemaName}',
-         1,
-         ${newEntityDefaults.AllowUserSearchAPI === undefined ? 1 : newEntityDefaults.AllowUserSearchAPI ? 1 : 0},
-         ${allowCaching ? 1 : 0}
-         ${newEntityDefaults.TrackRecordChanges === undefined ? '' : ', ' + (newEntityDefaults.TrackRecordChanges ? '1' : '0')}
-         ${newEntityDefaults.AuditRecordAccess === undefined ? '' : ', ' + (newEntityDefaults.AuditRecordAccess ? '1' : '0')}
-         ${newEntityDefaults.AuditViewRuns === undefined ? '' : ', ' + (newEntityDefaults.AuditViewRuns ? '1' : '0')}
-         ${newEntityDefaults.AllowAllRowsAPI === undefined ? '' : ', ' + (newEntityDefaults.AllowAllRowsAPI ? '1' : '0')}
-         ${newEntityDefaults.AllowCreateAPI === undefined ? '' : ', ' + (newEntityDefaults.AllowCreateAPI ? '1' : '0')}
-         ${newEntityDefaults.AllowUpdateAPI === undefined ? '' : ', ' + (newEntityDefaults.AllowUpdateAPI ? '1' : '0')}
-         ${newEntityDefaults.AllowDeleteAPI === undefined ? '' : ', ' + (newEntityDefaults.AllowDeleteAPI ? '1' : '0')}
+         ${this.boolLit(true)},
+         ${newEntityDefaults.AllowUserSearchAPI === undefined ? this.boolLit(true) : this.boolLit(newEntityDefaults.AllowUserSearchAPI)},
+         ${this.boolLit(allowCaching)}
+         ${newEntityDefaults.TrackRecordChanges === undefined ? '' : ', ' + this.boolLit(newEntityDefaults.TrackRecordChanges)}
+         ${newEntityDefaults.AuditRecordAccess === undefined ? '' : ', ' + this.boolLit(newEntityDefaults.AuditRecordAccess)}
+         ${newEntityDefaults.AuditViewRuns === undefined ? '' : ', ' + this.boolLit(newEntityDefaults.AuditViewRuns)}
+         ${newEntityDefaults.AllowAllRowsAPI === undefined ? '' : ', ' + this.boolLit(newEntityDefaults.AllowAllRowsAPI)}
+         ${newEntityDefaults.AllowCreateAPI === undefined ? '' : ', ' + this.boolLit(newEntityDefaults.AllowCreateAPI)}
+         ${newEntityDefaults.AllowUpdateAPI === undefined ? '' : ', ' + this.boolLit(newEntityDefaults.AllowUpdateAPI)}
+         ${newEntityDefaults.AllowDeleteAPI === undefined ? '' : ', ' + this.boolLit(newEntityDefaults.AllowDeleteAPI)}
          ${newEntityDefaults.UserViewMaxRows === undefined ? '' : ', ' + (newEntityDefaults.UserViewMaxRows)}
          , ${this.utcNow()}
          , ${this.utcNow()}
@@ -4350,7 +4350,7 @@ export class ManageMetadataBase {
             // Force regeneration mode - process all entities (or filtered by entityWhereClause)
             logStatus(`      Force regeneration enabled - processing all entities...`);
 
-            whereClause = 'e.VirtualEntity = 0';
+            whereClause = `e.VirtualEntity = ${this.boolLit(false)}`;
             if (configInfo.forceRegeneration.entityWhereClause && configInfo.forceRegeneration.entityWhereClause.trim().length > 0) {
                whereClause += ` AND (${configInfo.forceRegeneration.entityWhereClause})`;
                logStatus(`         Filtered by: ${configInfo.forceRegeneration.entityWhereClause}`);
@@ -4371,7 +4371,7 @@ export class ManageMetadataBase {
             }
 
             logStatus(`      Advanced Generation enabled, processing ${entitiesToProcess.length} entities...`);
-            whereClause = `e.VirtualEntity = 0 AND e.Name IN (${entitiesToProcess.map(name => `'${name}'`).join(',')}) AND e.SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})`;
+            whereClause = `e.VirtualEntity = ${this.boolLit(false)} AND e.Name IN (${entitiesToProcess.map(name => `'${name}'`).join(',')}) AND e.SchemaName NOT IN (${excludeSchemas.map(s => `'${s}'`).join(',')})`;
          }
 
          // Get entity details for entities that need processing
@@ -4432,7 +4432,7 @@ export class ManageMetadataBase {
                ef.AutoUpdateUserSearchPredicate,
                ef.FullTextSearchEnabled,
                ef.AutoUpdateFullTextSearch,
-               ef.Length as MaxLength
+               ef.${this.qi('Length')} as MaxLength
             FROM
                ${this.qs(mj_core_schema(), 'vwEntityFields')} ef
             WHERE
@@ -4622,7 +4622,7 @@ export class ManageMetadataBase {
       }
 
       // Walk the IS-A chain using in-memory metadata
-      const md = new Metadata();
+      const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
       const allEntities = md.Entities;
       const parentChain: Array<{ entityID: string; entityName: string }> = [];
       const visited = new Set<string>();
@@ -4727,9 +4727,9 @@ export class ManageMetadataBase {
          if (nameField && nameField.AutoUpdateIsNameField && nameField.ID && !nameField.IsNameField) {
             sqlStatements.push(`
                UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
-               SET IsNameField = 1
+               SET IsNameField = ${this.boolLit(true)}
                WHERE ID = '${nameField.ID}'
-               AND AutoUpdateIsNameField = 1
+               AND AutoUpdateIsNameField = ${this.boolLit(true)}
             `);
          } else if (!nameField) {
             logError(`Smart field identification returned invalid nameField: '${nfName}' not found in entity fields`);
@@ -4760,9 +4760,9 @@ export class ManageMetadataBase {
          if (!field.DefaultInView) {
             sqlStatements.push(`
                UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
-               SET DefaultInView = 1
+               SET DefaultInView = ${this.boolLit(true)}
                WHERE ID = '${field.ID}'
-               AND AutoUpdateDefaultInView = 1
+               AND AutoUpdateDefaultInView = ${this.boolLit(true)}
             `);
          }
       }
@@ -4795,9 +4795,9 @@ export class ManageMetadataBase {
          if (!field.IncludeInUserSearchAPI) {
             sqlStatements.push(`
                UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
-               SET IncludeInUserSearchAPI = 1
+               SET IncludeInUserSearchAPI = ${this.boolLit(true)}
                WHERE ID = '${field.ID}'
-               AND AutoUpdateIncludeInUserSearchAPI = 1
+               AND AutoUpdateIncludeInUserSearchAPI = ${this.boolLit(true)}
             `);
          }
       }
@@ -4830,7 +4830,7 @@ export class ManageMetadataBase {
                UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
                SET UserSearchPredicateAPI = '${sp.predicate}'
                WHERE ID = '${field.ID}'
-               AND AutoUpdateUserSearchPredicate = 1
+               AND AutoUpdateUserSearchPredicate = ${this.boolLit(true)}
             `);
          }
       }
@@ -4847,14 +4847,14 @@ export class ManageMetadataBase {
       if (result.allowUserSearch == null || !entity.AutoUpdateAllowUserSearchAPI) {
          return;
       }
-      const newValue = result.allowUserSearch ? 1 : 0;
-      const currentValue = entity.AllowUserSearchAPI ? 1 : 0;
+      const newValue = result.allowUserSearch;
+      const currentValue = !!entity.AllowUserSearchAPI;
       if (newValue !== currentValue) {
          sqlStatements.push(`
             UPDATE ${this.qs(mj_core_schema(), 'Entity')}
-            SET AllowUserSearchAPI = ${newValue}
+            SET AllowUserSearchAPI = ${this.boolLit(newValue)}
             WHERE ID = '${entity.ID}'
-            AND AutoUpdateAllowUserSearchAPI = 1
+            AND AutoUpdateAllowUserSearchAPI = ${this.boolLit(true)}
          `);
       }
    }
@@ -4870,14 +4870,14 @@ export class ManageMetadataBase {
    ): void {
       // Entity-level FullTextSearchEnabled
       if (result.enableFullTextSearch != null && entity.AutoUpdateFullTextSearch) {
-         const newValue = result.enableFullTextSearch ? 1 : 0;
-         const currentValue = entity.FullTextSearchEnabled ? 1 : 0;
+         const newValue = result.enableFullTextSearch;
+         const currentValue = !!entity.FullTextSearchEnabled;
          if (newValue !== currentValue) {
             sqlStatements.push(`
                UPDATE ${this.qs(mj_core_schema(), 'Entity')}
-               SET FullTextSearchEnabled = ${newValue}
+               SET FullTextSearchEnabled = ${this.boolLit(newValue)}
                WHERE ID = '${entity.ID}'
-               AND AutoUpdateFullTextSearch = 1
+               AND AutoUpdateFullTextSearch = ${this.boolLit(true)}
             `);
          }
       }
@@ -4899,9 +4899,9 @@ export class ManageMetadataBase {
          if (!field.FullTextSearchEnabled) {
             sqlStatements.push(`
                UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
-               SET FullTextSearchEnabled = 1
+               SET FullTextSearchEnabled = ${this.boolLit(true)}
                WHERE ID = '${field.ID}'
-               AND AutoUpdateFullTextSearch = 1
+               AND AutoUpdateFullTextSearch = ${this.boolLit(true)}
             `);
          }
       }
@@ -4998,9 +4998,9 @@ export class ManageMetadataBase {
       if (shouldSupportGeo !== currentValue) {
          await this.LogSQLAndExecute(pool, `
             UPDATE ${this.qs(schema, 'Entity')}
-            SET ${this.qi('SupportsGeoCoding')} = ${shouldSupportGeo ? 1 : 0}
-            WHERE ${this.qi('ID')} = '${entity.ID}' AND ${this.qi('AutoUpdateSupportsGeoCoding')} = 1
-         `, `Set SupportsGeoCoding = ${shouldSupportGeo ? 1 : 0} for ${entity.Name}`);
+            SET ${this.qi('SupportsGeoCoding')} = ${this.boolLit(shouldSupportGeo)}
+            WHERE ${this.qi('ID')} = '${entity.ID}' AND ${this.qi('AutoUpdateSupportsGeoCoding')} = ${this.boolLit(true)}
+         `, `Set SupportsGeoCoding = ${shouldSupportGeo} for ${entity.Name}`);
          logStatus(`  Entity ${entity.Name}: SupportsGeoCoding = ${shouldSupportGeo ? 1 : 0} (auto-detected from ${hasGeoFields ? 'LLM' : 'existing'} geo fields)`);
          // Queue for late-phase view regeneration — the view was already generated
          // before this flag was set, so it needs to be regenerated with the geo JOIN
@@ -5123,7 +5123,7 @@ export class ManageMetadataBase {
 SET 
    ${setClauses.join(',\n   ')}
 WHERE 
-   ID = '${field.ID}' AND AutoUpdateCategory = 1`);
+   ID = '${field.ID}' AND AutoUpdateCategory = ${this.boolLit(true)}`);
             }
          } else if (!field) {
             logError(`Form layout returned invalid fieldName: '${fieldCategory.fieldName}' not found in entity`);
@@ -5259,16 +5259,15 @@ WHERE
       entityId: string,
       importance: { defaultForNewUser: boolean; entityCategory: string; confidence: string; reasoning: string }
    ): Promise<void> {
-      const defaultForNewUser = importance.defaultForNewUser ? 1 : 0;
       const updateSQL = `
          UPDATE ${this.qs(mj_core_schema(), 'ApplicationEntity')}
-         SET DefaultForNewUser = ${defaultForNewUser}, __mj_UpdatedAt = ${this.utcNow()}
+         SET DefaultForNewUser = ${this.boolLit(importance.defaultForNewUser)}, __mj_UpdatedAt = ${this.utcNow()}
          WHERE EntityID = '${entityId}'
       `;
 
       try {
          await this.LogSQLAndExecute(pool, updateSQL,
-            `Set DefaultForNewUser=${defaultForNewUser} for NEW entity (category: ${importance.entityCategory}, confidence: ${importance.confidence})`, false);
+            `Set DefaultForNewUser=${importance.defaultForNewUser} for NEW entity (category: ${importance.entityCategory}, confidence: ${importance.confidence})`, false);
 
          logStatus(`  Entity importance (NEW Entity): ${importance.entityCategory} (defaultForNewUser: ${importance.defaultForNewUser}, confidence: ${importance.confidence})`);
          logStatus(`    Reasoning: ${importance.reasoning}`);

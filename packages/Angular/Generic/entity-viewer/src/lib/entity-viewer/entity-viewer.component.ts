@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, NgZone } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import { EntityInfo, EntityFieldInfo, EntityFieldTSType, RunView, RunViewParams, Metadata, CompositeKey } from '@memberjunction/core';
@@ -77,7 +78,7 @@ import { EntityDataGridComponent } from '../entity-data-grid/entity-data-grid.co
     'style': 'display: block; height: 100%;'
   }
 })
-export class EntityViewerComponent implements OnInit, OnDestroy {
+export class EntityViewerComponent extends BaseAngularComponent implements OnInit, OnDestroy  {
   /**
    * Maximum records to load in map mode. Map view needs all records for
    * geographic visualization — paging doesn't make sense for maps. This cap
@@ -540,7 +541,8 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
   /** Reference to the data grid component for flushing pending changes */
   @ViewChild(EntityDataGridComponent) private dataGridRef: EntityDataGridComponent | undefined;
 
-  constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {}
+  constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {
+  super();}
 
   // ========================================
   // PUBLIC METHODS
@@ -587,7 +589,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
       return viewEntity.ViewEntityInfo;
     }
 
-    const md = new Metadata();
+    const md = this.ProviderToUse;
 
     // Second try: Look up by Entity name (virtual field that returns entity name)
     if (viewEntity.Entity) {
@@ -1077,7 +1079,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
     const config = this.effectiveConfig;
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
       // Build OrderBy clause
       // Priority: 1) External/internal sort state  2) View's OrderByClause
@@ -1385,7 +1387,7 @@ export class EntityViewerComponent implements OnInit, OnDestroy {
    */
   onForeignKeyClick(event: ForeignKeyClickEvent): void {
     // Look up the related entity by name
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const relatedEntity = event.relatedEntityName
       ? md.Entities.find(e => e.Name === event.relatedEntityName)
       : md.Entities.find(e => UUIDsEqual(e.ID, event.relatedEntityId));

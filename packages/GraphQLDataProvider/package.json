@@ -20,21 +20,24 @@
     "/dist"
   ],
   "scripts": {
+    "prebuild": "node scripts/generate-version.mjs",
     "build": "tsc -noEmit && pkgroll --sourcemap --minify",
     "build-debug": "tsc -noEmit && pkgroll --sourcemap=inline --no-minify",
+    "pretest": "node scripts/generate-version.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
   "devDependencies": {
+    "fake-indexeddb": "^6.2.5",
     "pkgroll": "2.23.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   },
   "optionalDependencies": {
-    "@rollup/rollup-linux-x64-gnu": "4.17.2",
-    "@esbuild/win32-x64": "0.24.0"
+    "@esbuild/win32-x64": "0.24.0",
+    "@rollup/rollup-linux-x64-gnu": "4.17.2"
   },
   "dependencies": {
     "@memberjunction/actions-base": "5.30.1",

@@ -4,6 +4,7 @@ import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { Metadata } from '@memberjunction/core';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 interface QueryRunResult {
     QueryID: string;
     QueryName: string;
@@ -31,7 +32,7 @@ interface ParameterPair {
     templateUrl: './query-run-dialog.component.html',
     styleUrls: ['./query-run-dialog.component.css']
 })
-export class QueryRunDialogComponent implements OnInit, OnChanges {
+export class QueryRunDialogComponent extends BaseAngularComponent implements OnInit, OnChanges {
     private cdr = inject(ChangeDetectorRef);
 
     @Input() query: MJQueryEntity | null = null;
@@ -141,7 +142,7 @@ export class QueryRunDialogComponent implements OnInit, OnChanges {
             });
 
             // Get GraphQL data provider
-            const dataProvider = Metadata.Provider as GraphQLDataProvider;
+            const dataProvider = this.ProviderToUse as GraphQLDataProvider;
             
             // Execute the GetQueryData GraphQL query
             const query = `

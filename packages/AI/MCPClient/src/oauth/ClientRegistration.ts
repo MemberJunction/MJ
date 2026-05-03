@@ -7,7 +7,7 @@
  * @module @memberjunction/ai-mcp-client/oauth/ClientRegistration
  */
 
-import { Metadata, RunView, UserInfo, LogError, LogStatus, BaseEntity, CompositeKey } from '@memberjunction/core';
+import { Metadata, RunView, UserInfo, LogError, LogStatus, BaseEntity, CompositeKey, IMetadataProvider } from '@memberjunction/core';
 import type {
     AuthServerMetadata,
     DCRRequest,
@@ -387,11 +387,12 @@ export class ClientRegistration {
      */
     private async saveRegistration(
         registration: OAuthClientRegistration,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<OAuthClientRegistration> {
         try {
-            const md = new Metadata();
-            const rv = new RunView();
+            const md = provider ?? (new Metadata() as unknown as IMetadataProvider);
+            const rv = RunView.FromMetadataProvider(md);
 
             // Check for existing record
             const existing = await rv.RunView<{ ID: string }>({
@@ -440,9 +441,9 @@ export class ClientRegistration {
     /**
      * Deletes a registration from the database.
      */
-    private async deleteRegistration(registrationId: string, contextUser: UserInfo): Promise<void> {
+    private async deleteRegistration(registrationId: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<void> {
         try {
-            const md = new Metadata();
+            const md = provider ?? (new Metadata() as unknown as IMetadataProvider);
             const entity = await md.GetEntityObject<BaseEntity>(ENTITY_OAUTH_CLIENT_REGISTRATIONS, contextUser);
             const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: registrationId }]);
             const loaded = await entity.InnerLoad(compositeKey);
@@ -460,10 +461,11 @@ export class ClientRegistration {
     public async updateRegistrationStatus(
         registrationId: string,
         status: OAuthClientRegistrationStatus,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<void> {
         try {
-            const md = new Metadata();
+            const md = provider ?? (new Metadata() as unknown as IMetadataProvider);
             const entity = await md.GetEntityObject<BaseEntity>(ENTITY_OAUTH_CLIENT_REGISTRATIONS, contextUser);
             const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: registrationId }]);
             const loaded = await entity.InnerLoad(compositeKey);

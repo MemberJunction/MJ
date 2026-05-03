@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, ViewChild, OnInit, OnDestroy, OnChanges, SimpleChanges, AfterViewInit } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, Metadata } from '@memberjunction/core';
 import { MJConversationDetailEntity, MJEnvironmentEntityExtended, ConversationEngine } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
@@ -29,7 +30,7 @@ import { UUIDsEqual, CleanAndParseJSON } from '@memberjunction/global';
   templateUrl: './message-input.component.html',
   styleUrl: './message-input.component.scss'
 })
-export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, AfterViewInit {
+export class MessageInputComponent extends BaseAngularComponent implements OnInit, OnDestroy, OnChanges, AfterViewInit  {
   // Default artifact type ID for JSON (when agent doesn't specify DefaultArtifactTypeID)
   private readonly JSON_ARTIFACT_TYPE_ID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4';
 
@@ -152,9 +153,17 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
     private mentionAutocomplete: MentionAutocompleteService,
     private attachmentService: ConversationAttachmentService,
     private bridge: ConversationBridgeService
-  ) {}
+  ) {
+  super();}
 
   async ngOnInit() {
+    // Bind provider-aware services to this component's provider.
+    const p = this.ProviderToUse;
+    this.agentService.Provider = p;
+    this.dataCache.Provider = p;
+    this.activeTasks.Provider = p;
+    this.attachmentService.Provider = p;
+
     this.converationManagerAgent = await this.agentService.getConversationManagerAgent();
 
     // Initialize mention autocomplete (needed for parsing mentions in messages)
@@ -2219,7 +2228,7 @@ export class MessageInputComponent implements OnInit, OnDestroy, OnChanges, Afte
       const promptId = p.ID;
 
       // Use GraphQL AI client to run the prompt (same client as agent)
-      const provider = Metadata.Provider as GraphQLDataProvider;
+      const provider = this.ProviderToUse as GraphQLDataProvider;
       if (!provider) {
         console.warn('⚠️ GraphQLDataProvider not available');
         return;

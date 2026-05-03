@@ -1,6 +1,6 @@
 import { Component, OnInit, OnDestroy, EventEmitter, Output, ChangeDetectorRef, HostListener } from '@angular/core';
-import { Metadata } from '@memberjunction/core';
 import { MJAPIApplicationEntity, MJAPIApplicationScopeEntity, MJAPIScopeEntity, MJUserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { APIKeysEngineBase, parseAPIScopeUIConfig } from '@memberjunction/api-keys-base';
 import { UUIDsEqual } from '@memberjunction/global';
 
@@ -47,10 +47,10 @@ interface ScopeCategory {
     templateUrl: './api-applications-panel.component.html',
     styleUrls: ['./api-applications-panel.component.css']
 })
-export class APIApplicationsPanelComponent implements OnInit, OnDestroy {
+export class APIApplicationsPanelComponent extends BaseAngularComponent implements OnInit, OnDestroy {
     @Output() ApplicationUpdated = new EventEmitter<void>();
 
-    private md = new Metadata();
+    private get md() { return this.ProviderToUse; }
     private cdr: ChangeDetectorRef;
 
     // Loading states
@@ -99,6 +99,7 @@ export class APIApplicationsPanelComponent implements OnInit, OnDestroy {
     };
 
     constructor(cdr: ChangeDetectorRef) {
+        super();
         this.cdr = cdr;
     }
 

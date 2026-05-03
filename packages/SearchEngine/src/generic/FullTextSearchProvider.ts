@@ -9,7 +9,7 @@
  * @module @memberjunction/search-engine
  */
 
-import { LogError, Metadata, UserInfo } from '@memberjunction/core';
+import { IRunViewProvider, LogError, Metadata, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSearchProvider, SearchProviderConfig } from './ISearchProvider';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType } from './search.types';
@@ -46,7 +46,11 @@ export class FullTextSearchProvider extends BaseSearchProvider {
         contextUser: UserInfo
     ): Promise<SearchResultItem[]> {
         try {
-            const md = new Metadata();
+            const md = this.Provider as unknown as IRunViewProvider;
+            if (!md.FullTextSearch) {
+                LogError('FullTextSearchProvider: provider does not support FullTextSearch');
+                return [];
+            }
             const ftsResult = await md.FullTextSearch({
                 SearchText: query,
                 EntityNames: filters?.EntityNames,

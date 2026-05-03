@@ -35,7 +35,14 @@ export default class Pull extends Command {
     'backup-directory': Flags.string({ description: 'Custom backup directory (default: .backups)' }),
     'preserve-fields': Flags.string({ description: 'Comma-separated list of fields to preserve during updates', multiple: true }),
     'exclude-fields': Flags.string({ description: 'Comma-separated list of fields to exclude from pull', multiple: true }),
-    'target-dir': Flags.string({ description: 'Specific target directory (overrides auto-discovery)' })
+    'target-dir': Flags.string({ description: 'Specific target directory (overrides auto-discovery)' }),
+    incremental: Flags.boolean({
+      description: 'Only pull records updated since last successful pull',
+      default: false
+    }),
+    since: Flags.string({
+      description: 'Only pull records updated after this ISO 8601 timestamp (e.g., 2026-04-07T10:00:00Z)'
+    }),
   };
   
   async run(): Promise<void> {
@@ -132,8 +139,14 @@ export default class Pull extends Command {
         await backupManager.initialize();
       }
       
-      // Create pull service and execute
+      // Create pull service with optional state manager for incremental sync
       const pullService = new PullService(syncEngine, getSystemUser());
+      if (flags.incremental || flags.since) {
+        const { SyncStateManager } = await import('@memberjunction/metadata-sync');
+        const stateManager = new SyncStateManager(targetDir);
+        await stateManager.load();
+        pullService.setStateManager(stateManager);
+      }
       
       // Build pull options - only include CLI flags that were explicitly provided
       const pullOptions: any = {
@@ -154,6 +167,8 @@ export default class Pull extends Command {
       if (flags['backup-directory'] !== undefined) pullOptions.backupDirectory = flags['backup-directory'];
       if (flags['preserve-fields'] !== undefined) pullOptions.preserveFields = flags['preserve-fields'];
       if (flags['exclude-fields'] !== undefined) pullOptions.excludeFields = flags['exclude-fields'];
+      if (flags.incremental) pullOptions.incremental = flags.incremental;
+      if (flags.since !== undefined) pullOptions.since = flags.since;
       
       await pullService.pull(pullOptions, {
         onProgress: (message) => {

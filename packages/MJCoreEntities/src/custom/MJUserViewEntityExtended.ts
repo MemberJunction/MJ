@@ -247,7 +247,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
     override async LoadFromData(data: any): Promise<boolean> {
         // in this case we need to make sure we ge the _ViewEntityInfo property set up correctly
         if (data && data.EntityID) {
-            const md = new Metadata();
+            const md = this.ProviderToUse as unknown as IMetadataProvider;
             const match = md.Entities.find(e => UUIDsEqual(e.ID, data.EntityID))
             if (match) {
                 this._ViewEntityInfo = match
@@ -287,7 +287,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
         return this._cachedCanUserView;
     }
     private CalculateUserCanView(): boolean {
-        const md = new Metadata();
+        const md = this.ProviderToUse as unknown as IMetadataProvider;
         const bOwner = UUIDsEqual(this.UserID, md.CurrentUser.ID);
         if (bOwner) {
             return true
@@ -336,7 +336,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
         else {
             // EXISTING record in the database
             // check to see if the current user is the OWNER of this view via the UserID property in the record, if there's a match, the user OWNS this views
-            const md = new Metadata();
+            const md = this.ProviderToUse as unknown as IMetadataProvider;
             const user: UserInfo = this.ContextCurrentUser || md.CurrentUser; // take the context current user if it is set, otherwise use the global current user
             if (UUIDsEqual(this.UserID, user.ID) || user.Type.trim().toLowerCase() === 'owner' ) {
                 return this.CheckPermissions(EntityPermissionType.Delete, false); // exsiting records OWNED by current user, can be edited so long as we have Update permissions;
@@ -357,7 +357,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
             // EXISTING record in the database
             // check to see if the current user is the OWNER of this view via the UserID property in the record, if there's a match, the user OWNS this views
             // so of course they can save it
-            const md = new Metadata();
+            const md = this.ProviderToUse as unknown as IMetadataProvider;
             const user: UserInfo = this.ContextCurrentUser || md.CurrentUser; // take the context current user if it is set, otherwise use the global current user
             if (UUIDsEqual(this.UserID, user.ID) || user.Type.trim().toLowerCase() === 'owner') {
                 return this.CheckPermissions(EntityPermissionType.Update, false); // exsiting records OWNED by current user, can be edited so long as we have Update permissions;
@@ -389,7 +389,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
         // first load up the view info, use the superclass to do this
         const result = await super.Load(ID, EntityRelationshipsToLoad)
         if (result) {
-            const md = new Metadata();
+            const md = this.ProviderToUse as unknown as IMetadataProvider;
             // first, cache a copy of the entity info for the entity that is used in this view
             const match = md.Entities.find(e => UUIDsEqual(e.ID, this.EntityID))
             if (match)
@@ -484,7 +484,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
                 this.UserID = this.ContextCurrentUser.ID;
             }
             else {
-                const md = new Metadata();
+                const md = this.ProviderToUse as unknown as IMetadataProvider;
                 if (md.CurrentUser)
                     this.UserID = md.CurrentUser.ID;   
                 else
@@ -575,7 +575,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
 
         if (FieldName.toLowerCase() == 'entityid') {
             // we're updating the entityID, need to upate the _ViewEntityInfo property so it is always in sync
-            const md = new Metadata();
+            const md = this.ProviderToUse as unknown as IMetadataProvider;
             const match = md.Entities.find(e => UUIDsEqual(e.ID, Value))
             if (match)
                 this._ViewEntityInfo = match 
@@ -749,7 +749,7 @@ export class ViewInfo {
      */
     static async GetViewsForUser(entityId?: string, contextUser?: UserInfo): Promise<MJUserViewEntityExtended[]> {
         const rv = new RunView();
-        const md = new Metadata();
+        const md = new Metadata();  // global-provider-ok: utility helper — single-provider context
         const result = await rv.RunView({
             EntityName: 'MJ: User Views',
             ExtraFilter: `UserID = '${contextUser ? contextUser.ID : md.CurrentUser.ID}'

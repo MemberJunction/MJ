@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, ViewChild, ChangeDetectionStrategy, ChangeDetectorRef, HostListener } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { Metadata, CompositeKey, KeyValuePair, BaseEntity } from '@memberjunction/core';
 import { MJQueryEntity, MJQueryCategoryEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -476,7 +477,7 @@ export interface SaveQueryResult {
   `],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class SaveQueryPanelComponent {
+export class SaveQueryPanelComponent extends BaseAngularComponent {
   @Input() QueryName = '';
   @Input() QueryDescription = '';
   @Input() SQL = '';
@@ -515,7 +516,8 @@ export class SaveQueryPanelComponent {
     OrderBy: 'Name ASC'
   };
 
-  constructor(private cdr: ChangeDetectorRef) {}
+  constructor(private cdr: ChangeDetectorRef) {
+  super();}
 
   public get CanSave(): boolean {
     return !!this.Name?.trim();
@@ -595,7 +597,7 @@ export class SaveQueryPanelComponent {
     this.cdr.markForCheck();
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const category = await md.GetEntityObject<MJQueryCategoryEntity>('MJ: Query Categories');
 
       category.Name = name;
@@ -655,7 +657,7 @@ export class SaveQueryPanelComponent {
     this.cdr.markForCheck();
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const query = await md.GetEntityObject<MJQueryEntity>('MJ: Queries');
 
       query.Name = this.Name.trim();

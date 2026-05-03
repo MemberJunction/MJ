@@ -33,6 +33,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { DatasetResultType, LogError, Metadata } from '@memberjunction/core';
 import { ComponentCacheManager } from './component-cache-manager';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 /**
  * Container for Golden Layout tabs with app-colored styling.
  *
@@ -50,7 +51,7 @@ import { ComponentCacheManager } from './component-cache-manager';
   styleUrls: ['./tab-container.component.css'],
   encapsulation: ViewEncapsulation.None
 })
-export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
+export class TabContainerComponent extends BaseAngularComponent implements OnInit, OnDestroy, AfterViewInit {
   @ViewChild('glContainer', { static: false }) glContainer!: ElementRef<HTMLDivElement>;
   @ViewChild('directContentContainer', { static: false }) directContentContainer!: ElementRef<HTMLDivElement>;
 
@@ -109,6 +110,7 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
     private environmentInjector: EnvironmentInjector,
     private cdr: ChangeDetectorRef
   ) {
+    super();
     // Initialize component cache manager
     this.cacheManager = new ComponentCacheManager(this.appRef);
   }
@@ -993,7 +995,7 @@ export class TabContainerComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Fallback: if engine hasn't loaded yet (shouldn't happen in normal flow),
     // fetch the dataset directly
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const ds = TabContainerComponent._resourceTypesDataset || await md.GetDatasetByName("ResourceTypes");
     if (!ds || !ds.Success || ds.Results.length === 0) {
       return null;

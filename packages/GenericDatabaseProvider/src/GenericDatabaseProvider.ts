@@ -406,7 +406,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         contextUser?: UserInfo,
     ): Promise<void> {
         // Get the current provider instance
-        const provider = Metadata.Provider as GenericDatabaseProvider;
+        const provider = Metadata.Provider as GenericDatabaseProvider; // global-provider-ok: data provider implementation, owns its provider context
         if (provider && provider._sqlLoggingSessions.size > 0) {
             await provider._logSqlStatement(query, parameters, description, false, isMutation, simpleSQLFallback, contextUser);
         }
@@ -926,6 +926,39 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
+     * Builds the `SELECT COUNT(*) AS TotalRowCount FROM ...` SQL used to compute the total
+     * row count for paginated views. Returns `null` when the view isn't row-limited (no count
+     * query needed).
+     *
+     * Two PG-parity details this method encapsulates — both caught real regressions:
+     *
+     * 1. **When to emit the count query.** Returns non-null whenever rows are being limited
+     *    — either explicit pagination or MaxRows/UserViewMaxRows. Earlier code keyed off
+     *    `topSQL.length > 0`, which was SQL-Server-specific: PG's `BuildTopClause` returns
+     *    empty (PG uses `LIMIT` appended at end via `BuildNonPaginatedLimitSQL`, not `TOP`
+     *    in the SELECT). So the old condition missed every PG case where MaxRows was set
+     *    without explicit StartRow — Explorer's Entity list was one such case and showed
+     *    "100 of 100" (no pagination) instead of "100 of 299".
+     *
+     * 2. **Quote the alias via `QuoteIdentifier`.** PostgreSQL folds unquoted column aliases
+     *    to lowercase, so `AS TotalRowCount` returns a row keyed `totalrowcount` on PG. The
+     *    caller reads `countResult[0].TotalRowCount` (PascalCase) and gets `undefined` — the
+     *    count falls back to `retData.length` (the page size), so pagination breaks silently.
+     *    SQL Server is case-insensitive so it worked unquoted there. Quoting via
+     *    `QuoteIdentifier` produces `"TotalRowCount"` on PG and `[TotalRowCount]` on SQL
+     *    Server — both preserve case.
+     */
+    protected BuildTotalRowCountSQL(
+        entityInfo: EntityInfo,
+        usingPagination: boolean,
+        maxRowsForQuery: number
+    ): string | null {
+        const rowsAreLimited = usingPagination || maxRowsForQuery > 0;
+        if (!rowsAreLimited) return null;
+        return `SELECT COUNT(*) AS ${this.QuoteIdentifier('TotalRowCount')} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)}`;
+    }
+
+    /**
      * Transforms a user-provided SQL clause (ExtraFilter, OrderBy, etc.) for platform compatibility.
      * PostgreSQL overrides to quote mixed-case identifiers and convert bracket notation.
      * Default: returns the clause unchanged.
@@ -1016,9 +1049,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             // ── Build SELECT and COUNT SQL ──
             const topFragment = topSQL ? topSQL + ' ' : '';
             let viewSQL = `SELECT ${topFragment}${fields} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)}`;
-            let countSQL: string | null = (usingPagination || (topSQL && topSQL.length > 0))
-                ? `SELECT COUNT(*) AS TotalRowCount FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.BaseView)}`
-                : null;
+            let countSQL: string | null = this.BuildTotalRowCountSQL(entityInfo, usingPagination, maxRowsForQuery);
 
             // ── WHERE clause assembly ──
             let whereSQL = '';
@@ -1332,7 +1363,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                         sParam = field.UserSearchParamFormatAPI.replace('{0}', safeUserSearchString);
                     else
                         sParam = ` LIKE '%${safeUserSearchString}%'`;
-                    sUserSearchSQL += `(${field.Name} ${sParam})`;
+                    sUserSearchSQL += `(${this.QuoteIdentifier(field.Name)} ${sParam})`;
                 }
             }
             if (sUserSearchSQL.length > 0) sUserSearchSQL = '(' + sUserSearchSQL + ')';
@@ -1693,7 +1724,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         if (result.status !== 'error' && result.results && LocalCacheManager.Instance.IsInitialized) {
             const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(params, this.InstanceConnectionString);
             const maxUpdatedAt = result.maxUpdatedAt || new Date().toISOString();
-            await LocalCacheManager.Instance.SetRunViewResult(fingerprint, params, result.results, maxUpdatedAt, undefined, result.rowCount);
+            await LocalCacheManager.Instance.SetRunViewResult(fingerprint, params, result.results, maxUpdatedAt, undefined, result.rowCount, this);
         }
         return result;
     }
@@ -3028,7 +3059,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     ? this.extractMaxUpdatedAtFromRows(itemData, dateFieldToCheck)
                     : new Date(0).toISOString();
                 const syntheticParams = { EntityName: entityName } as RunViewParams;
-                await cache.SetRunViewResult(uncachedFingerprints[i], syntheticParams, itemData, maxUpdatedAt);
+                await cache.SetRunViewResult(uncachedFingerprints[i], syntheticParams, itemData, maxUpdatedAt, undefined, undefined, this);
             }
 
             sqlResults.push({

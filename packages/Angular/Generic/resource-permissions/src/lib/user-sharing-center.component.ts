@@ -13,12 +13,12 @@ import {
     BaseEntity,
     CompositeKey,
     LogError,
-    Metadata,
     NormalizedPermission,
     PermissionAction,
 } from '@memberjunction/core';
 import { PermissionEngine } from '@memberjunction/core-entities';
 import { MJDialogAction, MJDialogService } from '@memberjunction/ng-ui-components';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 /** Which tab the Sharing Center is currently displaying. */
 export type SharingCenterTab = 'shared-with-me' | 'shared-by-me';
@@ -92,7 +92,7 @@ export const DefaultSharingEntityResolver = (domainName: string): string | null 
     templateUrl: './user-sharing-center.component.html',
     styleUrls: ['./user-sharing-center.component.css'],
 })
-export class UserSharingCenterComponent implements OnInit {
+export class UserSharingCenterComponent extends BaseAngularComponent implements OnInit {
     private readonly cdr = inject(ChangeDetectorRef);
     private readonly dialogService = inject(MJDialogService);
 
@@ -194,8 +194,8 @@ export class UserSharingCenterComponent implements OnInit {
         if (!confirmed) return;
 
         try {
-            const md = new Metadata();
-            const entity = await md.GetEntityObject<BaseEntity>(entityName);
+            const md = this.ProviderToUse;
+            const entity = await md.GetEntityObject<BaseEntity>(entityName, md.CurrentUser);
             const key = new CompositeKey();
             key.KeyValuePairs.push({ FieldName: 'ID', Value: row.SourceRecordID });
             const loaded = await entity.InnerLoad(key);
@@ -247,7 +247,7 @@ export class UserSharingCenterComponent implements OnInit {
     }
 
     private async loadSharedWithMe(): Promise<void> {
-        const user = new Metadata().CurrentUser;
+        const user = this.ProviderToUse.CurrentUser;
         if (!user) return;
 
         this.IsLoadingWithMe = true;
@@ -264,7 +264,7 @@ export class UserSharingCenterComponent implements OnInit {
     }
 
     private async loadSharedByMe(): Promise<void> {
-        const user = new Metadata().CurrentUser;
+        const user = this.ProviderToUse.CurrentUser;
         if (!user) return;
 
         this.IsLoadingByMe = true;

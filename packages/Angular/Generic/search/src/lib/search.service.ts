@@ -7,7 +7,7 @@
 
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Subject } from 'rxjs';
-import { Metadata, StartupManager } from '@memberjunction/core';
+import { IMetadataProvider, Metadata, StartupManager } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { MJEventType, MJGlobal } from '@memberjunction/global';
 import {
@@ -68,8 +68,20 @@ interface RecentSearchJson {
     ResultCount: number;
 }
 
+/**
+ * Multi-provider note: callers under a non-default provider should set
+ * `service.Provider = component.ProviderToUse` before invoking any methods.
+ */
 @Injectable({ providedIn: 'root' })
 export class SearchService {
+    private _provider: IMetadataProvider | null = null;
+    public get Provider(): IMetadataProvider {
+        return this._provider ?? Metadata.Provider;
+    }
+    public set Provider(value: IMetadataProvider | null) {
+        this._provider = value;
+    }
+
     /** Current search response */
     public SearchResults$ = new BehaviorSubject<SearchResponse | null>(null);
 
@@ -125,7 +137,7 @@ export class SearchService {
                 return this.createEmptyResponse();
             }
 
-            const provider = Metadata.Provider;
+            const provider = this.Provider;
             if (!(provider instanceof GraphQLDataProvider)) {
                 return this.createEmptyResponse('GraphQL provider not available');
             }
@@ -302,10 +314,8 @@ export class SearchService {
                     await StartupManager.Instance.Startup();
 
                     const engine = UserInfoEngine.Instance;
-                    console.log('[SearchService] After Startup — engine.Loaded:', engine.Loaded, 'UserSettings count:', engine.UserSettings.length);
 
                     const json = engine.GetSetting(RECENT_SEARCHES_KEY);
-                    console.log('[SearchService] GetSetting("' + RECENT_SEARCHES_KEY + '"):', json?.substring(0, 100));
 
                     if (json) {
                         const parsed = JSON.parse(json) as RecentSearchJson[];
@@ -377,7 +387,7 @@ export class SearchService {
             return this.createEmptyResponse();
         }
 
-        const provider = Metadata.Provider;
+        const provider = this.Provider;
         if (!(provider instanceof GraphQLDataProvider)) {
             return this.createEmptyResponse('GraphQL provider not available');
         }

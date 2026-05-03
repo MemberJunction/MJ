@@ -3,7 +3,7 @@ import { BaseAction } from '@memberjunction/actions';
 import { RegisterClass, MJGlobal, MJEventType } from '@memberjunction/global';
 import {
     RunView, Metadata, LogStatus, LogError, UserInfo, EntityInfo,
-    CompositeKey, BaseEntity, BaseEntityEvent
+    CompositeKey, BaseEntity, BaseEntityEvent, IMetadataProvider
 } from '@memberjunction/core';
 import { MJRecordGeoCodeEntity } from '@memberjunction/core-entities';
 import { GeoCodeSyncService } from '@memberjunction/geo-core';
@@ -57,18 +57,18 @@ export class ScheduledGeocodingAction extends BaseAction {
         const stats = { MissingProcessed: 0, MissingSuccess: 0, RetriesProcessed: 0, RetriesSuccess: 0, OrphansRemoved: 0 };
 
         // Step 1: Find and geocode missing records
-        const missingStats = await this.processMissingRecords(contextUser, batchSize, maxTotal);
+        const missingStats = await this.processMissingRecords(contextUser, batchSize, maxTotal, params.Provider);
         stats.MissingProcessed = missingStats.Processed;
         stats.MissingSuccess = missingStats.Success;
 
         // Step 2: Retry failed geocoding attempts
         const retryMaxTotal = maxTotal != null ? Math.max(0, maxTotal - stats.MissingProcessed) : null;
-        const retryStats = await this.processFailedRetries(contextUser, maxRetries, batchSize, retryMaxTotal);
+        const retryStats = await this.processFailedRetries(contextUser, maxRetries, batchSize, retryMaxTotal, params.Provider);
         stats.RetriesProcessed = retryStats.Processed;
         stats.RetriesSuccess = retryStats.Success;
 
         // Step 3: Clean up orphaned RecordGeoCode rows
-        stats.OrphansRemoved = await this.cleanupOrphanedRecords(contextUser, batchSize);
+        stats.OrphansRemoved = await this.cleanupOrphanedRecords(contextUser, batchSize, params.Provider);
 
         LogStatus(`ScheduledGeocodingAction: Complete — Missing: ${stats.MissingProcessed} processed (${stats.MissingSuccess} success), Retries: ${stats.RetriesProcessed} (${stats.RetriesSuccess} success), Orphans: ${stats.OrphansRemoved} removed`);
 
@@ -91,9 +91,10 @@ export class ScheduledGeocodingAction extends BaseAction {
     private async processMissingRecords(
         contextUser: UserInfo,
         batchSize: number,
-        maxTotal: number | null
+        maxTotal: number | null,
+        provider?: IMetadataProvider
     ): Promise<{ Processed: number; Success: number }> {
-        const md = new Metadata();
+        const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
         const geoEntities = md.Entities.filter(e => e.SupportsGeoCoding);
         let totalProcessed = 0;
         let totalSuccess = 0;
@@ -191,7 +192,8 @@ export class ScheduledGeocodingAction extends BaseAction {
         contextUser: UserInfo,
         maxRetries: number,
         batchSize: number,
-        maxTotal: number | null
+        maxTotal: number | null,
+        provider?: IMetadataProvider
     ): Promise<{ Processed: number; Success: number }> {
         const rv = new RunView();
 
@@ -214,7 +216,7 @@ export class ScheduledGeocodingAction extends BaseAction {
 
         LogStatus(`ScheduledGeocodingAction: ${records.length} failed records eligible for retry`);
 
-        const md = new Metadata();
+        const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
         let totalProcessed = 0;
         let totalSuccess = 0;
 
@@ -235,7 +237,7 @@ export class ScheduledGeocodingAction extends BaseAction {
             if (!entityInfo) continue;
 
             // Load source entity records and geocode them in parallel batches
-            const entities = await this.loadSourceEntities(geoRecords, entityInfo, contextUser);
+            const entities = await this.loadSourceEntities(geoRecords, entityInfo, contextUser, provider);
             if (entities.length === 0) continue;
 
             const stats = await this.geocodeBatch(entities, entityInfo, contextUser, batchSize);
@@ -253,9 +255,10 @@ export class ScheduledGeocodingAction extends BaseAction {
     private async loadSourceEntities(
         geoRecords: MJRecordGeoCodeEntity[],
         entityInfo: EntityInfo,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<BaseEntity[]> {
-        const md = new Metadata();
+        const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
         const entities: BaseEntity[] = [];
 
         for (const geoRecord of geoRecords) {
@@ -284,10 +287,11 @@ export class ScheduledGeocodingAction extends BaseAction {
      */
     private async cleanupOrphanedRecords(
         contextUser: UserInfo,
-        batchSize: number
+        batchSize: number,
+        provider?: IMetadataProvider
     ): Promise<number> {
         const rv = new RunView();
-        const md = new Metadata();
+        const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
         let totalRemoved = 0;
 
         // Get distinct EntityIDs from RecordGeoCode
@@ -430,6 +434,9 @@ export class ScheduledGeocodingAction extends BaseAction {
         event.type = 'save';
         event.saveSubType = 'update';
         event.baseEntity = entity;
+        // Match BaseEntity.RaiseEvent() contract: include the entity's bound provider so
+        // multi-provider listeners (LocalCacheManager, BaseEngine, …) scope correctly.
+        event.provider = entity.ProviderToUse as unknown as IMetadataProvider | undefined;
         event.payload = null;
 
         MJGlobal.Instance.RaiseEvent({

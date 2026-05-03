@@ -86,6 +86,11 @@ export class ComponentArtifactViewerComponent extends BaseArtifactViewerPluginCo
    * Synchronously load the component spec from artifact content.
    * This is intentionally synchronous so that tabs are available immediately
    * when the parent queries GetAdditionalTabs() after pluginLoaded fires.
+   *
+   * The bridge purges the runtime registry + manager fetch cache itself when
+   * it (re)initializes for the new spec, so we don't need to clear caches
+   * from here — the bridge instance may not even exist yet when ngOnChanges
+   * fires for the first time.
    */
   private loadComponentSpec(): void {
     try {

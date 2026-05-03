@@ -1,7 +1,7 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectorRef, ChangeDetectionStrategy, OnInit } from '@angular/core';
 import { MJCredentialTypeEntity } from '@memberjunction/core-entities';
-import { Metadata } from '@memberjunction/core';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 type CategoryType = 'AI' | 'Authentication' | 'Communication' | 'Database' | 'Integration' | 'Storage';
 
@@ -22,7 +22,7 @@ interface SchemaField {
     styleUrls: ['./credential-type-edit-panel.component.css'],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class CredentialTypeEditPanelComponent implements OnInit {
+export class CredentialTypeEditPanelComponent extends BaseAngularComponent implements OnInit {
     @Input() credentialType: MJCredentialTypeEntity | null = null;
     @Input() isOpen = false;
 
@@ -45,9 +45,9 @@ export class CredentialTypeEditPanelComponent implements OnInit {
     // Available categories
     public categories: CategoryType[] = ['AI', 'Authentication', 'Communication', 'Database', 'Integration', 'Storage'];
 
-    private _metadata = new Metadata();
+    private get _metadata() { return this.ProviderToUse; }
 
-    constructor(private cdr: ChangeDetectorRef) {}
+    constructor(private cdr: ChangeDetectorRef) { super(); }
 
     ngOnInit(): void {}
 

@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnChanges, OnInit, SimpleChanges, ChangeDetectorRef, HostListener } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { EntityInfo, EntityFieldInfo, Metadata } from '@memberjunction/core';
 import {
   MJUserViewEntityExtended,
@@ -87,7 +88,7 @@ export interface ViewSaveEvent {
   templateUrl: './view-config-panel.component.html',
   styleUrls: ['./view-config-panel.component.css']
 })
-export class ViewConfigPanelComponent implements OnInit, OnChanges {
+export class ViewConfigPanelComponent extends BaseAngularComponent implements OnInit, OnChanges  {
   /**
    * The entity being viewed
    */
@@ -257,9 +258,10 @@ export class ViewConfigPanelComponent implements OnInit, OnChanges {
     return this.panelWidth < this.ICON_ONLY_THRESHOLD;
   }
 
-  private metadata = new Metadata();
+  private metadata = this.ProviderToUse;
 
-  constructor(private cdr: ChangeDetectorRef) {}
+  constructor(private cdr: ChangeDetectorRef) {
+  super();}
 
   /**
    * Handle keyboard shortcuts

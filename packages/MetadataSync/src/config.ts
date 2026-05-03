@@ -22,9 +22,11 @@ import { configManager } from './lib/config-manager';
  * database. Typically loaded from mj.config.cjs in the project root.
  */
 export interface MJConfig {
+  /** Database platform (defaults to 'sqlserver'). Set to 'postgresql' for PG-backed MJ instances. */
+  dbPlatform?: 'sqlserver' | 'postgresql';
   /** Database server hostname or IP address */
   dbHost: string;
-  /** Database server port (defaults to 1433 for SQL Server) */
+  /** Database server port (defaults to 1433 for SQL Server, 5432 for PostgreSQL) */
   dbPort?: number;
   /** Database name to connect to */
   dbDatabase: string;

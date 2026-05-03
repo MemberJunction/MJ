@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Suggestions Inbox · Option A — email-style</title>
+<link rel="stylesheet" href="mockup.css" />
+<style>
+  .inbox-shell { display: grid; grid-template-columns: 220px 380px 1fr; gap: 0; height: calc(100vh - 140px); min-height: 760px; border: 1px solid var(--mj-border-default); border-radius: 10px; overflow: hidden; background: var(--mj-bg-surface); }
+  .inbox-side { background: var(--mj-bg-surface-card); border-right: 1px solid var(--mj-border-default); padding: 16px 12px; overflow-y: auto; }
+  .inbox-side h3 { font-size: 11px; text-transform: uppercase; color: var(--mj-text-muted); letter-spacing: 0.06em; margin: 16px 8px 6px; font-weight: 600; }
+  .side-link { display: flex; align-items: center; justify-content: space-between; padding: 7px 10px; border-radius: 6px; font-size: 13px; cursor: pointer; color: var(--mj-text-secondary); }
+  .side-link:hover { background: var(--mj-bg-surface-hover); color: var(--mj-text-primary); }
+  .side-link.active { background: var(--mj-brand-primary-tint); color: var(--mj-brand-primary); font-weight: 600; }
+  .side-link .ct { font-size: 11px; padding: 0 7px; border-radius: 10px; background: var(--mj-bg-surface); color: var(--mj-text-secondary); border: 1px solid var(--mj-border-default); font-weight: 600; }
+  .side-link.active .ct { background: var(--mj-brand-primary); color: #fff; border-color: var(--mj-brand-primary); }
+
+  .inbox-list { border-right: 1px solid var(--mj-border-default); display: flex; flex-direction: column; overflow: hidden; }
+  .inbox-search { padding: 10px 12px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; gap: 8px; background: var(--mj-bg-surface); }
+  .inbox-search input { flex: 1; border: 1px solid var(--mj-border-default); border-radius: 6px; padding: 6px 10px; font: inherit; font-size: 13px; }
+  .inbox-list-body { overflow-y: auto; flex: 1; }
+  .row {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--mj-border-subtle);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    border-left: 3px solid transparent;
+  }
+  .row:hover { background: var(--mj-bg-surface-hover); }
+  .row.selected { background: var(--mj-brand-primary-tint); border-left-color: var(--mj-brand-primary); }
+  .row.unread .proposed { font-weight: 700; }
+  .row .top-line { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+  .row .proposed { font-size: 14px; color: var(--mj-text-primary); }
+  .row .ago { font-size: 11px; color: var(--mj-text-muted); white-space: nowrap; }
+  .row .preview { font-size: 12px; color: var(--mj-text-secondary); line-height: 1.4; }
+  .row .row-meta { display: flex; gap: 6px; align-items: center; margin-top: 4px; }
+  .row .source { font-size: 11px; color: var(--mj-text-muted); }
+
+  .reading {
+    background: var(--mj-bg-surface);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .reading-hd {
+    padding: 18px 24px 14px;
+    border-bottom: 1px solid var(--mj-border-default);
+  }
+  .reading-hd h2 { margin: 0 0 6px; font-size: 18px; font-weight: 700; }
+  .reading-hd .sub { font-size: 12px; color: var(--mj-text-muted); display: flex; gap: 12px; align-items: center; }
+  .reading-bd { padding: 20px 24px; flex: 1; }
+  .reading-ft { padding: 14px 24px; border-top: 1px solid var(--mj-border-default); display: flex; gap: 10px; background: var(--mj-bg-surface-card); }
+
+  .source-snippet {
+    background: var(--mj-bg-surface-sunken);
+    border-left: 3px solid var(--mj-brand-primary-light);
+    padding: 12px 14px;
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--mj-text-secondary);
+    line-height: 1.55;
+    margin: 12px 0;
+    font-style: italic;
+  }
+  .source-snippet mark { background: #fef3c7; padding: 1px 3px; border-radius: 2px; color: var(--mj-text-primary); font-style: normal; }
+
+  .candidate {
+    border: 1px solid var(--mj-border-default);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    background: var(--mj-bg-surface);
+  }
+  .candidate.selected { border-color: var(--mj-brand-primary); background: var(--mj-brand-primary-tint); }
+  .candidate .left { flex: 1; }
+  .candidate .name { font-weight: 600; font-size: 14px; }
+  .candidate .crumbs { font-size: 11px; color: var(--mj-text-muted); margin-top: 2px; }
+  .candidate .score { font-family: ui-monospace, monospace; font-weight: 700; color: var(--mj-text-primary); font-size: 14px; }
+  .candidate .reason-mini { font-size: 11px; color: var(--mj-text-muted); }
+
+  .kbd-row { display: flex; gap: 12px; font-size: 11px; color: var(--mj-text-muted); margin-left: auto; align-items: center; }
+  dl.facts { display: grid; grid-template-columns: 130px 1fr; gap: 6px 14px; margin: 12px 0; font-size: 12px; }
+  dl.facts dt { color: var(--mj-text-muted); font-weight: 600; }
+  dl.facts dd { margin: 0; color: var(--mj-text-primary); }
+</style>
+</head>
+<body>
+
+<div class="mockup-ribbon">
+  <span><strong>Mockup A:</strong> Suggestions Inbox — email-style list + reading pane</span>
+  <span><a href="index.html">← Back to index</a></span>
+</div>
+
+<header class="mj-app-header">
+  <div class="logo"><span class="logo-mark">MJ</span> MJ Explorer</div>
+  <div class="breadcrumbs">
+    <span>Knowledge Hub</span><span class="sep">›</span>
+    <span>Classify</span><span class="sep">›</span>
+    <span class="current">Suggestions Inbox</span>
+  </div>
+  <div class="right">
+    <span><strong>247</strong> pending</span>
+    <span class="avatar">AN</span>
+  </div>
+</header>
+
+<div class="page wide">
+
+  <div class="page-title">
+    <div>
+      <h1>Tag Suggestions</h1>
+      <div class="subtitle">Human-in-the-loop review queue · 247 pending across 8 sources</div>
+    </div>
+    <div class="flex gap-8">
+      <button class="btn">Filters</button>
+      <button class="btn">Bulk merge…</button>
+      <button class="btn primary">Run Tag Health</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab">Pipeline</div>
+    <div class="tab">Sources</div>
+    <div class="tab">Taxonomy</div>
+    <div class="tab active">Suggestions <span class="count">247</span></div>
+    <div class="tab">Tag Health</div>
+    <div class="tab">Logs</div>
+  </div>
+
+  <div class="inbox-shell">
+
+    <!-- side filters -->
+    <aside class="inbox-side">
+      <div class="side-link active"><span>📥 All pending</span><span class="ct">247</span></div>
+      <div class="side-link"><span>👤 Assigned to me</span><span class="ct">42</span></div>
+      <div class="side-link"><span>✓ Resolved (7d)</span><span class="ct">183</span></div>
+
+      <h3>By reason</h3>
+      <div class="side-link"><span><span class="dot yellow"></span>Below threshold</span><span class="ct">112</span></div>
+      <div class="side-link"><span><span class="dot blue"></span>Merge candidate</span><span class="ct">68</span></div>
+      <div class="side-link"><span><span class="dot red"></span>Constrained mode</span><span class="ct">31</span></div>
+      <div class="side-link"><span><span class="dot blue"></span>Parent frozen</span><span class="ct">17</span></div>
+      <div class="side-link"><span><span class="dot yellow"></span>Requires review</span><span class="ct">11</span></div>
+      <div class="side-link"><span><span class="dot gray"></span>Low usage</span><span class="ct">6</span></div>
+      <div class="side-link"><span><span class="dot yellow"></span>Wide node</span><span class="ct">2</span></div>
+
+      <h3>By source</h3>
+      <div class="side-link"><span>HubSpot · Help Center</span><span class="ct">87</span></div>
+      <div class="side-link"><span>Salesforce Notes</span><span class="ct">54</span></div>
+      <div class="side-link"><span>Confluence · Eng</span><span class="ct">39</span></div>
+      <div class="side-link"><span>Zendesk Tickets</span><span class="ct">32</span></div>
+      <div class="side-link"><span>Sharepoint · HR</span><span class="ct">21</span></div>
+      <div class="side-link"><span>+ 3 more</span><span class="ct"></span></div>
+
+      <h3>By age</h3>
+      <div class="side-link"><span>Today</span><span class="ct">14</span></div>
+      <div class="side-link"><span>This week</span><span class="ct">94</span></div>
+      <div class="side-link"><span>&gt; 30 days</span><span class="ct">12</span></div>
+    </aside>
+
+    <!-- list -->
+    <section class="inbox-list">
+      <div class="inbox-search">
+        <input type="text" placeholder="Search suggestions…" />
+        <span class="kbd">⌘K</span>
+      </div>
+      <div class="inbox-list-body" id="rowList">
+
+        <div class="row selected unread" data-id="1">
+          <div class="top-line">
+            <span class="proposed">"Generative AI"</span>
+            <span class="ago">3m ago</span>
+          </div>
+          <div class="preview">Best match: <strong>AI / Machine Learning</strong> · score 0.78 (band)</div>
+          <div class="row-meta">
+            <span class="reason below">Below threshold</span>
+            <span class="source">HubSpot · 142 items</span>
+          </div>
+        </div>
+
+        <div class="row unread" data-id="2">
+          <div class="top-line">
+            <span class="proposed">"GenAI"</span>
+            <span class="ago">8m ago</span>
+          </div>
+          <div class="preview">Looks like a synonym for <strong>Generative AI</strong></div>
+          <div class="row-meta">
+            <span class="reason merge">Merge candidate</span>
+            <span class="source">Auto · TagHealthJob</span>
+          </div>
+        </div>
+
+        <div class="row unread" data-id="3">
+          <div class="top-line">
+            <span class="proposed">"K8s"</span>
+            <span class="ago">22m ago</span>
+          </div>
+          <div class="preview">Source: "deployment failed on K8s cluster after the upgrade…"</div>
+          <div class="row-meta">
+            <span class="reason constrained">Constrained mode</span>
+            <span class="source">Zendesk · ticket #4421</span>
+          </div>
+        </div>
+
+        <div class="row unread" data-id="4">
+          <div class="top-line">
+            <span class="proposed">"PCI-DSS v4"</span>
+            <span class="ago">1h ago</span>
+          </div>
+          <div class="preview">Best match: <strong>Compliance / PCI-DSS</strong> · parent frozen</div>
+          <div class="row-meta">
+            <span class="reason frozen">Parent frozen</span>
+            <span class="source">Confluence · Security</span>
+          </div>
+        </div>
+
+        <div class="row" data-id="5">
+          <div class="top-line">
+            <span class="proposed">"Onboarding (Phase 2)"</span>
+            <span class="ago">2h ago</span>
+          </div>
+          <div class="preview">RequiresReview flag on parent <strong>HR / Onboarding</strong></div>
+          <div class="row-meta">
+            <span class="reason review">Requires review</span>
+            <span class="source">Sharepoint · HR</span>
+          </div>
+        </div>
+
+        <div class="row" data-id="6">
+          <div class="top-line">
+            <span class="proposed">"snake-case naming"</span>
+            <span class="ago">3h ago</span>
+          </div>
+          <div class="preview">Below SuggestThreshold, score 0.42. No close existing tag.</div>
+          <div class="row-meta">
+            <span class="reason below">Below threshold</span>
+            <span class="source">Confluence · Eng</span>
+          </div>
+        </div>
+
+        <div class="row" data-id="7">
+          <div class="top-line">
+            <span class="proposed">"Snowflake DW"</span>
+            <span class="ago">4h ago</span>
+          </div>
+          <div class="preview">Synonym candidate for <strong>Snowflake</strong> (score 0.92)</div>
+          <div class="row-meta">
+            <span class="reason merge">Merge candidate</span>
+            <span class="source">Auto · TagHealthJob</span>
+          </div>
+        </div>
+
+        <div class="row" data-id="8">
+          <div class="top-line">
+            <span class="proposed">"OAuth 2.1"</span>
+            <span class="ago">yesterday</span>
+          </div>
+          <div class="preview">MaxChildren reached on <strong>Auth / OAuth</strong> (12 of 12)</div>
+          <div class="row-meta">
+            <span class="reason frozen">MaxChildren</span>
+            <span class="source">Confluence · Security</span>
+          </div>
+        </div>
+
+        <div class="row" data-id="9">
+          <div class="top-line">
+            <span class="proposed">"Customer Success Plays"</span>
+            <span class="ago">yesterday</span>
+          </div>
+          <div class="preview">Below threshold (0.71); existing parent feels close.</div>
+          <div class="row-meta">
+            <span class="reason below">Below threshold</span>
+            <span class="source">Salesforce Notes</span>
+          </div>
+        </div>
+
+        <div class="row" data-id="10">
+          <div class="top-line">
+            <span class="proposed">"DEI"</span>
+            <span class="ago">2d ago</span>
+          </div>
+          <div class="preview">Used 2× in 90d window — deprecation candidate</div>
+          <div class="row-meta">
+            <span class="reason lowusage">Low usage</span>
+            <span class="source">Auto · TagHealthJob</span>
+          </div>
+        </div>
+
+        <div class="row" data-id="11">
+          <div class="top-line">
+            <span class="proposed">"WAF rules"</span>
+            <span class="ago">3d ago</span>
+          </div>
+          <div class="preview">No close match; AutoGrow disabled on parent.</div>
+          <div class="row-meta">
+            <span class="reason constrained">AutoGrow off</span>
+            <span class="source">Zendesk · ticket #4380</span>
+          </div>
+        </div>
+
+        <div class="row" data-id="12">
+          <div class="top-line">
+            <span class="proposed">"Vendor / Stripe"</span>
+            <span class="ago">3d ago</span>
+          </div>
+          <div class="preview">"Vendors" parent has 47 children — wide-node alert</div>
+          <div class="row-meta">
+            <span class="reason widenode">Wide node</span>
+            <span class="source">Auto · TagHealthJob</span>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- reading pane -->
+    <section class="reading">
+      <div class="reading-hd">
+        <div class="flex between center">
+          <div>
+            <h2>"Generative AI"</h2>
+            <div class="sub">
+              <span class="reason below">Below threshold</span>
+              <span>·</span>
+              <span>Suggestion #4427</span>
+              <span>·</span>
+              <span>Created 3m ago by autotagger</span>
+            </div>
+          </div>
+          <div class="kbd-row">
+            <span><span class="kbd">↑</span><span class="kbd">↓</span> navigate</span>
+            <span><span class="kbd">A</span> approve</span>
+            <span><span class="kbd">M</span> merge</span>
+            <span><span class="kbd">R</span> reject</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="reading-bd">
+
+        <dl class="facts">
+          <dt>Proposed name</dt><dd><strong>Generative AI</strong></dd>
+          <dt>Proposed parent</dt><dd>AI / Machine Learning <span class="muted">(suggested by classifier)</span></dd>
+          <dt>Source content</dt><dd><a href="#">HubSpot · "Building with Generative AI" — article #142</a></dd>
+          <dt>Source content source</dt><dd>HubSpot Help Center</dd>
+          <dt>Best-match tag</dt><dd>AI / Machine Learning · <span class="mono">0.78</span></dd>
+          <dt>MatchThreshold</dt><dd><span class="mono">0.85</span> · <span class="muted">configured on source</span></dd>
+          <dt>SuggestThreshold</dt><dd><span class="mono">0.70</span></dd>
+          <dt>Mode</dt><dd>Hybrid</dd>
+        </dl>
+
+        <h4 style="margin: 18px 0 6px; font-size: 13px;">Why it landed here</h4>
+        <p class="dim" style="margin: 0 0 8px; line-height: 1.5;">
+          Score <strong>0.78</strong> falls between <strong>SuggestThreshold (0.70)</strong> and <strong>MatchThreshold (0.85)</strong> — the
+          ambiguous band. Classifier didn't auto-match and didn't auto-create. Human call required.
+        </p>
+        <div class="threshold-track" style="margin: 22px 0 16px;">
+          <div class="marker" style="left: 78%;"><span class="lbl">score 0.78</span></div>
+          <div class="marker" style="left: 70%; background: var(--mj-status-warning);"><span class="lbl" style="top: 26px;">Suggest 0.70</span></div>
+          <div class="marker" style="left: 85%; background: var(--mj-status-success);"><span class="lbl" style="top: 26px;">Match 0.85</span></div>
+        </div>
+
+        <h4 style="margin: 18px 0 6px; font-size: 13px;">Source snippet</h4>
+        <div class="source-snippet">
+          "…teams across product and engineering are increasingly experimenting with <mark>generative AI</mark>
+          tools — from copy drafting to internal Q&amp;A bots. We've found that the most valuable workflows
+          are the ones where <mark>generative AI</mark> sits next to a human reviewer rather than running fully autonomously…"
+        </div>
+
+        <h4 style="margin: 18px 0 6px; font-size: 13px;">Closest existing tags <span class="muted" style="font-weight: 400;">(top 5 by cosine)</span></h4>
+
+        <div class="candidate selected">
+          <div class="left">
+            <div class="name">AI / Machine Learning <span class="badge brand">scoped: Acme</span></div>
+            <div class="crumbs">Technology › AI / Machine Learning · 1,847 items</div>
+          </div>
+          <div class="right-text">
+            <div class="score">0.78</div>
+            <div class="reason-mini">cosine · best</div>
+          </div>
+          <button class="btn primary sm">Merge into this</button>
+        </div>
+        <div class="candidate">
+          <div class="left">
+            <div class="name">AI / Generative</div>
+            <div class="crumbs">Technology › AI › Generative · 412 items</div>
+          </div>
+          <div class="right-text">
+            <div class="score">0.74</div>
+            <div class="reason-mini">cosine</div>
+          </div>
+          <button class="btn sm">Merge into this</button>
+        </div>
+        <div class="candidate">
+          <div class="left">
+            <div class="name">LLMs</div>
+            <div class="crumbs">Technology › AI › LLMs · 891 items</div>
+          </div>
+          <div class="right-text">
+            <div class="score">0.71</div>
+            <div class="reason-mini">cosine</div>
+          </div>
+          <button class="btn sm">Merge into this</button>
+        </div>
+        <div class="candidate">
+          <div class="left">
+            <div class="name">AI Agents</div>
+            <div class="crumbs">Technology › AI › AI Agents · 233 items</div>
+          </div>
+          <div class="right-text">
+            <div class="score">0.69</div>
+            <div class="reason-mini">below threshold</div>
+          </div>
+          <button class="btn sm">Merge into this</button>
+        </div>
+        <div class="candidate">
+          <div class="left">
+            <div class="name">Prompt Engineering</div>
+            <div class="crumbs">Technology › AI › Prompt Engineering · 156 items</div>
+          </div>
+          <div class="right-text">
+            <div class="score">0.66</div>
+            <div class="reason-mini">below threshold</div>
+          </div>
+          <button class="btn sm">Merge into this</button>
+        </div>
+
+        <hr class="divider" />
+
+        <h4 style="margin: 0 0 10px; font-size: 13px;">Or accept as a new tag</h4>
+        <div class="flex gap-12 center">
+          <div class="grow">
+            <div class="field" style="margin-bottom: 0;">
+              <label>Name</label>
+              <input class="input full" value="Generative AI" />
+            </div>
+          </div>
+          <div class="grow">
+            <div class="field" style="margin-bottom: 0;">
+              <label>Parent</label>
+              <input class="input full" value="Technology / AI" />
+            </div>
+          </div>
+        </div>
+        <div class="flex gap-12 mt-8">
+          <label class="flex center gap-8" style="font-size: 12px;"><input type="checkbox" checked /> Inherit parent scope (Acme + Globex)</label>
+          <label class="flex center gap-8" style="font-size: 12px;"><input type="checkbox" /> Mark RequiresReview</label>
+        </div>
+
+        <div class="muted" style="margin-top: 14px; font-size: 12px;">
+          Approving will: create <strong>Technology / AI / Generative AI</strong>, embed it, point this content item's tag at it,
+          and re-point <strong>11 other content items</strong> in this run that produced the same free-text "Generative AI".
+        </div>
+      </div>
+
+      <div class="reading-ft">
+        <button class="btn success">✓ Accept as new tag</button>
+        <button class="btn primary">↪ Merge into selected</button>
+        <button class="btn">Skip</button>
+        <button class="btn danger">✕ Reject</button>
+        <span class="grow"></span>
+        <button class="btn ghost">⋯</button>
+      </div>
+    </section>
+
+  </div>
+
+  <div class="design-notes">
+    <h3>Design notes — Option A</h3>
+    <p>The most familiar pattern for queue work: 3-pane email layout with keyboard-first navigation. Optimized for
+    careful single-item review of the long tail (<em>"Below threshold"</em> and <em>"Requires review"</em> reasons).
+    The threshold ribbon visualization is the signature element — it makes the score-band ambiguity visceral.</p>
+    <ul>
+      <li><strong>Strengths:</strong> instant familiarity, full context per item, keyboard-driven, easy mental model.</li>
+      <li><strong>Weaknesses:</strong> bulk operations feel awkward (have to multi-select in left list); 100-item merge approval is slow.</li>
+      <li><strong>Best for:</strong> first-time reviewers; "Requires review" items where stakes are high.</li>
+      <li><strong>Distinctive:</strong> per-item threshold-band ribbon; closest-5 candidate cards inline; exact "what will this approval cost" preview.</li>
+    </ul>
+  </div>
+
+</div>
+
+<script>
+  // Row selection
+  const rows = document.querySelectorAll('#rowList .row');
+  rows.forEach(r => {
+    r.addEventListener('click', () => {
+      rows.forEach(x => x.classList.remove('selected'));
+      r.classList.add('selected');
+    });
+  });
+  // Candidate selection
+  document.querySelectorAll('.candidate').forEach(c => {
+    c.addEventListener('click', () => {
+      document.querySelectorAll('.candidate').forEach(x => x.classList.remove('selected'));
+      c.classList.add('selected');
+    });
+  });
+</script>
+</body>
+</html>

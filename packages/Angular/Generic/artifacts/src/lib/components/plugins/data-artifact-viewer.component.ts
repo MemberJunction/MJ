@@ -1,4 +1,5 @@
 import { Component, OnInit, ChangeDetectorRef, Output, EventEmitter } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { RegisterClass } from '@memberjunction/global';
 import { DataSnapshot, DataTable, DataComputation, MJColumnDescriptor, NormalizeToTables, Metadata, RunQuery, CompositeKey, KeyValuePair } from '@memberjunction/core';
 import { QueryEngine, ArtifactMetadataEngine } from '@memberjunction/core-entities';
@@ -250,7 +251,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
    * Converts the grid's recordId string into a CompositeKey for the artifact viewer pipeline.
    */
   public OnEntityLinkClick(event: QueryEntityLinkClickEvent): void {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const entity = md.Entities.find(e => e.Name === event.entityName);
     const pkFieldName = entity?.FirstPrimaryKey?.Name ?? 'ID';
 
@@ -378,7 +379,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     const hasMetadata = columns.some(c => c.sourceEntity || c.sqlBaseType);
     if (!hasMetadata) return null;
 
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     return columns.map((col, index) => {
       const target = resolveTargetEntity(col.sourceEntity, col.sourceFieldName, md);
       const isEntityLink = !!(target.targetEntityName && (target.isPrimaryKey || target.isForeignKey));
@@ -618,7 +619,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
     this.cdr.detectChanges();
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const query = await md.GetEntityObject<import('@memberjunction/core-entities').MJQueryEntity>('MJ: Queries');
       const loaded = await query.Load(this.spec.savedQueryId);
 
@@ -681,7 +682,7 @@ export class DataArtifactViewerComponent extends BaseArtifactViewerPluginCompone
       await this.PersistArtifactContent();
       await QueryEngine.Instance.Config(true);
       await ArtifactMetadataEngine.Instance.Config(true);
-      await new Metadata().Refresh();
+      await this.ProviderToUse.Refresh();
 
       this.savedQuerySql = this.spec!.metadata?.sql ?? null;
       this.EffectiveSavedAtVersion = this.CurrentVersionNumber;

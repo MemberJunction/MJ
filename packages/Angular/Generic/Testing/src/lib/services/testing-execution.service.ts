@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import { GraphQLTestingClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
-import { Metadata } from '@memberjunction/core';
+import { IMetadataProvider, Metadata } from '@memberjunction/core';
 
 export interface TestExecutionOptions {
   testId?: string;
@@ -49,19 +49,36 @@ export interface ActiveRun {
   LogEntries: RunLogEntry[];
 }
 
+/**
+ * Multi-provider note: callers under a non-default provider should set
+ * `service.Provider = component.ProviderToUse` before invoking any methods.
+ */
 @Injectable({
   providedIn: 'root'
 })
 export class TestingExecutionService {
-  private testingClient: GraphQLTestingClient;
+  private _testingClient: GraphQLTestingClient | null = null;
+  private _provider: IMetadataProvider | null = null;
+
+  public get Provider(): IMetadataProvider {
+    return this._provider ?? Metadata.Provider;
+  }
+  public set Provider(value: IMetadataProvider | null) {
+    this._provider = value;
+    this._testingClient = null; // invalidate cached client
+  }
+
+  private get testingClient(): GraphQLTestingClient {
+    if (!this._testingClient) {
+      this._testingClient = new GraphQLTestingClient(this.Provider as unknown as GraphQLDataProvider);
+    }
+    return this._testingClient;
+  }
 
   private _activeRuns$ = new BehaviorSubject<ActiveRun[]>([]);
   readonly ActiveRuns$: Observable<ActiveRun[]> = this._activeRuns$.asObservable();
 
-  constructor() {
-    const dataProvider = Metadata.Provider as GraphQLDataProvider;
-    this.testingClient = new GraphQLTestingClient(dataProvider);
-  }
+  constructor() {}
 
   ExecuteTest(
     testId: string,

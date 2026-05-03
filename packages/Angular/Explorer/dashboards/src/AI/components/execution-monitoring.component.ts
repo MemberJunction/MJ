@@ -1862,6 +1862,7 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
 
   ngOnInit() {
     super.ngOnInit();
+    this.instrumentationService.Provider = this.ProviderToUse;
     // Load initial state if provided from resource configuration
     if (this.Data?.Configuration) {
       this.loadUserState(this.Data.Configuration);
@@ -2330,12 +2331,12 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
       
       // Load executions for this time period
       const [promptResults, agentResults] = await Promise.all([
-        new RunView().RunView<MJAIPromptRunEntityExtended>({
+        RunView.FromMetadataProvider(this.ProviderToUse).RunView<MJAIPromptRunEntityExtended>({
           EntityName: 'MJ: AI Prompt Runs',
           ExtraFilter: `RunAt >= '${startTime.toISOString()}' AND RunAt <= '${endTime.toISOString()}'`,
           OrderBy: 'RunAt DESC' 
         }),
-        new RunView().RunView<MJAIAgentRunEntityExtended>({
+        RunView.FromMetadataProvider(this.ProviderToUse).RunView<MJAIAgentRunEntityExtended>({
           EntityName: 'MJ: AI Agent Runs',
           ExtraFilter: `StartedAt >= '${startTime.toISOString()}' AND StartedAt <= '${endTime.toISOString()}'`,
           OrderBy: 'StartedAt DESC' 
@@ -2408,7 +2409,7 @@ export class ExecutionMonitoringComponent extends BaseResourceComponent implemen
     
     try {
       // Find model by name
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJAIModelEntityExtended>({
         EntityName: 'MJ: AI Models',
         ExtraFilter: `Name = '${modelName.replace(/'/g, "''")}'` 

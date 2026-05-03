@@ -1,8 +1,9 @@
 import { Component, EventEmitter, OnInit, Output } from '@angular/core';
-import { Metadata, RunView } from '@memberjunction/core';
+import { RunView } from '@memberjunction/core';
 import { MJFileCategoryEntity } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
 import { UUIDsEqual } from '@memberjunction/global';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 @Component({
   standalone: false,
@@ -10,7 +11,7 @@ import { UUIDsEqual } from '@memberjunction/global';
   templateUrl: './category-tree.html',
   styleUrls: ['./category-tree.css'],
 })
-export class CategoryTreeComponent implements OnInit {
+export class CategoryTreeComponent extends BaseAngularComponent implements OnInit {
   @Output() categorySelected = new EventEmitter<string | undefined>();
 
   public isLoading: boolean = false;
@@ -32,9 +33,9 @@ export class CategoryTreeComponent implements OnInit {
   public contextMenuY = 0;
   private contextMenuNode: MJFileCategoryEntity | undefined;
 
-  private md = new Metadata();
+  private get md() { return this.ProviderToUse; }
 
-  constructor(private sharedService: SharedService) {}
+  constructor(private sharedService: SharedService) { super(); }
 
   ngOnInit(): void {
     this.Refresh();
@@ -125,7 +126,7 @@ export class CategoryTreeComponent implements OnInit {
 
   async saveNewCategory() {
     this.isLoading = true;
-    const categoryEntity: MJFileCategoryEntity = await this.md.GetEntityObject('MJ: File Categories');
+    const categoryEntity: MJFileCategoryEntity = await this.md.GetEntityObject('MJ: File Categories', this.md.CurrentUser);
     categoryEntity.NewRecord();
     categoryEntity.Name = this.newCategoryName;
     await categoryEntity?.Save();
@@ -171,7 +172,7 @@ export class CategoryTreeComponent implements OnInit {
   async Refresh() {
     this.isLoading = true;
 
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView({
       EntityName: 'MJ: File Categories',
       ResultType: 'entity_object',

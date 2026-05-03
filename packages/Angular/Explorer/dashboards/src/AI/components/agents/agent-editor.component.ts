@@ -1,10 +1,11 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
-import { RunView, Metadata, LogError, LogStatus } from '@memberjunction/core';
+import { RunView, LogError, LogStatus } from '@memberjunction/core';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { CreateAgentService, CreateAgentResult } from '@memberjunction/ng-agents';
 import { NavigationService } from '@memberjunction/ng-shared';
 import * as d3 from 'd3';
 import { UUIDsEqual } from '@memberjunction/global';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 interface AgentHierarchyNode {
   id: string;
@@ -29,7 +30,7 @@ interface AgentPrompt {
   templateUrl: './agent-editor.component.html',
   styleUrls: ['./agent-editor.component.css']
 })
-export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
+export class AgentEditorComponent extends BaseAngularComponent implements OnInit, OnDestroy, AfterViewInit {
   @Input() agentId: string | null = null;
   @Output() close = new EventEmitter<void>();
   @Output() openAgent = new EventEmitter<string>();
@@ -62,7 +63,7 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
 
   constructor(
     private navigationService: NavigationService,
-    private createAgentService: CreateAgentService) {}
+    private createAgentService: CreateAgentService) { super(); }
 
   ngOnInit(): void {
     if (this.agentId) {
@@ -87,7 +88,7 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
       this.error = null;
 
       // Load all agents to build hierarchy
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView({
         EntityName: 'MJ: AI Agents',
         ExtraFilter: '',
@@ -483,7 +484,7 @@ export class AgentEditorComponent implements OnInit, OnDestroy, AfterViewInit {
 
       // Create the agent and all of its linked prompts/actions in one atomic transaction.
       // agent.ID is assigned client-side by NewRecord() so we can use it on child records before submit.
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const tg = await md.CreateTransactionGroup();
 
       agent.TransactionGroup = tg;

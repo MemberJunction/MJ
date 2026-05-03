@@ -56,3 +56,6 @@ export { postProcess } from './PostProcessor.js';
 // Batch converter (main orchestrator)
 export { convertFile, printReport } from './BatchConverter.js';
 export type { BatchConverterConfig, BatchConverterResult } from './BatchConverter.js';
+
+// EntityField sequence deduplicator (post-conversion fixup for UQ_EntityField_EntityID_Sequence)
+export { deduplicateEntityFieldSequences } from './SequenceDeduplicator.js';

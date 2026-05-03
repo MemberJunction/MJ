@@ -217,7 +217,7 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
         locationType: string,
         contextUser: UserInfo
     ): Promise<MJRecordGeoCodeEntity | null> {
-        const md = new Metadata();
+        const md = new Metadata();  // global-provider-ok: sync service — single-provider context
         const row = await md.GetEntityObject<MJRecordGeoCodeEntity>('MJ: Record Geo Codes', contextUser);
         row.NewRecord();
         row.EntityID = entityID;
