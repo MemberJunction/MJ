@@ -1,7 +1,7 @@
 import { Component, EventEmitter, Input, OnInit, Output } from '@angular/core';
-import { Metadata } from '@memberjunction/core';
 import { MJFileEntity, MJFileSchema, MJFileStorageProviderEntity, FileStorageEngineBase } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, gql } from '@memberjunction/graphql-dataprovider';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 import { z } from 'zod';
 
@@ -63,17 +63,17 @@ type UploadTuple = [FileSelectInfo, ApiFile, string];
   templateUrl: './file-upload.html',
   styleUrls: ['./file-upload.css'],
 })
-export class FileUploadComponent implements OnInit {
+export class FileUploadComponent extends BaseAngularComponent implements OnInit {
   public ConfirmQueue: Array<UploadTuple> = [];
   public UploadQueue: Array<FileSelectInfo> = [];
   private defaultProviderID = '';
-  private md = new Metadata();
+  private get md() { return this.ProviderToUse; }
 
   get IsUploading(): boolean {
     return this.UploadQueue.length + this.ConfirmQueue.length > 0;
   }
 
-  constructor() {}
+  constructor() { super(); }
 
   @Input() disabled = false;
   @Input() CategoryID: string | undefined = undefined;

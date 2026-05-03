@@ -13,9 +13,9 @@ import {
   EntityFieldInfo,
   EntityFieldTSType,
   EntityInfo,
-  Metadata,
 } from '@memberjunction/core';
 import { MJRecordChangeEntity } from '@memberjunction/core-entities';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 /**
  * Mode controls how the preview is rendered and how the restore is interpreted.
@@ -156,7 +156,7 @@ export interface RestoreCommitEvent {
   changeDetection: ChangeDetectionStrategy.OnPush,
   encapsulation: ViewEncapsulation.None,
 })
-export class RestorePreviewPanelComponent implements OnInit {
+export class RestorePreviewPanelComponent extends BaseAngularComponent implements OnInit {
   // ─── Inputs ─────────────────────────────────────────────────────
 
   /**
@@ -273,7 +273,7 @@ export class RestorePreviewPanelComponent implements OnInit {
   private isInitialized = false;
   private resolvedEntityInfo: EntityInfo | null = null;
 
-  constructor(private cdr: ChangeDetectorRef) {}
+  constructor(private cdr: ChangeDetectorRef) { super(); }
 
   ngOnInit(): void {
     this.isInitialized = true;
@@ -537,7 +537,7 @@ export class RestorePreviewPanelComponent implements OnInit {
       return this.resolvedEntityInfo;
     }
     if (this.EntityName) {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const ei = md.Entities.find(
         e => e.Name.trim().toLowerCase() === this.EntityName!.trim().toLowerCase(),
       );

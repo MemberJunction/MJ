@@ -10,10 +10,25 @@
   "registry": "MJ",
   "status": "Active",
   "dataRequirements": {
-    "queries": [{
-      "name": "Event Stats",
-      "categoryPath": "Events/Reports",
-      "fields": ["EventType", "AttendeeCount", "EventCount"]
-    }]
+    "queries": [
+      {
+        "name": "Event Stats",
+        "categoryPath": "Events/Reports",
+        "fields": [
+          {
+            "name": "EventType",
+            "type": "nvarchar"
+          },
+          {
+            "name": "AttendeeCount",
+            "type": "int"
+          },
+          {
+            "name": "EventCount",
+            "type": "int"
+          }
+        ]
+      }
+    ]
   }
 }

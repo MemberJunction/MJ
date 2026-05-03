@@ -26,8 +26,8 @@
     "@memberjunction/core-actions": "5.30.1",
     "@memberjunction/core-entities": "5.30.1",
     "@memberjunction/core-entities-server": "5.30.1",
+    "@memberjunction/generic-database-provider": "5.30.1",
     "@memberjunction/global": "5.30.1",
-    "@memberjunction/sqlserver-dataprovider": "5.30.1",
     "cron-parser": "^4.9.0"
   },
   "repository": {

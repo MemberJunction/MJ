@@ -12,6 +12,7 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { RunView } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 // ── Interfaces ──
 
@@ -531,7 +532,7 @@ const FIELDS: string[] = [
         }
     `]
 })
-export class AnalyticsUsagePatternsComponent implements OnInit, OnDestroy {
+export class AnalyticsUsagePatternsComponent extends BaseAngularComponent implements OnInit, OnDestroy {
 
     private _timeRange = '30d';
     private isInitialized = false;
@@ -622,7 +623,7 @@ export class AnalyticsUsagePatternsComponent implements OnInit, OnDestroy {
     }
 
     private async fetchPromptRuns(): Promise<PromptRunRecord[]> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const since = new Date();
         switch (this.TimeRange) {
             case '1h': since.setHours(since.getHours() - 1); break;

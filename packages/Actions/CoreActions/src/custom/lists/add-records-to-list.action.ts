@@ -50,7 +50,7 @@ export class AddRecordsToListAction extends BaseAction {
       }
 
       // Validate list exists
-      const md = new Metadata();
+      const md = params.Provider ?? new Metadata();
       const rv = new RunView();
 
       const listResult = await rv.RunView<MJListEntity>({

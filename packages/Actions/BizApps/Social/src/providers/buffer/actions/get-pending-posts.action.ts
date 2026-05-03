@@ -13,7 +13,7 @@ export class BufferGetPendingPostsAction extends BufferBaseAction {
     const { Params } = params;
 
     try {
-      const authError = await this.ensureAuthenticated(Params);
+      const authError = await this.ensureAuthenticated(params);
       if (authError) return authError;
 
       const channelId = this.getParamValue(Params, 'ChannelID') as string | null;

@@ -324,17 +324,17 @@ describe('logout and cache clearing', () => {
     const { removeItem } = stubLocalStorage({
       'mj-session-id': 'abc',
       'auth0.token': 'xyz',
-      'mj-login-theme': 'dark',
+      'mj-theme': 'dark',
     });
     stubIndexedDB();
     await makeProvider().logout();
     expect(removeItem).toHaveBeenCalledWith('mj-session-id');
     expect(removeItem).toHaveBeenCalledWith('auth0.token');
-    expect(removeItem).not.toHaveBeenCalledWith('mj-login-theme');
+    expect(removeItem).not.toHaveBeenCalledWith('mj-theme');
   });
 
-  it('should preserve mj-login-theme by default even when it is the only key', async () => {
-    const { removeItem } = stubLocalStorage({ 'mj-login-theme': 'dark' });
+  it('should preserve mj-theme by default even when it is the only key', async () => {
+    const { removeItem } = stubLocalStorage({ 'mj-theme': 'dark' });
     stubIndexedDB();
     await makeProvider().logout();
     expect(removeItem).not.toHaveBeenCalled();
@@ -383,14 +383,14 @@ describe('logout and cache clearing', () => {
 
   it('should respect overridden preservedLocalStorageKeys in a subclass', async () => {
     const { removeItem } = stubLocalStorage({
-      'mj-login-theme': 'dark',
+      'mj-theme': 'dark',
       'my-app-setting': 'value',
       'session-data': 'to-remove',
     });
     stubIndexedDB();
-    await makeProvider(new Set(['mj-login-theme', 'my-app-setting'])).logout();
+    await makeProvider(new Set(['mj-theme', 'my-app-setting'])).logout();
     expect(removeItem).toHaveBeenCalledWith('session-data');
-    expect(removeItem).not.toHaveBeenCalledWith('mj-login-theme');
+    expect(removeItem).not.toHaveBeenCalledWith('mj-theme');
     expect(removeItem).not.toHaveBeenCalledWith('my-app-setting');
   });
 });

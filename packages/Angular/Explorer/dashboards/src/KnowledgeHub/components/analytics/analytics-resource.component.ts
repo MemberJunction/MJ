@@ -288,7 +288,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
             return;
         }
 
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const entityInfo = md.Entities.find(e => e.Name === entityName);
         const pkey = new CompositeKey();
         if (entityInfo) {
@@ -630,7 +630,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
         this.cdr.detectChanges();
 
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const results = await rv.RunViews([
                 { EntityName: 'MJ: Tags', ExtraFilter: '', ResultType: 'simple' },
                 { EntityName: 'MJ: Content Item Tags', ExtraFilter: '', ResultType: 'simple' },
@@ -665,7 +665,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
     // ================================================================
 
     private buildEntityFilterOptions(): void {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const entityNames = new Set<string>();
         for (const item of this.rawContentItems) {
             const ctid = String(item['ContentTypeID'] || '');
@@ -2302,7 +2302,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
      */
     private async loadCoOccurrenceData(): Promise<void> {
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<{
                 TagA: string; TagB: string; CoOccurrenceCount: number; LastComputedAt: string | null;
             }>({
@@ -2348,7 +2348,7 @@ export class AnalyticsResourceComponent extends BaseResourceComponent implements
         this.cdr.detectChanges();
 
         try {
-            const provider = Metadata.Provider as unknown;
+            const provider = this.ProviderToUse as unknown;
             const gql = `
                 mutation RecomputeTagCoOccurrence {
                     RecomputeTagCoOccurrence {

@@ -24,7 +24,7 @@ import {
     SkipAPIArtifactType
 } from '@memberjunction/skip-types';
 import { DataContext } from '@memberjunction/data-context';
-import { UserInfo, LogStatus, LogError, Metadata, RunQuery, EntityInfo, EntityFieldInfo, EntityFieldValueInfo, DatabaseProviderBase } from '@memberjunction/core';
+import { IMetadataProvider, UserInfo, LogStatus, LogError, Metadata, RunQuery, EntityInfo, EntityFieldInfo, EntityFieldValueInfo, DatabaseProviderBase } from '@memberjunction/core';
 import { request as httpRequest } from 'http';
 import { request as httpsRequest } from 'https';
 import { gzip as gzipCompress, createGunzip } from 'zlib';
@@ -61,6 +61,15 @@ export interface SkipSDKConfig {
      * Optional organization context information
      */
     organizationInfo?: string;
+
+    /**
+     * Optional metadata provider this SDK instance binds to. When set, every metadata
+     * lookup (entities, queries, schema) and direct SQL call is routed through this
+     * provider — multi-tenant servers should pass the per-request provider here.
+     * When omitted, the SDK falls back to the global `Metadata.Provider` (single-server
+     * mode, legacy callers).
+     */
+    provider?: IMetadataProvider;
 }
 
 /**
@@ -198,6 +207,19 @@ interface SkipStreamMessage {
  */
 export class SkipSDK {
     private config: SkipSDKConfig;
+
+    /**
+     * The metadata provider this SDK instance is bound to. Set via the constructor
+     * config or the `Provider` setter. Falls back to the global `Metadata.Provider`
+     * when not set — multi-tenant servers should always supply an explicit provider
+     * so each request reaches its own database connection.
+     */
+    public get Provider(): IMetadataProvider {
+        return this.config.provider ?? (new Metadata() as unknown as IMetadataProvider);
+    }
+    public set Provider(value: IMetadataProvider | null) {
+        this.config.provider = value ?? undefined;
+    }
 
     // Static cache for Skip entities (shared across all instances)
     private static __skipEntitiesCache$: BehaviorSubject<Promise<EntityInfo[]> | null> = new BehaviorSubject<Promise<EntityInfo[]> | null>(null);
@@ -460,7 +482,7 @@ export class SkipSDK {
      * Build saved queries for Skip
      */
     private buildQueries(status: "Pending" | "In-Review" | "Approved" | "Rejected" | "Obsolete" = 'Approved'): SkipQueryInfo[] {
-        const md = new Metadata();
+        const md = this.Provider;
         const approvedQueries = md.Queries.filter((q) => q.Status === status);
 
         return approvedQueries.map((q) => ({
@@ -521,7 +543,7 @@ export class SkipSDK {
     /**
      * Recursively build category path for a query
      */
-    private buildQueryCategoryPath(md: Metadata, categoryID: string): string {
+    private buildQueryCategoryPath(md: IMetadataProvider, categoryID: string): string {
         const cat = md.QueryCategories.find((c) => UUIDsEqual(c.ID, categoryID));
         if (!cat) return '';
         if (!cat.ParentID) return cat.Name;
@@ -537,7 +559,7 @@ export class SkipSDK {
      * across all queries, not just approved ones.
      */
     private buildQueryCatalog(): SkipQueryCatalogEntry[] {
-        const md = new Metadata();
+        const md = this.Provider;
 
         return md.Queries.map((q) => ({
             Name: q.Name,
@@ -856,7 +878,7 @@ export class SkipSDK {
      */
     private async refreshSkipEntities(): Promise<EntityInfo[]> {
         try {
-            const md = new Metadata();
+            const md = this.Provider;
 
             // Diagnostic logging
             LogStatus(`[SkipSDK.refreshSkipEntities] Total entities in metadata: ${md.Entities.length}`);
@@ -983,8 +1005,9 @@ export class SkipSDK {
      */
     private async getFieldDistinctValues(f: EntityFieldInfo): Promise<EntityFieldValueInfo[]> {
         try {
-            // Uses the provider's ExecuteSQL so this works on both SQL Server and PostgreSQL.
-            const provider = Metadata.Provider as DatabaseProviderBase;
+            // Use this SDK instance's bound provider so multi-tenant servers route the SQL
+            // through the right connection. ExecuteSQL works on both SQL Server and PostgreSQL.
+            const provider = this.Provider as unknown as DatabaseProviderBase;
             const sql = `SELECT DISTINCT ${f.Name} FROM ${f.SchemaName}.${f.BaseView}`;
             const rows = await provider.ExecuteSQL<Record<string, unknown>>(sql);
             if (!rows || rows.length === 0) {

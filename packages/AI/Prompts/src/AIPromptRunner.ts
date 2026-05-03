@@ -12,6 +12,7 @@ import { ExecutionPlanner } from './ExecutionPlanner';
 import { ParallelExecutionCoordinator } from './ParallelExecutionCoordinator';
 import { ResultSelectionConfig } from './ParallelExecution';
 import { AIEngine } from '@memberjunction/aiengine';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { SystemPlaceholderManager } from '@memberjunction/ai-core-plus';
 import {
     TemplateMessageRole,
@@ -128,9 +129,22 @@ export class AIPromptRunner {
   private _parallelCoordinator: ParallelExecutionCoordinator;
   private _jsonValidator: JSONValidator;
   private _modelRunner: AIModelRunner;
+  private _provider: IMetadataProvider | null = null;
+
+  /**
+   * Optional metadata provider override. Callers should set
+   * `instance.Provider = providerToUse` before invoking run methods
+   * in multi-provider contexts. Falls back to the global default provider when unset.
+   */
+  public get Provider(): IMetadataProvider {
+    return this._provider ?? (this._metadata as unknown as IMetadataProvider);
+  }
+  public set Provider(value: IMetadataProvider | null) {
+    this._provider = value;
+  }
 
   constructor() {
-    this._metadata = new Metadata();
+    this._metadata = (this._provider as unknown as Metadata) ?? new Metadata();
     this._templateEngine = TemplateEngineServer.Instance;
     this._executionPlanner = new ExecutionPlanner();
     this._parallelCoordinator = new ParallelExecutionCoordinator();
@@ -585,6 +599,12 @@ export class AIPromptRunner {
   public async ExecutePrompt<T = unknown>(params: AIPromptParams): Promise<AIPromptRunResult<T>> {
     const startTime = new Date();
     const promptRun: MJAIPromptRunEntityExtended | null = null;
+
+    // AIEngineBase is registered as deferred — its initial load runs in the background
+    // after server boot. Make sure the cached metadata (Models, Vendors, ModelVendors,
+    // ConfigurationParams, etc.) is loaded before downstream resolution / planning runs.
+    // Idempotent: zero cost after first load thanks to BaseEngine._loadingSubject dedup.
+    await AIEngineBase.Instance.EnsureLoaded();
 
     // Check for cancellation at the start
     if (params.cancellationToken?.aborted) {
@@ -2548,7 +2568,7 @@ export class AIPromptRunner {
     vendorId?: string,
     modelSelectionInfo?: any
   ): Promise<MJAIPromptRunEntityExtended> {
-    const provider: IMetadataProvider = params.provider || Metadata.Provider;
+    const provider: IMetadataProvider = params.provider ?? Metadata.Provider;
     const promptRun = await provider.GetEntityObject<MJAIPromptRunEntityExtended>('MJ: AI Prompt Runs', params.contextUser);
     try {
       promptRun.NewRecord();

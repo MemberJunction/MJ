@@ -129,6 +129,22 @@
         },
         {
           "fields": {
+            "Code": "AuthorizationRoles",
+            "DatasetID": "@parent:ID",
+            "Sequence": 5,
+            "EntityID": "@lookup:MJ: Entities.Name=MJ: Authorization Roles",
+            "DateFieldToCheck": "__mj_UpdatedAt"
+          },
+          "primaryKey": {
+            "ID": "C3D4E5F6-A7B8-4901-BCDE-F01234567890"
+          },
+          "sync": {
+            "lastModified": "2026-04-15T05:46:00.883Z",
+            "checksum": "5da49c85031252267958c3becb4e889f06b6c49839649724ca2e7c88fce3b2c5"
+          }
+        },
+        {
+          "fields": {
             "Code": "EntityDocumentTypes",
             "DatasetID": "@parent:ID",
             "Sequence": 6,

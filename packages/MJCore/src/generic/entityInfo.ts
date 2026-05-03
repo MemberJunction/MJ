@@ -360,7 +360,7 @@ export class EntityPermissionInfo extends BaseInfo{
                 break;
         }
         if (fID && fID.length > 0) 
-            return Metadata.Provider.RowLevelSecurityFilters.find(f => UUIDsEqual(f.ID, fID));
+            return Metadata.Provider.RowLevelSecurityFilters.find(f => UUIDsEqual(f.ID, fID));  // global-provider-ok: stateless info class — proxies to global metadata
     }
 
     constructor (initData: any) {
@@ -1046,6 +1046,33 @@ export class EntityFieldInfo extends BaseInfo {
      */
     get HasDefaultValue(): boolean {
         return this.DefaultValue && this.DefaultValue.trim().length > 0
+    }
+
+    /**
+     * Returns true when the field's `spUpdate` / `spCreate` procedure
+     * exposes a `<Param>_Clear` companion parameter — i.e. the field is
+     * nullable and has a non-NULL database default.
+     *
+     * Codegen emits the companion so a caller can disambiguate
+     * "leave unchanged / apply default" (omit the parameter) from
+     * "explicitly set this column to NULL" (`<Param>_Clear = 1`).
+     * Without it, the SP body's `ISNULL(@Param, [Col])` merge silently
+     * substitutes the existing value or default, and a literal NULL
+     * could never be persisted.
+     *
+     * Save-time callers in the data providers use this to decide whether
+     * to also emit the `_Clear` companion parameter when the entity
+     * intentionally sets such a field to NULL. Stays in sync with
+     * `CodeGenLib`'s `needsClearCompanion`.
+     *
+     * Note: relies on `DefaultValue` already being normalized by
+     * `ExtractActualDefaultValue` at populate time — that helper strips
+     * the DB's wrapping parens and converts a literal `NULL` default to
+     * JS `null`. So if `HasDefaultValue` is true, the default is
+     * guaranteed to be non-NULL.
+     */
+    get NeedsClearCompanion(): boolean {
+        return this.AllowsNull && this.HasDefaultValue;
     }
 
     /**
@@ -1775,7 +1802,7 @@ export class EntityInfo extends BaseInfo {
      */
     get ParentEntityInfo(): EntityInfo | null {
         if (!this.ParentID) return null;
-        const p = Metadata.Provider;
+        const p = Metadata.Provider;  // global-provider-ok: stateless info class — proxies to global metadata
         if (p?.EntityByID) {
             return p.EntityByID(this.ParentID) ?? null;
         }
@@ -1792,7 +1819,7 @@ export class EntityInfo extends BaseInfo {
      * only one child type is allowed per parent record (disjoint subtypes).
      */
     get ChildEntities(): EntityInfo[] {
-        return Metadata.Provider?.Entities?.filter(e => UUIDsEqual(e.ParentID, this.ID)) ?? [];
+        return Metadata.Provider?.Entities?.filter(e => UUIDsEqual(e.ParentID, this.ID)) ?? [];  // global-provider-ok: stateless info class — proxies to global metadata
     }
 
     /**

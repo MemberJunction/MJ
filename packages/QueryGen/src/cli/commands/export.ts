@@ -35,7 +35,7 @@ export async function exportCommand(options: Record<string, unknown>): Promise<v
     // 2. Verify database connection and load metadata
     spinner.text = 'Loading metadata...';
     // Assume provider is already configured by the calling application
-    if (!Metadata.Provider) {
+    if (!Metadata.Provider) { // global-provider-ok: CLI tool, single-provider context
       throw new Error('Metadata provider not configured. Please ensure database connection is set up before running CLI.');
     }
     spinner.succeed('Metadata loaded');

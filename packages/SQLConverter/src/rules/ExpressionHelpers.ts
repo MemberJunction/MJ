@@ -649,10 +649,27 @@ function mapInlineType(tsqlType: string): string {
   return resolveInlineType(tsqlType);
 }
 
-/** Remove N' prefix from string literals, but only when preceded by non-alphanumeric */
+/**
+ * Remove T-SQL's N' unicode-string prefix.
+ *
+ * Tricky case: the original pattern `(?<![a-zA-Z])N'` strips any N'
+ * where N isn't preceded by a letter. That's correct for a leading
+ * unicode prefix (`... = N'text' ...`) but WRONG for trailing N inside
+ * a string ending with a digit, like `N'BD-3N'`:
+ *   1st match: prefix  N' → '       →  `'BD-3N'`
+ *   2nd match: string  N' → '       →  `'BD-3'`  (bug: stripped the trailing N!)
+ * That bug silently corrupted ISO codes in v5.25 Metadata_Sync and
+ * caused spCreateStateProvince to hit UQ_StateProvince_ISO3166_2.
+ *
+ * Fix: only strip N' in contexts where a string literal *starts* — i.e.
+ * after a non-quote boundary character (whitespace, punctuation, paren,
+ * operator, comma, equals, start of line). This leaves N' inside a
+ * string alone.
+ */
 export function removeNPrefix(sql: string): string {
-  // N' at start of string or after non-alpha character → '
-  return sql.replace(/(?<![a-zA-Z])N'/g, "'");
+  // Anchors: start of string, or after one of the "string-start" context chars.
+  // Whitespace, comma, paren, comparison operators, brackets, semicolon.
+  return sql.replace(/(^|[\s(,=<>!+\-*\/[;])N'/g, "$1'");
 }
 
 /** Remove COLLATE clauses */

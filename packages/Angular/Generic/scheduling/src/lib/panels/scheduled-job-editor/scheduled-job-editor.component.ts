@@ -8,9 +8,9 @@ import {
     OnInit,
     inject,
 } from '@angular/core';
-import { Metadata } from '@memberjunction/core';
 import { MJScheduledJobEntity, MJScheduledJobTypeEntity } from '@memberjunction/core-entities';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ScheduledJobService } from '../../services/scheduled-job.service';
 
 /** IANA timezone list subset for the dropdown */
@@ -39,7 +39,7 @@ const COMMON_TIMEZONES = [
     styleUrls: ['./scheduled-job-editor.component.css'],
     changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class ScheduledJobEditorComponent implements OnInit {
+export class ScheduledJobEditorComponent extends BaseAngularComponent implements OnInit {
     private cdr = inject(ChangeDetectorRef);
     private scheduledJobService = inject(ScheduledJobService);
 
@@ -259,8 +259,8 @@ export class ScheduledJobEditorComponent implements OnInit {
         if (this.Job && !this.IsNew) {
             return this.Job;
         }
-        const md = new Metadata();
-        const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs');
+        const md = this.ProviderToUse;
+        const job = await md.GetEntityObject<MJScheduledJobEntity>('MJ: Scheduled Jobs', md.CurrentUser);
         job.NewRecord();
         return job;
     }

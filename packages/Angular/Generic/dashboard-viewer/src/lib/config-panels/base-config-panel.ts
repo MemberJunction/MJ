@@ -1,5 +1,6 @@
 import { Input, Output, EventEmitter, ChangeDetectorRef, Directive } from '@angular/core';
 import { MJDashboardPartTypeEntity } from '@memberjunction/core-entities';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { PanelConfig, DashboardPanel } from '../models/dashboard-types';
 
 /**
@@ -30,7 +31,7 @@ export interface ConfigPanelResult {
  * Subclasses are registered with @RegisterClass and instantiated via ClassFactory.
  */
 @Directive()
-export abstract class BaseConfigPanel {
+export abstract class BaseConfigPanel extends BaseAngularComponent {
     /** The part type being configured */
     @Input() partType: MJDashboardPartTypeEntity | null = null;
 
@@ -56,7 +57,9 @@ export abstract class BaseConfigPanel {
      */
     @Output() configChanged = new EventEmitter<ConfigPanelResult>();
 
-    constructor(protected cdr: ChangeDetectorRef) {}
+    constructor(protected cdr: ChangeDetectorRef) {
+        super();
+    }
 
     /**
      * Initialize form fields from a configuration.

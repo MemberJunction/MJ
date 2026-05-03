@@ -8,7 +8,7 @@
  * @module @memberjunction/search-engine
  */
 
-import { LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSearchProvider } from './ISearchProvider';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType } from './search.types';
@@ -38,7 +38,7 @@ export class EntitySearchProvider extends BaseSearchProvider {
         contextUser: UserInfo
     ): Promise<SearchResultItem[]> {
         try {
-            const md = new Metadata();
+            const md = this.Provider;
             const searchableEntities = this.getSearchableEntities(md, filters);
 
             if (searchableEntities.length === 0) {
@@ -49,7 +49,7 @@ export class EntitySearchProvider extends BaseSearchProvider {
             // Debug: log searchable entities and their search fields
             LogStatus(`EntitySearchProvider: Searching ${searchableEntities.length} entities for "${query}"`);
             for (const e of searchableEntities.slice(0, 3)) {
-                const entity = md.Entities.find(ent => ent.Name === e.Name);
+                const entity = md.EntityByName(e.Name);
                 if (entity) {
                     const searchFields = entity.Fields.filter(f => f.IncludeInUserSearchAPI);
                     LogStatus(`  Entity "${e.Name}": ${searchFields.length} searchable fields [${searchFields.slice(0, 5).map(f => f.Name).join(', ')}${searchFields.length > 5 ? '...' : ''}]`);
@@ -81,7 +81,7 @@ export class EntitySearchProvider extends BaseSearchProvider {
      * Get the list of entities eligible for search, optionally filtered by name.
      */
     private getSearchableEntities(
-        md: Metadata,
+        md: IMetadataProvider,
         filters: SearchFilters | undefined
     ): { Name: string }[] {
         let entities = md.Entities.filter(e => e.AllowUserSearchAPI);
@@ -135,8 +135,8 @@ export class EntitySearchProvider extends BaseSearchProvider {
         entityName: string,
         query: string
     ): SearchResultItem[] {
-        const md = new Metadata();
-        const entityInfo = md.Entities.find(e => e.Name === entityName);
+        const md = this.Provider;
+        const entityInfo = md.EntityByName(entityName);
         const queryLower = query.toLowerCase();
 
         // Get searchable fields and classify them by importance

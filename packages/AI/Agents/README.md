@@ -209,6 +209,32 @@ Handles persistent memory operations for agents:
 - Creating and updating agent notes
 - Managing agent examples
 - Scoped memory for multi-tenant deployments (UserScope support)
+- Consolidation, decay, and protection-tier maintenance over the agent note pool (see below)
+
+#### Consolidation Pipeline
+
+When invoked in maintenance mode, MemoryManagerAgent runs an end-to-end pipeline over the agent's notes to keep the memory pool useful and bounded over time. The pipeline is a sequence of phases on the run, each emitting its own observability data.
+
+- **Clustering** — groups semantically similar notes by cosine similarity. The clustering threshold is `0.60` (intentionally broad — the LLM is the final arbiter for ambiguous clusters during the consolidate phase).
+- **Cluster splitting** — `splitOversizedCluster` breaks any cluster larger than 7 notes so the consolidation prompt stays focused.
+- **Drift prevention** — `maxConsolidationCount = 3` caps the number of times any one note can be folded into successor consolidations. When a cluster reaches the cap, anchored-mode drilling resolves the original sources via `DerivedFromNoteIDs` so consolidation operates on the underlying facts rather than re-summarizing summaries.
+- **Consolidate** — the LLM generates a merged note for each cluster. The pipeline records `DerivedFromNoteIDs`, increments `ConsolidationCount`, and revokes source notes with `ConsolidatedIntoNoteID` back-links to preserve provenance.
+- **Verify Consolidation Output** — post-check phase (`verifyConsolidationOutput`) confirms entity-attribute coverage hasn't been lost in the merge; reports `entitiesChecked` and `entitiesMissing`.
+- **Contradiction detection** — extracts entity-attribute-value triples across active notes, flags conflicting values, and resolves contradictions by revoking the older or lower-importance side.
+- **Ebbinghaus decay archival** — applies a forgetting curve to the importance score over time; low-importance notes that haven't been retrieved are archived. `ProtectionTier` modulates the decay rate.
+- **Protection tiers** — `Immutable` / `Protected` / `Standard` / `Ephemeral`. Immutable notes are never modified; Protected notes are excluded from consolidation but still age normally; Ephemeral notes decay faster.
+- **Outlier auto-promotion** — notes whose semantic uniqueness lands in the 95th percentile are auto-promoted to `Protected` so they aren't swallowed by future consolidations.
+
+The pipeline emits two new run-step types for observability:
+
+- `Process Consolidation Cluster` — one child step per cluster, with `clusterSize`, `noteIds`, `shouldConsolidate`, `consolidatedNoteId`, `sourceNotesArchived`, `verificationPassed`, `entitiesChecked`, `entitiesMissing`.
+- `Verify Consolidation Output` — phase-level step covering the post-consolidation verification pass.
+
+Run-level payload fields added: `scoreDistribution`, `entityTriplesExtracted`, `decayScoreDistribution`, `protectedPreserved`, `ephemeralAccelerated`, and consolidation `triggerType` (one of `forced` / `time` / `event` / `count`).
+
+Memory Cleanup Agent has been deprecated — its responsibilities are folded into MemoryManagerAgent's pipeline.
+
+For the full design (functional requirements, threshold rationale, decay curve, contradiction taxonomy), see [`specs/001-memory-consolidation/spec.md`](../../../specs/001-memory-consolidation/spec.md) and the implementation in [`src/memory-manager-agent.ts`](./src/memory-manager-agent.ts).
 
 ## Usage
 
@@ -262,20 +288,24 @@ const result = await runner.ExecuteAgent({
 });
 ```
 
-### With User Scope (Multi-Tenant)
+### With Memory Scope (Multi-Tenant)
+
+Multi-tenant deployments can isolate the agent's memory cohort (notes and examples) per request by passing scope fields on `ExecuteAgentParams`. The fields are top-level — there is no `userScope` wrapper:
 
 ```typescript
 const result = await runner.ExecuteAgent({
     agentId: 'my-agent-id',
     conversationMessages: messages,
     contextUser: currentUser,
-    userScope: {
-        primaryEntityName: 'Organizations',
-        primaryRecordId: orgId,
-        secondary: { TeamID: teamId }
-    }
+    // Primary scope (indexed for fast filtering)
+    PrimaryScopeEntityName: 'Organizations',
+    PrimaryScopeRecordID: orgId,
+    // Secondary scopes (arbitrary dimensions, validated against the agent's ScopeConfig)
+    SecondaryScopes: { TeamID: teamId }
 });
 ```
+
+See [`docs/AGENT_MEMORY_SCOPING.md`](./docs/AGENT_MEMORY_SCOPING.md) for the full model — built-in scopes, primary/secondary semantics, inheritance modes, and how scope propagates through sub-agent invocations.
 
 ### With Message Lifecycle Management
 

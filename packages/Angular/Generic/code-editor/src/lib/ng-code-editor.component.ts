@@ -36,6 +36,7 @@ import { compositionTokenExtension, CompositionTokenClickEvent, CompositionToken
 
 // Import MJ Metadata for default hover resolution
 import { Metadata } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 export type Setup = 'basic' | 'minimal' | null;
 
@@ -56,7 +57,7 @@ export const External = Annotation.define<boolean>();
     },
   ],
 })
-export class CodeEditorComponent implements OnInit, OnDestroy, ControlValueAccessor {
+export class CodeEditorComponent extends BaseAngularComponent implements OnInit, OnDestroy, ControlValueAccessor {
   /**
    * EditorView's [root](https://codemirror.net/docs/ref/#view.EditorView.root).
    *
@@ -254,7 +255,7 @@ export class CodeEditorComponent implements OnInit, OnDestroy, ControlValueAcces
   private _onChange: (value: string) => void = () => {};
   private _onTouched: () => void = () => {};
 
-  constructor(private _elementRef: ElementRef<Element>) {}
+  constructor(private _elementRef: ElementRef<Element>) { super(); }
 
   /**
    * The instance of [EditorView](https://codemirror.net/docs/ref/#view.EditorView).
@@ -523,7 +524,7 @@ export class CodeEditorComponent implements OnInit, OnDestroy, ControlValueAcces
    */
   private resolveCompositionToken(fullPath: string): CompositionTokenInfo | null {
     try {
-      const allQueries = Metadata.Provider.Queries;
+      const allQueries = this.ProviderToUse.Queries;
       const segments = fullPath.split('/').map(s => s.trim()).filter(s => s.length > 0);
       if (segments.length === 0) return null;
 

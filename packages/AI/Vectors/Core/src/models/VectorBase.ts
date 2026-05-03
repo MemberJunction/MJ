@@ -1,5 +1,5 @@
 import { AIEngine } from "@memberjunction/aiengine";
-import { BaseEntity, Metadata, CompositeKey, RunView, UserInfo, EntityInfo, RunViewResult, LogError } from "@memberjunction/core";
+import { BaseEntity, Metadata, CompositeKey, RunView, UserInfo, EntityInfo, RunViewResult, LogError, IMetadataProvider } from "@memberjunction/core";
 import { MJVectorDatabaseEntity } from "@memberjunction/core-entities";
 import { UUIDsEqual } from "@memberjunction/global";
 import { PageRecordsParams } from "../generic/VectorCore.types";
@@ -9,10 +9,11 @@ export class VectorBase {
     _runView: RunView;
     _metadata: Metadata;
     _currentUser: UserInfo;
+    private _provider: IMetadataProvider | null = null;
 
     constructor() {
         this._runView = new RunView();
-        this._metadata = new Metadata();
+        this._metadata = (this._provider as unknown as Metadata) ?? new Metadata();
         this._currentUser = this._metadata.CurrentUser;
     }
 
@@ -21,8 +22,20 @@ export class VectorBase {
     public get CurrentUser(): UserInfo { return this._currentUser; }
     public set CurrentUser(user: UserInfo) { this._currentUser = user; }
 
+    /**
+     * Optional metadata provider override. Callers should set
+     * `instance.Provider = providerToUse` before invoking helper methods
+     * in multi-provider contexts. Falls back to the global default provider when unset.
+     */
+    public get Provider(): IMetadataProvider {
+        return this._provider ?? (this._metadata as unknown as IMetadataProvider);
+    }
+    public set Provider(value: IMetadataProvider | null) {
+        this._provider = value;
+    }
+
     protected async GetRecordsByEntityID(entityID: string, recordIDs?: CompositeKey[]): Promise<BaseEntity[]> {
-        const md = new Metadata();
+        const md = this.Provider;
         const entity = md.Entities.find(e => UUIDsEqual(e.ID, entityID));
         if (!entity){
             throw new Error(`Entity with ID ${entityID} not found.`);

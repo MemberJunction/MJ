@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Tag Scope Editor · Option A — dual-pane</title>
+<link rel="stylesheet" href="mockup.css" />
+<style>
+  .scope-shell { display: grid; grid-template-columns: 1fr 80px 1fr; gap: 0; background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 12px; overflow: hidden; min-height: 500px; }
+  .pane { display: flex; flex-direction: column; }
+  .pane.middle { background: var(--mj-bg-surface-card); border-left: 1px solid var(--mj-border-default); border-right: 1px solid var(--mj-border-default); display: flex; align-items: center; justify-content: center; }
+  .pane-hd { padding: 12px 16px; border-bottom: 1px solid var(--mj-border-default); display: flex; align-items: center; justify-content: space-between; background: var(--mj-bg-surface-card); }
+  .pane-hd h3 { margin: 0; font-size: 13px; font-weight: 700; }
+  .pane-hd .ct { font-size: 12px; color: var(--mj-text-muted); }
+  .pane-search { padding: 10px 14px; border-bottom: 1px solid var(--mj-border-default); }
+  .pane-body { flex: 1; overflow-y: auto; padding: 8px 6px; }
+  .opt-row {
+    padding: 8px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  .opt-row:hover { background: var(--mj-bg-surface-hover); }
+  .opt-row.selected { background: var(--mj-brand-primary-tint); }
+  .opt-row.in-scope { background: #faf5ff; color: #6d28d9; }
+  .opt-row .av { width: 24px; height: 24px; font-size: 10px; }
+  .opt-row .meta { flex: 1; }
+  .opt-row .nm { font-size: 13px; font-weight: 600; }
+  .opt-row .sub { font-size: 11px; color: var(--mj-text-muted); }
+  .opt-row .ind {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--mj-color-neutral-300);
+  }
+  .arrow-btn {
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    border: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface);
+    cursor: pointer;
+    font-size: 18px;
+    color: var(--mj-text-secondary);
+    display: flex; align-items: center; justify-content: center;
+    margin: 6px 0;
+  }
+  .arrow-btn:hover { background: var(--mj-brand-primary-tint); color: var(--mj-brand-primary); border-color: var(--mj-brand-primary-light); }
+  .arrow-btn.primary { background: var(--mj-brand-primary); color: #fff; border-color: var(--mj-brand-primary); }
+
+  .filter-strip {
+    display: flex; gap: 8px; padding: 8px 14px;
+    border-bottom: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface-card);
+    font-size: 12px;
+  }
+  .filter-strip .pill {
+    padding: 3px 9px;
+    border-radius: 999px;
+    cursor: pointer;
+    color: var(--mj-text-secondary);
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+  }
+  .filter-strip .pill.active {
+    background: var(--mj-brand-primary-tint);
+    color: var(--mj-brand-primary);
+    border-color: var(--mj-brand-primary-light);
+    font-weight: 600;
+  }
+  .header-card {
+    background: linear-gradient(135deg, #faf5ff 0%, #f5f3ff 100%);
+    border: 1px solid #ddd6fe;
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 18px;
+    display: flex; gap: 18px; align-items: center;
+  }
+  .header-card .ic { width: 44px; height: 44px; border-radius: 8px; background: #ede9fe; color: #6d28d9; display: inline-flex; align-items: center; justify-content: center; font-size: 22px; }
+  .header-card h2 { margin: 0; font-size: 16px; }
+  .header-card p { margin: 4px 0 0; color: #6d28d9; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<div class="mockup-ribbon">
+  <span><strong>Mockup A:</strong> Tag Scope Editor — dual-pane transfer (representative; B/C deferred)</span>
+  <span><a href="index.html">← Back to index</a></span>
+</div>
+
+<header class="mj-app-header">
+  <div class="logo"><span class="logo-mark">MJ</span> MJ Explorer</div>
+  <div class="breadcrumbs">
+    <span>Knowledge Hub</span><span class="sep">›</span>
+    <span>Classify</span><span class="sep">›</span>
+    <span>Taxonomy</span><span class="sep">›</span>
+    <span class="current">Generative AI · Scope</span>
+  </div>
+  <div class="right">
+    <span class="badge brand">2 tenants</span>
+    <span class="avatar">AN</span>
+  </div>
+</header>
+
+<div class="page wide">
+
+  <div class="page-title">
+    <div>
+      <h1>Edit scope · Generative AI</h1>
+      <div class="subtitle">Pick which (Entity, Record) tuples can see this tag · children inherit · global toggle locked while scope rows exist</div>
+    </div>
+    <div class="flex gap-8">
+      <button class="btn">Cancel</button>
+      <button class="btn primary">Save scope</button>
+    </div>
+  </div>
+
+  <div class="header-card">
+    <div class="ic">🔒</div>
+    <div class="grow">
+      <h2>Scope is currently restricted</h2>
+      <p>Visible to <strong>2 tenants</strong>. Promoting to global will unfreeze this subtree and require admin approval. <a href="#">Learn more</a></p>
+    </div>
+    <div class="flex gap-8">
+      <button class="btn">Promote to global…</button>
+    </div>
+  </div>
+
+  <div class="filter-strip">
+    <span style="color: var(--mj-text-muted); font-weight: 600;">Filter by entity:</span>
+    <span class="pill active">Companies (12)</span>
+    <span class="pill">Tenants (3)</span>
+    <span class="pill">Departments (47)</span>
+    <span class="pill">Custom…</span>
+    <span class="grow"></span>
+    <span style="color: var(--mj-text-muted);">Inheritance: child tags adopt this scope automatically</span>
+  </div>
+
+  <div class="scope-shell">
+
+    <!-- LEFT: available -->
+    <div class="pane">
+      <div class="pane-hd">
+        <h3>Available companies</h3>
+        <span class="ct">10 not in scope</span>
+      </div>
+      <div class="pane-search">
+        <input class="input full" placeholder="Search companies…" style="font-size: 12px;" />
+      </div>
+      <div class="pane-body">
+        <div class="opt-row selected">
+          <input type="checkbox" />
+          <span class="av">IN</span>
+          <div class="meta"><div class="nm">Initech</div><div class="sub">12 users · added 3 weeks ago</div></div>
+        </div>
+        <div class="opt-row selected">
+          <input type="checkbox" checked />
+          <span class="av" style="background: #ddd6fe; color: #6d28d9;">SC</span>
+          <div class="meta"><div class="nm">Soylent Corp</div><div class="sub">47 users · enterprise</div></div>
+        </div>
+        <div class="opt-row">
+          <input type="checkbox" />
+          <span class="av">UM</span>
+          <div class="meta"><div class="nm">Umbrella Inc.</div><div class="sub">29 users</div></div>
+        </div>
+        <div class="opt-row">
+          <input type="checkbox" />
+          <span class="av">WW</span>
+          <div class="meta"><div class="nm">Wonka Industries</div><div class="sub">8 users</div></div>
+        </div>
+        <div class="opt-row">
+          <input type="checkbox" />
+          <span class="av">SK</span>
+          <div class="meta"><div class="nm">Stark Enterprises</div><div class="sub">156 users · enterprise</div></div>
+        </div>
+        <div class="opt-row">
+          <input type="checkbox" />
+          <span class="av">TY</span>
+          <div class="meta"><div class="nm">Tyrell Corp</div><div class="sub">61 users</div></div>
+        </div>
+        <div class="opt-row">
+          <input type="checkbox" />
+          <span class="av">CY</span>
+          <div class="meta"><div class="nm">Cyberdyne Systems</div><div class="sub">34 users</div></div>
+        </div>
+        <div class="opt-row">
+          <input type="checkbox" />
+          <span class="av">WY</span>
+          <div class="meta"><div class="nm">Weyland-Yutani</div><div class="sub">19 users</div></div>
+        </div>
+        <div class="opt-row">
+          <input type="checkbox" />
+          <span class="av">PY</span>
+          <div class="meta"><div class="nm">Pied Piper</div><div class="sub">7 users · trial</div></div>
+        </div>
+        <div class="opt-row" style="opacity: 0.5;">
+          <input type="checkbox" disabled />
+          <span class="av">HC</span>
+          <div class="meta"><div class="nm">Hooli</div><div class="sub" style="color: var(--mj-status-error-text);">Parent scope conflict — would widen beyond AI/ML</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MIDDLE: arrow controls -->
+    <div class="pane middle">
+      <button class="arrow-btn primary" title="Add to scope">→</button>
+      <button class="arrow-btn" title="Add all">≫</button>
+      <button class="arrow-btn" title="Remove from scope">←</button>
+      <button class="arrow-btn" title="Remove all">≪</button>
+    </div>
+
+    <!-- RIGHT: in scope -->
+    <div class="pane">
+      <div class="pane-hd">
+        <h3>In scope · this tag is visible to</h3>
+        <span class="ct">2 in scope</span>
+      </div>
+      <div class="pane-search">
+        <input class="input full" placeholder="Search current scope…" style="font-size: 12px;" />
+      </div>
+      <div class="pane-body">
+        <div class="opt-row in-scope">
+          <input type="checkbox" />
+          <span class="av" style="background: #ddd6fe; color: #6d28d9;">AC</span>
+          <div class="meta">
+            <div class="nm">Acme Corp</div>
+            <div class="sub">added 2 weeks ago by amith@bluecypress.io</div>
+          </div>
+          <span class="ind" style="background: var(--mj-status-success);"></span>
+        </div>
+        <div class="opt-row in-scope">
+          <input type="checkbox" />
+          <span class="av" style="background: #ddd6fe; color: #6d28d9;">GX</span>
+          <div class="meta">
+            <div class="nm">Globex Inc.</div>
+            <div class="sub">added 5 days ago by sarah@bluecypress.io</div>
+          </div>
+          <span class="ind" style="background: var(--mj-status-success);"></span>
+        </div>
+      </div>
+      <div style="padding: 12px 14px; border-top: 1px solid var(--mj-border-default); background: var(--mj-bg-surface-card); font-size: 11px; color: var(--mj-text-muted); display: flex; justify-content: space-between;">
+        <span>Each row = MJ:TagScope (TagID, EntityID, RecordID)</span>
+        <a href="#">View raw</a>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="panel mt-24">
+    <div class="panel-hd"><h2>Affected children — scope inheritance preview</h2><span class="hd-meta">3 children, all inherit</span></div>
+    <div class="panel-bd">
+      <table class="tbl">
+        <thead><tr><th>Child tag</th><th>Items</th><th>Currently scoped to</th><th>Will inherit</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Generative AI / Image gen</strong></td><td>87</td><td><span class="chip scoped">Acme</span> <span class="chip scoped">Globex</span></td><td><span class="muted">no change</span></td></tr>
+          <tr><td><strong>Generative AI / Code gen</strong></td><td>123</td><td><span class="chip scoped">Acme</span> <span class="chip scoped">Globex</span></td><td><span class="muted">no change</span></td></tr>
+          <tr><td><strong>Generative AI / Audio</strong></td><td>34</td><td><span class="chip scoped">Acme</span></td><td><span class="badge success">+ Globex</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="design-notes">
+    <h3>Design notes — Option A</h3>
+    <p>Bulletproof transfer-list pattern. The middle column of arrow buttons (single + bulk) is the workhorse;
+    keyboard users can ⌘-A on the available pane and bulk-add. Greyed-out rows on the left show <em>why</em>
+    they can't be added (parent scope conflict), turning a validation rule into a visible explanation.</p>
+    <ul>
+      <li><strong>Strengths:</strong> visually clear "before / after"; explicit move semantics; failure modes (scope conflict) explained inline; affected-children preview makes inheritance visible.</li>
+      <li><strong>Weaknesses:</strong> wide layout (3 panes); slow for picking 1 of 1000 tenants; mobile-hostile.</li>
+      <li><strong>Best for:</strong> typical 5–50 tenant scopes; one-shot setup of new tags.</li>
+      <li><strong>Distinctive:</strong> middle arrow column; disabled-row inline reasoning; affected-children inheritance preview as a panel below.</li>
+    </ul>
+    <hr class="divider" />
+    <p class="muted"><strong>B and C variants — described in index, not yet built:</strong>
+    <em>B (chip multi-picker)</em> would be a single-row autocomplete with chips for selected scopes — compact, modern, but harder
+    for 50+ scopes. <em>C (Tag × Tenant matrix)</em> would be a heatmap of every tag vs. every tenant with cells colored by
+    scope membership — great for audits, terrible for editing one tag.</p>
+  </div>
+
+</div>
+
+<script>
+  document.querySelectorAll('.opt-row').forEach(r => r.addEventListener('click', e => {
+    if (e.target.tagName === 'INPUT') return;
+    r.classList.toggle('selected');
+  }));
+</script>
+</body>
+</html>

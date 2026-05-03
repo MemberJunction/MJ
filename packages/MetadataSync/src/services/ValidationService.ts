@@ -36,7 +36,7 @@ export class ValidationService {
   private userRoleCache: Map<string, string[]> = new Map();
 
   constructor(options: Partial<ValidationOptions> = {}) {
-    this.metadata = new Metadata();
+    this.metadata = new Metadata(); // global-provider-ok: metadata sync operates on the configured provider only
     this.options = {
       verbose: false,
       outputFormat: 'human',

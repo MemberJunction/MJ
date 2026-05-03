@@ -4,13 +4,14 @@ import { MJResourceTypeEntity, ViewInfo} from '@memberjunction/core-entities';
 import { ResourceData } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 @Component({
   standalone: false,
   selector: 'app-add-item-dialog',
   templateUrl: './add-item.component.html',
   styleUrls: ['./add-item.component.css']
 })
-export class AddItemComponent implements OnInit {
+export class AddItemComponent extends BaseAngularComponent implements OnInit {
   @Output() onClose = new EventEmitter<any>();
   @Input() selectedResource!:MJResourceTypeEntity | null;
   public showloader: boolean = false;
@@ -31,9 +32,9 @@ export class AddItemComponent implements OnInit {
   public get ResourceTypes(): any[] {
     return SharedService.Instance.ResourceTypes.filter((rt: any) => rt.Name !== 'Dashboards' && rt.Name !== 'Records');
   }
-  private md: Metadata = new Metadata();
-
-  constructor(private sharedService: SharedService) { }
+  private get md() { return this.ProviderToUse; }
+  constructor(private sharedService: SharedService) {
+    super(); }
 
   ngOnInit(): void {
     this.resourceType = this.selectedResource || SharedService.Instance.ViewResourceType;
@@ -74,7 +75,7 @@ export class AddItemComponent implements OnInit {
     this.selectedReport = null;
     this.Reports = [];
     
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const reports = await rv.RunView({ EntityName: this.resourceType.Entity, ExtraFilter: `UserID='${this.md.CurrentUser.ID}'` });
     
     if (reports.Success && reports.Results) {

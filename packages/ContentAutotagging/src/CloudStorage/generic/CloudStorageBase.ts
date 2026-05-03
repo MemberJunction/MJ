@@ -1,7 +1,7 @@
 import { AutotagBase, AutotagProgressCallback } from "../../Core";
 import { AutotagBaseEngine } from "../../Engine";
 import { ContentSourceParams } from "../../Engine";
-import { UserInfo } from "@memberjunction/core";
+import { IMetadataProvider, UserInfo } from "@memberjunction/core";
 import { MJContentSourceEntity, MJContentItemEntity } from "@memberjunction/core-entities";
 import dotenv from 'dotenv';
 dotenv.config({ quiet: true })
@@ -32,7 +32,8 @@ export abstract class CloudStorageBase extends AutotagBase {
     */
     public abstract SetNewAndModifiedContentItems(contentSourceParams: ContentSourceParams, lastRunDate: Date, contextUser: UserInfo): Promise<MJContentItemEntity[]>;
     
-    public async Autotag(contextUser: UserInfo, onProgress?: AutotagProgressCallback): Promise<number> {
+    public async Autotag(contextUser: UserInfo, onProgress?: AutotagProgressCallback, contentSourceIDs?: string[], provider?: IMetadataProvider): Promise<number> {
+        if (provider) this._provider = provider;
         this.contextUser = contextUser;
         this.contentSourceTypeID = this.engine.SetSubclassContentSourceType('Cloud Storage');
         const contentSources: MJContentSourceEntity[] = await this.engine.getAllContentSources(this.contextUser, this.contentSourceTypeID) || [];

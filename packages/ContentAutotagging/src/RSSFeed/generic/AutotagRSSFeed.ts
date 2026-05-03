@@ -1,4 +1,4 @@
-import { UserInfo, Metadata, RunView, DatabaseProviderBase, LogStatus, LogError } from '@memberjunction/core';
+import { IMetadataProvider, UserInfo, Metadata, RunView, DatabaseProviderBase, LogStatus, LogError } from '@memberjunction/core';
 import { RegisterClass, NormalizeUUID } from '@memberjunction/global';
 import { AutotagBase, AutotagProgressCallback } from '../../Core';
 import { AutotagBaseEngine, ContentSourceParams } from '../../Engine';
@@ -30,7 +30,8 @@ export class AutotagRSSFeed extends AutotagBase {
         this.engine = AutotagBaseEngine.Instance;
     }
 
-    public async Autotag(contextUser: UserInfo, onProgress?: AutotagProgressCallback): Promise<number> {
+    public async Autotag(contextUser: UserInfo, onProgress?: AutotagProgressCallback, contentSourceIDs?: string[], provider?: IMetadataProvider): Promise<number> {
+        if (provider) this._provider = provider;
         this.contextUser = contextUser;
         this.contentSourceTypeID = this.engine.SetSubclassContentSourceType('RSS Feed');
         LogStatus(`[RSS] Starting RSS autotag...`);
@@ -152,7 +153,7 @@ export class AutotagRSSFeed extends AutotagBase {
             return null; // Content unchanged
         }
 
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         let contentItem: MJContentItemEntity;
 
         if (existing) {

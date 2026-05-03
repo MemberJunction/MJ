@@ -1,7 +1,8 @@
 import { Arg, Ctx, Field, InputType, Mutation, ObjectType, registerEnumType } from 'type-graphql';
 import { AppContext, UserPayload } from '../types.js';
-import { BaseEntity, CompositeKey, DatabaseProviderBase, EntityDeleteOptions, EntitySaveOptions, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, DatabaseProviderBase, EntityDeleteOptions, EntitySaveOptions, IMetadataProvider, LogError, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { RequireSystemUser } from '../directives/RequireSystemUser.js';
+import { GetReadWriteProvider } from '../util.js';
 import { CompositeKeyInputType, CompositeKeyOutputType } from '../generic/KeyInputOutputTypes.js';
 import { MJDatasetItemEntity } from '@memberjunction/core-entities';
 
@@ -110,9 +111,9 @@ export class SyncDataResolver {
     @Arg('items', () => [ActionItemInputType] ) items: ActionItemInputType[],
     @Ctx() context: AppContext
     ) {
-        try { 
-            // iterate through the items 
-            const md = new Metadata();
+        try {
+            // iterate through the items
+            const md = (GetReadWriteProvider(context.providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider) ?? (new Metadata() as unknown as IMetadataProvider);
             const results: ActionItemOutputType[] = [];
             for (const item of items) {
                 results.push(await this.SyncSingleItem(item, context, md, context.userPayload)); 
@@ -160,7 +161,7 @@ export class SyncDataResolver {
         return false; // didn't find any
     }
 
-    protected async SyncSingleItem(item: ActionItemInputType, context: AppContext, md: Metadata, userPayload: UserPayload): Promise<ActionItemOutputType> {
+    protected async SyncSingleItem(item: ActionItemInputType, context: AppContext, md: IMetadataProvider, userPayload: UserPayload): Promise<ActionItemOutputType> {
         const result = new ActionItemOutputType();
         result.AlternateKey = item.AlternateKey;
         result.PrimaryKey = item.PrimaryKey;
@@ -192,7 +193,7 @@ export class SyncDataResolver {
                         await this.SyncSingleItemDelete(entityObject, pk, ak, result, userPayload);
                         break;
                     case SyncDataActionType.DeleteWithFilter:
-                        await this.SyncSingleItemDeleteWithFilter(item.EntityName, item.DeleteFilter, result, context.userPayload.userRecord, userPayload);
+                        await this.SyncSingleItemDeleteWithFilter(item.EntityName, item.DeleteFilter, result, context.userPayload.userRecord, userPayload, md);
                         break;
                     default:
                         throw new Error('Invalid SyncDataActionType');
@@ -211,7 +212,7 @@ export class SyncDataResolver {
     }
 
 
-    protected async SyncSingleItemDeleteWithFilter(entityName: string, filter: string, result: ActionItemOutputType, user: UserInfo, userPayload: UserPayload) {
+    protected async SyncSingleItemDeleteWithFilter(entityName: string, filter: string, result: ActionItemOutputType, user: UserInfo, userPayload: UserPayload, providerOverride?: IMetadataProvider) {
         try {
             // Run the view to find matching records, then delete them all atomically —
             // any single failure rolls back the entire batch so the dataset stays consistent.
@@ -233,7 +234,7 @@ export class SyncDataResolver {
                 return;
             }
 
-            const provider = Metadata.Provider as DatabaseProviderBase;
+            const provider = (providerOverride ?? Metadata.Provider) as unknown as DatabaseProviderBase;
             await provider.BeginTransaction();
             try {
                 for (const entityObject of data.Results) {
@@ -254,11 +255,11 @@ export class SyncDataResolver {
         }
     }
 
-    protected async LoadFromAlternateKey(entityName: string, alternateKey: CompositeKey, user: UserInfo): Promise<BaseEntity> {
+    protected async LoadFromAlternateKey(entityName: string, alternateKey: CompositeKey, user: UserInfo, provider?: IMetadataProvider): Promise<BaseEntity> {
         try {
-            // no primary key provided, attempt to look up the primary key based on the 
+            // no primary key provided, attempt to look up the primary key based on the
             const rv = new RunView();
-            const md = new Metadata();
+            const md = provider ?? new Metadata();
             const entity = md.EntityByName(entityName);
             const r = await rv.RunView<BaseEntity>({
                 EntityName: entityName,

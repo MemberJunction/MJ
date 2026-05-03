@@ -13,11 +13,13 @@ A TypeScript wrapper for Python's [sqlglot](https://github.com/tobymao/sqlglot) 
 
 ## Prerequisites
 
-- **Python 3.9+** with `sqlglot`, `fastapi`, and `uvicorn` installed:
+- **Python 3.9+** with the pinned dependencies installed:
 
 ```bash
-pip install sqlglot fastapi uvicorn
+pip install -r requirements.txt
 ```
+
+Dependencies (`sqlglot`, `fastapi`, `uvicorn`, `pydantic`) are pinned in `requirements.txt` so conversion output is reproducible. See the comments in that file for the upgrade procedure.
 
 ## Usage
 

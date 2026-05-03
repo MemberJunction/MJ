@@ -10,10 +10,29 @@
   "registry": "MJ",
   "status": "Active",
   "dataRequirements": {
-    "queries": [{
-      "name": "Member Report",
-      "categoryPath": "Membership/Reports",
-      "fields": ["MemberID", "MemberName", "JoinDate", "Status"]
-    }]
+    "queries": [
+      {
+        "name": "Member Report",
+        "categoryPath": "Membership/Reports",
+        "fields": [
+          {
+            "name": "MemberID",
+            "type": "uniqueidentifier"
+          },
+          {
+            "name": "MemberName",
+            "type": "nvarchar"
+          },
+          {
+            "name": "JoinDate",
+            "type": "datetimeoffset"
+          },
+          {
+            "name": "Status",
+            "type": "nvarchar"
+          }
+        ]
+      }
+    ]
   }
 }

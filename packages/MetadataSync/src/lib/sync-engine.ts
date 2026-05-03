@@ -15,6 +15,7 @@ import axios from 'axios';
 import { EntityInfo, Metadata, RunView, BaseEntity, CompositeKey, UserInfo } from '@memberjunction/core';
 import { EntityConfig, FolderConfig } from '../config';
 import { JsonPreprocessor } from './json-preprocessor';
+import { BatchContextIndex, BatchContextStub } from './batch-context-index';
 import {
   METADATA_KEYWORDS,
   METADATA_KEYWORD_PREFIXES,
@@ -22,6 +23,9 @@ import {
   isNonKeywordAtSymbol,
   extractKeywordValue
 } from '../constants/metadata-keywords';
+
+/** Accepted types for the batchContext parameter (indexed or plain Map). */
+export type BatchContext = BatchContextIndex | Map<string, BaseEntity | BatchContextStub>;
 
 /**
  * Custom error class for lookup failures that can be deferred.
@@ -142,7 +146,7 @@ export class SyncEngine {
    * @param contextUser - The user context for database operations
    */
   constructor(contextUser: UserInfo) {
-    this.metadata = new Metadata();
+    this.metadata = new Metadata(); // global-provider-ok: metadata sync operates on the configured provider only
     this.contextUser = contextUser;
   }
   
@@ -202,10 +206,10 @@ export class SyncEngine {
   async processFieldValue(
     value: any,
     baseDir: string,
-    parentRecord?: BaseEntity | null,
-    rootRecord?: BaseEntity | null,
+    parentRecord?: BaseEntity | BatchContextStub | null,
+    rootRecord?: BaseEntity | BatchContextStub | null,
     depth: number = 0,
-    batchContext?: Map<string, BaseEntity>,
+    batchContext?: BatchContext,
     resolutionCollector?: SyncResolutionCollector,
     fieldName?: string
   ): Promise<any> {
@@ -503,35 +507,43 @@ export class SyncEngine {
     lookupFields: Array<{fieldName: string, fieldValue: string}>,
     autoCreate: boolean = false,
     createFields: Record<string, any> = {},
-    batchContext?: Map<string, BaseEntity>,
+    batchContext?: BatchContext,
     allowDefer: boolean = false,
     originalValue?: string
   ): Promise<string> {
     // First check batch context for in-memory entities
     if (batchContext) {
-      // Try to find the entity in batch context
-      for (const [, entity] of batchContext) {
-        // Check if this is the right entity type
-        if (entity.EntityInfo?.Name === entityName) {
-          // Check if all lookup fields match
-          let allMatch = true;
-          for (const {fieldName, fieldValue} of lookupFields) {
-            const entityValue = entity.Get(fieldName);
-            const normalizedEntityValue = entityValue?.toString() || '';
-            const normalizedLookupValue = fieldValue?.toString() || '';
-            
-            if (normalizedEntityValue !== normalizedLookupValue) {
-              allMatch = false;
-              break;
+      if (batchContext instanceof BatchContextIndex) {
+        // O(1) indexed lookup
+        const pkValue = batchContext.lookupByFields(entityName, lookupFields);
+        if (pkValue !== undefined) {
+          return pkValue;
+        }
+      } else {
+        // Fallback: linear scan for plain Map (backward compatibility)
+        for (const [, entity] of batchContext) {
+          // Check if this is the right entity type
+          if (entity.EntityInfo?.Name === entityName) {
+            // Check if all lookup fields match
+            let allMatch = true;
+            for (const {fieldName, fieldValue} of lookupFields) {
+              const entityValue = entity.Get(fieldName);
+              const normalizedEntityValue = (entityValue?.toString() || '').toLowerCase();
+              const normalizedLookupValue = (fieldValue?.toString() || '').toLowerCase();
+
+              if (normalizedEntityValue !== normalizedLookupValue) {
+                allMatch = false;
+                break;
+              }
             }
-          }
-          
-          if (allMatch) {
-            // Found in batch context, return primary key
-            const entityInfo = this.metadata.EntityByName(entityName);
-            if (entityInfo && entityInfo.PrimaryKeys.length > 0) {
-              const pkeyField = entityInfo.PrimaryKeys[0].Name;
-              return entity.Get(pkeyField);
+
+            if (allMatch) {
+              // Found in batch context, return primary key
+              const entityInfo = this.metadata.EntityByName(entityName);
+              if (entityInfo && entityInfo.PrimaryKeys.length > 0) {
+                const pkeyField = entityInfo.PrimaryKeys[0].Name;
+                return entity.Get(pkeyField);
+              }
             }
           }
         }
@@ -1078,10 +1090,10 @@ export class SyncEngine {
   private async processJsonFieldValues(
     obj: any,
     baseDir: string,
-    parentRecord?: BaseEntity | null,
-    rootRecord?: BaseEntity | null,
+    parentRecord?: BaseEntity | BatchContextStub | null,
+    rootRecord?: BaseEntity | BatchContextStub | null,
     depth: number = 0,
-    batchContext?: Map<string, BaseEntity>
+    batchContext?: BatchContext
   ): Promise<any> {
     // Handle null and undefined
     if (obj === null || obj === undefined) {

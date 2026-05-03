@@ -111,7 +111,7 @@ export class AdvancedGeneration {
     private _promptRunner: AIPromptRunner;
 
     constructor() {
-        this._metadata = new Metadata();
+        this._metadata = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
         this._promptRunner = new AIPromptRunner();
     }
 

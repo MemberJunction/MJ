@@ -88,6 +88,8 @@
     "@memberjunction/sql-dialect": "5.30.1",
     "@memberjunction/sqlserver-dataprovider": "5.30.1",
     "@memberjunction/storage": "5.30.1",
+    "@memberjunction/tag-engine": "5.30.1",
+    "@memberjunction/tag-engine-base": "5.30.1",
     "@memberjunction/templates": "5.30.1",
     "@memberjunction/testing-engine": "5.30.1",
     "@memberjunction/testing-engine-base": "5.30.1",

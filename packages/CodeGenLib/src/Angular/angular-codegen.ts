@@ -819,7 +819,7 @@ ${indentedFormHTML}
         }
         else {
             // Use the entity's DisplayName (human-friendly) when available, falling back to the technical Name
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
             const re = md.EntityByID(relatedEntity.RelatedEntityID);
             let tabName = re ? re.DisplayNameOrName : relatedEntity.RelatedEntity;
 
@@ -850,7 +850,7 @@ ${indentedFormHTML}
        * @returns Promise resolving to array of related entity tab sections
        */
       protected async generateRelatedEntityTabs(entity: EntityInfo, startIndex: number, contextUser: UserInfo): Promise<AngularFormSectionInfo[]> {
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
         const tabs: AngularFormSectionInfo[] = [];
         // IS-A child entity IDs — these are shown in the toolbar breadcrumb and
         // can only have 0 or 1 records (disjoint subtypes), so a grid panel is redundant
@@ -954,7 +954,7 @@ ${componentCodeWithIndent}
        * @returns Array of organic key tab sections
        */
       protected generateOrganicKeyTabs(entity: EntityInfo, startIndex: number): AngularFormSectionInfo[] {
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
         const tabs: AngularFormSectionInfo[] = [];
         const organicKeys = entity.OrganicKeys;
 

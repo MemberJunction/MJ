@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, ViewContainerRef } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJProjectEntity, MJConversationEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { MJDialogService } from '@memberjunction/ng-ui-components';
@@ -100,7 +101,7 @@ export interface ProjectWithStats extends MJProjectEntity {
     }
   `]
 })
-export class ProjectSelectorComponent implements OnInit {
+export class ProjectSelectorComponent extends BaseAngularComponent implements OnInit  {
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
   @Input() selectedProjectId: string | null = null;
@@ -119,7 +120,8 @@ export class ProjectSelectorComponent implements OnInit {
     private dialogService: DialogService,
     private mjDialogService: MJDialogService,
     private viewContainerRef: ViewContainerRef
-  ) {}
+  ) {
+  super();}
 
   ngOnInit() {
     this.loadProjects();
@@ -127,7 +129,7 @@ export class ProjectSelectorComponent implements OnInit {
 
   private async loadProjects(): Promise<void> {
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
       // Load projects and conversation counts in parallel
       const [projectsResult, conversationsResult] = await rv.RunViews([
@@ -255,7 +257,7 @@ export class ProjectSelectorComponent implements OnInit {
     if (!confirmed) return;
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const project = await md.GetEntityObject<MJProjectEntity>('MJ: Projects', this.currentUser);
       await project.Load(projectId);
 

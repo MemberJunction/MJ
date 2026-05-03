@@ -21,7 +21,7 @@ export class YouTubeGetChannelAnalyticsAction extends YouTubeBaseAction {
                 throw new Error('CompanyIntegrationID is required');
             }
 
-            const initialized = await this.initializeOAuth(companyIntegrationId);
+            const initialized = await this.initializeOAuth(companyIntegrationId, params);
             if (!initialized) {
                 throw new Error('Failed to initialize YouTube OAuth connection');
             }

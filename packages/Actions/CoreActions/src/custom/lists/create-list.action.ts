@@ -51,7 +51,7 @@ export class CreateListAction extends BaseAction {
         };
       }
 
-      const md = new Metadata();
+      const md = params.Provider ?? new Metadata();
       const rv = new RunView();
 
       // Resolve entity ID if name provided
@@ -86,7 +86,7 @@ export class CreateListAction extends BaseAction {
         list.CategoryID = categoryId;
       }
 
-      const provider = Metadata.Provider as DatabaseProviderBase;
+      const provider = (params.Provider ?? Metadata.Provider) as DatabaseProviderBase;
       let recordsAdded = 0;
 
       await provider.BeginTransaction();

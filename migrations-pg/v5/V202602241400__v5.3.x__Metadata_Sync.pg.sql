@@ -1,25 +1,3 @@
--- ============================================================================
--- MemberJunction PostgreSQL Migration
--- Converted from SQL Server using TypeScript conversion pipeline
--- ============================================================================
-
--- Extensions
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- Schema
-CREATE SCHEMA IF NOT EXISTS __mj;
-SET search_path TO __mj, public;
-
--- Ensure backslashes in string literals are treated literally (not as escape sequences)
-SET standard_conforming_strings = on;
-
--- Implicit INTEGER -> BOOLEAN cast (SQL Server BIT columns accept 0/1 in INSERTs)
--- PostgreSQL has a built-in explicit-only INTEGER->bool cast. We upgrade it to implicit
--- so INSERT VALUES with 0/1 for BOOLEAN columns work like SQL Server BIT.
-UPDATE pg_cast SET castcontext = 'i'
-WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
-
 
 -- ===================== Data (INSERT/UPDATE/DELETE) =====================
 
@@ -292,7 +270,7 @@ BEGIN
   p_Type_61e8a3c8 := 'Input';
   p_ValueType_61e8a3c8 := 'Scalar';
   p_IsArray_61e8a3c8 := 0;
-  p_Description_61e8a3c8 := 'How often the judge evaluates progress. Options: ''EveryStep'' (every step, most accurate but highest cost), ''EveryNSteps:'' (every N steps, e.g. ''EveryNSteps:3''), ''OnStagnation:'' (only when N identical screenshots detected, e.g. ''OnStagnation:5''). Default: ''EveryStep''.';
+  p_Description_61e8a3c8 := 'How often the judge evaluates progress. Options: ''EveryStep'' (every step, most accurate but highest cost), ''EveryNSteps:N'' (every N steps, e.g. ''EveryNSteps:3''), ''OnStagnation:N'' (only when N identical screenshots detected, e.g. ''OnStagnation:5''). Default: ''EveryStep''.';
   p_IsRequired_61e8a3c8 := 0;
   PERFORM __mj."spCreateActionParam"(p_ID := p_ID_61e8a3c8, p_ActionID := p_ActionID_61e8a3c8, p_Name := p_Name_61e8a3c8, p_DefaultValue := p_DefaultValue_61e8a3c8, p_Type := p_Type_61e8a3c8, p_ValueType := p_ValueType_61e8a3c8, p_IsArray := p_IsArray_61e8a3c8, p_Description := p_Description_61e8a3c8, p_IsRequired := p_IsRequired_61e8a3c8, p_MediaModality := p_MediaModality_61e8a3c8);
 END $$;

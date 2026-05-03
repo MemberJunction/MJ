@@ -5,7 +5,7 @@
  * Every function is stateless: context is passed in as parameters rather than via `this`.
  */
 
-import { EntityInfo, IMetadataProvider, Metadata, QueryDependencyInfo, QueryFieldInfo, QueryInfo, TypeScriptTypeFromSQLType } from "@memberjunction/core";
+import { EntityInfo, IMetadataProvider, QueryDependencyInfo, QueryFieldInfo, QueryInfo, TypeScriptTypeFromSQLType } from "@memberjunction/core";
 import { QueryCompositionEngine } from "@memberjunction/generic-database-provider";
 import { UUIDsEqual } from "@memberjunction/global";
 import { SQLParser } from "@memberjunction/sql-parser";
@@ -307,7 +307,7 @@ function expandFieldsFromCompositionRefs(
     const compositionRefs = SQLParser.ExtractCompositionRefs(sql);
 
     for (const ref of compositionRefs) {
-        const referencedQuery = Metadata.Provider.Queries.find(q =>
+        const referencedQuery = md.Queries.find(q =>
             q.Name.toLowerCase() === ref.queryName.toLowerCase()
         );
 
@@ -375,7 +375,8 @@ function buildFieldFromQueryField(
 export function EnrichFieldTypesFromCompositions(
     fields: ExtractedField[],
     resolvedRefs: ResolvedCompositionReference[],
-    selectColumns: SQLSelectColumn[]
+    selectColumns: SQLSelectColumn[],
+    md: IMetadataProvider
 ): ExtractedField[] {
     if (resolvedRefs.length === 0 || fields.length === 0) return fields;
 
@@ -390,7 +391,7 @@ export function EnrichFieldTypesFromCompositions(
             ?? allDepFields.get(field.name.toLowerCase());
 
         if (matchedField) {
-            return applyQueryFieldMetadata(field, matchedField);
+            return applyQueryFieldMetadata(field, matchedField, md);
         }
 
         return field;
@@ -653,14 +654,15 @@ function buildDependencyFieldLookup(
  */
 function applyQueryFieldMetadata(
     field: ExtractedField,
-    matchedField: QueryFieldInfo
+    matchedField: QueryFieldInfo,
+    md: IMetadataProvider
 ): ExtractedField {
     return {
         ...field,
         sqlBaseType: matchedField.SQLBaseType,
         sqlFullType: matchedField.SQLFullType,
         sourceEntity: field.sourceEntity ?? (matchedField.SourceEntityID
-            ? findEntityNameByID(Metadata.Provider, matchedField.SourceEntityID)
+            ? findEntityNameByID(md, matchedField.SourceEntityID)
             : null),
         sourceFieldName: field.sourceFieldName ?? matchedField.SourceFieldName,
         isComputed: field.isComputed ?? matchedField.IsComputed ?? false,
@@ -787,7 +789,7 @@ function expandWildcardFromSource(
         return expandFromEntityInfo(sourceEntityInfo, field.optional);
     }
 
-    const composedQuery = Metadata.Provider.Queries.find(q =>
+    const composedQuery = md.Queries.find(q =>
         q.Name.toLowerCase() === field.sourceEntity!.toLowerCase()
     );
     if (composedQuery && composedQuery.Fields.length > 0) {

@@ -8,7 +8,7 @@
  * @module @memberjunction/ai-vector-sync
  */
 
-import { EntityInfo, LogError, LogStatus, Metadata, UserInfo } from '@memberjunction/core';
+import { EntityInfo, IMetadataProvider, LogError, LogStatus, Metadata, UserInfo } from '@memberjunction/core';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
@@ -61,6 +61,13 @@ export interface SuggestDocumentResponse {
  * Uses the `AIPromptRunner` directly (not via Actions) per CLAUDE.md design philosophy.
  */
 export class EntityDocumentSuggester {
+    /** Optional provider override; falls back to Metadata.Provider when not set. */
+    private _provider?: IMetadataProvider;
+
+    /** Returns the active provider — explicit override if set, otherwise the global default. */
+    protected get ProviderToUse(): IMetadataProvider {
+        return this._provider ?? Metadata.Provider;
+    }
 
     /**
      * Analyze an entity's schema and suggest an Entity Document template.
@@ -93,8 +100,8 @@ export class EntityDocumentSuggester {
 
     /** Resolve entity metadata by name */
     private resolveEntity(entityName: string): EntityInfo {
-        const md = new Metadata();
-        const entity = md.Entities.find(e => e.Name === entityName);
+        const md = this.ProviderToUse;
+        const entity = md.EntityByName(entityName);
         if (!entity) {
             throw new Error(`Entity "${entityName}" not found in metadata`);
         }
@@ -116,12 +123,12 @@ export class EntityDocumentSuggester {
 
     /** Build relationship descriptors from entity metadata */
     private buildRelationshipDescriptors(entity: EntityInfo): RelationshipDescriptor[] {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         return entity.RelatedEntities
             .filter(r => r.Type === 'One to Many' || r.Type === 'Many to One')
             .slice(0, 20) // Limit to prevent oversized prompts
             .map(r => {
-                const relatedEntityInfo = md.Entities.find(e => e.Name === r.RelatedEntity);
+                const relatedEntityInfo = md.EntityByName(r.RelatedEntity);
                 const sampleFields = relatedEntityInfo
                     ? relatedEntityInfo.Fields
                         .filter(f => !f.IsPrimaryKey && f.Type !== 'datetimeoffset')

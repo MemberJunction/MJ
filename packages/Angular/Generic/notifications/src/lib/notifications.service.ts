@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { LogError, Metadata, StartupManager } from '@memberjunction/core';
+import { IMetadataProvider, LogError, Metadata, StartupManager } from '@memberjunction/core';
 import { UserInfoEngine, MJUserNotificationEntity } from '@memberjunction/core-entities';
 import { DisplaySimpleNotificationRequestData, MJEventType, MJGlobal, GetGlobalObjectStore } from '@memberjunction/global';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
@@ -10,12 +10,24 @@ import { map, shareReplay } from 'rxjs/operators';
  * This injectable service is also available as a singleton MJNotificationService.Instance globally within an Angular application/library process space. It is responsible for displaying notifications to the user and also is able to manage the User Notifications entity
  * in the database.
  */
+/**
+ * Multi-provider note: callers under a non-default provider should set
+ * `service.Provider = component.ProviderToUse` before invoking any methods.
+ */
 @Injectable({
   providedIn: 'root'
 })
 export class MJNotificationService {
   private static readonly _globalStoreKey = '___SINGLETON__MJNotificationService';
   private static _loaded: boolean = false;
+
+  private _provider: IMetadataProvider | null = null;
+  public get Provider(): IMetadataProvider {
+    return this._provider ?? Metadata.Provider;
+  }
+  public set Provider(value: IMetadataProvider | null) {
+    this._provider = value;
+  }
 
   private static isLoading$ = new BehaviorSubject<boolean>(false);
   private tabChange = new Subject();
@@ -134,7 +146,7 @@ export class MJNotificationService {
   }
 
   public PushStatusUpdates(): Observable<string> {
-    const gp: GraphQLDataProvider = <GraphQLDataProvider>Metadata.Provider;
+    const gp: GraphQLDataProvider = <GraphQLDataProvider><unknown>this.Provider;
     return gp.PushStatusUpdates();
   }
 
@@ -189,7 +201,7 @@ export class MJNotificationService {
    * @returns 
    */
   public async CreateNotification(title: string, message: string, resourceTypeId: string | null, resourceRecordId: string | null, resourceConfiguration: any | null, displayToUser: boolean = true): Promise<MJUserNotificationEntity> {
-    const md = new Metadata();
+    const md = this.Provider;
     const notification = <MJUserNotificationEntity>await md.GetEntityObject('MJ: User Notifications');
     notification.Title = title;
     notification.Message = message;

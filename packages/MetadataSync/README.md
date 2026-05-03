@@ -994,7 +994,54 @@ mj sync push --no-validate
 
 # Reset file checksums
 mj sync file-reset
+
+# Incremental push (skip unchanged files and records)
+mj sync push --incremental
+mj sync push --dir ./metadata --incremental --verbose
+
+# Incremental pull (only records updated since last pull)
+mj sync pull --incremental
+
+# Pull records updated after a specific timestamp
+mj sync pull --entity "MJ: AI Prompts" --since "2026-04-07T10:00:00Z"
 ```
+
+### Incremental Push (`--incremental`)
+
+Skips unchanged files and records using stored checksums, significantly speeding up repeated pushes when only a few files have changed.
+
+- The first run with `--incremental` establishes baseline checksums (runs at normal speed)
+- Subsequent runs skip files whose content hash has not changed since the last push
+- Also skips individual records within multi-record files when only some records changed (uses the per-record `sync.checksum` already present in metadata files)
+- Unchanged files and records are skipped without any database calls
+- State is stored in `~/.mj/sync-state/` (machine-local, not committed to version control)
+- Combine freely with other flags: `mj sync push --dir ./metadata --incremental --verbose`
+
+### Incremental Pull (`--incremental`)
+
+Only pulls records updated since the last successful pull, avoiding a full re-pull of every record.
+
+- Filters by the `__mj_UpdatedAt` column (maintained by database triggers on all tracked entities)
+- Detects soft-deleted records (`__mj_DeletedAt`) and removes their local files
+- State is stored in `~/.mj/sync-state/`
+
+### Pull Since Timestamp (`--since`)
+
+Explicit alternative to `--incremental` -- pulls only records updated after a given ISO timestamp.
+
+```bash
+mj sync pull --entity "MJ: AI Prompts" --since "2026-04-07T10:00:00Z"
+```
+
+### Performance Improvements
+
+The following improvements apply automatically with no flags required:
+
+**Lazy embedding model loading** -- The AIEngine no longer loads the embedding model (~50 MB `Xenova/all-mpnet-base-v2`) at startup. The model loads on the first semantic search call (`FindSimilarAgents`, etc.). CLI commands that never use semantic search (sync, codegen) skip the ~8 s model load entirely. API server behavior is unchanged -- embeddings generate on the first search request.
+
+**Indexed batch context lookups** -- Push operations resolve `@lookup` references using an indexed data structure instead of a linear scan, reducing lookup cost from O(N) to O(1).
+
+**Batched pull queries** -- Pull operations pre-fetch related entities with a single `IN` query per type, replacing the previous N+1 query pattern (one query per parent record per related type).
 
 ## Configuration
 

@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { Metadata } from '@memberjunction/core';
+import { Metadata, IMetadataProvider } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { FormState, FormSectionState, DEFAULT_FORM_STATE, DEFAULT_SECTION_STATE } from './form-state.interface';
 
@@ -27,7 +27,18 @@ export class FormStateService {
     /** Track which entities are currently in edit mode (saves suppressed) */
     private editingEntities = new Set<string>();
 
-    private metadata = new Metadata();
+    private _provider: IMetadataProvider | null = null;
+
+    /**
+     * Set the metadata provider this service should use. When unset, falls back to Metadata.Provider.
+     */
+    public set Provider(value: IMetadataProvider | null) {
+        this._provider = value;
+    }
+
+    private get metadata(): IMetadataProvider {
+        return this._provider ?? Metadata.Provider;
+    }
 
     /**
      * Get the observable state for an entity.

@@ -49,10 +49,11 @@ function collectAvailableFields(
       queries?: { name: string; categoryPath: string; fields?: { name: string; type: string }[] }[];
     };
   },
-): { exactSet: Set<string>; caseMap: Map<string, string>; hasEntityFields: boolean } {
+): { exactSet: Set<string>; caseMap: Map<string, string>; hasEntityFields: boolean; hasQueryFields: boolean } {
   const exactSet = new Set<string>();
   const caseMap = new Map<string, string>(); // lowercase -> original name
   let hasEntityFields = false;
+  let hasQueryFields = false;
 
   if (componentSpec.dataRequirements?.entities) {
     for (const entity of componentSpec.dataRequirements.entities) {
@@ -82,6 +83,7 @@ function collectAvailableFields(
           if (typeof fieldName !== 'string') continue;
           exactSet.add(fieldName);
           caseMap.set(fieldName.toLowerCase(), fieldName);
+          hasQueryFields = true;
         }
       }
       if (query.fields) {
@@ -89,12 +91,13 @@ function collectAvailableFields(
           if (typeof f.name !== 'string') continue;
           exactSet.add(f.name);
           caseMap.set(f.name.toLowerCase(), f.name);
+          hasQueryFields = true;
         }
       }
     }
   }
 
-  return { exactSet, caseMap, hasEntityFields };
+  return { exactSet, caseMap, hasEntityFields, hasQueryFields };
 }
 
 /**
@@ -208,7 +211,7 @@ export class DatagridFieldValidationRule extends BaseLintRule {
     }
 
     const typeContext = new TypeContext(componentSpec);
-    const { exactSet, caseMap, hasEntityFields } = collectAvailableFields(typeContext, componentSpec);
+    const { exactSet, caseMap, hasEntityFields, hasQueryFields } = collectAvailableFields(typeContext, componentSpec);
 
     if (exactSet.size === 0) {
       return violations;
@@ -230,18 +233,19 @@ export class DatagridFieldValidationRule extends BaseLintRule {
         const hasGridProps = propsMap.has('fields') || propsMap.has('columns');
         if (!isGridComponent(nameNode.name, hasGridProps)) return;
 
-        // Determine if this grid is bound to a known entity schema.
-        // Only validate field names when we have a definitive schema to check against:
-        // 1. Entity-bound grids (EntityGrid, EntityDataGrid) — always entity-bound
+        // Determine if this grid has a known schema to validate against:
+        // 1. Entity-bound grids (EntityGrid, EntityDataGrid) — always validate against entity fields
         // 2. Any grid with an explicit entityName prop — schema is known
+        // 3. Plain DataGrid fed by RunQuery results — query fields represent the actual
+        //    data shape and can be validated
         //
-        // For plain DataGrid/DataTable/SingleRecordView WITHOUT entityName, the data
-        // is likely from a client-side transformation (renamed/computed fields), a query
-        // result, or a constructed display object. Field validation against the raw entity
-        // schema would produce false positives.
+        // For plain DataGrid/DataTable/SingleRecordView WITHOUT entityName and without
+        // query fields, the data is likely from a client-side transformation
+        // (renamed/computed fields). Validating against the raw entity schema would
+        // produce false positives, so we skip.
         const isEntityBound = ENTITY_BOUND_GRIDS.has(nameNode.name) || propsMap.has('entityName');
-        if (!isEntityBound) return; // Skip — can't validate without a known entity schema
-        if (!hasEntityFields) return; // Entity-bound but no metadata loaded — skip
+        if (isEntityBound && !hasEntityFields) return; // Entity-bound but no metadata loaded
+        if (!isEntityBound && !hasQueryFields) return; // Not entity-bound and no query fields — data is likely transformed
 
         // Validate `fields` prop: fields={['Name', 'Email']}
         const fieldsAttr = propsMap.get('fields');

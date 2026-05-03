@@ -2,6 +2,7 @@ import {
     BaseEntity,
     CompositeKey,
     EntityInfo,
+    IMetadataProvider,
     Metadata,
     RunView,
     UserInfo,
@@ -51,14 +52,24 @@ export class RestoreEngine {
     private LabelMgr = new LabelManager();
     private SnapshotBldr = new SnapshotBuilder();
 
+    /** Optional provider override; falls back to Metadata.Provider when not set. */
+    private _provider?: IMetadataProvider;
+
+    /** Returns the active provider — explicit override if set, otherwise the global default. */
+    protected get ProviderToUse(): IMetadataProvider {
+        return this._provider ?? Metadata.Provider;
+    }
+
     /**
      * Restore records to the state captured by a version label.
      */
     public async RestoreToLabel(
         labelId: string,
         options: RestoreOptions,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<RestoreResult> {
+        if (provider) this._provider = provider;
         const resolvedOptions = this.resolveDefaults(options);
 
         // Load the target label
@@ -182,7 +193,7 @@ export class RestoreEngine {
 
         // Apply entity exclusion
         if (options.SkipEntities && options.SkipEntities.length > 0) {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const excludeIds = options.SkipEntities
                 .map(name => md.EntityByName(name)?.ID)
                 .filter((id): id is string => id != null);
@@ -222,9 +233,9 @@ export class RestoreEngine {
         const selectedSet = new Set(
             selectedRecords.map(s => `${s.EntityName}::${s.RecordID}`)
         );
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         return items.filter(item => {
-            const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, item.EntityID));
+            const entityInfo = md.EntityByID(item.EntityID);
             const entityName = entityInfo?.Name ?? '';
             return selectedSet.has(`${entityName}::${item.RecordID}`);
         });
@@ -235,7 +246,7 @@ export class RestoreEngine {
      * before their children.
      */
     private sortByDependencyOrder(items: MJVersionLabelItemEntityType[]): MJVersionLabelItemEntityType[] {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
 
         // Build a map of entityId -> dependency level
         const levelMap = new Map<string, number>();
@@ -246,7 +257,7 @@ export class RestoreEngine {
             if (visited.has(entityId)) return 0; // Cycle — break it
             visited.add(entityId);
 
-            const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityId));
+            const entityInfo = md.EntityByID(entityId);
             if (!entityInfo) {
                 levelMap.set(entityId, 0);
                 return 0;
@@ -317,8 +328,8 @@ export class RestoreEngine {
      * Resolve entity metadata by ID.
      */
     private resolveEntityInfo(entityId: string): EntityInfo | null {
-        const md = new Metadata();
-        return md.Entities.find(e => UUIDsEqual(e.ID, entityId)) ?? null;
+        const md = this.ProviderToUse;
+        return md.EntityByID(entityId) ?? null;
     }
 
     /**
@@ -363,7 +374,7 @@ export class RestoreEngine {
         recordId: string,
         contextUser: UserInfo
     ): Promise<BaseEntity | null> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const entity = await md.GetEntityObject<BaseEntity>(entityInfo.Name, contextUser);
 
         // Try to load existing record using the entity's actual primary key
@@ -435,11 +446,11 @@ export class RestoreEngine {
         }, contextUser);
 
         const preRestoreLabelId = label.ID;
-        const md = new Metadata();
+        const md = this.ProviderToUse;
 
         // Capture current state of each record that will be restored
         for (const item of items) {
-            const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, item.EntityID));
+            const entityInfo = md.EntityByID(item.EntityID);
             if (!entityInfo) continue;
 
             const key = new CompositeKey([{
@@ -470,7 +481,7 @@ export class RestoreEngine {
         preRestoreLabelId: string | null,
         contextUser: UserInfo
     ): Promise<string> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const restore = await md.GetEntityObject<MJVersionLabelRestoreEntity>(ENTITY_VERSION_LABEL_RESTORES, contextUser);
 
         restore.VersionLabelID = labelId;

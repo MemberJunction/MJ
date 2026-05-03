@@ -28,7 +28,7 @@ export class CreateNewUserBase {
                 if (!existingNewUser) {
                     if (newUserSetup.Email && newUserSetup.Email.length > 0) {
                         logStatus("Attempting to create new user: " + newUserSetup.Email);
-                        const md = new Metadata();
+                        const md = new Metadata(); // global-provider-ok: CLI tool, single-provider context
                         const user = <MJUserEntity>await md.GetEntityObject('MJ: Users', currentUser);
                         user.NewRecord();
                         user.Name = newUserSetup.UserName ? newUserSetup.UserName : newUserSetup.Email;
@@ -40,7 +40,7 @@ export class CreateNewUserBase {
                         // Create the user and all of its role/application/app-entity records atomically.
                         // If any Save fails partway through, the whole provisioning rolls back so we never
                         // leave a half-created user with partial roles/applications behind.
-                        const provider = Metadata.Provider as DatabaseProviderBase;
+                        const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: CLI tool, single-provider context
                         await provider.BeginTransaction();
                         try {
                             if (!await user.Save()) {

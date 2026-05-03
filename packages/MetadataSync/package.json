@@ -37,6 +37,7 @@
     "@memberjunction/generic-database-provider": "5.30.1",
     "@memberjunction/global": "5.30.1",
     "@memberjunction/graphql-dataprovider": "5.30.1",
+    "@memberjunction/postgresql-dataprovider": "5.30.1",
     "@memberjunction/sqlserver-dataprovider": "5.30.1",
     "axios": "^1.13.4",
     "chalk": "^5.6.2",
@@ -47,6 +48,7 @@
     "fs-extra": "^11.3.3",
     "minimatch": "^10.1.2",
     "mssql": "^12.2.0",
+    "pg": "^8.13.1",
     "uuid": "^13.0.0",
     "zod": "~3.24.4"
   },

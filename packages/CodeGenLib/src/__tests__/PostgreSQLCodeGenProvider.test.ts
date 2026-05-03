@@ -192,6 +192,28 @@ describe('PostgreSQLCodeGenProvider', () => {
             expect(sql).toContain('r."CategoryName"');
             expect(sql).toContain('LEFT OUTER JOIN');
         });
+
+        it('should NOT emit DROP VIEW (non-destructive strategy)', () => {
+            // Regression guard — base view generation must never silently DROP
+            // existing views because CASCADE wipes dependent views/functions/grants
+            // and the 42P16 recovery path hasn't landed yet. If someone
+            // accidentally reintroduces the DROP, this test fails and forces a
+            // review before dependent-object loss can ship again.
+            const entity = createMockEntity();
+            const context: BaseViewGenerationContext = {
+                entity,
+                relatedFieldsSelect: '',
+                relatedFieldsJoins: '',
+                parentFieldsSelect: '',
+                parentJoins: '',
+                rootFieldsSelect: '',
+                rootJoins: '',
+            };
+
+            const sql = provider.generateBaseView(context);
+            expect(sql).not.toMatch(/\bDROP\s+VIEW\b/i);
+            expect(sql).not.toMatch(/\bCASCADE\b/i);
+        });
     });
 
     describe('generateCRUDCreate', () => {
@@ -308,7 +330,8 @@ describe('PostgreSQLCodeGenProvider', () => {
             expect(sql).toContain('CREATE OR REPLACE FUNCTION');
             expect(sql).toContain('fn_trg_update_test_entity');
             expect(sql).toContain('RETURNS TRIGGER');
-            expect(sql).toContain("NEW.__mj_UpdatedAt := NOW() AT TIME ZONE 'UTC'");
+            expect(sql).toContain('NEW."__mj_UpdatedAt" := NOW()');
+
             expect(sql).toContain('RETURN NEW');
             expect(sql).toContain('CREATE TRIGGER');
             expect(sql).toContain('BEFORE UPDATE');
@@ -473,14 +496,16 @@ describe('PostgreSQLCodeGenProvider', () => {
     });
 
     describe('generateUpdateFieldString', () => {
-        it('should generate SET clause with quoted identifiers', () => {
+        it('should generate SET clause with quoted identifiers and tolerant merge semantics', () => {
             const entity = createMockEntity();
             const result = provider.generateUpdateFieldString(entity.Fields);
 
-            expect(result).toContain('"Name" = p_name');
-            expect(result).toContain('"Email" = p_email');
+            // Tolerant SP merge wrap: omitting a parameter preserves the existing value.
+            // PostgreSQL has no ISNULL keyword; it emits COALESCE.
+            expect(result).toContain('"Name" = COALESCE(p_name, "Name")');
+            expect(result).toContain('"Email" = COALESCE(p_email, "Email")');
             // Should NOT include PK
-            expect(result).not.toContain('"ID" = p_id');
+            expect(result).not.toContain('"ID" = ');
         });
     });
 

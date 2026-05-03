@@ -1,5 +1,5 @@
 import { Injectable, EventEmitter } from '@angular/core';
-import { RunView, CompositeKey, Metadata } from '@memberjunction/core';
+import { RunView, CompositeKey, Metadata, IMetadataProvider } from '@memberjunction/core';
 import { MJComponentEntityExtended } from '@memberjunction/core-entities';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
@@ -168,6 +168,7 @@ export class ComponentStudioStateService {
 
   // --- Unsaved changes tracking ---
   private _hasUnsavedChanges = false;
+  private _hasResolvedSpec = false;
   get HasUnsavedChanges(): boolean { return this._hasUnsavedChanges; }
   set HasUnsavedChanges(value: boolean) { this._hasUnsavedChanges = value; }
 
@@ -189,7 +190,20 @@ export class ComponentStudioStateService {
   /** Emitted when a component spec is updated (e.g. by AI) */
   SpecUpdated = new EventEmitter<ComponentSpec>();
 
-  private metadata: Metadata = new Metadata();
+  private _provider: IMetadataProvider | null = null;
+
+  /** Set the metadata provider this service should use. Components should call this after injection. */
+  public set Provider(value: IMetadataProvider | null) {
+      this._provider = value;
+  }
+
+  public get Provider(): IMetadataProvider {
+      return this._provider ?? Metadata.Provider;
+  }
+
+  private get metadata(): IMetadataProvider {
+    return this.Provider;
+  }
 
   // ============================================================
   // DATA LOADING
@@ -200,7 +214,7 @@ export class ComponentStudioStateService {
     this.StateChanged.emit();
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.Provider);
       const result = await rv.RunView<MJComponentEntityExtended>({
         EntityName: 'MJ: Components',
         ExtraFilter: 'HasRequiredCustomProps = 0',
@@ -415,7 +429,8 @@ export class ComponentStudioStateService {
         currentUserId,
         'MJ: Components',
         CompositeKey.FromID(componentId),
-        !isFavorite
+        !isFavorite,
+        this.metadata.CurrentUser
       );
 
       if (isFavorite) {
@@ -495,6 +510,7 @@ export class ComponentStudioStateService {
     this._currentError = null;
     this._isDetailsPaneCollapsed = false;
     this._hasUnsavedChanges = false;
+    this._hasResolvedSpec = false;
     this.InitializeEditors();
     this.StateChanged.emit();
   }
@@ -505,6 +521,7 @@ export class ComponentStudioStateService {
     this._componentSpec = null;
     this._currentError = null;
     this._hasUnsavedChanges = false;
+    this._hasResolvedSpec = false;
     this.StateChanged.emit();
   }
 
@@ -657,14 +674,20 @@ export class ComponentStudioStateService {
    * React bridge after it loads the component hierarchy.  This replaces
    * registry-reference stubs with real code so code sections show actual source.
    * Does NOT mark the component as having unsaved changes or trigger a re-render.
+   *
+   * Runs at most once per component load. The bridge re-resolves from the registry
+   * on every refresh (including the refresh triggered by Apply Changes), and we
+   * must not let that round-trip clobber edits the user has already applied.
    */
   UpdateWithResolvedSpec(resolvedSpec: ComponentSpec): void {
     if (!this._selectedComponent) return;
+    if (this._hasResolvedSpec) return;
 
     // Only update if the resolved spec actually differs (has real code)
     const current = this._componentSpec;
     if (!current || current === resolvedSpec) return;
 
+    this._hasResolvedSpec = true;
     this._componentSpec = resolvedSpec;
 
     // Update editable spec JSON so Spec/Requirements/Design/Data tabs reflect resolved data

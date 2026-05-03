@@ -1,0 +1,21 @@
+<div class="step-pipeline">
+
+  <mj-database-pipeline-panel
+    [TableDefinition]="AsEntityTableSpec"
+    ModificationType="create"
+    [AutoStart]="true"
+    (Completed)="OnCompleted($event)"
+    (Errored)="PipelineCompleted.emit({ Success: false, ErrorMessage: $event })">
+  </mj-database-pipeline-panel>
+
+  <!-- CTA buttons shown after success -->
+  @if (PipelineResult?.Success) {
+    <div class="pipeline-ctas">
+      <button mjButton buttonStyle="secondary" (click)="CreateAnother.emit()">
+        <i class="fa-solid fa-plus"></i>
+        Create Another Entity
+      </button>
+    </div>
+  }
+
+</div>

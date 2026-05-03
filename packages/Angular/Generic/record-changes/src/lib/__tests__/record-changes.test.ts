@@ -7,6 +7,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // Mock Angular
 vi.mock('@angular/core', () => ({
   Component: () => (target: Function) => target,
+  Directive: () => (target: Function) => target,
   Injectable: () => (target: Function) => target,
   Input: () => () => {},
   Output: () => () => {},
@@ -17,6 +18,14 @@ vi.mock('@angular/core', () => ({
   OnInit: class {},
   NgZone: class { run(fn: Function) { return fn(); } },
 }));
+
+vi.mock('@memberjunction/ng-base-types', () => {
+  class MockBaseAngularComponent {
+    Provider: unknown = null;
+    get ProviderToUse() { return this.Provider; }
+  }
+  return { BaseAngularComponent: MockBaseAngularComponent };
+});
 
 vi.mock('@angular/platform-browser', () => ({
   DomSanitizer: class {

@@ -42,7 +42,7 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
     await UserInfoEngine.Instance.Config(forceRefresh, contextUser, provider);
 
     // BaseEngine Load with empty configs - we don't load our own data
-    await this.Load([], provider || Metadata.Provider, forceRefresh, contextUser);
+    await this.Load([], provider ?? Metadata.Provider, forceRefresh, contextUser);
   }
 
   /**
@@ -214,7 +214,7 @@ export class NotificationEngine extends BaseEngine<NotificationEngine> {
     type: MJUserNotificationTypeEntity,
     contextUser: UserInfo
   ): Promise<string> {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const notification = await md.GetEntityObject<MJUserNotificationEntity>('MJ: User Notifications', contextUser);
 
     notification.UserID = params.userId;

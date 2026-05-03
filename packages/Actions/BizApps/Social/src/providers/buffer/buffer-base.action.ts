@@ -3,7 +3,7 @@ import { BaseSocialMediaAction, SocialPost, SocialAnalytics, MediaFile } from '.
 import { LogStatus } from '@memberjunction/core';
 import axios from 'axios';
 import { BaseAction } from '@memberjunction/actions';
-import { ActionParam, ActionResultSimple } from '@memberjunction/actions-base';
+import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 
 // ---------------------------------------------------------------------------
 // Buffer API string unions
@@ -238,14 +238,22 @@ export abstract class BufferBaseAction extends BaseSocialMediaAction {
   // Action helpers — reduce boilerplate in subclasses
   // -----------------------------------------------------------------------
 
-  /** Validate CompanyIntegrationID and initialize OAuth. Returns null on success, or an error result. */
-  protected async ensureAuthenticated(params: ActionParam[]): Promise<ActionResultSimple | null> {
-    const companyIntegrationId = this.getParamValue(params, 'CompanyIntegrationID');
+  /**
+   * Validate CompanyIntegrationID and initialize OAuth.
+   *
+   * Pass the full `RunActionParams` so the per-request provider on `params.Provider` is
+   * threaded into `initializeOAuth` (multi-tenant correctness — every entity load/save
+   * inside the OAuth flow binds to the request's connection, not the global default).
+   *
+   * Returns null on success, or an error result.
+   */
+  protected async ensureAuthenticated(params: RunActionParams): Promise<ActionResultSimple | null> {
+    const companyIntegrationId = this.getParamValue(params.Params, 'CompanyIntegrationID');
     if (!companyIntegrationId) {
-      return { Success: false, ResultCode: 'MISSING_PARAM', Message: 'CompanyIntegrationID is required', Params: params };
+      return { Success: false, ResultCode: 'MISSING_PARAM', Message: 'CompanyIntegrationID is required', Params: params.Params };
     }
-    if (!(await this.initializeOAuth(companyIntegrationId))) {
-      return { Success: false, ResultCode: 'INVALID_TOKEN', Message: 'Failed to initialize Buffer connection', Params: params };
+    if (!(await this.initializeOAuth(companyIntegrationId, params))) {
+      return { Success: false, ResultCode: 'INVALID_TOKEN', Message: 'Failed to initialize Buffer connection', Params: params.Params };
     }
     return null;
   }

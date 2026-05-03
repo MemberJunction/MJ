@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Taxonomy Admin · Option B — card galaxy</title>
+<link rel="stylesheet" href="mockup.css" />
+<style>
+  .galaxy-shell {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 20px;
+  }
+  .galaxy-nav {
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 10px;
+    padding: 12px;
+    height: fit-content;
+    position: sticky;
+    top: 80px;
+  }
+  .galaxy-nav h3 { font-size: 11px; text-transform: uppercase; color: var(--mj-text-muted); margin: 8px 0 4px; }
+  .galaxy-nav a {
+    display: block;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--mj-text-secondary);
+  }
+  .galaxy-nav a.active { background: var(--mj-brand-primary-tint); color: var(--mj-brand-primary); font-weight: 600; }
+  .galaxy-nav a:hover { text-decoration: none; background: var(--mj-bg-surface-hover); color: var(--mj-text-primary); }
+
+  .galaxy-canvas {
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 10px;
+    padding: 24px;
+    min-height: 700px;
+    background-image: radial-gradient(circle at 30% 20%, #f1f5f9 1px, transparent 1px),
+                      radial-gradient(circle at 70% 60%, #f1f5f9 1px, transparent 1px);
+    background-size: 60px 60px, 80px 80px;
+  }
+  .crumbs-bar { display: flex; gap: 6px; align-items: center; margin-bottom: 18px; font-size: 13px; color: var(--mj-text-secondary); }
+  .crumbs-bar .sep { color: var(--mj-color-neutral-300); }
+  .crumbs-bar .current { color: var(--mj-text-primary); font-weight: 700; font-size: 18px; }
+
+  .galaxy-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+    gap: 16px;
+  }
+  .tag-card {
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: var(--mj-shadow-sm);
+    display: flex; flex-direction: column; gap: 10px;
+    cursor: pointer;
+    transition: transform .12s, box-shadow .12s, border-color .12s;
+  }
+  .tag-card:hover { transform: translateY(-2px); box-shadow: var(--mj-shadow-md); border-color: var(--mj-brand-primary-light); }
+  .tag-card .top { display: flex; justify-content: space-between; align-items: flex-start; }
+  .tag-card .name { font-size: 15px; font-weight: 700; }
+  .tag-card .crumbs { font-size: 11px; color: var(--mj-text-muted); }
+  .tag-card .badges { display: flex; gap: 4px; flex-wrap: wrap; }
+  .tag-card .stats { display: flex; gap: 14px; padding-top: 8px; border-top: 1px dashed var(--mj-border-default); font-size: 11px; color: var(--mj-text-secondary); }
+  .tag-card .stats .stat { display: flex; flex-direction: column; }
+  .tag-card .stats .stat .v { font-size: 16px; font-weight: 700; color: var(--mj-text-primary); }
+  .tag-card.has-children::after {
+    content: '▼ enter';
+    font-size: 10px;
+    color: var(--mj-brand-primary);
+    text-align: right;
+    font-weight: 600;
+  }
+  .tag-card.frozen-card { background: linear-gradient(160deg, #eef2ff, #ffffff); border-color: #c7d2fe; }
+  .tag-card.scoped-card { background: linear-gradient(160deg, #faf5ff, #ffffff); border-color: #ddd6fe; }
+  .tag-card.alert-card { background: linear-gradient(160deg, #fff7ed, #ffffff); border-color: #fed7aa; }
+
+  .legend {
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 18px;
+    font-size: 12px;
+    color: var(--mj-text-secondary);
+    display: flex;
+    gap: 18px;
+    flex-wrap: wrap;
+  }
+  .legend .lg-item { display: inline-flex; align-items: center; gap: 6px; }
+</style>
+</head>
+<body>
+
+<div class="mockup-ribbon">
+  <span><strong>Mockup B:</strong> Taxonomy Admin — card galaxy</span>
+  <span><a href="index.html">← Back to index</a> · <a href="taxonomy-a-classic-split.html">A</a> · <strong>B</strong> · <a href="taxonomy-c-table-first.html">C</a></span>
+</div>
+
+<header class="mj-app-header">
+  <div class="logo"><span class="logo-mark">MJ</span> MJ Explorer</div>
+  <div class="breadcrumbs">
+    <span>Knowledge Hub</span><span class="sep">›</span>
+    <span>Classify</span><span class="sep">›</span>
+    <span class="current">Taxonomy</span>
+  </div>
+  <div class="right">
+    <span><strong>1,247</strong> tags</span>
+    <span class="avatar">AN</span>
+  </div>
+</header>
+
+<div class="page wide">
+
+  <div class="page-title">
+    <div>
+      <h1>Taxonomy</h1>
+      <div class="subtitle">Galaxy view · drill in by clicking a card · double-click to enter the subtree</div>
+    </div>
+    <div class="flex gap-8">
+      <div class="segmented">
+        <span class="seg">Tree</span>
+        <span class="seg active">Galaxy</span>
+        <span class="seg">Table</span>
+      </div>
+      <button class="btn primary">+ New tag</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab">Pipeline</div>
+    <div class="tab">Sources</div>
+    <div class="tab active">Taxonomy <span class="count">1,247</span></div>
+    <div class="tab">Suggestions <span class="count">247</span></div>
+    <div class="tab">Tag Health</div>
+    <div class="tab">Logs</div>
+  </div>
+
+  <div class="galaxy-shell">
+
+    <aside class="galaxy-nav">
+      <h3>Roots</h3>
+      <a href="#" class="active">Technology · 412</a>
+      <a href="#">Compliance · 89</a>
+      <a href="#">Product · 241</a>
+      <a href="#">Customer · 198</a>
+      <a href="#">HR · 87</a>
+      <a href="#">Finance · 73</a>
+      <a href="#">Vendors · 47</a>
+
+      <h3>Filters</h3>
+      <a href="#"><span class="dot green"></span>Global only</a>
+      <a href="#"><span class="dot blue"></span>Frozen subtrees</a>
+      <a href="#"><span class="dot red"></span>RequiresReview</a>
+      <a href="#"><span class="dot yellow"></span>Wide-node alerts</a>
+
+      <h3>View</h3>
+      <a href="#">By usage volume</a>
+      <a href="#">By recent activity</a>
+      <a href="#">By health score</a>
+    </aside>
+
+    <section class="galaxy-canvas">
+
+      <div class="crumbs-bar">
+        <span>All taxonomies</span>
+        <span class="sep">›</span>
+        <span>Technology</span>
+        <span class="sep">›</span>
+        <span class="current">AI / Machine Learning</span>
+        <span class="grow"></span>
+        <button class="btn sm">↑ Up to Technology</button>
+      </div>
+
+      <div class="legend">
+        <span class="lg-item">🌐 Global</span>
+        <span class="lg-item">🔒 Scoped</span>
+        <span class="lg-item">❄ Frozen</span>
+        <span class="lg-item">🚫 No auto-grow</span>
+        <span class="lg-item">! Requires review</span>
+        <span class="lg-item">⚠ Wide node</span>
+      </div>
+
+      <div class="galaxy-grid">
+
+        <div class="tag-card scoped-card frozen-card has-children">
+          <div class="top">
+            <div>
+              <div class="name">Generative AI</div>
+              <div class="crumbs">Tech · AI/ML · 3 children</div>
+            </div>
+            <div class="badges">
+              <span class="badge warning">❄</span>
+              <span class="badge" style="background:#ede9fe; color:#6d28d9; border-color:#ddd6fe;">🔒</span>
+            </div>
+          </div>
+          <div class="muted" style="font-size: 12px; line-height: 1.4;">AI systems that produce novel content given a prompt.</div>
+          <div class="stats">
+            <div class="stat"><span class="v">412</span><span>items</span></div>
+            <div class="stat"><span class="v">3</span><span>of 10 children</span></div>
+            <div class="stat"><span class="v">0.91</span><span>avg conf</span></div>
+            <div class="stat"><span class="v">7</span><span>pending</span></div>
+          </div>
+        </div>
+
+        <div class="tag-card has-children">
+          <div class="top">
+            <div>
+              <div class="name">LLMs</div>
+              <div class="crumbs">Tech · AI/ML · 12 children</div>
+            </div>
+            <div class="badges"><span class="badge success">🌐</span></div>
+          </div>
+          <div class="muted" style="font-size: 12px; line-height: 1.4;">Large language models — model families and providers.</div>
+          <div class="stats">
+            <div class="stat"><span class="v">891</span><span>items</span></div>
+            <div class="stat"><span class="v">12</span><span>children</span></div>
+            <div class="stat"><span class="v">0.94</span><span>avg conf</span></div>
+            <div class="stat"><span class="v">4</span><span>pending</span></div>
+          </div>
+        </div>
+
+        <div class="tag-card has-children">
+          <div class="top">
+            <div>
+              <div class="name">AI Agents</div>
+              <div class="crumbs">Tech · AI/ML · 8 children</div>
+            </div>
+            <div class="badges"><span class="badge success">🌐</span><span class="badge error">!</span></div>
+          </div>
+          <div class="muted" style="font-size: 12px; line-height: 1.4;">Agentic systems with tool calls and goal-directed behavior.</div>
+          <div class="stats">
+            <div class="stat"><span class="v">233</span><span>items</span></div>
+            <div class="stat"><span class="v">8</span><span>children</span></div>
+            <div class="stat"><span class="v">0.88</span><span>avg conf</span></div>
+            <div class="stat"><span class="v">11</span><span>pending</span></div>
+          </div>
+        </div>
+
+        <div class="tag-card has-children">
+          <div class="top">
+            <div>
+              <div class="name">Prompt Engineering</div>
+              <div class="crumbs">Tech · AI/ML · 5 children</div>
+            </div>
+            <div class="badges"><span class="badge success">🌐</span></div>
+          </div>
+          <div class="muted" style="font-size: 12px; line-height: 1.4;">Techniques for steering LLMs: zero-shot, CoT, ReAct, etc.</div>
+          <div class="stats">
+            <div class="stat"><span class="v">156</span><span>items</span></div>
+            <div class="stat"><span class="v">5</span><span>children</span></div>
+            <div class="stat"><span class="v">0.93</span><span>avg conf</span></div>
+            <div class="stat"><span class="v">2</span><span>pending</span></div>
+          </div>
+        </div>
+
+        <div class="tag-card has-children">
+          <div class="top">
+            <div>
+              <div class="name">Vector Search</div>
+              <div class="crumbs">Tech · AI/ML · 4 children</div>
+            </div>
+            <div class="badges"><span class="badge success">🌐</span></div>
+          </div>
+          <div class="muted" style="font-size: 12px; line-height: 1.4;">Embedding-based similarity search and ANN indexes.</div>
+          <div class="stats">
+            <div class="stat"><span class="v">87</span><span>items</span></div>
+            <div class="stat"><span class="v">4</span><span>children</span></div>
+            <div class="stat"><span class="v">0.89</span><span>avg conf</span></div>
+            <div class="stat"><span class="v">0</span><span>pending</span></div>
+          </div>
+        </div>
+
+        <div class="tag-card alert-card has-children">
+          <div class="top">
+            <div>
+              <div class="name">RAG</div>
+              <div class="crumbs">Tech · AI/ML · 47 children</div>
+            </div>
+            <div class="badges"><span class="badge success">🌐</span><span class="badge warning">⚠</span></div>
+          </div>
+          <div class="muted" style="font-size: 12px; line-height: 1.4;">Retrieval-augmented generation patterns. <strong>Wide-node alert.</strong></div>
+          <div class="stats">
+            <div class="stat"><span class="v">312</span><span>items</span></div>
+            <div class="stat"><span class="v" style="color: var(--mj-status-warning-text);">47</span><span>children</span></div>
+            <div class="stat"><span class="v">0.86</span><span>avg conf</span></div>
+            <div class="stat"><span class="v">5</span><span>pending</span></div>
+          </div>
+        </div>
+
+        <div class="tag-card">
+          <div class="top">
+            <div>
+              <div class="name">Fine-tuning</div>
+              <div class="crumbs">Tech · AI/ML · leaf</div>
+            </div>
+            <div class="badges"><span class="badge success">🌐</span></div>
+          </div>
+          <div class="muted" style="font-size: 12px; line-height: 1.4;">Domain adaptation via supervised / RLHF training.</div>
+          <div class="stats">
+            <div class="stat"><span class="v">62</span><span>items</span></div>
+            <div class="stat"><span class="v">0</span><span>children</span></div>
+            <div class="stat"><span class="v">0.92</span><span>avg conf</span></div>
+            <div class="stat"><span class="v">1</span><span>pending</span></div>
+          </div>
+        </div>
+
+        <div class="tag-card" style="border-style: dashed; background: var(--mj-bg-surface-card); display: flex; align-items: center; justify-content: center; min-height: 180px;">
+          <div style="text-align: center;">
+            <div style="font-size: 28px; color: var(--mj-text-muted);">+</div>
+            <div class="bold" style="color: var(--mj-brand-primary);">New tag under AI/ML</div>
+            <div class="muted" style="font-size: 11px; margin-top: 4px;">Inherits scope from parent</div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+  </div>
+
+  <div class="design-notes">
+    <h3>Design notes — Option B</h3>
+    <p>Card-based "galaxy" view: each card is a tag, badges encode governance state, stats footer encodes health.
+    Drill into a card to enter its subtree (breadcrumb up top to navigate back). Trade depth for visual richness —
+    you only ever see one level at a time, but each tag's status is immediate and beautiful.</p>
+    <ul>
+      <li><strong>Strengths:</strong> visually engaging; great for browsing and exploration; governance state is immediately legible; scope tinting (purple wash) communicates "this is restricted" without reading.</li>
+      <li><strong>Weaknesses:</strong> editing requires opening a modal/drawer; comparing siblings across the tree is hard; expensive on screen real estate.</li>
+      <li><strong>Best for:</strong> stakeholders browsing the taxonomy ("what tags do we have?"); quarterly governance audits.</li>
+      <li><strong>Distinctive:</strong> color-tinted cards by state (purple = scoped, blue = frozen, orange = alert); per-card health stats footer; "enter" affordance on parents.</li>
+    </ul>
+  </div>
+
+</div>
+</body>
+</html>

@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJCollectionEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata, LogError } from '@memberjunction/core';
 import { CollectionPermission, CollectionPermissionService } from '../../services/collection-permission.service';
@@ -167,7 +168,7 @@ interface DragData {
     .node-action-btn:hover { background: var(--mj-bg-surface-sunken); }
   `]
 })
-export class CollectionTreeComponent implements OnInit {
+export class CollectionTreeComponent extends BaseAngularComponent implements OnInit  {
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
   @Input() selectedCollectionId: string | null = null;
@@ -182,15 +183,17 @@ export class CollectionTreeComponent implements OnInit {
   public draggedNode: TreeNode | null = null;
   public dragOverNodeId: string | null = null;
 
-  constructor(private permissionService: CollectionPermissionService) {}
+  constructor(private permissionService: CollectionPermissionService) {
+  super();}
 
   ngOnInit() {
+    this.permissionService.Provider = this.ProviderToUse;
     this.loadCollections();
   }
 
   private async loadCollections(): Promise<void> {
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJCollectionEntity>({
         EntityName: 'MJ: Collections',
         ExtraFilter: `EnvironmentID='${this.environmentId}'`,
@@ -265,7 +268,7 @@ export class CollectionTreeComponent implements OnInit {
     if (!name) return;
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const collection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
 
       collection.Name = name;

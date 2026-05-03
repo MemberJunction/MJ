@@ -7,7 +7,7 @@
  * @module @memberjunction/ai-mcp-client/types
  */
 
-import type { UserInfo } from '@memberjunction/core';
+import type { UserInfo, IMetadataProvider } from '@memberjunction/core';
 
 /**
  * Supported MCP transport types
@@ -497,6 +497,11 @@ export interface MCPClientOptions {
     contextUser: UserInfo;
     /** Skip permission validation (internal use only) */
     skipPermissionCheck?: boolean;
+    /**
+     * Optional per-request metadata provider for multi-user server isolation.
+     * When omitted, MCPClientManager falls back to the global Metadata.Provider.
+     */
+    provider?: IMetadataProvider;
 }
 
 /**

@@ -156,6 +156,35 @@ export class SQLServerDialect extends SQLDialect {
         return value ? '1' : '0';
     }
 
+    ParameterRef(name: string): string {
+        return `@${name}`;
+    }
+
+    ParameterDefault(value: string): string {
+        return ` = ${value}`;
+    }
+
+    /**
+     * SQL Server has both `ISNULL` (T-SQL native, two-arg only) and `COALESCE`
+     * (ANSI, n-ary). For two-argument null-coalescing we emit the native
+     * `ISNULL` form so generated SPs match the conventional T-SQL idiom and
+     * the data-type-of-first-argument semantics callers may already rely on.
+     */
+    IsNull(expr: string, fallback: string): string {
+        return `ISNULL(${expr}, ${fallback})`;
+    }
+
+    /**
+     * SQL Server supports `COALESCE` as an ANSI-standard alternative to its
+     * native `ISNULL`. The two differ subtly in return-type inference and
+     * argument arity (`COALESCE` is n-ary; `ISNULL` is two-arg only). Use
+     * this helper when codegen needs the n-ary form or when caller intent
+     * is ANSI-portable rather than T-SQL-native.
+     */
+    Coalesce(expr: string, fallback: string): string {
+        return `COALESCE(${expr}, ${fallback})`;
+    }
+
     CurrentTimestampUTC(): string {
         return 'GETUTCDATE()';
     }

@@ -1,5 +1,6 @@
 import { Input, Output, EventEmitter, ChangeDetectorRef, Directive, OnInit, OnDestroy } from '@angular/core';
 import { MJDashboardPartTypeEntity } from '@memberjunction/core-entities';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import {
     PanelConfig,
     DashboardPanel,
@@ -58,7 +59,7 @@ export interface PartDataChangeEvent {
  * 3. Adding a DashboardPartType record with the DriverClass set to the registered name
  */
 @Directive()
-export abstract class BaseDashboardPart implements OnInit, OnDestroy {
+export abstract class BaseDashboardPart extends BaseAngularComponent implements OnInit, OnDestroy {
     /**
      * The panel data including ID, title, icon, and configuration
      */
@@ -127,7 +128,9 @@ export abstract class BaseDashboardPart implements OnInit, OnDestroy {
      */
     public ErrorMessage: string | null = null;
 
-    constructor(protected cdr: ChangeDetectorRef) {}
+    constructor(protected cdr: ChangeDetectorRef) {
+        super();
+    }
 
     ngOnInit(): void {
         this.initialize();

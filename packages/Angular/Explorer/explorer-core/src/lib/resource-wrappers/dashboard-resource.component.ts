@@ -615,7 +615,7 @@ export class DashboardResource extends BaseResourceComponent {
 
         if (result.Action === 'save' && this.configDashboard) {
             // Recompute permissions after sharing changes
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             this.dashboardPermissions = DashboardEngine.Instance.GetDashboardPermissions(
                 this.configDashboard.ID,
                 md.CurrentUser.ID
@@ -822,7 +822,7 @@ export class DashboardResource extends BaseResourceComponent {
 
     protected async loadDashboardUserState(dashboardId: string): Promise<MJDashboardUserStateEntity> {
         // handle user state changes for the dashboard
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const stateResult = DashboardEngine.Instance.DashboardUserStates.filter(dus => UUIDsEqual(dus.DashboardID, dashboardId) && UUIDsEqual(dus.UserID, md.CurrentUser.ID));
         let stateObject: MJDashboardUserStateEntity;
         if (stateResult && stateResult.length > 0) {
@@ -852,7 +852,7 @@ export class DashboardResource extends BaseResourceComponent {
             this.configDashboard = dashboard;
 
             // Compute user permissions for this dashboard
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             this.dashboardPermissions = DashboardEngine.Instance.GetDashboardPermissions(
                 dashboard.ID,
                 md.CurrentUser.ID
@@ -950,7 +950,7 @@ export class DashboardResource extends BaseResourceComponent {
         try {
             // Try to load dashboard metadata if we have the record ID
             if (data.ResourceRecordID && data.ResourceRecordID.length > 0) {
-                const md = new Metadata();
+                const md = this.ProviderToUse;
                 const compositeKey = new CompositeKey([{ FieldName: 'ID', Value: data.ResourceRecordID }]);
                 const name = await md.GetEntityRecordName('Dashboards', compositeKey);
                 if (name) {

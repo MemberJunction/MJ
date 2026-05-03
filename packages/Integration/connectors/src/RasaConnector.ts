@@ -1,5 +1,5 @@
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, type UserInfo } from '@memberjunction/core';
+import { Metadata, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type { MJCompanyIntegrationEntity, MJCredentialEntity } from '@memberjunction/core-entities';
 import {
     BaseIntegrationConnector,
@@ -684,8 +684,8 @@ export class RasaConnector extends BaseRESTIntegrationConnector {
     /**
      * Loads credentials from the MJ: Credentials entity.
      */
-    private async ParseConfigFromCredential(credentialID: string, contextUser?: UserInfo): Promise<RasaConnectionConfig> {
-        const md = new Metadata();
+    private async ParseConfigFromCredential(credentialID: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<RasaConnectionConfig> {
+        const md = provider ?? new Metadata();
         const credEntity = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
         await credEntity.Load(credentialID);
 

@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams } from '@memberjunction/actions-base';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseAction } from '@memberjunction/actions';
-import { Metadata } from '@memberjunction/core';
+import { IMetadataProvider, Metadata } from '@memberjunction/core';
 import { MJScheduledJobRunEntity } from '@memberjunction/core-entities';
 import { BaseJobAction } from './BaseJobAction';
 
@@ -46,7 +46,7 @@ export class ExecuteScheduledJobNowAction extends BaseJobAction {
             }
 
             // Load the job to verify it exists
-            const loadResult = await this.loadJob(jobId, params.ContextUser);
+            const loadResult = await this.loadJob(jobId, params.ContextUser, params.Provider);
             if (loadResult.error) {
                 return loadResult.error;
             }
@@ -63,7 +63,7 @@ export class ExecuteScheduledJobNowAction extends BaseJobAction {
             }
 
             // Create a job run record
-            const md = new Metadata();
+            const md = (params.Provider ?? new Metadata()) as unknown as IMetadataProvider;
             const jobRun = await md.GetEntityObject<MJScheduledJobRunEntity>('MJ: Scheduled Job Runs', params.ContextUser);
 
             jobRun.NewRecord();

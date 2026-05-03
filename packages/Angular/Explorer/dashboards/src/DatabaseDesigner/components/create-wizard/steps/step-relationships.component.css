@@ -1,0 +1,138 @@
+.step-relationships {
+  padding: 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ── Info banner ──────────────────────────────────────────────── */
+
+.step-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--mj-text-secondary);
+}
+
+.step-info i {
+  color: var(--mj-status-info);
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+/* ── Empty state ──────────────────────────────────────────────── */
+
+.no-fk-hint {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 32px;
+  text-align: center;
+  color: var(--mj-text-muted);
+}
+
+.no-fk-hint i {
+  font-size: 1.8rem;
+}
+
+.no-fk-hint p {
+  margin: 0;
+  font-size: 0.875rem;
+  max-width: 400px;
+}
+
+/* ── FK card list ─────────────────────────────────────────────── */
+
+.fk-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.fk-row {
+  border: 1px solid var(--mj-border-default);
+  border-radius: 8px;
+  background: var(--mj-bg-surface-card);
+  padding: 12px 16px;
+}
+
+/* ── Card header ──────────────────────────────────────────────── */
+
+.fk-row-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.fk-row-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--mj-text-secondary);
+}
+
+/* ── 5-column grid ────────────────────────────────────────────── */
+
+.fk-row-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.5fr 1fr 1.2fr;
+  gap: 12px;
+  align-items: end;
+}
+
+/* ── Field (label + select) ───────────────────────────────────── */
+
+.fk-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fk-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--mj-text-secondary);
+  white-space: nowrap;
+}
+
+.fk-field select {
+  width: 100%;
+  font-size: 0.875rem;
+}
+
+/* ── Delete button ────────────────────────────────────────────── */
+
+.delete-btn {
+  background: none;
+  border: none;
+  padding: 5px 7px;
+  cursor: pointer;
+  color: var(--mj-text-muted);
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+  line-height: 1;
+}
+
+.delete-btn:hover {
+  color: var(--mj-status-error-text);
+  background: var(--mj-status-error-bg);
+}
+
+/* ── Add bar ──────────────────────────────────────────────────── */
+
+.add-bar {
+  padding-top: 4px;
+}
+
+/* ── Responsive: stack to 2-col on narrow panels ─────────────── */
+
+@media (max-width: 640px) {
+  .fk-row-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}

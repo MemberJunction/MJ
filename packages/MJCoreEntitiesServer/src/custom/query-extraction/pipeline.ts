@@ -1,4 +1,4 @@
-import { IMetadataProvider, LogError, Metadata, UserInfo } from "@memberjunction/core";
+import { IMetadataProvider, LogError, UserInfo } from "@memberjunction/core";
 import type { QuerySyncContext, ExtractedField, ResolveResult } from "./types";
 import { parseQuerySQL } from "./parse";
 import {
@@ -74,8 +74,8 @@ export async function CleanupQueryData(ctx: QuerySyncContext): Promise<void> {
 // ─── Internal stage helpers ──────────────────────────────────────────────────
 
 function resolve(ctx: QuerySyncContext, parseResult: ReturnType<typeof parseQuerySQL>): ResolveResult {
-    const allQueries = Metadata.Provider.Queries;
     const md = ctx.metadataProvider;
+    const allQueries = md.Queries;
 
     // Composition references
     const resolvedCompositionRefs = ResolveCompositionReferences(ctx.sql, ctx.queryName, allQueries);
@@ -120,7 +120,7 @@ function merge(
 
     const finalFields = rawFields
         ? EnrichFieldTypesFromEntityMetadata(
-              EnrichFieldTypesFromCompositions(rawFields, resolveResult.resolvedCompositionRefs, parseResult.selectColumns),
+              EnrichFieldTypesFromCompositions(rawFields, resolveResult.resolvedCompositionRefs, parseResult.selectColumns, md),
               parseResult.selectColumns,
               parseResult.tableRefs,
               md

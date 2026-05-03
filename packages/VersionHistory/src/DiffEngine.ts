@@ -1,4 +1,5 @@
 import {
+    IMetadataProvider,
     Metadata,
     RunView,
     UserInfo,
@@ -34,6 +35,14 @@ type SnapshotIndex = Map<string, string>;
  * current live state, producing a structured diff grouped by entity.
  */
 export class DiffEngine {
+    /** Optional provider override; falls back to Metadata.Provider when not set. */
+    private _provider?: IMetadataProvider;
+
+    /** Returns the active provider — explicit override if set, otherwise the global default. */
+    protected get ProviderToUse(): IMetadataProvider {
+        return this._provider ?? Metadata.Provider;
+    }
+
     /**
      * Compare two version labels.
      */
@@ -124,7 +133,7 @@ export class DiffEngine {
         labelId: string,
         contextUser: UserInfo
     ): Promise<RecordSnapshot | null> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const entityInfo = md.EntityByName(entityName);
         if (!entityInfo) return null;
 
@@ -261,7 +270,7 @@ export class DiffEngine {
         contextUser: UserInfo
     ): Promise<EntityDiffGroup[]> {
         const allKeys = new Set([...fromIndex.keys(), ...toIndex.keys()]);
-        const md = new Metadata();
+        const md = this.ProviderToUse;
 
         // Group diffs by entity
         const entityGroups = new Map<string, { entityId: string; records: RecordDiff[] }>();
@@ -289,7 +298,7 @@ export class DiffEngine {
     /**
      * Resolve an entity name from metadata by ID, with fallback.
      */
-    private resolveEntityName(md: Metadata, entityId: string): string {
+    private resolveEntityName(md: IMetadataProvider, entityId: string): string {
         const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityId));
         return entityInfo?.Name ?? `Unknown(${entityId})`;
     }
@@ -300,7 +309,7 @@ export class DiffEngine {
      */
     private buildEntityDiffGroups(
         entityGroups: Map<string, { entityId: string; records: RecordDiff[] }>,
-        md: Metadata
+        md: IMetadataProvider
     ): EntityDiffGroup[] {
         const result: EntityDiffGroup[] = [];
 

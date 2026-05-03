@@ -1,7 +1,18 @@
 import type { BaseEntity } from "./baseEntity";
-import type { IMetadataProvider } from "./interfaces";
+import type { EntityInfo } from "./entityInfo";
+import type { IEntityDataProvider, IMetadataProvider } from "./interfaces";
 import { LogError } from "./logging";
 import type { UserInfo } from "./securityInfo";
+
+/**
+ * Minimal structural shape consulted by `RunMaybeSerial`. Anything that exposes
+ * a boolean `IsInTransaction` (e.g. a `DatabaseProviderBase` subclass) qualifies.
+ * The check is purely structural and tolerates objects that don't expose the
+ * flag (in which case the helper defaults to parallel execution).
+ */
+export interface TransactionAwareProvider {
+    readonly IsInTransaction: boolean;
+}
 
 /**
  * Returns the TypeScript type that corresponds to the SQL type passed in
@@ -10,10 +21,13 @@ export function TypeScriptTypeFromSQLType(sqlType: string): 'string' | 'number' 
     switch (sqlType.trim().toLowerCase()) {
         case 'text':
         case 'char':
+        case 'character': // PG returns this for CHAR(N)
+        case 'character varying': // PG returns this for VARCHAR(N)
         case 'varchar':
         case 'ntext':
         case 'nchar':
         case 'nvarchar':
+        case 'citext': // PostgreSQL case-insensitive text
         case 'uniqueidentifier': //treat this as a string
         case 'uuid': // PostgreSQL UUID type
         case 'bytea': // PostgreSQL binary data, treat as string (base64)
@@ -278,6 +292,47 @@ export function Concurrent<V>(concurrency: number, funcs: (() => Promise<V>)[]):
 }
 
 /**
+ * Runs a list of save/work factories with transaction-aware concurrency:
+ *   - If `provider.IsInTransaction` is `true`, runs them sequentially via
+ *     `await` (no microtask interleaving, no contention on the single
+ *     transaction-bound connection).
+ *   - Otherwise, fans them out concurrently via `Promise.all`.
+ *
+ * Use this anywhere you would normally write `Promise.all(items.map(save))`
+ * but a single shared transaction is in flight. The PostgreSQL provider
+ * holds its active transaction on a single `pg.PoolClient`, so concurrent
+ * `Save()` calls would queue up on that one client anyway — and worse,
+ * combined with non-DB async work (e.g. embedding compute), the queue can
+ * deadlock. Sequential execution avoids that entirely.
+ *
+ * SQL Server preserves the original parallelism: `IsInTransaction` is
+ * `false` by default on `DatabaseProviderBase`, and the SQL Server provider
+ * doesn't override it.
+ *
+ * Pass factory functions (`() => Promise<T>`) rather than already-started
+ * promises so saves only start when we're ready to await them.
+ *
+ * @param provider — the active data provider (used to read transaction state)
+ * @param factories — work units to run; each is invoked when its turn comes
+ * @returns the results in input order
+ */
+export async function RunMaybeSerial<T>(
+    provider: unknown,
+    factories: (() => Promise<T>)[]
+): Promise<T[]> {
+    if (factories.length === 0) return [];
+    const inTx = !!(provider as TransactionAwareProvider | null | undefined)?.IsInTransaction;
+    if (inTx) {
+        const results: T[] = [];
+        for (const fn of factories) {
+            results.push(await fn());
+        }
+        return results;
+    }
+    return Promise.all(factories.map(fn => fn()));
+}
+
+/**
  * The DBMS may store the default value for a column with extra parens, for example ((1)) or (getdate()) or (('Pending')) or (('Active')) and in addition for unicode characters
  * it may prefix the value with an N, for example N'Active'. This function will strip out the extra parens and the N prefix if it exists and return the actual default value
  * @param storedDefaultValue - The default value as stored in the DBMS 
@@ -407,21 +462,75 @@ export function StripContainingParens(value: string): string {
  * ```
  */
 export async function TransformSimpleObjectToEntityObject<T extends BaseEntity>(md: IMetadataProvider, entityName: string, items: Array<Record<string, unknown>>, contextUser?: UserInfo): Promise<Array<T>> {
-    // we need to transform each of the items in the result set into a BaseEntity-derived object
-    // Create entities and load data in parallel for better performance
-    const entityPromises = items.map(async (item) => {
-        if (typeof item.Save === 'function') {
-            // duck-typing check — detects BaseEntity instances (and subclasses loaded
-            // from different runtime sources where instanceof would fail)
-            return item as T;
+    if (items.length === 0) return [];
+
+    // Look up EntityInfo once via the O(1) name map. Inside GetEntityObject this
+    // would be called per row via a 314-entity linear scan — prohibitive in hot
+    // paths like cache restoration. Defensive `?.` for test mocks that don't
+    // implement EntityByName — those fall through to the slow path below.
+    const entityInfo = md.EntityByName?.(entityName);
+
+    // IS-A inheritance requires real async work (parent/child entity discovery via
+    // DB round-trips). For non-IS-A entities — the vast majority — every async
+    // hop in GetEntityObject + LoadFromData resolves synchronously, so the awaits
+    // are pure Zone.js / microtask overhead. Take a sync fast path in that case.
+    const isISA = !!(entityInfo?.IsParentType || entityInfo?.IsChildType);
+
+    if (entityInfo && !isISA) {
+        const provider = md as unknown as IEntityDataProvider;
+        const results: T[] = new Array(items.length);
+        let prototype: T | null = null;
+        // Captured from the prototype instance so we don't have to import BaseEntity
+        // (would create a circular dependency through entityInfo.ts).
+        let SubClassCtor: (new (entity: EntityInfo, provider: IEntityDataProvider | null) => T) | null = null;
+
+        for (let i = 0; i < items.length; i++) {
+            const item = items[i];
+
+            // Per-row duck-type check — supports mixed batches where some items
+            // are already BaseEntity instances (e.g. from RunView entity_object
+            // results being re-wrapped by a downstream pipeline).
+            if (typeof (item as { Save?: unknown }).Save === 'function') {
+                results[i] = item as unknown as T;
+                continue;
+            }
+
+            // Pay GetEntityObject's full setup cost once for the first plain row.
+            // Subsequent rows are constructed synchronously via the prototype's
+            // own constructor, skipping the per-row Config / InitializeParentEntity
+            // awaits (both no-ops for non-IS-A entities).
+            if (!prototype) {
+                prototype = await md.GetEntityObject<T>(entityName, contextUser);
+                SubClassCtor = prototype.constructor as new (entity: EntityInfo, provider: IEntityDataProvider | null) => T;
+                prototype.LoadFromData(item);
+                results[i] = prototype;
+                continue;
+            }
+
+            const e = new SubClassCtor!(entityInfo, provider);
+            if (contextUser) {
+                (e as unknown as { ContextCurrentUser?: UserInfo }).ContextCurrentUser = contextUser;
+            }
+            // LoadFromData is effectively sync for non-parent-type entities —
+            // its only await is InitializeChildEntity which early-returns when
+            // !IsParentType. SetMany still runs synchronously inline, so calling
+            // without await skips one microtask hop per row.
+            e.LoadFromData(item);
+            results[i] = e;
         }
-        else {
-            // not a base entity sub-class already so convert
-            const entity = await md.GetEntityObject<T>(entityName, contextUser);
-            await entity.LoadFromData(item);
-            return entity;
-        } 
+        return results;
+    }
+
+    // Slow / correct path: IS-A entities (need parent/child chain built) and
+    // mocks that don't implement EntityByName. Per-row async — preserves the
+    // original semantics exactly.
+    const entityPromises = items.map(async (item) => {
+        if (typeof (item as { Save?: unknown }).Save === 'function') {
+            return item as unknown as T;
+        }
+        const entity = await md.GetEntityObject<T>(entityName, contextUser);
+        await entity.LoadFromData(item);
+        return entity;
     });
-    
     return await Promise.all(entityPromises);
 }
