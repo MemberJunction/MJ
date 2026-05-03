@@ -4,7 +4,14 @@ arguments: 'Optional: scope or category. Examples: "summary", "detailed", "rxjs"
 
 # Audit Memory & Resource Leaks
 
-You are running a recurring scan for memory and resource leaks across the MemberJunction monorepo. The baseline report lives at `reports/memory-leaks/MEMORY_LEAK_AUDIT.md` — your job is to refresh that baseline, generate a dated snapshot, and surface what changed since the last run.
+You are running a recurring scan for memory and resource leaks across the MemberJunction monorepo. The baseline reports live at:
+
+- `reports/memory-leaks/MEMORY_LEAK_AUDIT.md` — main baseline (Round 1: full-repo five-category sweep)
+- `reports/memory-leaks/MEMORY_LEAK_AUDIT_ROUND2.md` — supplement covering deeply-nested provider/connector subtrees (AI providers, Integration connectors, Communication providers, Storage drivers, Auth providers, Actions subdirs, MJServer resolvers, AI Agents/MCP/A2A) that Round 1 sampled rather than covered exhaustively
+
+The repo has **234 packages** (count `package.json` files under `packages/`, excluding `node_modules` and `dist`). Round 1's broad globs satisfy themselves on shallow sampling; Round 2's narrow agents are required to actually cover the nested subtrees.
+
+Your job is to refresh both baselines, generate a dated snapshot, and surface what changed since the last run.
 
 ## Parse Arguments
 
@@ -50,7 +57,11 @@ If the file is missing, treat this as the first run and skip the diff phase.
 
 ### Phase 2 — Spawn parallel audit subagents
 
-Launch the audit subagents **in parallel** (single message, multiple Agent tool calls). Skip categories the user filtered out. Use `subagent_type: Explore`.
+The audit runs in **two waves**, each with subagents launched in parallel (single message, multiple Agent tool calls). Use `subagent_type: Explore` for everything. Skip waves/agents the user's filter excludes.
+
+**Wave 1 (broad five-category sweep)** — Subagents A–E below; targets the whole `packages/` tree. Coverage is shallow on deeply-nested subtrees but catches the dominant patterns.
+
+**Wave 2 (deep subtree sweep)** — Subagents F–J below; narrow scope per agent so each can actually read the files. Run only after Wave 1 finishes (its findings inform what's already covered).
 
 Each subagent's prompt should:
 
@@ -58,8 +69,9 @@ Each subagent's prompt should:
 - Specify file globs and exclude `node_modules/`, `dist/`, `generated/`, `__tests__/`, `*.test.ts`, `*.spec.ts`
 - Demand file:line references for every finding
 - Demand a severity tag (Critical / High / Medium / Low) using the definitions in the baseline report
-- Ask for under 1500–2000 words
+- Ask for under 1500–2200 words
 - Aim for 15–40 concrete findings per category
+- For Wave 2 agents, instruct them to first read both baseline reports and skip findings already documented
 
 Use the prompts below as templates. Each is self-contained; the subagent has no memory of this conversation.
 
@@ -138,6 +150,56 @@ Use the prompts below as templates. Each is self-contained; the subagent has no 
 >
 > Pay special attention to: `packages/SQLServerDataProvider`, `packages/PostgreSQLDataProvider`, `packages/MJServer`, `packages/MJAPI`, `packages/MJStorage`, `packages/AI/**`, `packages/Communication`, `packages/MJQueue`, `packages/RedisProvider`, `packages/MJInstaller`, `packages/Actions/CoreActions/src/custom/utilities`. Report file:line references with severity tags. Under 2000 words.
 
+#### Subagent F (Wave 2) — AI Providers deep scan
+
+> Audit `/home/user/MJ/packages/AI/Providers/**` (26 provider directories: Anthropic, Azure, Bedrock, BettyBot, BlackForestLabs, Bundle, Cerebras, Cohere, ElevenLabs, Fireworks, Gemini, Groq, HeyGen, Inception, LMStudio, LlamaCpp, LocalEmbeddings, MiniMax, Mistral, Ollama, OpenAI, OpenRouter, Recommendations-Rex, Vertex, Zhipu, xAI).
+>
+> Read `reports/memory-leaks/MEMORY_LEAK_AUDIT_ROUND2.md` first to skip already-flagged findings (Anthropic/OpenAI streaming-thinking accumulators, LMStudio/Azure client recreation, LocalEmbeddings static cache, ElevenLabs chunk accumulation, Bedrock missing AbortController, Gemini lazy-init promise leak).
+>
+> Look for NEW issues: HTTP keep-alive agent reuse vs per-request creation, AbortController plumbing on streaming, EventEmitter listeners on streams not cleaned, audio/image/video binary buffers held in instance fields, SDK-client per-request instantiation in hot paths, OAuth token refresh timers without shutdown.
+>
+> Severity definitions per the baseline. Aim for 10–25 NEW findings. Group by provider. Under 1800 words.
+
+#### Subagent G (Wave 2) — Integration connectors deep scan
+
+> Audit `/home/user/MJ/packages/Integration/connectors/src/**` (HubSpot, Salesforce, YourMembership, Wicket, Rasa, QuickBooks, SageIntacct, RelationalDB, etc.).
+>
+> Read `reports/memory-leaks/MEMORY_LEAK_AUDIT_ROUND2.md` first to skip already-flagged findings (YourMembership Promise.race timeouts, HubSpot pagination accumulation, Rasa/Salesforce/YourMembership cache patterns, RelationalDB pool cache).
+>
+> Look for NEW issues: webhook subscription registration without unregister, OAuth token refresh timers without shutdown, rate limiter Maps keyed by endpoint, per-sync state on long-lived connector singletons, AbortController signals pinned by closures, streaming uploads of files without destroy on error, additional `Promise.race` + `setTimeout` patterns elsewhere in connectors.
+>
+> Aim for 10–20 NEW findings. Under 1500 words.
+
+#### Subagent H (Wave 2) — Communication, Storage, Auth providers deep scan
+
+> Audit `/home/user/MJ/packages/Communication/providers/**`, `/home/user/MJ/packages/Communication/engine/src/**`, `/home/user/MJ/packages/Communication/notifications/src/**`, `/home/user/MJ/packages/MJStorage/src/**`, `/home/user/MJ/packages/AuthProviders/src/**`.
+>
+> Read `reports/memory-leaks/MEMORY_LEAK_AUDIT_ROUND2.md` first to skip already-flagged findings (Twilio/Gmail/MSGraph client caches, AuthProviderFactory issuer caches, BaseAuthProvider HTTPS agent + JWKS cache, S3Client/BlobServiceClient reassignment, Box/Azure stream cleanup gaps, SendGrid global-state mutation, NotificationEngine fire-and-forget).
+>
+> Look for NEW issues: SMTP transport pooling, Twilio/Slack webhook listeners, MS Graph delta query state, signed-URL caches without TTL, multipart upload buffer retention, JWKS sub-cache patterns in specific provider implementations (Auth0/MSAL/Okta), session token refresh timers, additional providers in Communication/providers/* not yet covered.
+>
+> Aim for 10–20 NEW findings. Under 1500 words.
+
+#### Subagent I (Wave 2) — Actions / MetadataSync / React runtime / misc deep scan
+
+> Audit `/home/user/MJ/packages/Actions/**`, `/home/user/MJ/packages/MetadataSync/**`, `/home/user/MJ/packages/React/runtime/**`, `/home/user/MJ/packages/Encryption/**`, `/home/user/MJ/packages/Credentials/**`, `/home/user/MJ/packages/APIKeys/**`, `/home/user/MJ/packages/MessagingAdapters/**`, `/home/user/MJ/packages/ContentAutotagging/**`, `/home/user/MJ/packages/DBAutoDoc/**`, `/home/user/MJ/packages/DocUtils/**`, `/home/user/MJ/packages/InteractiveComponents/**`, `/home/user/MJ/packages/ComponentRegistry/**`, `/home/user/MJ/packages/Archiving/**`, `/home/user/MJ/packages/MJDataContext*/**`, `/home/user/MJ/packages/Scheduling/**`, `/home/user/MJ/packages/MJExportEngine/**`.
+>
+> Read `reports/memory-leaks/MEMORY_LEAK_AUDIT_ROUND2.md` first to skip already-flagged findings (EntityActionInvocationTypes._scriptCache, WorkerPool abort listener, WatchService debounce timers, ComponentRegistry pool, DBAutoDoc cache, ContentAutotagging RateLimiter arrays, React CacheManager per-entry timeouts, EncryptionEngine key cache, Slack Socket Mode listeners).
+>
+> Look for NEW issues across these packages: child process / worker thread leaks, vm context retention on script error, file watcher leaks (chokidar/fs.watch), PowerShell/shell-out child processes, sensitive Buffers not zeroed, retry queues with no max size.
+>
+> Aim for 10–20 NEW findings. Under 1500 words.
+
+#### Subagent J (Wave 2) — MJServer / AI Agents / MCP / A2A deep scan
+
+> Audit `/home/user/MJ/packages/MJServer/src/**`, `/home/user/MJ/packages/MJAPI/src/**`, `/home/user/MJ/packages/MJCoreEntitiesServer/src/**`, `/home/user/MJ/packages/AI/MCPServer/src/**`, `/home/user/MJ/packages/AI/A2AServer/src/**`, `/home/user/MJ/packages/AI/Agents/src/**`, `/home/user/MJ/packages/AI/Engine/src/**`, `/home/user/MJ/packages/AI/Prompts/src/**`, `/home/user/MJ/packages/AI/AgentManager/**`, `/home/user/MJ/packages/QueryGen/src/**`, `/home/user/MJ/packages/QueryProcessor/src/**`, `/home/user/MJ/packages/SQLConverter/src/**`.
+>
+> Read `reports/memory-leaks/MEMORY_LEAK_AUDIT_ROUND2.md` first to skip already-flagged findings (A2AServer tasks Map, GeoResolver instance cache, MCPServer keepalive race, SkipSDK error path, util.ts sendPostRequest timeout, ConversationAttachmentService modalityCache, AIEngine embeddings caches, ResolverBase EventSubscriptions, MCPClientManager listener stacking, MJEntityPermissionEntityServer timer race, BaseAgent compaction).
+>
+> Look for NEW issues: GraphQL subscription resolver teardown, agent run-step accumulators, conversation/run state on long-lived objects, file upload streams in resolvers, DataLoader scoping, generators that hold state when consumer hangs up, agent tool call history without bounds, prompt cache without TTL, Skip per-request HTTP agent.
+>
+> Aim for 10–25 NEW findings. Under 2000 words.
+
 ### Phase 3 — Static cross-checks
 
 While the subagents run, run these `Bash` greps in parallel for hard verification (the agents sample but these are exhaustive):
@@ -186,7 +248,7 @@ Write three files (relative to `/home/user/MJ`):
    - **New leaks since last run** (file:line, category, severity, 1-sentence rationale)
    - **Resolved leaks** (which finding ID, what file:line, how confirmed)
    - **Still outstanding** (count by severity)
-3. **`reports/memory-leaks/MEMORY_LEAK_AUDIT.md`** — only updated when run in `detailed` mode without a category filter (full re-baseline). Preserve the structure of the existing baseline (Executive Summary → Methodology → Critical → High → Medium → Low → Anti-Patterns → Recommendations → Appendices).
+3. **`reports/memory-leaks/MEMORY_LEAK_AUDIT.md`** AND **`reports/memory-leaks/MEMORY_LEAK_AUDIT_ROUND2.md`** — only updated when run in `detailed` mode without a category filter (full re-baseline). Preserve the structure of the existing baselines (Executive Summary → Methodology → Critical → High → Medium → Low → Anti-Patterns → Recommendations → Appendices). The Round 2 file specifically covers AI providers, Integration connectors, Communication/Storage/Auth providers, Actions/MetadataSync/React/Encryption/Slack, and MJServer/AI-Agents/MCP/A2A — keep that scope.
 
 ### Phase 6 — Report to user
 

@@ -1,9 +1,10 @@
 # MemberJunction Memory & Resource Leak Audit
 
 **Generated:** 2026-05-03
-**Scope:** Full monorepo (69 packages)
+**Scope:** Full monorepo — **234 packages** (corrected; the original "69 packages" count was the top-level entries under `packages/`, not the actual `package.json` count)
 **Tooling:** Parallel multi-agent static analysis across five leak categories
 **Re-run command:** `/audit-memory-leaks` (see `.claude/commands/audit-memory-leaks.md`)
+**Companion report:** [`MEMORY_LEAK_AUDIT_ROUND2.md`](./MEMORY_LEAK_AUDIT_ROUND2.md) — targeted re-scan of nested provider/connector subtrees that this round sampled rather than covered exhaustively. Round 2 added **74 more findings** (combined total ~158).
 
 ---
 
