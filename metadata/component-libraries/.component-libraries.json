@@ -71,14 +71,15 @@
       "CDNUrl": "https://unpkg.com/chart.js@4.4.1/dist/chart.umd.js",
       "CDNCssUrl": null,
       "Description": "Simple yet flexible JavaScript charting library",
-      "LintRules": "@file:lint-rules/chart-js/lint.json"
+      "LintRules": "@file:lint-rules/chart-js/lint.json",
+      "UsageInstructions": "@file:usage-instructions/chart-js.md"
     },
     "primaryKey": {
       "ID": "754D12D4-B182-45E8-B4BB-98FB8A366B02"
     },
     "sync": {
-      "lastModified": "2026-04-30T22:22:37.674Z",
-      "checksum": "0863e33a75a18240c6547219ef693220aa699ef7116462ba7ebb0a265630478f"
+      "lastModified": "2026-05-03T05:31:01.297Z",
+      "checksum": "d8aedb18f3a639e0cdfa1e52574e0880d94baa34c9eb573fe67ba93323ada9e4"
     }
   },
   {
