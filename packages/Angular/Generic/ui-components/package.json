@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-ui-components",
-  "version": "5.30.1",
+  "version": "5.31.0",
   "description": "MemberJunction: Angular UI Components - reusable standalone components replacing Kendo UI dependencies.",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
