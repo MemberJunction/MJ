@@ -252,6 +252,44 @@ describe('ResourcePermissionProvider', () => {
         });
     });
 
+    describe('GetPermissionsSharedWithUser (SharedByUserID-backed)', () => {
+        it('returns direct Approved User grants where the user is the grantee and someone else is the grantor', async () => {
+            engineState.ResourceTypes = [{ ID: 'RT-CV', Name: 'Conversations' }];
+            engineState.Permissions = [
+                // current user is grantee, someone else is grantor — included
+                { ID: 'RP1', ResourceTypeID: 'RT-CV', ResourceRecordID: 'C1', Type: 'User', UserID: 'AAA', User: 'User A',
+                    SharedByUserID: 'BBB', PermissionLevel: 'View', Status: 'Approved' },
+                // current user is the grantor, not the grantee — excluded
+                { ID: 'RP2', ResourceTypeID: 'RT-CV', ResourceRecordID: 'C2', Type: 'User', UserID: 'CCC',
+                    SharedByUserID: 'AAA', PermissionLevel: 'View', Status: 'Approved' },
+                // self-grant (grantor === grantee) — excluded
+                { ID: 'RP3', ResourceTypeID: 'RT-CV', ResourceRecordID: 'C3', Type: 'User', UserID: 'AAA',
+                    SharedByUserID: 'AAA', PermissionLevel: 'Owner', Status: 'Approved' },
+                // missing SharedByUserID — excluded (legacy/role-only)
+                { ID: 'RP4', ResourceTypeID: 'RT-CV', ResourceRecordID: 'C4', Type: 'User', UserID: 'AAA',
+                    SharedByUserID: null, PermissionLevel: 'View', Status: 'Approved' },
+                // Requested status — excluded
+                { ID: 'RP5', ResourceTypeID: 'RT-CV', ResourceRecordID: 'C5', Type: 'User', UserID: 'AAA',
+                    SharedByUserID: 'BBB', PermissionLevel: 'View', Status: 'Requested' },
+                // Role grant — excluded (role-inherited access doesn't belong in personal "Shared with me")
+                { ID: 'RP6', ResourceTypeID: 'RT-CV', ResourceRecordID: 'C6', Type: 'Role', RoleID: 'ROLE-X',
+                    SharedByUserID: 'BBB', PermissionLevel: 'View', Status: 'Approved' },
+            ];
+            const result = await provider.GetPermissionsSharedWithUser(USER_A);
+            expect(result).toHaveLength(1);
+            expect(result[0].SourceRecordID).toBe('RP1');
+            expect(result[0].GranteeID).toBe('AAA');
+            expect(result[0].ResourceType).toBe('Conversations');
+            expect(result[0].ResourceID).toBe('C1');
+            expect(result[0].Actions).toEqual(['Read']);
+        });
+
+        it('returns empty when nothing has been shared with the user', async () => {
+            const result = await provider.GetPermissionsSharedWithUser(USER_A);
+            expect(result).toEqual([]);
+        });
+    });
+
     describe('GetResourceTypes', () => {
         it('lists the catalog resource type names, sorted', async () => {
             engineState.ResourceTypes = [

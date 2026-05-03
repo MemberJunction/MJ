@@ -1,5 +1,11 @@
 # @memberjunction/export-engine
 
+## 5.31.0
+
+### Patch Changes
+
+- 7ed7a4b: no metadata/migration changes
+
 ## 5.30.1
 
 ## 5.30.0

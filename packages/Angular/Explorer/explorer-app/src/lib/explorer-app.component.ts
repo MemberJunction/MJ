@@ -35,7 +35,13 @@ import { BaseAngularComponent } from '@memberjunction/ng-base-types';
   encapsulation: ViewEncapsulation.None
 })
 export class MJExplorerAppComponent extends BaseAngularComponent implements OnInit, OnDestroy {
-  private static readonly THEME_STORAGE_KEY = 'mj-login-theme';
+  /**
+   * Unified theme storage key. Same value the inline pre-paint script in
+   * index.html and ThemeService both read/write. Single source of truth so
+   * the login-screen toggle, the post-login ThemeService, and the inline
+   * first-paint script all stay in sync.
+   */
+  private static readonly THEME_STORAGE_KEY = 'mj-theme';
 
   public title = 'MJ Explorer';
   public initialPath = '/';
@@ -673,7 +679,11 @@ export class MJExplorerAppComponent extends BaseAngularComponent implements OnIn
   }
 
   /**
-   * Load saved theme preference from localStorage, falling back to OS preference
+   * Load saved theme preference from localStorage, falling back to OS preference.
+   *
+   * Reads the same THEME_STORAGE_KEY ('mj-theme') the inline pre-paint script
+   * reads, so both paths reach the same decision and Angular bootstrap doesn't
+   * override the script's correct first-paint setting.
    */
   private applyLoginTheme(): void {
     const saved = localStorage.getItem(MJExplorerAppComponent.THEME_STORAGE_KEY);

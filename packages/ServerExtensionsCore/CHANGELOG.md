@@ -1,5 +1,21 @@
 # @memberjunction/server-extensions-core
 
+## 5.31.0
+
+### Patch Changes
+
+- 7ed7a4b: no metadata/migration changes
+- 28beaa4: Slack/Teams server extensions now skip silently when enabled but unconfigured (placeholder ContextUserEmail or missing tokens) instead of throwing and logging failed to initialize on every MJAPI startup. Adds optional Skipped?: boolean to ExtensionInitResult for extensions to opt into the quiet path; loader emits LogStatus instead of LogError when set. Genuine misconfig (real credentials but unknown email) still throws and logs as an error.
+- Updated dependencies [7ed7a4b]
+- Updated dependencies [60e7541]
+- Updated dependencies [18be074]
+- Updated dependencies [17b8087]
+- Updated dependencies [6779c1e]
+- Updated dependencies [de34786]
+- Updated dependencies [5db36d9]
+  - @memberjunction/core@5.31.0
+  - @memberjunction/global@5.31.0
+
 ## 5.30.1
 
 ### Patch Changes

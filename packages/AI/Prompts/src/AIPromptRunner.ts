@@ -12,6 +12,7 @@ import { ExecutionPlanner } from './ExecutionPlanner';
 import { ParallelExecutionCoordinator } from './ParallelExecutionCoordinator';
 import { ResultSelectionConfig } from './ParallelExecution';
 import { AIEngine } from '@memberjunction/aiengine';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { SystemPlaceholderManager } from '@memberjunction/ai-core-plus';
 import {
     TemplateMessageRole,
@@ -598,6 +599,12 @@ export class AIPromptRunner {
   public async ExecutePrompt<T = unknown>(params: AIPromptParams): Promise<AIPromptRunResult<T>> {
     const startTime = new Date();
     const promptRun: MJAIPromptRunEntityExtended | null = null;
+
+    // AIEngineBase is registered as deferred — its initial load runs in the background
+    // after server boot. Make sure the cached metadata (Models, Vendors, ModelVendors,
+    // ConfigurationParams, etc.) is loaded before downstream resolution / planning runs.
+    // Idempotent: zero cost after first load thanks to BaseEngine._loadingSubject dedup.
+    await AIEngineBase.Instance.EnsureLoaded();
 
     // Check for cancellation at the start
     if (params.cancellationToken?.aborted) {

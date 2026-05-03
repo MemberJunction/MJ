@@ -6,6 +6,24 @@
   <base href="/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!--
+    Theme pre-paint — sets data-theme="dark" on <html> BEFORE Angular
+    boots so the first frame paints with the user's saved theme instead
+    of flashing light first. Reads 'mj-theme', the unified key written by
+    both ThemeService (post-login) and the login-screen toggle. Falls back
+    to OS prefers-color-scheme on true first visits. Wrapped in try/catch
+    so localStorage exceptions (Safari private mode, disabled storage) can
+    never block app load.
+  -->
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('mj-theme');
+        var isDark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (isDark) document.documentElement.setAttribute('data-theme', 'dark');
+      } catch (e) { /* swallow — theme just falls back to light */ }
+    })();
+  </script>
   <link rel="icon" href="favicon.ico" sizes="48x48">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">

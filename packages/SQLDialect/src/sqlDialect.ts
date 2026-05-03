@@ -214,11 +214,50 @@ export abstract class SQLDialect implements SQLParserDialect {
     abstract NewUUID(): string;
 
     /**
-     * Returns the COALESCE expression wrapper.
+     * Returns the platform's n-ary null-coalescing expression. SQL Server and
+     * PostgreSQL both spell this `COALESCE(...)`, but a future dialect could
+     * use a different keyword — abstract on purpose so each dialect must
+     * declare its own form rather than inheriting an opinionated default.
      */
-    Coalesce(expr: string, fallback: string): string {
-        return `COALESCE(${expr}, ${fallback})`;
+    abstract Coalesce(expr: string, fallback: string): string;
+
+    /**
+     * Returns the dialect's literal representation of NULL as it would
+     * appear in generated SQL (e.g. as the result of a default-value
+     * formatter). Both SQL Server and PostgreSQL use the bare keyword
+     * `NULL`, but a future dialect could differ — codegen comparisons
+     * should route through this rather than hard-coding the string.
+     */
+    get NullLiteral(): string {
+        return 'NULL';
     }
+
+    /**
+     * Returns true if `value` is the dialect's representation of a NULL
+     * literal in generated SQL. Comparison is case-insensitive after
+     * trimming whitespace. Subclasses may override if a dialect uses a
+     * non-keyword form (none currently do).
+     */
+    IsNullLiteral(value: string): boolean {
+        if (value == null) return false;
+        return value.trim().toUpperCase() === this.NullLiteral.toUpperCase();
+    }
+
+    /**
+     * Returns the parameter-reference syntax used by this dialect's
+     * stored-procedure / function bodies.
+     * SQL Server: `@MyName`, PostgreSQL functions: `p_my_name`.
+     * Codegen should call this rather than hard-coding `'@' + name`.
+     */
+    abstract ParameterRef(name: string): string;
+
+    /**
+     * Returns the default-value clause appended to a parameter declaration.
+     * SQL Server: ` = NULL` (or ` = 0`, etc.), PostgreSQL: ` DEFAULT NULL`.
+     * `value` should be a SQL literal already formatted by the caller (e.g.
+     * the dialect's NullLiteral, a quoted string, a numeric literal).
+     */
+    abstract ParameterDefault(value: string): string;
 
     /**
      * Returns a CAST-to-text expression.
@@ -231,6 +270,18 @@ export abstract class SQLDialect implements SQLParserDialect {
      * SQL Server: CAST(expr AS UNIQUEIDENTIFIER), PostgreSQL: CAST(expr AS UUID)
      */
     abstract CastToUUID(expr: string): string;
+
+    /**
+     * Returns the empty-GUID sentinel literal
+     * (`00000000-0000-0000-0000-000000000000`) formatted for use in a
+     * CASE-comparison expression. The base class returns the literal as a
+     * plain quoted string — SQL Server's implicit conversion accepts that
+     * directly. Dialects with strict typing (PostgreSQL) override to add
+     * the explicit cast their grammar requires.
+     */
+    EmptyUUIDLiteral(): string {
+        return `'00000000-0000-0000-0000-000000000000'`;
+    }
 
     // ─── INSERT/UPDATE Return Patterns ───────────────────────────────
 
@@ -524,13 +575,14 @@ export abstract class SQLDialect implements SQLParserDialect {
     // ─── Null Handling ───────────────────────────────────────────────
 
     /**
-     * Returns the platform's ISNULL/COALESCE equivalent.
-     * SQL Server: ISNULL(expr, fallback), PostgreSQL: COALESCE(expr, fallback)
-     * Note: COALESCE works on both, but ISNULL is SQL Server-specific.
+     * Returns the platform's two-argument null-coalescing expression.
+     * SQL Server: `ISNULL(expr, fallback)`, PostgreSQL: `COALESCE(expr, fallback)`.
+     * Abstract because each dialect must declare its own keyword — there is no
+     * safe default. A future dialect that has neither `ISNULL` nor `COALESCE`
+     * would silently emit invalid SQL if this fell through to a base
+     * implementation.
      */
-    IsNull(expr: string, fallback: string): string {
-        return this.Coalesce(expr, fallback);
-    }
+    abstract IsNull(expr: string, fallback: string): string;
 
     /**
      * Returns an IIF/CASE equivalent expression.

@@ -74,7 +74,6 @@ const DEFAULT_MAX_SIZE_BYTES = 20 * 1024 * 1024; // 20MB
 const DEFAULT_MAX_COUNT_PER_MESSAGE = 10;
 const DEFAULT_MAX_DIMENSION = 4096;
 
-// this class handles execution of AI Actions
 @RegisterForStartup()
 export class AIEngineBase extends BaseEngine<AIEngineBase> {
     private _models: MJAIModelEntityExtended[] = [];

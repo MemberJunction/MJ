@@ -982,6 +982,18 @@ export class SQLServerDataProvider
       // Also build the old-style simple params for backward compatibility
       simpleParams += this.generateSingleSPParam(f, value as string, bFirst);
       bFirst = false;
+
+      // Pillar 1 (tolerant SPs): when the caller is intentionally setting a
+      // nullable column with a non-NULL DB default to NULL, signal the SP's
+      // `_Clear` companion. Otherwise the SP body's `ISNULL(@Param, [Col])`
+      // (update) or default-substitution (create) would silently keep the
+      // existing value or apply the default — a literal NULL could never
+      // be persisted. Predicate lives on EntityFieldInfo where it logically
+      // belongs (pure metadata) and stays in sync with codegen.
+      if ((value === null || value === undefined) && f.NeedsClearCompanion) {
+        execParams.push(`@${f.CodeName}_Clear=1`);
+        simpleParams += `, @${f.CodeName}_Clear=1`;
+      }
     }
     if (isUpdate && execParams.length > 0) {
       // this is an update and we have other fields, so we need to add all of the pkeys to the end of the SP call

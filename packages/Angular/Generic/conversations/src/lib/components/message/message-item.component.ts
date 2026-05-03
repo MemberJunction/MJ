@@ -129,6 +129,12 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   }
 
   async ngOnInit() {
+    // AIEngineBase is deferred at startup; kick off the load early so the
+    // template-bound aiAgentInfo getter finds populated .Agents data when
+    // change detection asks for it. Fire-and-forget — the getter falls back
+    // to defaults until it's loaded.
+    AIEngineBase.Instance.EnsureLoaded();
+
     // Execute automatic commands if present
     await this.executeAutomaticCommands();
   }
