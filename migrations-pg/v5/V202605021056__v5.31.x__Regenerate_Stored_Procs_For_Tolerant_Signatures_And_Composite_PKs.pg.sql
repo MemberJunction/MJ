@@ -14,13 +14,6 @@ SET search_path TO __mj, public;
 -- Ensure backslashes in string literals are treated literally (not as escape sequences)
 SET standard_conforming_strings = on;
 
--- Implicit INTEGER -> BOOLEAN cast (SQL Server BIT columns accept 0/1 in INSERTs)
--- PostgreSQL has a built-in explicit-only INTEGER->bool cast. We upgrade it to implicit
--- so INSERT VALUES with 0/1 for BOOLEAN columns work like SQL Server BIT.
-UPDATE pg_cast SET castcontext = 'i'
-WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
-
-
 -- ===================== Stored Procedures (sp*) =====================
 
 -- Drop any existing overloads of __mj."spCreateActionAuthorization" before recreating with new signature.
@@ -3317,7 +3310,7 @@ IF p_ID IS NOT NULL THEN
                 p_ExtraFilter,
                 p_OrderBy,
                 p_FieldsToRetrieve,
-                CASE WHEN p_ResultType_Clear = 1 THEN NULL ELSE COALESCE(p_ResultType, 'simple') END,
+                CASE WHEN p_ResultType_Clear = TRUE THEN NULL ELSE COALESCE(p_ResultType, 'simple') END,
                 p_QueryName,
                 p_CategoryPath,
                 p_Parameters,
@@ -3363,7 +3356,7 @@ IF p_ID IS NOT NULL THEN
                 p_ExtraFilter,
                 p_OrderBy,
                 p_FieldsToRetrieve,
-                CASE WHEN p_ResultType_Clear = 1 THEN NULL ELSE COALESCE(p_ResultType, 'simple') END,
+                CASE WHEN p_ResultType_Clear = TRUE THEN NULL ELSE COALESCE(p_ResultType, 'simple') END,
                 p_QueryName,
                 p_CategoryPath,
                 p_Parameters,
@@ -3430,7 +3423,7 @@ UPDATE
         "ExtraFilter" = COALESCE(p_ExtraFilter, "ExtraFilter"),
         "OrderBy" = COALESCE(p_OrderBy, "OrderBy"),
         "FieldsToRetrieve" = COALESCE(p_FieldsToRetrieve, "FieldsToRetrieve"),
-        "ResultType" = CASE WHEN p_ResultType_Clear = 1 THEN NULL ELSE COALESCE(p_ResultType, "ResultType") END,
+        "ResultType" = CASE WHEN p_ResultType_Clear = TRUE THEN NULL ELSE COALESCE(p_ResultType, "ResultType") END,
         "QueryName" = COALESCE(p_QueryName, "QueryName"),
         "CategoryPath" = COALESCE(p_CategoryPath, "CategoryPath"),
         "Parameters" = COALESCE(p_Parameters, "Parameters"),
@@ -5410,8 +5403,8 @@ IF p_ID IS NOT NULL THEN
                 p_UserID,
                 p_Result,
                 p_AgentState,
-                CASE WHEN p_TotalTokensUsed_Clear = 1 THEN NULL ELSE COALESCE(p_TotalTokensUsed, 0) END,
-                CASE WHEN p_TotalCost_Clear = 1 THEN NULL ELSE COALESCE(p_TotalCost, 0.000000) END,
+                CASE WHEN p_TotalTokensUsed_Clear = TRUE THEN NULL ELSE COALESCE(p_TotalTokensUsed, 0) END,
+                CASE WHEN p_TotalCost_Clear = TRUE THEN NULL ELSE COALESCE(p_TotalCost, 0.000000) END,
                 p_TotalPromptTokensUsed,
                 p_TotalCompletionTokensUsed,
                 p_TotalTokensUsedRollup,
@@ -5431,7 +5424,7 @@ IF p_ID IS NOT NULL THEN
                 p_OverrideModelID,
                 p_OverrideVendorID,
                 p_Data,
-                CASE WHEN p_Verbose_Clear = 1 THEN NULL ELSE COALESCE(p_Verbose, FALSE) END,
+                CASE WHEN p_Verbose_Clear = TRUE THEN NULL ELSE COALESCE(p_Verbose, FALSE) END,
                 p_EffortLevel,
                 p_RunName,
                 p_Comments,
@@ -5504,8 +5497,8 @@ IF p_ID IS NOT NULL THEN
                 p_UserID,
                 p_Result,
                 p_AgentState,
-                CASE WHEN p_TotalTokensUsed_Clear = 1 THEN NULL ELSE COALESCE(p_TotalTokensUsed, 0) END,
-                CASE WHEN p_TotalCost_Clear = 1 THEN NULL ELSE COALESCE(p_TotalCost, 0.000000) END,
+                CASE WHEN p_TotalTokensUsed_Clear = TRUE THEN NULL ELSE COALESCE(p_TotalTokensUsed, 0) END,
+                CASE WHEN p_TotalCost_Clear = TRUE THEN NULL ELSE COALESCE(p_TotalCost, 0.000000) END,
                 p_TotalPromptTokensUsed,
                 p_TotalCompletionTokensUsed,
                 p_TotalTokensUsedRollup,
@@ -5525,7 +5518,7 @@ IF p_ID IS NOT NULL THEN
                 p_OverrideModelID,
                 p_OverrideVendorID,
                 p_Data,
-                CASE WHEN p_Verbose_Clear = 1 THEN NULL ELSE COALESCE(p_Verbose, FALSE) END,
+                CASE WHEN p_Verbose_Clear = TRUE THEN NULL ELSE COALESCE(p_Verbose, FALSE) END,
                 p_EffortLevel,
                 p_RunName,
                 p_Comments,
@@ -5621,8 +5614,8 @@ UPDATE
         "UserID" = COALESCE(p_UserID, "UserID"),
         "Result" = COALESCE(p_Result, "Result"),
         "AgentState" = COALESCE(p_AgentState, "AgentState"),
-        "TotalTokensUsed" = CASE WHEN p_TotalTokensUsed_Clear = 1 THEN NULL ELSE COALESCE(p_TotalTokensUsed, "TotalTokensUsed") END,
-        "TotalCost" = CASE WHEN p_TotalCost_Clear = 1 THEN NULL ELSE COALESCE(p_TotalCost, "TotalCost") END,
+        "TotalTokensUsed" = CASE WHEN p_TotalTokensUsed_Clear = TRUE THEN NULL ELSE COALESCE(p_TotalTokensUsed, "TotalTokensUsed") END,
+        "TotalCost" = CASE WHEN p_TotalCost_Clear = TRUE THEN NULL ELSE COALESCE(p_TotalCost, "TotalCost") END,
         "TotalPromptTokensUsed" = COALESCE(p_TotalPromptTokensUsed, "TotalPromptTokensUsed"),
         "TotalCompletionTokensUsed" = COALESCE(p_TotalCompletionTokensUsed, "TotalCompletionTokensUsed"),
         "TotalTokensUsedRollup" = COALESCE(p_TotalTokensUsedRollup, "TotalTokensUsedRollup"),
@@ -5642,7 +5635,7 @@ UPDATE
         "OverrideModelID" = COALESCE(p_OverrideModelID, "OverrideModelID"),
         "OverrideVendorID" = COALESCE(p_OverrideVendorID, "OverrideVendorID"),
         "Data" = COALESCE(p_Data, "Data"),
-        "Verbose" = CASE WHEN p_Verbose_Clear = 1 THEN NULL ELSE COALESCE(p_Verbose, "Verbose") END,
+        "Verbose" = CASE WHEN p_Verbose_Clear = TRUE THEN NULL ELSE COALESCE(p_Verbose, "Verbose") END,
         "EffortLevel" = COALESCE(p_EffortLevel, "EffortLevel"),
         "RunName" = COALESCE(p_RunName, "RunName"),
         "Comments" = COALESCE(p_Comments, "Comments"),
@@ -6093,7 +6086,7 @@ IF p_ID IS NOT NULL THEN
                 p_Description,
                 p_StepType,
                 COALESCE(p_StartingStep, FALSE),
-                CASE WHEN p_TimeoutSeconds_Clear = 1 THEN NULL ELSE COALESCE(p_TimeoutSeconds, 600) END,
+                CASE WHEN p_TimeoutSeconds_Clear = TRUE THEN NULL ELSE COALESCE(p_TimeoutSeconds, 600) END,
                 COALESCE(p_RetryCount, 0),
                 COALESCE(p_OnErrorBehavior, 'fail'),
                 p_ActionID,
@@ -6141,7 +6134,7 @@ IF p_ID IS NOT NULL THEN
                 p_Description,
                 p_StepType,
                 COALESCE(p_StartingStep, FALSE),
-                CASE WHEN p_TimeoutSeconds_Clear = 1 THEN NULL ELSE COALESCE(p_TimeoutSeconds, 600) END,
+                CASE WHEN p_TimeoutSeconds_Clear = TRUE THEN NULL ELSE COALESCE(p_TimeoutSeconds, 600) END,
                 COALESCE(p_RetryCount, 0),
                 COALESCE(p_OnErrorBehavior, 'fail'),
                 p_ActionID,
@@ -6210,7 +6203,7 @@ UPDATE
         "Description" = COALESCE(p_Description, "Description"),
         "StepType" = COALESCE(p_StepType, "StepType"),
         "StartingStep" = COALESCE(p_StartingStep, "StartingStep"),
-        "TimeoutSeconds" = CASE WHEN p_TimeoutSeconds_Clear = 1 THEN NULL ELSE COALESCE(p_TimeoutSeconds, "TimeoutSeconds") END,
+        "TimeoutSeconds" = CASE WHEN p_TimeoutSeconds_Clear = TRUE THEN NULL ELSE COALESCE(p_TimeoutSeconds, "TimeoutSeconds") END,
         "RetryCount" = COALESCE(p_RetryCount, "RetryCount"),
         "OnErrorBehavior" = COALESCE(p_OnErrorBehavior, "OnErrorBehavior"),
         "ActionID" = COALESCE(p_ActionID, "ActionID"),
@@ -7490,8 +7483,8 @@ IF p_ID IS NOT NULL THEN
                 p_InlineStorageThresholdBytes,
                 p_AgentTypePromptParams,
                 p_ScopeConfig,
-                CASE WHEN p_NoteRetentionDays_Clear = 1 THEN NULL ELSE COALESCE(p_NoteRetentionDays, 90) END,
-                CASE WHEN p_ExampleRetentionDays_Clear = 1 THEN NULL ELSE COALESCE(p_ExampleRetentionDays, 180) END,
+                CASE WHEN p_NoteRetentionDays_Clear = TRUE THEN NULL ELSE COALESCE(p_NoteRetentionDays, 90) END,
+                CASE WHEN p_ExampleRetentionDays_Clear = TRUE THEN NULL ELSE COALESCE(p_ExampleRetentionDays, 180) END,
                 COALESCE(p_AutoArchiveEnabled, TRUE),
                 p_RerankerConfiguration,
                 p_CategoryID,
@@ -7620,8 +7613,8 @@ IF p_ID IS NOT NULL THEN
                 p_InlineStorageThresholdBytes,
                 p_AgentTypePromptParams,
                 p_ScopeConfig,
-                CASE WHEN p_NoteRetentionDays_Clear = 1 THEN NULL ELSE COALESCE(p_NoteRetentionDays, 90) END,
-                CASE WHEN p_ExampleRetentionDays_Clear = 1 THEN NULL ELSE COALESCE(p_ExampleRetentionDays, 180) END,
+                CASE WHEN p_NoteRetentionDays_Clear = TRUE THEN NULL ELSE COALESCE(p_NoteRetentionDays, 90) END,
+                CASE WHEN p_ExampleRetentionDays_Clear = TRUE THEN NULL ELSE COALESCE(p_ExampleRetentionDays, 180) END,
                 COALESCE(p_AutoArchiveEnabled, TRUE),
                 p_RerankerConfiguration,
                 p_CategoryID,
@@ -7772,8 +7765,8 @@ UPDATE
         "InlineStorageThresholdBytes" = COALESCE(p_InlineStorageThresholdBytes, "InlineStorageThresholdBytes"),
         "AgentTypePromptParams" = COALESCE(p_AgentTypePromptParams, "AgentTypePromptParams"),
         "ScopeConfig" = COALESCE(p_ScopeConfig, "ScopeConfig"),
-        "NoteRetentionDays" = CASE WHEN p_NoteRetentionDays_Clear = 1 THEN NULL ELSE COALESCE(p_NoteRetentionDays, "NoteRetentionDays") END,
-        "ExampleRetentionDays" = CASE WHEN p_ExampleRetentionDays_Clear = 1 THEN NULL ELSE COALESCE(p_ExampleRetentionDays, "ExampleRetentionDays") END,
+        "NoteRetentionDays" = CASE WHEN p_NoteRetentionDays_Clear = TRUE THEN NULL ELSE COALESCE(p_NoteRetentionDays, "NoteRetentionDays") END,
+        "ExampleRetentionDays" = CASE WHEN p_ExampleRetentionDays_Clear = TRUE THEN NULL ELSE COALESCE(p_ExampleRetentionDays, "ExampleRetentionDays") END,
         "AutoArchiveEnabled" = COALESCE(p_AutoArchiveEnabled, "AutoArchiveEnabled"),
         "RerankerConfiguration" = COALESCE(p_RerankerConfiguration, "RerankerConfiguration"),
         "CategoryID" = COALESCE(p_CategoryID, "CategoryID"),
@@ -7974,7 +7967,7 @@ IF p_ID IS NOT NULL THEN
                 p_Category,
                 p_InputSchemaJSON,
                 p_OutputSchemaJSON,
-                CASE WHEN p_DefaultTimeoutMs_Clear = 1 THEN NULL ELSE COALESCE(p_DefaultTimeoutMs, 30000) END,
+                CASE WHEN p_DefaultTimeoutMs_Clear = TRUE THEN NULL ELSE COALESCE(p_DefaultTimeoutMs, 30000) END,
                 p_RequiresContextType
             );
     ELSE
@@ -7996,7 +7989,7 @@ IF p_ID IS NOT NULL THEN
                 p_Category,
                 p_InputSchemaJSON,
                 p_OutputSchemaJSON,
-                CASE WHEN p_DefaultTimeoutMs_Clear = 1 THEN NULL ELSE COALESCE(p_DefaultTimeoutMs, 30000) END,
+                CASE WHEN p_DefaultTimeoutMs_Clear = TRUE THEN NULL ELSE COALESCE(p_DefaultTimeoutMs, 30000) END,
                 p_RequiresContextType
             );
     END IF;
@@ -8039,7 +8032,7 @@ UPDATE
         "Category" = COALESCE(p_Category, "Category"),
         "InputSchemaJSON" = COALESCE(p_InputSchemaJSON, "InputSchemaJSON"),
         "OutputSchemaJSON" = COALESCE(p_OutputSchemaJSON, "OutputSchemaJSON"),
-        "DefaultTimeoutMs" = CASE WHEN p_DefaultTimeoutMs_Clear = 1 THEN NULL ELSE COALESCE(p_DefaultTimeoutMs, "DefaultTimeoutMs") END,
+        "DefaultTimeoutMs" = CASE WHEN p_DefaultTimeoutMs_Clear = TRUE THEN NULL ELSE COALESCE(p_DefaultTimeoutMs, "DefaultTimeoutMs") END,
         "RequiresContextType" = COALESCE(p_RequiresContextType, "RequiresContextType")
     WHERE
         "ID" = p_ID;
@@ -10368,7 +10361,7 @@ IF p_ID IS NOT NULL THEN
                 p_ID,
                 p_ModelID,
                 p_VendorID,
-                CASE WHEN p_StartedAt_Clear = 1 THEN NULL ELSE COALESCE(p_StartedAt, NOW()) END,
+                CASE WHEN p_StartedAt_Clear = TRUE THEN NULL ELSE COALESCE(p_StartedAt, NOW()) END,
                 p_EndedAt,
                 p_Status,
                 p_Currency,
@@ -10400,7 +10393,7 @@ IF p_ID IS NOT NULL THEN
             (
                 p_ModelID,
                 p_VendorID,
-                CASE WHEN p_StartedAt_Clear = 1 THEN NULL ELSE COALESCE(p_StartedAt, NOW()) END,
+                CASE WHEN p_StartedAt_Clear = TRUE THEN NULL ELSE COALESCE(p_StartedAt, NOW()) END,
                 p_EndedAt,
                 p_Status,
                 p_Currency,
@@ -10453,7 +10446,7 @@ UPDATE
     SET
         "ModelID" = COALESCE(p_ModelID, "ModelID"),
         "VendorID" = COALESCE(p_VendorID, "VendorID"),
-        "StartedAt" = CASE WHEN p_StartedAt_Clear = 1 THEN NULL ELSE COALESCE(p_StartedAt, "StartedAt") END,
+        "StartedAt" = CASE WHEN p_StartedAt_Clear = TRUE THEN NULL ELSE COALESCE(p_StartedAt, "StartedAt") END,
         "EndedAt" = COALESCE(p_EndedAt, "EndedAt"),
         "Status" = COALESCE(p_Status, "Status"),
         "Currency" = COALESCE(p_Currency, "Currency"),
@@ -11351,10 +11344,10 @@ IF p_ID IS NOT NULL THEN
                 p_Name,
                 p_Description,
                 p_AIModelTypeID,
-                CASE WHEN p_PowerRank_Clear = 1 THEN NULL ELSE COALESCE(p_PowerRank, 0) END,
+                CASE WHEN p_PowerRank_Clear = TRUE THEN NULL ELSE COALESCE(p_PowerRank, 0) END,
                 COALESCE(p_IsActive, TRUE),
-                CASE WHEN p_SpeedRank_Clear = 1 THEN NULL ELSE COALESCE(p_SpeedRank, 0) END,
-                CASE WHEN p_CostRank_Clear = 1 THEN NULL ELSE COALESCE(p_CostRank, 0) END,
+                CASE WHEN p_SpeedRank_Clear = TRUE THEN NULL ELSE COALESCE(p_SpeedRank, 0) END,
+                CASE WHEN p_CostRank_Clear = TRUE THEN NULL ELSE COALESCE(p_CostRank, 0) END,
                 p_ModelSelectionInsights,
                 COALESCE(p_InheritTypeModalities, TRUE),
                 p_PriorVersionID,
@@ -11383,10 +11376,10 @@ IF p_ID IS NOT NULL THEN
                 p_Name,
                 p_Description,
                 p_AIModelTypeID,
-                CASE WHEN p_PowerRank_Clear = 1 THEN NULL ELSE COALESCE(p_PowerRank, 0) END,
+                CASE WHEN p_PowerRank_Clear = TRUE THEN NULL ELSE COALESCE(p_PowerRank, 0) END,
                 COALESCE(p_IsActive, TRUE),
-                CASE WHEN p_SpeedRank_Clear = 1 THEN NULL ELSE COALESCE(p_SpeedRank, 0) END,
-                CASE WHEN p_CostRank_Clear = 1 THEN NULL ELSE COALESCE(p_CostRank, 0) END,
+                CASE WHEN p_SpeedRank_Clear = TRUE THEN NULL ELSE COALESCE(p_SpeedRank, 0) END,
+                CASE WHEN p_CostRank_Clear = TRUE THEN NULL ELSE COALESCE(p_CostRank, 0) END,
                 p_ModelSelectionInsights,
                 COALESCE(p_InheritTypeModalities, TRUE),
                 p_PriorVersionID,
@@ -11438,10 +11431,10 @@ UPDATE
         "Name" = COALESCE(p_Name, "Name"),
         "Description" = COALESCE(p_Description, "Description"),
         "AIModelTypeID" = COALESCE(p_AIModelTypeID, "AIModelTypeID"),
-        "PowerRank" = CASE WHEN p_PowerRank_Clear = 1 THEN NULL ELSE COALESCE(p_PowerRank, "PowerRank") END,
+        "PowerRank" = CASE WHEN p_PowerRank_Clear = TRUE THEN NULL ELSE COALESCE(p_PowerRank, "PowerRank") END,
         "IsActive" = COALESCE(p_IsActive, "IsActive"),
-        "SpeedRank" = CASE WHEN p_SpeedRank_Clear = 1 THEN NULL ELSE COALESCE(p_SpeedRank, "SpeedRank") END,
-        "CostRank" = CASE WHEN p_CostRank_Clear = 1 THEN NULL ELSE COALESCE(p_CostRank, "CostRank") END,
+        "SpeedRank" = CASE WHEN p_SpeedRank_Clear = TRUE THEN NULL ELSE COALESCE(p_SpeedRank, "SpeedRank") END,
+        "CostRank" = CASE WHEN p_CostRank_Clear = TRUE THEN NULL ELSE COALESCE(p_CostRank, "CostRank") END,
         "ModelSelectionInsights" = COALESCE(p_ModelSelectionInsights, "ModelSelectionInsights"),
         "InheritTypeModalities" = COALESCE(p_InheritTypeModalities, "InheritTypeModalities"),
         "PriorVersionID" = COALESCE(p_PriorVersionID, "PriorVersionID"),
@@ -11939,7 +11932,7 @@ IF p_ID IS NOT NULL THEN
                 p_TotalRetryDurationMS,
                 p_ValidationAttempts,
                 p_ValidationSummary,
-                CASE WHEN p_FailoverAttempts_Clear = 1 THEN NULL ELSE COALESCE(p_FailoverAttempts, 0) END,
+                CASE WHEN p_FailoverAttempts_Clear = TRUE THEN NULL ELSE COALESCE(p_FailoverAttempts, 0) END,
                 p_FailoverErrors,
                 p_FailoverDurations,
                 p_OriginalModelID,
@@ -12111,7 +12104,7 @@ IF p_ID IS NOT NULL THEN
                 p_TotalRetryDurationMS,
                 p_ValidationAttempts,
                 p_ValidationSummary,
-                CASE WHEN p_FailoverAttempts_Clear = 1 THEN NULL ELSE COALESCE(p_FailoverAttempts, 0) END,
+                CASE WHEN p_FailoverAttempts_Clear = TRUE THEN NULL ELSE COALESCE(p_FailoverAttempts, 0) END,
                 p_FailoverErrors,
                 p_FailoverDurations,
                 p_OriginalModelID,
@@ -12304,7 +12297,7 @@ UPDATE
         "TotalRetryDurationMS" = COALESCE(p_TotalRetryDurationMS, "TotalRetryDurationMS"),
         "ValidationAttempts" = COALESCE(p_ValidationAttempts, "ValidationAttempts"),
         "ValidationSummary" = COALESCE(p_ValidationSummary, "ValidationSummary"),
-        "FailoverAttempts" = CASE WHEN p_FailoverAttempts_Clear = 1 THEN NULL ELSE COALESCE(p_FailoverAttempts, "FailoverAttempts") END,
+        "FailoverAttempts" = CASE WHEN p_FailoverAttempts_Clear = TRUE THEN NULL ELSE COALESCE(p_FailoverAttempts, "FailoverAttempts") END,
         "FailoverErrors" = COALESCE(p_FailoverErrors, "FailoverErrors"),
         "FailoverDurations" = COALESCE(p_FailoverDurations, "FailoverDurations"),
         "OriginalModelID" = COALESCE(p_OriginalModelID, "OriginalModelID"),
@@ -13261,7 +13254,7 @@ IF p_ID IS NOT NULL THEN
                 COALESCE(p_ResponseFormat, 'Any'),
                 p_ModelSpecificResponseFormat,
                 p_AIModelTypeID,
-                CASE WHEN p_MinPowerRank_Clear = 1 THEN NULL ELSE COALESCE(p_MinPowerRank, 0) END,
+                CASE WHEN p_MinPowerRank_Clear = TRUE THEN NULL ELSE COALESCE(p_MinPowerRank, 0) END,
                 COALESCE(p_SelectionStrategy, 'Default'),
                 COALESCE(p_PowerPreference, 'Highest'),
                 COALESCE(p_ParallelizationMode, 'None'),
@@ -13292,11 +13285,11 @@ IF p_ID IS NOT NULL THEN
                 p_PresencePenalty,
                 p_Seed,
                 p_StopSequences,
-                CASE WHEN p_IncludeLogProbs_Clear = 1 THEN NULL ELSE COALESCE(p_IncludeLogProbs, FALSE) END,
+                CASE WHEN p_IncludeLogProbs_Clear = TRUE THEN NULL ELSE COALESCE(p_IncludeLogProbs, FALSE) END,
                 p_TopLogProbs,
                 COALESCE(p_FailoverStrategy, 'SameModelDifferentVendor'),
-                CASE WHEN p_FailoverMaxAttempts_Clear = 1 THEN NULL ELSE COALESCE(p_FailoverMaxAttempts, 3) END,
-                CASE WHEN p_FailoverDelaySeconds_Clear = 1 THEN NULL ELSE COALESCE(p_FailoverDelaySeconds, 5) END,
+                CASE WHEN p_FailoverMaxAttempts_Clear = TRUE THEN NULL ELSE COALESCE(p_FailoverMaxAttempts, 3) END,
+                CASE WHEN p_FailoverDelaySeconds_Clear = TRUE THEN NULL ELSE COALESCE(p_FailoverDelaySeconds, 5) END,
                 COALESCE(p_FailoverModelStrategy, 'PreferSameModel'),
                 COALESCE(p_FailoverErrorScope, 'All'),
                 p_EffortLevel,
@@ -13371,7 +13364,7 @@ IF p_ID IS NOT NULL THEN
                 COALESCE(p_ResponseFormat, 'Any'),
                 p_ModelSpecificResponseFormat,
                 p_AIModelTypeID,
-                CASE WHEN p_MinPowerRank_Clear = 1 THEN NULL ELSE COALESCE(p_MinPowerRank, 0) END,
+                CASE WHEN p_MinPowerRank_Clear = TRUE THEN NULL ELSE COALESCE(p_MinPowerRank, 0) END,
                 COALESCE(p_SelectionStrategy, 'Default'),
                 COALESCE(p_PowerPreference, 'Highest'),
                 COALESCE(p_ParallelizationMode, 'None'),
@@ -13402,11 +13395,11 @@ IF p_ID IS NOT NULL THEN
                 p_PresencePenalty,
                 p_Seed,
                 p_StopSequences,
-                CASE WHEN p_IncludeLogProbs_Clear = 1 THEN NULL ELSE COALESCE(p_IncludeLogProbs, FALSE) END,
+                CASE WHEN p_IncludeLogProbs_Clear = TRUE THEN NULL ELSE COALESCE(p_IncludeLogProbs, FALSE) END,
                 p_TopLogProbs,
                 COALESCE(p_FailoverStrategy, 'SameModelDifferentVendor'),
-                CASE WHEN p_FailoverMaxAttempts_Clear = 1 THEN NULL ELSE COALESCE(p_FailoverMaxAttempts, 3) END,
-                CASE WHEN p_FailoverDelaySeconds_Clear = 1 THEN NULL ELSE COALESCE(p_FailoverDelaySeconds, 5) END,
+                CASE WHEN p_FailoverMaxAttempts_Clear = TRUE THEN NULL ELSE COALESCE(p_FailoverMaxAttempts, 3) END,
+                CASE WHEN p_FailoverDelaySeconds_Clear = TRUE THEN NULL ELSE COALESCE(p_FailoverDelaySeconds, 5) END,
                 COALESCE(p_FailoverModelStrategy, 'PreferSameModel'),
                 COALESCE(p_FailoverErrorScope, 'All'),
                 p_EffortLevel,
@@ -13505,7 +13498,7 @@ UPDATE
         "ResponseFormat" = COALESCE(p_ResponseFormat, "ResponseFormat"),
         "ModelSpecificResponseFormat" = COALESCE(p_ModelSpecificResponseFormat, "ModelSpecificResponseFormat"),
         "AIModelTypeID" = COALESCE(p_AIModelTypeID, "AIModelTypeID"),
-        "MinPowerRank" = CASE WHEN p_MinPowerRank_Clear = 1 THEN NULL ELSE COALESCE(p_MinPowerRank, "MinPowerRank") END,
+        "MinPowerRank" = CASE WHEN p_MinPowerRank_Clear = TRUE THEN NULL ELSE COALESCE(p_MinPowerRank, "MinPowerRank") END,
         "SelectionStrategy" = COALESCE(p_SelectionStrategy, "SelectionStrategy"),
         "PowerPreference" = COALESCE(p_PowerPreference, "PowerPreference"),
         "ParallelizationMode" = COALESCE(p_ParallelizationMode, "ParallelizationMode"),
@@ -13536,11 +13529,11 @@ UPDATE
         "PresencePenalty" = COALESCE(p_PresencePenalty, "PresencePenalty"),
         "Seed" = COALESCE(p_Seed, "Seed"),
         "StopSequences" = COALESCE(p_StopSequences, "StopSequences"),
-        "IncludeLogProbs" = CASE WHEN p_IncludeLogProbs_Clear = 1 THEN NULL ELSE COALESCE(p_IncludeLogProbs, "IncludeLogProbs") END,
+        "IncludeLogProbs" = CASE WHEN p_IncludeLogProbs_Clear = TRUE THEN NULL ELSE COALESCE(p_IncludeLogProbs, "IncludeLogProbs") END,
         "TopLogProbs" = COALESCE(p_TopLogProbs, "TopLogProbs"),
         "FailoverStrategy" = COALESCE(p_FailoverStrategy, "FailoverStrategy"),
-        "FailoverMaxAttempts" = CASE WHEN p_FailoverMaxAttempts_Clear = 1 THEN NULL ELSE COALESCE(p_FailoverMaxAttempts, "FailoverMaxAttempts") END,
-        "FailoverDelaySeconds" = CASE WHEN p_FailoverDelaySeconds_Clear = 1 THEN NULL ELSE COALESCE(p_FailoverDelaySeconds, "FailoverDelaySeconds") END,
+        "FailoverMaxAttempts" = CASE WHEN p_FailoverMaxAttempts_Clear = TRUE THEN NULL ELSE COALESCE(p_FailoverMaxAttempts, "FailoverMaxAttempts") END,
+        "FailoverDelaySeconds" = CASE WHEN p_FailoverDelaySeconds_Clear = TRUE THEN NULL ELSE COALESCE(p_FailoverDelaySeconds, "FailoverDelaySeconds") END,
         "FailoverModelStrategy" = COALESCE(p_FailoverModelStrategy, "FailoverModelStrategy"),
         "FailoverErrorScope" = COALESCE(p_FailoverErrorScope, "FailoverErrorScope"),
         "EffortLevel" = COALESCE(p_EffortLevel, "EffortLevel"),
@@ -24086,9 +24079,9 @@ IF p_ID IS NOT NULL THEN
                 p_ProcessedItems,
                 p_StartedByUserID,
                 p_TotalItemCount,
-                CASE WHEN p_LastProcessedOffset_Clear = 1 THEN NULL ELSE COALESCE(p_LastProcessedOffset, 0) END,
-                CASE WHEN p_BatchSize_Clear = 1 THEN NULL ELSE COALESCE(p_BatchSize, 100) END,
-                CASE WHEN p_ErrorCount_Clear = 1 THEN NULL ELSE COALESCE(p_ErrorCount, 0) END,
+                CASE WHEN p_LastProcessedOffset_Clear = TRUE THEN NULL ELSE COALESCE(p_LastProcessedOffset, 0) END,
+                CASE WHEN p_BatchSize_Clear = TRUE THEN NULL ELSE COALESCE(p_BatchSize, 100) END,
+                CASE WHEN p_ErrorCount_Clear = TRUE THEN NULL ELSE COALESCE(p_ErrorCount, 0) END,
                 p_ErrorMessage,
                 COALESCE(p_CancellationRequested, FALSE),
                 p_Configuration
@@ -24120,9 +24113,9 @@ IF p_ID IS NOT NULL THEN
                 p_ProcessedItems,
                 p_StartedByUserID,
                 p_TotalItemCount,
-                CASE WHEN p_LastProcessedOffset_Clear = 1 THEN NULL ELSE COALESCE(p_LastProcessedOffset, 0) END,
-                CASE WHEN p_BatchSize_Clear = 1 THEN NULL ELSE COALESCE(p_BatchSize, 100) END,
-                CASE WHEN p_ErrorCount_Clear = 1 THEN NULL ELSE COALESCE(p_ErrorCount, 0) END,
+                CASE WHEN p_LastProcessedOffset_Clear = TRUE THEN NULL ELSE COALESCE(p_LastProcessedOffset, 0) END,
+                CASE WHEN p_BatchSize_Clear = TRUE THEN NULL ELSE COALESCE(p_BatchSize, 100) END,
+                CASE WHEN p_ErrorCount_Clear = TRUE THEN NULL ELSE COALESCE(p_ErrorCount, 0) END,
                 p_ErrorMessage,
                 COALESCE(p_CancellationRequested, FALSE),
                 p_Configuration
@@ -24177,9 +24170,9 @@ UPDATE
         "ProcessedItems" = COALESCE(p_ProcessedItems, "ProcessedItems"),
         "StartedByUserID" = COALESCE(p_StartedByUserID, "StartedByUserID"),
         "TotalItemCount" = COALESCE(p_TotalItemCount, "TotalItemCount"),
-        "LastProcessedOffset" = CASE WHEN p_LastProcessedOffset_Clear = 1 THEN NULL ELSE COALESCE(p_LastProcessedOffset, "LastProcessedOffset") END,
-        "BatchSize" = CASE WHEN p_BatchSize_Clear = 1 THEN NULL ELSE COALESCE(p_BatchSize, "BatchSize") END,
-        "ErrorCount" = CASE WHEN p_ErrorCount_Clear = 1 THEN NULL ELSE COALESCE(p_ErrorCount, "ErrorCount") END,
+        "LastProcessedOffset" = CASE WHEN p_LastProcessedOffset_Clear = TRUE THEN NULL ELSE COALESCE(p_LastProcessedOffset, "LastProcessedOffset") END,
+        "BatchSize" = CASE WHEN p_BatchSize_Clear = TRUE THEN NULL ELSE COALESCE(p_BatchSize, "BatchSize") END,
+        "ErrorCount" = CASE WHEN p_ErrorCount_Clear = TRUE THEN NULL ELSE COALESCE(p_ErrorCount, "ErrorCount") END,
         "ErrorMessage" = COALESCE(p_ErrorMessage, "ErrorMessage"),
         "CancellationRequested" = COALESCE(p_CancellationRequested, "CancellationRequested"),
         "Configuration" = COALESCE(p_Configuration, "Configuration")
@@ -30090,9 +30083,9 @@ IF p_ID IS NOT NULL THEN
                 COALESCE(p_ProcessingStatus, 'Pending'),
                 p_ProcessingErrorMessage,
                 p_TotalItemCount,
-                CASE WHEN p_ProcessedItemCount_Clear = 1 THEN NULL ELSE COALESCE(p_ProcessedItemCount, 0) END,
-                CASE WHEN p_LastProcessedOffset_Clear = 1 THEN NULL ELSE COALESCE(p_LastProcessedOffset, 0) END,
-                CASE WHEN p_BatchSize_Clear = 1 THEN NULL ELSE COALESCE(p_BatchSize, 100) END,
+                CASE WHEN p_ProcessedItemCount_Clear = TRUE THEN NULL ELSE COALESCE(p_ProcessedItemCount, 0) END,
+                CASE WHEN p_LastProcessedOffset_Clear = TRUE THEN NULL ELSE COALESCE(p_LastProcessedOffset, 0) END,
+                CASE WHEN p_BatchSize_Clear = TRUE THEN NULL ELSE COALESCE(p_BatchSize, 100) END,
                 COALESCE(p_CancellationRequested, FALSE)
             );
     ELSE
@@ -30128,9 +30121,9 @@ IF p_ID IS NOT NULL THEN
                 COALESCE(p_ProcessingStatus, 'Pending'),
                 p_ProcessingErrorMessage,
                 p_TotalItemCount,
-                CASE WHEN p_ProcessedItemCount_Clear = 1 THEN NULL ELSE COALESCE(p_ProcessedItemCount, 0) END,
-                CASE WHEN p_LastProcessedOffset_Clear = 1 THEN NULL ELSE COALESCE(p_LastProcessedOffset, 0) END,
-                CASE WHEN p_BatchSize_Clear = 1 THEN NULL ELSE COALESCE(p_BatchSize, 100) END,
+                CASE WHEN p_ProcessedItemCount_Clear = TRUE THEN NULL ELSE COALESCE(p_ProcessedItemCount, 0) END,
+                CASE WHEN p_LastProcessedOffset_Clear = TRUE THEN NULL ELSE COALESCE(p_LastProcessedOffset, 0) END,
+                CASE WHEN p_BatchSize_Clear = TRUE THEN NULL ELSE COALESCE(p_BatchSize, 100) END,
                 COALESCE(p_CancellationRequested, FALSE)
             );
     END IF;
@@ -30189,9 +30182,9 @@ UPDATE
         "ProcessingStatus" = COALESCE(p_ProcessingStatus, "ProcessingStatus"),
         "ProcessingErrorMessage" = COALESCE(p_ProcessingErrorMessage, "ProcessingErrorMessage"),
         "TotalItemCount" = COALESCE(p_TotalItemCount, "TotalItemCount"),
-        "ProcessedItemCount" = CASE WHEN p_ProcessedItemCount_Clear = 1 THEN NULL ELSE COALESCE(p_ProcessedItemCount, "ProcessedItemCount") END,
-        "LastProcessedOffset" = CASE WHEN p_LastProcessedOffset_Clear = 1 THEN NULL ELSE COALESCE(p_LastProcessedOffset, "LastProcessedOffset") END,
-        "BatchSize" = CASE WHEN p_BatchSize_Clear = 1 THEN NULL ELSE COALESCE(p_BatchSize, "BatchSize") END,
+        "ProcessedItemCount" = CASE WHEN p_ProcessedItemCount_Clear = TRUE THEN NULL ELSE COALESCE(p_ProcessedItemCount, "ProcessedItemCount") END,
+        "LastProcessedOffset" = CASE WHEN p_LastProcessedOffset_Clear = TRUE THEN NULL ELSE COALESCE(p_LastProcessedOffset, "LastProcessedOffset") END,
+        "BatchSize" = CASE WHEN p_BatchSize_Clear = TRUE THEN NULL ELSE COALESCE(p_BatchSize, "BatchSize") END,
         "CancellationRequested" = COALESCE(p_CancellationRequested, "CancellationRequested")
     WHERE
         "ID" = p_ID;
@@ -31304,7 +31297,7 @@ IF p_ID IS NOT NULL THEN
                 COALESCE(p_FullTextIndexGenerated, TRUE),
                 p_FullTextSearchFunction,
                 COALESCE(p_FullTextSearchFunctionGenerated, TRUE),
-                CASE WHEN p_UserViewMaxRows_Clear = 1 THEN NULL ELSE COALESCE(p_UserViewMaxRows, 1000) END,
+                CASE WHEN p_UserViewMaxRows_Clear = TRUE THEN NULL ELSE COALESCE(p_UserViewMaxRows, 1000) END,
                 p_spCreate,
                 p_spUpdate,
                 p_spDelete,
@@ -31432,7 +31425,7 @@ IF p_ID IS NOT NULL THEN
                 COALESCE(p_FullTextIndexGenerated, TRUE),
                 p_FullTextSearchFunction,
                 COALESCE(p_FullTextSearchFunctionGenerated, TRUE),
-                CASE WHEN p_UserViewMaxRows_Clear = 1 THEN NULL ELSE COALESCE(p_UserViewMaxRows, 1000) END,
+                CASE WHEN p_UserViewMaxRows_Clear = TRUE THEN NULL ELSE COALESCE(p_UserViewMaxRows, 1000) END,
                 p_spCreate,
                 p_spUpdate,
                 p_spDelete,
@@ -31581,7 +31574,7 @@ UPDATE
         "FullTextIndexGenerated" = COALESCE(p_FullTextIndexGenerated, "FullTextIndexGenerated"),
         "FullTextSearchFunction" = COALESCE(p_FullTextSearchFunction, "FullTextSearchFunction"),
         "FullTextSearchFunctionGenerated" = COALESCE(p_FullTextSearchFunctionGenerated, "FullTextSearchFunctionGenerated"),
-        "UserViewMaxRows" = CASE WHEN p_UserViewMaxRows_Clear = 1 THEN NULL ELSE COALESCE(p_UserViewMaxRows, "UserViewMaxRows") END,
+        "UserViewMaxRows" = CASE WHEN p_UserViewMaxRows_Clear = TRUE THEN NULL ELSE COALESCE(p_UserViewMaxRows, "UserViewMaxRows") END,
         "spCreate" = COALESCE(p_spCreate, "spCreate"),
         "spUpdate" = COALESCE(p_spUpdate, "spUpdate"),
         "spDelete" = COALESCE(p_spDelete, "spDelete"),
@@ -35264,7 +35257,7 @@ IF p_ID IS NOT NULL THEN
                 p_CompanyIntegrationRunDetailID,
                 p_Code,
                 p_Message,
-                CASE WHEN p_CreatedBy_Clear = 1 THEN NULL ELSE COALESCE(p_CreatedBy, current_user) END,
+                CASE WHEN p_CreatedBy_Clear = TRUE THEN NULL ELSE COALESCE(p_CreatedBy, current_user) END,
                 p_Status,
                 p_Category,
                 p_Details
@@ -35288,7 +35281,7 @@ IF p_ID IS NOT NULL THEN
                 p_CompanyIntegrationRunDetailID,
                 p_Code,
                 p_Message,
-                CASE WHEN p_CreatedBy_Clear = 1 THEN NULL ELSE COALESCE(p_CreatedBy, current_user) END,
+                CASE WHEN p_CreatedBy_Clear = TRUE THEN NULL ELSE COALESCE(p_CreatedBy, current_user) END,
                 p_Status,
                 p_Category,
                 p_Details
@@ -35333,7 +35326,7 @@ UPDATE
         "CompanyIntegrationRunDetailID" = COALESCE(p_CompanyIntegrationRunDetailID, "CompanyIntegrationRunDetailID"),
         "Code" = COALESCE(p_Code, "Code"),
         "Message" = COALESCE(p_Message, "Message"),
-        "CreatedBy" = CASE WHEN p_CreatedBy_Clear = 1 THEN NULL ELSE COALESCE(p_CreatedBy, "CreatedBy") END,
+        "CreatedBy" = CASE WHEN p_CreatedBy_Clear = TRUE THEN NULL ELSE COALESCE(p_CreatedBy, "CreatedBy") END,
         "Status" = COALESCE(p_Status, "Status"),
         "Category" = COALESCE(p_Category, "Category"),
         "Details" = COALESCE(p_Details, "Details")
@@ -37942,8 +37935,8 @@ IF p_ID IS NOT NULL THEN
                 COALESCE(p_Sequence, 0),
                 COALESCE(p_Status, 'Active'),
                 p_WriteAPIPath,
-                CASE WHEN p_WriteMethod_Clear = 1 THEN NULL ELSE COALESCE(p_WriteMethod, 'POST') END,
-                CASE WHEN p_DeleteMethod_Clear = 1 THEN NULL ELSE COALESCE(p_DeleteMethod, 'DELETE') END,
+                CASE WHEN p_WriteMethod_Clear = TRUE THEN NULL ELSE COALESCE(p_WriteMethod, 'POST') END,
+                CASE WHEN p_DeleteMethod_Clear = TRUE THEN NULL ELSE COALESCE(p_DeleteMethod, 'DELETE') END,
                 COALESCE(p_IsCustom, FALSE)
             );
     ELSE
@@ -37990,8 +37983,8 @@ IF p_ID IS NOT NULL THEN
                 COALESCE(p_Sequence, 0),
                 COALESCE(p_Status, 'Active'),
                 p_WriteAPIPath,
-                CASE WHEN p_WriteMethod_Clear = 1 THEN NULL ELSE COALESCE(p_WriteMethod, 'POST') END,
-                CASE WHEN p_DeleteMethod_Clear = 1 THEN NULL ELSE COALESCE(p_DeleteMethod, 'DELETE') END,
+                CASE WHEN p_WriteMethod_Clear = TRUE THEN NULL ELSE COALESCE(p_WriteMethod, 'POST') END,
+                CASE WHEN p_DeleteMethod_Clear = TRUE THEN NULL ELSE COALESCE(p_DeleteMethod, 'DELETE') END,
                 COALESCE(p_IsCustom, FALSE)
             );
     END IF;
@@ -38060,8 +38053,8 @@ UPDATE
         "Sequence" = COALESCE(p_Sequence, "Sequence"),
         "Status" = COALESCE(p_Status, "Status"),
         "WriteAPIPath" = COALESCE(p_WriteAPIPath, "WriteAPIPath"),
-        "WriteMethod" = CASE WHEN p_WriteMethod_Clear = 1 THEN NULL ELSE COALESCE(p_WriteMethod, "WriteMethod") END,
-        "DeleteMethod" = CASE WHEN p_DeleteMethod_Clear = 1 THEN NULL ELSE COALESCE(p_DeleteMethod, "DeleteMethod") END,
+        "WriteMethod" = CASE WHEN p_WriteMethod_Clear = TRUE THEN NULL ELSE COALESCE(p_WriteMethod, "WriteMethod") END,
+        "DeleteMethod" = CASE WHEN p_DeleteMethod_Clear = TRUE THEN NULL ELSE COALESCE(p_DeleteMethod, "DeleteMethod") END,
         "IsCustom" = COALESCE(p_IsCustom, "IsCustom")
     WHERE
         "ID" = p_ID;
@@ -38296,7 +38289,7 @@ IF p_ID IS NOT NULL THEN
                 p_Query,
                 p_Filters,
                 p_MinScore,
-                CASE WHEN p_MaxResults_Clear = 1 THEN NULL ELSE COALESCE(p_MaxResults, 50) END,
+                CASE WHEN p_MaxResults_Clear = TRUE THEN NULL ELSE COALESCE(p_MaxResults, 50) END,
                 COALESCE(p_NotifyOnNewResults, FALSE)
             );
     ELSE
@@ -38318,7 +38311,7 @@ IF p_ID IS NOT NULL THEN
                 p_Query,
                 p_Filters,
                 p_MinScore,
-                CASE WHEN p_MaxResults_Clear = 1 THEN NULL ELSE COALESCE(p_MaxResults, 50) END,
+                CASE WHEN p_MaxResults_Clear = TRUE THEN NULL ELSE COALESCE(p_MaxResults, 50) END,
                 COALESCE(p_NotifyOnNewResults, FALSE)
             );
     END IF;
@@ -38361,7 +38354,7 @@ UPDATE
         "Query" = COALESCE(p_Query, "Query"),
         "Filters" = COALESCE(p_Filters, "Filters"),
         "MinScore" = COALESCE(p_MinScore, "MinScore"),
-        "MaxResults" = CASE WHEN p_MaxResults_Clear = 1 THEN NULL ELSE COALESCE(p_MaxResults, "MaxResults") END,
+        "MaxResults" = CASE WHEN p_MaxResults_Clear = TRUE THEN NULL ELSE COALESCE(p_MaxResults, "MaxResults") END,
         "NotifyOnNewResults" = COALESCE(p_NotifyOnNewResults, "NotifyOnNewResults")
     WHERE
         "ID" = p_ID;
@@ -40125,7 +40118,7 @@ IF p_ID IS NOT NULL THEN
                 COALESCE(p_LogToolCalls, TRUE),
                 COALESCE(p_LogInputParameters, TRUE),
                 COALESCE(p_LogOutputContent, TRUE),
-                CASE WHEN p_MaxOutputLogSize_Clear = 1 THEN NULL ELSE COALESCE(p_MaxOutputLogSize, 102400) END,
+                CASE WHEN p_MaxOutputLogSize_Clear = TRUE THEN NULL ELSE COALESCE(p_MaxOutputLogSize, 102400) END,
                 p_LastConnectedAt,
                 p_LastErrorMessage,
                 p_EnvironmentVars
@@ -40165,7 +40158,7 @@ IF p_ID IS NOT NULL THEN
                 COALESCE(p_LogToolCalls, TRUE),
                 COALESCE(p_LogInputParameters, TRUE),
                 COALESCE(p_LogOutputContent, TRUE),
-                CASE WHEN p_MaxOutputLogSize_Clear = 1 THEN NULL ELSE COALESCE(p_MaxOutputLogSize, 102400) END,
+                CASE WHEN p_MaxOutputLogSize_Clear = TRUE THEN NULL ELSE COALESCE(p_MaxOutputLogSize, 102400) END,
                 p_LastConnectedAt,
                 p_LastErrorMessage,
                 p_EnvironmentVars
@@ -40226,7 +40219,7 @@ UPDATE
         "LogToolCalls" = COALESCE(p_LogToolCalls, "LogToolCalls"),
         "LogInputParameters" = COALESCE(p_LogInputParameters, "LogInputParameters"),
         "LogOutputContent" = COALESCE(p_LogOutputContent, "LogOutputContent"),
-        "MaxOutputLogSize" = CASE WHEN p_MaxOutputLogSize_Clear = 1 THEN NULL ELSE COALESCE(p_MaxOutputLogSize, "MaxOutputLogSize") END,
+        "MaxOutputLogSize" = CASE WHEN p_MaxOutputLogSize_Clear = TRUE THEN NULL ELSE COALESCE(p_MaxOutputLogSize, "MaxOutputLogSize") END,
         "LastConnectedAt" = COALESCE(p_LastConnectedAt, "LastConnectedAt"),
         "LastErrorMessage" = COALESCE(p_LastErrorMessage, "LastErrorMessage"),
         "EnvironmentVars" = COALESCE(p_EnvironmentVars, "EnvironmentVars")
@@ -40360,13 +40353,13 @@ IF p_ID IS NOT NULL THEN
                 p_LastSyncAt,
                 p_RateLimitPerMinute,
                 p_RateLimitPerHour,
-                CASE WHEN p_ConnectionTimeoutMs_Clear = 1 THEN NULL ELSE COALESCE(p_ConnectionTimeoutMs, 30000) END,
-                CASE WHEN p_RequestTimeoutMs_Clear = 1 THEN NULL ELSE COALESCE(p_RequestTimeoutMs, 60000) END,
+                CASE WHEN p_ConnectionTimeoutMs_Clear = TRUE THEN NULL ELSE COALESCE(p_ConnectionTimeoutMs, 30000) END,
+                CASE WHEN p_RequestTimeoutMs_Clear = TRUE THEN NULL ELSE COALESCE(p_RequestTimeoutMs, 60000) END,
                 p_DocumentationURL,
                 p_IconClass,
                 p_OAuthIssuerURL,
                 p_OAuthScopes,
-                CASE WHEN p_OAuthMetadataCacheTTLMinutes_Clear = 1 THEN NULL ELSE COALESCE(p_OAuthMetadataCacheTTLMinutes, 1440) END,
+                CASE WHEN p_OAuthMetadataCacheTTLMinutes_Clear = TRUE THEN NULL ELSE COALESCE(p_OAuthMetadataCacheTTLMinutes, 1440) END,
                 p_OAuthClientID,
                 p_OAuthClientSecretEncrypted,
                 COALESCE(p_OAuthRequirePKCE, TRUE)
@@ -40412,13 +40405,13 @@ IF p_ID IS NOT NULL THEN
                 p_LastSyncAt,
                 p_RateLimitPerMinute,
                 p_RateLimitPerHour,
-                CASE WHEN p_ConnectionTimeoutMs_Clear = 1 THEN NULL ELSE COALESCE(p_ConnectionTimeoutMs, 30000) END,
-                CASE WHEN p_RequestTimeoutMs_Clear = 1 THEN NULL ELSE COALESCE(p_RequestTimeoutMs, 60000) END,
+                CASE WHEN p_ConnectionTimeoutMs_Clear = TRUE THEN NULL ELSE COALESCE(p_ConnectionTimeoutMs, 30000) END,
+                CASE WHEN p_RequestTimeoutMs_Clear = TRUE THEN NULL ELSE COALESCE(p_RequestTimeoutMs, 60000) END,
                 p_DocumentationURL,
                 p_IconClass,
                 p_OAuthIssuerURL,
                 p_OAuthScopes,
-                CASE WHEN p_OAuthMetadataCacheTTLMinutes_Clear = 1 THEN NULL ELSE COALESCE(p_OAuthMetadataCacheTTLMinutes, 1440) END,
+                CASE WHEN p_OAuthMetadataCacheTTLMinutes_Clear = TRUE THEN NULL ELSE COALESCE(p_OAuthMetadataCacheTTLMinutes, 1440) END,
                 p_OAuthClientID,
                 p_OAuthClientSecretEncrypted,
                 COALESCE(p_OAuthRequirePKCE, TRUE)
@@ -40487,13 +40480,13 @@ UPDATE
         "LastSyncAt" = COALESCE(p_LastSyncAt, "LastSyncAt"),
         "RateLimitPerMinute" = COALESCE(p_RateLimitPerMinute, "RateLimitPerMinute"),
         "RateLimitPerHour" = COALESCE(p_RateLimitPerHour, "RateLimitPerHour"),
-        "ConnectionTimeoutMs" = CASE WHEN p_ConnectionTimeoutMs_Clear = 1 THEN NULL ELSE COALESCE(p_ConnectionTimeoutMs, "ConnectionTimeoutMs") END,
-        "RequestTimeoutMs" = CASE WHEN p_RequestTimeoutMs_Clear = 1 THEN NULL ELSE COALESCE(p_RequestTimeoutMs, "RequestTimeoutMs") END,
+        "ConnectionTimeoutMs" = CASE WHEN p_ConnectionTimeoutMs_Clear = TRUE THEN NULL ELSE COALESCE(p_ConnectionTimeoutMs, "ConnectionTimeoutMs") END,
+        "RequestTimeoutMs" = CASE WHEN p_RequestTimeoutMs_Clear = TRUE THEN NULL ELSE COALESCE(p_RequestTimeoutMs, "RequestTimeoutMs") END,
         "DocumentationURL" = COALESCE(p_DocumentationURL, "DocumentationURL"),
         "IconClass" = COALESCE(p_IconClass, "IconClass"),
         "OAuthIssuerURL" = COALESCE(p_OAuthIssuerURL, "OAuthIssuerURL"),
         "OAuthScopes" = COALESCE(p_OAuthScopes, "OAuthScopes"),
-        "OAuthMetadataCacheTTLMinutes" = CASE WHEN p_OAuthMetadataCacheTTLMinutes_Clear = 1 THEN NULL ELSE COALESCE(p_OAuthMetadataCacheTTLMinutes, "OAuthMetadataCacheTTLMinutes") END,
+        "OAuthMetadataCacheTTLMinutes" = CASE WHEN p_OAuthMetadataCacheTTLMinutes_Clear = TRUE THEN NULL ELSE COALESCE(p_OAuthMetadataCacheTTLMinutes, "OAuthMetadataCacheTTLMinutes") END,
         "OAuthClientID" = COALESCE(p_OAuthClientID, "OAuthClientID"),
         "OAuthClientSecretEncrypted" = COALESCE(p_OAuthClientSecretEncrypted, "OAuthClientSecretEncrypted"),
         "OAuthRequirePKCE" = COALESCE(p_OAuthRequirePKCE, "OAuthRequirePKCE")
@@ -42845,9 +42838,9 @@ IF p_ID IS NOT NULL THEN
                 p_OriginalSQL,
                 p_Feedback,
                 COALESCE(p_Status, 'Pending'),
-                CASE WHEN p_QualityRank_Clear = 1 THEN NULL ELSE COALESCE(p_QualityRank, 0) END,
+                CASE WHEN p_QualityRank_Clear = TRUE THEN NULL ELSE COALESCE(p_QualityRank, 0) END,
                 p_ExecutionCostRank,
-                CASE WHEN p_UsesTemplate_Clear = 1 THEN NULL ELSE COALESCE(p_UsesTemplate, FALSE) END,
+                CASE WHEN p_UsesTemplate_Clear = TRUE THEN NULL ELSE COALESCE(p_UsesTemplate, FALSE) END,
                 COALESCE(p_AuditQueryRuns, FALSE),
                 COALESCE(p_CacheEnabled, FALSE),
                 p_CacheTTLMinutes,
@@ -42895,9 +42888,9 @@ IF p_ID IS NOT NULL THEN
                 p_OriginalSQL,
                 p_Feedback,
                 COALESCE(p_Status, 'Pending'),
-                CASE WHEN p_QualityRank_Clear = 1 THEN NULL ELSE COALESCE(p_QualityRank, 0) END,
+                CASE WHEN p_QualityRank_Clear = TRUE THEN NULL ELSE COALESCE(p_QualityRank, 0) END,
                 p_ExecutionCostRank,
-                CASE WHEN p_UsesTemplate_Clear = 1 THEN NULL ELSE COALESCE(p_UsesTemplate, FALSE) END,
+                CASE WHEN p_UsesTemplate_Clear = TRUE THEN NULL ELSE COALESCE(p_UsesTemplate, FALSE) END,
                 COALESCE(p_AuditQueryRuns, FALSE),
                 COALESCE(p_CacheEnabled, FALSE),
                 p_CacheTTLMinutes,
@@ -42967,9 +42960,9 @@ UPDATE
         "OriginalSQL" = COALESCE(p_OriginalSQL, "OriginalSQL"),
         "Feedback" = COALESCE(p_Feedback, "Feedback"),
         "Status" = COALESCE(p_Status, "Status"),
-        "QualityRank" = CASE WHEN p_QualityRank_Clear = 1 THEN NULL ELSE COALESCE(p_QualityRank, "QualityRank") END,
+        "QualityRank" = CASE WHEN p_QualityRank_Clear = TRUE THEN NULL ELSE COALESCE(p_QualityRank, "QualityRank") END,
         "ExecutionCostRank" = COALESCE(p_ExecutionCostRank, "ExecutionCostRank"),
-        "UsesTemplate" = CASE WHEN p_UsesTemplate_Clear = 1 THEN NULL ELSE COALESCE(p_UsesTemplate, "UsesTemplate") END,
+        "UsesTemplate" = CASE WHEN p_UsesTemplate_Clear = TRUE THEN NULL ELSE COALESCE(p_UsesTemplate, "UsesTemplate") END,
         "AuditQueryRuns" = COALESCE(p_AuditQueryRuns, "AuditQueryRuns"),
         "CacheEnabled" = COALESCE(p_CacheEnabled, "CacheEnabled"),
         "CacheTTLMinutes" = COALESCE(p_CacheTTLMinutes, "CacheTTLMinutes"),
@@ -43984,7 +43977,7 @@ IF p_ID IS NOT NULL THEN
                 p_QueryID,
                 p_Name,
                 p_Type,
-                CASE WHEN p_IsRequired_Clear = 1 THEN NULL ELSE COALESCE(p_IsRequired, FALSE) END,
+                CASE WHEN p_IsRequired_Clear = TRUE THEN NULL ELSE COALESCE(p_IsRequired, FALSE) END,
                 p_DefaultValue,
                 p_Description,
                 p_SampleValue,
@@ -44012,7 +44005,7 @@ IF p_ID IS NOT NULL THEN
                 p_QueryID,
                 p_Name,
                 p_Type,
-                CASE WHEN p_IsRequired_Clear = 1 THEN NULL ELSE COALESCE(p_IsRequired, FALSE) END,
+                CASE WHEN p_IsRequired_Clear = TRUE THEN NULL ELSE COALESCE(p_IsRequired, FALSE) END,
                 p_DefaultValue,
                 p_Description,
                 p_SampleValue,
@@ -44061,7 +44054,7 @@ UPDATE
         "QueryID" = COALESCE(p_QueryID, "QueryID"),
         "Name" = COALESCE(p_Name, "Name"),
         "Type" = COALESCE(p_Type, "Type"),
-        "IsRequired" = CASE WHEN p_IsRequired_Clear = 1 THEN NULL ELSE COALESCE(p_IsRequired, "IsRequired") END,
+        "IsRequired" = CASE WHEN p_IsRequired_Clear = TRUE THEN NULL ELSE COALESCE(p_IsRequired, "IsRequired") END,
         "DefaultValue" = COALESCE(p_DefaultValue, "DefaultValue"),
         "Description" = COALESCE(p_Description, "Description"),
         "SampleValue" = COALESCE(p_SampleValue, "SampleValue"),
@@ -50658,7 +50651,7 @@ IF p_ID IS NOT NULL THEN
                 p_UserID,
                 p_AgentID,
                 COALESCE(p_Status, 'Pending'),
-                CASE WHEN p_PercentComplete_Clear = 1 THEN NULL ELSE COALESCE(p_PercentComplete, 0) END,
+                CASE WHEN p_PercentComplete_Clear = TRUE THEN NULL ELSE COALESCE(p_PercentComplete, 0) END,
                 p_DueAt,
                 p_StartedAt,
                 p_CompletedAt
@@ -50694,7 +50687,7 @@ IF p_ID IS NOT NULL THEN
                 p_UserID,
                 p_AgentID,
                 COALESCE(p_Status, 'Pending'),
-                CASE WHEN p_PercentComplete_Clear = 1 THEN NULL ELSE COALESCE(p_PercentComplete, 0) END,
+                CASE WHEN p_PercentComplete_Clear = TRUE THEN NULL ELSE COALESCE(p_PercentComplete, 0) END,
                 p_DueAt,
                 p_StartedAt,
                 p_CompletedAt
@@ -50751,7 +50744,7 @@ UPDATE
         "UserID" = COALESCE(p_UserID, "UserID"),
         "AgentID" = COALESCE(p_AgentID, "AgentID"),
         "Status" = COALESCE(p_Status, "Status"),
-        "PercentComplete" = CASE WHEN p_PercentComplete_Clear = 1 THEN NULL ELSE COALESCE(p_PercentComplete, "PercentComplete") END,
+        "PercentComplete" = CASE WHEN p_PercentComplete_Clear = TRUE THEN NULL ELSE COALESCE(p_PercentComplete, "PercentComplete") END,
         "DueAt" = COALESCE(p_DueAt, "DueAt"),
         "StartedAt" = COALESCE(p_StartedAt, "StartedAt"),
         "CompletedAt" = COALESCE(p_CompletedAt, "CompletedAt")
@@ -53483,7 +53476,7 @@ IF p_ID IS NOT NULL THEN
                 p_ExpectedOutcomes,
                 p_Configuration,
                 p_Tags,
-                CASE WHEN p_Priority_Clear = 1 THEN NULL ELSE COALESCE(p_Priority, 0) END,
+                CASE WHEN p_Priority_Clear = TRUE THEN NULL ELSE COALESCE(p_Priority, 0) END,
                 p_EstimatedDurationSeconds,
                 p_EstimatedCostUSD,
                 p_RepeatCount,
@@ -53519,7 +53512,7 @@ IF p_ID IS NOT NULL THEN
                 p_ExpectedOutcomes,
                 p_Configuration,
                 p_Tags,
-                CASE WHEN p_Priority_Clear = 1 THEN NULL ELSE COALESCE(p_Priority, 0) END,
+                CASE WHEN p_Priority_Clear = TRUE THEN NULL ELSE COALESCE(p_Priority, 0) END,
                 p_EstimatedDurationSeconds,
                 p_EstimatedCostUSD,
                 p_RepeatCount,
@@ -53576,7 +53569,7 @@ UPDATE
         "ExpectedOutcomes" = COALESCE(p_ExpectedOutcomes, "ExpectedOutcomes"),
         "Configuration" = COALESCE(p_Configuration, "Configuration"),
         "Tags" = COALESCE(p_Tags, "Tags"),
-        "Priority" = CASE WHEN p_Priority_Clear = 1 THEN NULL ELSE COALESCE(p_Priority, "Priority") END,
+        "Priority" = CASE WHEN p_Priority_Clear = TRUE THEN NULL ELSE COALESCE(p_Priority, "Priority") END,
         "EstimatedDurationSeconds" = COALESCE(p_EstimatedDurationSeconds, "EstimatedDurationSeconds"),
         "EstimatedCostUSD" = COALESCE(p_EstimatedCostUSD, "EstimatedCostUSD"),
         "RepeatCount" = COALESCE(p_RepeatCount, "RepeatCount"),
@@ -54218,7 +54211,7 @@ IF p_ID IS NOT NULL THEN
                 p_InAppEnabled,
                 p_EmailEnabled,
                 p_SMSEnabled,
-                CASE WHEN p_Enabled_Clear = 1 THEN NULL ELSE COALESCE(p_Enabled, TRUE) END
+                CASE WHEN p_Enabled_Clear = TRUE THEN NULL ELSE COALESCE(p_Enabled, TRUE) END
             );
     ELSE
         -- No value provided, let database use its default (e.g., gen_random_uuid())
@@ -54238,7 +54231,7 @@ IF p_ID IS NOT NULL THEN
                 p_InAppEnabled,
                 p_EmailEnabled,
                 p_SMSEnabled,
-                CASE WHEN p_Enabled_Clear = 1 THEN NULL ELSE COALESCE(p_Enabled, TRUE) END
+                CASE WHEN p_Enabled_Clear = TRUE THEN NULL ELSE COALESCE(p_Enabled, TRUE) END
             );
     END IF;
     -- return the new record from the base view, which might have some calculated fields
@@ -54279,7 +54272,7 @@ UPDATE
         "InAppEnabled" = COALESCE(p_InAppEnabled, "InAppEnabled"),
         "EmailEnabled" = COALESCE(p_EmailEnabled, "EmailEnabled"),
         "SMSEnabled" = COALESCE(p_SMSEnabled, "SMSEnabled"),
-        "Enabled" = CASE WHEN p_Enabled_Clear = 1 THEN NULL ELSE COALESCE(p_Enabled, "Enabled") END
+        "Enabled" = CASE WHEN p_Enabled_Clear = TRUE THEN NULL ELSE COALESCE(p_Enabled, "Enabled") END
     WHERE
         "ID" = p_ID;
 
@@ -54552,13 +54545,13 @@ IF p_ID IS NOT NULL THEN
                 COALESCE(p_DefaultInApp, TRUE),
                 COALESCE(p_DefaultEmail, FALSE),
                 COALESCE(p_DefaultSMS, FALSE),
-                CASE WHEN p_AllowUserPreference_Clear = 1 THEN NULL ELSE COALESCE(p_AllowUserPreference, TRUE) END,
+                CASE WHEN p_AllowUserPreference_Clear = TRUE THEN NULL ELSE COALESCE(p_AllowUserPreference, TRUE) END,
                 p_EmailTemplateID,
                 p_SMSTemplateID,
                 p_Icon,
                 p_Color,
                 p_AutoExpireDays,
-                CASE WHEN p_Priority_Clear = 1 THEN NULL ELSE COALESCE(p_Priority, 0) END
+                CASE WHEN p_Priority_Clear = TRUE THEN NULL ELSE COALESCE(p_Priority, 0) END
             );
     ELSE
         -- No value provided, let database use its default (e.g., gen_random_uuid())
@@ -54584,13 +54577,13 @@ IF p_ID IS NOT NULL THEN
                 COALESCE(p_DefaultInApp, TRUE),
                 COALESCE(p_DefaultEmail, FALSE),
                 COALESCE(p_DefaultSMS, FALSE),
-                CASE WHEN p_AllowUserPreference_Clear = 1 THEN NULL ELSE COALESCE(p_AllowUserPreference, TRUE) END,
+                CASE WHEN p_AllowUserPreference_Clear = TRUE THEN NULL ELSE COALESCE(p_AllowUserPreference, TRUE) END,
                 p_EmailTemplateID,
                 p_SMSTemplateID,
                 p_Icon,
                 p_Color,
                 p_AutoExpireDays,
-                CASE WHEN p_Priority_Clear = 1 THEN NULL ELSE COALESCE(p_Priority, 0) END
+                CASE WHEN p_Priority_Clear = TRUE THEN NULL ELSE COALESCE(p_Priority, 0) END
             );
     END IF;
     -- return the new record from the base view, which might have some calculated fields
@@ -54638,13 +54631,13 @@ UPDATE
         "DefaultInApp" = COALESCE(p_DefaultInApp, "DefaultInApp"),
         "DefaultEmail" = COALESCE(p_DefaultEmail, "DefaultEmail"),
         "DefaultSMS" = COALESCE(p_DefaultSMS, "DefaultSMS"),
-        "AllowUserPreference" = CASE WHEN p_AllowUserPreference_Clear = 1 THEN NULL ELSE COALESCE(p_AllowUserPreference, "AllowUserPreference") END,
+        "AllowUserPreference" = CASE WHEN p_AllowUserPreference_Clear = TRUE THEN NULL ELSE COALESCE(p_AllowUserPreference, "AllowUserPreference") END,
         "EmailTemplateID" = COALESCE(p_EmailTemplateID, "EmailTemplateID"),
         "SMSTemplateID" = COALESCE(p_SMSTemplateID, "SMSTemplateID"),
         "Icon" = COALESCE(p_Icon, "Icon"),
         "Color" = COALESCE(p_Color, "Color"),
         "AutoExpireDays" = COALESCE(p_AutoExpireDays, "AutoExpireDays"),
-        "Priority" = CASE WHEN p_Priority_Clear = 1 THEN NULL ELSE COALESCE(p_Priority, "Priority") END
+        "Priority" = CASE WHEN p_Priority_Clear = TRUE THEN NULL ELSE COALESCE(p_Priority, "Priority") END
     WHERE
         "ID" = p_ID;
 
@@ -56282,7 +56275,7 @@ IF p_ID IS NOT NULL THEN
                 p_MajorVersion,
                 p_MinorVersion,
                 p_PatchVersion,
-                CASE WHEN p_Type_Clear = 1 THEN NULL ELSE COALESCE(p_Type, 'System') END,
+                CASE WHEN p_Type_Clear = TRUE THEN NULL ELSE COALESCE(p_Type, 'System') END,
                 p_InstalledAt,
                 COALESCE(p_Status, 'Pending'),
                 p_InstallLog,
@@ -56306,7 +56299,7 @@ IF p_ID IS NOT NULL THEN
                 p_MajorVersion,
                 p_MinorVersion,
                 p_PatchVersion,
-                CASE WHEN p_Type_Clear = 1 THEN NULL ELSE COALESCE(p_Type, 'System') END,
+                CASE WHEN p_Type_Clear = TRUE THEN NULL ELSE COALESCE(p_Type, 'System') END,
                 p_InstalledAt,
                 COALESCE(p_Status, 'Pending'),
                 p_InstallLog,
@@ -56351,7 +56344,7 @@ UPDATE
         "MajorVersion" = COALESCE(p_MajorVersion, "MajorVersion"),
         "MinorVersion" = COALESCE(p_MinorVersion, "MinorVersion"),
         "PatchVersion" = COALESCE(p_PatchVersion, "PatchVersion"),
-        "Type" = CASE WHEN p_Type_Clear = 1 THEN NULL ELSE COALESCE(p_Type, "Type") END,
+        "Type" = CASE WHEN p_Type_Clear = TRUE THEN NULL ELSE COALESCE(p_Type, "Type") END,
         "InstalledAt" = COALESCE(p_InstalledAt, "InstalledAt"),
         "Status" = COALESCE(p_Status, "Status"),
         "InstallLog" = COALESCE(p_InstallLog, "InstallLog"),

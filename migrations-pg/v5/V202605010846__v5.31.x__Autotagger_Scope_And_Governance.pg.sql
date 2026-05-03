@@ -14,13 +14,6 @@ SET search_path TO __mj, public;
 -- Ensure backslashes in string literals are treated literally (not as escape sequences)
 SET standard_conforming_strings = on;
 
--- Implicit INTEGER -> BOOLEAN cast (SQL Server BIT columns accept 0/1 in INSERTs)
--- PostgreSQL has a built-in explicit-only INTEGER->bool cast. We upgrade it to implicit
--- so INSERT VALUES with 0/1 for BOOLEAN columns work like SQL Server BIT.
-UPDATE pg_cast SET castcontext = 'i'
-WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
-
-
 -- ===================== DDL: Tables, PKs, Indexes =====================
 
 -- Migration: Autotagger Scope & Governance
@@ -1229,16 +1222,16 @@ INSERT INTO __mj."Entity" (
          'TagScope',
          'vwTagScopes',
          '__mj',
-         1,
-         1,
-         1
-         , 1
-         , 0
-         , 0
-         , 0
-         , 1
-         , 1
-         , 1
+         TRUE,
+         TRUE,
+         TRUE
+         , TRUE
+         , FALSE
+         , FALSE
+         , FALSE
+         , TRUE
+         , TRUE
+         , TRUE
          , 1000
          , NOW()
          , NOW()
@@ -1252,17 +1245,17 @@ INSERT INTO __mj."ApplicationEntity"
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('ea41de76-f03f-4335-a98d-facfa37afb1c', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, NOW(), NOW());
+                                                   ('ea41de76-f03f-4335-a98d-facfa37afb1c', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, FALSE, FALSE, FALSE, NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: Tag Scopes for role Developer */
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('ea41de76-f03f-4335-a98d-facfa37afb1c', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0, NOW(), NOW());
+                                                   ('ea41de76-f03f-4335-a98d-facfa37afb1c', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, FALSE, NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: Tag Scopes for role Integration */
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('ea41de76-f03f-4335-a98d-facfa37afb1c', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, NOW(), NOW());
+                                                   ('ea41de76-f03f-4335-a98d-facfa37afb1c', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, TRUE, NOW(), NOW());
 /* SQL generated to create new entity MJ: Tag Synonyms */
 
 INSERT INTO __mj."Entity" (
@@ -1297,16 +1290,16 @@ INSERT INTO __mj."Entity" (
          'TagSynonym',
          'vwTagSynonyms',
          '__mj',
-         1,
-         1,
-         1
-         , 1
-         , 0
-         , 0
-         , 0
-         , 1
-         , 1
-         , 1
+         TRUE,
+         TRUE,
+         TRUE
+         , TRUE
+         , FALSE
+         , FALSE
+         , FALSE
+         , TRUE
+         , TRUE
+         , TRUE
          , 1000
          , NOW()
          , NOW()
@@ -1320,17 +1313,17 @@ INSERT INTO __mj."ApplicationEntity"
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('fe0d485e-8c3f-4fe0-bd07-ef81e8f14ce0', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, NOW(), NOW());
+                                                   ('fe0d485e-8c3f-4fe0-bd07-ef81e8f14ce0', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, FALSE, FALSE, FALSE, NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: Tag Synonyms for role Developer */
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('fe0d485e-8c3f-4fe0-bd07-ef81e8f14ce0', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0, NOW(), NOW());
+                                                   ('fe0d485e-8c3f-4fe0-bd07-ef81e8f14ce0', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, FALSE, NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: Tag Synonyms for role Integration */
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('fe0d485e-8c3f-4fe0-bd07-ef81e8f14ce0', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, NOW(), NOW());
+                                                   ('fe0d485e-8c3f-4fe0-bd07-ef81e8f14ce0', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, TRUE, NOW(), NOW());
 /* SQL generated to create new entity MJ: Tag Suggestions */
 
 INSERT INTO __mj."Entity" (
@@ -1365,16 +1358,16 @@ INSERT INTO __mj."Entity" (
          'TagSuggestion',
          'vwTagSuggestions',
          '__mj',
-         1,
-         1,
-         1
-         , 1
-         , 0
-         , 0
-         , 0
-         , 1
-         , 1
-         , 1
+         TRUE,
+         TRUE,
+         TRUE
+         , TRUE
+         , FALSE
+         , FALSE
+         , FALSE
+         , TRUE
+         , TRUE
+         , TRUE
          , 1000
          , NOW()
          , NOW()
@@ -1388,17 +1381,17 @@ INSERT INTO __mj."ApplicationEntity"
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('bcf03e3b-d2b2-4557-aceb-95b18495f451', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, NOW(), NOW());
+                                                   ('bcf03e3b-d2b2-4557-aceb-95b18495f451', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, FALSE, FALSE, FALSE, NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: Tag Suggestions for role Developer */
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('bcf03e3b-d2b2-4557-aceb-95b18495f451', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0, NOW(), NOW());
+                                                   ('bcf03e3b-d2b2-4557-aceb-95b18495f451', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, FALSE, NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: Tag Suggestions for role Integration */
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('bcf03e3b-d2b2-4557-aceb-95b18495f451', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, NOW(), NOW());
+                                                   ('bcf03e3b-d2b2-4557-aceb-95b18495f451', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, TRUE, NOW(), NOW());
 /* SQL text to add special date field __mj_CreatedAt to entity __mj."TagSuggestion" */
 
 /* SQL text to add special date field __mj_CreatedAt to entity __mj."TagSuggestion" */
@@ -1501,19 +1494,19 @@ BEGIN
         1,
         1,
         0,
-        0,
+        FALSE,
         '(1)',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -1567,19 +1560,19 @@ BEGIN
         1,
         1,
         0,
-        0,
+        FALSE,
         '(1)',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -1633,19 +1626,19 @@ BEGIN
         1,
         1,
         0,
-        0,
+        FALSE,
         '(0)',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -1699,19 +1692,19 @@ BEGIN
         4,
         10,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -1765,19 +1758,19 @@ BEGIN
         4,
         10,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -1831,19 +1824,19 @@ BEGIN
         5,
         3,
         2,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -1897,19 +1890,19 @@ BEGIN
         1,
         1,
         0,
-        0,
+        FALSE,
         '(0)',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -1963,19 +1956,19 @@ BEGIN
         -1,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -2029,19 +2022,19 @@ BEGIN
         16,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         'FD238F34-2837-EF11-86D4-6045BDEE16E6',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -2095,19 +2088,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         'gen_random_uuid()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        1,
-        0,
-        0,
-        1,
-        1,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        TRUE,
+        TRUE,
         'Search',
         NOW(),
         NOW()
@@ -2161,19 +2154,19 @@ BEGIN
         510,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -2227,19 +2220,19 @@ BEGIN
         16,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         '0C248F34-2837-EF11-86D4-6045BDEE16E6',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -2293,19 +2286,19 @@ BEGIN
         16,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         '0C248F34-2837-EF11-86D4-6045BDEE16E6',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -2359,19 +2352,19 @@ BEGIN
         5,
         4,
         3,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -2425,19 +2418,19 @@ BEGIN
         100,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -2491,19 +2484,19 @@ BEGIN
         16,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         'B693AD50-0E66-EF11-A752-C0A5E8ACCB22',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -2557,19 +2550,19 @@ BEGIN
         16,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         'B420FF22-0E66-EF11-A752-C0A5E8ACCB22',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -2623,19 +2616,19 @@ BEGIN
         -1,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -2689,19 +2682,19 @@ BEGIN
         40,
         0,
         0,
-        0,
+        FALSE,
         'Pending',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -2755,19 +2748,19 @@ BEGIN
         16,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         '0C248F34-2837-EF11-86D4-6045BDEE16E6',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -2821,19 +2814,19 @@ BEGIN
         16,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         'E1238F34-2837-EF11-86D4-6045BDEE16E6',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -2887,19 +2880,19 @@ BEGIN
         10,
         34,
         7,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -2953,19 +2946,19 @@ BEGIN
         -1,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -3019,19 +3012,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -3085,19 +3078,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -3151,19 +3144,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         'gen_random_uuid()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        1,
-        0,
-        0,
-        1,
-        1,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        TRUE,
+        TRUE,
         'Search',
         NOW(),
         NOW()
@@ -3217,19 +3210,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         '0C248F34-2837-EF11-86D4-6045BDEE16E6',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        TRUE,
         'Search',
         NOW(),
         NOW()
@@ -3283,19 +3276,19 @@ BEGIN
         510,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        TRUE,
         'Search',
         NOW(),
         NOW()
@@ -3349,19 +3342,19 @@ BEGIN
         40,
         0,
         0,
-        0,
+        FALSE,
         'Manual',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -3415,19 +3408,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -3481,19 +3474,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -3547,19 +3540,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         'gen_random_uuid()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        1,
-        0,
-        0,
-        1,
-        1,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        TRUE,
+        TRUE,
         'Search',
         NOW(),
         NOW()
@@ -3613,19 +3606,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         '0C248F34-2837-EF11-86D4-6045BDEE16E6',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        TRUE,
         'Search',
         NOW(),
         NOW()
@@ -3679,19 +3672,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         'E0238F34-2837-EF11-86D4-6045BDEE16E6',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        TRUE,
         'Search',
         NOW(),
         NOW()
@@ -3745,19 +3738,19 @@ BEGIN
         900,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        TRUE,
         'Search',
         NOW(),
         NOW()
@@ -3811,19 +3804,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -3877,19 +3870,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -3957,7 +3950,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = 'c75df88d-1abc-43df-8a1a-fbccdcb2e7df'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('c75df88d-1abc-43df-8a1a-fbccdcb2e7df', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'EA41DE76-F03F-4335-A98D-FACFA37AFB1C', 'ScopeEntityID', 'One To Many', 1, 1, 1, NOW(), NOW());
+        VALUES ('c75df88d-1abc-43df-8a1a-fbccdcb2e7df', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', 'EA41DE76-F03F-4335-A98D-FACFA37AFB1C', 'ScopeEntityID', 'One To Many', TRUE, TRUE, 1, NOW(), NOW());
     END IF;
 END $$;
 
@@ -3967,7 +3960,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = 'dda5c2b7-8a10-4ebd-baf0-cae93df7f1e7'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('dda5c2b7-8a10-4ebd-baf0-cae93df7f1e7', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', 'BCF03E3B-D2B2-4557-ACEB-95B18495F451', 'ReviewedByUserID', 'One To Many', 1, 1, 1, NOW(), NOW());
+        VALUES ('dda5c2b7-8a10-4ebd-baf0-cae93df7f1e7', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', 'BCF03E3B-D2B2-4557-ACEB-95B18495F451', 'ReviewedByUserID', 'One To Many', TRUE, TRUE, 1, NOW(), NOW());
     END IF;
 END $$;
 
@@ -3977,7 +3970,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = 'd16b8236-75fd-4639-9d05-724e390f826b'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('d16b8236-75fd-4639-9d05-724e390f826b', 'FD238F34-2837-EF11-86D4-6045BDEE16E6', '0C248F34-2837-EF11-86D4-6045BDEE16E6', 'EmbeddingModelID', 'One To Many', 1, 1, 9, NOW(), NOW());
+        VALUES ('d16b8236-75fd-4639-9d05-724e390f826b', 'FD238F34-2837-EF11-86D4-6045BDEE16E6', '0C248F34-2837-EF11-86D4-6045BDEE16E6', 'EmbeddingModelID', 'One To Many', TRUE, TRUE, 9, NOW(), NOW());
     END IF;
 END $$;
 
@@ -3987,7 +3980,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '00791f8d-289a-4a54-8f88-d87711876dbb'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('00791f8d-289a-4a54-8f88-d87711876dbb', '0C248F34-2837-EF11-86D4-6045BDEE16E6', 'BCF03E3B-D2B2-4557-ACEB-95B18495F451', 'ProposedParentID', 'One To Many', 1, 1, 2, NOW(), NOW());
+        VALUES ('00791f8d-289a-4a54-8f88-d87711876dbb', '0C248F34-2837-EF11-86D4-6045BDEE16E6', 'BCF03E3B-D2B2-4557-ACEB-95B18495F451', 'ProposedParentID', 'One To Many', TRUE, TRUE, 2, NOW(), NOW());
     END IF;
 END $$;
 
@@ -3997,7 +3990,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '522d3a92-5e99-4036-b5ff-843706b4ad84'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('522d3a92-5e99-4036-b5ff-843706b4ad84', '0C248F34-2837-EF11-86D4-6045BDEE16E6', 'BCF03E3B-D2B2-4557-ACEB-95B18495F451', 'BestMatchTagID', 'One To Many', 1, 1, 3, NOW(), NOW());
+        VALUES ('522d3a92-5e99-4036-b5ff-843706b4ad84', '0C248F34-2837-EF11-86D4-6045BDEE16E6', 'BCF03E3B-D2B2-4557-ACEB-95B18495F451', 'BestMatchTagID', 'One To Many', TRUE, TRUE, 3, NOW(), NOW());
     END IF;
 END $$;
 
@@ -4007,7 +4000,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = 'f27279f6-af3c-4b01-ba65-1406f16b3585'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('f27279f6-af3c-4b01-ba65-1406f16b3585', '0C248F34-2837-EF11-86D4-6045BDEE16E6', 'BCF03E3B-D2B2-4557-ACEB-95B18495F451', 'ResolvedTagID', 'One To Many', 1, 1, 4, NOW(), NOW());
+        VALUES ('f27279f6-af3c-4b01-ba65-1406f16b3585', '0C248F34-2837-EF11-86D4-6045BDEE16E6', 'BCF03E3B-D2B2-4557-ACEB-95B18495F451', 'ResolvedTagID', 'One To Many', TRUE, TRUE, 4, NOW(), NOW());
     END IF;
 END $$;
 
@@ -4017,7 +4010,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = 'a5e149ca-8d5d-4322-8c47-1fc850be7b90'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('a5e149ca-8d5d-4322-8c47-1fc850be7b90', '0C248F34-2837-EF11-86D4-6045BDEE16E6', 'FE0D485E-8C3F-4FE0-BD07-EF81E8F14CE0', 'TagID', 'One To Many', 1, 1, 1, NOW(), NOW());
+        VALUES ('a5e149ca-8d5d-4322-8c47-1fc850be7b90', '0C248F34-2837-EF11-86D4-6045BDEE16E6', 'FE0D485E-8C3F-4FE0-BD07-EF81E8F14CE0', 'TagID', 'One To Many', TRUE, TRUE, 1, NOW(), NOW());
     END IF;
 END $$;
 
@@ -4027,7 +4020,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = 'fe79889c-9f50-42aa-be5c-ce9e6e6e4f78'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('fe79889c-9f50-42aa-be5c-ce9e6e6e4f78', '0C248F34-2837-EF11-86D4-6045BDEE16E6', 'EA41DE76-F03F-4335-A98D-FACFA37AFB1C', 'TagID', 'One To Many', 1, 1, 2, NOW(), NOW());
+        VALUES ('fe79889c-9f50-42aa-be5c-ce9e6e6e4f78', '0C248F34-2837-EF11-86D4-6045BDEE16E6', 'EA41DE76-F03F-4335-A98D-FACFA37AFB1C', 'TagID', 'One To Many', TRUE, TRUE, 2, NOW(), NOW());
     END IF;
 END $$;
 
@@ -4037,7 +4030,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '882dd9f5-6e18-4a0c-a9d3-90d601f798b1'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('882dd9f5-6e18-4a0c-a9d3-90d601f798b1', 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', 'BCF03E3B-D2B2-4557-ACEB-95B18495F451', 'SourceContentSourceID', 'One To Many', 1, 1, 5, NOW(), NOW());
+        VALUES ('882dd9f5-6e18-4a0c-a9d3-90d601f798b1', 'B420FF22-0E66-EF11-A752-C0A5E8ACCB22', 'BCF03E3B-D2B2-4557-ACEB-95B18495F451', 'SourceContentSourceID', 'One To Many', TRUE, TRUE, 5, NOW(), NOW());
     END IF;
 END $$;
 
@@ -4047,7 +4040,7 @@ BEGIN
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '7885dbf6-7263-4470-ba4d-0c4c801a622b'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('7885dbf6-7263-4470-ba4d-0c4c801a622b', 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', 'BCF03E3B-D2B2-4557-ACEB-95B18495F451', 'SourceContentItemID', 'One To Many', 1, 1, 6, NOW(), NOW());
+        VALUES ('7885dbf6-7263-4470-ba4d-0c4c801a622b', 'B693AD50-0E66-EF11-A752-C0A5E8ACCB22', 'BCF03E3B-D2B2-4557-ACEB-95B18495F451', 'SourceContentItemID', 'One To Many', TRUE, TRUE, 6, NOW(), NOW());
     END IF;
 END $$;
 
@@ -4097,19 +4090,19 @@ BEGIN
         100,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -4163,19 +4156,19 @@ BEGIN
         510,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -4229,19 +4222,19 @@ BEGIN
         510,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -4295,19 +4288,19 @@ BEGIN
         500,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -4361,19 +4354,19 @@ BEGIN
         510,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -4427,19 +4420,19 @@ BEGIN
         510,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -4493,19 +4486,19 @@ BEGIN
         200,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -4559,19 +4552,19 @@ BEGIN
         510,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -4625,19 +4618,19 @@ BEGIN
         510,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -4691,19 +4684,19 @@ BEGIN
         510,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -4712,202 +4705,202 @@ BEGIN
 END $$;
 
 UPDATE __mj."EntityField"
-               SET "IsNameField" = 1
+               SET "IsNameField" = TRUE
                WHERE "ID" = 'E7AA3A90-0588-4579-8F17-6A6A5C69F51C'
-               AND "AutoUpdateIsNameField" = 1;
+               AND "AutoUpdateIsNameField" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "IsNameField" = 1
+               SET "IsNameField" = TRUE
                WHERE "ID" = 'F98B5333-DFD0-4163-8068-95A913D7326D'
-               AND "AutoUpdateIsNameField" = 1;
+               AND "AutoUpdateIsNameField" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '7366BE86-000C-44E3-8B16-FC97FBD8B586'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = 'E7AA3A90-0588-4579-8F17-6A6A5C69F51C'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = 'F98B5333-DFD0-4163-8068-95A913D7326D'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = '7366BE86-000C-44E3-8B16-FC97FBD8B586'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = 'E7AA3A90-0588-4579-8F17-6A6A5C69F51C'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = 'F98B5333-DFD0-4163-8068-95A913D7326D'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
                SET "UserSearchPredicateAPI" = 'BeginsWith'
                WHERE "ID" = 'E7AA3A90-0588-4579-8F17-6A6A5C69F51C'
-               AND "AutoUpdateUserSearchPredicate" = 1;
+               AND "AutoUpdateUserSearchPredicate" = TRUE;
 
 UPDATE __mj."EntityField"
                SET "UserSearchPredicateAPI" = 'BeginsWith'
                WHERE "ID" = 'F98B5333-DFD0-4163-8068-95A913D7326D'
-               AND "AutoUpdateUserSearchPredicate" = 1;
+               AND "AutoUpdateUserSearchPredicate" = TRUE;
 
 UPDATE __mj."EntityField"
                SET "UserSearchPredicateAPI" = 'Exact'
                WHERE "ID" = '7366BE86-000C-44E3-8B16-FC97FBD8B586'
-               AND "AutoUpdateUserSearchPredicate" = 1;
+               AND "AutoUpdateUserSearchPredicate" = TRUE;
 /* Set field properties for entity */
 
 UPDATE __mj."EntityField"
-               SET "IsNameField" = 1
+               SET "IsNameField" = TRUE
                WHERE "ID" = '2D4317F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND "AutoUpdateIsNameField" = 1;
+               AND "AutoUpdateIsNameField" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '8E4149A0-D01D-48FD-9E1B-8764EBC4409D'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = '2D4317F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
                SET "UserSearchPredicateAPI" = 'BeginsWith'
                WHERE "ID" = '2D4317F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND "AutoUpdateUserSearchPredicate" = 1;
+               AND "AutoUpdateUserSearchPredicate" = TRUE;
 
 UPDATE __mj."EntityField"
                SET "UserSearchPredicateAPI" = 'BeginsWith'
                WHERE "ID" = '2C4317F0-6F36-EF11-86D4-6045BDEE16E6'
-               AND "AutoUpdateUserSearchPredicate" = 1;
+               AND "AutoUpdateUserSearchPredicate" = TRUE;
 
 UPDATE __mj."Entity"
-            SET "AllowUserSearchAPI" = 1
+            SET "AllowUserSearchAPI" = TRUE
             WHERE "ID" = '0C248F34-2837-EF11-86D4-6045BDEE16E6'
-            AND "AutoUpdateAllowUserSearchAPI" = 1;
+            AND "AutoUpdateAllowUserSearchAPI" = TRUE;
 /* Set field properties for entity */
 
 UPDATE __mj."EntityField"
-               SET "IsNameField" = 1
+               SET "IsNameField" = TRUE
                WHERE "ID" = 'F95E7337-1169-4D05-B6EC-0A14A7626E21'
-               AND "AutoUpdateIsNameField" = 1;
+               AND "AutoUpdateIsNameField" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = 'F95E7337-1169-4D05-B6EC-0A14A7626E21'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = 'B50A4543-D60F-4440-9587-CB61C449D06A'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '4AE65FCA-B822-44F1-AC56-70606E6CC190'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '43D9E184-F855-43A3-B704-D0036172DD30'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = 'F95E7337-1169-4D05-B6EC-0A14A7626E21'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = 'B50A4543-D60F-4440-9587-CB61C449D06A'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = '43D9E184-F855-43A3-B704-D0036172DD30'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
                SET "UserSearchPredicateAPI" = 'Exact'
                WHERE "ID" = 'B50A4543-D60F-4440-9587-CB61C449D06A'
-               AND "AutoUpdateUserSearchPredicate" = 1;
+               AND "AutoUpdateUserSearchPredicate" = TRUE;
 /* Set field properties for entity */
 
 UPDATE __mj."EntityField"
-               SET "IsNameField" = 1
+               SET "IsNameField" = TRUE
                WHERE "ID" = '25782CCD-889E-433D-B2CC-C2A0E2E2BE5D'
-               AND "AutoUpdateIsNameField" = 1;
+               AND "AutoUpdateIsNameField" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '25782CCD-889E-433D-B2CC-C2A0E2E2BE5D'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '83526F85-6ADC-40BD-A2DF-AC433F616F9B'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = 'EF060F94-EFB2-4057-AF53-4B13280C307C'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '5D1C0858-4387-4070-A37E-F1B9D840E43B'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '51C44037-ED00-47BB-91F9-AA6B344DEC75'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = '25782CCD-889E-433D-B2CC-C2A0E2E2BE5D'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = '83526F85-6ADC-40BD-A2DF-AC433F616F9B'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = 'EF060F94-EFB2-4057-AF53-4B13280C307C'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = '51C44037-ED00-47BB-91F9-AA6B344DEC75'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
                SET "UserSearchPredicateAPI" = 'BeginsWith'
                WHERE "ID" = '25782CCD-889E-433D-B2CC-C2A0E2E2BE5D'
-               AND "AutoUpdateUserSearchPredicate" = 1;
+               AND "AutoUpdateUserSearchPredicate" = TRUE;
 
 UPDATE __mj."EntityField"
                SET "UserSearchPredicateAPI" = 'Exact'
                WHERE "ID" = '83526F85-6ADC-40BD-A2DF-AC433F616F9B'
-               AND "AutoUpdateUserSearchPredicate" = 1;
+               AND "AutoUpdateUserSearchPredicate" = TRUE;
 
 UPDATE __mj."EntityField"
                SET "UserSearchPredicateAPI" = 'Exact'
                WHERE "ID" = 'EF060F94-EFB2-4057-AF53-4B13280C307C'
-               AND "AutoUpdateUserSearchPredicate" = 1;
+               AND "AutoUpdateUserSearchPredicate" = TRUE;
 /* Set categories for 8 fields */
 -- UPDATE Entity Field Category Info MJ: Tag Scopes."Tag"
 
@@ -4918,7 +4911,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'E7AA3A90-0588-4579-8F17-6A6A5C69F51C' AND "AutoUpdateCategory" = 1;
+   "ID" = 'E7AA3A90-0588-4579-8F17-6A6A5C69F51C' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tag Scopes."TagID"
 
 UPDATE __mj."EntityField"
@@ -4928,7 +4921,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '78A7D431-93EB-485A-9667-E2CE0EB31F2A' AND "AutoUpdateCategory" = 1;
+   "ID" = '78A7D431-93EB-485A-9667-E2CE0EB31F2A' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tag Scopes."ScopeEntity"
 
 UPDATE __mj."EntityField"
@@ -4938,7 +4931,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'F98B5333-DFD0-4163-8068-95A913D7326D' AND "AutoUpdateCategory" = 1;
+   "ID" = 'F98B5333-DFD0-4163-8068-95A913D7326D' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tag Scopes."ScopeEntityID"
 
 UPDATE __mj."EntityField"
@@ -4948,7 +4941,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '815C5C75-ECDE-4090-BC99-615C6B209532' AND "AutoUpdateCategory" = 1;
+   "ID" = '815C5C75-ECDE-4090-BC99-615C6B209532' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tag Scopes."ScopeRecordID"
 
 UPDATE __mj."EntityField"
@@ -4958,7 +4951,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '7366BE86-000C-44E3-8B16-FC97FBD8B586' AND "AutoUpdateCategory" = 1;
+   "ID" = '7366BE86-000C-44E3-8B16-FC97FBD8B586' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tag Scopes."ID"
 
 UPDATE __mj."EntityField"
@@ -4968,7 +4961,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '8B3123F9-9973-4C70-9B0B-7156A6BD57F2' AND "AutoUpdateCategory" = 1;
+   "ID" = '8B3123F9-9973-4C70-9B0B-7156A6BD57F2' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tag Scopes.__mj_CreatedAt
 
 UPDATE __mj."EntityField"
@@ -4978,7 +4971,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '73FA4EEF-DB95-469D-92B0-3318A9C2663D' AND "AutoUpdateCategory" = 1;
+   "ID" = '73FA4EEF-DB95-469D-92B0-3318A9C2663D' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tag Scopes.__mj_UpdatedAt
 
 UPDATE __mj."EntityField"
@@ -4988,7 +4981,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'B925E50C-AA27-4C58-9C3A-9625E17989E8' AND "AutoUpdateCategory" = 1;
+   "ID" = 'B925E50C-AA27-4C58-9C3A-9625E17989E8' AND "AutoUpdateCategory" = TRUE;
 /* Set entity icon to fa fa-tags */
 
 UPDATE __mj."Entity"
@@ -5005,7 +4998,7 @@ INSERT INTO __mj."EntitySetting" ("ID", "EntityID", "Name", "Value", "__mj_Creat
 /* Set DefaultForNewUser=0 for NEW entity (category: junction, confidence: high) */
 
 UPDATE __mj."ApplicationEntity"
-         SET "DefaultForNewUser" = 0, "__mj_UpdatedAt" = NOW()
+         SET "DefaultForNewUser" = FALSE, "__mj_UpdatedAt" = NOW()
          WHERE "EntityID" = 'EA41DE76-F03F-4335-A98D-FACFA37AFB1C';
 /* Set categories for 7 fields */
 -- UPDATE Entity Field Category Info MJ: Tag Synonyms."ID"
@@ -5017,7 +5010,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '6BA484DC-192C-4D78-BDA6-F05CC8FB9565' AND "AutoUpdateCategory" = 1;
+   "ID" = '6BA484DC-192C-4D78-BDA6-F05CC8FB9565' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tag Synonyms."TagID"
 
 UPDATE __mj."EntityField"
@@ -5027,7 +5020,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'DE84807F-A1A6-40ED-A154-BC7B7F59FAD3' AND "AutoUpdateCategory" = 1;
+   "ID" = 'DE84807F-A1A6-40ED-A154-BC7B7F59FAD3' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tag Synonyms."Tag"
 
 UPDATE __mj."EntityField"
@@ -5038,7 +5031,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '43D9E184-F855-43A3-B704-D0036172DD30' AND "AutoUpdateCategory" = 1;
+   "ID" = '43D9E184-F855-43A3-B704-D0036172DD30' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tag Synonyms."Synonym"
 
 UPDATE __mj."EntityField"
@@ -5048,7 +5041,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'F95E7337-1169-4D05-B6EC-0A14A7626E21' AND "AutoUpdateCategory" = 1;
+   "ID" = 'F95E7337-1169-4D05-B6EC-0A14A7626E21' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tag Synonyms."Source"
 
 UPDATE __mj."EntityField"
@@ -5058,7 +5051,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'B50A4543-D60F-4440-9587-CB61C449D06A' AND "AutoUpdateCategory" = 1;
+   "ID" = 'B50A4543-D60F-4440-9587-CB61C449D06A' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tag Synonyms.__mj_CreatedAt
 
 UPDATE __mj."EntityField"
@@ -5068,7 +5061,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '2FBD3C83-DC1C-41B6-9BF2-BBE89DC42901' AND "AutoUpdateCategory" = 1;
+   "ID" = '2FBD3C83-DC1C-41B6-9BF2-BBE89DC42901' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tag Synonyms.__mj_UpdatedAt
 
 UPDATE __mj."EntityField"
@@ -5078,7 +5071,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '4AE65FCA-B822-44F1-AC56-70606E6CC190' AND "AutoUpdateCategory" = 1;
+   "ID" = '4AE65FCA-B822-44F1-AC56-70606E6CC190' AND "AutoUpdateCategory" = TRUE;
 /* Set entity icon to fa fa-tags */
 
 UPDATE __mj."Entity"
@@ -5095,7 +5088,7 @@ INSERT INTO __mj."EntitySetting" ("ID", "EntityID", "Name", "Value", "__mj_Creat
 /* Set DefaultForNewUser=0 for NEW entity (category: supporting, confidence: high) */
 
 UPDATE __mj."ApplicationEntity"
-         SET "DefaultForNewUser" = 0, "__mj_UpdatedAt" = NOW()
+         SET "DefaultForNewUser" = FALSE, "__mj_UpdatedAt" = NOW()
          WHERE "EntityID" = 'FE0D485E-8C3F-4FE0-BD07-EF81E8F14CE0';
 /* Set categories for 23 fields */
 -- UPDATE Entity Field Category Info MJ: Tags."ID"
@@ -5106,7 +5099,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '2B4317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '2B4317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tags."Name"
 
 UPDATE __mj."EntityField"
@@ -5115,7 +5108,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '2C4317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '2C4317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tags."DisplayName"
 
 UPDATE __mj."EntityField"
@@ -5124,7 +5117,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '2D4317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '2D4317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tags."Description"
 
 UPDATE __mj."EntityField"
@@ -5133,7 +5126,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '2E4317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '2E4317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tags."ParentID"
 
 UPDATE __mj."EntityField"
@@ -5142,7 +5135,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '2F4317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '2F4317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tags."Parent"
 
 UPDATE __mj."EntityField"
@@ -5151,7 +5144,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '674317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '674317F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tags."RootParentID"
 
 UPDATE __mj."EntityField"
@@ -5160,7 +5153,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '55C353F4-3F77-4BE6-B931-AA23603CF3CA' AND "AutoUpdateCategory" = 1;
+   "ID" = '55C353F4-3F77-4BE6-B931-AA23603CF3CA' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tags."Status"
 
 UPDATE __mj."EntityField"
@@ -5169,7 +5162,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '44B30122-35F7-4954-82AA-329F26486ED5' AND "AutoUpdateCategory" = 1;
+   "ID" = '44B30122-35F7-4954-82AA-329F26486ED5' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tags."MergedIntoTagID"
 
 UPDATE __mj."EntityField"
@@ -5179,7 +5172,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '23E00FA1-C0B5-4370-B526-78F65F2571D2' AND "AutoUpdateCategory" = 1;
+   "ID" = '23E00FA1-C0B5-4370-B526-78F65F2571D2' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tags."MergedIntoTag"
 
 UPDATE __mj."EntityField"
@@ -5189,7 +5182,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'FD942B17-CF54-41C5-B8B3-6A66BAC2C41E' AND "AutoUpdateCategory" = 1;
+   "ID" = 'FD942B17-CF54-41C5-B8B3-6A66BAC2C41E' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tags."RootMergedIntoTagID"
 
 UPDATE __mj."EntityField"
@@ -5199,7 +5192,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'D47C8E2A-AAAC-4C4D-992E-F595DC94877C' AND "AutoUpdateCategory" = 1;
+   "ID" = 'D47C8E2A-AAAC-4C4D-992E-F595DC94877C' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tags."IsGlobal"
 
 UPDATE __mj."EntityField"
@@ -5209,7 +5202,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '8E4149A0-D01D-48FD-9E1B-8764EBC4409D' AND "AutoUpdateCategory" = 1;
+   "ID" = '8E4149A0-D01D-48FD-9E1B-8764EBC4409D' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tags."AllowAutoGrow"
 
 UPDATE __mj."EntityField"
@@ -5219,7 +5212,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '188A03E5-163F-4305-B05D-A1CAFC786695' AND "AutoUpdateCategory" = 1;
+   "ID" = '188A03E5-163F-4305-B05D-A1CAFC786695' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tags."IsFrozen"
 
 UPDATE __mj."EntityField"
@@ -5229,7 +5222,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '06C53AD9-6E47-40F6-8A54-22B08FFAC96E' AND "AutoUpdateCategory" = 1;
+   "ID" = '06C53AD9-6E47-40F6-8A54-22B08FFAC96E' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tags."MaxChildren"
 
 UPDATE __mj."EntityField"
@@ -5239,7 +5232,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '40C2E9D8-C6F6-4060-B56B-88ABBC8E0698' AND "AutoUpdateCategory" = 1;
+   "ID" = '40C2E9D8-C6F6-4060-B56B-88ABBC8E0698' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tags."MaxDescendantDepth"
 
 UPDATE __mj."EntityField"
@@ -5249,7 +5242,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'B752F3F4-1D32-4645-925F-28E6D6C122C0' AND "AutoUpdateCategory" = 1;
+   "ID" = 'B752F3F4-1D32-4645-925F-28E6D6C122C0' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tags."MinWeight"
 
 UPDATE __mj."EntityField"
@@ -5259,7 +5252,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '9E7ED65E-41C6-4C6D-8659-52CFFF1B46DD' AND "AutoUpdateCategory" = 1;
+   "ID" = '9E7ED65E-41C6-4C6D-8659-52CFFF1B46DD' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tags."RequiresReview"
 
 UPDATE __mj."EntityField"
@@ -5269,7 +5262,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'E54B8418-2042-44D3-ACDD-00E34D6DB818' AND "AutoUpdateCategory" = 1;
+   "ID" = 'E54B8418-2042-44D3-ACDD-00E34D6DB818' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tags."EmbeddingVector"
 
 UPDATE __mj."EntityField"
@@ -5279,7 +5272,7 @@ SET
    "ExtendedType" = 'Code',
    "CodeType" = 'Other'
 WHERE 
-   "ID" = '32BD0C45-CE4C-41C5-8F42-9075A36B27AE' AND "AutoUpdateCategory" = 1;
+   "ID" = '32BD0C45-CE4C-41C5-8F42-9075A36B27AE' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tags."EmbeddingModelID"
 
 UPDATE __mj."EntityField"
@@ -5290,7 +5283,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '2681AEAC-3D38-478E-854B-9C0D271279F8' AND "AutoUpdateCategory" = 1;
+   "ID" = '2681AEAC-3D38-478E-854B-9C0D271279F8' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tags."EmbeddingModel"
 
 UPDATE __mj."EntityField"
@@ -5301,7 +5294,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '01AE9E00-305F-4FEC-B8D2-A0A906D34F70' AND "AutoUpdateCategory" = 1;
+   "ID" = '01AE9E00-305F-4FEC-B8D2-A0A906D34F70' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tags.__mj_CreatedAt
 
 UPDATE __mj."EntityField"
@@ -5310,7 +5303,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'BA5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'BA5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tags.__mj_UpdatedAt
 
 UPDATE __mj."EntityField"
@@ -5319,7 +5312,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'BB5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'BB5817F0-6F36-EF11-86D4-6045BDEE16E6' AND "AutoUpdateCategory" = TRUE;
 /* Update FieldCategoryInfo setting for entity */
 
 UPDATE __mj."EntitySetting"
@@ -5340,7 +5333,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'AC912468-B579-46CE-A7F7-CB110AA54789' AND "AutoUpdateCategory" = 1;
+   "ID" = 'AC912468-B579-46CE-A7F7-CB110AA54789' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tag Suggestions."ProposedName"
 
 UPDATE __mj."EntityField"
@@ -5350,7 +5343,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '25782CCD-889E-433D-B2CC-C2A0E2E2BE5D' AND "AutoUpdateCategory" = 1;
+   "ID" = '25782CCD-889E-433D-B2CC-C2A0E2E2BE5D' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tag Suggestions."ProposedParentID"
 
 UPDATE __mj."EntityField"
@@ -5361,7 +5354,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '2CBA41B4-7CA6-43B7-B854-8F1B5C9D8413' AND "AutoUpdateCategory" = 1;
+   "ID" = '2CBA41B4-7CA6-43B7-B854-8F1B5C9D8413' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tag Suggestions."ProposedParent"
 
 UPDATE __mj."EntityField"
@@ -5372,7 +5365,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'B444EB26-6ED0-4BEB-8F8C-F6C6B5CFD820' AND "AutoUpdateCategory" = 1;
+   "ID" = 'B444EB26-6ED0-4BEB-8F8C-F6C6B5CFD820' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tag Suggestions."BestMatchTagID"
 
 UPDATE __mj."EntityField"
@@ -5383,7 +5376,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'D9DFCF44-E225-4EC2-A08C-C2C1EDE9565D' AND "AutoUpdateCategory" = 1;
+   "ID" = 'D9DFCF44-E225-4EC2-A08C-C2C1EDE9565D' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tag Suggestions."BestMatchTag"
 
 UPDATE __mj."EntityField"
@@ -5394,7 +5387,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '5D1C0858-4387-4070-A37E-F1B9D840E43B' AND "AutoUpdateCategory" = 1;
+   "ID" = '5D1C0858-4387-4070-A37E-F1B9D840E43B' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tag Suggestions."BestMatchScore"
 
 UPDATE __mj."EntityField"
@@ -5404,7 +5397,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '14685A97-7362-4755-847B-3C6043D0967F' AND "AutoUpdateCategory" = 1;
+   "ID" = '14685A97-7362-4755-847B-3C6043D0967F' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tag Suggestions."Reason"
 
 UPDATE __mj."EntityField"
@@ -5414,7 +5407,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '83526F85-6ADC-40BD-A2DF-AC433F616F9B' AND "AutoUpdateCategory" = 1;
+   "ID" = '83526F85-6ADC-40BD-A2DF-AC433F616F9B' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tag Suggestions."SourceContentItemID"
 
 UPDATE __mj."EntityField"
@@ -5425,7 +5418,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'FBAB09CD-DB94-4DB7-A3C2-B783247E0E21' AND "AutoUpdateCategory" = 1;
+   "ID" = 'FBAB09CD-DB94-4DB7-A3C2-B783247E0E21' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tag Suggestions."SourceContentItem"
 
 UPDATE __mj."EntityField"
@@ -5436,7 +5429,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '51C44037-ED00-47BB-91F9-AA6B344DEC75' AND "AutoUpdateCategory" = 1;
+   "ID" = '51C44037-ED00-47BB-91F9-AA6B344DEC75' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tag Suggestions."SourceContentSourceID"
 
 UPDATE __mj."EntityField"
@@ -5447,7 +5440,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '3BDFB3E2-F43E-44AB-AD6B-516C47C12E9B' AND "AutoUpdateCategory" = 1;
+   "ID" = '3BDFB3E2-F43E-44AB-AD6B-516C47C12E9B' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tag Suggestions."SourceContentSource"
 
 UPDATE __mj."EntityField"
@@ -5458,7 +5451,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'D972301F-D1DA-4CBD-90E7-3C6657D15F64' AND "AutoUpdateCategory" = 1;
+   "ID" = 'D972301F-D1DA-4CBD-90E7-3C6657D15F64' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tag Suggestions."SourceText"
 
 UPDATE __mj."EntityField"
@@ -5468,7 +5461,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '960C7BEA-30A6-4D48-845A-065D8A6275BE' AND "AutoUpdateCategory" = 1;
+   "ID" = '960C7BEA-30A6-4D48-845A-065D8A6275BE' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tag Suggestions."Status"
 
 UPDATE __mj."EntityField"
@@ -5478,7 +5471,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'EF060F94-EFB2-4057-AF53-4B13280C307C' AND "AutoUpdateCategory" = 1;
+   "ID" = 'EF060F94-EFB2-4057-AF53-4B13280C307C' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tag Suggestions."ResolvedTagID"
 
 UPDATE __mj."EntityField"
@@ -5489,7 +5482,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '9D6D17DA-DA7F-43F1-90F1-424F908448D9' AND "AutoUpdateCategory" = 1;
+   "ID" = '9D6D17DA-DA7F-43F1-90F1-424F908448D9' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tag Suggestions."ResolvedTag"
 
 UPDATE __mj."EntityField"
@@ -5500,7 +5493,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'DBBF3AF6-4C7C-4116-B357-CE0643E0C7DD' AND "AutoUpdateCategory" = 1;
+   "ID" = 'DBBF3AF6-4C7C-4116-B357-CE0643E0C7DD' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tag Suggestions."ReviewedByUserID"
 
 UPDATE __mj."EntityField"
@@ -5511,7 +5504,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'D5357C14-3B81-4A98-9E1D-516B56248907' AND "AutoUpdateCategory" = 1;
+   "ID" = 'D5357C14-3B81-4A98-9E1D-516B56248907' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tag Suggestions."ReviewedByUser"
 
 UPDATE __mj."EntityField"
@@ -5522,7 +5515,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'CC4C9E6D-6326-4E28-BB7D-7686CB281FBE' AND "AutoUpdateCategory" = 1;
+   "ID" = 'CC4C9E6D-6326-4E28-BB7D-7686CB281FBE' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tag Suggestions."ReviewedAt"
 
 UPDATE __mj."EntityField"
@@ -5532,7 +5525,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'C4FD8477-E9B1-4156-8B34-0D03D2E332DC' AND "AutoUpdateCategory" = 1;
+   "ID" = 'C4FD8477-E9B1-4156-8B34-0D03D2E332DC' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tag Suggestions."ReviewerNotes"
 
 UPDATE __mj."EntityField"
@@ -5542,7 +5535,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '7A894CCA-6BCE-4F45-ADA9-D750813A7462' AND "AutoUpdateCategory" = 1;
+   "ID" = '7A894CCA-6BCE-4F45-ADA9-D750813A7462' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tag Suggestions.__mj_CreatedAt
 
 UPDATE __mj."EntityField"
@@ -5552,7 +5545,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '371B3A78-7A29-4C93-99E5-E88E8F243C63' AND "AutoUpdateCategory" = 1;
+   "ID" = '371B3A78-7A29-4C93-99E5-E88E8F243C63' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Tag Suggestions.__mj_UpdatedAt
 
 UPDATE __mj."EntityField"
@@ -5562,7 +5555,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '6AD03EFF-39F3-4227-9260-BB2E3118F6FC' AND "AutoUpdateCategory" = 1;
+   "ID" = '6AD03EFF-39F3-4227-9260-BB2E3118F6FC' AND "AutoUpdateCategory" = TRUE;
 /* Set entity icon to fa fa-tags */
 
 UPDATE __mj."Entity"
@@ -5579,7 +5572,7 @@ INSERT INTO __mj."EntitySetting" ("ID", "EntityID", "Name", "Value", "__mj_Creat
 /* Set DefaultForNewUser=1 for NEW entity (category: primary, confidence: high) */
 
 UPDATE __mj."ApplicationEntity"
-         SET "DefaultForNewUser" = 1, "__mj_UpdatedAt" = NOW()
+         SET "DefaultForNewUser" = TRUE, "__mj_UpdatedAt" = NOW()
          WHERE "EntityID" = 'BCF03E3B-D2B2-4557-ACEB-95B18495F451';
 
 
