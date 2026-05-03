@@ -66,6 +66,7 @@ import { AgentDataPreloader } from './AgentDataPreloader';
 import { ClientToolRequestManager } from './ClientToolRequestManager';
 import { ConversationMessageResolver } from './utils/ConversationMessageResolver';
 import { ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
+import { isDelegationOnly } from './utils/AgentFlags';
 import _ from 'lodash';
 
 /**
@@ -6397,9 +6398,15 @@ The context is now within limits. Please retry your request with the recovered c
                 this.logStatus(`📄 Collected ${subAgentResult.fileOutputs.length} file output(s) from sub-agent '${subAgentRequest.name}'`, true);
             }
 
-            // Determine if we should terminate after sub-agent
-            const shouldTerminate = subAgentRequest.terminateAfter;
-            
+            // Determine if we should terminate after sub-agent.
+            // Two ways this becomes true:
+            //   1. The LLM explicitly set `terminateAfter` on its sub-agent invocation, OR
+            //   2. The agent is flagged `DelegationOnly` and the sub-agent succeeded —
+            //      in which case the parent's job ends after the first successful delegation
+            //      (no second prompt iteration to "re-read and present" the result).
+            const shouldTerminate = subAgentRequest.terminateAfter
+                || (isDelegationOnly(params.agent) && subAgentResult.success);
+
             // Prepare output data
             const outputData = {
                 subAgentResult: {
@@ -6766,8 +6773,10 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             }
 
-            // Check if we should terminate after this sub-agent
-            const shouldTerminate = subAgentRequest.terminateAfter === true;
+            // Check if we should terminate after this sub-agent. See `executeChildSubAgentStep`
+            // above for the same DelegationOnly-aware OR.
+            const shouldTerminate = subAgentRequest.terminateAfter === true
+                || (isDelegationOnly(params.agent) && subAgentResult.success);
 
             // Prepare output data
             const outputData = {
