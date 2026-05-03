@@ -4,14 +4,19 @@ arguments: 'Optional: scope or category. Examples: "summary", "detailed", "rxjs"
 
 # Audit Memory & Resource Leaks
 
-You are running a recurring scan for memory and resource leaks across the MemberJunction monorepo. The baseline reports live at:
+You are running a recurring scan for memory and resource leaks across the MemberJunction monorepo. **The single consolidated plan lives at `plans/MEMORY_LEAK_AUDIT.md`** — there is no separate Round 1 / Round 2 file split anymore. The plan is divided into Part 1 (broad sweep) and Part 2 (deep subtree sweep) headed sections within one document.
 
-- `reports/memory-leaks/MEMORY_LEAK_AUDIT.md` — main baseline (Round 1: full-repo five-category sweep)
-- `reports/memory-leaks/MEMORY_LEAK_AUDIT_ROUND2.md` — supplement covering deeply-nested provider/connector subtrees (AI providers, Integration connectors, Communication providers, Storage drivers, Auth providers, Actions subdirs, MJServer resolvers, AI Agents/MCP/A2A) that Round 1 sampled rather than covered exhaustively
+The repo has **234 packages** (count `package.json` files under `packages/`, excluding `node_modules` and `dist`). Part 1's broad globs satisfy themselves on shallow sampling; Part 2's narrow agents are required to actually cover the nested subtrees.
 
-The repo has **234 packages** (count `package.json` files under `packages/`, excluding `node_modules` and `dist`). Round 1's broad globs satisfy themselves on shallow sampling; Round 2's narrow agents are required to actually cover the nested subtrees.
+Your job is to refresh the plan, generate a dated snapshot, and surface what changed since the last run.
 
-Your job is to refresh both baselines, generate a dated snapshot, and surface what changed since the last run.
+### File layout
+
+| Path | Purpose |
+|---|---|
+| `plans/MEMORY_LEAK_AUDIT.md` | The consolidated plan — single source of truth, rewritten in place on every detailed run |
+| `plans/.memory-leak-snapshots/<YYYY-MM-DD>/agent-<X>-<category>.md` | Raw per-agent output for this run (one file per subagent). Used as the inputs for concatenation. **Add `plans/.memory-leak-snapshots/` to `.gitignore` if not already present.** |
+| `plans/.memory-leak-snapshots/<YYYY-MM-DD>/CHANGES.md` | Per-run delta showing new vs. resolved leaks since the previous snapshot |
 
 ## Parse Arguments
 
@@ -20,8 +25,8 @@ Parse the arguments from: `{{arguments}}`
 Recognized values:
 
 - **Output mode** (mutually exclusive):
-  - `summary` — one-page diff vs. baseline (top criticals + new findings only)
-  - `detailed` *(default)* — full report, replaces the baseline
+  - `summary` — one-page diff vs. plan (top criticals + new findings only); does NOT rewrite the plan
+  - `detailed` *(default)* — full re-baseline; rewrites `plans/MEMORY_LEAK_AUDIT.md` in place
 - **Category filter** (mutually exclusive with each other; combine with output mode):
   - `rxjs` — only RxJS subscription / Angular `OnDestroy` patterns
   - `timers` — only `setInterval` / recursive `setTimeout` patterns
@@ -36,20 +41,25 @@ If no argument is provided, run the full `detailed` audit across all five catego
 
 This command:
 
-1. Re-detects the leak categories baselined in `reports/memory-leaks/MEMORY_LEAK_AUDIT.md`
-2. Diffs new findings against existing ones
-3. Flags resolved leaks (so the team gets credit for fixes)
-4. Produces a dated snapshot in `reports/memory-leaks/snapshots/`
-5. Updates the baseline at `reports/memory-leaks/MEMORY_LEAK_AUDIT.md` (only when run in `detailed` mode without a category filter)
-6. Writes a per-run delta to `reports/memory-leaks/CHANGES.md`
+1. Re-detects the leak categories baselined in `plans/MEMORY_LEAK_AUDIT.md`
+2. Spawns parallel `Explore` subagents and writes each one's raw markdown output to a per-agent file under `plans/.memory-leak-snapshots/<YYYY-MM-DD>/`
+3. **Concatenates** those per-agent files (with `cat`, via the Bash tool) into the consolidated plan, then patches the joined doc's headers/cross-references — this avoids one giant in-context Write and keeps each subagent's output independently inspectable
+4. Diffs new findings against the previous plan
+5. Flags resolved leaks (so the team gets credit for fixes)
+6. Updates the consolidated plan at `plans/MEMORY_LEAK_AUDIT.md` (only when run in `detailed` mode without a category filter)
+7. Writes a per-run delta to `plans/.memory-leak-snapshots/<YYYY-MM-DD>/CHANGES.md`
 
 ## Execution Plan
 
-### Phase 1 — Read the baseline
+### Phase 0 — Set up the snapshot directory
 
-Read `reports/memory-leaks/MEMORY_LEAK_AUDIT.md` and extract:
+Compute `SNAPSHOT_DIR=plans/.memory-leak-snapshots/$(date +%Y-%m-%d)` and `mkdir -p` it. If `.gitignore` doesn't already include `plans/.memory-leak-snapshots/`, append it (these are working files, not artifacts to commit).
 
-- The list of finding IDs (C1–C7, H1–H28, plus medium/low entries)
+### Phase 1 — Read the existing plan
+
+Read `plans/MEMORY_LEAK_AUDIT.md` and extract:
+
+- The list of finding IDs (C1–C7, H1–H28, R2-C1–R2-C15, plus medium/low entries)
 - The file:line references for each finding
 - The severity counts table
 
@@ -68,12 +78,18 @@ Each subagent's prompt should:
 - State the category and the specific anti-patterns to find
 - Specify file globs and exclude `node_modules/`, `dist/`, `generated/`, `__tests__/`, `*.test.ts`, `*.spec.ts`
 - Demand file:line references for every finding
-- Demand a severity tag (Critical / High / Medium / Low) using the definitions in the baseline report
-- Ask for under 1500–2200 words
+- Demand a severity tag (Critical / High / Medium / Low) using the definitions in the consolidated plan
 - Aim for 15–40 concrete findings per category
-- For Wave 2 agents, instruct them to first read both baseline reports and skip findings already documented
+- For Wave 2 agents, instruct them to first read `plans/MEMORY_LEAK_AUDIT.md` and skip findings already documented
+- **Critical:** instruct the agent to **write its full findings as a markdown section directly to `plans/.memory-leak-snapshots/<YYYY-MM-DD>/agent-<X>-<category>.md`** (using the Write tool — the agent has access to it). The agent should then return only a brief summary (under 200 words) — top 3 findings + total count — to the orchestrator. This keeps the bulk of agent output out of the orchestrator's context window so we can run all ten agents without context bloat.
+
+The agent's written file should start with an H2 heading (e.g. `## Subagent A — RxJS / Angular OnDestroy`) since it will be concatenated into the consolidated plan as a section.
 
 Use the prompts below as templates. Each is self-contained; the subagent has no memory of this conversation.
+
+**Boilerplate to append to every subagent prompt** (substitute `<X>`, `<category>`, and `<YYYY-MM-DD>`):
+
+> When you finish, write your full findings to `/home/user/MJ/plans/.memory-leak-snapshots/<YYYY-MM-DD>/agent-<X>-<category>.md` using the Write tool. Start the file with an H2 heading (e.g. `## Subagent <X> — <category>`). Then return to me only a brief summary (under 200 words) — top 3 findings + total counts by severity. Do not paste the full findings into your response — the orchestrator will read them from the file you wrote.
 
 #### Subagent A — RxJS / Angular `OnDestroy`
 
@@ -228,47 +244,75 @@ grep -rn "extends BaseSingleton" packages/ --include="*.ts" \
 
 Use these counts to validate the subagents' coverage. If a subagent reported far fewer findings than the grep count suggests, ask it to follow up (via `SendMessage`) — but only if the gap is large and the category is in scope.
 
-### Phase 4 — Diff against baseline
+### Phase 4 — Diff against the previous plan
 
-Compare the new findings against the existing `reports/memory-leaks/MEMORY_LEAK_AUDIT.md`:
+Compare the new findings against `plans/MEMORY_LEAK_AUDIT.md`:
 
-- **New** — file:line not present in baseline
-- **Resolved** — baseline finding's file:line no longer matches the pattern (use `Read` to verify the file changed in a way that addresses the issue)
+- **New** — file:line not present in plan
+- **Resolved** — plan finding's file:line no longer matches the pattern (use `Read` to verify the file changed in a way that addresses the issue)
 - **Persisted** — same finding still present
 - **Moved** — same conceptual finding but file path or line shifted (best-effort match by surrounding code)
 
 A finding is "resolved" only if you can read the file and confirm the cleanup pattern was added (e.g. `takeUntil(this.destroy$)`, `clearInterval` call, `finally` block, eviction logic). Don't claim resolved status based purely on absence — files get refactored.
 
-### Phase 5 — Write outputs
+### Phase 5 — Concatenate per-agent files into the consolidated plan
 
-Write three files (relative to `/home/user/MJ`):
+Each subagent already wrote its findings to `$SNAPSHOT_DIR/agent-<X>-<category>.md`. The orchestrator's job in this phase is **just to concatenate them** with `cat` (via the Bash tool) — *not* to re-paste their content with the Write tool. This avoids dragging the entire ~700-line report through the orchestrator's context.
 
-1. **`reports/memory-leaks/snapshots/YYYY-MM-DD.md`** — a dated, immutable snapshot of this run's findings (always created)
-2. **`reports/memory-leaks/CHANGES.md`** — a delta document with three sections:
+Suggested flow:
+
+1. **Author the framing prelude** (executive summary, methodology, severity definitions, totals table) using the Write tool — this is the only fresh prose you produce. Save to `$SNAPSHOT_DIR/00-prelude.md`. Compute the totals table from the brief summaries each agent returned (their top-line counts).
+2. **Author the framing postlude** (cross-cutting anti-patterns, recommendations, appendices) using the Write tool, computed from the brief summaries. Save to `$SNAPSHOT_DIR/99-postlude.md`.
+3. **Concatenate** with a single Bash call:
+
+   ```bash
+   cat $SNAPSHOT_DIR/00-prelude.md \
+       $SNAPSHOT_DIR/agent-A-rxjs.md \
+       $SNAPSHOT_DIR/agent-B-timers.md \
+       $SNAPSHOT_DIR/agent-C-listeners.md \
+       $SNAPSHOT_DIR/agent-D-caches.md \
+       $SNAPSHOT_DIR/agent-E-connections.md \
+       $SNAPSHOT_DIR/agent-F-ai-providers.md \
+       $SNAPSHOT_DIR/agent-G-connectors.md \
+       $SNAPSHOT_DIR/agent-H-comm-storage-auth.md \
+       $SNAPSHOT_DIR/agent-I-actions-misc.md \
+       $SNAPSHOT_DIR/agent-J-mjserver-agents.md \
+       $SNAPSHOT_DIR/99-postlude.md \
+       > plans/MEMORY_LEAK_AUDIT.md
+   ```
+
+   Skip any agent files that don't exist (because the user filtered to a category or path).
+
+4. **Patch headers** with a few targeted Edit calls — fix things like duplicate "Round 1 / Round 2" titles, broken cross-references between agent sections, or finding-ID renumbering. Keep edits minimal — the per-agent files are the source of truth for findings.
+
+5. **Write the delta**: `$SNAPSHOT_DIR/CHANGES.md` with three sections:
    - **New leaks since last run** (file:line, category, severity, 1-sentence rationale)
    - **Resolved leaks** (which finding ID, what file:line, how confirmed)
    - **Still outstanding** (count by severity)
-3. **`reports/memory-leaks/MEMORY_LEAK_AUDIT.md`** AND **`reports/memory-leaks/MEMORY_LEAK_AUDIT_ROUND2.md`** — only updated when run in `detailed` mode without a category filter (full re-baseline). Preserve the structure of the existing baselines (Executive Summary → Methodology → Critical → High → Medium → Low → Anti-Patterns → Recommendations → Appendices). The Round 2 file specifically covers AI providers, Integration connectors, Communication/Storage/Auth providers, Actions/MetadataSync/React/Encryption/Slack, and MJServer/AI-Agents/MCP/A2A — keep that scope.
+
+If the user ran `summary` mode, skip the prelude/postlude/concatenation/patch steps — only write `$SNAPSHOT_DIR/CHANGES.md` and the chat summary.
+
+If the user filtered by category, only the matching agent files exist; concatenate those, but **do not overwrite `plans/MEMORY_LEAK_AUDIT.md`** in category-filter mode — instead write to `$SNAPSHOT_DIR/PARTIAL_<category>.md` and let the user choose to merge later.
 
 ### Phase 6 — Report to user
 
-Output a concise summary to the user (this is what they see in the chat — keep it tight):
+Output a concise summary to the user (this is what they see in the chat — keep it tight, no emojis unless the user has them turned on):
 
 ```
 Memory Leak Audit complete.
 
-📊 Findings: <N> total (<C> Critical, <H> High, <M> Medium, <L> Low)
-🆕 New since last run: <N>
-✅ Resolved since last run: <N>
-📌 Top 3 new criticals:
+Findings: <N> total (<C> Critical, <H> High, <M> Medium, <L> Low)
+New since last run: <N>
+Resolved since last run: <N>
+Top 3 new criticals:
   1. <file:line> — <one-line description>
   2. <file:line> — <one-line description>
   3. <file:line> — <one-line description>
 
-Reports updated:
-  - reports/memory-leaks/snapshots/YYYY-MM-DD.md (snapshot)
-  - reports/memory-leaks/CHANGES.md (delta)
-  - reports/memory-leaks/MEMORY_LEAK_AUDIT.md (baseline) [if detailed mode]
+Files updated:
+  - plans/MEMORY_LEAK_AUDIT.md (consolidated plan) [detailed mode only]
+  - plans/.memory-leak-snapshots/YYYY-MM-DD/CHANGES.md (delta)
+  - plans/.memory-leak-snapshots/YYYY-MM-DD/agent-*.md (per-agent raw findings)
 ```
 
 ## Severity Definitions
