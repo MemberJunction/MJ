@@ -648,7 +648,7 @@ END $$;
             // _Clear companion is emitted immediately before its main parameter
             // for nullable columns whose database default is non-NULL.
             if (!ef.IsPrimaryKey && this.needsClearCompanion(ef)) {
-                parts.push(`${dialect.ParameterRef(ef.CodeName + '_Clear')} bit${dialect.ParameterDefault('0')}`);
+                parts.push(`${dialect.ParameterRef(ef.CodeName + '_Clear')} ${dialect.BooleanParameterType()}${dialect.ParameterDefault(dialect.BooleanLiteral(false))}`);
                 foundDefault = true;
             }
 

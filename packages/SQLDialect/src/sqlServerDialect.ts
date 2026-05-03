@@ -156,6 +156,10 @@ export class SQLServerDialect extends SQLDialect {
         return value ? '1' : '0';
     }
 
+    BooleanParameterType(): string {
+        return 'bit';
+    }
+
     ParameterRef(name: string): string {
         return `@${name}`;
     }
