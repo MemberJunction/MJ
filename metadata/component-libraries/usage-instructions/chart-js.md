@@ -1,6 +1,6 @@
 ## Canvas Container Requirements (CRITICAL)
 
-When using Chart.js directly (not via SimpleChart), the canvas element MUST be wrapped in a container with:
+When using Chart.js directly, the canvas element MUST be wrapped in a container with:
 
 - `position: 'relative'` -- Chart.js requires this for responsive sizing
 - Explicit height (e.g. `height: '300px'` or `` height: `${height}px` ``) -- without this the canvas collapses to 0px
