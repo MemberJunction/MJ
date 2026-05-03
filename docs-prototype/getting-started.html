@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Getting Started — MemberJunction</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="proto-banner">
+    PROTOTYPE — Demonstrates IA only. Final site will be built with Astro Starlight. See <a href="plan.md">plan.md</a>.
+</div>
+
+<header class="site-header">
+    <div class="site-header-inner">
+        <a href="index.html" class="site-brand">
+            <span class="site-brand-mark">MJ</span>
+            <span>MemberJunction</span>
+        </a>
+        <nav class="site-nav">
+            <a href="getting-started.html" class="active">Getting Started</a>
+            <a href="architecture.html">Architecture</a>
+            <a href="guides.html">Guides</a>
+            <a href="packages.html">Packages</a>
+            <a href="ai-and-agents.html">AI &amp; Agents</a>
+            <a href="ecosystem.html">Ecosystem</a>
+        </nav>
+        <div class="site-nav-right">
+            <a href="https://github.com/MemberJunction/MJ" class="btn btn-outline">GitHub</a>
+        </div>
+    </div>
+</header>
+
+<main class="narrow">
+    <div class="breadcrumb"><a href="index.html">Home</a> / Getting Started</div>
+    <h1 class="page-title">Getting Started</h1>
+    <p class="page-subtitle">Install MJ, get the API and UI running, and write your first entity.</p>
+
+    <section class="section">
+        <h2 class="mt-0">Prerequisites</h2>
+        <ul>
+            <li><strong>Node.js 20+</strong> and npm 9+</li>
+            <li><strong>SQL Server 2019+</strong> or Azure SQL (PostgreSQL is supported but not the primary path yet)</li>
+            <li><strong>Angular CLI 21+</strong> for working on the UI</li>
+            <li>An <strong>auth provider</strong>: Auth0, Azure AD (MSAL), or Okta</li>
+            <li>Optional: Docker, if you want the workbench dev environment</li>
+        </ul>
+    </section>
+
+    <section class="section">
+        <h2>1. Clone and install</h2>
+        <pre><code>git clone https://github.com/MemberJunction/MJ.git
+cd MJ
+npm install</code></pre>
+        <p class="muted small">This is an npm workspace monorepo with 175+ packages — install runs at the root.</p>
+    </section>
+
+    <section class="section">
+        <h2>2. Configure</h2>
+        <pre><code>cp install.config.json.example install.config.json
+# Edit install.config.json with:
+#   - Your SQL Server connection string
+#   - Your auth provider settings (Auth0 / MSAL / Okta)
+#   - Your default schema name</code></pre>
+        <p>For a deeper config tour, see <a href="https://github.com/MemberJunction/MJ/blob/main/packages/Config/README.md">@memberjunction/config</a> and the <a href="https://github.com/MemberJunction/MJ/blob/main/mj.config.cjs">root <code>mj.config.cjs</code></a>.</p>
+    </section>
+
+    <section class="section">
+        <h2>3. Initialize the database</h2>
+        <pre><code>node InstallMJ.js</code></pre>
+        <p>This runs Flyway migrations from <code>migrations/v5/</code>, creates the MJ system schema, and seeds reference data. See <a href="migrations.html">Migrations</a> for the full migration story.</p>
+    </section>
+
+    <section class="section">
+        <h2>4. Run it</h2>
+        <pre><code>npm run start:api        # GraphQL API on port 4000
+npm run start:explorer   # Angular UI on port 4200</code></pre>
+        <p>Visit <code>http://localhost:4200</code>, sign in via your configured auth provider, and you're looking at MJ Explorer.</p>
+    </section>
+
+    <section class="section">
+        <h2>5. Your first entity</h2>
+        <p>The "hello world" of MJ is a database table. Create one in your default schema (or use an existing app schema), then run CodeGen:</p>
+        <pre><code>npm run codegen</code></pre>
+        <p>CodeGen detects the new table, generates a typed entity class, server-side resolvers, and an Angular form. The full pipeline is documented in the <a href="https://github.com/MemberJunction/MJ/blob/main/packages/CodeGenLib/README.md">CodeGenLib README</a>.</p>
+        <p>From your TypeScript code, the new entity is available immediately:</p>
+        <pre><code>import { Metadata } from '@memberjunction/core';
+
+const md = new Metadata();
+const customer = await md.GetEntityObject&lt;CustomerEntity&gt;('Customers');
+await customer.Load(customerId);
+customer.Status = 'Active';
+await customer.Save(); // Validation, audit, downstream actions all automatic</code></pre>
+    </section>
+
+    <section class="section">
+        <h2>Where to go next</h2>
+        <div class="card-grid">
+            <div class="card">
+                <a href="architecture.html" class="card-title-link">Understand the architecture</a>
+                <p>The metadata-driven approach, the layers, and how the pieces fit together.</p>
+            </div>
+            <div class="card">
+                <a href="custom-apps.html" class="card-title-link">Build a custom app</a>
+                <p>App-centric navigation, custom dashboards, lazy-loaded modules, theming.</p>
+            </div>
+            <div class="card">
+                <a href="ai-and-agents.html" class="card-title-link">Wire up AI</a>
+                <p>Configure providers, run prompts, build agents, expose your data via MCP.</p>
+            </div>
+            <div class="card">
+                <a href="guides.html" class="card-title-link">Read the guides</a>
+                <p>Deep-dive guides on caching, dashboards, lazy loading, UUID comparison, and more.</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <h2>Upgrading</h2>
+        <ul>
+            <li><a href="https://github.com/MemberJunction/MJ/blob/main/UPGRADE-v5.0.md">v5.0 Upgrade Guide</a> — breaking changes and migration steps from v4.x</li>
+            <li><a href="https://github.com/MemberJunction/MJ/blob/main/UPDATES.md">General upgrade procedure</a> — standard process across dev/stage/prod</li>
+        </ul>
+    </section>
+
+    <section class="section">
+        <h2>Stuck?</h2>
+        <ul>
+            <li><a href="https://github.com/MemberJunction/MJ/discussions">GitHub Discussions</a> — questions, ideas</li>
+            <li><a href="https://github.com/MemberJunction/MJ/issues">GitHub Issues</a> — bug reports, feature requests</li>
+            <li><a href="community.html">Community page</a> — all the support paths in one place</li>
+        </ul>
+    </section>
+</main>
+
+<footer class="site-footer">
+    <div class="site-footer-inner">
+        <div>
+            <strong>MemberJunction</strong>
+            <p class="muted small">The open-source, AI-native data platform.</p>
+        </div>
+        <div>
+            <h4>Docs</h4>
+            <ul>
+                <li><a href="getting-started.html">Getting Started</a></li>
+                <li><a href="architecture.html">Architecture</a></li>
+                <li><a href="guides.html">Guides</a></li>
+                <li><a href="api/">API Reference</a></li>
+            </ul>
+        </div>
+        <div>
+            <h4>Community</h4>
+            <ul>
+                <li><a href="https://github.com/MemberJunction/MJ/discussions">Discussions</a></li>
+                <li><a href="https://github.com/MemberJunction/MJ/issues">Issues</a></li>
+                <li><a href="https://github.com/MemberJunction/MJ/releases">Releases</a></li>
+            </ul>
+        </div>
+        <div>
+            <h4>Project</h4>
+            <ul>
+                <li><a href="https://github.com/MemberJunction">GitHub Org</a></li>
+                <li><a href="https://www.npmjs.com/org/memberjunction">npm</a></li>
+                <li><a href="https://github.com/MemberJunction/MJ/blob/main/LICENSE">License (ISC)</a></li>
+            </ul>
+        </div>
+    </div>
+    <div class="site-footer-bottom">
+        Built with TypeScript · Angular 21 · SQL Server · Open source under ISC License
+    </div>
+</footer>
+
+</body>
+</html>

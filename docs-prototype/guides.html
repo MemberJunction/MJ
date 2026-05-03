@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Guides — MemberJunction</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="proto-banner">
+    PROTOTYPE — Demonstrates IA only. Final site will be built with Astro Starlight. See <a href="plan.md">plan.md</a>.
+</div>
+
+<header class="site-header">
+    <div class="site-header-inner">
+        <a href="index.html" class="site-brand">
+            <span class="site-brand-mark">MJ</span>
+            <span>MemberJunction</span>
+        </a>
+        <nav class="site-nav">
+            <a href="getting-started.html">Getting Started</a>
+            <a href="architecture.html">Architecture</a>
+            <a href="guides.html" class="active">Guides</a>
+            <a href="packages.html">Packages</a>
+            <a href="ai-and-agents.html">AI &amp; Agents</a>
+            <a href="ecosystem.html">Ecosystem</a>
+        </nav>
+        <div class="site-nav-right">
+            <a href="https://github.com/MemberJunction/MJ" class="btn btn-outline">GitHub</a>
+        </div>
+    </div>
+</header>
+
+<main>
+    <div class="breadcrumb"><a href="index.html">Home</a> / Guides</div>
+    <h1 class="page-title">Guides</h1>
+    <p class="page-subtitle">In-depth, opinionated documentation on the patterns we expect you to use.</p>
+
+    <div class="callout">
+        <p><strong>How this page works.</strong> Every guide below is rendered live from a markdown file in <code>MJ/guides/</code>. Edits to the source files appear here on the next site build (nightly + on every MJ release). To contribute or correct a guide, open a PR against the markdown file directly — no docs-site PR needed.</p>
+    </div>
+
+    <section class="section">
+        <h2 class="mt-0">Architecture &amp; Performance</h2>
+        <div class="card-grid">
+            <div class="card" id="caching">
+                <div class="card-icon">🔄</div>
+                <a href="https://github.com/MemberJunction/MJ/blob/main/guides/CACHING_AND_PUBSUB_GUIDE.md" class="card-title-link">Caching &amp; Pub/Sub</a>
+                <p>Multi-tier cache architecture. BaseEntity event-driven invalidation. Auto-cache rules for small/unfiltered queries. The <code>BypassCache</code> escape hatch.</p>
+                <div class="card-meta">Source: <code>guides/CACHING_AND_PUBSUB_GUIDE.md</code></div>
+            </div>
+            <div class="card" id="lazy-loading">
+                <div class="card-icon">⚡</div>
+                <a href="https://github.com/MemberJunction/MJ/blob/main/guides/LAZY_LOADING_GUIDE.md" class="card-title-link">Lazy Loading</a>
+                <p>How MJExplorer code-splits dashboards. Adding new lazy-loaded components. Making a package lazy-loadable. The auto-generated lazy config.</p>
+                <div class="card-meta">Source: <code>guides/LAZY_LOADING_GUIDE.md</code></div>
+            </div>
+            <div class="card" id="base-entity-server">
+                <div class="card-icon">🛠️</div>
+                <a href="https://github.com/MemberJunction/MJ/blob/main/guides/BASE_ENTITY_SERVER_PATTERNS.md" class="card-title-link">BaseEntity Server Patterns</a>
+                <p>Persisted embeddings via <code>EmbedTextLocal</code>. Cross-record validation in <code>ValidateAsync</code>. FK cleanup before delete. Reference implementations.</p>
+                <div class="card-meta">Source: <code>guides/BASE_ENTITY_SERVER_PATTERNS.md</code></div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <h2>UI &amp; Frontend</h2>
+        <div class="card-grid">
+            <div class="card" id="dashboards">
+                <div class="card-icon">📊</div>
+                <a href="https://github.com/MemberJunction/MJ/blob/main/guides/DASHBOARD_BEST_PRACTICES.md" class="card-title-link">Dashboard Best Practices</a>
+                <p>Architecture and naming. State management with getter/setters. Engine class patterns (no Angular services for data). User preferences and local caching. Layout and permission checking.</p>
+                <div class="card-meta">Source: <code>guides/DASHBOARD_BEST_PRACTICES.md</code></div>
+            </div>
+            <div class="card" id="theming">
+                <div class="card-icon">🎨</div>
+                <a href="https://github.com/MemberJunction/MJ/blob/main/guides/THEMING.md" class="card-title-link">Theming</a>
+                <p>The semantic design token system. Light/dark mode. White-labeling. The full set of <code>--mj-*</code> tokens and when to use which.</p>
+                <div class="card-meta">Source: <code>guides/THEMING.md</code></div>
+            </div>
+            <div class="card" id="app-color">
+                <div class="card-icon">🎨</div>
+                <a href="https://github.com/MemberJunction/MJ/blob/main/guides/APP_COLOR_ARCHITECTURE.md" class="card-title-link">App Color Architecture</a>
+                <p>Per-application color customization. How brand colors flow from database metadata into CSS custom properties at runtime.</p>
+                <div class="card-meta">Source: <code>guides/APP_COLOR_ARCHITECTURE.md</code></div>
+            </div>
+            <div class="card" id="navigation">
+                <div class="card-icon">🧭</div>
+                <a href="https://github.com/MemberJunction/MJ/blob/main/guides/NAVIGATION_AND_ROUTING_GUIDE.md" class="card-title-link">Navigation &amp; Routing</a>
+                <p>App-centric navigation. Resource components. <code>BaseResourceComponent</code> and the <code>NotifyLoadComplete</code> requirement.</p>
+                <div class="card-meta">Source: <code>guides/NAVIGATION_AND_ROUTING_GUIDE.md</code></div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <h2>Data Patterns</h2>
+        <div class="card-grid">
+            <div class="card" id="uuid">
+                <div class="card-icon">🔑</div>
+                <a href="https://github.com/MemberJunction/MJ/blob/main/guides/UUID_COMPARISON_GUIDE.md" class="card-title-link">UUID Comparison</a>
+                <p>Critical patterns for comparing UUIDs across SQL Server (uppercase) and PostgreSQL (lowercase). Always use <code>UUIDsEqual()</code>. <code>NormalizeUUID()</code> for Set/Map keys. Automated enforcement tests.</p>
+                <div class="card-meta">Source: <code>guides/UUID_COMPARISON_GUIDE.md</code></div>
+            </div>
+            <div class="card" id="taxonomy">
+                <div class="card-icon">🏷️</div>
+                <a href="https://github.com/MemberJunction/MJ/blob/main/guides/TAXONOMY_TAGGING_GUIDE.md" class="card-title-link">Taxonomy &amp; Tagging</a>
+                <p>The MJ tagging model. Tag scopes. Hierarchical taxonomies. Querying tagged entities efficiently.</p>
+                <div class="card-meta">Source: <code>guides/TAXONOMY_TAGGING_GUIDE.md</code></div>
+            </div>
+            <div class="card" id="content-autotag">
+                <div class="card-icon">🤖</div>
+                <a href="https://github.com/MemberJunction/MJ/blob/main/guides/CONTENT_AUTOTAGGING_GUIDE.md" class="card-title-link">Content Autotagging</a>
+                <p>AI-powered automatic tagging of content records. Configuration, runs, and integration with the vector pipeline.</p>
+                <div class="card-meta">Source: <code>guides/CONTENT_AUTOTAGGING_GUIDE.md</code></div>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <h2>Cross-cutting standards</h2>
+        <p>Beyond the dedicated guides, the <a href="https://github.com/MemberJunction/MJ/blob/main/CLAUDE.md"><code>CLAUDE.md</code></a> in the repo root is the canonical developer handbook covering naming conventions, anti-patterns (<code>any</code>, weak singletons, dynamic <code>import()</code>), Angular best practices, RunView optimization, the design token system, and more. We recommend reading it cover-to-cover at least once.</p>
+        <p class="muted small">If a section of <code>CLAUDE.md</code> outgrows it, that's a cue to promote it into <code>/guides/</code>.</p>
+    </section>
+
+    <section class="section">
+        <h2>Specialized references</h2>
+        <ul>
+            <li><a href="https://github.com/MemberJunction/MJ/blob/main/migrations/CLAUDE.md">Migrations guide</a> — naming, conventions, what CodeGen handles automatically</li>
+            <li><a href="https://github.com/MemberJunction/MJ/blob/main/packages/CodeGenLib/CLASS_MANIFEST_GUIDE.md">Class Manifest Guide</a> — preventing tree-shaking of <code>@RegisterClass</code> classes</li>
+            <li><a href="https://github.com/MemberJunction/MJ/blob/main/packages/Actions/CLAUDE.md">Actions package guide</a> — when to use Actions vs. direct imports</li>
+            <li><a href="https://github.com/MemberJunction/MJ/blob/main/packages/Angular/CLAUDE.md">Angular package guide</a> — component patterns, custom forms, the toolbar pattern</li>
+            <li><a href="https://github.com/MemberJunction/MJ/blob/main/packages/OpenApp/PUBLISH_NO_BREAK_POLICY.md">Publish-Then-No-Breaking-Changes Policy</a> — schema evolution rules for OpenApp publishers</li>
+        </ul>
+    </section>
+</main>
+
+<footer class="site-footer">
+    <div class="site-footer-inner">
+        <div>
+            <strong>MemberJunction</strong>
+            <p class="muted small">The open-source, AI-native data platform.</p>
+        </div>
+        <div>
+            <h4>Docs</h4>
+            <ul>
+                <li><a href="getting-started.html">Getting Started</a></li>
+                <li><a href="architecture.html">Architecture</a></li>
+                <li><a href="guides.html">Guides</a></li>
+                <li><a href="api/">API Reference</a></li>
+            </ul>
+        </div>
+        <div>
+            <h4>Community</h4>
+            <ul>
+                <li><a href="https://github.com/MemberJunction/MJ/discussions">Discussions</a></li>
+                <li><a href="https://github.com/MemberJunction/MJ/issues">Issues</a></li>
+                <li><a href="https://github.com/MemberJunction/MJ/releases">Releases</a></li>
+            </ul>
+        </div>
+        <div>
+            <h4>Project</h4>
+            <ul>
+                <li><a href="https://github.com/MemberJunction">GitHub Org</a></li>
+                <li><a href="https://www.npmjs.com/org/memberjunction">npm</a></li>
+                <li><a href="https://github.com/MemberJunction/MJ/blob/main/LICENSE">License (ISC)</a></li>
+            </ul>
+        </div>
+    </div>
+    <div class="site-footer-bottom">
+        Built with TypeScript · Angular 21 · SQL Server · Open source under ISC License
+    </div>
+</footer>
+
+</body>
+</html>

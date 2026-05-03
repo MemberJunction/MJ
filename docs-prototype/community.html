@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Community — MemberJunction</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="proto-banner">
+    PROTOTYPE — Demonstrates IA only. Final site will be built with Astro Starlight. See <a href="plan.md">plan.md</a>.
+</div>
+
+<header class="site-header">
+    <div class="site-header-inner">
+        <a href="index.html" class="site-brand">
+            <span class="site-brand-mark">MJ</span>
+            <span>MemberJunction</span>
+        </a>
+        <nav class="site-nav">
+            <a href="getting-started.html">Getting Started</a>
+            <a href="architecture.html">Architecture</a>
+            <a href="guides.html">Guides</a>
+            <a href="packages.html">Packages</a>
+            <a href="ai-and-agents.html">AI &amp; Agents</a>
+            <a href="ecosystem.html">Ecosystem</a>
+        </nav>
+        <div class="site-nav-right">
+            <a href="https://github.com/MemberJunction/MJ" class="btn btn-outline">GitHub</a>
+        </div>
+    </div>
+</header>
+
+<main class="narrow">
+    <div class="breadcrumb"><a href="index.html">Home</a> / Community</div>
+    <h1 class="page-title">Community</h1>
+    <p class="page-subtitle">Where to ask, contribute, and follow along.</p>
+
+    <section class="section">
+        <h2 class="mt-0">Ask &amp; discuss</h2>
+        <div class="card-grid">
+            <div class="card">
+                <div class="card-icon">💬</div>
+                <a href="https://github.com/MemberJunction/MJ/discussions" class="card-title-link">GitHub Discussions</a>
+                <p>The canonical place for questions, ideas, design conversations, and "how do I…" threads.</p>
+            </div>
+            <div class="card">
+                <div class="card-icon">🐛</div>
+                <a href="https://github.com/MemberJunction/MJ/issues" class="card-title-link">GitHub Issues</a>
+                <p>Bug reports and feature requests. Search before opening — many ideas are already tracked.</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <h2>Follow along</h2>
+        <div class="card-grid">
+            <div class="card">
+                <div class="card-icon">🚀</div>
+                <a href="https://github.com/MemberJunction/MJ/releases" class="card-title-link">Releases</a>
+                <p>Every published version with changelog. Watch the repo to get release notifications.</p>
+            </div>
+            <div class="card">
+                <div class="card-icon">📦</div>
+                <a href="https://www.npmjs.com/org/memberjunction" class="card-title-link">npm</a>
+                <p>All published packages. The full directory is mirrored on the <a href="packages.html">Packages page</a>.</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <h2>Contribute</h2>
+        <p>MemberJunction is open source. Contributions are welcome at every level — bug fixes, docs improvements, new providers, new packages.</p>
+        <ol>
+            <li><strong>Read</strong> <a href="https://github.com/MemberJunction/MJ/blob/main/CLAUDE.md"><code>CLAUDE.md</code></a> — coding standards, naming conventions, anti-patterns, and architectural guidelines. This is the developer handbook and your PR reviewer's reference.</li>
+            <li><strong>Open an issue</strong> before starting non-trivial work. We'll confirm direction so your effort isn't wasted.</li>
+            <li><strong>Branch from <code>next</code></strong> with a descriptive name (e.g., <code>fix/cache-invalidation-edge-case</code>).</li>
+            <li><strong>Run tests</strong> in the affected packages: <code>cd packages/PackageName &amp;&amp; npm run test</code>. Tests must pass before review.</li>
+            <li><strong>Submit a PR</strong> with a clear summary and a test plan.</li>
+        </ol>
+    </section>
+
+    <section class="section">
+        <h2>Reporting a security issue</h2>
+        <p>Please don't open a public issue for security vulnerabilities. Email <a href="mailto:support@memberjunction.org">support@memberjunction.org</a> with details, and we'll respond promptly with coordination.</p>
+    </section>
+
+    <section class="section">
+        <h2>Get support</h2>
+        <ul>
+            <li><strong>Open source / community questions</strong>: <a href="https://github.com/MemberJunction/MJ/discussions">Discussions</a></li>
+            <li><strong>Bug reports</strong>: <a href="https://github.com/MemberJunction/MJ/issues">Issues</a></li>
+            <li><strong>Commercial support / partnerships</strong>: <a href="mailto:support@memberjunction.org">support@memberjunction.org</a></li>
+        </ul>
+    </section>
+
+    <section class="section">
+        <h2>License</h2>
+        <p>MemberJunction is released under the <a href="https://github.com/MemberJunction/MJ/blob/main/LICENSE">ISC License</a> — permissive, business-friendly, and short enough to read in a minute.</p>
+    </section>
+</main>
+
+<footer class="site-footer">
+    <div class="site-footer-inner">
+        <div>
+            <strong>MemberJunction</strong>
+            <p class="muted small">The open-source, AI-native data platform.</p>
+        </div>
+        <div>
+            <h4>Docs</h4>
+            <ul>
+                <li><a href="getting-started.html">Getting Started</a></li>
+                <li><a href="architecture.html">Architecture</a></li>
+                <li><a href="guides.html">Guides</a></li>
+                <li><a href="api/">API Reference</a></li>
+            </ul>
+        </div>
+        <div>
+            <h4>Community</h4>
+            <ul>
+                <li><a href="https://github.com/MemberJunction/MJ/discussions">Discussions</a></li>
+                <li><a href="https://github.com/MemberJunction/MJ/issues">Issues</a></li>
+                <li><a href="https://github.com/MemberJunction/MJ/releases">Releases</a></li>
+            </ul>
+        </div>
+        <div>
+            <h4>Project</h4>
+            <ul>
+                <li><a href="https://github.com/MemberJunction">GitHub Org</a></li>
+                <li><a href="https://www.npmjs.com/org/memberjunction">npm</a></li>
+                <li><a href="https://github.com/MemberJunction/MJ/blob/main/LICENSE">License (ISC)</a></li>
+            </ul>
+        </div>
+    </div>
+    <div class="site-footer-bottom">
+        Built with TypeScript · Angular 21 · SQL Server · Open source under ISC License
+    </div>
+</footer>
+
+</body>
+</html>
