@@ -62,7 +62,11 @@ import { PayloadManager, PayloadManagerResult, PayloadChangeResultSummary } from
 import { ScratchpadManager } from './ScratchpadManager';
 import { ArtifactToolManager, ArtifactToolCall, InputArtifact } from './ArtifactToolManager';
 import { AgentPayloadChangeRequest } from '@memberjunction/ai-core-plus';
-import { AgentDataPreloader } from './AgentDataPreloader';
+import {
+    AgentDataPreloader,
+    type LazyDataSourceToolDescriptor,
+    type LazyDataSourceToolset,
+} from './AgentDataPreloader';
 import { ClientToolRequestManager } from './ClientToolRequestManager';
 import { ConversationMessageResolver } from './utils/ConversationMessageResolver';
 import { ForEachOperation, WhileOperation } from '@memberjunction/ai-core-plus';
@@ -751,6 +755,27 @@ export class BaseAgent {
     private _effectiveActions: MJActionEntityExtended[] = [];
 
     /**
+     * Lazy-loaded data-source tools for this agent run, keyed by tool name.
+     *
+     * Populated during gatherPromptTemplateData() by calling
+     * `AgentDataPreloader.SynthesizeLazyToolset()` for any AIAgentDataSource
+     * record marked `LoadingMode='Lazy'`. The descriptors are surfaced to the
+     * LLM alongside regular actions in the prompt's action markdown, then
+     * dispatched back through `AgentDataPreloader.InvokeLazyTool()` in
+     * `executeActionsStep()`.
+     *
+     * Empty for agents whose sources are all 'Eager' (default), so this adds
+     * zero overhead to existing agents.
+     */
+    private _lazyDataTools: Map<string, LazyDataSourceToolDescriptor> = new Map();
+
+    /**
+     * Toolset metadata returned by the lazy loader (kept for diagnostics so the
+     * step entity can record which sources were exposed vs skipped).
+     */
+    private _lazyDataToolset: LazyDataSourceToolset | undefined;
+
+    /**
      * Counts only prompt (LLM) executions, NOT all agent steps.
      * Used for message expiration age calculations so that `expirationTurns`
      * semantically means "number of LLM calls" rather than "number of steps"
@@ -946,7 +971,27 @@ export class BaseAgent {
         }
 
         try {
-            // Load preloaded data using the singleton service
+            // Synthesise lazy tool descriptors for any source whose LoadingMode='Lazy'.
+            // These are NOT preloaded; they're surfaced to the LLM as on-demand tools
+            // alongside actions (see formatActionDetails) and dispatched via
+            // AgentDataPreloader.InvokeLazyTool() in executeActionsStep().
+            this._lazyDataToolset = await AgentDataPreloader.Instance.SynthesizeLazyToolset(
+                params.agent.ID,
+                params.contextUser,
+            );
+            this._lazyDataTools = new Map(
+                this._lazyDataToolset.tools.map(t => [t.name, t]),
+            );
+            if (this._lazyDataTools.size > 0) {
+                this.logStatus(
+                    `🪶 Exposing ${this._lazyDataTools.size} lazy data-source tool(s) for agent '${params.agent.Name}'`,
+                    true,
+                    params,
+                );
+            }
+
+            // Load preloaded data using the singleton service (eager sources only;
+            // PreloadAgentData internally filters out LoadingMode='Lazy' rows).
             const preloadedResult = await AgentDataPreloader.Instance.PreloadAgentData(
                 params.agent.ID,
                 params.contextUser,
@@ -3908,6 +3953,11 @@ The context is now within limits. Please retry your request with the recovered c
             const activeActions = actions.filter(a => a.Status === 'Active');
             this._effectiveActions = activeActions;
 
+            // Lazy data-source tools synthesised at preload time (see preloadAgentData);
+            // surfaced as additional callable tools alongside actions so the LLM can
+            // invoke them with the same JSON shape it uses for actions.
+            const lazyToolMarkdown = this.formatLazyDataToolDetails();
+
             // Build agent type prompt params (merged from schema defaults, agent config, and runtime overrides)
             const agentType = engine.AgentTypes.find(at => UUIDsEqual(at.ID, agent.TypeID));
             const runtimePromptParamOverrides = extraData?.__agentTypePromptParams as Record<string, unknown> | undefined;
@@ -3929,8 +3979,8 @@ The context is now within limits. Please retry your request with the recovered c
                 parentAgentName: agent.Parent ? agent.Parent.trim() : "",
                 subAgentCount: uniqueActiveSubAgents.length,
                 subAgentDetails: this.formatSubAgentDetails(uniqueActiveSubAgents),
-                actionCount: activeActions.length,
-                actionDetails: this.formatActionDetails(activeActions),
+                actionCount: activeActions.length + this._lazyDataTools.size,
+                actionDetails: this.formatActionDetails(activeActions) + lazyToolMarkdown,
                 clientToolDetails: clientToolDetails,
                 appContext: appContext,
             };
@@ -4458,6 +4508,41 @@ The context is now within limits. Please retry your request with the recovered c
             DefaultValue: param.DefaultValue,
             Description: param.Description
         })), null, 2);
+    }
+
+    /**
+     * Formats lazy data-source tool descriptors as markdown to append to the
+     * action list. From the LLM's perspective they look like additional
+     * callable actions; dispatch routes them to `AgentDataPreloader.InvokeLazyTool`
+     * in `executeActionsStep` rather than to `ActionEngine.RunAction`.
+     *
+     * Returns an empty string when no lazy tools are exposed (the common case),
+     * so eager-only agents see zero change in their prompts.
+     */
+    private formatLazyDataToolDetails(): string {
+        if (this._lazyDataTools.size === 0) return '';
+
+        const blocks: string[] = [];
+        for (const tool of this._lazyDataTools.values()) {
+            const inputs = Object.entries(tool.parameters.properties)
+                .map(([name, schema]) => {
+                    const s = schema as { type?: string; description?: string };
+                    const typeStr = s.type ? `(${s.type})` : '';
+                    return `\`${name}\` ${typeStr}: ${s.description ?? ''}`.trim();
+                })
+                .join(', ');
+
+            const lines: string[] = [];
+            lines.push(`### ${tool.name}`);
+            lines.push(tool.description);
+            if (inputs) {
+                lines.push(`**Input:** ${inputs}`);
+            }
+            blocks.push(lines.join('\n'));
+        }
+
+        // Leading separator so this block sits clearly after the regular actions.
+        return '\n\n' + blocks.join('\n\n');
     }
 
     /**
@@ -7259,9 +7344,15 @@ The context is now within limits. Please retry your request with the recovered c
             let numActionsProcessed = 0;
             const baseStepNumber = (this._agentRun!.Steps?.length || 0) + 1;
 
-            // Execute all actions in parallel
+            // Split into lazy data-source tools vs regular actions. Lazy tools
+            // dispatch through AgentDataPreloader.InvokeLazyTool and produce
+            // ActionResultSummary directly — no fake MJActionEntityExtended needed.
+            const lazyInvocations = actions.filter(aa => this._lazyDataTools.has(aa.name));
+            const regularActions = actions.filter(aa => !this._lazyDataTools.has(aa.name));
+
+            // Execute all regular actions in parallel
             let lastStep: MJAIAgentRunStepEntityExtended | undefined = undefined;
-            const actionPromises = actions.map(async (aa) => {
+            const actionPromises = regularActions.map(async (aa) => {
                 // Find action entity from the effective actions (which includes runtime changes)
                 const actionEntity = effectiveActions.find(a => a.Name === aa.name);
                 if (!actionEntity) {
@@ -7316,17 +7407,27 @@ The context is now within limits. Please retry your request with the recovered c
                 }
             });
             
-            // Wait for all actions to complete
-            const actionResults = await Promise.all(actionPromises);
-            
+            // Lazy data tools dispatch in parallel with regular actions but
+            // produce ActionResultSummary directly — no fake action entity needed.
+            const lazyPromises = lazyInvocations.map(aa => {
+                const descriptor = this._lazyDataTools.get(aa.name)!;
+                const stepNumber = baseStepNumber + numActionsProcessed++;
+                return this.executeLazyDataTool(params, aa, descriptor, parentStepId, stepNumber, currentPayload);
+            });
+
+            const [actionResults, lazyResults] = await Promise.all([
+                Promise.all(actionPromises),
+                Promise.all(lazyPromises),
+            ]);
+
             // Check for cancellation after actions complete
             if (params.cancellationToken?.aborted) {
                 throw new Error('Cancelled after action execution');
             }
-            
+
             // Build a clean summary of action results
             // Apply large binary content interception to prevent context overflow
-            const actionSummaries: ActionResultSummary[] = actionResults.map(result => {
+            const regularSummaries: ActionResultSummary[] = actionResults.map(result => {
                 const actionResult = result.success ? result.result : null;
 
                 // Filter to output params only
@@ -7350,6 +7451,8 @@ The context is now within limits. Please retry your request with the recovered c
                     aiDirectives: result.success ? actionResult?.AIDirectives : undefined
                 };
             });
+
+            const actionSummaries: ActionResultSummary[] = [...regularSummaries, ...lazyResults];
             
             // Check if any actions failed
             const failedActions = actionSummaries.filter(a => !a.success);
@@ -7512,6 +7615,77 @@ The context is now within limits. Please retry your request with the recovered c
      *
      * @private
      */
+
+    /**
+     * Execute one lazy data-source tool invocation: create a step entity,
+     * dispatch via `AgentDataPreloader.InvokeLazyTool`, finalise the step,
+     * and return a `ActionResultSummary` ready to drop into the per-step
+     * markdown the agent sees on its next turn.
+     *
+     * Returned as `ActionResultSummary` directly (not `ActionResult`) so we
+     * never need to fake an `MJActionEntityExtended` for a tool that has no
+     * Action record backing it.
+     */
+    private async executeLazyDataTool(
+        params: ExecuteAgentParams,
+        aa: AgentAction,
+        descriptor: LazyDataSourceToolDescriptor,
+        parentStepId: string,
+        stepNumber: number,
+        currentPayload: unknown,
+    ): Promise<ActionResultSummary> {
+        const inputData = { actionName: aa.name, actionParams: aa.params, lazyToolUri: descriptor.uri };
+        const stepEntity = await this.createStepEntity({
+            stepType: 'Actions',
+            stepName: `Lazy data tool: ${aa.name}`,
+            contextUser: params.contextUser,
+            inputData,
+            payloadAtStart: currentPayload,
+            payloadAtEnd: currentPayload,
+            parentId: parentStepId,
+        });
+        stepEntity.StepNumber = stepNumber;
+
+        const invocation = await AgentDataPreloader.Instance.InvokeLazyTool(
+            descriptor,
+            (aa.params ?? {}) as Record<string, unknown>,
+            params.contextUser,
+            this._agentRun!.ID,
+        );
+
+        const message = invocation.success
+            ? `Returned ${Array.isArray(invocation.data) ? invocation.data.length : 1} record(s)${invocation.cacheHit ? ' (cached)' : ''} in ${invocation.durationMs}ms`
+            : (invocation.errorMessage ?? 'Lazy data tool failed');
+
+        const outputData = {
+            actionResult: {
+                success: invocation.success,
+                cacheHit: invocation.cacheHit,
+                durationMs: invocation.durationMs,
+                message,
+            },
+        };
+        await this.finalizeStepEntity(
+            stepEntity,
+            invocation.success,
+            invocation.success ? undefined : invocation.errorMessage,
+            outputData,
+        );
+
+        const dataParam: ActionParam = {
+            Name: 'data',
+            Type: 'Output',
+            Value: invocation.success ? invocation.data : undefined,
+        };
+
+        return {
+            actionName: aa.name,
+            success: invocation.success,
+            params: [dataParam],
+            resultCode: invocation.success ? 'SUCCESS' : 'ERROR',
+            message,
+        };
+    }
 
     // ================================================================
     // Client Tools Step Execution
@@ -9017,8 +9191,12 @@ The context is now within limits. Please retry your request with the recovered c
             if (!ok) {
                 LogError(`Failed to finalize agent run ${this._agentRun.ID}`);
             }
+
+            // Drop the lazy data-source per-run cache + invocation log; harmless
+            // for runs that didn't use any lazy tools (no-op when no state exists).
+            AgentDataPreloader.Instance.ClearLazyRunCache(this._agentRun.ID);
         }
-        
+
         // Also promote any media from the final step's promoteMediaOutputs
         if (finalStep.promoteMediaOutputs && finalStep.promoteMediaOutputs.length > 0) {
             this.promoteMediaOutputs(finalStep.promoteMediaOutputs);
