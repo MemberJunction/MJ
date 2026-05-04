@@ -524,17 +524,29 @@ describe('PostgreSQLCodeGenProvider', () => {
 
     describe('generateUpdateFieldString', () => {
         it('should generate SET clause with quoted identifiers and tolerant merge semantics', () => {
-            const entity = createMockEntity();
+            // Use a field that qualifies under PG's narrow `_Clear` rule:
+            // nullable AND has a non-NULL DB default. PG's 100-arg ceiling
+            // forces `PostgreSQLCodeGenProvider.needsClearCompanion` to use
+            // the narrow rule (only fields with non-NULL defaults), so the
+            // `Email` mock above (DefaultValue: '') does NOT get a `_Clear`
+            // companion. We use `Status` with a `'Active'` default to verify
+            // the CASE/COALESCE pattern on a field that DOES qualify.
+            const entity = createMockEntity({}, [
+                { ID: 'f1', Name: 'ID', IsPrimaryKey: true, Type: 'uniqueidentifier', Length: 16, AllowsNull: false, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: 'newsequentialid()' },
+                { ID: 'f2', Name: 'Name', IsPrimaryKey: false, Type: 'nvarchar', Length: 200, AllowsNull: false, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                { ID: 'f3', Name: 'Status', IsPrimaryKey: false, Type: 'nvarchar', Length: 40, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: "'Active'" },
+            ]);
             const result = provider.generateUpdateFieldString(entity.Fields);
 
             // Tolerant SP merge wrap: omitting a parameter preserves the existing value.
             // PostgreSQL has no ISNULL keyword; it emits COALESCE.
             expect(result).toContain('"Name" = COALESCE(p_name, "Name")');
-            // Nullable columns: CASE WHEN _Clear THEN NULL ELSE COALESCE(...) END so callers
-            // can explicitly set the column to NULL via the _Clear companion.
-            // PG comparison is `= true` (not `= 1`) to match the `boolean DEFAULT false`
-            // parameter type — see `dialect.BooleanLiteral(true)` in the codegen template.
-            expect(result).toContain('"Email" = CASE WHEN p_email_clear = true THEN NULL ELSE COALESCE(p_email, "Email") END');
+            // Nullable column with a non-NULL default: CASE WHEN _Clear THEN NULL
+            // ELSE COALESCE(...) END so callers can explicitly set the column to
+            // NULL via the _Clear companion. PG comparison is `= true` (not `= 1`)
+            // to match the `boolean DEFAULT false` parameter type — see
+            // `dialect.BooleanLiteral(true)` in the codegen template.
+            expect(result).toContain('"Status" = CASE WHEN p_status_clear = true THEN NULL ELSE COALESCE(p_status, "Status") END');
             // Should NOT include PK
             expect(result).not.toContain('"ID" = ');
         });
