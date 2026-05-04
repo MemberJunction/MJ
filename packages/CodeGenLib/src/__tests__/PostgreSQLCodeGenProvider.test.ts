@@ -193,12 +193,13 @@ describe('PostgreSQLCodeGenProvider', () => {
             expect(sql).toContain('LEFT OUTER JOIN');
         });
 
-        it('should NOT emit DROP VIEW (non-destructive strategy)', () => {
-            // Regression guard — base view generation must never silently DROP
-            // existing views because CASCADE wipes dependent views/functions/grants
-            // and the 42P16 recovery path hasn't landed yet. If someone
-            // accidentally reintroduces the DROP, this test fails and forces a
-            // review before dependent-object loss can ship again.
+        it('should only emit DROP VIEW inside the 42P16 EXCEPTION recovery block', () => {
+            // The base view generator wraps CREATE OR REPLACE in a DO block that
+            // catches invalid_table_definition (42P16 — raised when the column
+            // list changes in a way OR REPLACE can't accept) and falls back to
+            // DROP VIEW IF EXISTS ... CASCADE; CREATE VIEW. The DROP is the
+            // recovery path, not the default. Regression guard: the only DROP
+            // VIEW in the output must live inside that EXCEPTION block.
             const entity = createMockEntity();
             const context: BaseViewGenerationContext = {
                 entity,
@@ -211,8 +212,12 @@ describe('PostgreSQLCodeGenProvider', () => {
             };
 
             const sql = provider.generateBaseView(context);
-            expect(sql).not.toMatch(/\bDROP\s+VIEW\b/i);
-            expect(sql).not.toMatch(/\bCASCADE\b/i);
+            // Recovery path is present
+            expect(sql).toMatch(/EXCEPTION\s+WHEN\s+invalid_table_definition/i);
+            expect(sql).toMatch(/\bDROP\s+VIEW\s+IF\s+EXISTS\b[^;]*\bCASCADE\b/i);
+            // No DROP VIEW outside the EXCEPTION block (i.e. before it)
+            const beforeException = sql.split(/EXCEPTION\s+WHEN\s+invalid_table_definition/i)[0];
+            expect(beforeException).not.toMatch(/\bDROP\s+VIEW\b/i);
         });
     });
 
@@ -523,7 +528,9 @@ describe('PostgreSQLCodeGenProvider', () => {
             expect(result).toContain('"Name" = COALESCE(p_name, "Name")');
             // Nullable columns: CASE WHEN _Clear THEN NULL ELSE COALESCE(...) END so callers
             // can explicitly set the column to NULL via the _Clear companion.
-            expect(result).toContain('"Email" = CASE WHEN p_email_clear = 1 THEN NULL ELSE COALESCE(p_email, "Email") END');
+            // PG comparison is `= true` (not `= 1`) to match the `boolean DEFAULT false`
+            // parameter type — see `dialect.BooleanLiteral(true)` in the codegen template.
+            expect(result).toContain('"Email" = CASE WHEN p_email_clear = true THEN NULL ELSE COALESCE(p_email, "Email") END');
             // Should NOT include PK
             expect(result).not.toContain('"ID" = ');
         });
