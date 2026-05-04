@@ -1253,7 +1253,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                     f.ActiveStatusAssertions = tempStatus;
                     return ret;
                 });
-                entity.ResultHistory.push(entityResult);
+                entity.RegisterResultHistoryEntry(entityResult);
 
                 // Step 2: Validation hook
                 if (!bReplay) {
@@ -1411,7 +1411,7 @@ export abstract class DatabaseProviderBase extends ProviderBase {
                 FieldName: f.Name,
                 Value: f.Value,
             }));
-            entity.ResultHistory.push(entityResult);
+            entity.RegisterResultHistoryEntry(entityResult);
 
             // Generate provider-specific delete SQL
             const sqlDetails = this.GenerateDeleteSQL(entity, user);
