@@ -601,8 +601,26 @@ export function convertTopToLimit(sql: string): string {
 /**
  * Convert common T-SQL CAST patterns to PostgreSQL types.
  * Used in views, procedures, and expressions.
+ *
+ * Note on quoted type names: when input T-SQL uses bracket-wrapped types
+ * like `CAST(x AS [INT])`, the upstream `convertIdentifiers` pass turns
+ * `[INT]` into `"INT"`. PG then parses `"INT"` as a quoted identifier
+ * (column reference), not a type, and rejects with `type "INT" does not
+ * exist`. We strip quotes from known T-SQL type names first so the
+ * existing patterns below match.
  */
 export function convertCastTypes(sql: string): string {
+  // Strip quotes from quoted T-SQL type tokens produced by convertIdentifiers
+  // when the source SQL had bracket-wrapped types (e.g. CAST(x AS [INT])).
+  const quotedTypes = [
+    'UNIQUEIDENTIFIER', 'NVARCHAR', 'VARCHAR', 'BIT',
+    'DATETIMEOFFSET', 'DATETIME2', 'DATETIME', 'FLOAT',
+    'TINYINT', 'IMAGE', 'MONEY', 'INT', 'INTEGER',
+  ];
+  for (const t of quotedTypes) {
+    sql = sql.replace(new RegExp(`\\bAS\\s+"${t}"`, 'gi'), `AS ${t}`);
+  }
+
   sql = sql.replace(/\bAS\s+UNIQUEIDENTIFIER\b/gi, 'AS UUID');
   sql = sql.replace(/\bAS\s+NVARCHAR\s*\(\s*MAX\s*\)/gi, 'AS TEXT');
   sql = sql.replace(/\bAS\s+NVARCHAR\s*\(\s*(\d+)\s*\)/gi, 'AS VARCHAR($1)');
