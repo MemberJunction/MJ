@@ -337,11 +337,11 @@ export const getSkywayConfig = async (
     Migrations: {
       Locations: [cleanLocation],
       DefaultSchema: targetSchema,
-      // Skyway treats BaselineVersion '1' as a sentinel meaning "auto-select the highest-versioned
-      // B__ baseline file". Without this, Skyway leaves baselineVersion undefined, finds no
-      // baseline matching `undefined`, and silently skips the baseline file on fresh installs —
-      // which then fails on the next migration with "relation does not exist".
-      BaselineVersion: mjConfig.baselineVersion ?? '1',
+      // Pass through the user's configured baselineVersion (or undefined).
+      // skyway-core's config layer applies its own `?? '1'` default and the
+      // resolver treats '1' as the auto-select-highest-baseline sentinel,
+      // so MJCLI doesn't need to duplicate that defaulting.
+      BaselineVersion: mjConfig.baselineVersion,
       BaselineOnMigrate: mjConfig.baselineOnMigrate,
       OutOfOrder: mjConfig.outOfOrder,
     },
