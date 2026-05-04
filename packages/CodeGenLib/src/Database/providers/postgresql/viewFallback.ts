@@ -153,26 +153,47 @@ async function restoreDependents(
 ): Promise<void> {
     // 1. Dependent views/matviews in shallowest-first order. The capture query
     //    already returns them sorted, so we just walk the array.
+    //
+    // Strategy change: ALWAYS try to restore. The previous behavior — skip
+    // anything CodeGen will regenerate — left the DB in a temporarily
+    // inconsistent state where ANOTHER entity processed in-between (whose own
+    // view body references the skipped dependent) failed phase 1 with
+    // `relation "__mj.vwX" does not exist`. With "always restore," the
+    // dropped dependent comes back as its captured (pre-this-run) definition;
+    // when its owning entity processes later, CREATE OR REPLACE VIEW
+    // overwrites it with the fresh definition. Best-effort: if a stale
+    // captured definition can't be re-created (e.g. it referenced columns
+    // that no longer exist), swallow the error — the owning entity's regen
+    // will fix it. Anything that owns a captured definition AND isn't slated
+    // for regen WILL surface as a hard error (re-thrown below).
     for (const dep of dependents) {
         const key = `${dep.schema}.${dep.name}`;
-        if (willRegenerate.has(key)) continue; // CodeGen will regenerate it with the new def.
+        const willRegen = willRegenerate.has(key);
         const kind = dep.relkind === 'm' ? 'MATERIALIZED VIEW' : 'VIEW';
         const sql = `CREATE ${kind} ${quoteQualified(dep.schema, dep.name)} AS ${dep.definition}`;
         try {
             await client.query(sql);
         } catch (e) {
+            if (willRegen) {
+                // Captured definition couldn't be re-created (likely stale —
+                // depends on a column that just got reshaped). The owning
+                // entity's regen will create the new definition; suppress.
+                continue;
+            }
             throw new ViewFallbackRestoreError('restore-view', { schema: dep.schema, name: dep.name, sql }, e);
         }
     }
 
     // 2. Dependent functions via pg_get_functiondef. The captured body is a
     //    full CREATE OR REPLACE FUNCTION statement so we execute verbatim.
+    //    Same "always try, swallow on willRegenerate" strategy as views.
     for (const fn of dependentFunctions) {
         const key = `${fn.schema}.${fn.name}`;
-        if (willRegenerate.has(key)) continue;
+        const willRegen = willRegenerate.has(key);
         try {
             await client.query(fn.definition);
         } catch (e) {
+            if (willRegen) continue;
             throw new ViewFallbackRestoreError(
                 'restore-function',
                 { schema: fn.schema, name: fn.name, sql: fn.definition },
