@@ -46,6 +46,14 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
     private _schemaName: string = '__mj';
     private _transaction: pg.PoolClient | null = null;
 
+    // Nested-transaction tracking, mirrors SQLServerDataProvider's pattern.
+    // PG implements nesting via SAVEPOINT / RELEASE SAVEPOINT / ROLLBACK TO
+    // SAVEPOINT, so depth==1 maps to a real BEGIN/COMMIT/ROLLBACK and depth>1
+    // maps to a savepoint operation on the same client connection.
+    private _transactionDepth: number = 0;
+    private _savepointStack: string[] = [];
+    private _savepointCounter: number = 0;
+
     // ─── Platform Identity ───────────────────────────────────────────
 
     override get PlatformKey(): DatabasePlatform {
@@ -266,35 +274,150 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
         return this._transaction !== null;
     }
 
-    async BeginTransaction(): Promise<void> {
-        if (this._transaction) {
-            throw new Error('A transaction is already active. Nested transactions are not yet supported in the PostgreSQL provider.');
-        }
-        this._transaction = await this._connectionManager.AcquireClient();
-        await this._transaction.query('BEGIN');
+    /**
+     * Current transaction nesting depth.
+     * 0 = no active transaction; 1 = outermost real BEGIN; 2+ = nested via SAVEPOINTs.
+     */
+    public get TransactionDepth(): number {
+        return this._transactionDepth;
     }
 
+    /**
+     * BeginTransaction with nested-transaction support via SAVEPOINTs.
+     *
+     * - First call: AcquireClient + BEGIN.
+     * - Subsequent calls (within the same provider instance): emit a uniquely-named
+     *   SAVEPOINT on the same client. PG savepoints are arbitrary-depth, so
+     *   nesting from frameworks like TransactionGroups composes correctly.
+     *
+     * Mirrors SQLServerDataProvider's depth/savepoint-stack model so that any
+     * caller treating the provider polymorphically gets identical semantics
+     * across both backends.
+     */
+    async BeginTransaction(): Promise<void> {
+        try {
+            this._transactionDepth++;
+            if (this._transactionDepth === 1) {
+                this._transaction = await this._connectionManager.AcquireClient();
+                await this._transaction.query('BEGIN');
+            } else {
+                if (!this._transaction) {
+                    // Defensive: depth got out of sync with client state. Reset and surface.
+                    throw new Error(`PostgreSQLDataProvider transaction state corrupted: depth=${this._transactionDepth} but no active client. Reset and rethrowing.`);
+                }
+                const savepointName = `mj_sp_${++this._savepointCounter}`;
+                this._savepointStack.push(savepointName);
+                // PG savepoint identifiers are unquoted; we only ever generate
+                // ASCII-only names so quoting isn't required.
+                await this._transaction.query(`SAVEPOINT ${savepointName}`);
+            }
+        } catch (e) {
+            this._transactionDepth--;
+            throw e;
+        }
+    }
+
+    /**
+     * CommitTransaction with savepoint-aware semantics.
+     *
+     * - Outermost (depth was 1): real COMMIT and release the client.
+     * - Nested (depth > 1): RELEASE SAVEPOINT, drop from stack, decrement depth.
+     *   Releasing a savepoint discards it but does NOT commit anything yet —
+     *   the work it represents is folded into the enclosing transaction and
+     *   only persists when that enclosing transaction commits.
+     */
     async CommitTransaction(): Promise<void> {
         if (!this._transaction) {
             throw new Error('No active transaction to commit.');
         }
+        if (this._transactionDepth === 0) {
+            // Defensive: client present but depth says no transaction. Surface explicitly.
+            throw new Error('PostgreSQLDataProvider transaction depth mismatch — no transaction to commit.');
+        }
         try {
-            await this._transaction.query('COMMIT');
-        } finally {
-            this._transaction.release();
-            this._transaction = null;
+            if (this._transactionDepth === 1) {
+                try {
+                    await this._transaction.query('COMMIT');
+                } finally {
+                    this._transaction.release();
+                    this._transaction = null;
+                    this._transactionDepth = 0;
+                    this._savepointStack = [];
+                    this._savepointCounter = 0;
+                }
+            } else {
+                const savepointName = this._savepointStack[this._savepointStack.length - 1];
+                if (!savepointName) {
+                    throw new Error(`PostgreSQLDataProvider savepoint stack mismatch — expected savepoint at depth ${this._transactionDepth}.`);
+                }
+                await this._transaction.query(`RELEASE SAVEPOINT ${savepointName}`);
+                this._savepointStack.pop();
+                this._transactionDepth--;
+            }
+        } catch (e) {
+            // If COMMIT itself failed at depth 1 the connection is in a bad state.
+            // Force a rollback + release so we don't leak the client back into the pool
+            // mid-transaction (would block subsequent queries on that client).
+            if (this._transactionDepth === 1 && this._transaction) {
+                try { await this._transaction.query('ROLLBACK'); } catch { /* swallow — surfacing primary error */ }
+                this._transaction.release();
+                this._transaction = null;
+                this._transactionDepth = 0;
+                this._savepointStack = [];
+                this._savepointCounter = 0;
+            }
+            throw e;
         }
     }
 
+    /**
+     * RollbackTransaction with savepoint-aware semantics.
+     *
+     * - Outermost (depth was 1): real ROLLBACK and release the client.
+     * - Nested (depth > 1): ROLLBACK TO SAVEPOINT (which keeps the savepoint
+     *   itself active but discards work done after it), then RELEASE SAVEPOINT
+     *   to drop it. Combining the two matches what callers usually mean by
+     *   "undo this nested operation entirely".
+     */
     async RollbackTransaction(): Promise<void> {
         if (!this._transaction) {
             throw new Error('No active transaction to rollback.');
         }
+        if (this._transactionDepth === 0) {
+            throw new Error('PostgreSQLDataProvider transaction depth mismatch — no transaction to rollback.');
+        }
         try {
-            await this._transaction.query('ROLLBACK');
-        } finally {
-            this._transaction.release();
-            this._transaction = null;
+            if (this._transactionDepth === 1) {
+                try {
+                    await this._transaction.query('ROLLBACK');
+                } finally {
+                    this._transaction.release();
+                    this._transaction = null;
+                    this._transactionDepth = 0;
+                    this._savepointStack = [];
+                    this._savepointCounter = 0;
+                }
+            } else {
+                const savepointName = this._savepointStack[this._savepointStack.length - 1];
+                if (!savepointName) {
+                    throw new Error(`PostgreSQLDataProvider savepoint stack mismatch — expected savepoint at depth ${this._transactionDepth}.`);
+                }
+                await this._transaction.query(`ROLLBACK TO SAVEPOINT ${savepointName}`);
+                await this._transaction.query(`RELEASE SAVEPOINT ${savepointName}`);
+                this._savepointStack.pop();
+                this._transactionDepth--;
+            }
+        } catch (e) {
+            // If ROLLBACK failed at depth 1, the client state is unknown.
+            // Force-release to avoid leaking a poisoned client back to the pool.
+            if (this._transactionDepth === 1 && this._transaction) {
+                this._transaction.release();
+                this._transaction = null;
+                this._transactionDepth = 0;
+                this._savepointStack = [];
+                this._savepointCounter = 0;
+            }
+            throw e;
         }
     }
 

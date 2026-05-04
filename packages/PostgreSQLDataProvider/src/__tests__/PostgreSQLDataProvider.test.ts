@@ -116,6 +116,108 @@ describe('PostgreSQLDataProvider', () => {
         });
     });
 
+    describe('Transaction nesting (savepoint-based)', () => {
+        // Test wiring: replace the connection manager's AcquireClient so we can
+        // capture the queries the provider issues. This is the lightest-weight
+        // way to validate nesting semantics without spinning up real PG.
+        type CapturedClient = {
+            queries: string[];
+            query: (sql: string) => Promise<{ rows: unknown[] }>;
+            release: () => void;
+            released: boolean;
+        };
+
+        function installFakeClient(p: PostgreSQLDataProvider): CapturedClient {
+            const client: CapturedClient = {
+                queries: [],
+                released: false,
+                query: vi.fn(async (sql: string) => {
+                    client.queries.push(sql);
+                    return { rows: [] };
+                }) as unknown as (sql: string) => Promise<{ rows: unknown[] }>,
+                release: vi.fn(() => { client.released = true; }) as unknown as () => void,
+            };
+            // Replace the private connection manager's AcquireClient with a stub.
+            const cm = (p as unknown as { _connectionManager: { AcquireClient: () => Promise<unknown> } })._connectionManager;
+            cm.AcquireClient = vi.fn(async () => client) as unknown as typeof cm.AcquireClient;
+            return client;
+        }
+
+        it('depth==1: BeginTransaction issues BEGIN on the acquired client', async () => {
+            const client = installFakeClient(provider);
+            await provider.BeginTransaction();
+            expect(client.queries).toEqual(['BEGIN']);
+            expect(provider.IsInTransaction).toBe(true);
+            expect(provider.TransactionDepth).toBe(1);
+        });
+
+        it('depth>1: nested Begin issues SAVEPOINT instead of new BEGIN', async () => {
+            const client = installFakeClient(provider);
+            await provider.BeginTransaction();
+            await provider.BeginTransaction();
+            await provider.BeginTransaction();
+            expect(client.queries).toEqual(['BEGIN', 'SAVEPOINT mj_sp_1', 'SAVEPOINT mj_sp_2']);
+            expect(provider.TransactionDepth).toBe(3);
+        });
+
+        it('Commit at depth>1 issues RELEASE SAVEPOINT, depth-1 issues COMMIT and releases client', async () => {
+            const client = installFakeClient(provider);
+            await provider.BeginTransaction();    // depth 1
+            await provider.BeginTransaction();    // depth 2
+            await provider.CommitTransaction();   // releases sp, depth 1
+            expect(provider.TransactionDepth).toBe(1);
+            expect(client.queries.at(-1)).toBe('RELEASE SAVEPOINT mj_sp_1');
+            expect(client.released).toBe(false); // still in outer
+
+            await provider.CommitTransaction();   // commits outer
+            expect(client.queries.at(-1)).toBe('COMMIT');
+            expect(client.released).toBe(true);
+            expect(provider.TransactionDepth).toBe(0);
+            expect(provider.IsInTransaction).toBe(false);
+        });
+
+        it('Rollback at depth>1 rolls back to + releases savepoint without affecting outer', async () => {
+            const client = installFakeClient(provider);
+            await provider.BeginTransaction();
+            await provider.BeginTransaction();
+            await provider.RollbackTransaction();
+            expect(provider.TransactionDepth).toBe(1);
+            // Last two queries should be the rollback-to + release of the savepoint
+            expect(client.queries.slice(-2)).toEqual(['ROLLBACK TO SAVEPOINT mj_sp_1', 'RELEASE SAVEPOINT mj_sp_1']);
+            expect(client.released).toBe(false); // outer transaction still active
+
+            await provider.CommitTransaction();   // outer commits successfully
+            expect(client.released).toBe(true);
+        });
+
+        it('Rollback at depth==1 issues ROLLBACK and releases client', async () => {
+            const client = installFakeClient(provider);
+            await provider.BeginTransaction();
+            await provider.RollbackTransaction();
+            expect(client.queries.at(-1)).toBe('ROLLBACK');
+            expect(client.released).toBe(true);
+            expect(provider.TransactionDepth).toBe(0);
+        });
+
+        it('Commit/Rollback without active transaction throws', async () => {
+            await expect(provider.CommitTransaction()).rejects.toThrow('No active transaction');
+            await expect(provider.RollbackTransaction()).rejects.toThrow('No active transaction');
+        });
+
+        it('Savepoint counter is fresh after the outer transaction commits', async () => {
+            const client = installFakeClient(provider);
+            await provider.BeginTransaction();
+            await provider.BeginTransaction();      // mj_sp_1
+            await provider.CommitTransaction();     // RELEASE mj_sp_1
+            await provider.CommitTransaction();     // outer COMMIT, resets counter
+            // Re-installing a client because the previous one was released
+            const client2 = installFakeClient(provider);
+            await provider.BeginTransaction();
+            await provider.BeginTransaction();      // should be mj_sp_1 again, not mj_sp_2
+            expect(client2.queries.at(-1)).toBe('SAVEPOINT mj_sp_1');
+        });
+    });
+
     describe('GetCurrentUser', () => {
         it('should return null when called without auth context', async () => {
             // Access the protected method via type assertion for testing
