@@ -771,7 +771,7 @@ export class SQLCodeGenBase {
      * here because it needs access to the internal generators; the provider
      * doesn't own context building for the view.
      */
-    private async executeEntityInPhases(
+    public async executeEntityInPhases(
         pool: CodeGenConnection,
         entity: EntityInfo,
         willRegenerate: Set<string> | undefined

@@ -149,7 +149,34 @@ export async function executeWithFallback(opts: ExecuteWithFallbackOptions): Pro
         }
 
         const dependents = await captureDependentViews(client, oid);
-        const dependentFunctions = await captureDependentFunctions(client, oid);
+
+        // Capture functions transitively. A DROP VIEW ... CASCADE on the
+        // target removes BOTH directly-dependent functions (those whose
+        // RETURNS SETOF references the target's rowtype) AND functions that
+        // depend on the cascaded dependent views. Without the transitive
+        // sweep, codegen pass 1 leaves spCreateX/spUpdateX functions
+        // permanently missing for any entity X whose view is reached only
+        // through the cascade chain — surfacing as "Post-CodeGen CRUD
+        // validation FAILED: missing create routine spCreateX" and forcing
+        // a second codegen pass to converge.
+        const directFunctions = await captureDependentFunctions(client, oid);
+        const transitiveFnLists = await Promise.all(
+            dependents.map(async (dep) => {
+                const depOid = await resolveViewOid(client, dep.schema, dep.name);
+                return depOid !== null ? captureDependentFunctions(client, depOid) : [];
+            })
+        );
+        // De-duplicate by schema+name — direct + transitive lists can overlap
+        // when the same function depends on both target and a dependent view.
+        const seen = new Set<string>();
+        const dependentFunctions = [...directFunctions, ...transitiveFnLists.flat()].filter(fn => {
+            const key = `${fn.schema}.${fn.name}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+
+
         const grants = await captureGrants(client, schema, viewName);
         const metadata = await captureMetadata(client, oid);
 

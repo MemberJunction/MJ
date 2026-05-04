@@ -178,6 +178,24 @@ EXCEPTION WHEN invalid_table_definition THEN
   ) ON COMMIT DROP;
   DELETE FROM _vw_regen_deps;
 
+  -- Capture dependent FUNCTIONS too. CASCADE drops every function with
+  -- RETURNS SETOF <view> (the codegen-emitted spCreate/spUpdate/spDelete
+  -- pattern) when the target view is dropped. Without restoring them,
+  -- post-codegen CRUD validation reports those routines as missing —
+  -- e.g. "MJ: Recommendation Items → missing create routine
+  -- spCreateRecommendationItem" — even though the next codegen pass
+  -- emits them. The restored definitions are pg_get_functiondef() output
+  -- which is a complete CREATE OR REPLACE FUNCTION statement plus a
+  -- trailing semicolon; replaying them verbatim recreates the function
+  -- with its original body, parameter list, and return type.
+  CREATE TEMP TABLE IF NOT EXISTS _vw_regen_fn_deps (
+    schema_name TEXT,
+    fn_name     TEXT,
+    fn_oid      OID,
+    definition  TEXT
+  ) ON COMMIT DROP;
+  DELETE FROM _vw_regen_fn_deps;
+
   -- Capture dependents. NOTES on the grants_sql build:
   --   - Resolve role name via pg_get_userbyid(oid) — returns the bare,
   --     unquoted role name (or 'unknown (OID=N)' if the oid no longer
@@ -187,12 +205,12 @@ EXCEPTION WHEN invalid_table_definition THEN
   --     Cloud SQL) where pg_authid is restricted to the rds_superuser /
   --     azure_pg_admin / cloudsqlsuperuser group. Earlier revisions joined
   --     to pg_authid which works on self-hosted PG but fails with
-  --     `permission denied for table pg_authid` on managed services.
+  --     "permission denied for table pg_authid" on managed services.
   --   - The earlier (broken) approach cast (aclexplode).grantee::regrole::text
   --     which RETURNS the role name pre-quoted when it contains uppercase
-  --     (e.g. '"cdp_Developer"'); calling quote_ident on the already-quoted
-  --     string double-wrapped to '"""cdp_Developer"""' and the GRANT failed
-  --     at replay with `role "cdp_Developer" does not exist`. Using
+  --     (e.g. cdp_Developer comes back already wrapped); calling quote_ident
+  --     on the already-quoted string double-wrapped and the GRANT failed at
+  --     replay with "role does not exist". Using
   --     pg_get_userbyid returns a bare name and lets quote_ident wrap it
   --     correctly exactly once.
   --   - PUBLIC is grantee oid 0; pg_get_userbyid(0) returns 'unknown
@@ -223,6 +241,49 @@ EXCEPTION WHEN invalid_table_definition THEN
     AND tc.relname = '${viewNameLit}'
     AND tc.relkind IN ('v', 'm')
     AND dc.oid <> tc.oid;
+
+  -- Capture dependent functions. Two paths matter on PG:
+  --   1. Functions whose RETURN type references the view (RETURNS SETOF
+  --      <view>) — pg_depend records this as type=pg_type → pg_class.
+  --   2. Functions whose body references the view (used by sql functions
+  --      and by some plpgsql edge cases) — pg_depend records this as
+  --      pg_proc → pg_class.
+  -- pg_get_functiondef returns a complete CREATE OR REPLACE FUNCTION
+  -- statement that we replay verbatim. We DO include RETURNS-only
+  -- references because that's the dominant codegen pattern (sp* CRUD
+  -- functions all RETURNS SETOF the matching vwX).
+  INSERT INTO _vw_regen_fn_deps (schema_name, fn_name, fn_oid, definition)
+  SELECT DISTINCT
+      pn.nspname,
+      pp.proname,
+      pp.oid,
+      pg_get_functiondef(pp.oid)
+  FROM pg_depend d
+  JOIN pg_proc pp ON pp.oid = d.objid AND d.classid = 'pg_proc'::regclass
+  JOIN pg_namespace pn ON pn.oid = pp.pronamespace
+  JOIN pg_class tc ON tc.oid = d.refobjid
+  JOIN pg_namespace tn ON tn.oid = tc.relnamespace
+  WHERE tn.nspname = '${schemaLit}'
+    AND tc.relname = '${viewNameLit}'
+    AND tc.relkind IN ('v', 'm')
+  UNION
+  SELECT DISTINCT
+      pn.nspname,
+      pp.proname,
+      pp.oid,
+      pg_get_functiondef(pp.oid)
+  FROM pg_depend d
+  JOIN pg_type pt ON pt.oid = d.refobjid AND d.refclassid = 'pg_type'::regclass
+  JOIN pg_proc pp ON pp.prorettype = pt.oid OR pt.typrelid = pp.oid
+  JOIN pg_namespace pn ON pn.oid = pp.pronamespace
+  WHERE EXISTS (
+      SELECT 1 FROM pg_class tc
+      JOIN pg_namespace tn ON tn.oid = tc.relnamespace
+      WHERE tc.reltype = pt.oid
+        AND tn.nspname = '${schemaLit}'
+        AND tc.relname = '${viewNameLit}'
+        AND tc.relkind IN ('v', 'm')
+  );
 
   DROP VIEW IF EXISTS ${quotedView} CASCADE;
   EXECUTE vsql;
@@ -255,7 +316,21 @@ EXCEPTION WHEN invalid_table_definition THEN
     END IF;
   END LOOP;
 
+  -- Replay captured dependent functions AFTER all dependent views are
+  -- restored — most codegen-emitted sp* functions reference both the
+  -- target view AND the dependent views in their bodies/return types.
+  -- Wrapped per-function in its own savepoint so a single failure
+  -- doesn't poison subsequent restores or the just-recreated target.
+  FOR rec IN SELECT schema_name, fn_name, definition FROM _vw_regen_fn_deps LOOP
+    BEGIN
+      EXECUTE rec.definition;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'Best-effort restore skipped dependent function %.%: %', rec.schema_name, rec.fn_name, SQLERRM;
+    END;
+  END LOOP;
+
   DROP TABLE _vw_regen_deps;
+  DROP TABLE _vw_regen_fn_deps;
 END $vw_regen$;
 `;
     }
