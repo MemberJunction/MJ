@@ -62,34 +62,23 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
     // ─── BASE VIEWS ──────────────────────────────────────────────────────
 
     /**
-     * Generates the SQL for an entity's base view in PostgreSQL.
+     * Generates a PostgreSQL `CREATE OR REPLACE VIEW` statement for an entity's base view.
      *
-     * Emits `DROP VIEW IF EXISTS ... CASCADE; CREATE VIEW ...` rather than
-     * `CREATE OR REPLACE VIEW`. Two reasons:
+     * **Non-destructive strategy.** Historically this method emitted
+     * `DROP VIEW IF EXISTS ... CASCADE;` before the CREATE, which silently destroyed
+     * any dependent view, function, trigger, or GRANT on the view — and codegen's
+     * per-entity processing order doesn't guarantee dependents are regenerated
+     * after dependencies, so views like `__mj.vwAIModels` (with downstream
+     * consumers in MJ Engine init) routinely went missing across a codegen run.
      *
-     * 1. **Replayability.** The SQL log captured by `SQLLogging` is meant to
-     *    be applied to other databases (via `mj migrate`, raw `psql -f`, or
-     *    bundled into a Flyway migration). PG's `CREATE OR REPLACE VIEW`
-     *    rejects any change that isn't column-additive — rename, reorder,
-     *    type-change all error with `42P16 invalid_table_definition`. That
-     *    error never reaches the log file (it's caught by runtime fallback),
-     *    so the log was *only* applicable to databases whose existing view
-     *    definition matched the new one byte-for-byte. DROP CASCADE +
-     *    CREATE makes the log self-sufficient regardless of starting state.
-     *
-     * 2. **CASCADE blast radius is bounded.** Codegen regenerates views,
-     *    functions, and grants for every entity in the same run. Anything
-     *    DROP CASCADE removes (dependent views, function bodies, grants) is
-     *    re-emitted later in the same SQL log by codegen's own per-entity
-     *    pipeline. The runtime fallback in `viewFallback.ts` also captures
-     *    and replays dependents — so destruction is recoverable in both
-     *    "live execution" and "log replay" modes.
-     *
-     * Historically this method emitted `CREATE OR REPLACE VIEW` only, paired
-     * with a runtime 42P16 fallback that did capture/drop/restore. That
-     * yielded a non-destructive happy path but produced a SQL log nobody
-     * could replay. Trading non-destructiveness for replayability is the
-     * right call given codegen's purpose.
+     * Emits just `CREATE OR REPLACE VIEW`, which PostgreSQL accepts when the new
+     * column list is a prefix of the existing one plus optional trailing additions.
+     * Any incompatible change (rename, reorder, type change, removed column) fails
+     * with SQLSTATE `42P16 invalid_table_definition`, which is caught by the
+     * runtime fallback in `viewFallback.ts` — that path captures dependent views,
+     * functions, grants, and comments via `pg_depend`, performs the DROP+CREATE
+     * dance, and replays the dependents in dependency order. Bounded blast radius,
+     * recoverable.
      *
      * Permissions are handled separately by sql_codegen.ts via generateViewPermissions().
      */
@@ -110,8 +99,7 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
 -----               BASE TABLE:  ${entity.BaseTable}
 -----               PRIMARY KEY: ${entity.PrimaryKeys.map((pk: EntityFieldInfo) => pk.Name).join(', ')}
 ------------------------------------------------------------
-DROP VIEW IF EXISTS ${quotedView} CASCADE;
-CREATE VIEW ${quotedView}
+CREATE OR REPLACE VIEW ${quotedView}
 AS
 SELECT
     ${selectParts}
