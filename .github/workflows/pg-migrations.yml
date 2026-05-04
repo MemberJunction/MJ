@@ -229,6 +229,134 @@ jobs:
 
           echo "pg_passed=$PASSED" >> "$GITHUB_OUTPUT"
           echo "pg_total=$TOTAL" >> "$GITHUB_OUTPUT"
+          echo "baseline_ts=$BASELINE_TS" >> "$GITHUB_OUTPUT"
+
+      # ─── Step 5b: Idempotency check (re-apply each V-migration) ─────
+      # After step 5 succeeds, re-apply each V-migration on top of the
+      # already-migrated database. Idempotent migrations succeed; non-
+      # idempotent ones fail with errors like "column already exists",
+      # "relation already exists", or UNIQUE constraint violations on
+      # hardcoded INSERTs.
+      #
+      # The check exists because real users hit non-idempotent migrations
+      # via two paths: (1) Skyway/Flyway repair after a partial-commit
+      # failure (psql doesn't auto-wrap multi-statement scripts in
+      # transactions, so a failure mid-file leaves prior statements
+      # committed); (2) restoring from a backup taken mid-migration.
+      #
+      # Failure modes this catches that step 5 cannot:
+      #   - ALTER TABLE ADD COLUMN without IF NOT EXISTS
+      #   - CREATE INDEX without IF NOT EXISTS
+      #   - CREATE TABLE without IF NOT EXISTS
+      #   - INSERT without ON CONFLICT or IF-NOT-EXISTS guard
+      #   - CREATE TRIGGER without prior DROP TRIGGER IF EXISTS
+      #
+      # Migrations that are intentionally non-idempotent can opt out by
+      # including the marker `-- pg-test:non-idempotent <reason>` on a
+      # comment line anywhere in the file. This keeps the gate honest
+      # — if you opt out, the reason is right there in the file.
+      #
+      # Failures here are reported but do NOT fail the workflow yet
+      # (continue-on-error: true) — first we need to see how dirty the
+      # current PG migration set is. Once we triage existing migrations,
+      # remove continue-on-error to make the gate enforced.
+      - name: Verify migration idempotency (second-pass apply)
+        id: idempotency
+        if: steps.verify_committed.outputs.skip_apply != 'true'
+        continue-on-error: true
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+          PGPASSWORD: testpass
+          PGDATABASE: mj_pg_ci
+          BASELINE_TS: ${{ steps.apply.outputs.baseline_ts }}
+        run: |
+          echo "=== Idempotency check: re-applying each V-migration ==="
+
+          TOTAL=0
+          IDEMPOTENT=0
+          NOT_IDEMPOTENT=0
+          ALLOWLISTED=0
+          SKIPPED_BASELINE=0
+          NON_IDEMPOTENT_FILES=""
+
+          for f in $(ls migrations-pg/v5/V*.sql 2>/dev/null | sort); do
+            FILENAME=$(basename "$f")
+
+            # Skip pre-baseline V-migrations (same logic as first pass)
+            if [ -n "$BASELINE_TS" ]; then
+              V_TS=$(echo "$FILENAME" | grep -oP '(?<=^V)\d{12}')
+              if [ -n "$V_TS" ] && [ "$V_TS" -le "$BASELINE_TS" ]; then
+                SKIPPED_BASELINE=$((SKIPPED_BASELINE + 1))
+                continue
+              fi
+            fi
+
+            # Skip files explicitly opted out via the allowlist marker
+            if grep -qE '^[[:space:]]*--[[:space:]]*pg-test:non-idempotent\b' "$f"; then
+              ALLOWLISTED=$((ALLOWLISTED + 1))
+              echo "::notice::$FILENAME — opted out via 'pg-test:non-idempotent' marker"
+              continue
+            fi
+
+            # Skip Metadata_Sync-pattern files (sproc-call-driven, expected to
+            # require CodeGen between runs — same exception step 5 makes)
+            if grep -q 'SELECT __mj\."fn_create_\|SELECT __mj\."fn_update_\|SELECT __mj\."spCreate\|PERFORM __mj\.' "$f" 2>/dev/null; then
+              ALLOWLISTED=$((ALLOWLISTED + 1))
+              echo "::notice::$FILENAME — skipped (Metadata_Sync: stored-proc-call file, idempotency depends on CodeGen state)"
+              continue
+            fi
+
+            TOTAL=$((TOTAL + 1))
+
+            if psql -v ON_ERROR_STOP=1 -f "$f" > /dev/null 2>&1; then
+              IDEMPOTENT=$((IDEMPOTENT + 1))
+            else
+              NOT_IDEMPOTENT=$((NOT_IDEMPOTENT + 1))
+              NON_IDEMPOTENT_FILES="$NON_IDEMPOTENT_FILES\n  $FILENAME"
+              echo "::warning::$FILENAME — NOT idempotent (failed on second apply)"
+              # Surface the actual error for triage
+              psql -v ON_ERROR_STOP=1 -f "$f" 2>&1 | tail -3 | sed 's/^/    /'
+            fi
+          done
+
+          echo ""
+          echo "=== Idempotency Results ==="
+          echo "  Checked:       $TOTAL"
+          echo "  Idempotent:    $IDEMPOTENT"
+          echo "  NOT idempotent: $NOT_IDEMPOTENT"
+          echo "  Allowlisted:   $ALLOWLISTED"
+          echo "  Pre-baseline:  $SKIPPED_BASELINE"
+
+          {
+            echo "## PG Migration Idempotency Report"
+            echo ""
+            echo "| Metric | Value |"
+            echo "|---|---|"
+            echo "| Migrations checked | $TOTAL |"
+            echo "| Idempotent | $IDEMPOTENT |"
+            echo "| **NOT idempotent** | **$NOT_IDEMPOTENT** |"
+            echo "| Allowlisted (Metadata_Sync or marker) | $ALLOWLISTED |"
+            if [ "$NOT_IDEMPOTENT" -gt 0 ]; then
+              echo ""
+              echo "### Non-idempotent migrations"
+              echo ""
+              printf '%s\n' "$NON_IDEMPOTENT_FILES" | sed 's/^/- /'
+              echo ""
+              echo "Each file above either needs defensive guards (\`IF NOT EXISTS\`, \`ON CONFLICT\`,"
+              echo "\`OR REPLACE\`, etc.) OR an opt-out marker \`-- pg-test:non-idempotent <reason>\`"
+              echo "if non-idempotency is intentional."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ $NOT_IDEMPOTENT -gt 0 ]; then
+            printf "::warning::%d migration(s) are NOT idempotent. See step summary for details.\n" "$NOT_IDEMPOTENT"
+            # Initially non-blocking via continue-on-error above. Once existing
+            # migrations are triaged, remove continue-on-error to enforce.
+          fi
+
+          echo "not_idempotent=$NOT_IDEMPOTENT" >> "$GITHUB_OUTPUT"
 
       # ─── Step 6: Verify schema ──────────────────────────────────────
       - name: Verify PG schema
