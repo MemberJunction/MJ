@@ -536,6 +536,13 @@ export class EntityFieldInfo extends BaseInfo {
     IncludeInUserSearchAPI: boolean = null
     FullTextSearchEnabled: boolean = false
     UserSearchParamFormatAPI: string = null
+    /**
+     * Search predicate controlling how user-search queries match against this field
+     * in the LIKE-based search path used when the entity does not have FullTextSearchEnabled.
+     * Valid values: 'BeginsWith' | 'Contains' | 'EndsWith' | 'Exact'. Default 'Contains'.
+     * Honored by GenericDatabaseProvider.createViewUserSearchSQL.
+     */
+    UserSearchPredicateAPI: string = null
     IncludeInGeneratedForm: boolean = null
     GeneratedFormSection: string = null
     IsVirtual: boolean = null 

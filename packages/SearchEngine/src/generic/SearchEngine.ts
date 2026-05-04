@@ -89,6 +89,26 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     private _enricher = new SearchEnricher();
     private _defaultMaxResults = 20;
 
+    /**
+     * Minimum trimmed query length we accept. One- and two-character queries against
+     * a `LIKE '%term%'` fan-out are essentially full-database scans with negligible
+     * relevance — the providers also enforce this, but we short-circuit here to
+     * avoid the cache lookup and provider dispatch overhead too.
+     */
+    private static readonly MIN_TERM_LENGTH = 3;
+
+    /**
+     * Result cache TTL. 30s balances "user resubmits the same prefix" wins against
+     * "results stay reasonably fresh after a write". Cache key includes the user's
+     * ID so two users with different RLS scopes never share an entry.
+     */
+    private static readonly CACHE_TTL_MS = 30_000;
+
+    /** Maximum cached entries across all users. LRU-evicted on overflow. */
+    private static readonly CACHE_MAX_ENTRIES = 500;
+
+    private _cache: Map<string, { result: SearchResult; expires: number }> = new Map();
+
     /** Access the cached provider metadata from SearchEngineBase */
     protected get Base(): SearchEngineBase {
         return SearchEngineBase.Instance;
@@ -166,8 +186,22 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         const startTime = Date.now();
 
         try {
-            if (!params.Query.trim()) {
+            const trimmed = (params.Query ?? '').trim();
+            if (!trimmed) {
                 return this.buildErrorResult('Query cannot be empty', startTime);
+            }
+            if (trimmed.length < SearchEngine.MIN_TERM_LENGTH) {
+                // Short queries hit unindexed table-scans fanned out across every
+                // searchable entity with negligible relevance. Return an empty
+                // success result rather than burning resources.
+                return {
+                    Success: true,
+                    Results: [],
+                    TotalCount: 0,
+                    ElapsedMs: Date.now() - startTime,
+                    SourceCounts: { Vector: 0, FullText: 0, Entity: 0, Storage: 0 },
+                    Providers: this._configured ? this.buildProviderInfoList() : [],
+                };
             }
 
             // Ensure configured
@@ -179,8 +213,24 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
             const mode = params.Mode ?? 'full';
             const isPreview = mode === 'preview';
 
+            // Cache lookup. Skip preview searches — they're already cheap and
+            // caching would mask config changes during dev. Cache key includes
+            // the user's ID so two users with different RLS scopes never share
+            // an entry.
+            const cacheKey = isPreview ? null : this.buildCacheKey(trimmed, params, contextUser);
+            if (cacheKey) {
+                const hit = this._cache.get(cacheKey);
+                if (hit && hit.expires > Date.now()) {
+                    // Move to end for LRU recency
+                    this._cache.delete(cacheKey);
+                    this._cache.set(cacheKey, hit);
+                    return { ...hit.result, ElapsedMs: Date.now() - startTime };
+                }
+                if (hit) this._cache.delete(cacheKey); // expired
+            }
+
             // Step 1: Run all providers in parallel (respecting preview flag)
-            const labeledLists = await this.executeProviders(params.Query, topK, params.Filters, contextUser, isPreview);
+            const labeledLists = await this.executeProviders(trimmed, topK, params.Filters, contextUser, isPreview);
             const sourceCounts = this.countSources(labeledLists);
 
             // Step 2: Fuse with RRF
@@ -208,7 +258,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
 
             LogStatus(`SearchEngine: Search complete in ${Date.now() - startTime}ms - ${results.length} results`);
 
-            return {
+            const finalResult: SearchResult = {
                 Success: true,
                 Results: results,
                 TotalCount: results.length,
@@ -216,11 +266,48 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
                 SourceCounts: sourceCounts,
                 Providers: this.buildProviderInfoList(),
             };
+
+            if (cacheKey) {
+                this.cachePut(cacheKey, finalResult);
+            }
+
+            return finalResult;
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             LogError(`SearchEngine: Search failed: ${msg}`);
             return this.buildErrorResult(msg, startTime);
         }
+    }
+
+    /**
+     * Build a stable cache key for a search. Includes the user identity so RLS
+     * scopes never bleed across users, plus the trimmed query, MaxResults,
+     * MinScore, and a deterministic projection of Filters.
+     */
+    private buildCacheKey(trimmed: string, params: SearchParams, contextUser: UserInfo): string {
+        const userKey = (contextUser as unknown as { ID?: string })?.ID ?? 'anonymous';
+        const f = params.Filters ?? {};
+        const filterKey = JSON.stringify({
+            EntityNames: f.EntityNames ? [...f.EntityNames].sort() : undefined,
+            SourceTypes: f.SourceTypes ? [...f.SourceTypes].sort() : undefined,
+            Tags: f.Tags ? [...f.Tags].sort() : undefined,
+        });
+        return `${userKey}|${trimmed}|${params.MaxResults ?? this._defaultMaxResults}|${params.MinScore ?? 0}|${filterKey}`;
+    }
+
+    /** Insert into the LRU cache, evicting oldest entries when over capacity. */
+    private cachePut(key: string, result: SearchResult): void {
+        if (this._cache.size >= SearchEngine.CACHE_MAX_ENTRIES) {
+            // Map iteration order is insertion order — the first entry is oldest.
+            const oldest = this._cache.keys().next().value;
+            if (oldest !== undefined) this._cache.delete(oldest);
+        }
+        this._cache.set(key, { result, expires: Date.now() + SearchEngine.CACHE_TTL_MS });
+    }
+
+    /** Test / admin hook: clear the result cache. */
+    public ClearResultCache(): void {
+        this._cache.clear();
     }
 
     /**
