@@ -5,6 +5,7 @@ import {
     UserInfo,
     EntityInfo,
     EntityFieldInfo,
+    EntityFieldTSType,
     ProviderType,
     CompositeKey,
     EntityDependency,
@@ -436,10 +437,43 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
     /**
      * Transforms user-provided SQL clauses (ExtraFilter, OrderBy) to quote
      * mixed-case identifiers and convert [bracket] notation for PostgreSQL.
+     * Also coerces SQL Server bit literals (`= 1` / `= 0`) on boolean fields
+     * to PG boolean literals (`= TRUE` / `= FALSE`), since hand-written
+     * filters across the codebase (engines, dashboards, agents) use SQL
+     * Server's bit-as-integer convention. Without this, PG rejects the
+     * comparison with `operator does not exist: boolean = integer`.
      */
     protected override TransformExternalSQLClause(clause: string, entityInfo: EntityInfo): string {
         if (!clause || clause.length === 0) return clause;
-        return this.quoteIdentifiersInSQL(clause, entityInfo);
+        const quoted = this.quoteIdentifiersInSQL(clause, entityInfo);
+        return this.coerceBooleanLiteralsInSQL(quoted, entityInfo);
+    }
+
+    /**
+     * Rewrites bit-style boolean comparisons in a quoted SQL fragment so they
+     * type-check on PostgreSQL. For each boolean column on the entity, finds
+     * `"Col" {= | != | <>} {0|1|'0'|'1'}` (any whitespace, case-insensitive
+     * operator) and substitutes `TRUE` / `FALSE`. Operates on the already-
+     * identifier-quoted output of `quoteIdentifiersInSQL` so the column-name
+     * regex anchor is unambiguous.
+     */
+    private coerceBooleanLiteralsInSQL(sql: string, entityInfo: EntityInfo): string {
+        const boolFields = entityInfo.Fields.filter(f => f.TSType === EntityFieldTSType.Boolean);
+        if (boolFields.length === 0) return sql;
+
+        let out = sql;
+        for (const field of boolFields) {
+            // Match `"FieldName" <op> <int-or-quoted-int>`. We only rewrite when
+            // the literal is a bare 0/1 (or '0'/'1') — anything else (NULL,
+            // another column, parameter) is left alone so we don't accidentally
+            // mangle TRUE/FALSE the caller already wrote.
+            const ident = pgDialect.QuoteIdentifier(field.Name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const re = new RegExp(`(${ident})\\s*(=|!=|<>)\\s*'?([01])'?(?=\\s|$|\\)|,)`, 'g');
+            out = out.replace(re, (_m, col: string, op: string, val: string) =>
+                `${col} ${op} ${val === '1' ? 'TRUE' : 'FALSE'}`
+            );
+        }
+        return out;
     }
 
     // ─── Entity Record Names ─────────────────────────────────────────
@@ -957,6 +991,11 @@ WHERE ${pgDialect.QuoteIdentifier(pkName)} = '${safePKValue}';`;
         // PostgreSQL specific
         'BOOLEAN', 'SERIAL', 'BIGSERIAL', 'UUID', 'JSONB', 'JSON', 'ARRAY', 'TIMESTAMPTZ',
         'TIMESTAMP', 'DATE', 'TIME', 'INTERVAL', 'CITEXT', 'INET', 'MACADDR',
+        // PG type names that show up in CAST(... AS T) and ::T expressions in
+        // hand-written SQL across the codebase. Without these in the keyword
+        // set the tokenizer emits "INTEGER" / "DOUBLE" / "BYTEA" as quoted
+        // identifiers and PG rejects them as unknown user-defined types.
+        'INTEGER', 'DOUBLE', 'PRECISION', 'BYTEA', 'OID', 'REGCLASS', 'REGPROC', 'NAME',
         'GEN_RANDOM_UUID', 'TO_CHAR', 'TO_DATE', 'TO_TIMESTAMP', 'TO_NUMBER',
         'STRING_AGG', 'ARRAY_AGG', 'UNNEST', 'LATERAL', 'ILIKE',
         'LANGUAGE', 'PLPGSQL', 'VOLATILE', 'STABLE', 'IMMUTABLE', 'SETOF', 'RECORD',

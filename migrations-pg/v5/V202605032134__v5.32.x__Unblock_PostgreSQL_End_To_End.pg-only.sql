@@ -237,6 +237,32 @@ BEGIN
         END IF;
     END IF;
 
+    -- Self-heal: any rows left with negative Sequence (from a prior interrupted
+    -- run, or from row-by-row code paths in CodeGen that crashed mid-update)
+    -- would otherwise collide with this run's staging negatives in Pass A.
+    -- Reseat them at the tail of their entity's existing positive range so the
+    -- 2-pass renumber below has a clean negative space to work in. Rerunable.
+    WITH stale AS (
+        SELECT ef."ID",
+               ef."EntityID",
+               ROW_NUMBER() OVER (
+                   PARTITION BY ef."EntityID"
+                   ORDER BY abs(ef."Sequence") DESC, ef."ID"
+               )
+                 + COALESCE((
+                     SELECT max(ef2."Sequence")
+                     FROM ${flyway:defaultSchema}."EntityField" ef2
+                     WHERE ef2."EntityID" = ef."EntityID"
+                       AND ef2."Sequence" >= 0
+                 ), 0) AS new_seq
+        FROM ${flyway:defaultSchema}."EntityField" ef
+        WHERE ef."Sequence" < 0
+    )
+    UPDATE ${flyway:defaultSchema}."EntityField" target
+    SET "Sequence" = stale.new_seq
+    FROM stale
+    WHERE target."ID" = stale."ID";
+
     RETURN QUERY
     WITH excluded AS (
         SELECT TRIM(s) AS "SchemaName"

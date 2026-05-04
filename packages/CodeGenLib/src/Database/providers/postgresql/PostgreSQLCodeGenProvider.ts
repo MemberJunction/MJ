@@ -457,7 +457,7 @@ WHERE ${ftsColName} IS NULL;
         const primaryKey = entity.FirstPrimaryKey.Name;
         const primaryKeyType = this.mapSQLType(entity.FirstPrimaryKey.SQLFullType);
         const fieldName = field.Name;
-        const fnName = `fn_${this.toSnakeCase(entity.BaseTable)}_${this.toSnakeCase(fieldName)}_get_root_id`;
+        const fnName = this.getRootIDFunctionName(entity, field);
 
         return `
 ------------------------------------------------------------
@@ -503,6 +503,23 @@ $$ LANGUAGE sql STABLE;
 `;
     }
 
+    /**
+     * Produces the canonical name for the recursive root-finder helper function
+     * generated for self-referencing fields. The function definition and the
+     * view's LATERAL-JOIN reference must agree on this name (caller side calls
+     * via `generateRootFieldJoin`, definition via `generateRootIDFunction`).
+     *
+     * Note: this intentionally does NOT match the baseline-shipped PascalCase
+     * `fn{Table}{Field}_GetRootID` form, because the baseline returns
+     * `TABLE("RootID" type)` and the view callers expect a scalar — using the
+     * baseline name would clash with `cannot change return type of existing
+     * function`. The snake_case scalar form is codegen's own naming space and
+     * is consistent with how downstream views are emitted.
+     */
+    private getRootIDFunctionName(entity: EntityInfo, field: EntityFieldInfo): string {
+        return `fn_${this.toSnakeCase(entity.BaseTable)}_${this.toSnakeCase(field.Name)}_get_root_id`;
+    }
+
     /** @inheritdoc */
     generateRootFieldSelect(_entity: EntityInfo, field: EntityFieldInfo, alias: string): string {
         const rootFieldName = `Root${field.Name}`;
@@ -515,7 +532,7 @@ $$ LANGUAGE sql STABLE;
      * `OUTER APPLY`) to call scalar functions inline within a view definition.
      */
     generateRootFieldJoin(entity: EntityInfo, field: EntityFieldInfo, alias: string): string {
-        const fnName = `fn_${this.toSnakeCase(entity.BaseTable)}_${this.toSnakeCase(field.Name)}_get_root_id`;
+        const fnName = this.getRootIDFunctionName(entity, field);
         const tableAlias = entity.BaseTableCodeName.charAt(0).toLowerCase();
         return `LEFT JOIN LATERAL (
     SELECT ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(${tableAlias}.${pgDialect.QuoteIdentifier(entity.FirstPrimaryKey.Name)}, ${tableAlias}.${pgDialect.QuoteIdentifier(field.Name)}) AS root_id
@@ -685,14 +702,18 @@ END $$;
 
     /** @inheritdoc */
     getCRUDRoutineName(entity: EntityInfo, type: CRUDType): string {
-        const snakeTable = this.toSnakeCase(entity.BaseTableCodeName);
+        // Match the baseline-ported `sp{Verb}{TableCodeName}` convention (SQL Server
+        // names ported verbatim into PG). The runtime PostgreSQLDataProvider calls
+        // these names directly — diverging here (e.g. `fn_create_<snake>`) means new
+        // CodeGen runs leave functions the runtime can never find.
+        const tableCodeName = entity.BaseTableCodeName;
         switch (type) {
             case CRUDType.Create:
-                return entity.spCreate || `fn_create_${snakeTable}`;
+                return entity.spCreate || `spCreate${tableCodeName}`;
             case CRUDType.Update:
-                return entity.spUpdate || `fn_update_${snakeTable}`;
+                return entity.spUpdate || `spUpdate${tableCodeName}`;
             case CRUDType.Delete:
-                return entity.spDelete || `fn_delete_${snakeTable}`;
+                return entity.spDelete || `spDelete${tableCodeName}`;
         }
     }
 

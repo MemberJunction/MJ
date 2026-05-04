@@ -115,22 +115,27 @@ describe('PostgreSQLCodeGenProvider', () => {
     });
 
     describe('getCRUDRoutineName', () => {
-        it('should generate fn_create_ name', () => {
+        // PG codegen now emits sp{Verb}{TableCodeName} (PascalCase) to match the
+        // baseline-ported SP names (which are SQL Server names ported verbatim into
+        // PG) and the runtime PostgreSQLDataProvider, which calls procs by that
+        // exact convention. Earlier we emitted `fn_<verb>_<snake>` and the runtime
+        // could never find the function.
+        it('should generate spCreate name matching baseline convention', () => {
             const entity = createMockEntity();
             const name = provider.getCRUDRoutineName(entity, CRUDType.Create);
-            expect(name).toBe('fn_create_test_entity');
+            expect(name).toBe('spCreateTestEntity');
         });
 
-        it('should generate fn_update_ name', () => {
+        it('should generate spUpdate name matching baseline convention', () => {
             const entity = createMockEntity();
             const name = provider.getCRUDRoutineName(entity, CRUDType.Update);
-            expect(name).toBe('fn_update_test_entity');
+            expect(name).toBe('spUpdateTestEntity');
         });
 
-        it('should generate fn_delete_ name', () => {
+        it('should generate spDelete name matching baseline convention', () => {
             const entity = createMockEntity();
             const name = provider.getCRUDRoutineName(entity, CRUDType.Delete);
-            expect(name).toBe('fn_delete_test_entity');
+            expect(name).toBe('spDeleteTestEntity');
         });
 
         it('should use custom SP name when set on entity', () => {
@@ -222,7 +227,7 @@ describe('PostgreSQLCodeGenProvider', () => {
             const sql = provider.generateCRUDCreate(entity);
 
             expect(sql).toContain('CREATE OR REPLACE FUNCTION');
-            expect(sql).toContain('fn_create_test_entity');
+            expect(sql).toContain('spCreateTestEntity');
             expect(sql).toContain('RETURNS SETOF');
             expect(sql).toContain('vwTestEntities');
             expect(sql).toContain('INSERT INTO');
@@ -255,7 +260,7 @@ describe('PostgreSQLCodeGenProvider', () => {
             const sql = provider.generateCRUDUpdate(entity);
 
             expect(sql).toContain('CREATE OR REPLACE FUNCTION');
-            expect(sql).toContain('fn_update_test_entity');
+            expect(sql).toContain('spUpdateTestEntity');
             expect(sql).toContain('RETURNS SETOF');
             expect(sql).toContain('UPDATE');
             expect(sql).toContain('SET');
@@ -284,7 +289,7 @@ describe('PostgreSQLCodeGenProvider', () => {
             const sql = provider.generateCRUDDelete(entity, '');
 
             expect(sql).toContain('CREATE OR REPLACE FUNCTION');
-            expect(sql).toContain('fn_delete_test_entity');
+            expect(sql).toContain('spDeleteTestEntity');
             expect(sql).toContain('DELETE FROM');
             expect(sql).toContain('RETURNS TABLE');
             expect(sql).toContain('#variable_conflict use_column');
@@ -584,7 +589,7 @@ describe('PostgreSQLCodeGenProvider', () => {
             });
 
             expect(sql).toContain('PERFORM');
-            expect(sql).toContain('fn_delete_child_entity');
+            expect(sql).toContain('spDeleteChildEntity');
         });
 
         it('should generate warning when entity disallows delete', () => {

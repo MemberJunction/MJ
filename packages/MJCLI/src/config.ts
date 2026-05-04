@@ -11,6 +11,23 @@ export type MJConfig = z.infer<typeof mjConfigSchema>;
 const MJ_REPO_URL = 'https://github.com/MemberJunction/MJ.git';
 
 /**
+ * Resolves the database platform from `DB_TYPE` (the env var the rest of the
+ * MJ stack — MJServer, CodeGenLib — already honors). Without this, `mj migrate`
+ * and `mj codegen` default to SQL Server even when the runtime is targeting PG,
+ * because MJCLI previously only read `dbPlatform` from the config file.
+ *
+ * Accepts the same aliases as MJServer/CodeGenLib (`postgresql`, `postgres`,
+ * `pg`, `mssql`, `sqlserver`) so users can set whichever spelling they prefer.
+ */
+function resolveDbPlatformFromEnv(): 'sqlserver' | 'postgresql' | undefined {
+  const raw = process.env.DB_TYPE?.trim().toLowerCase();
+  if (!raw) return undefined;
+  if (raw === 'postgresql' || raw === 'postgres' || raw === 'pg') return 'postgresql';
+  if (raw === 'sqlserver' || raw === 'mssql') return 'sqlserver';
+  return undefined;
+}
+
+/**
  * Default database configuration for MJCLI.
  * Database settings come from environment variables with sensible defaults.
  */
@@ -18,6 +35,7 @@ const DEFAULT_CLI_CONFIG = {
   dbHost: process.env.DB_HOST ?? 'localhost',
   dbPort: process.env.DB_PORT ? parseInt(process.env.DB_PORT) : 1433,
   dbDatabase: process.env.DB_DATABASE ?? '',
+  dbPlatform: resolveDbPlatformFromEnv() ?? 'sqlserver',
   dbEncrypt: process.env.DB_ENCRYPT !== undefined ? parseBooleanEnv(process.env.DB_ENCRYPT) : true,
   dbTrustServerCertificate: parseBooleanEnv(process.env.DB_TRUST_SERVER_CERTIFICATE),
   codeGenLogin: process.env.CODEGEN_DB_USERNAME ?? '',

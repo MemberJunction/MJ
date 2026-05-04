@@ -1,6 +1,8 @@
 ---
 "@memberjunction/postgresql-dataprovider": minor
 "@memberjunction/codegen-lib": minor
+"@memberjunction/sql-dialect": minor
+"@memberjunction/cli": minor
 ---
 
 Unblock fresh-DB PostgreSQL end-to-end across baseline migrations, codegen, and runtime data access:
@@ -8,3 +10,7 @@ Unblock fresh-DB PostgreSQL end-to-end across baseline migrations, codegen, and 
 - **PostgreSQLDataProvider**: replace the `Nested transactions are not yet supported` throw with full SAVEPOINT-based nesting, mirroring the SQL Server provider's depth/savepoint-stack model. Fixes `mj sync` of multi-row metadata via TransactionGroups.
 - **CodeGenLib config**: add `dbPlatform: 'sqlserver' | 'postgresql'` as an alias of `dbType: 'mssql' | 'postgresql'`, with a normalizer that derives one from the other and fails fast on conflict — eliminates the silent MSSQL fallthrough when only `dbPlatform` was set.
 - **PG migration `V202605031857__v5.32.x__Fix_vwSQLColumnsAndEntityFields_Boolean_Types.pg-only.sql`**: idempotent CREATE ROLE for `cdp_Developer` / `cdp_Integration` / `cdp_UI`, GRANT USAGE + ALTER DEFAULT PRIVILEGES on `__mj` so subsequent migrations' new objects inherit grants automatically, plus a CREATE OR REPLACE VIEW that returns BOOLEAN (was INTEGER 0/1) for `IsVirtual` and `AutoIncrement` in `vwSQLColumnsAndEntityFields`. The view fix also resolves the same `operator does not exist: integer = boolean` failure inside the hand-ported `spUpdateExistingEntityFieldsFromSchema` body without requiring a separate SP edit.
+- **CodeGen ↔ runtime CRUD contract**: PG codegen now emits `spCreate{TableCodeName}` / `spUpdate*` / `spDelete*` matching the SQL Server-ported baseline (was `fn_create_<snake>`), and `pgDialect.ParameterRef` produces `p_<flat lowercase>` matching baseline + `PostgreSQLDataProvider.buildCRUDParams` (was `p_<snake_case>`). Without these, every entity `Save()` against PG failed with `function does not exist` because the runtime called `spCreate*` while codegen had emitted `fn_create_<snake>` with snake-case params.
+- **PG runtime SQL emission**: `INTEGER`, `DOUBLE`, `PRECISION`, `BYTEA`, `OID`, `REGCLASS`, `REGPROC`, `NAME` added to the `autoQuoteIdentifiers` keyword set so casts in hand-written runtime SQL (`CAST(x AS INTEGER)`, `'5'::INTEGER`) stop being quoted as user-defined types. New `coerceBooleanLiteralsInSQL` pass in `TransformExternalSQLClause` rewrites SQL Server bit literals (`Bool = 1` / `= 0` / `!= 1` / `<> 0`, including quoted forms) to `TRUE` / `FALSE` for any field whose `TSType` is Boolean — fixes `operator does not exist: boolean = integer` for ExtraFilter clauses across engines, agents, and dashboards.
+- **`spUpdateExistingEntityFieldsFromSchema` self-heal**: pre-pass reseats stale negative `Sequence` values from prior interrupted runs at the tail of each entity's positive range before the 2-pass renumber stages its own negatives, eliminating `UQ_EntityField_EntityID_Sequence` collisions on re-runs after any aborted codegen.
+- **MJCLI**: `mj migrate` / `mj codegen` honor `DB_TYPE` (with `postgresql` / `postgres` / `pg` / `mssql` / `sqlserver` aliases), matching the env contract MJServer + CodeGenLib already used. Previously these defaulted to SQL Server regardless of `DB_TYPE` unless `dbPlatform` was set explicitly in `mj.config.cjs`.

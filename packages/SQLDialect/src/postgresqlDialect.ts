@@ -202,18 +202,18 @@ export class PostgreSQLDialect extends SQLDialect {
     }
 
     /**
-     * PostgreSQL function parameters use a `p_<snake_case_name>` convention
-     * (no `@`-prefix syntax in PG). The snake-case transform converts the
-     * canonical PascalCase identifier MJ uses everywhere into PG's preferred
-     * shape — e.g. `MyParam` → `p_my_param`.
+     * PostgreSQL function parameters use a `p_<flat lowercase>` convention
+     * (no `@`-prefix syntax in PG). This matches the baseline-ported SP names
+     * (which lowercased SQL Server's PascalCase parameter names without
+     * separators — e.g. `@CompanyID` → `p_companyid`) and the runtime
+     * PostgreSQLDataProvider, which calls procs with `p_${field.Name.toLowerCase()}`.
+     *
+     * Earlier this used a snake_case transform (`p_company_id`), which
+     * produced functions the runtime could never invoke. Underscores already
+     * in the input (e.g. the `_Clear` companion suffix) are preserved.
      */
     ParameterRef(name: string): string {
-        const snake = name
-            .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
-            .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
-            .toLowerCase()
-            .replace(/__+/g, '_');
-        return `p_${snake}`;
+        return `p_${name.toLowerCase()}`;
     }
 
     /**
