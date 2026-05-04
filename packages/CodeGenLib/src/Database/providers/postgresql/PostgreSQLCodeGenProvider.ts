@@ -179,15 +179,25 @@ EXCEPTION WHEN invalid_table_definition THEN
   DELETE FROM _vw_regen_deps;
 
   -- Capture dependents. NOTES on the grants_sql build:
-  --   - Use pg_authid.rolname (raw, unquoted) joined on grantee oid, then
-  --     quote_ident() it. Earlier versions cast (aclexplode).grantee::regrole::text
+  --   - Resolve role name via pg_get_userbyid(oid) — returns the bare,
+  --     unquoted role name (or 'unknown (OID=N)' if the oid no longer
+  --     exists). pg_get_userbyid is a public catalog function available to
+  --     every database user, including unprivileged accounts on managed
+  --     PostgreSQL services (Amazon RDS, Azure Database for PostgreSQL,
+  --     Cloud SQL) where pg_authid is restricted to the rds_superuser /
+  --     azure_pg_admin / cloudsqlsuperuser group. Earlier revisions joined
+  --     to pg_authid which works on self-hosted PG but fails with
+  --     `permission denied for table pg_authid` on managed services.
+  --   - The earlier (broken) approach cast (aclexplode).grantee::regrole::text
   --     which RETURNS the role name pre-quoted when it contains uppercase
   --     (e.g. '"cdp_Developer"'); calling quote_ident on the already-quoted
-  --     string then double-wraps to '"""cdp_Developer"""' and the GRANT
-  --     fails at replay with 'role does not exist'. The lookup via pg_authid
-  --     gives us the bare name and lets quote_ident do the right thing.
-  --   - PUBLIC is grantee oid 0, which has no pg_authid row — handle via
-  --     LEFT JOIN + COALESCE so the role list is built consistently.
+  --     string double-wrapped to '"""cdp_Developer"""' and the GRANT failed
+  --     at replay with `role "cdp_Developer" does not exist`. Using
+  --     pg_get_userbyid returns a bare name and lets quote_ident wrap it
+  --     correctly exactly once.
+  --   - PUBLIC is grantee oid 0; pg_get_userbyid(0) returns 'unknown
+  --     (OID=0)' so handle the PUBLIC case explicitly and use it as the
+  --     literal 'PUBLIC' rather than quote_ident on the synthetic name.
   INSERT INTO _vw_regen_deps (schema_name, view_name, relkind, definition, grants_sql)
   SELECT DISTINCT
       dn.nspname,
@@ -196,13 +206,12 @@ EXCEPTION WHEN invalid_table_definition THEN
       pg_get_viewdef(dc.oid),
       (SELECT string_agg(
           'GRANT ' || g.privilege || ' ON ' || quote_ident(dn.nspname) || '.' || quote_ident(dc.relname) ||
-          ' TO ' || (CASE WHEN g.grantee_oid = 0 THEN 'PUBLIC' ELSE quote_ident(r.rolname) END) || ';',
+          ' TO ' || (CASE WHEN g.grantee_oid = 0 THEN 'PUBLIC' ELSE quote_ident(pg_get_userbyid(g.grantee_oid)) END) || ';',
           E'\n')
        FROM (
            SELECT (aclexplode(dc.relacl)).grantee AS grantee_oid,
                   (aclexplode(dc.relacl)).privilege_type AS privilege
        ) g
-       LEFT JOIN pg_authid r ON r.oid = g.grantee_oid
        WHERE g.privilege IN ('SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'))
   FROM pg_depend d
   JOIN pg_rewrite r ON r.oid = d.objid AND d.classid = 'pg_rewrite'::regclass

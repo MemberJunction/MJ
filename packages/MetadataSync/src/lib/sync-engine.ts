@@ -570,7 +570,21 @@ export class SyncEngine {
         filterParts.push(`${fieldName} IS NULL`);
       } else {
         const quotes = field.NeedsQuotes ? "'" : '';
-        filterParts.push(`${fieldName} = ${quotes}${fieldValue.replace(/'/g, "''")}${quotes}`);
+        // String comparisons must be case-insensitive on both backends so
+        // metadata authored against SQL Server (case-insensitive default
+        // collation) works unchanged on PostgreSQL (case-sensitive).
+        // Without LOWER() wrapping, lookups like
+        //   `@lookup:MJ: Action Categories.Name=Hootsuite&Parent=Social Media`
+        // fail on PG when the canonical row uses different casing
+        // (e.g. `HootSuite`), turning every PG sync push into a forced
+        // metadata-file edit. Numbers, dates, booleans, and uuids skip the
+        // wrapper since (a) they don't have casing semantics and (b) PG
+        // refuses LOWER(uuid).
+        if (field.NeedsQuotes) {
+          filterParts.push(`LOWER(${fieldName}) = LOWER('${fieldValue.replace(/'/g, "''")}')`);
+        } else {
+          filterParts.push(`${fieldName} = ${quotes}${fieldValue.replace(/'/g, "''")}${quotes}`);
+        }
       }
     }
     
@@ -578,8 +592,18 @@ export class SyncEngine {
     const result = await rv.RunView({
       EntityName: entityName,
       ExtraFilter: extraFilter,
-      MaxRows: 1
-    }, this.contextUser);
+      MaxRows: 1,
+      // BypassCache: lookups during a push must always go to the DB.
+      // The provider's RunView cache can return stale or filtered results
+      // (especially across the LOWER()-based case-insensitive lookups
+      // introduced for PG parity), and a stale empty result here
+      // surfaces as `Lookup failed: No record found in 'X' where Name='Y'`
+      // even when the row plainly exists. Lookups are point queries, so
+      // we sacrifice the cache hit for correctness.
+      ResultType: 'simple',
+      Fields: entityInfo.PrimaryKeys.map(pk => pk.Name),
+      BypassCache: true
+    } as any, this.contextUser);
     
     if (result.Success && result.Results.length > 0) {
       if (entityInfo.PrimaryKeys.length > 0) {

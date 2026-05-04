@@ -285,6 +285,38 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
     }
 
     /**
+     * Mutex serializing Begin/Commit/Rollback. Prior implementations had no
+     * locking around `_savepointCounter`, `_savepointStack`, and
+     * `_transactionDepth` — under concurrent callers (e.g. `mj sync push`
+     * processing 178 records with parallel BaseEntity.Save() calls), three
+     * BeginTransaction invocations would each `++this._savepointCounter` and
+     * `push` to the stack between their respective SAVEPOINT awaits, then
+     * subsequent CommitTransaction/RollbackTransaction would read a stack-top
+     * that didn't match what PG actually had on its savepoint list. The
+     * symptom was `savepoint "mj_sp_X" does not exist` mid-push, after the
+     * SECOND duplicate ROLLBACK TO same savepoint.
+     *
+     * The mutex turns the entire begin/commit/rollback operation into a
+     * critical section. The underlying PG client serializes its own queries,
+     * so we only need to protect the JS-side state mutations and the
+     * matching SAVEPOINT/RELEASE/ROLLBACK TO commands as a single
+     * indivisible unit.
+     */
+    private _txMutex: Promise<void> = Promise.resolve();
+
+    private async _withTxLock<T>(fn: () => Promise<T>): Promise<T> {
+        const previous = this._txMutex;
+        let release!: () => void;
+        this._txMutex = new Promise<void>((resolve) => { release = resolve; });
+        try {
+            await previous;
+            return await fn();
+        } finally {
+            release();
+        }
+    }
+
+    /**
      * BeginTransaction with nested-transaction support via SAVEPOINTs.
      *
      * - First call: AcquireClient + BEGIN.
@@ -297,17 +329,20 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
      * across both backends.
      */
     async BeginTransaction(): Promise<void> {
-        // Stage state mutations so the catch block can fully revert. The
-        // previous implementation only rolled back `_transactionDepth` on
-        // failure — it left the pushed name on `_savepointStack` and the
-        // bumped `_savepointCounter` in place. When the SAVEPOINT query
-        // failed (e.g. the transaction was already in PG's "aborted" state
-        // because of an earlier per-record error inside `mj sync push`), the
-        // next nested BeginTransaction would generate `mj_sp_(N+1)`, push it,
-        // and the corresponding RollbackTransaction would `ROLLBACK TO
-        // SAVEPOINT mj_sp_(N+1)` — which PG had never created, raising
-        // `savepoint "mj_sp_(N+1)" does not exist` and tearing down the
-        // entire push.
+        return this._withTxLock(async () => this._beginTransactionLocked());
+    }
+
+    private async _beginTransactionLocked(): Promise<void> {
+        // Stage state mutations so the catch block can fully revert. Without
+        // the mutex protecting concurrent callers, this catch path was the
+        // ONLY guard against state drift, but it couldn't help when the race
+        // happened during the `await SAVEPOINT` itself (other parallel
+        // BeginTransactions would push their savepoints onto the same stack
+        // and bump the same counter between this one's push and SAVEPOINT
+        // command). The mutex now ensures Begin/Commit/Rollback are
+        // serialized; this catch handles the much narrower case of the
+        // SAVEPOINT command itself failing (e.g. PG transaction in aborted
+        // state from a prior per-record error).
         let savepointName: string | null = null;
         let pushedSavepoint = false;
         let bumpedCounter = false;
@@ -355,6 +390,10 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
      *   only persists when that enclosing transaction commits.
      */
     async CommitTransaction(): Promise<void> {
+        return this._withTxLock(async () => this._commitTransactionLocked());
+    }
+
+    private async _commitTransactionLocked(): Promise<void> {
         if (!this._transaction) {
             throw new Error('No active transaction to commit.');
         }
@@ -408,6 +447,10 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
      *   "undo this nested operation entirely".
      */
     async RollbackTransaction(): Promise<void> {
+        return this._withTxLock(async () => this._rollbackTransactionLocked());
+    }
+
+    private async _rollbackTransactionLocked(): Promise<void> {
         if (!this._transaction) {
             throw new Error('No active transaction to rollback.');
         }
@@ -710,28 +753,77 @@ SELECT * FROM delete_result`;
         // Build a set of field names for this entity
         const fieldNames = new Set(entityInfo.Fields.map(f => f.Name));
 
-        // Tokenise: keep single-quoted strings and double-quoted identifiers
-        // as opaque tokens so we only transform bare identifiers.
-        const tokens = sql.match(/'[^']*'|"[^"]*"|\S+/g);
-        if (!tokens) return sql;
+        // Walk the SQL with a tiny state machine so string literals and
+        // already-quoted identifiers are preserved as opaque ranges.
+        //
+        // Why not the previous `match(/'[^']*'|"[^"]*"|\S+/g)` token approach?
+        // It split the string on whitespace BEFORE the alternation could see
+        // an opening single-quote that lives inside a non-whitespace prefix —
+        // e.g. `LOWER('Loop Agent Type: System Prompt')` tokenized into
+        // `LOWER('Loop`, `Agent`, `Type:`, `System`, `Prompt')`. The middle
+        // tokens were treated as bare-identifier code, so `Type` (a real
+        // entity field) got quoted INSIDE the string literal, producing
+        // `LOWER('Loop Agent "Type": System Prompt')`. PG then matched on
+        // the corrupted text and `mj sync push` saw `rows=0` for a row that
+        // plainly existed in the DB. The state machine below tracks `'…'`
+        // (with `''` escape) and `"…"` ranges across whitespace, so any
+        // `'…'` literal stays intact regardless of its surroundings.
+        let out = '';
+        let i = 0;
+        const n = sql.length;
+        let codeBuf = '';
 
-        return tokens.map(token => {
-            // Skip string literals and already-quoted identifiers
-            if (token.startsWith("'") || token.startsWith('"')) return token;
+        const flushCode = () => {
+            if (codeBuf.length === 0) return;
+            out += this.quoteFieldNamesInToken(codeBuf, fieldNames);
+            codeBuf = '';
+        };
 
-            // When \S+ captures a token like  RecordID='ID|uuid'  the embedded
-            // single-quoted value must NOT be subject to field-name replacement.
-            // Split at the first single quote: only the part before it (the
-            // identifier portion) gets field names quoted.
-            const quoteIdx = token.indexOf("'");
-            if (quoteIdx > 0) {
-                const identPart = token.substring(0, quoteIdx);
-                const valuePart = token.substring(quoteIdx);
-                return this.quoteFieldNamesInToken(identPart, fieldNames) + valuePart;
+        while (i < n) {
+            const ch = sql[i];
+            if (ch === "'") {
+                // Flush any pending code before opening the literal.
+                flushCode();
+                let j = i + 1;
+                let lit = "'";
+                while (j < n) {
+                    if (sql[j] === "'") {
+                        // SQL-style escaped quote: '' inside a literal stays inside.
+                        if (j + 1 < n && sql[j + 1] === "'") {
+                            lit += "''";
+                            j += 2;
+                            continue;
+                        }
+                        lit += "'";
+                        j++;
+                        break;
+                    }
+                    lit += sql[j];
+                    j++;
+                }
+                out += lit;
+                i = j;
+                continue;
             }
-
-            return this.quoteFieldNamesInToken(token, fieldNames);
-        }).join(' ');
+            if (ch === '"') {
+                // Already-quoted identifier — pass through untouched.
+                flushCode();
+                let j = i + 1;
+                let id = '"';
+                while (j < n && sql[j] !== '"') {
+                    id += sql[j];
+                    j++;
+                }
+                if (j < n) { id += '"'; j++; }
+                out += id;
+                i = j;
+                continue;
+            }
+            codeBuf += ch;
+            i++;
+        }
+        flushCode();
+        return out;
     }
 
     /**
