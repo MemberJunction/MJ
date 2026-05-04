@@ -117,22 +117,24 @@ describe('SQLServerCodeGenProvider — tolerant SP signatures', () => {
             expect(result.indexOf('@Status_Clear')).toBeLessThan(result.indexOf('@Status nvarchar'));
         });
 
-        it('does NOT emit `_Clear` companion when nullable column has no default', () => {
+        it('emits `_Clear` companion for nullable column with no default', () => {
             const entity = createMockEntity({}, [
                 { ID: 'f1', Name: 'ID', Type: 'uniqueidentifier', Length: 16, IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: 'newsequentialid()' },
                 { ID: 'f2', Name: 'Email', Type: 'nvarchar', Length: 510, IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
             ]);
             const result = provider.generateCRUDParamString(entity.Fields, false);
-            expect(result).not.toContain('@Email_Clear');
+            // Predicate is `AllowsNull` — every nullable column gets a _Clear companion
+            // so callers can explicitly set the column to NULL through Save().
+            expect(result).toContain('@Email_Clear bit = 0');
         });
 
-        it('does NOT emit `_Clear` companion when nullable column default is NULL', () => {
+        it('emits `_Clear` companion for nullable column with NULL default', () => {
             const entity = createMockEntity({}, [
                 { ID: 'f1', Name: 'ID', Type: 'uniqueidentifier', Length: 16, IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: 'newsequentialid()' },
                 { ID: 'f2', Name: 'Note', Type: 'nvarchar', Length: 510, IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: 'NULL' },
             ]);
             const result = provider.generateCRUDParamString(entity.Fields, false);
-            expect(result).not.toContain('@Note_Clear');
+            expect(result).toContain('@Note_Clear bit = 0');
         });
     });
 
@@ -213,16 +215,15 @@ describe('SQLServerCodeGenProvider — tolerant SP signatures', () => {
             expect(result).not.toContain('@AllowAuditLog_Clear');
         });
 
-        it('nullable column with no default emits plain @Param (NULL passes through)', () => {
+        it('nullable column with no default uses CASE WHEN _Clear pattern', () => {
             const entity = createMockEntity({}, [
                 { ID: 'f1', Name: 'ID', Type: 'uniqueidentifier', Length: 16, IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: 'newsequentialid()' },
                 { ID: 'f2', Name: 'Email', Type: 'nvarchar', Length: 510, IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
             ]);
             const result = provider.generateInsertFieldString(entity, entity.Fields, '@', true);
-            // Plain @Email reference, no ISNULL or CASE wrapping
-            expect(result).toContain('@Email');
-            expect(result).not.toContain('ISNULL(@Email');
-            expect(result).not.toContain('@Email_Clear');
+            // Predicate is `AllowsNull` — every nullable column emits the _Clear CASE wrapper
+            // so callers can explicitly persist NULL through Save().
+            expect(result).toContain('CASE WHEN @Email_Clear = 1 THEN NULL ELSE ISNULL(@Email');
         });
     });
 });

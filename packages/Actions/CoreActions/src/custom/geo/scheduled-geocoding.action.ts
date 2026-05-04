@@ -6,7 +6,7 @@ import {
     CompositeKey, BaseEntity, BaseEntityEvent, IMetadataProvider
 } from '@memberjunction/core';
 import { MJRecordGeoCodeEntity } from '@memberjunction/core-entities';
-import { GeoCodeSyncService } from '@memberjunction/geo-core';
+import { GeoCodeSyncService, ExistingGeoCodeInfo } from '@memberjunction/geo-core';
 
 /**
  * Scheduled geocoding maintenance action that handles three tasks:
@@ -22,9 +22,11 @@ import { GeoCodeSyncService } from '@memberjunction/geo-core';
  * - **BatchSize** (default 10) — Number of records to geocode **concurrently**
  *   in each parallel batch. Controls API rate pressure. Google Geocoding API
  *   allows 50 QPS, so 10 is conservative and leaves headroom.
- * - **MaxTotalRecords** (default unlimited) — Optional hard cap on the total
- *   number of records processed in a single run. When null/0, processes all
- *   pending records until exhausted.
+ * - **MaxTotalRecords** (default 50,000) — Safety cap on the total number of
+ *   records processed in a single run. Prevents unbounded memory growth in
+ *   extreme cases. Override via scheduled job parameters. Logs a warning when
+ *   the limit is reached so operators know remaining records exist for the
+ *   next run.
  * - **MaxRetries** (default 5) — Maximum retry count for failed geocoding
  *   attempts before a record is considered permanently failed.
  *
@@ -41,6 +43,10 @@ import { GeoCodeSyncService } from '@memberjunction/geo-core';
 export class ScheduledGeocodingAction extends BaseAction {
     private static readonly DEFAULT_MAX_RETRIES = 5;
     private static readonly DEFAULT_BATCH_SIZE = 10;
+    /** Safety default: cap total records per run to prevent unbounded memory growth in extreme cases. */
+    private static readonly DEFAULT_MAX_TOTAL = 50_000;
+    /** Page size for RunView pagination — controls how many BaseEntity objects exist simultaneously. */
+    private static readonly PAGE_SIZE = 500;
 
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         const contextUser = params.ContextUser;
@@ -50,9 +56,9 @@ export class ScheduledGeocodingAction extends BaseAction {
 
         const maxRetries = this.getNumericParam(params, 'MaxRetries', ScheduledGeocodingAction.DEFAULT_MAX_RETRIES);
         const batchSize = this.getNumericParam(params, 'BatchSize', ScheduledGeocodingAction.DEFAULT_BATCH_SIZE);
-        const maxTotal = this.getNullableNumericParam(params, 'MaxTotalRecords');
+        const maxTotal = this.getNumericParam(params, 'MaxTotalRecords', ScheduledGeocodingAction.DEFAULT_MAX_TOTAL);
 
-        LogStatus(`ScheduledGeocodingAction: Starting maintenance run (BatchSize=${batchSize}, MaxTotal=${maxTotal ?? 'unlimited'})`);
+        LogStatus(`ScheduledGeocodingAction: Starting maintenance run (BatchSize=${batchSize}, MaxTotal=${maxTotal})`);
 
         const stats = { MissingProcessed: 0, MissingSuccess: 0, RetriesProcessed: 0, RetriesSuccess: 0, OrphansRemoved: 0 };
 
@@ -62,13 +68,18 @@ export class ScheduledGeocodingAction extends BaseAction {
         stats.MissingSuccess = missingStats.Success;
 
         // Step 2: Retry failed geocoding attempts
-        const retryMaxTotal = maxTotal != null ? Math.max(0, maxTotal - stats.MissingProcessed) : null;
+        const retryMaxTotal = Math.max(0, maxTotal - stats.MissingProcessed);
         const retryStats = await this.processFailedRetries(contextUser, maxRetries, batchSize, retryMaxTotal, params.Provider);
         stats.RetriesProcessed = retryStats.Processed;
         stats.RetriesSuccess = retryStats.Success;
 
         // Step 3: Clean up orphaned RecordGeoCode rows
         stats.OrphansRemoved = await this.cleanupOrphanedRecords(contextUser, batchSize, params.Provider);
+
+        const totalRecordsProcessed = stats.MissingProcessed + stats.RetriesProcessed;
+        if (totalRecordsProcessed >= maxTotal) {
+            LogStatus(`ScheduledGeocodingAction: WARNING — MaxTotal limit (${maxTotal}) reached. There may be remaining records for the next run.`);
+        }
 
         LogStatus(`ScheduledGeocodingAction: Complete — Missing: ${stats.MissingProcessed} processed (${stats.MissingSuccess} success), Retries: ${stats.RetriesProcessed} (${stats.RetriesSuccess} success), Orphans: ${stats.OrphansRemoved} removed`);
 
@@ -91,7 +102,7 @@ export class ScheduledGeocodingAction extends BaseAction {
     private async processMissingRecords(
         contextUser: UserInfo,
         batchSize: number,
-        maxTotal: number | null,
+        maxTotal: number,
         provider?: IMetadataProvider
     ): Promise<{ Processed: number; Success: number }> {
         const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
@@ -100,9 +111,9 @@ export class ScheduledGeocodingAction extends BaseAction {
         let totalSuccess = 0;
 
         for (const entityInfo of geoEntities) {
-            if (maxTotal != null && totalProcessed >= maxTotal) break;
+            if (totalProcessed >= maxTotal) break;
 
-            const remaining = maxTotal != null ? maxTotal - totalProcessed : null;
+            const remaining = maxTotal - totalProcessed;
             const entityStats = await this.processMissingForEntity(entityInfo, contextUser, batchSize, remaining);
             totalProcessed += entityStats.Processed;
             totalSuccess += entityStats.Success;
@@ -116,23 +127,22 @@ export class ScheduledGeocodingAction extends BaseAction {
     }
 
     /**
-     * Process all missing RecordGeoCode rows for a single entity.
-     * Loads all entity records with non-null geo fields, filters out those
-     * that already have a RecordGeoCode row, then geocodes the rest in
-     * parallel batches.
+     * Process all missing RecordGeoCode rows for a single entity using pagination.
      *
-     * @param entityInfo - The entity to process
-     * @param contextUser - User context for data operations
-     * @param batchSize - Number of concurrent geocoding operations per batch
-     * @param maxRows - Maximum records to process (0 = unlimited)
+     * Instead of loading ALL entity records into memory at once (which causes OOM
+     * with 50k+ records), this fetches pages of PAGE_SIZE records, processes each
+     * page, then releases references so previous pages can be GC'd.
+     *
+     * Also loads all existing RecordGeoCode rows for this entity into a lightweight
+     * Map upfront (ExistingGeoCodeInfo — ~5 small fields per row, ~15MB for 50k rows)
+     * to eliminate the N+1 per-record FindExistingGeoCode SQL query.
      */
     private async processMissingForEntity(
         entityInfo: EntityInfo,
         contextUser: UserInfo,
         batchSize: number,
-        maxRows: number | null
+        maxRows: number
     ): Promise<{ Processed: number; Success: number }> {
-        const rv = new RunView();
         const pkField = entityInfo.FirstPrimaryKey;
         if (!pkField) return { Processed: 0, Success: 0 };
 
@@ -140,38 +150,49 @@ export class ScheduledGeocodingAction extends BaseAction {
         if (geoFields.length === 0) return { Processed: 0, Success: 0 };
 
         try {
-            // Get all record IDs that already have a RecordGeoCode row
-            const existingRecordIds = await this.getExistingGeoCodeRecordIds(entityInfo.ID, contextUser);
+            // Bulk load: lightweight map of all existing RecordGeoCode rows for this entity.
+            // Used both for filtering (which records are missing) and passed through to
+            // GeoCodeSyncService to eliminate per-record SQL queries.
+            const existingMap = await this.loadExistingGeoCodesMap(entityInfo.ID, contextUser);
 
-            // Load entity records with non-null geo fields
             const nonNullConditions = geoFields.map(f => `${f.Name} IS NOT NULL`).join(' OR ');
-            const result = await rv.RunView({
-                EntityName: entityInfo.Name,
-                ExtraFilter: `(${nonNullConditions})`,
-                IgnoreMaxRows: true,
-                BypassCache: true,
-                ResultType: 'entity_object'
-            }, contextUser);
+            let totalProcessed = 0;
+            let totalSuccess = 0;
+            let pageOffset = 0;
 
-            if (!result.Success || result.Results.length === 0) {
-                return { Processed: 0, Success: 0 };
-            }
+            // Paginate through entity records to avoid loading all into memory at once
+            while (totalProcessed < maxRows) {
+                const pageResult = await this.loadEntityPage(
+                    entityInfo.Name, nonNullConditions, pageOffset, contextUser
+                );
 
-            // Filter to records missing geocodes
-            let missingRecords = (result.Results as unknown as BaseEntity[])
-                .filter(entity => {
+                if (!pageResult.Success || pageResult.Results.length === 0) break;
+
+                const pageEntities = pageResult.Results as unknown as BaseEntity[];
+
+                // Filter to records missing geocodes (not in existingMap for any LocationType)
+                const missingRecords = pageEntities.filter(entity => {
                     const recordId = this.buildRecordId(entity);
-                    return !existingRecordIds.has(recordId);
+                    // A record is "missing" if it has no existing geocode row at all.
+                    // Check for 'Primary' since that's the only LocationType currently generated.
+                    const key = GeoCodeSyncService.BuildGeoCodeMapKey(recordId, 'Primary');
+                    return !existingMap.has(key);
                 });
 
-            if (maxRows != null) {
-                missingRecords = missingRecords.slice(0, maxRows);
+                if (missingRecords.length > 0) {
+                    const budget = maxRows - totalProcessed;
+                    const toProcess = missingRecords.slice(0, budget);
+                    const stats = await this.geocodeBatch(toProcess, entityInfo, contextUser, batchSize, existingMap);
+                    totalProcessed += stats.Processed;
+                    totalSuccess += stats.Success;
+                }
+
+                // If this page was smaller than PAGE_SIZE, we've exhausted the entity
+                if (pageEntities.length < ScheduledGeocodingAction.PAGE_SIZE) break;
+                pageOffset += ScheduledGeocodingAction.PAGE_SIZE;
             }
 
-            if (missingRecords.length === 0) return { Processed: 0, Success: 0 };
-
-            // Geocode in parallel batches
-            return await this.geocodeBatch(missingRecords, entityInfo, contextUser, batchSize);
+            return { Processed: totalProcessed, Success: totalSuccess };
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : String(e);
             LogError(`ScheduledGeocodingAction: Error querying missing records for ${entityInfo.Name}: ${msg}`);
@@ -179,70 +200,104 @@ export class ScheduledGeocodingAction extends BaseAction {
         }
     }
 
+    /**
+     * Load a single page of entity records with non-null geo fields.
+     * Uses OrderBy on PK + MaxRows + offset simulation via GreaterThan filter
+     * to paginate without loading the full result set.
+     */
+    private async loadEntityPage(
+        entityName: string,
+        nonNullFilter: string,
+        offset: number,
+        contextUser: UserInfo
+    ): Promise<{ Success: boolean; Results: BaseEntity[] }> {
+        const rv = new RunView();
+        const result = await rv.RunView({
+            EntityName: entityName,
+            ExtraFilter: `(${nonNullFilter})`,
+            OrderBy: 'ID',
+            MaxRows: ScheduledGeocodingAction.PAGE_SIZE,
+            StartRow: offset + 1,  // RunView StartRow is 1-based
+            BypassCache: true,
+            ResultType: 'entity_object'
+        }, contextUser);
+
+        return {
+            Success: result.Success,
+            Results: result.Success ? (result.Results as unknown as BaseEntity[]) : []
+        };
+    }
+
     // ================================================================
     // Step 2: Retry failed geocoding attempts
     // ================================================================
 
     /**
-     * Retry failed geocoding attempts. Loads the source entity record
-     * and re-runs GeoCodeSyncService. Processes all eligible failures
-     * (or up to maxTotal) in parallel batches.
+     * Retry failed geocoding attempts using pagination.
+     * Loads pages of failed RecordGeoCode rows, then loads source entity records
+     * and re-runs GeoCodeSyncService. Processes up to maxTotal records.
      */
     private async processFailedRetries(
         contextUser: UserInfo,
         maxRetries: number,
         batchSize: number,
-        maxTotal: number | null,
+        maxTotal: number,
         provider?: IMetadataProvider
     ): Promise<{ Processed: number; Success: number }> {
-        const rv = new RunView();
-
-        const failedResult = await rv.RunView<MJRecordGeoCodeEntity>({
-            EntityName: 'MJ: Record Geo Codes',
-            ExtraFilter: `Status='failed' AND RetryCount < ${maxRetries}`,
-            IgnoreMaxRows: true,
-            OrderBy: 'RetryCount ASC, GeocodedAt ASC',
-            ResultType: 'entity_object'
-        }, contextUser);
-
-        if (!failedResult.Success || failedResult.Results.length === 0) {
-            return { Processed: 0, Success: 0 };
-        }
-
-        let records = failedResult.Results;
-        if (maxTotal != null) {
-            records = records.slice(0, maxTotal);
-        }
-
-        LogStatus(`ScheduledGeocodingAction: ${records.length} failed records eligible for retry`);
+        if (maxTotal <= 0) return { Processed: 0, Success: 0 };
 
         const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
+        const rv = new RunView();
         let totalProcessed = 0;
         let totalSuccess = 0;
+        let pageOffset = 0;
 
-        // Group by entity for efficient processing
-        const byEntity = new Map<string, MJRecordGeoCodeEntity[]>();
-        for (const geoRecord of records) {
-            const key = geoRecord.EntityID;
-            let arr = byEntity.get(key);
-            if (!arr) {
-                arr = [];
-                byEntity.set(key, arr);
+        while (totalProcessed < maxTotal) {
+            const pageResult = await rv.RunView<MJRecordGeoCodeEntity>({
+                EntityName: 'MJ: Record Geo Codes',
+                ExtraFilter: `Status='failed' AND RetryCount < ${maxRetries}`,
+                OrderBy: 'RetryCount ASC, GeocodedAt ASC',
+                MaxRows: ScheduledGeocodingAction.PAGE_SIZE,
+                StartRow: pageOffset + 1,
+                BypassCache: true,
+                ResultType: 'entity_object'
+            }, contextUser);
+
+            if (!pageResult.Success || pageResult.Results.length === 0) break;
+
+            const budget = maxTotal - totalProcessed;
+            const records = pageResult.Results.slice(0, budget);
+
+            if (totalProcessed === 0) {
+                LogStatus(`ScheduledGeocodingAction: Processing failed records for retry`);
             }
-            arr.push(geoRecord);
-        }
 
-        for (const [entityId, geoRecords] of byEntity) {
-            const entityInfo = md.EntityByID(entityId);
-            if (!entityInfo) continue;
+            // Group by entity for efficient processing
+            const byEntity = new Map<string, MJRecordGeoCodeEntity[]>();
+            for (const geoRecord of records) {
+                const key = geoRecord.EntityID;
+                let arr = byEntity.get(key);
+                if (!arr) {
+                    arr = [];
+                    byEntity.set(key, arr);
+                }
+                arr.push(geoRecord);
+            }
 
-            // Load source entity records and geocode them in parallel batches
-            const entities = await this.loadSourceEntities(geoRecords, entityInfo, contextUser, provider);
-            if (entities.length === 0) continue;
+            for (const [entityId, geoRecords] of byEntity) {
+                const entityInfo = md.EntityByID(entityId);
+                if (!entityInfo) continue;
 
-            const stats = await this.geocodeBatch(entities, entityInfo, contextUser, batchSize);
-            totalProcessed += stats.Processed;
-            totalSuccess += stats.Success;
+                const entities = await this.loadSourceEntities(geoRecords, entityInfo, contextUser, provider);
+                if (entities.length === 0) continue;
+
+                const stats = await this.geocodeBatch(entities, entityInfo, contextUser, batchSize);
+                totalProcessed += stats.Processed;
+                totalSuccess += stats.Success;
+            }
+
+            if (pageResult.Results.length < ScheduledGeocodingAction.PAGE_SIZE) break;
+            pageOffset += ScheduledGeocodingAction.PAGE_SIZE;
         }
 
         return { Processed: totalProcessed, Success: totalSuccess };
@@ -283,7 +338,8 @@ export class ScheduledGeocodingAction extends BaseAction {
 
     /**
      * Remove RecordGeoCode rows whose source entity record no longer exists.
-     * Processes one entity at a time to keep queries efficient.
+     * Processes one entity at a time, paginating orphan queries to avoid loading
+     * all orphan rows into memory simultaneously.
      */
     private async cleanupOrphanedRecords(
         contextUser: UserInfo,
@@ -294,7 +350,7 @@ export class ScheduledGeocodingAction extends BaseAction {
         const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
         let totalRemoved = 0;
 
-        // Get distinct EntityIDs from RecordGeoCode
+        // Get distinct EntityIDs from RecordGeoCode (lightweight — just IDs)
         const entityResult = await rv.RunView<{ EntityID: string }>({
             EntityName: 'MJ: Record Geo Codes',
             Fields: ['EntityID'],
@@ -314,23 +370,10 @@ export class ScheduledGeocodingAction extends BaseAction {
                 const pkField = entityInfo.FirstPrimaryKey;
                 if (!pkField) continue;
 
-                const orphanResult = await rv.RunView<MJRecordGeoCodeEntity>({
-                    EntityName: 'MJ: Record Geo Codes',
-                    ExtraFilter: `EntityID = '${entityId}' AND NOT EXISTS (SELECT 1 FROM ${entityInfo.SchemaName}.${entityInfo.BaseTable} src WHERE CAST(src.${pkField.Name} AS NVARCHAR(450)) = RecordID)`,
-                    IgnoreMaxRows: true,
-                    ResultType: 'entity_object'
-                }, contextUser);
-
-                if (orphanResult.Success && orphanResult.Results.length > 0) {
-                    // Delete orphans in parallel batches
-                    const orphans = orphanResult.Results;
-                    for (let i = 0; i < orphans.length; i += batchSize) {
-                        const batch = orphans.slice(i, i + batchSize);
-                        const results = await Promise.allSettled(batch.map(o => o.Delete()));
-                        totalRemoved += results.filter(r => r.status === 'fulfilled' && r.value).length;
-                    }
-                    LogStatus(`ScheduledGeocodingAction: Removed ${orphanResult.Results.length} orphaned geo records for ${entityInfo.Name}`);
-                }
+                const entityRemoved = await this.cleanupOrphansForEntity(
+                    entityId, entityInfo, pkField.Name, contextUser, batchSize, rv
+                );
+                totalRemoved += entityRemoved;
             } catch (e: unknown) {
                 const msg = e instanceof Error ? e.message : String(e);
                 LogError(`ScheduledGeocodingAction: Orphan cleanup error for entity ${entityId}: ${msg}`);
@@ -338,6 +381,53 @@ export class ScheduledGeocodingAction extends BaseAction {
         }
 
         return totalRemoved;
+    }
+
+    /**
+     * Paginated orphan cleanup for a single entity. Fetches pages of orphan rows,
+     * deletes them, then fetches the next page. Since deleted rows disappear from
+     * subsequent queries, we always fetch from offset 0.
+     */
+    private async cleanupOrphansForEntity(
+        entityId: string,
+        entityInfo: EntityInfo,
+        pkFieldName: string,
+        contextUser: UserInfo,
+        batchSize: number,
+        rv: RunView
+    ): Promise<number> {
+        let entityRemoved = 0;
+        const orphanFilter = `EntityID = '${entityId}' AND NOT EXISTS (SELECT 1 FROM ${entityInfo.SchemaName}.${entityInfo.BaseTable} src WHERE CAST(src.${pkFieldName} AS NVARCHAR(450)) = RecordID)`;
+
+        // Paginate: fetch a page, delete it, repeat. Since we're deleting rows,
+        // always query from the start — deleted rows won't appear again.
+        let hasMore = true;
+        while (hasMore) {
+            const orphanResult = await rv.RunView<MJRecordGeoCodeEntity>({
+                EntityName: 'MJ: Record Geo Codes',
+                ExtraFilter: orphanFilter,
+                MaxRows: ScheduledGeocodingAction.PAGE_SIZE,
+                BypassCache: true,
+                ResultType: 'entity_object'
+            }, contextUser);
+
+            if (!orphanResult.Success || orphanResult.Results.length === 0) break;
+
+            const orphans = orphanResult.Results;
+            for (let i = 0; i < orphans.length; i += batchSize) {
+                const batch = orphans.slice(i, i + batchSize);
+                const results = await Promise.allSettled(batch.map(o => o.Delete()));
+                entityRemoved += results.filter(r => r.status === 'fulfilled' && r.value).length;
+            }
+
+            // If we got fewer than PAGE_SIZE, we've exhausted the orphans
+            hasMore = orphans.length >= ScheduledGeocodingAction.PAGE_SIZE;
+        }
+
+        if (entityRemoved > 0) {
+            LogStatus(`ScheduledGeocodingAction: Removed ${entityRemoved} orphaned geo records for ${entityInfo.Name}`);
+        }
+        return entityRemoved;
     }
 
     // ================================================================
@@ -358,12 +448,14 @@ export class ScheduledGeocodingAction extends BaseAction {
      * @param entityInfo - Entity metadata
      * @param contextUser - User context
      * @param batchSize - Number of concurrent geocoding operations per batch
+     * @param existingGeoCodesMap - Optional pre-loaded map passed to GeoCodeSyncService
      */
     private async geocodeBatch(
         entities: BaseEntity[],
         entityInfo: EntityInfo,
         contextUser: UserInfo,
-        batchSize: number
+        batchSize: number,
+        existingGeoCodesMap?: Map<string, ExistingGeoCodeInfo>
     ): Promise<{ Processed: number; Success: number }> {
         let totalSuccess = 0;
 
@@ -371,7 +463,7 @@ export class ScheduledGeocodingAction extends BaseAction {
             const batch = entities.slice(i, i + batchSize);
 
             const results = await Promise.allSettled(
-                batch.map(entity => this.geocodeAndInvalidate(entity, contextUser))
+                batch.map(entity => this.geocodeAndInvalidate(entity, contextUser, existingGeoCodesMap))
             );
 
             const batchSuccess = results.filter(r => r.status === 'fulfilled' && r.value).length;
@@ -396,9 +488,15 @@ export class ScheduledGeocodingAction extends BaseAction {
      *
      * @returns true if geocoding succeeded, false otherwise
      */
-    private async geocodeAndInvalidate(entity: BaseEntity, contextUser: UserInfo): Promise<boolean> {
+    private async geocodeAndInvalidate(
+        entity: BaseEntity,
+        contextUser: UserInfo,
+        existingGeoCodesMap?: Map<string, ExistingGeoCodeInfo>
+    ): Promise<boolean> {
         try {
-            const result = await GeoCodeSyncService.Instance.SyncIfChanged(entity, contextUser);
+            const result = await GeoCodeSyncService.Instance.SyncIfChanged(
+                entity, contextUser, undefined, existingGeoCodesMap
+            );
 
             if (result) {
                 // Geocoding produced new coordinates — fire cache invalidation.
@@ -464,21 +562,49 @@ export class ScheduledGeocodingAction extends BaseAction {
     }
 
     /**
-     * Get the set of RecordIDs that already have a RecordGeoCode row for an entity.
+     * Load all existing RecordGeoCode rows for an entity into a lightweight Map.
+     * Keyed by `RecordID|LocationType` for O(1) lookup.
+     *
+     * This replaces both the old getExistingGeoCodeRecordIds() Set (for filtering
+     * missing records) and the per-record FindExistingGeoCode() SQL query in
+     * GeoCodeSyncService (for staleness checking). The map holds ~5 small string
+     * fields per row — even 50k rows is only ~15MB, safe to hold in memory for
+     * the duration of one entity's processing.
      */
-    private async getExistingGeoCodeRecordIds(entityId: string, contextUser: UserInfo): Promise<Set<string>> {
+    private async loadExistingGeoCodesMap(
+        entityId: string,
+        contextUser: UserInfo
+    ): Promise<Map<string, ExistingGeoCodeInfo>> {
         const rv = new RunView();
-        const existingResult = await rv.RunView<{ RecordID: string }>({
+        const result = await rv.RunView<{
+            ID: string;
+            RecordID: string;
+            LocationType: string;
+            SourceFieldHash: string | null;
+            Status: string;
+        }>({
             EntityName: 'MJ: Record Geo Codes',
             ExtraFilter: `EntityID = '${entityId}'`,
-            Fields: ['RecordID'],
+            Fields: ['ID', 'RecordID', 'LocationType', 'SourceFieldHash', 'Status'],
             ResultType: 'simple',
-            IgnoreMaxRows: true
+            IgnoreMaxRows: true,
+            BypassCache: true
         }, contextUser);
 
-        return new Set<string>(
-            existingResult.Success ? existingResult.Results.map(r => r.RecordID) : []
-        );
+        const map = new Map<string, ExistingGeoCodeInfo>();
+        if (result.Success) {
+            for (const row of result.Results) {
+                const key = GeoCodeSyncService.BuildGeoCodeMapKey(row.RecordID, row.LocationType);
+                map.set(key, {
+                    ID: row.ID,
+                    RecordID: row.RecordID,
+                    LocationType: row.LocationType,
+                    SourceFieldHash: row.SourceFieldHash,
+                    Status: row.Status
+                });
+            }
+        }
+        return map;
     }
 
     /**
@@ -502,13 +628,4 @@ export class ScheduledGeocodingAction extends BaseAction {
         return isNaN(parsed) ? defaultValue : parsed;
     }
 
-    /**
-     * Extract an optional numeric parameter. Returns null if not provided.
-     */
-    private getNullableNumericParam(params: RunActionParams, name: string): number | null {
-        const param = params.Params.find(p => p.Name.trim().toLowerCase() === name.toLowerCase());
-        if (!param || param.Value === undefined || param.Value === null) return null;
-        const parsed = Number(param.Value);
-        return isNaN(parsed) ? null : parsed;
-    }
 }

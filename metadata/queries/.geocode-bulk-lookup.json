@@ -1,0 +1,37 @@
+[
+  {
+    "fields": {
+      "Name": "GeoBulkLookup_RecordGeoCodesByEntity",
+      "CategoryID": "@lookup:MJ: Query Categories.Name=MJ",
+      "Description": "Bulk lookup of all RecordGeoCode rows for a given entity. Returns lightweight fields (ID, RecordID, LocationType, SourceFieldHash, Status) for in-memory staleness checking and existence filtering. Used by ScheduledGeocodingAction to eliminate per-record SQL queries during batch geocoding.",
+      "SQL": "@file:SQL/geocode-bulk-lookup/bulk-geocode-by-entity.sql",
+      "UsesTemplate": true,
+      "Status": "Approved"
+    },
+    "relatedEntities": {
+      "MJ: Query SQLs": [
+        {
+          "fields": {
+            "QueryID": "@parent:ID",
+            "SQLDialectID": "@lookup:MJ: SQL Dialects.PlatformKey=postgresql",
+            "SQL": "@file:SQL/geocode-bulk-lookup/bulk-geocode-by-entity.pg.sql"
+          },
+          "primaryKey": {
+            "ID": "8B22E8A0-9362-4958-83BB-E98300B6DD34"
+          },
+          "sync": {
+            "lastModified": "2026-05-03T05:57:44.271Z",
+            "checksum": "3a52b64f8f1bc0f157c3efc1f4ef50643f14efa0d63abd747202b27fabb535f7"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "C0A11C4B-7C68-4A42-AC5E-F5268193CDAA"
+    },
+    "sync": {
+      "lastModified": "2026-05-03T05:57:44.248Z",
+      "checksum": "eab06a8762c33f5277d31f6e32737e0be4b5000ff2cc845bc6baf667927d9277"
+    }
+  }
+]
