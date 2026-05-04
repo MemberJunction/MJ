@@ -725,6 +725,23 @@ SELECT * FROM delete_result`;
             .replace(/__+/g, '_');
     }
 
+    /**
+     * PG-specific narrow rule for whether to send a `_Clear` companion param
+     * on save. Mirrors `PostgreSQLCodeGenProvider.needsClearCompanion`: a
+     * `_Clear` is emitted iff the column is nullable AND has a non-NULL DB
+     * default. PG has a hard 100-argument limit per function, so we cannot
+     * use the broader `EntityFieldInfo.NeedsClearCompanion` rule here without
+     * busting that ceiling on wide tables. Both ends (codegen-emit + runtime-
+     * call) must agree on the same predicate or callers will pass `_Clear`
+     * params the SP doesn't accept (or vice versa).
+     */
+    private pgNeedsClearCompanion(field: EntityFieldInfo): boolean {
+        if (!field.AllowsNull || !field.HasDefaultValue) return false;
+        const dv = (field.DefaultValue ?? '').toString().trim();
+        if (dv.length === 0) return false;
+        return dv.toUpperCase() !== 'NULL';
+    }
+
     private quoteFieldNamesInToken(token: string, fieldNames: Set<string>): string {
         for (const fieldName of fieldNames) {
             // Negative lookahead: don't quote words followed by ( — those are function calls
@@ -835,14 +852,18 @@ SELECT * FROM delete_result`;
             // SP's `_Clear` companion. Otherwise the SP body's COALESCE merge
             // (update) or default-substitution (create) silently keeps the
             // existing value or applies the default — a literal NULL could
-            // never be persisted. Predicate lives on EntityFieldInfo where
-            // it logically belongs (pure metadata) and stays in sync with
-            // codegen. Companion param name is rendered through
-            // pgDialect.ParameterRef to match the snake-case shape codegen
-            // emits for `_Clear` params (newly generated procs only —
-            // baseline-converted procs predate this companion mechanism
-            // and won't ever have one).
-            if ((value === null || value === undefined) && field.NeedsClearCompanion) {
+            // never be persisted.
+            //
+            // PG-specific narrow rule (deviates from EntityFieldInfo.NeedsClearCompanion):
+            // PG has a hard 100-argument limit per function. The broadened
+            // `_Clear`-for-all-nullable-columns rule from PR #2533 doubles the
+            // param count of CRUD SPs; entities with 80+ nullable columns
+            // (AIPromptRun: 165, AIAgent: 123, AIPrompt: 103) overshoot the
+            // limit. Use the original narrow rule here (only fields with a
+            // non-NULL DB default) so the SP signatures stay under 100 params.
+            // Mirrored in PostgreSQLCodeGenProvider.needsClearCompanion to keep
+            // the runtime call site aligned with the codegen-emitted signature.
+            if ((value === null || value === undefined) && this.pgNeedsClearCompanion(field)) {
                 const clearParamName = pgDialect.ParameterRef(field.CodeName + '_Clear');
                 paramValues.push(true);
                 placeholders.push(`${clearParamName} => $${paramIndex + 1}`);
