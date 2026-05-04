@@ -1,5 +1,11 @@
 # Change Log - @memberjunction/ai
 
+## 5.32.0
+
+### Patch Changes
+
+- @memberjunction/global@5.32.0
+
 ## 5.31.0
 
 ### Patch Changes
