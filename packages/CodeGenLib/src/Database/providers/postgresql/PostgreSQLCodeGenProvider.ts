@@ -133,6 +133,8 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
         const selectParts = this.buildBaseViewSelectParts(context, alias);
         const fromParts = this.buildBaseViewFromParts(context, entity, alias);
         const quotedView = pgDialect.QuoteSchema(entity.SchemaName, viewName);
+        const schemaLit = entity.SchemaName.replace(/'/g, "''");
+        const viewNameLit = viewName.replace(/'/g, "''");
 
         // Inner CREATE OR REPLACE statement (no trailing semicolon — embedded inside
         // the DO block via dollar-quoted literal).
@@ -154,11 +156,97 @@ ${whereClause}`;
 DO $vw_regen$
 DECLARE
   vsql CONSTANT TEXT := $vsql$${createOrReplaceSQL}$vsql$;
+  rec RECORD;
 BEGIN
   EXECUTE vsql;
 EXCEPTION WHEN invalid_table_definition THEN
+  -- 42P16: column rename/reorder/type change. CREATE OR REPLACE can't handle
+  -- non-additive shape changes — must DROP CASCADE + recreate. CASCADE drops
+  -- every dependent view (anything that JOINs this view in its body), so we
+  -- capture each dependent's definition + grants BEFORE the drop and replay
+  -- them afterward (best-effort). Without this, on a fresh-DB replay where
+  -- one entity's wrapper triggers (e.g. vwAIModelTypes shape changed since
+  -- baseline V202605021056), CASCADE wipes downstream views (vwAIModels)
+  -- that the wrapper for this entity doesn't know how to recreate, and
+  -- those views stay permanently missing.
+  CREATE TEMP TABLE IF NOT EXISTS _vw_regen_deps (
+    schema_name TEXT,
+    view_name   TEXT,
+    relkind     CHAR(1),
+    definition  TEXT,
+    grants_sql  TEXT
+  ) ON COMMIT DROP;
+  DELETE FROM _vw_regen_deps;
+
+  -- Capture dependents. NOTES on the grants_sql build:
+  --   - Use pg_authid.rolname (raw, unquoted) joined on grantee oid, then
+  --     quote_ident() it. Earlier versions cast (aclexplode).grantee::regrole::text
+  --     which RETURNS the role name pre-quoted when it contains uppercase
+  --     (e.g. '"cdp_Developer"'); calling quote_ident on the already-quoted
+  --     string then double-wraps to '"""cdp_Developer"""' and the GRANT
+  --     fails at replay with 'role does not exist'. The lookup via pg_authid
+  --     gives us the bare name and lets quote_ident do the right thing.
+  --   - PUBLIC is grantee oid 0, which has no pg_authid row — handle via
+  --     LEFT JOIN + COALESCE so the role list is built consistently.
+  INSERT INTO _vw_regen_deps (schema_name, view_name, relkind, definition, grants_sql)
+  SELECT DISTINCT
+      dn.nspname,
+      dc.relname,
+      dc.relkind,
+      pg_get_viewdef(dc.oid),
+      (SELECT string_agg(
+          'GRANT ' || g.privilege || ' ON ' || quote_ident(dn.nspname) || '.' || quote_ident(dc.relname) ||
+          ' TO ' || (CASE WHEN g.grantee_oid = 0 THEN 'PUBLIC' ELSE quote_ident(r.rolname) END) || ';',
+          E'\n')
+       FROM (
+           SELECT (aclexplode(dc.relacl)).grantee AS grantee_oid,
+                  (aclexplode(dc.relacl)).privilege_type AS privilege
+       ) g
+       LEFT JOIN pg_authid r ON r.oid = g.grantee_oid
+       WHERE g.privilege IN ('SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER'))
+  FROM pg_depend d
+  JOIN pg_rewrite r ON r.oid = d.objid AND d.classid = 'pg_rewrite'::regclass
+  JOIN pg_class dc ON dc.oid = r.ev_class AND dc.relkind IN ('v', 'm')
+  JOIN pg_namespace dn ON dn.oid = dc.relnamespace
+  JOIN pg_class tc ON tc.oid = d.refobjid
+  JOIN pg_namespace tn ON tn.oid = tc.relnamespace
+  WHERE tn.nspname = '${schemaLit}'
+    AND tc.relname = '${viewNameLit}'
+    AND tc.relkind IN ('v', 'm')
+    AND dc.oid <> tc.oid;
+
   DROP VIEW IF EXISTS ${quotedView} CASCADE;
   EXECUTE vsql;
+
+  -- Replay captured dependents. Best-effort: log + continue on failure.
+  -- IMPORTANT: the CREATE VIEW and the GRANTs run in SEPARATE inner BEGIN
+  -- blocks. PL/pgSQL's BEGIN ... EXCEPTION creates an implicit savepoint
+  -- and rolls back EVERY statement in the block on any exception. If we
+  -- combined CREATE+GRANT in one block and a GRANT failed (e.g. role not
+  -- present in target environment), the just-recreated VIEW would also
+  -- get rolled back and stay missing — the exact failure mode this
+  -- wrapper exists to prevent.
+  FOR rec IN SELECT schema_name, view_name, relkind, definition, grants_sql FROM _vw_regen_deps LOOP
+    BEGIN
+      IF rec.relkind = 'm' THEN
+        EXECUTE 'CREATE MATERIALIZED VIEW ' || quote_ident(rec.schema_name) || '.' || quote_ident(rec.view_name) || ' AS ' || rec.definition;
+      ELSE
+        EXECUTE 'CREATE VIEW ' || quote_ident(rec.schema_name) || '.' || quote_ident(rec.view_name) || ' AS ' || rec.definition;
+      END IF;
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'Best-effort restore skipped dependent %.%: %', rec.schema_name, rec.view_name, SQLERRM;
+    END;
+
+    IF rec.grants_sql IS NOT NULL THEN
+      BEGIN
+        EXECUTE rec.grants_sql;
+      EXCEPTION WHEN OTHERS THEN
+        RAISE NOTICE 'Best-effort grant restore skipped %.%: %', rec.schema_name, rec.view_name, SQLERRM;
+      END;
+    END IF;
+  END LOOP;
+
+  DROP TABLE _vw_regen_deps;
 END $vw_regen$;
 `;
     }

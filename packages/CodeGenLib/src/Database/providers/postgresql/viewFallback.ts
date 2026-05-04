@@ -202,39 +202,42 @@ async function restoreDependents(
     // that no longer exist), swallow the error — the owning entity's regen
     // will fix it. Anything that owns a captured definition AND isn't slated
     // for regen WILL surface as a hard error (re-thrown below).
+    // ALWAYS-BEST-EFFORT for dependents (changed strategy):
+    //
+    // The previous policy rethrew on a non-willRegenerate dependent restore
+    // failure, which ROLLBACK'd the entire transaction including the just-
+    // recreated TARGET view. The result: target view permanently missing,
+    // dependent CRUD functions (RETURNS SETOF target) failing in their
+    // phase, and 16+ entities (AIModel, UserApplicationEntity, etc.) ending
+    // up with no spCreate/spUpdate at all. Losing the target is worse than
+    // losing a dependent.
+    //
+    // New policy: log dependent failures, continue. The target view's
+    // recreation always commits. Dependents that couldn't be restored stay
+    // missing — they'll either come back in a later codegen pass (if
+    // willRegenerate) or surface as a missing-routine warning at validator
+    // time (which is actionable and visible, vs. a silent ROLLBACK).
     for (const dep of dependents) {
-        const key = `${dep.schema}.${dep.name}`;
-        const willRegen = willRegenerate.has(key);
         const kind = dep.relkind === 'm' ? 'MATERIALIZED VIEW' : 'VIEW';
         const sql = `CREATE ${kind} ${quoteQualified(dep.schema, dep.name)} AS ${dep.definition}`;
         try {
             await client.query(sql);
         } catch (e) {
-            if (willRegen) {
-                // Captured definition couldn't be re-created (likely stale —
-                // depends on a column that just got reshaped). The owning
-                // entity's regen will create the new definition; suppress.
-                continue;
-            }
-            throw new ViewFallbackRestoreError('restore-view', { schema: dep.schema, name: dep.name, sql }, e);
+            // Best-effort: log, continue. Target view stays committed.
+            const msg = e instanceof Error ? e.message : String(e);
+            // eslint-disable-next-line no-console
+            console.warn(`[viewFallback] best-effort restore skipped dependent ${dep.schema}.${dep.name}: ${msg}`);
         }
     }
 
-    // 2. Dependent functions via pg_get_functiondef. The captured body is a
-    //    full CREATE OR REPLACE FUNCTION statement so we execute verbatim.
-    //    Same "always try, swallow on willRegenerate" strategy as views.
+    // 2. Dependent functions via pg_get_functiondef. Same best-effort policy.
     for (const fn of dependentFunctions) {
-        const key = `${fn.schema}.${fn.name}`;
-        const willRegen = willRegenerate.has(key);
         try {
             await client.query(fn.definition);
         } catch (e) {
-            if (willRegen) continue;
-            throw new ViewFallbackRestoreError(
-                'restore-function',
-                { schema: fn.schema, name: fn.name, sql: fn.definition },
-                e
-            );
+            const msg = e instanceof Error ? e.message : String(e);
+            // eslint-disable-next-line no-console
+            console.warn(`[viewFallback] best-effort restore skipped dependent function ${fn.schema}.${fn.name}: ${msg}`);
         }
     }
 

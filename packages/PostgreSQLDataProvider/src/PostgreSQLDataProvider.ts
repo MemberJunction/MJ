@@ -297,8 +297,26 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
      * across both backends.
      */
     async BeginTransaction(): Promise<void> {
+        // Stage state mutations so the catch block can fully revert. The
+        // previous implementation only rolled back `_transactionDepth` on
+        // failure — it left the pushed name on `_savepointStack` and the
+        // bumped `_savepointCounter` in place. When the SAVEPOINT query
+        // failed (e.g. the transaction was already in PG's "aborted" state
+        // because of an earlier per-record error inside `mj sync push`), the
+        // next nested BeginTransaction would generate `mj_sp_(N+1)`, push it,
+        // and the corresponding RollbackTransaction would `ROLLBACK TO
+        // SAVEPOINT mj_sp_(N+1)` — which PG had never created, raising
+        // `savepoint "mj_sp_(N+1)" does not exist` and tearing down the
+        // entire push.
+        let savepointName: string | null = null;
+        let pushedSavepoint = false;
+        let bumpedCounter = false;
+        let depthIncreased = false;
+
+        this._transactionDepth++;
+        depthIncreased = true;
+
         try {
-            this._transactionDepth++;
             if (this._transactionDepth === 1) {
                 this._transaction = await this._connectionManager.AcquireClient();
                 await this._transaction.query('BEGIN');
@@ -307,14 +325,22 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
                     // Defensive: depth got out of sync with client state. Reset and surface.
                     throw new Error(`PostgreSQLDataProvider transaction state corrupted: depth=${this._transactionDepth} but no active client. Reset and rethrowing.`);
                 }
-                const savepointName = `mj_sp_${++this._savepointCounter}`;
+                savepointName = `mj_sp_${++this._savepointCounter}`;
+                bumpedCounter = true;
                 this._savepointStack.push(savepointName);
+                pushedSavepoint = true;
                 // PG savepoint identifiers are unquoted; we only ever generate
                 // ASCII-only names so quoting isn't required.
                 await this._transaction.query(`SAVEPOINT ${savepointName}`);
             }
         } catch (e) {
-            this._transactionDepth--;
+            // Full rollback of staged state — leaving any of these set on
+            // failure causes the savepoint stack and PG's actual savepoint
+            // state to drift, which surfaces later as "savepoint X does not
+            // exist" during rollback.
+            if (pushedSavepoint) this._savepointStack.pop();
+            if (bumpedCounter) this._savepointCounter--;
+            if (depthIncreased) this._transactionDepth--;
             throw e;
         }
     }

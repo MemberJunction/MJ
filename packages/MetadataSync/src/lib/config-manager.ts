@@ -13,16 +13,39 @@ import { BaseSingleton } from '@memberjunction/global';
 import { MJConfig } from '../config';
 
 /**
+ * Resolve dbPlatform from DB_TYPE env. Mirrors the helper in MJCLI/src/config.ts
+ * so a single .env drives mj migrate, mj codegen, and mj sync push consistently.
+ * Accepts the same alias set MJServer/MJCLI do: postgresql | postgres | pg |
+ * sqlserver | mssql.
+ */
+function resolveDbPlatformFromEnv(): 'sqlserver' | 'postgresql' | undefined {
+  const raw = process.env.DB_TYPE?.trim().toLowerCase();
+  if (!raw) return undefined;
+  if (raw === 'postgresql' || raw === 'postgres' || raw === 'pg') return 'postgresql';
+  if (raw === 'sqlserver' || raw === 'mssql') return 'sqlserver';
+  return undefined;
+}
+
+const ENV_DB_PLATFORM = resolveDbPlatformFromEnv();
+
+/**
  * Default configuration for MetadataSync
  *
  * Provides database connection settings from environment variables,
- * matching the pattern used by MJServer's DEFAULT_SERVER_CONFIG.
- * This ensures consistent behavior with the MJ ecosystem.
+ * matching the pattern used by MJServer's DEFAULT_SERVER_CONFIG and
+ * MJCLI's DEFAULT_CLI_CONFIG. This ensures consistent behavior with the
+ * rest of the MJ ecosystem — without `dbPlatform` resolved here, `mj sync
+ * push` against a PG .env silently constructs a SqlServerDataProvider and
+ * fails with `socket hang up` when its tedious driver tries to talk to
+ * postgres on port 5432.
  */
 const DEFAULT_SYNC_CONFIG: Partial<MJConfig> = {
   // Database connection settings (environment-driven with defaults)
+  dbPlatform: ENV_DB_PLATFORM ?? 'sqlserver',
   dbHost: process.env.DB_HOST ?? 'localhost',
-  dbPort: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : 1433,
+  dbPort: process.env.DB_PORT
+    ? parseInt(process.env.DB_PORT, 10)
+    : (ENV_DB_PLATFORM === 'postgresql' ? 5432 : 1433),
   dbDatabase: process.env.DB_DATABASE,
   dbUsername: process.env.DB_USERNAME,
   dbPassword: process.env.DB_PASSWORD,

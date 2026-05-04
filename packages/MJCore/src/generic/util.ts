@@ -21,7 +21,8 @@ export function TypeScriptTypeFromSQLType(sqlType: string): 'string' | 'number' 
     switch (sqlType.trim().toLowerCase()) {
         case 'text':
         case 'char':
-        case 'character': // PG returns this for CHAR(N)
+        case 'character': // PG returns this for CHAR(N) via information_schema
+        case 'bpchar':    // PG returns this for CHAR(N) via pg_catalog (internal type name — "blank-padded char")
         case 'character varying': // PG returns this for VARCHAR(N)
         case 'varchar':
         case 'ntext':
