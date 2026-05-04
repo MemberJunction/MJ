@@ -110,12 +110,32 @@ jobs:
           PGPASSWORD: testpass
           PGDATABASE: mj_pg_ci
         run: |
-          # Create roles referenced by migration GRANT statements
+          # Create roles referenced by migration GRANT statements, plus a stub
+          # of the Flyway/Skyway schema-history table. In real installs Skyway
+          # creates this table at startup before applying any V-migration; CI
+          # uses raw psql, so we have to mimic that bootstrap step. Without it,
+          # any view that joins __mj.flyway_schema_history (e.g.
+          # vwFlywayVersionHistoryParsed) fails to create with
+          # `relation "__mj.flyway_schema_history" does not exist`.
           psql <<'SQL'
           DO $$ BEGIN CREATE ROLE "cdp_UI" NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
           DO $$ BEGIN CREATE ROLE "cdp_Developer" NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
           DO $$ BEGIN CREATE ROLE "cdp_Integration" NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
           GRANT USAGE ON SCHEMA public TO "cdp_UI", "cdp_Developer", "cdp_Integration";
+
+          CREATE SCHEMA IF NOT EXISTS __mj;
+          CREATE TABLE IF NOT EXISTS __mj.flyway_schema_history (
+              installed_rank INTEGER NOT NULL PRIMARY KEY,
+              version VARCHAR(50),
+              description VARCHAR(200) NOT NULL,
+              type VARCHAR(20) NOT NULL,
+              script VARCHAR(1000) NOT NULL,
+              checksum INTEGER,
+              installed_by VARCHAR(100) NOT NULL,
+              installed_on TIMESTAMP NOT NULL DEFAULT now(),
+              execution_time INTEGER NOT NULL,
+              success BOOLEAN NOT NULL
+          );
           SQL
 
       # ─── Step 5: Apply PG migrations ────────────────────────────────

@@ -236,10 +236,21 @@ describe.skipIf(!hasMigrations || !hasPGMigrations)('v5 migration regression —
    * pre-baseline upgrades that the v5.0 PG baseline already incorporates, so
    * shipping a PG version would re-apply the same DDL on top of the baseline.
    * Removed in commit 37d65c66e1 in the migrations PR.
+   *
+   * The Force_Regen v5.32 entry is a temporary allowlist while the proper PG
+   * counterpart is being produced. The SS-side migration is a 65K-line bulk
+   * regeneration of every tolerant SP signature with the broadened
+   * NeedsClearCompanion semantics. The PG-equivalent content is being handled
+   * out-of-band: PR #2531 (Madhav, "fix(pg): unblock fresh-DB PostgreSQL
+   * end-to-end") consolidates the equivalent PG sproc regen into a single
+   * `V202605032134__v5.32.x__Unblock_PostgreSQL_End_To_End.pg-only.sql`
+   * migration. Once that PR lands (or the `/pg-migrate` automation produces
+   * a freshly-converted file), this entry should be removed.
    */
   const INTENTIONALLY_NO_PG_COUNTERPART = new Set<string>([
     'V202602131500__v5.0.x__Entity_Name_Normalization_And_ClassName_Prefix_Fix',
     'V202602141421__v5.0.x__Add_AllowMultipleSubtypes_to_Entity',
+    'V202605032116__v5.32.x__Force_Regen_Tolerant_SP_All_Nullable_Columns',
   ]);
 
   // Enforces that every T-SQL V-migration has a committed PG counterpart in
