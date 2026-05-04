@@ -319,6 +319,21 @@ All configuration is validated at startup using Zod schemas, with clear error me
 | `excludeSchemas` / `excludeTables` | Filter schemas and tables from metadata discovery |
 | `entityNaming` | Controls ALL CAPS normalization and compound word splitting for entity/field names |
 | `additionalSchemaInfo` | Path to JSON file with soft PK/FK definitions and schema prefix rules |
+| `dbType` / `dbPlatform` | Database backend selector. See **Database Platform Selection** below. |
+
+### Database Platform Selection (`dbType` / `dbPlatform`)
+
+CodeGenLib historically used `dbType: 'mssql' \| 'postgresql'`. `@memberjunction/cli` uses `dbPlatform: 'sqlserver' \| 'postgresql'`. As of this release both are accepted and reconciled before validation:
+
+| You set | What CodeGen does |
+|---|---|
+| `dbType` only | Derives `dbPlatform` for symmetry. |
+| `dbPlatform` only | Derives `dbType` (`sqlserver` → `mssql`, `postgresql` → `postgresql`). |
+| Both, in agreement | Keeps both. |
+| Both, conflicting | Throws a clear error at startup — silent dialect mismatch is never tolerated. |
+| Neither | Default `dbType: 'mssql'` applies. |
+
+This means a config file with **only `dbPlatform: 'postgresql'`** now correctly drives PG codegen. Previously CodeGen silently fell through to its `dbType: 'mssql'` default and produced MSSQL output against a PG database.
 
 ### Entity Naming Normalization
 

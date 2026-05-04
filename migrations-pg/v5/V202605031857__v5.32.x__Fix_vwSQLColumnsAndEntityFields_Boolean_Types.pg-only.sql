@@ -89,7 +89,15 @@ GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA ${flyway:defaultSchema}
 -- table column types and makes every existing comparison + downstream INSERT
 -- correct without further changes.
 
-CREATE OR REPLACE VIEW ${flyway:defaultSchema}."vwSQLColumnsAndEntityFields" AS
+-- PG's CREATE OR REPLACE VIEW cannot change a column's data type. Since this
+-- migration narrows IsVirtual + AutoIncrement from INTEGER to BOOLEAN, we must
+-- DROP the view and recreate it. CASCADE isn't needed — verified at write time
+-- that no other view depends on vwSQLColumnsAndEntityFields. If a downstream
+-- consumer is added in the future, switch to CASCADE and re-run CodeGen to
+-- regenerate any dropped dependents.
+DROP VIEW IF EXISTS ${flyway:defaultSchema}."vwSQLColumnsAndEntityFields";
+
+CREATE VIEW ${flyway:defaultSchema}."vwSQLColumnsAndEntityFields" AS
 SELECT
     e."EntityID",
     e."EntityName"                             AS "Entity",

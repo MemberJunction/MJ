@@ -123,6 +123,21 @@ export class SQLLogging {
                 contents = `${comment}${contents}`;
             }
 
+            // Many call sites pass SQL without a trailing semicolon because they execute
+            // it via the PG client / mssql driver where the protocol treats each query as
+            // standalone. When that SQL is concatenated into a replayable log file (a
+            // CodeGen_Run_*.sql migration), the missing ; turns each subsequent statement
+            // into a syntax error during raw `psql -f` / `mj migrate` replay
+            // ("syntax error at or near INSERT" on the next statement).
+            //
+            // Normalize: strip any trailing whitespace and ensure the content ends with `;`
+            // before adding spacing. Multiple `;`s are harmless in both T-SQL and PG, so
+            // call sites that already include a terminator pay nothing.
+            const trimmed = contents.replace(/[\s;]+$/g, '');
+            if (trimmed.length > 0) {
+                contents = `${trimmed};`;
+            }
+
             contents = includeBatchSeparator
                 ? `${contents}\n${batchSeparator}\n\n`
                 : `${contents}\n\n`;

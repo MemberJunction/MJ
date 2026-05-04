@@ -806,16 +806,28 @@ export function normalizeDbPlatformAndType<T extends { dbType?: 'mssql' | 'postg
 export function initializeConfig(cwd: string): ConfigInfo {
   currentWorkingDirectory = cwd;
 
-  // Merge user config with DEFAULT_CODEGEN_CONFIG
+  // Resolve dbType ↔ dbPlatform on the USER config BEFORE merging with defaults.
+  // If we normalized after merging, the default `dbType: 'mssql'` would always
+  // be present and conflict with a user-supplied `dbPlatform: 'postgresql'`,
+  // throwing a spurious "configuration mismatch" error. By normalizing the
+  // user config first, the user's intent wins; the default only applies when
+  // the user supplied neither field.
   const userConfigResult = explorer.search(currentWorkingDirectory);
+  if (userConfigResult?.config) {
+    const userCfg = userConfigResult.config as { dbType?: 'mssql' | 'postgresql'; dbPlatform?: 'sqlserver' | 'postgresql' };
+    normalizeDbPlatformAndType(userCfg);
+    // If the user set dbPlatform (and we derived dbType), drop the default
+    // dbType so it doesn't shadow the derived one through mergeConfigs.
+    // mergeConfigs is a shallow object merge, so user keys take precedence
+    // automatically — we just need both fields populated on the user side.
+  }
   const mergedConfig = userConfigResult?.config
     ? mergeConfigs(DEFAULT_CODEGEN_CONFIG, userConfigResult.config)
     : DEFAULT_CODEGEN_CONFIG;
 
-  // Resolve dbType ↔ dbPlatform BEFORE schema validation so the schema sees
-  // a coherent dbType (e.g. user set only dbPlatform: 'postgresql' → we
-  // derive dbType: 'postgresql' before zod's default-to-'mssql' kicks in).
-  // Throws on outright disagreement.
+  // Final cross-validation pass on the merged result to catch any remaining
+  // conflict (e.g. user set dbType explicitly to a value that doesn't match
+  // their dbPlatform). No-op when fields agree, throws on conflict.
   normalizeDbPlatformAndType(mergedConfig as { dbType?: 'mssql' | 'postgresql'; dbPlatform?: 'sqlserver' | 'postgresql' });
 
   const maybeConfig = configInfoSchema.safeParse(mergedConfig);

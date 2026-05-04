@@ -1926,7 +1926,8 @@ WHERE vf."IsVirtual" = true
       AND fk."RelatedEntityNameFieldMap" != ''
       AND LOWER(vf."Name") = LOWER(fk."RelatedEntityNameFieldMap"))
   )
-  AND vf."AllowsNull" != fk."AllowsNull"`;
+  AND vf."AllowsNull" != fk."AllowsNull";
+`;
     }
 
 }
