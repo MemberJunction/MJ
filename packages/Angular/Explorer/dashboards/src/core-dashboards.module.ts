@@ -25,6 +25,14 @@ import { ActionPinRunnerDialogComponent } from './Home/action-pin-runner-dialog.
 // via the lazy loading system when ApplicationManager calls CreateInstanceAsync.
 import { HomeApplication } from './Home/home-application';
 import { SystemDiagnosticsComponent } from './SystemDiagnostics/system-diagnostics.component';
+// Developer Tools
+import { AppStateInspectorComponent } from './DevTools/app-state-inspector.component';
+import { LayoutInspectorComponent } from './DevTools/layout-inspector.component';
+// Admin Containers
+import { AdminDevToolsResourceComponent } from './Admin/admin-dev-tools-resource.component';
+import { AdminIdentityAccessComponent } from './Admin/admin-identity-access.component';
+import { AdminDataSchemaComponent } from './Admin/admin-data-schema.component';
+import { AdminMonitoringComponent } from './Admin/admin-monitoring.component';
 import { QueryBrowserResourceComponent } from './QueryBrowser/query-browser-resource.component';
 import { DashboardBrowserResourceComponent } from './DashboardBrowser/dashboard-browser-resource.component';
 import { DashboardShareDialogComponent } from './DashboardBrowser/dashboard-share-dialog.component';
@@ -59,6 +67,12 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     ActionPinConfigDialogComponent,
     ActionPinRunnerDialogComponent,
     SystemDiagnosticsComponent,
+    AppStateInspectorComponent,
+    LayoutInspectorComponent,
+    AdminDevToolsResourceComponent,
+    AdminIdentityAccessComponent,
+    AdminDataSchemaComponent,
+    AdminMonitoringComponent,
     QueryBrowserResourceComponent,
     DashboardBrowserResourceComponent,
     DashboardShareDialogComponent,
@@ -109,6 +123,12 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     EntityAdminDashboardComponent,
     HomeDashboardComponent,
     SystemDiagnosticsComponent,
+    AppStateInspectorComponent,
+    LayoutInspectorComponent,
+    AdminDevToolsResourceComponent,
+    AdminIdentityAccessComponent,
+    AdminDataSchemaComponent,
+    AdminMonitoringComponent,
     QueryBrowserResourceComponent,
     DashboardBrowserResourceComponent,
     DashboardShareDialogComponent,
