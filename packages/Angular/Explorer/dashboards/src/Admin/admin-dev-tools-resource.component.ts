@@ -20,6 +20,41 @@ export class AdminDevToolsResourceComponent extends BaseAdminContainerComponent 
 
     public readonly Sections: AdminSection[] = [
         {
+            id: 'graphql',
+            label: 'GraphQL Console',
+            icon: 'fa-solid fa-code',
+            description: 'Run queries against the API',
+            source: { kind: 'resource', driverClass: 'GraphQLConsoleInspector' }
+        },
+        {
+            id: 'events',
+            label: 'Event Monitor',
+            icon: 'fa-solid fa-bolt',
+            description: 'Live tail of MJ events',
+            source: { kind: 'resource', driverClass: 'EventMonitorInspector' }
+        },
+        {
+            id: 'classes',
+            label: 'Class Registry',
+            icon: 'fa-solid fa-cubes',
+            description: 'All @RegisterClass entries',
+            source: { kind: 'resource', driverClass: 'ClassRegistryInspector' }
+        },
+        {
+            id: 'lazy',
+            label: 'Lazy Loading',
+            icon: 'fa-solid fa-puzzle-piece',
+            description: 'Code-split chunk status',
+            source: { kind: 'resource', driverClass: 'LazyModuleStatusInspector' }
+        },
+        {
+            id: 'settings',
+            label: 'Settings Explorer',
+            icon: 'fa-solid fa-sliders',
+            description: 'User and instance settings',
+            source: { kind: 'resource', driverClass: 'SettingsExplorerInspector' }
+        },
+        {
             id: 'app-state',
             label: 'App State',
             icon: 'fa-solid fa-magnifying-glass-chart',

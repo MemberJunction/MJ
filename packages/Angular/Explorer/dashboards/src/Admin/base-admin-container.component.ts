@@ -59,7 +59,15 @@ export abstract class BaseAdminContainerComponent extends BaseResourceComponent 
     public LoadError: string | null = null;
     public IsLoading = false;
 
-    protected currentRef: ComponentRef<unknown> | null = null;
+    /**
+     * Cache of section.id → ComponentRef. Once a sub-section is rendered we
+     * keep its component alive across switches by detaching + reattaching the
+     * view (instead of destroying + recreating). This preserves state — Event
+     * Monitor's captured events, GraphQL Console's history, query inputs,
+     * scroll position, etc. — and avoids expensive re-init.
+     */
+    protected cache = new Map<string, ComponentRef<unknown>>();
+    protected currentSectionId: string | null = null;
 
     protected readonly cdr = inject(ChangeDetectorRef);
 
@@ -82,8 +90,11 @@ export abstract class BaseAdminContainerComponent extends BaseResourceComponent 
     }
 
     public override ngOnDestroy(): void {
-        this.currentRef?.destroy();
-        this.currentRef = null;
+        for (const ref of this.cache.values()) {
+            try { ref.destroy(); } catch { /* ignore */ }
+        }
+        this.cache.clear();
+        this.currentSectionId = null;
         super.ngOnDestroy();
     }
 
@@ -128,60 +139,75 @@ export abstract class BaseAdminContainerComponent extends BaseResourceComponent 
     }
 
     private async renderSection(section: AdminSection): Promise<void> {
-        // Tear down any previously rendered sub-component
-        this.contentHost.clear();
-        this.currentRef?.destroy();
-        this.currentRef = null;
+        // Detach (don't destroy) the currently visible sub-component so it
+        // stays alive in memory with its state intact.
+        this.detachCurrent();
 
-        if (section.source.kind === 'resource') {
-            await this.renderResource(section.source.driverClass);
-        } else {
-            await this.renderDashboard(section.source.dashboardName);
+        // Reattach if cached
+        const cached = this.cache.get(section.id);
+        if (cached) {
+            this.contentHost.insert(cached.hostView);
+            this.currentSectionId = section.id;
+            return;
+        }
+
+        // Otherwise, create fresh
+        const ref = section.source.kind === 'resource'
+            ? await this.createResourceRef(section.source.driverClass)
+            : await this.createDashboardRef(section.source.dashboardName);
+
+        if (ref) {
+            this.applyHostSizing(ref);
+            this.cache.set(section.id, ref);
+            this.currentSectionId = section.id;
         }
     }
 
-    private async renderResource(driverClass: string): Promise<void> {
+    private detachCurrent(): void {
+        if (!this.currentSectionId) return;
+        const cur = this.cache.get(this.currentSectionId);
+        if (!cur) return;
+        const idx = this.contentHost.indexOf(cur.hostView);
+        if (idx >= 0) this.contentHost.detach(idx);
+    }
+
+    private async createResourceRef(driverClass: string): Promise<ComponentRef<unknown> | null> {
         const reg = await MJGlobal.Instance.ClassFactory.GetRegistrationAsync(BaseResourceComponent, driverClass);
         if (!reg) {
             this.LoadError = `Component "${driverClass}" is not registered. Make sure its module is imported.`;
-            return;
+            return null;
         }
         const ref = this.contentHost.createComponent(reg.SubClass as Type<BaseResourceComponent>);
         const instance = ref.instance as BaseResourceComponent;
-        // Pass the container's ResourceData through so sub-components that look at it have something
-        if (this.Data) {
-            instance.Data = this.Data;
-        }
-        this.applyHostSizing(ref);
-        this.currentRef = ref;
+        if (this.Data) instance.Data = this.Data;
+        return ref;
     }
 
-    private async renderDashboard(dashboardName: string): Promise<void> {
+    private async createDashboardRef(dashboardName: string): Promise<ComponentRef<unknown> | null> {
         await DashboardEngine.Instance.Config(false);
         const dashboard = DashboardEngine.Instance.Dashboards.find(d => d.Name === dashboardName);
         if (!dashboard) {
             this.LoadError = `Dashboard "${dashboardName}" was not found in metadata.`;
-            return;
+            return null;
         }
         if (dashboard.Type !== 'Code') {
             this.LoadError = `Dashboard "${dashboardName}" has type "${dashboard.Type}" — only Code dashboards can be embedded here.`;
-            return;
+            return null;
         }
         if (!dashboard.DriverClass) {
             this.LoadError = `Dashboard "${dashboardName}" has no DriverClass set.`;
-            return;
+            return null;
         }
         const reg = await MJGlobal.Instance.ClassFactory.GetRegistrationAsync(BaseDashboard, dashboard.DriverClass);
         if (!reg) {
             this.LoadError = `Driver class "${dashboard.DriverClass}" is not registered against BaseDashboard.`;
-            return;
+            return null;
         }
         const ref = this.contentHost.createComponent(reg.SubClass as Type<BaseDashboard>);
         const instance = ref.instance as BaseDashboard;
         instance.Config = { dashboard, userState: undefined };
         instance.Refresh();
-        this.applyHostSizing(ref);
-        this.currentRef = ref;
+        return ref;
     }
 
     /**

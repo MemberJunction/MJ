@@ -1,7 +1,8 @@
-import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
 import { WorkspaceStateManager, GoldenLayoutManager } from '@memberjunction/ng-base-application';
+import { DevToolsPrefs } from './dev-tools-prefs';
 
 interface LayoutSection {
     id: 'workspace' | 'golden';
@@ -22,7 +23,7 @@ interface LayoutSection {
     templateUrl: './layout-inspector.component.html',
     styleUrls: ['./inspector-shared.css']
 })
-export class LayoutInspectorComponent extends BaseResourceComponent implements OnInit {
+export class LayoutInspectorComponent extends BaseResourceComponent implements OnInit, OnDestroy {
 
     public Sections: LayoutSection[] = [
         { id: 'workspace', label: 'Workspace State',  icon: 'fa-solid fa-table-columns',  description: 'Tabs, active tab, app state' },
@@ -43,8 +44,15 @@ export class LayoutInspectorComponent extends BaseResourceComponent implements O
     }
 
     public ngOnInit(): void {
+        const p = DevToolsPrefs.Get<{ activeSection?: 'workspace' | 'golden' }>('layoutInspector');
+        if (p?.activeSection) this.ActiveSection = p.activeSection;
         this.refresh();
         this.NotifyLoadComplete();
+    }
+
+    public override ngOnDestroy(): void {
+        DevToolsPrefs.Save('layoutInspector', { activeSection: this.ActiveSection });
+        super.ngOnDestroy();
     }
 
     public override async GetResourceDisplayName(): Promise<string> { return 'Layout Inspector'; }
@@ -53,6 +61,7 @@ export class LayoutInspectorComponent extends BaseResourceComponent implements O
     public OnSectionClick(section: LayoutSection): void {
         if (this.ActiveSection === section.id) return;
         this.ActiveSection = section.id;
+        DevToolsPrefs.Save('layoutInspector', { activeSection: this.ActiveSection });
         this.refresh();
     }
 

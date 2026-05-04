@@ -1,6 +1,7 @@
-import { Component, OnInit, ChangeDetectorRef } from '@angular/core';
+import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
+import { DevToolsPrefs } from './dev-tools-prefs';
 import { Metadata } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { WorkspaceStateManager } from '@memberjunction/ng-base-application';
@@ -26,7 +27,7 @@ interface InspectorSection {
     templateUrl: './app-state-inspector.component.html',
     styleUrls: ['./inspector-shared.css']
 })
-export class AppStateInspectorComponent extends BaseResourceComponent implements OnInit {
+export class AppStateInspectorComponent extends BaseResourceComponent implements OnInit, OnDestroy {
 
     public Sections: InspectorSection[] = [
         { id: 'user',     label: 'Current User',         icon: 'fa-solid fa-user',           enabled: true, description: 'Identity, roles, email' },
@@ -52,8 +53,17 @@ export class AppStateInspectorComponent extends BaseResourceComponent implements
     }
 
     public ngOnInit(): void {
+        const p = DevToolsPrefs.Get<{ activeSection?: string }>('appStateInspector');
+        if (p?.activeSection && this.Sections.some(s => s.id === p.activeSection)) {
+            this.ActiveSection = p.activeSection;
+        }
         this.refresh();
         this.NotifyLoadComplete();
+    }
+
+    public override ngOnDestroy(): void {
+        DevToolsPrefs.Save('appStateInspector', { activeSection: this.ActiveSection });
+        super.ngOnDestroy();
     }
 
     public override async GetResourceDisplayName(): Promise<string> { return 'App State Inspector'; }
@@ -62,6 +72,7 @@ export class AppStateInspectorComponent extends BaseResourceComponent implements
     public OnSectionClick(section: InspectorSection): void {
         if (this.ActiveSection === section.id) return;
         this.ActiveSection = section.id;
+        DevToolsPrefs.Save('appStateInspector', { activeSection: this.ActiveSection });
         this.refresh();
     }
 

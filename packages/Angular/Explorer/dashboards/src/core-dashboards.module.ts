@@ -28,6 +28,11 @@ import { SystemDiagnosticsComponent } from './SystemDiagnostics/system-diagnosti
 // Developer Tools
 import { AppStateInspectorComponent } from './DevTools/app-state-inspector.component';
 import { LayoutInspectorComponent } from './DevTools/layout-inspector.component';
+import { ClassRegistryInspectorComponent } from './DevTools/class-registry.component';
+import { LazyModuleStatusComponent } from './DevTools/lazy-module-status.component';
+import { SettingsExplorerComponent } from './DevTools/settings-explorer.component';
+import { EventMonitorComponent } from './DevTools/event-monitor.component';
+import { GraphQLConsoleComponent } from './DevTools/graphql-console.component';
 // Admin Containers
 import { AdminDevToolsResourceComponent } from './Admin/admin-dev-tools-resource.component';
 import { AdminIdentityAccessComponent } from './Admin/admin-identity-access.component';
@@ -69,6 +74,11 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     SystemDiagnosticsComponent,
     AppStateInspectorComponent,
     LayoutInspectorComponent,
+    ClassRegistryInspectorComponent,
+    LazyModuleStatusComponent,
+    SettingsExplorerComponent,
+    EventMonitorComponent,
+    GraphQLConsoleComponent,
     AdminDevToolsResourceComponent,
     AdminIdentityAccessComponent,
     AdminDataSchemaComponent,
@@ -125,6 +135,11 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     SystemDiagnosticsComponent,
     AppStateInspectorComponent,
     LayoutInspectorComponent,
+    ClassRegistryInspectorComponent,
+    LazyModuleStatusComponent,
+    SettingsExplorerComponent,
+    EventMonitorComponent,
+    GraphQLConsoleComponent,
     AdminDevToolsResourceComponent,
     AdminIdentityAccessComponent,
     AdminDataSchemaComponent,
