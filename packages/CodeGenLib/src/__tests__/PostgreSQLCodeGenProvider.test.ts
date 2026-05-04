@@ -530,11 +530,11 @@ describe('PostgreSQLCodeGenProvider', () => {
             // Tolerant SP merge wrap: omitting a parameter preserves the existing value.
             // PostgreSQL has no ISNULL keyword; it emits COALESCE.
             expect(result).toContain('"Name" = COALESCE(p_name, "Name")');
-            // Nullable columns: CASE WHEN _Clear THEN NULL ELSE COALESCE(...) END so callers
-            // can explicitly set the column to NULL via the _Clear companion.
-            // PG comparison is `= true` (not `= 1`) to match the `boolean DEFAULT false`
-            // parameter type — see `dialect.BooleanLiteral(true)` in the codegen template.
-            expect(result).toContain('"Email" = CASE WHEN p_email_clear = true THEN NULL ELSE COALESCE(p_email, "Email") END');
+            // Default mock Email field is nullable but has no DefaultValue, so
+            // needsClearCompanion returns false → simple COALESCE only (no _Clear CASE).
+            // The CASE-WHEN-_Clear-=-true pattern is exercised by the next test using
+            // a Status field with an explicit DefaultValue.
+            expect(result).toContain('"Email" = COALESCE(p_email, "Email")');
             // Should NOT include PK
             expect(result).not.toContain('"ID" = ');
         });
