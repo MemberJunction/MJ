@@ -1,46 +1,177 @@
 -- ╔══════════════════════════════════════════════════════════════════════════╗
--- ║ Fix EntityField Sequence renumber idempotency: 2-pass renumber inside    ║
--- ║ spUpdateExistingEntityFieldsFromSchema.                                 ║
+-- ║ PostgreSQL end-to-end unblock — consolidated migration                  ║
 -- ║                                                                          ║
--- ║ BUG: codegen Pass-2 calls spUpdateExistingEntityFieldsFromSchema, which ║
--- ║ issues a single UPDATE that renumbers Sequence values for many fields   ║
--- ║ within an entity. PG enforces non-deferrable UNIQUE constraints         ║
--- ║ row-by-row inside an UPDATE, so any transient duplicate during the      ║
--- ║ renumber (e.g. field A: 24→28 and field B: 28→33 — A's update sees      ║
--- ║ B's pre-update value 28) raises 23505 immediately, even though the      ║
--- ║ end-of-statement state would be unique. Result: every codegen run      ║
--- ║ after the first aborts with                                              ║
--- ║   "duplicate key value violates unique constraint                        ║
--- ║    UQ_EntityField_EntityID_Sequence"                                     ║
--- ║ and 32 CRUD routines downstream of "Updating existing entity fields    ║
--- ║ from schema" are silently skipped.                                      ║
+-- ║ Six fixes that together get a fresh PG mint through `mj migrate` and    ║
+-- ║ `mj codegen --skipfiles` cleanly. Each section is independent and       ║
+-- ║ self-contained; ordering matters only where noted.                      ║
 -- ║                                                                          ║
--- ║ FIX: split the UPDATE into two passes via the staging-then-final         ║
--- ║ pattern:                                                                 ║
--- ║   Pass A: stage every field that's getting a Sequence change at a      ║
--- ║           negative offset (-1, -2, -3, …). Negatives never collide      ║
--- ║           with existing positive Sequence values OR with each other     ║
--- ║           (each row gets a unique negative).                            ║
--- ║   Pass B: write the final positive Sequence in a second UPDATE,         ║
--- ║           keyed off the entity-field ID. Now every "from" value is     ║
--- ║           negative so no collision with existing positives can occur.   ║
+-- ║   1. CREATE ROLE for cdp_Developer / cdp_Integration / cdp_UI          ║
+-- ║      (the v5.0 baseline already has the equivalent at the top now via   ║
+-- ║      a sibling commit; this re-asserts idempotently for safety).        ║
 -- ║                                                                          ║
--- ║ Other column updates (Description, Type, Length, …) move with the      ║
--- ║ row in Pass A; Pass B only fixes Sequence.                              ║
+-- ║   2. GRANT USAGE on __mj + ALTER DEFAULT PRIVILEGES so subsequent       ║
+-- ║      migrations' new objects auto-grant to cdp_*.                       ║
 -- ║                                                                          ║
--- ║ Did NOT pursue ALTER CONSTRAINT … DEFERRABLE because codegen-emitted    ║
--- ║ INSERT … ON CONFLICT (EntityID, Sequence) elsewhere uses this           ║
--- ║ constraint as an arbiter, and PG rejects deferrable arbiters with      ║
--- ║ "ON CONFLICT does not support deferrable unique constraints".           ║
+-- ║   3. Recreate vwSQLColumnsAndEntityFields with native BOOLEAN for       ║
+-- ║      IsVirtual + AutoIncrement (was INTEGER 0/1). PostgreSQLCodeGen-    ║
+-- ║      Provider compares to BOOLEAN literals and PG won't implicit-cast.  ║
 -- ║                                                                          ║
--- ║ Idempotent: CREATE OR REPLACE FUNCTION; safe to re-apply.               ║
+-- ║   4. Recreate spUpdateExistingEntityFieldsFromSchema as a 2-pass        ║
+-- ║      renumber so transient duplicate Sequence values during the bulk    ║
+-- ║      UPDATE don't trip UQ_EntityField_EntityID_Sequence (PG enforces    ║
+-- ║      non-deferrable UNIQUE row-by-row inside an UPDATE).                ║
+-- ║                                                                          ║
+-- ║   5. Pre-fix existing rows with case-mismatched CodeType values         ║
+-- ║      ('Typescript' → 'TypeScript', etc.) that slipped through the      ║
+-- ║      original NOT VALID CHECK constraint and trip                       ║
+-- ║      CK_EntityField_CodeType on any UPDATE of those rows.               ║
+-- ║                                                                          ║
+-- ║   6. Recreate vwDatasetItems to use Entity.Name (not Entity.DisplayName)║
+-- ║      for the "Entity" column. Consumers (e.g. TemplateEngineBase via   ║
+-- ║      GetDatasetByName) use this column as an EntityName for downstream  ║
+-- ║      EntityByName() lookups; with DisplayName they look up the unqualified║
+-- ║      name "Templates" instead of the actual "MJ: Templates" and crash. ║
+-- ║                                                                          ║
+-- ║ Idempotent end-to-end: every CREATE/REPLACE, GRANT, and INSERT is safe ║
+-- ║ to re-apply.                                                            ║
 -- ╚══════════════════════════════════════════════════════════════════════════╝
 
--- ─── Pre-fix: clean up rows with case-mismatched CodeType values ─────────────
+-- ─── 1. CREATE ROLE for cdp_* (idempotent) ───────────────────────────────────
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'cdp_Developer') THEN
+        CREATE ROLE "cdp_Developer" NOLOGIN;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'cdp_Integration') THEN
+        CREATE ROLE "cdp_Integration" NOLOGIN;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = 'cdp_UI') THEN
+        CREATE ROLE "cdp_UI" NOLOGIN;
+    END IF;
+END
+$$;
+
+-- ─── 2. Schema-level USAGE + default privileges ──────────────────────────────
+GRANT USAGE ON SCHEMA ${flyway:defaultSchema} TO "cdp_Developer", "cdp_Integration", "cdp_UI";
+
+ALTER DEFAULT PRIVILEGES IN SCHEMA ${flyway:defaultSchema}
+    GRANT SELECT ON TABLES    TO "cdp_Developer", "cdp_Integration", "cdp_UI";
+ALTER DEFAULT PRIVILEGES IN SCHEMA ${flyway:defaultSchema}
+    GRANT INSERT, UPDATE, DELETE ON TABLES TO "cdp_Developer", "cdp_Integration";
+ALTER DEFAULT PRIVILEGES IN SCHEMA ${flyway:defaultSchema}
+    GRANT USAGE, SELECT ON SEQUENCES TO "cdp_Developer", "cdp_Integration", "cdp_UI";
+ALTER DEFAULT PRIVILEGES IN SCHEMA ${flyway:defaultSchema}
+    GRANT EXECUTE ON FUNCTIONS TO "cdp_Developer", "cdp_Integration", "cdp_UI";
+
+GRANT SELECT ON ALL TABLES IN SCHEMA ${flyway:defaultSchema}
+    TO "cdp_Developer", "cdp_Integration", "cdp_UI";
+GRANT INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA ${flyway:defaultSchema}
+    TO "cdp_Developer", "cdp_Integration";
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA ${flyway:defaultSchema}
+    TO "cdp_Developer", "cdp_Integration", "cdp_UI";
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA ${flyway:defaultSchema}
+    TO "cdp_Developer", "cdp_Integration", "cdp_UI";
+
+-- ─── 3. Fix vwSQLColumnsAndEntityFields type contract ────────────────────────
+-- PG's CREATE OR REPLACE VIEW cannot change a column's data type, so we
+-- DROP and CREATE. Verified at write time that no other view depends on
+-- vwSQLColumnsAndEntityFields, so CASCADE isn't needed.
+DROP VIEW IF EXISTS ${flyway:defaultSchema}."vwSQLColumnsAndEntityFields";
+
+CREATE VIEW ${flyway:defaultSchema}."vwSQLColumnsAndEntityFields" AS
+SELECT
+    e."EntityID",
+    e."EntityName"                             AS "Entity",
+    e."SchemaName",
+    e."TableName",
+    ef."ID"                                    AS "EntityFieldID",
+    ef."Sequence"                              AS "EntityFieldSequence",
+    ef."Name"                                  AS "EntityFieldName",
+    a.attnum                                   AS "Sequence",
+    bt_a.attnum                                AS "BaseTableSequence",
+    a.attname                                  AS "FieldName",
+    COALESCE(base_t.typname, t.typname)        AS "Type",
+    CASE WHEN t.typtype = 'd' THEN t.typname ELSE NULL END
+                                               AS "UserDefinedType",
+    CASE
+        WHEN t.typname IN ('varchar', 'bpchar', 'char')
+            THEN CASE WHEN a.atttypmod = -1 THEN -1 ELSE a.atttypmod - 4 END
+        WHEN t.typname = 'text' THEN -1
+        ELSE a.attlen::integer
+    END                                        AS "Length",
+    CASE
+        WHEN t.typname = 'numeric' AND a.atttypmod != -1
+            THEN ((a.atttypmod - 4) >> 16) & 65535
+        ELSE 0
+    END                                        AS "Precision",
+    CASE
+        WHEN t.typname = 'numeric' AND a.atttypmod != -1
+            THEN (a.atttypmod - 4) & 65535
+        ELSE 0
+    END                                        AS "Scale",
+    NOT a.attnotnull                           AS "AllowsNull",
+    -- BUG FIX: was `CASE ... THEN 1 ELSE 0 END` (INTEGER). Now native BOOLEAN
+    -- to match __mj."EntityField"."AutoIncrement" (BOOLEAN).
+    (COALESCE(bt_a.attidentity, '') IN ('a','d'))
+                                               AS "AutoIncrement",
+    a.attnum                                   AS column_id,
+    -- BUG FIX: was `CASE WHEN bt_a.attnum IS NULL THEN 1 ELSE 0 END` (INTEGER).
+    -- Now native BOOLEAN to match __mj."EntityField"."IsVirtual" (BOOLEAN).
+    (bt_a.attnum IS NULL)                      AS "IsVirtual",
+    src_cls.oid                                AS object_id,
+    NULL::text                                 AS "DefaultConstraintName",
+    pg_get_expr(ad.adbin, ad.adrelid)          AS "DefaultValue",
+    NULL::text                                 AS "ComputedColumnDefinition",
+    COALESCE(
+        col_description(src_cls.oid, a.attnum),
+        col_description(bt_cls.oid, bt_a.attnum)
+    )                                          AS "Description",
+    col_description(src_cls.oid, a.attnum)     AS "ViewColumnDescription",
+    CASE
+        WHEN bt_a.attnum IS NOT NULL
+            THEN col_description(bt_cls.oid, bt_a.attnum)
+        ELSE NULL
+    END                                        AS "TableColumnDescription"
+FROM
+    ${flyway:defaultSchema}."vwSQLTablesAndEntities" e
+INNER JOIN
+    pg_catalog.pg_class src_cls
+        ON src_cls.oid = COALESCE(e.view_object_id, e.object_id)
+INNER JOIN
+    pg_catalog.pg_attribute a
+        ON a.attrelid = src_cls.oid
+        AND a.attnum > 0
+        AND NOT a.attisdropped
+INNER JOIN
+    pg_catalog.pg_type t ON a.atttypid = t.oid
+LEFT JOIN
+    pg_catalog.pg_type base_t
+        ON t.typbasetype = base_t.oid AND t.typtype = 'd'
+INNER JOIN
+    pg_catalog.pg_class bt_cls ON bt_cls.oid = e.object_id
+LEFT JOIN
+    pg_catalog.pg_attribute bt_a
+        ON bt_a.attrelid = bt_cls.oid
+        AND bt_a.attname = a.attname
+        AND bt_a.attnum > 0
+        AND NOT bt_a.attisdropped
+LEFT JOIN
+    pg_catalog.pg_attrdef ad
+        ON ad.adrelid = bt_cls.oid
+        AND ad.adnum = bt_a.attnum
+LEFT JOIN
+    ${flyway:defaultSchema}."EntityField" ef
+        ON e."EntityID" = ef."EntityID"
+        AND a.attname = ef."Name";
+
+GRANT SELECT ON ${flyway:defaultSchema}."vwSQLColumnsAndEntityFields"
+    TO "cdp_Developer", "cdp_Integration", "cdp_UI";
+
+-- ─── 4. Pre-fix case-mismatched CodeType values (must precede the SP) ────────
 -- The CK_EntityField_CodeType constraint was originally added with NOT VALID,
--- so existing rows with case-incorrect CodeType (e.g. 'Typescript' instead of
--- 'TypeScript') slipped through. Any UPDATE on those rows triggers
--- re-validation and fails the renumber. Normalize the casing here.
+-- so existing rows with case-incorrect CodeType slipped through. Any UPDATE
+-- on those rows triggers re-validation and fails the SP's renumber UPDATE.
+-- Normalize the casing here so the SP can run cleanly.
 UPDATE ${flyway:defaultSchema}."EntityField"
    SET "CodeType" = 'TypeScript'
    WHERE "CodeType" ILIKE 'typescript' AND "CodeType" <> 'TypeScript';
@@ -60,6 +191,7 @@ UPDATE ${flyway:defaultSchema}."EntityField"
    SET "CodeType" = 'Other'
    WHERE "CodeType" ILIKE 'other' AND "CodeType" <> 'Other';
 
+-- ─── 5. Re-create spUpdateExistingEntityFieldsFromSchema as 2-pass renumber ──
 DROP FUNCTION IF EXISTS ${flyway:defaultSchema}."spUpdateExistingEntityFieldsFromSchema"(text, text);
 
 CREATE OR REPLACE FUNCTION ${flyway:defaultSchema}."spUpdateExistingEntityFieldsFromSchema"(
@@ -126,9 +258,8 @@ BEGIN
             fromSQL."Scale"::INTEGER                   AS "Scale",
             fromSQL."AllowsNull"                       AS "AllowsNull",
             fromSQL."DefaultValue"::TEXT               AS "DefaultValue",
-            -- vwSQLColumnsAndEntityFields now returns BOOLEAN for these
-            -- (see V202605031857). The redundant `= TRUE` in the previous
-            -- SP body has been removed.
+            -- Section 3 above gives us BOOLEAN now; the redundant `= TRUE` in
+            -- the previous SP body has been removed.
             fromSQL."AutoIncrement"                    AS "AutoIncrement",
             fromSQL."IsVirtual"                        AS "IsVirtual",
             fromSQL."Sequence"::INTEGER                AS "Sequence",
@@ -141,7 +272,6 @@ BEGIN
                 ELSE false
             END                                        AS "IsUnique",
             -- Per-row index used for the staging negative offset in Pass A.
-            -- Globally unique within the SP run; we only need it transient.
             ROW_NUMBER() OVER ()                       AS "StageRow"
         FROM ${flyway:defaultSchema}."EntityField" ef
         INNER JOIN ${flyway:defaultSchema}."vwSQLColumnsAndEntityFields" fromSQL
@@ -242,10 +372,7 @@ BEGIN
             fr."IsPrimaryKey", fr."IsUnique"
     ),
     -- Pass B: now that all changing rows have unique negative sequences,
-    -- write the desired positive sequence. Each row's negative is unique,
-    -- and no remaining unchanged row holds a target positive that's also
-    -- a current target (since unchanged rows already had their final
-    -- sequence and aren't in `staged`).
+    -- write the desired positive sequence. No collision possible.
     finalized AS (
         UPDATE ${flyway:defaultSchema}."EntityField" ef
         SET "Sequence" = s."FinalSequence"
@@ -265,6 +392,28 @@ BEGIN
 END;
 $func$;
 
--- Re-grant — DROP FUNCTION dropped previous grants.
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION ${flyway:defaultSchema}."spUpdateExistingEntityFieldsFromSchema"(text, text) TO "cdp_Developer"; EXCEPTION WHEN others THEN NULL; END $$;
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION ${flyway:defaultSchema}."spUpdateExistingEntityFieldsFromSchema"(text, text) TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
+
+-- ─── 6. Fix vwDatasetItems."Entity" column to use Name, not DisplayName ──────
+DROP VIEW IF EXISTS ${flyway:defaultSchema}."vwDatasetItems" CASCADE;
+
+CREATE VIEW ${flyway:defaultSchema}."vwDatasetItems" AS
+SELECT d."ID",
+    d."Code",
+    d."DatasetID",
+    d."Sequence",
+    d."EntityID",
+    d."WhereClause",
+    d."DateFieldToCheck",
+    d."Description",
+    d."__mj_CreatedAt",
+    d."__mj_UpdatedAt",
+    d."Columns",
+    mjentity_entityid."Name" AS "Entity",
+    mjdataset_datasetid."Name" AS "Dataset"
+FROM ${flyway:defaultSchema}."DatasetItem" d
+LEFT JOIN ${flyway:defaultSchema}."Entity" mjentity_entityid ON d."EntityID" = mjentity_entityid."ID"
+LEFT JOIN ${flyway:defaultSchema}."Dataset" mjdataset_datasetid ON d."DatasetID" = mjdataset_datasetid."ID";
+
+GRANT SELECT ON ${flyway:defaultSchema}."vwDatasetItems" TO "cdp_Developer", "cdp_Integration", "cdp_UI";

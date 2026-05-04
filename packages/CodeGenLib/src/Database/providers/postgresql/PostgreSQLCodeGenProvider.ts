@@ -1275,6 +1275,13 @@ WHERE p.prokind IN ('f', 'p')
                 viewName: entity.BaseView,
                 createOrReplaceSQL: viewSQL,
                 willRegenerate,
+                // Pass the base table so viewFallback can materialize a stub
+                // first if the view body has a self-reference and the view
+                // doesn't yet exist (e.g. vwRecordChanges joins to itself for
+                // parent lookup; if it was CASCADE-dropped earlier in the
+                // same codegen run, CREATE OR REPLACE can't resolve the
+                // self-reference until a placeholder exists).
+                baseTableQualified: pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable),
             });
         } finally {
             try { await client.end(); } catch { /* best-effort cleanup */ }
@@ -1353,6 +1360,7 @@ WHERE p.prokind IN ('f', 'p')
                         viewName: opts.entity.BaseView,
                         createOrReplaceSQL: opts.viewSQL,
                         willRegenerate: opts.willRegenerate,
+                        baseTableQualified: pgDialect.QuoteSchema(opts.entity.SchemaName, opts.entity.BaseTable),
                     });
                 } catch (e) {
                     return {

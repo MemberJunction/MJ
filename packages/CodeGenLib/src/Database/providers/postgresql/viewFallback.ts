@@ -77,6 +77,20 @@ export interface ExecuteWithFallbackOptions {
      * as-written when quoted.
      */
     willRegenerate?: Set<string>;
+    /**
+     * Optional — the qualified base table this view selects from
+     * (e.g. `__mj."RecordChange"`). Used to materialize a stub view first
+     * when the view body has a self-reference (`FROM ... vwSelf`) and the
+     * view doesn't yet exist (so CREATE OR REPLACE can't resolve the
+     * self-reference without erroring "relation does not exist").
+     *
+     * When provided AND the first CREATE OR REPLACE fails with 42P01
+     * (undefined_table) for the view we're trying to create, we materialize
+     * an empty-shape stub view from the base table, then retry the real
+     * CREATE OR REPLACE — which now succeeds because the self-reference
+     * can resolve to the stub.
+     */
+    baseTableQualified?: string;
 }
 
 /**
@@ -87,7 +101,7 @@ export interface ExecuteWithFallbackOptions {
  * from other code is not allowed — this function manages transaction state.
  */
 export async function executeWithFallback(opts: ExecuteWithFallbackOptions): Promise<void> {
-    const { client, schema, viewName, createOrReplaceSQL } = opts;
+    const { client, schema, viewName, createOrReplaceSQL, baseTableQualified } = opts;
     const willRegenerate = opts.willRegenerate ?? new Set<string>();
 
     // First attempt: happy-path CREATE OR REPLACE. If this succeeds there's
@@ -96,7 +110,29 @@ export async function executeWithFallback(opts: ExecuteWithFallbackOptions): Pro
         await client.query(createOrReplaceSQL);
         return;
     } catch (e) {
-        if (!is42P16(e)) throw e;
+        // Self-reference recovery (42P01 — undefined_table for the view we're
+        // creating). Some entity views reference themselves via a LEFT JOIN
+        // (e.g. vwRecordChanges joins to itself for parent lookup). When the
+        // view doesn't exist (e.g. an earlier CASCADE drop wiped it),
+        // CREATE OR REPLACE fails because the body's FROM clause can't
+        // resolve the self-reference. Materialize a stub from the base table
+        // first, then retry the real CREATE OR REPLACE.
+        if (is42P01ForSelf(e, schema, viewName) && baseTableQualified) {
+            const qualified = quoteQualified(schema, viewName);
+            await client.query(`CREATE OR REPLACE VIEW ${qualified} AS SELECT * FROM ${baseTableQualified} WHERE FALSE`);
+            try {
+                await client.query(createOrReplaceSQL);
+                return;
+            } catch (e2) {
+                // If the retry STILL fails, drop into the 42P16 path below
+                // (which captures + drop-cascade + recreate). This handles
+                // the case where the stub's column list doesn't match the
+                // real one closely enough for CREATE OR REPLACE additive rules.
+                if (!is42P16(e2)) throw e2;
+            }
+        } else if (!is42P16(e)) {
+            throw e;
+        }
     }
 
     // 42P16 path. Everything from here runs inside a transaction so a failed
@@ -243,6 +279,27 @@ async function restoreDependents(
 
 function is42P16(err: unknown): boolean {
     return typeof err === 'object' && err !== null && (err as { code?: string }).code === SQLSTATE_INVALID_TABLE_DEFINITION;
+}
+
+const SQLSTATE_UNDEFINED_TABLE = '42P01';
+
+/**
+ * Returns true if the error is an `undefined_table` error for the same view
+ * we're trying to create — i.e. the CREATE OR REPLACE failed because the
+ * body's FROM clause references the view itself, but the view doesn't yet
+ * exist. Caller can recover by materializing a stub first.
+ *
+ * Match logic: PG's error message is `relation "schema.name" does not exist`
+ * or sometimes `relation "name" does not exist`. We check both.
+ */
+function is42P01ForSelf(err: unknown, schema: string, viewName: string): boolean {
+    if (typeof err !== 'object' || err === null) return false;
+    const e = err as { code?: string; message?: string };
+    if (e.code !== SQLSTATE_UNDEFINED_TABLE) return false;
+    const msg = e.message ?? '';
+    // Match `relation "<schema>.<name>"` or `relation "<name>"` — both forms occur in PG.
+    return msg.includes(`relation "${schema}.${viewName}"`)
+        || msg.includes(`relation "${viewName}"`);
 }
 
 function quoteQualified(schema: string, name: string): string {
