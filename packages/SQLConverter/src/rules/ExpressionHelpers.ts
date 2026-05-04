@@ -90,6 +90,38 @@ export function transformCodeOnly(sql: string, transform: (code: string) => stri
   }).join('');
 }
 
+/**
+ * Emit a DO-block that drops every overload of a function in a given schema.
+ *
+ * PG dispatches functions by `(name, ordered-arg-type-list)`. `CREATE OR
+ * REPLACE FUNCTION` only replaces the body when the new signature exactly
+ * matches the prior signature; adding (or renaming, or retyping) any
+ * parameter creates a NEW overload alongside the old one. The result —
+ * silent duplicate overloads that pile up across migrations until a caller
+ * hits "function ... is not unique" at runtime.
+ *
+ * Emit this block immediately before any `CREATE OR REPLACE FUNCTION` in
+ * generated migrations so the next CREATE always either replaces (matching
+ * sig) or creates fresh (no prior overload). The block is idempotent — when
+ * no overload exists the FOR loop iterates zero times.
+ *
+ * Used by ProcedureToFunctionRule and FunctionRule. Keeps the wording
+ * identical across both so reviewers reading converter output recognize
+ * the pattern at a glance.
+ */
+export function emitDropOverloadsBlock(funcName: string, schema: string = '__mj'): string {
+  return (
+    `DO $$ DECLARE r record;\n` +
+    `BEGIN\n` +
+    `  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc\n` +
+    `           WHERE proname = '${funcName}'\n` +
+    `             AND pronamespace = '${schema}'::regnamespace\n` +
+    `  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';\n` +
+    `  END LOOP;\n` +
+    `END $$;\n`
+  );
+}
+
 /** Convert [schema].[name] bracket identifiers to schema."name" double-quote format.
  *  Also converts T-SQL temp table #name references to PostgreSQL equivalents.
  *  Skips content inside SQL string literals and comments. */

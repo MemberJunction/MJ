@@ -471,4 +471,112 @@ END`;
       expect(result).toContain('current_user');
     });
   });
+
+  // ─── Fix 18: DROP-overload guard before CREATE OR REPLACE FUNCTION ────
+  //
+  // PG dispatches functions by (name, ordered-arg-type-list). Without
+  // dropping prior overloads, every regenerated sproc with a new param
+  // accumulates as a duplicate overload (Bug 1 from Ian's v5.32 finding).
+  // Every converted procedure must emit a DO-block iterating pg_proc to
+  // drop all overloads of the function name BEFORE the CREATE OR REPLACE.
+  describe('Fix 18: DROP-overload guard before CREATE OR REPLACE FUNCTION', () => {
+    it('should emit a DO-block dropping all overloads of the function before the CREATE', () => {
+      const input = `CREATE PROCEDURE [__mj].[spCreateUser]
+    @FirstName nvarchar(100),
+    @LastName nvarchar(100)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    INSERT INTO [__mj].[User] ([FirstName], [LastName]) VALUES (@FirstName, @LastName)
+    SELECT * FROM [__mj].[vwUsers] WHERE [ID] = SCOPE_IDENTITY()
+END`;
+      const result = convert(input);
+      // The drop block must reference the function by name and run BEFORE
+      // the CREATE OR REPLACE.
+      expect(result).toContain(`proname = 'spCreateUser'`);
+      expect(result).toContain(`pronamespace = '__mj'::regnamespace`);
+      expect(result).toContain(`DROP FUNCTION IF EXISTS`);
+      expect(result).toContain(`CASCADE`);
+      // Order: DROP block must precede CREATE OR REPLACE
+      const dropIdx = result.indexOf('DROP FUNCTION IF EXISTS');
+      const createIdx = result.indexOf('CREATE OR REPLACE FUNCTION');
+      expect(dropIdx).toBeGreaterThan(-1);
+      expect(createIdx).toBeGreaterThan(dropIdx);
+    });
+
+    it('should drop overloads even for parameterless procedures (idempotent for first-time creates)', () => {
+      const input = `CREATE PROCEDURE [__mj].[spCleanup]
+AS
+BEGIN
+    DELETE FROM [__mj].[StaleRecords]
+END`;
+      const result = convert(input);
+      // First-time creates also get the drop block — DROP IF EXISTS is harmless
+      // when no prior overload exists, so emitting unconditionally keeps the
+      // converter's output fully idempotent.
+      expect(result).toContain(`proname = 'spCleanup'`);
+    });
+
+    it('should generate a unique drop block per procedure name', () => {
+      const input1 = `CREATE PROCEDURE [__mj].[spOne] AS BEGIN SELECT 1 END`;
+      const input2 = `CREATE PROCEDURE [__mj].[spTwo] AS BEGIN SELECT 2 END`;
+      const result1 = convert(input1);
+      const result2 = convert(input2);
+      expect(result1).toContain(`proname = 'spOne'`);
+      expect(result1).not.toContain(`proname = 'spTwo'`);
+      expect(result2).toContain(`proname = 'spTwo'`);
+      expect(result2).not.toContain(`proname = 'spOne'`);
+    });
+  });
+
+  // ─── Fix 19: Named-arg PERFORM in spDelete bodies calling spUpdate ────
+  //
+  // T-SQL spDelete bodies use EXEC ... @Param = value (named args) when
+  // calling other sprocs (e.g. cascade-delete chains calling spUpdate).
+  // Previously the converter translated these to POSITIONAL PERFORM —
+  // fragile across signature changes (Bug 2: when spUpdate gets a new
+  // param inserted, the positional args bind to the wrong slots and PG
+  // throws runtime type errors). Fix 19: emit named-arg PERFORM
+  // (`p_x => value`) which survives parameter insertion.
+  describe('Fix 19: named-arg PERFORM for cross-sproc EXEC calls', () => {
+    it('should translate EXEC with named args to PERFORM with named args (=> syntax)', () => {
+      const input = `CREATE PROCEDURE [__mj].[spDeleteUser]
+    @ID UNIQUEIDENTIFIER
+AS
+BEGIN
+    EXEC [__mj].[spUpdateUser] @ID = @ID, @IsActive = 0
+    DELETE FROM [__mj].[User] WHERE [ID] = @ID
+END`;
+      const result = convert(input);
+      // Named-arg PERFORM (`p_X => value`) — NOT positional
+      expect(result).toContain('p_ID => p_ID');
+      expect(result).toContain('p_IsActive => 0');
+      // The bug pattern would have been positional `(p_ID, 0)` — verify
+      // we don't emit that.
+      expect(result).not.toMatch(/PERFORM\s+__mj\."spUpdateUser"\(p_ID,\s*0\)/);
+    });
+
+    it('should preserve named args even when value is a complex expression', () => {
+      const input = `CREATE PROCEDURE [__mj].[spDeleteOrder]
+    @OrderID UNIQUEIDENTIFIER
+AS
+BEGIN
+    EXEC [__mj].[spUpdateOrder] @OrderID = @OrderID, @Status = 'Cancelled', @CancelledAt = GETUTCDATE()
+END`;
+      const result = convert(input);
+      expect(result).toContain('p_OrderID => p_OrderID');
+      expect(result).toContain(`p_Status => 'Cancelled'`);
+      expect(result).toMatch(/p_CancelledAt\s*=>\s*(GETUTCDATE\(\)|NOW\(\)|CURRENT_TIMESTAMP)/);
+    });
+
+    it('should still handle EXEC with no params (parameterless call)', () => {
+      const input = `CREATE PROCEDURE [__mj].[spRunCleanup]
+AS
+BEGIN
+    EXEC [__mj].[spCleanupOrphans]
+END`;
+      const result = convert(input);
+      expect(result).toContain(`PERFORM __mj."spCleanupOrphans"()`);
+    });
+  });
 });
