@@ -200,6 +200,44 @@ export class SQLCodeGenBase {
             // strictly more useful than nothing.
             let entityGenSuccess = true;
 
+            // Build a UNION will-regenerate set across every batch we're about
+            // to launch (main + cascade-regen + excluded-perms). The PG view
+            // fallback's restoreDependents path uses this to skip restoring
+            // captured dependents that codegen will recreate later in the run.
+            // Without the union, batch 1's fallback only sees batch 1's
+            // entities — so a dependent like vwAIAgentRuns (which lives in
+            // batch 2 cascade-regen) is "missing from willRegenerate", the
+            // fallback tries to restore its stale captured definition, and
+            // that definition references views (vwTestRuns, vwRecordChanges)
+            // that no longer exist post-CASCADE → restore-view fails.
+            // Empty BaseView fields are filtered so virtual/no-view entities
+            // don't add `__mj.` (a malformed key) to the set.
+            const allBatchEntities: EntityInfo[] = [
+                ...entitiesWithoutCascadeRegeneration,
+                ...entitiesForCascadeRegeneration,
+                ...excludedEntities,
+            ];
+            const globalWillRegenerate = new Set(
+                allBatchEntities
+                    .filter(e => !!e.BaseView)
+                    .map(e => `${e.SchemaName}.${e.BaseView}`)
+            );
+
+            // PostgreSQL must serialize per-entity processing. Each PG entity's
+            // phased execution (view → CRUD → permissions) issues
+            // CREATE OR REPLACE VIEW with a 42P16 fallback that does
+            // capture/DROP CASCADE/CREATE/restore via pg_depend. Running this
+            // in parallel against entities with cross-references (e.g.
+            // vwAIModels ←→ vwAIModelVendors, view + dependent function) hits
+            // catalog-level deadlocks ("ERROR: deadlock detected") and the
+            // deadlock victim's transaction rolls back leaving its dependents
+            // dropped but never recreated — net effect: 11+ views silently
+            // missing after one codegen run, then the next run crashes during
+            // AI Engine init because vwAIModels is gone. SQL Server doesn't
+            // hit this because its execution path is bulk-monolithic, not
+            // phased per-entity.
+            const perEntityBatchSize = configInfo.dbType === 'postgresql' ? 1 : 5;
+
             // Generate SQL for entities that don't need cascade delete regeneration
             const genResult = await this.generateAndExecuteEntitySQLToSeparateFiles({
                 pool,
@@ -210,8 +248,9 @@ export class SQLCodeGenBase {
                 // other dialects defer to the bulk step 2(e) below.
                 skipExecution: perEntitySkipExecution,
                 writeFiles: true,
-                batchSize: 5,
-                enableSQLLoggingForNewOrModifiedEntities: true
+                batchSize: perEntityBatchSize,
+                enableSQLLoggingForNewOrModifiedEntities: true,
+                willRegenerate: globalWillRegenerate
             }); // enable sql logging for NEW entities....
             if (!genResult.Success) {
                 logError('Main entity SQL generation batch had failures — continuing with cascade-regen and excluded-perms batches; validator will report any missing routines.');
@@ -229,7 +268,8 @@ export class SQLCodeGenBase {
                     skipExecution: perEntitySkipExecution,
                     writeFiles: true,
                     batchSize: 1, // Process sequentially to maintain dependency order
-                    enableSQLLoggingForNewOrModifiedEntities: true
+                    enableSQLLoggingForNewOrModifiedEntities: true,
+                    willRegenerate: globalWillRegenerate
                 });
                 if (!cascadeGenResult.Success) {
                     logError('Cascade-regen batch had failures — continuing; validator will report any missing routines.');
@@ -246,9 +286,10 @@ export class SQLCodeGenBase {
                 directory,
                 onlyPermissions: true,
                 skipExecution: true, // skip execution because we execute it all in a giant batch below
-                batchSize: 5,
+                batchSize: perEntityBatchSize,
                 writeFiles: true,
-                enableSQLLoggingForNewOrModifiedEntities: false /*don't log this stuff, it is just permissions for excluded entities*/
+                enableSQLLoggingForNewOrModifiedEntities: false, /*don't log this stuff, it is just permissions for excluded entities*/
+                willRegenerate: globalWillRegenerate
             });
             if (!genResult2.Success) {
                 logError('Excluded-entities permissions batch had failures — continuing; validator will report any missing routines.');
@@ -539,14 +580,17 @@ export class SQLCodeGenBase {
      * @param onlyPermissions If true, only the permissions files will be generated and executed, not the actual SQL files. Use this if you are simply setting permission changes but no actual changes to the entities have occured.
      */
     public async generateAndExecuteEntitySQLToSeparateFiles(options: {
-        pool: CodeGenConnection, 
-        entities: EntityInfo[], 
-        directory: string, 
-        onlyPermissions: boolean, 
-        writeFiles: boolean, 
-        skipExecution: boolean, 
-        batchSize?: number, 
-        enableSQLLoggingForNewOrModifiedEntities?: boolean
+        pool: CodeGenConnection,
+        entities: EntityInfo[],
+        directory: string,
+        onlyPermissions: boolean,
+        writeFiles: boolean,
+        skipExecution: boolean,
+        batchSize?: number,
+        enableSQLLoggingForNewOrModifiedEntities?: boolean,
+        /** Optional UNION of will-regenerate keys across ALL batches in the same
+         *  codegen run. When provided, takes precedence over the per-batch set. */
+        willRegenerate?: Set<string>
     }): Promise<{Success: boolean, Files: string[]}> {
         if (!options.batchSize)
             options.batchSize = 5; // default to 5 if not specified
@@ -556,11 +600,13 @@ export class SQLCodeGenBase {
             const failedEntities: EntityInfo[] = [];
             const totalEntities = options.entities.length;
 
-            // Build the will-regenerate set once per batch. A dialect phased
-            // executor (e.g. PG) uses this to skip restoring dependents that
-            // are about to be rebuilt with new definitions — avoids stale
-            // captured definitions conflicting with newly-regenerated targets.
-            const willRegenerate = new Set(
+            // Prefer the caller-supplied union (across all batches in this run)
+            // when available; fall back to a per-batch set for callers that
+            // don't pass one. The per-batch set is too narrow when an earlier
+            // batch's CASCADE drops a view owned by a later batch — the
+            // captured-dependent-restore fails because it doesn't know that
+            // dependent will be re-emitted in a subsequent batch.
+            const willRegenerate = options.willRegenerate ?? new Set(
                 options.entities.map(e => `${e.SchemaName}.${e.BaseView}`)
             );
 

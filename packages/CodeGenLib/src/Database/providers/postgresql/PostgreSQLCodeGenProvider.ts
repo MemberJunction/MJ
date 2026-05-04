@@ -759,13 +759,30 @@ END $$;
             trimmedValue = trimmedValue.substring(1, trimmedValue.length - 1);
         }
 
+        // PG default values can come back as typed literals like
+        // `'Pending'::character varying` or `'Active'::text`. The cast
+        // suffix means the value is already a fully-formed PG expression —
+        // stripping the leading-and-trailing quotes (line 14721 bug:
+        // `'Pending'::character varying` → cleanValue = `Pending'::character varying`
+        // → re-wrap → `'Pending'::character varying'` which is invalid SQL)
+        // is wrong here. Detect this shape and pass through verbatim.
+        if (/^'.*'::\w+(\s*\(\s*\d+\s*\))?(\s*\[\s*\])?$/.test(trimmedValue)) {
+            return trimmedValue;
+        }
+
         // Remove surrounding quotes for clean value
         let cleanValue = trimmedValue;
         if (cleanValue.startsWith("'") && cleanValue.endsWith("'")) {
             cleanValue = cleanValue.substring(1, cleanValue.length - 1);
         }
 
-        if (needsQuotes) return `'${cleanValue}'`;
+        if (needsQuotes) {
+            // Single-quote-escape the cleaned value (SQL standard: '' → ').
+            // Without this, a default of `O'Brien` would re-emit as `'O'Brien'`
+            // which closes the literal at the apostrophe and then fails parsing.
+            const escaped = cleanValue.replace(/'/g, "''");
+            return `'${escaped}'`;
+        }
         return cleanValue;
     }
 
