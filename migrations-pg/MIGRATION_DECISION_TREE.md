@@ -132,7 +132,7 @@ This makes the rationale auditable and forces honest answers. If you can't artic
 - Q4: YES — Query metadata row in baseline references the view; running it from MJ Explorer errors with `relation does not exist`
 - Q5: NO — SS consistently creates this view; PG consistently lacks it because the converter intentionally skipped it (`CROSS APPLY` not translatable)
 
-**Verdict: legitimate. Write the migration.** (See `V202605031200__v5.31.x__Add_vwFlywayVersionHistoryParsed_For_PG_Parity.pg-only.sql`.)
+**Verdict: legitimate. Write the migration.** (See `V202605031200__v5.32.x__Add_vwFlywayVersionHistoryParsed_For_PG_Parity.pg-only.sql`.)
 
 ### Bug #15 — `ListInvitation.ExpiresAt` type drift (RETRACTED)
 
