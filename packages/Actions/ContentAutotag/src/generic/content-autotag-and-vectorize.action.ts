@@ -198,7 +198,10 @@ export class AutotagAndVectorizeContentAction extends BaseAction {
         // Resolve the per-request provider once and thread it down the call stack so
         // every BaseEntity / RunView operation in this action runs against the caller's
         // connection (multi-tenant correctness; do not fall through to the global default).
-        const provider = (params.Provider ?? new Metadata()) as unknown as IMetadataProvider;
+        // Use Metadata.Provider (the global ProviderBase which implements IRunViewProvider)
+        // as the fallback — NOT `new Metadata()` which is just a wrapper and doesn't
+        // implement RunView.
+        const provider = (params.Provider ?? Metadata.Provider) as unknown as IMetadataProvider;
 
         // Load all content items, then exclude Entity-sourced items.
         // Entity sources get their vectors via EntityVectorSyncer (Phase 2b),

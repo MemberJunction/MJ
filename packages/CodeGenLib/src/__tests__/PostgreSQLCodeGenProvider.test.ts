@@ -496,14 +496,19 @@ describe('PostgreSQLCodeGenProvider', () => {
     });
 
     describe('generateUpdateFieldString', () => {
-        it('should generate SET clause with quoted identifiers', () => {
+        it('should generate SET clause with quoted identifiers and tolerant merge semantics', () => {
             const entity = createMockEntity();
             const result = provider.generateUpdateFieldString(entity.Fields);
 
-            expect(result).toContain('"Name" = p_name');
-            expect(result).toContain('"Email" = p_email');
+            // Tolerant SP merge wrap: omitting a parameter preserves the existing value.
+            // PostgreSQL has no ISNULL keyword; it emits COALESCE.
+            // Non-nullable columns: plain COALESCE merge.
+            expect(result).toContain('"Name" = COALESCE(p_name, "Name")');
+            // Nullable columns: CASE WHEN _Clear THEN NULL ELSE COALESCE(...) END so callers
+            // can explicitly set the column to NULL via the _Clear companion.
+            expect(result).toContain('"Email" = CASE WHEN p_email_clear = 1 THEN NULL ELSE COALESCE(p_email, "Email") END');
             // Should NOT include PK
-            expect(result).not.toContain('"ID" = p_id');
+            expect(result).not.toContain('"ID" = ');
         });
     });
 

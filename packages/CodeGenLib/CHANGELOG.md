@@ -1,5 +1,90 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 5.32.0
+
+### Minor Changes
+
+- ef8f900: All nullable fields have \_Clear
+
+### Patch Changes
+
+- Updated dependencies [a7e8b3b]
+- Updated dependencies [b9c67ac]
+  - @memberjunction/core@5.32.0
+  - @memberjunction/server-bootstrap-lite@5.32.0
+  - @memberjunction/ai-core-plus@5.32.0
+  - @memberjunction/aiengine@5.32.0
+  - @memberjunction/ai-prompts@5.32.0
+  - @memberjunction/actions-base@5.32.0
+  - @memberjunction/actions@5.32.0
+  - @memberjunction/core-entities@5.32.0
+  - @memberjunction/core-entities-server@5.32.0
+  - @memberjunction/postgresql-dataprovider@5.32.0
+  - @memberjunction/sqlserver-dataprovider@5.32.0
+  - @memberjunction/ai-provider-bundle@5.32.0
+  - @memberjunction/ai@5.32.0
+  - @memberjunction/config@5.32.0
+  - @memberjunction/global@5.32.0
+  - @memberjunction/sql-dialect@5.32.0
+  - @memberjunction/sql-parser@5.32.0
+
+## 5.31.0
+
+### Minor Changes
+
+- 9457655: lift CRUD-routine generation to the base class via new SQLDialect abstractions (IsNull, ParameterRef, ParameterDefault, NullLiteral, EmptyUUIDLiteral) so SP generation logic lives once and dialects override only what's syntax-specific
+- 3c5176f: Bring MJ to a state where it runs end-to-end on PostgreSQL — including managed PG services (RDS, Aurora, Cloud SQL, Azure) — on a developer machine and in self-hosted environments.
+
+  **Runtime (`@memberjunction/postgresql-dataprovider`):** new `autoQuoteIdentifiers` tokenizer in `ExecuteSQL` auto-quotes mixed-case identifiers in raw SQL (PascalCase columns, `vw*` views) so hand-written queries from MJ resolvers, engines, and dashboards work on PG without per-call quoting. Conservative — only quotes PascalCase or lowercase-first identifiers preceded by `.` (object refs). 30 new tokenizer tests covering keywords, dollar-quoted blocks, positional `$N` params, string literals, `[bracketed]` SQL Server identifiers, and the regression cases from Memory Manager and ConversationEngine flows.
+
+  **Converter (`@memberjunction/sql-converter`):** `quoteAsAliases` regex made case-insensitive on the `AS` keyword (caught the `vwEntityPermissions.RoleName` alias case-fold bug). `SequenceDeduplicator` now auto-detects and fixes EntityField sequence collisions as a post-conversion step. Heavy regression tests gated behind `process.env.CI === 'true'` (with `CI_HEAVY_REGRESSION=true` opt-out for nightly) — pg-migrations.yml workflow already does the equivalent gate at the workflow level.
+
+  **CodeGen (`@memberjunction/codegen-lib`):** CodeGen audit SQL output now routes to `migrations-pg/v5/` when `dbPlatform=postgresql` (was always going to `migrations/v5/`).
+
+  **CLI (`@memberjunction/cli`):** consumes published Skyway 0.6.0 multi-dialect packages (`skyway-core`, `skyway-sqlserver`, `skyway-postgres`).
+
+  **Managed-PG support:** historical PG migrations rewritten to drop the `pg_cast` UPDATE that required superuser, with INSERT VALUES tuples / WHERE-comparisons / CHECK constraints rewritten to use BOOLEAN literals (`TRUE`/`FALSE`) directly. 50 files touched in the companion `pg-migration-files` PR; 10,967 INSERT tuples + 3,510 comparisons + 9 CHECK constraints fixed.
+
+  The actual PG migration content — v5.0 baseline + every V\*.pg.sql for v5.0–v5.30 — ships in the companion `pg-migration-files` PR. The two PRs merge together.
+
+  See `migrations-pg/TESTING_GUIDE.md` for the verification strategy used during this PR's development (per-migration audit, schema dump diff, snapshot scripts, autoQuoter coverage).
+
+- 132ce24: Fix CodeGen dropping primary-key columns from `spCreate` INSERT statements for tables with composite (multi-column) primary keys. The existing single-PK uniqueidentifier workaround that re-injects the PK column into the generated INSERT was gated on `entity.PrimaryKeys.length === 1`, so composite-PK tables fell through to the else branch which only built the SELECT-back clause. Combined with metadata sync setting `AllowUpdateAPI=0` on every PK column (and `generateInsertFieldString` filtering on `!ef.AllowUpdateAPI`), every PK column was filtered out of the INSERT, producing broken stored procs that fail at runtime with `NOT NULL` violations on the missing PK columns. Both SQL Server and PostgreSQL providers now re-inject all PK columns and parameters into the INSERT column/value lists when `PrimaryKeys.length > 1`, mirroring what the single-PK branch already does for one key.
+
+### Patch Changes
+
+- 7ed7a4b: no metadata/migration changes
+- e545a51: tolerant spCreate/spUpdate signatures - SPs now accept NULL for non-required params with ISNULL merge semantics on update and \_Clear companions for nullable columns with non-NULL defaults
+- Updated dependencies [fc8b9b8]
+- Updated dependencies [cde4d2c]
+- Updated dependencies [7ed7a4b]
+- Updated dependencies [84494bb]
+- Updated dependencies [9457655]
+- Updated dependencies [60e7541]
+- Updated dependencies [18be074]
+- Updated dependencies [17b8087]
+- Updated dependencies [6779c1e]
+- Updated dependencies [3c5176f]
+- Updated dependencies [de34786]
+- Updated dependencies [5db36d9]
+  - @memberjunction/core-entities@5.31.0
+  - @memberjunction/core-entities-server@5.31.0
+  - @memberjunction/ai@5.31.0
+  - @memberjunction/ai-core-plus@5.31.0
+  - @memberjunction/aiengine@5.31.0
+  - @memberjunction/ai-prompts@5.31.0
+  - @memberjunction/ai-provider-bundle@5.31.0
+  - @memberjunction/actions-base@5.31.0
+  - @memberjunction/actions@5.31.0
+  - @memberjunction/config@5.31.0
+  - @memberjunction/core@5.31.0
+  - @memberjunction/global@5.31.0
+  - @memberjunction/postgresql-dataprovider@5.31.0
+  - @memberjunction/sql-dialect@5.31.0
+  - @memberjunction/sql-parser@5.31.0
+  - @memberjunction/sqlserver-dataprovider@5.31.0
+  - @memberjunction/server-bootstrap-lite@5.31.0
+
 ## 5.30.1
 
 ### Patch Changes

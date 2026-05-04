@@ -68,6 +68,15 @@ export interface ExtensionInitResult {
      * @example `['POST /webhook/slack', 'GET /webhook/slack/health']`
      */
     RegisteredRoutes?: string[];
+
+    /**
+     * Indicates the extension chose not to load because it isn't actually configured
+     * (e.g., missing required secrets, placeholder defaults still in place). When `true`,
+     * the loader treats this as a quiet, expected condition rather than an error: no
+     * `LogError` is emitted, and the skip line itself is verbose-only (only printed when
+     * `MJ_VERBOSE` is enabled). Implies `Success: false`.
+     */
+    Skipped?: boolean;
 }
 
 /**
