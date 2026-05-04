@@ -24,6 +24,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { UserAvatarService } from '@memberjunction/ng-user-avatar';
 import { SettingsDialogService } from './services/settings-dialog.service';
 import { UserSharingCenterDialogService } from './services/user-sharing-center-dialog.service';
+import { AboutDialogService } from './services/about-dialog.service';
 import { LoadingTheme, LoadingAnimationType, AnimationStep, getActiveTheme } from './loading-themes';
 import { AppAccessDialogComponent, AppAccessDialogConfig, AppAccessDialogResult } from './components/dialogs/app-access-dialog.component';
 import { TabContainerComponent } from './components/tabs/tab-container.component';
@@ -32,6 +33,7 @@ import { MJUserEntity, InstanceConfigEngine } from '@memberjunction/core-entitie
 import { CommandPaletteService } from '../command-palette/command-palette.service';
 import { FileOpenService } from '@memberjunction/ng-file-storage';
 import { FeedbackDialogService, FeedbackService } from '@memberjunction/ng-feedback';
+import { PACKAGE_VERSION } from '@memberjunction/graphql-dataprovider';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 /**
@@ -81,6 +83,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   private animationSequenceTimeout: ReturnType<typeof setTimeout> | null = null;
   // Loading recovery reset
   ShowResetOption = false;
+
+  /** MemberJunction framework version, shown in the loading screen and About dialog. */
+  public readonly MJVersion: string = PACKAGE_VERSION;
   private loadingResetTimeout: ReturnType<typeof setTimeout> | null = null;
   private readonly loadingResetDelayMs = 20_000; // 20 seconds before showing reset option
   currentLoadingText: string;
@@ -160,6 +165,7 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     private userAvatarService: UserAvatarService,
     private settingsDialogService: SettingsDialogService,
     private userSharingCenterDialogService: UserSharingCenterDialogService,
+    private aboutDialogService: AboutDialogService,
     private viewContainerRef: ViewContainerRef,
     private titleService: TitleService,
     public developerModeService: DeveloperModeService,
@@ -2060,6 +2066,15 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     if (result.message === 'submit-feedback') {
       this.userMenuVisible = false;
       this.ShowFeedbackDialog();
+      return;
+    }
+
+    if (result.message === 'about') {
+      this.userMenuVisible = false;
+      this.aboutDialogService.open(this.viewContainerRef, {
+        avatarUrl: this.userImageURL || null,
+        avatarIconClass: this.userIconClass || null
+      });
       return;
     }
 

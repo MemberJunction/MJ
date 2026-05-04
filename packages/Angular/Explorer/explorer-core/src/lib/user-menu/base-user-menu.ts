@@ -217,6 +217,17 @@ export class BaseUserMenu {
                 enabled: true,
                 tooltip: 'Reset workspace to default layout'
             },
+            {
+                id: 'about',
+                label: 'About MemberJunction',
+                icon: 'fa-solid fa-circle-info',
+                group: 'system',
+                order: 20,
+                developerOnly: false,
+                visible: true,
+                enabled: true,
+                tooltip: 'Version, diagnostics, and links'
+            },
 
             // === DANGER GROUP ===
             {
@@ -480,6 +491,15 @@ export class BaseUserMenu {
             success: true,
             closeMenu: true,
             message: 'submit-feedback'
+        };
+    }
+
+    /** Signal the shell to open the About dialog */
+    protected async Handle_about(): Promise<UserMenuActionResult> {
+        return {
+            success: true,
+            closeMenu: true,
+            message: 'about'
         };
     }
 

@@ -52,6 +52,10 @@ export * from './lib/system-validation/system-validation-banner.component'
 // User Menu Plugin System
 export * from './lib/user-menu'
 
+// About Dialog
+export * from './lib/about/about-dialog.component'
+export * from './lib/shell/services/about-dialog.service'
+
 // OAuth Module
 export * from './lib/oauth/oauth.module'
 export * from './lib/oauth/oauth-callback.component'
