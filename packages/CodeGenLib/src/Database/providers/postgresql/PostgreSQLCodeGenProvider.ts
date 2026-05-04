@@ -62,25 +62,34 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
     // ─── BASE VIEWS ──────────────────────────────────────────────────────
 
     /**
-     * Generates a PostgreSQL `CREATE OR REPLACE VIEW` statement for an entity's base view.
-     * Includes all base table columns, parent/related field joins, and root field lateral
-     * joins. Applies a soft-delete `WHERE` filter when the entity uses soft deletes.
+     * Generates the SQL for an entity's base view in PostgreSQL.
      *
-     * **Non-destructive strategy.** Historically this method emitted
-     * `DROP VIEW IF EXISTS ... CASCADE;` before the CREATE, which let it handle every
-     * column-signature change — but also silently destroyed any dependent view, function,
-     * trigger, or GRANT on the view. When a later statement (or subsequent entity in the
-     * same run) failed, half the database's objects could be gone with no error surfaced.
+     * Emits `DROP VIEW IF EXISTS ... CASCADE; CREATE VIEW ...` rather than
+     * `CREATE OR REPLACE VIEW`. Two reasons:
      *
-     * We now emit just `CREATE OR REPLACE VIEW`, which PostgreSQL accepts when the new
-     * column list is a prefix of the existing one plus optional trailing additions. Any
-     * incompatible change (rename, reorder, type change, removed column) fails with
-     * SQLSTATE `42P16 invalid_table_definition`. That error is intentionally allowed to
-     * propagate up through `executeSQLFileViaShell` → the per-entity batch loop → and is
-     * surfaced as a real regeneration failure. A follow-up pass will add a capture-drop-
-     * restore fallback for 42P16 that preserves dependents via `pg_depend` and
-     * `pg_get_viewdef` / `pg_get_functiondef`. Until that lands, 42P16 on PG is loud and
-     * actionable instead of silent and destructive.
+     * 1. **Replayability.** The SQL log captured by `SQLLogging` is meant to
+     *    be applied to other databases (via `mj migrate`, raw `psql -f`, or
+     *    bundled into a Flyway migration). PG's `CREATE OR REPLACE VIEW`
+     *    rejects any change that isn't column-additive — rename, reorder,
+     *    type-change all error with `42P16 invalid_table_definition`. That
+     *    error never reaches the log file (it's caught by runtime fallback),
+     *    so the log was *only* applicable to databases whose existing view
+     *    definition matched the new one byte-for-byte. DROP CASCADE +
+     *    CREATE makes the log self-sufficient regardless of starting state.
+     *
+     * 2. **CASCADE blast radius is bounded.** Codegen regenerates views,
+     *    functions, and grants for every entity in the same run. Anything
+     *    DROP CASCADE removes (dependent views, function bodies, grants) is
+     *    re-emitted later in the same SQL log by codegen's own per-entity
+     *    pipeline. The runtime fallback in `viewFallback.ts` also captures
+     *    and replays dependents — so destruction is recoverable in both
+     *    "live execution" and "log replay" modes.
+     *
+     * Historically this method emitted `CREATE OR REPLACE VIEW` only, paired
+     * with a runtime 42P16 fallback that did capture/drop/restore. That
+     * yielded a non-destructive happy path but produced a SQL log nobody
+     * could replay. Trading non-destructiveness for replayability is the
+     * right call given codegen's purpose.
      *
      * Permissions are handled separately by sql_codegen.ts via generateViewPermissions().
      */
@@ -101,7 +110,8 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
 -----               BASE TABLE:  ${entity.BaseTable}
 -----               PRIMARY KEY: ${entity.PrimaryKeys.map((pk: EntityFieldInfo) => pk.Name).join(', ')}
 ------------------------------------------------------------
-CREATE OR REPLACE VIEW ${quotedView}
+DROP VIEW IF EXISTS ${quotedView} CASCADE;
+CREATE VIEW ${quotedView}
 AS
 SELECT
     ${selectParts}
@@ -647,8 +657,14 @@ END $$;
 
             // _Clear companion is emitted immediately before its main parameter
             // for nullable columns whose database default is non-NULL.
+            //
+            // Type was historically `bit DEFAULT 0` (a copy-paste from the
+            // SQL Server emitter). PG has no implicit cast from integer to
+            // its `bit` type, and `bit` here was meant to mean a boolean
+            // anyway — so the function compiles but every caller that passes
+            // `0`/`false` fails type-checking. Emit native PG `boolean DEFAULT FALSE`.
             if (!ef.IsPrimaryKey && this.needsClearCompanion(ef)) {
-                parts.push(`${dialect.ParameterRef(ef.CodeName + '_Clear')} bit${dialect.ParameterDefault('0')}`);
+                parts.push(`${dialect.ParameterRef(ef.CodeName + '_Clear')} boolean${dialect.ParameterDefault('FALSE')}`);
                 foundDefault = true;
             }
 
