@@ -774,6 +774,32 @@ END $$;
 
     /**
      * Maps a SQL default value expression to its PostgreSQL equivalent. Translates
+     * Override of `needsClearCompanion` to use the narrow rule on PostgreSQL:
+     * only nullable fields with a non-NULL DB default get a `_Clear` companion.
+     *
+     * The base class was broadened in commit 34d86261d5 (PR #2533) to emit
+     * `_Clear` for ALL nullable columns. That broadening is necessary for
+     * tolerant-SP semantics (so callers can persist explicit NULL on fields
+     * that COALESCE-merge would otherwise preserve), but it doubles the param
+     * count of CRUD SPs. PostgreSQL has a hard 100-argument limit per function
+     * (`functions cannot have more than 100 arguments`), and entities with
+     * 80+ nullable columns (AIPromptRun, AIAgent, AIPrompt) exceed it.
+     *
+     * Narrowing here for PG keeps wide tables under the limit. The trade-off:
+     * on PG, fields with a NULL default (or no default) cannot be cleared
+     * via `BaseEntity.Save()` — they fall back to the COALESCE merge, which
+     * keeps the existing value. Concrete impact: `ScheduledJob` lock cleanup
+     * on PG should use a direct UPDATE rather than relying on the `_Clear`
+     * mechanism. Mirrored at runtime in `PostgreSQLDataProvider.buildCRUDParams`
+     * to keep the call site aligned with the SP signature.
+     */
+    protected override needsClearCompanion(ef: EntityFieldInfo): boolean {
+        if (!ef.AllowsNull || !ef.HasDefaultValue) return false;
+        const formattedDefault = this.formatDefaultValue(ef.DefaultValue, ef.NeedsQuotes);
+        return !this.Dialect.IsNullLiteral(formattedDefault);
+    }
+
+    /**
      * SQL Server built-in functions (e.g., `NEWID()` to `gen_random_uuid()`,
      * `GETUTCDATE()` to `NOW() AT TIME ZONE 'UTC'`), strips outer parentheses and
      * surrounding single quotes, and re-applies quoting based on the {@link needsQuotes}
@@ -919,7 +945,15 @@ END $$;
     addDefaultConstraintSQL(schema: string, tableName: string, columnName: string, defaultExpression: string): string {
         const table = pgDialect.QuoteSchema(schema, tableName);
         const col = pgDialect.QuoteIdentifier(columnName);
-        return `ALTER TABLE ${table} ALTER COLUMN ${col} SET DEFAULT ${defaultExpression}`;
+        // Prepend SET CONSTRAINTS ALL IMMEDIATE so any deferred constraint
+        // trigger events queued by earlier INSERTs in the same migration
+        // transaction fire NOW, freeing the target table for ALTER. Without
+        // this, mid-migration ALTER TABLE on a table that received earlier
+        // INSERTs fails with `cannot ALTER TABLE because it has pending
+        // trigger events` — codegen interleaves INSERTs (data sync) and
+        // ALTER TABLE (default refresh) within a single Skyway-wrapped
+        // transaction so the queue must be flushed at the boundary.
+        return `SET CONSTRAINTS ALL IMMEDIATE;\nALTER TABLE ${table} ALTER COLUMN ${col} SET DEFAULT ${defaultExpression}`;
     }
 
     /**
@@ -931,7 +965,12 @@ END $$;
     dropDefaultConstraintSQL(schema: string, tableName: string, columnName: string): string {
         const table = pgDialect.QuoteSchema(schema, tableName);
         const col = pgDialect.QuoteIdentifier(columnName);
-        return `
+        // SET CONSTRAINTS ALL IMMEDIATE outside the DO block so it executes
+        // first; any deferred trigger events from earlier INSERTs in the
+        // same transaction fire NOW, clearing the queue before the ALTER
+        // TABLE inside this DO block runs. See addDefaultConstraintSQL for
+        // the rationale on why this is needed.
+        return `SET CONSTRAINTS ALL IMMEDIATE;
 DO $$
 DECLARE
    v_constraint_name TEXT;
