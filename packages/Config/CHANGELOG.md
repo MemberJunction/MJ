@@ -1,5 +1,7 @@
 # @memberjunction/config
 
+## 5.32.0
+
 ## 5.31.0
 
 ### Patch Changes

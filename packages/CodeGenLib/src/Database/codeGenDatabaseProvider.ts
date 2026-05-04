@@ -369,9 +369,7 @@ export abstract class CodeGenDatabaseProvider {
      * their generated SQL. Pure decision logic — no rendering.
      */
     protected needsClearCompanion(ef: EntityFieldInfo): boolean {
-        if (!ef.AllowsNull || !ef.HasDefaultValue) return false;
-        const formattedDefault = this.formatDefaultValue(ef.DefaultValue, ef.NeedsQuotes);
-        return !this.Dialect.IsNullLiteral(formattedDefault);
+        return ef.AllowsNull;
     }
 
     /**
