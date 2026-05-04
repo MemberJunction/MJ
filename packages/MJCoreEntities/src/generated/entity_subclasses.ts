@@ -9781,12 +9781,12 @@ export const MJComponentLibrarySchema = z.object({
         * * Description: Library category: Core, Runtime, UI, Charting, Utility, or Other`),
     CDNUrl: z.string().nullable().describe(`
         * * Field Name: CDNUrl
-        * * Display Name: CDN Url
+        * * Display Name: CDN URL
         * * SQL Data Type: nvarchar(1000)
         * * Description: CDN URL for loading the library JavaScript`),
     CDNCssUrl: z.string().nullable().describe(`
         * * Field Name: CDNCssUrl
-        * * Display Name: CDN Css Url
+        * * Display Name: CDN CSS URL
         * * SQL Data Type: nvarchar(1000)
         * * Description: Optional CDN URL for loading library CSS`),
     Description: z.string().nullable().describe(`
@@ -9836,6 +9836,11 @@ export const MJComponentLibrarySchema = z.object({
     *   * Dependency
     *   * Direct
         * * Description: Controls how the library can be used: Direct (by components), Dependency (only as dependency), or Both`),
+    UsageInstructions: z.string().nullable().describe(`
+        * * Field Name: UsageInstructions
+        * * Display Name: Usage Instructions
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Markdown-formatted usage instructions for AI code generators and agents. Injected into prompts when a component references this library. Covers container requirements, initialization patterns, required config options, and common pitfalls. Distinct from Description which is a high-level summary of what the library does.`),
 });
 
 export type MJComponentLibraryEntityType = z.infer<typeof MJComponentLibrarySchema>;
@@ -51976,7 +51981,7 @@ export class MJComponentLibraryEntity extends BaseEntity<MJComponentLibraryEntit
 
     /**
     * * Field Name: CDNUrl
-    * * Display Name: CDN Url
+    * * Display Name: CDN URL
     * * SQL Data Type: nvarchar(1000)
     * * Description: CDN URL for loading the library JavaScript
     */
@@ -51989,7 +51994,7 @@ export class MJComponentLibraryEntity extends BaseEntity<MJComponentLibraryEntit
 
     /**
     * * Field Name: CDNCssUrl
-    * * Display Name: CDN Css Url
+    * * Display Name: CDN CSS URL
     * * SQL Data Type: nvarchar(1000)
     * * Description: Optional CDN URL for loading library CSS
     */
@@ -52095,6 +52100,19 @@ export class MJComponentLibraryEntity extends BaseEntity<MJComponentLibraryEntit
     }
     set UsageType(value: 'Both' | 'Dependency' | 'Direct') {
         this.Set('UsageType', value);
+    }
+
+    /**
+    * * Field Name: UsageInstructions
+    * * Display Name: Usage Instructions
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Markdown-formatted usage instructions for AI code generators and agents. Injected into prompts when a component references this library. Covers container requirements, initialization patterns, required config options, and common pitfalls. Distinct from Description which is a high-level summary of what the library does.
+    */
+    get UsageInstructions(): string | null {
+        return this.Get('UsageInstructions');
+    }
+    set UsageInstructions(value: string | null) {
+        this.Set('UsageInstructions', value);
     }
 }
 

@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/ng-explorer-service-worker",
-  "version": "5.30.1",
+  "version": "5.32.0",
   "description": "MemberJunction: Service worker app-shell pre-cache + update notification UI for MJ Explorer",
   "main": "./dist/public-api.js",
   "typings": "./dist/public-api.d.ts",
