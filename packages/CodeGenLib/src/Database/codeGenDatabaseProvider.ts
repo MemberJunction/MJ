@@ -232,6 +232,22 @@ export abstract class CodeGenDatabaseProvider {
      */
     abstract get PlatformKey(): DatabasePlatform;
 
+    /**
+     * Whether this dialect can handle a base view that LEFT-JOINs itself to read
+     * a virtual computed column (e.g. `vwRecordChanges` joining to itself for the
+     * `RestoredFromID` virtual NameField lookup).
+     *
+     * Default: `true` — SQL Server's `CREATE VIEW` parser tolerates the self-
+     * reference because the view has already been declared by name when the body
+     * is checked. PostgreSQL's strict parser rejects with `42P01 undefined_table`
+     * because the view doesn't yet exist. PG override returns `false`, telling
+     * `sql_codegen.ts` to skip the self-virtual-NameField join entirely (matches
+     * the baseline-shipped view's shape — no `RestoredFrom` virtual column).
+     */
+    canSelfJoinViewForVirtualNameField(): boolean {
+        return true;
+    }
+
     // ─── DROP GUARDS ─────────────────────────────────────────────────────
 
     /**

@@ -1790,6 +1790,20 @@ export class SQLCodeGenBase {
             // In 'override' mode: skip the NameField, only use explicitly configured fields
             if (config.mode !== 'override' && ef.IncludeRelatedEntityNameFieldInBaseView) {
                 const { nameField, nameFieldIsVirtual } = this.getIsNameFieldForSingleEntity(ef.RelatedEntity);
+
+                // Self-FK + virtual NameField + dialect that can't handle self-join → skip.
+                // PG's strict `CREATE OR REPLACE VIEW` parser raises 42P01 on a body that
+                // LEFT-JOINs the view-being-created to itself, and the stub-recovery path
+                // hits column-type incompat. The cleanest fix is to not emit the join at
+                // all for this combination; the related virtual column is dropped from
+                // the view (matches baseline behaviour for entities like RecordChange).
+                const isSelfFK = ef.RelatedEntityID && ef.EntityID && ef.RelatedEntityID.toLowerCase() === ef.EntityID.toLowerCase();
+                if (nameField !== '' && nameFieldIsVirtual && isSelfFK && !this._dbProvider.canSelfJoinViewForVirtualNameField()) {
+                    const owningEntity = md.Entities.find(e => UUIDsEqual(e.ID, ef.EntityID));
+                    logStatus(`  Skipping self-referential virtual NameField join for ${owningEntity?.Name ?? ef.EntityID}.${ef.Name} (dialect: ${this._dbProvider.PlatformKey})`);
+                    continue;
+                }
+
                 if (nameField !== '') {
                     // only add to the output, if we found a name field for the related entity.
                     ef._RelatedEntityTableAlias = ef.RelatedEntityClassName + '_' + ef.Name;
