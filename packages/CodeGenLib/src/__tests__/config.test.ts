@@ -100,7 +100,7 @@ describe('Config Schema Shapes', () => {
 });
 
 // Import the functions under test
-import { resolveEntityPackageName, getExternalEntitySchemas, ConfigInfo } from '../Config/config';
+import { resolveEntityPackageName, getExternalEntitySchemas, ConfigInfo, normalizeDbPlatformAndType } from '../Config/config';
 
 /**
  * Helper to build a minimal ConfigInfo-like object with just the entityPackageName field.
@@ -204,5 +204,65 @@ describe('getExternalEntitySchemas', () => {
         // so this should return an empty array.
         const result = getExternalEntitySchemas();
         expect(result).toEqual([]);
+    });
+});
+
+describe('normalizeDbPlatformAndType (Bug 6 — dbType ↔ dbPlatform alias resolution)', () => {
+    type Cfg = { dbType?: 'mssql' | 'postgresql'; dbPlatform?: 'sqlserver' | 'postgresql' };
+
+    it('derives dbType=postgresql when only dbPlatform=postgresql is set', () => {
+        const cfg: Cfg = { dbPlatform: 'postgresql' };
+        normalizeDbPlatformAndType(cfg);
+        expect(cfg.dbType).toBe('postgresql');
+        expect(cfg.dbPlatform).toBe('postgresql');
+    });
+
+    it('derives dbType=mssql when only dbPlatform=sqlserver is set', () => {
+        const cfg: Cfg = { dbPlatform: 'sqlserver' };
+        normalizeDbPlatformAndType(cfg);
+        expect(cfg.dbType).toBe('mssql');
+        expect(cfg.dbPlatform).toBe('sqlserver');
+    });
+
+    it('derives dbPlatform=postgresql when only dbType=postgresql is set', () => {
+        const cfg: Cfg = { dbType: 'postgresql' };
+        normalizeDbPlatformAndType(cfg);
+        expect(cfg.dbType).toBe('postgresql');
+        expect(cfg.dbPlatform).toBe('postgresql');
+    });
+
+    it('derives dbPlatform=sqlserver when only dbType=mssql is set', () => {
+        const cfg: Cfg = { dbType: 'mssql' };
+        normalizeDbPlatformAndType(cfg);
+        expect(cfg.dbType).toBe('mssql');
+        expect(cfg.dbPlatform).toBe('sqlserver');
+    });
+
+    it('keeps both when set in agreement (postgresql + postgresql)', () => {
+        const cfg: Cfg = { dbType: 'postgresql', dbPlatform: 'postgresql' };
+        normalizeDbPlatformAndType(cfg);
+        expect(cfg.dbType).toBe('postgresql');
+        expect(cfg.dbPlatform).toBe('postgresql');
+    });
+
+    it('keeps both when set in agreement (mssql + sqlserver)', () => {
+        const cfg: Cfg = { dbType: 'mssql', dbPlatform: 'sqlserver' };
+        normalizeDbPlatformAndType(cfg);
+        expect(cfg.dbType).toBe('mssql');
+        expect(cfg.dbPlatform).toBe('sqlserver');
+    });
+
+    it('throws when both are set with conflicting values', () => {
+        const cfg: Cfg = { dbType: 'mssql', dbPlatform: 'postgresql' };
+        expect(() => normalizeDbPlatformAndType(cfg)).toThrow(
+            /dbPlatform='postgresql' implies dbType='postgresql' but dbType='mssql'/
+        );
+    });
+
+    it('is a no-op when neither is set', () => {
+        const cfg: Cfg = {};
+        normalizeDbPlatformAndType(cfg);
+        expect(cfg.dbType).toBeUndefined();
+        expect(cfg.dbPlatform).toBeUndefined();
     });
 });

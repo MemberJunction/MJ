@@ -532,6 +532,14 @@ const configInfoSchema = z.object({
 
   /** Database platform type: 'mssql' for SQL Server, 'postgresql' for PostgreSQL */
   dbType: z.enum(['mssql', 'postgresql']).default('mssql'),
+
+  /**
+   * Alias of `dbType` using the same vocabulary as @memberjunction/cli's
+   * `dbPlatform` field. Accepts 'sqlserver' | 'postgresql'. When both are
+   * present they must agree; when only this one is set, `dbType` is
+   * derived from it. See `normalizeDbPlatformAndType()`.
+   */
+  dbPlatform: z.enum(['sqlserver', 'postgresql']).optional(),
   dbHost: z.string(),
   dbPort: z.coerce.number().int().positive().default(1433),
   codeGenLogin: z.string(),
@@ -749,6 +757,52 @@ export const { mjCoreSchema, dbDatabase } = configInfo;
  * @returns Parsed configuration object
  * @throws Error if no configuration is found
  */
+/**
+ * Resolve the divergence between MJCLI's `dbPlatform` ('sqlserver'|'postgresql')
+ * and CodeGenLib's `dbType` ('mssql'|'postgresql').
+ *
+ * Rules:
+ *   - Both set, in agreement → keep both.
+ *   - Both set, disagreeing → throw a clear error (silent dialect mismatch is
+ *     the exact foot-gun this prevents).
+ *   - Only `dbPlatform` set → derive `dbType` from it.
+ *   - Only `dbType` set → derive `dbPlatform` (for symmetry with downstream
+ *     consumers that may read either).
+ *   - Neither set → both default through their own schemas (`dbType` → 'mssql').
+ *
+ * Mutates the merged config in place and returns it. Exported for unit tests.
+ */
+export function normalizeDbPlatformAndType<T extends { dbType?: 'mssql' | 'postgresql'; dbPlatform?: 'sqlserver' | 'postgresql' }>(cfg: T): T {
+  const platformToType = { sqlserver: 'mssql', postgresql: 'postgresql' } as const;
+  const typeToPlatform = { mssql: 'sqlserver', postgresql: 'postgresql' } as const;
+
+  const hasType = cfg.dbType !== undefined;
+  const hasPlatform = cfg.dbPlatform !== undefined;
+
+  if (hasType && hasPlatform) {
+    const expectedType = platformToType[cfg.dbPlatform!];
+    if (expectedType !== cfg.dbType) {
+      throw new Error(
+        `Configuration mismatch: dbPlatform='${cfg.dbPlatform}' implies dbType='${expectedType}' but dbType='${cfg.dbType}' was set explicitly. ` +
+        `Set them to compatible values, or unset one and let it be derived.`
+      );
+    }
+    return cfg;
+  }
+
+  if (hasPlatform && !hasType) {
+    cfg.dbType = platformToType[cfg.dbPlatform!];
+    return cfg;
+  }
+
+  if (hasType && !hasPlatform) {
+    cfg.dbPlatform = typeToPlatform[cfg.dbType!];
+    return cfg;
+  }
+
+  return cfg;
+}
+
 export function initializeConfig(cwd: string): ConfigInfo {
   currentWorkingDirectory = cwd;
 
@@ -757,6 +811,12 @@ export function initializeConfig(cwd: string): ConfigInfo {
   const mergedConfig = userConfigResult?.config
     ? mergeConfigs(DEFAULT_CODEGEN_CONFIG, userConfigResult.config)
     : DEFAULT_CODEGEN_CONFIG;
+
+  // Resolve dbType ↔ dbPlatform BEFORE schema validation so the schema sees
+  // a coherent dbType (e.g. user set only dbPlatform: 'postgresql' → we
+  // derive dbType: 'postgresql' before zod's default-to-'mssql' kicks in).
+  // Throws on outright disagreement.
+  normalizeDbPlatformAndType(mergedConfig as { dbType?: 'mssql' | 'postgresql'; dbPlatform?: 'sqlserver' | 'postgresql' });
 
   const maybeConfig = configInfoSchema.safeParse(mergedConfig);
   // Don't log errors - let the calling code handle validation failures
