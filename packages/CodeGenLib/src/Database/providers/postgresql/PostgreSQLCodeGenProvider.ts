@@ -1,5 +1,5 @@
 import { EntityInfo, EntityFieldInfo, EntityPermissionInfo } from '@memberjunction/core';
-import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
+import { RegisterClass } from '@memberjunction/global';
 import {
     CodeGenDatabaseProvider,
     CRUDType,
@@ -1560,39 +1560,6 @@ WHERE p.prokind IN ('f', 'p')
 
         await client.connect();
         try {
-            // PG-only: emit recursive-FK root-ID helpers ahead of the view.
-            //
-            // PG codegen intentionally uses snake_case scalar
-            // `fn_<table>_<field>_get_root_id` rather than the SS baseline's
-            // PascalCase table-returning `fn<Table><Field>_GetRootID` — see
-            // `getRootIDFunctionName`. The two names CAN'T coexist as the
-            // same function (different return type), so codegen owns its
-            // own snake_case namespace.
-            //
-            // Consequence: on a fresh PG database, the snake_case helpers
-            // don't exist until codegen has run successfully at least once.
-            // The `recompileAllBaseViews` → `regenerateFailedBaseViews`
-            // recovery path used to call `generateBaseView` directly with
-            // no helper emission, so customer first-run codegen against a
-            // managed PG (where only baseline PascalCase functions exist)
-            // hit `function fn_ai_agent_run_parent_run_id_get_root_id does
-            // not exist` when LATERAL JOINs in the regenerated view body
-            // resolved to the snake_case scalar form.
-            //
-            // SS doesn't have this problem because its codegen-generated
-            // helper name matches the baseline name — the baseline always
-            // satisfies the LATERAL JOIN. Hence the fix lives here, not
-            // in the dialect-agnostic recovery loop.
-            const recursiveFKs = entity.Fields.filter(f =>
-                f.RelatedEntityID != null && UUIDsEqual(f.RelatedEntityID, entity.ID)
-            );
-            for (const field of recursiveFKs) {
-                const fnSQL = this.generateRootIDFunction(entity, field);
-                if (fnSQL && fnSQL.trim().length > 0) {
-                    await client.query(fnSQL);
-                }
-            }
-
             await executeWithFallback({
                 client,
                 schema: entity.SchemaName,

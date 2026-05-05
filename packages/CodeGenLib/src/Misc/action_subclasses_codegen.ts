@@ -22,7 +22,7 @@ export class ActionSubClassGeneratorBase {
             action.Libraries.forEach(lib => {
                 if (!allActionLibraries.find(l => UUIDsEqual(l.LibraryID, lib.LibraryID))) {
                     allActionLibraries.push({
-                        Library: lib.Library ?? '',
+                        Library: lib.Library,
                         LibraryID: lib.LibraryID,
                         ItemsUsedArray: lib.ItemsUsed && lib.ItemsUsed.length > 0 ? lib.ItemsUsed.split(',').map(item => item.trim()) : []
                     });
