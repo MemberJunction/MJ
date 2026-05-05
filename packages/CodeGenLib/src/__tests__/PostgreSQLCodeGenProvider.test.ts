@@ -502,8 +502,11 @@ describe('PostgreSQLCodeGenProvider', () => {
 
             // Tolerant SP merge wrap: omitting a parameter preserves the existing value.
             // PostgreSQL has no ISNULL keyword; it emits COALESCE.
+            // Non-nullable columns: plain COALESCE merge.
             expect(result).toContain('"Name" = COALESCE(p_name, "Name")');
-            expect(result).toContain('"Email" = COALESCE(p_email, "Email")');
+            // Nullable columns: CASE WHEN _Clear THEN NULL ELSE COALESCE(...) END so callers
+            // can explicitly set the column to NULL via the _Clear companion.
+            expect(result).toContain('"Email" = CASE WHEN p_email_clear = 1 THEN NULL ELSE COALESCE(p_email, "Email") END');
             // Should NOT include PK
             expect(result).not.toContain('"ID" = ');
         });

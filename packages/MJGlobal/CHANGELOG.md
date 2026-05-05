@@ -1,5 +1,7 @@
 # Change Log - @memberjunction/global
 
+## 5.32.0
+
 ## 5.31.0
 
 ### Patch Changes

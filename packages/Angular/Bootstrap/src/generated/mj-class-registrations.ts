@@ -444,7 +444,7 @@ import {
     WebURLPartComponent,
 } from '@memberjunction/ng-dashboard-viewer';
 
-// @memberjunction/ng-dashboards (76 classes)
+// @memberjunction/ng-dashboards (82 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -452,9 +452,14 @@ import {
     ActionExplorerComponent,
     ActionsOverviewComponent,
     ActivityComponent,
+    AdminDataSchemaComponent,
+    AdminDevToolsResourceComponent,
+    AdminIdentityAccessComponent,
+    AdminMonitoringComponent,
     AgentConfigurationComponent,
     AgentRequestsResourceComponent,
     AnalyticsResourceComponent,
+    AppStateInspectorComponent,
     ApplicationRolesResourceComponent,
     ArchiveConfigResourceComponent,
     ArchiveRunsResourceComponent,
@@ -486,6 +491,7 @@ import {
     HomeApplication,
     HomeDashboardComponent,
     KnowledgeConfigResourceComponent,
+    LayoutInspectorComponent,
     ListsBrowseResource,
     ListsCategoriesResource,
     ListsMyListsResource,
@@ -956,9 +962,14 @@ export const CLASS_REGISTRATIONS: any[] = [
     ActionExplorerComponent,
     ActionsOverviewComponent,
     ActivityComponent,
+    AdminDataSchemaComponent,
+    AdminDevToolsResourceComponent,
+    AdminIdentityAccessComponent,
+    AdminMonitoringComponent,
     AgentConfigurationComponent,
     AgentRequestsResourceComponent,
     AnalyticsResourceComponent,
+    AppStateInspectorComponent,
     ApplicationRolesResourceComponent,
     ArchiveConfigResourceComponent,
     ArchiveRunsResourceComponent,
@@ -990,6 +1001,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     HomeApplication,
     HomeDashboardComponent,
     KnowledgeConfigResourceComponent,
+    LayoutInspectorComponent,
     ListsBrowseResource,
     ListsCategoriesResource,
     ListsMyListsResource,
@@ -1047,7 +1059,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 484;
+export const CLASS_REGISTRATIONS_COUNT = 490;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
