@@ -297,6 +297,7 @@ export class ProcedureToFunctionRule implements IConversionRule {
     if (allBoolVars.size > 0) {
       for (const boolVar of allBoolVars) {
         const escaped = boolVar.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // COALESCE(<bool>, 0|1) → COALESCE(<bool>, FALSE|TRUE)
         sql = sql.replace(
           new RegExp(`COALESCE\\(${escaped},\\s*0\\)`, 'gi'),
           `COALESCE(${boolVar}, FALSE)`
@@ -305,6 +306,20 @@ export class ProcedureToFunctionRule implements IConversionRule {
           new RegExp(`COALESCE\\(${escaped},\\s*1\\)`, 'gi'),
           `COALESCE(${boolVar}, TRUE)`
         );
+        // T-SQL bodies routinely test boolean params/vars with `= 1` / `= 0`
+        // / `<> 1` / `!= 0` etc. After converting the param type bit→boolean,
+        // those comparisons become `boolean = integer` and PG rejects them at
+        // call time. Coerce the integer literal to TRUE/FALSE here so the
+        // function body type-checks against the now-boolean parameter.
+        // Order matters: handle multi-char operators (<>, !=) before the
+        // single-char `=` so `\\b<bool>\\s*=` doesn't fire on the trailing
+        // `=` of `!=`.
+        sql = sql.replace(new RegExp(`\\b${escaped}\\s*<>\\s*1\\b`, 'gi'), `${boolVar} <> TRUE`);
+        sql = sql.replace(new RegExp(`\\b${escaped}\\s*<>\\s*0\\b`, 'gi'), `${boolVar} <> FALSE`);
+        sql = sql.replace(new RegExp(`\\b${escaped}\\s*!=\\s*1\\b`, 'gi'), `${boolVar} != TRUE`);
+        sql = sql.replace(new RegExp(`\\b${escaped}\\s*!=\\s*0\\b`, 'gi'), `${boolVar} != FALSE`);
+        sql = sql.replace(new RegExp(`\\b${escaped}\\s*=\\s*1\\b`, 'gi'),  `${boolVar} = TRUE`);
+        sql = sql.replace(new RegExp(`\\b${escaped}\\s*=\\s*0\\b`, 'gi'),  `${boolVar} = FALSE`);
       }
     }
 

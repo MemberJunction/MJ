@@ -194,6 +194,109 @@ END`;
       expect(result).not.toContain('ISNULL');
     });
 
+    // After bit→boolean param translation, body comparisons against integer
+    // literals (`= 1` / `= 0` / `<> 1` / `!= 0`) become `boolean = integer`
+    // and PG rejects them at call time. Coerce literals to TRUE/FALSE for any
+    // param that was translated to boolean.
+    describe('boolean-param body comparison coercion', () => {
+      it('should rewrite `<bool_param> = 1` to `= TRUE`', () => {
+        const input = `CREATE PROCEDURE [__mj].[spTest]
+    @Active bit = 0
+AS
+BEGIN
+    UPDATE __mj.Test SET "Status" = 'On' WHERE @Active = 1;
+END`;
+        const result = convert(input);
+        expect(result).toContain('p_Active = TRUE');
+        expect(result).not.toMatch(/p_Active\s*=\s*1\b/);
+      });
+
+      it('should rewrite `<bool_param> = 0` to `= FALSE`', () => {
+        const input = `CREATE PROCEDURE [__mj].[spTest]
+    @Active bit = 0
+AS
+BEGIN
+    UPDATE __mj.Test SET "Status" = 'Off' WHERE @Active = 0;
+END`;
+        const result = convert(input);
+        expect(result).toContain('p_Active = FALSE');
+        expect(result).not.toMatch(/p_Active\s*=\s*0\b/);
+      });
+
+      it('should rewrite `<> 1` and `<> 0` for boolean params', () => {
+        const input = `CREATE PROCEDURE [__mj].[spTest]
+    @A bit = 0,
+    @B bit = 0
+AS
+BEGIN
+    SELECT 1 WHERE @A <> 1 AND @B <> 0;
+END`;
+        const result = convert(input);
+        expect(result).toContain('p_A <> TRUE');
+        expect(result).toContain('p_B <> FALSE');
+      });
+
+      it('should rewrite `!= 1` and `!= 0` for boolean params', () => {
+        const input = `CREATE PROCEDURE [__mj].[spTest]
+    @A bit = 0,
+    @B bit = 0
+AS
+BEGIN
+    SELECT 1 WHERE @A != 1 AND @B != 0;
+END`;
+        const result = convert(input);
+        expect(result).toContain('p_A != TRUE');
+        expect(result).toContain('p_B != FALSE');
+      });
+
+      it('should rewrite the tolerant-SP CASE WHEN _Clear pattern', () => {
+        // Real-world shape: nullable column with _Clear companion bit param
+        // gets a CASE WHEN <param>_Clear = 1 THEN NULL ELSE COALESCE(...) END
+        // emitted into the SET clause. This is exactly what trips
+        // V202605032236 Metadata_Sync at call time on PG.
+        const input = `CREATE PROCEDURE [__mj].[spTest]
+    @ID uniqueidentifier,
+    @Name_Clear bit = 0,
+    @Name nvarchar(100)
+AS
+BEGIN
+    UPDATE __mj.Test
+    SET "Name" = CASE WHEN @Name_Clear = 1 THEN NULL ELSE COALESCE(@Name, "Name") END
+    WHERE "ID" = @ID;
+END`;
+        const result = convert(input);
+        expect(result).toContain('CASE WHEN p_Name_Clear = TRUE THEN NULL ELSE');
+        expect(result).not.toMatch(/p_Name_Clear\s*=\s*1\b/);
+      });
+
+      it('should NOT rewrite integer literals for non-boolean params', () => {
+        const input = `CREATE PROCEDURE [__mj].[spTest]
+    @Code int
+AS
+BEGIN
+    SELECT 1 WHERE @Code = 1;
+END`;
+        const result = convert(input);
+        // p_Code is int, not boolean — `= 1` is a legitimate integer compare,
+        // must not be touched.
+        expect(result).toMatch(/p_Code\s*=\s*1\b/);
+        expect(result).not.toContain('p_Code = TRUE');
+      });
+
+      it('should NOT confuse `!= 1` with `= 1` (operator-overlap guard)', () => {
+        const input = `CREATE PROCEDURE [__mj].[spTest]
+    @A bit = 0
+AS
+BEGIN
+    SELECT 1 WHERE @A != 1;
+END`;
+        const result = convert(input);
+        // Must produce `!= TRUE`, not `! = TRUE` or `= TRUE`
+        expect(result).toContain('p_A != TRUE');
+        expect(result).not.toContain('!= 1');
+      });
+    });
+
     it('should convert GETUTCDATE to NOW()', () => {
       const input = `CREATE PROCEDURE [__mj].[spTest]
 AS
