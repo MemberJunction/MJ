@@ -157,6 +157,39 @@ describe('AlterTableRule', () => {
     });
   });
 
+  describe('ADD COLUMN idempotency (IF NOT EXISTS)', () => {
+    // PG migrations need idempotent DDL: CI's Step 5b re-applies each V-migration
+    // on top of the already-migrated DB, and Skyway can re-run a migration after a
+    // partial-commit failure. ADD COLUMN without IF NOT EXISTS errors on duplicate.
+    // T-SQL ADD COLUMN also errors on duplicate, so emitting IF NOT EXISTS is strictly
+    // more permissive — never weaker than the source semantics.
+    it('should emit ADD COLUMN IF NOT EXISTS for a single ADD', () => {
+      const sql = `ALTER TABLE [__mj].[ComponentLibrary] ADD [UsageInstructions] [NVARCHAR](MAX) NULL`;
+      const result = convert(sql);
+      expect(result).toContain('ADD COLUMN IF NOT EXISTS');
+      expect(result).toContain('"UsageInstructions"');
+      expect(result).not.toMatch(/ADD COLUMN\s+"UsageInstructions"/);
+    });
+
+    it('should emit IF NOT EXISTS on every column in a multi-column ADD', () => {
+      const sql = `ALTER TABLE [__mj].[Entity]
+        ADD [Col1] [NVARCHAR](100) NULL,
+            [Col2] [BIT] NOT NULL DEFAULT 1`;
+      const result = convert(sql);
+      const matches = result.match(/ADD COLUMN IF NOT EXISTS/g) || [];
+      expect(matches.length).toBe(2);
+      expect(result).toContain('"Col1"');
+      expect(result).toContain('"Col2"');
+    });
+
+    it('should NOT emit IF NOT EXISTS for ADD CONSTRAINT', () => {
+      const sql = `ALTER TABLE [__mj].[Orders] ADD CONSTRAINT [PK_Orders] PRIMARY KEY ([ID])`;
+      const result = convert(sql);
+      expect(result).toContain('ADD CONSTRAINT');
+      expect(result).not.toContain('IF NOT EXISTS');
+    });
+  });
+
   describe('Boolean DEFAULT conversion in ADD COLUMN', () => {
     it('should convert BIT DEFAULT 1 to BOOLEAN DEFAULT TRUE', () => {
       const sql = `ALTER TABLE [__mj].[AIAgent] ADD [AllowEphemeralClientTools] [BIT] NOT NULL DEFAULT 1`;
