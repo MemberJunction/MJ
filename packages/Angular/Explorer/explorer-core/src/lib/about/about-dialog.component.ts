@@ -9,10 +9,11 @@ import {
     inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Metadata, UserRoleInfo } from '@memberjunction/core';
+import { UserRoleInfo } from '@memberjunction/core';
 import { InstanceConfigEngine } from '@memberjunction/core-entities';
 import { GraphQLDataProvider, PACKAGE_VERSION } from '@memberjunction/graphql-dataprovider';
 import { MJAuthBase } from '@memberjunction/ng-auth-services';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ThemeService } from '@memberjunction/ng-shared';
 import { Subscription } from 'rxjs';
 import { ServerConnectivityService } from '../services/server-connectivity.service';
@@ -526,7 +527,7 @@ img.mj-about__user-avatar { background: var(--mj-bg-surface-card); }
 }
     `]
 })
-export class AboutDialogComponent implements OnInit, OnDestroy {
+export class AboutDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy {
     @Output() CloseRequested = new EventEmitter<void>();
 
     /** Optional avatar image URL — passed in from the shell where it's already resolved. */
@@ -616,7 +617,7 @@ export class AboutDialogComponent implements OnInit, OnDestroy {
     }
 
     private populate(): void {
-        const provider = Metadata.Provider; // global-provider-ok: about dialog displays the global default provider's catalog counts
+        const provider = this.ProviderToUse;
 
         this.EntityCount = provider?.Entities?.length ?? 0;
         this.ApplicationCount = provider?.Applications?.length ?? 0;

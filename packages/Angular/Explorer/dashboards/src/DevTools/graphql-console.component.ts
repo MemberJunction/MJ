@@ -1,7 +1,7 @@
 import { Component, OnInit, OnDestroy, ChangeDetectorRef, ElementRef, ViewChild, HostListener, inject } from '@angular/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, EntityInfo, EntityFieldInfo, getGraphQLTypeNameBase } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo, getGraphQLTypeNameBase } from '@memberjunction/core';
 import { GraphQLDataProvider, FieldMapper } from '@memberjunction/graphql-dataprovider';
 import { DevToolsPrefs } from './dev-tools-prefs';
 
@@ -152,7 +152,7 @@ export class GraphQLConsoleComponent extends BaseResourceComponent implements On
 
     private loadEntities(): void {
         try {
-            const md = Metadata.Provider; // global-provider-ok: DevTools GraphQL console queries the global default provider's entity catalog
+            const md = this.ProviderToUse;
             if (!md) return;
             const items: EntityListItem[] = (md.Entities ?? []).map(e => ({
                 info: e,

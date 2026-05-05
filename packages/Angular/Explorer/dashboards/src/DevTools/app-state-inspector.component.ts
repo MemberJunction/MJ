@@ -2,7 +2,6 @@ import { Component, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
 import { DevToolsPrefs } from './dev-tools-prefs';
-import { Metadata } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { WorkspaceStateManager } from '@memberjunction/ng-base-application';
 import { DeveloperModeService } from '@memberjunction/ng-shared';
@@ -129,7 +128,7 @@ export class AppStateInspectorComponent extends BaseResourceComponent implements
     }
 
     private userData(): unknown {
-        const user = Metadata.Provider?.CurrentUser; // global-provider-ok: DevTools inspector explicitly displays the global default provider's state
+        const user = this.ProviderToUse?.CurrentUser;
         if (!user) return { error: 'No current user' };
         return {
             ID: user.ID,
@@ -146,7 +145,7 @@ export class AppStateInspectorComponent extends BaseResourceComponent implements
     }
 
     private providerData(): unknown {
-        const provider = Metadata.Provider; // global-provider-ok: DevTools inspector explicitly displays the global default provider's state
+        const provider = this.ProviderToUse;
         if (!provider) return { error: 'No provider' };
         const data: Record<string, unknown> = {
             type: provider.constructor.name,
