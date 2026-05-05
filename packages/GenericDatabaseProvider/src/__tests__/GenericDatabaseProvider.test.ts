@@ -793,23 +793,15 @@ describe('SqlLoggingSessionImpl', () => {
             expect(result).toBe(input);
         });
 
-        // =====================================================================
-        // Regression test for the silent NVARCHAR(4000) truncation bug
-        // documented in /BUG_NVARCHAR_TRUNCATION_IN_METADATASYNC.md.
-        //
-        // The escape currently splits each ${...} as `$' + N'{...}`. T-SQL
-        // string concatenation of NVARCHAR(N) literals caps the running result
-        // at NVARCHAR(4000) and silently drops content past that boundary
-        // unless one operand is explicitly NVARCHAR(MAX). The split therefore
-        // must interleave `CAST(N'' AS NVARCHAR(MAX))` so the concat chain
-        // inherits MAX precedence — otherwise large component Specifications
-        // (e.g. DataExportPanel, 21 ${...} expressions, ~65 KB) get truncated
-        // to ~57 KB on Flyway apply with no error.
-        //
-        // This test FAILS on the current implementation (which emits
-        // `$'+N'{`) and PASSES once `_escapeFlywaySyntaxInStrings` is changed
-        // to emit `$'+CAST(N'' AS NVARCHAR(MAX))+N'{`.
-        // =====================================================================
+        // Regression test for silent NVARCHAR(4000) truncation. The escape
+        // splits each ${...} via N'…$' + N'{…}', but T-SQL string concatenation
+        // of NVARCHAR(N) literals caps the running result at NVARCHAR(4000)
+        // and silently drops content past that boundary unless one operand
+        // is explicitly NVARCHAR(MAX). Each split must therefore interleave
+        // a CAST(N'' AS NVARCHAR(MAX)) so the concat chain inherits MAX
+        // precedence — otherwise large Specifications (e.g. components with
+        // 20+ ${...} expressions, ~65 KB encoded) get truncated to ~57 KB on
+        // Flyway apply with no error.
         it('forces NVARCHAR(MAX) precedence at every split so multi-chunk concat does not silently truncate at 4000 chars', () => {
             const input = "SET @x = N'`Hello ${name}, you have ${count} items`'";
             const result = escapeFlyway(input);

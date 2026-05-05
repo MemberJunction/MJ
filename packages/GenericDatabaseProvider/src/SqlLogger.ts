@@ -469,10 +469,6 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
    * declared NVARCHAR(MAX) does NOT save you because the truncation happens on the right-hand side before
    * assignment. Interleaving an explicit CAST(N'' AS NVARCHAR(MAX)) at every split forces NVARCHAR(MAX)
    * precedence on the entire chain, preserving the full literal value regardless of size.
-   *
-   * See /BUG_NVARCHAR_TRUNCATION_IN_METADATASYNC.md for the full root-cause analysis. Components with many
-   * ${...} template-literal expressions (e.g. DataExportPanel — 21 expressions, ~65 KB) were silently truncated
-   * to ~57 KB on Flyway apply prior to this fix.
    */
   private _escapeFlywaySyntaxInStrings(sql: string): string {
     return sql.replaceAll(/\$\{/g, "$$'+CAST(N'' AS NVARCHAR(MAX))+N'{");
