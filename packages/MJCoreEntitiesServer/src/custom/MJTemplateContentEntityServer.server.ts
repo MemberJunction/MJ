@@ -43,6 +43,29 @@ export class MJTemplateContentEntityServer extends MJTemplateContentEntity {
     }
 
     private async extractAndSyncParameters(): Promise<void> {
+        // Nest the AI-driven extraction in its own transaction (a SAVEPOINT
+        // on PG, a SAVE TRANSACTION on SS) so any failure inside this step
+        // can't poison the parent `super.Save()`'s outer tx.
+        //
+        // SS and PG diverge on statement-error policy: SS rolls back only the
+        // failing statement and keeps the tx alive, so the existing
+        // try/catch + LogError already does the right thing there. PG aborts
+        // the *entire* outer tx on any stmt error and refuses every
+        // subsequent command except `ROLLBACK [TO SAVEPOINT]`. Failures here
+        // are common — the AI prompt runner makes lookups that error when
+        // no models have credentials, and the inner spCreateTemplateParam
+        // call can hit signature-skew or transient DB issues — all of which
+        // would otherwise bubble up to the parent `CommitTransaction` as
+        // `current transaction is aborted, commands ignored until end of
+        // transaction block` on PG, killing the entire `mj sync push`
+        // batch even though the original `super.Save()` succeeded.
+        //
+        // The savepoint absorbs those errors and keeps PG's behavior
+        // matching SS: the parent save commits, the parameter extraction
+        // is best-effort. Nested begin/commit on SS has no abort to
+        // recover from, so it's a transparent no-op.
+        const provider = this.ProviderToUse as unknown as SQLServerDataProvider;
+        await provider.BeginTransaction();
         try {
             // Run the hybrid extraction pipeline: deterministic parse + AI enrichment
             const result = await RunTemplateExtractionPipeline(
@@ -58,10 +81,15 @@ export class MJTemplateContentEntityServer extends MJTemplateContentEntity {
             if (result.parameters.length > 0) {
                 await this.syncTemplateParameters(result.parameters);
             }
+
+            await provider.CommitTransaction();
         } catch (e) {
-            LogError('Error extracting template parameters:', e);
-            // Don't throw here - we don't want to fail the save if parameter extraction fails
-            // The user can still manually manage parameters if needed
+            // Best-effort rollback — RollbackTransaction itself can throw if
+            // the underlying connection has already been torn down.
+            try { await provider.RollbackTransaction(); } catch { /* swallow */ }
+            LogError('Error extracting template parameters (rolled back to savepoint, parent save preserved):', e);
+            // Don't re-throw — the parent save should still commit. The user
+            // can still manually manage parameters if needed.
         }
     }
 
