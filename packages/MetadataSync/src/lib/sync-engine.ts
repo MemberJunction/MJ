@@ -580,7 +580,27 @@ export class SyncEngine {
         // metadata-file edit. Numbers, dates, booleans, and uuids skip the
         // wrapper since (a) they don't have casing semantics and (b) PG
         // refuses LOWER(uuid).
-        if (field.NeedsQuotes) {
+        //
+        // `field.NeedsQuotes` only filters out Number and Boolean — UUIDs
+        // (Type='uniqueidentifier' on SQL Server, 'uuid' on PG) and Date
+        // columns are reported as quoted but cannot be wrapped in LOWER()
+        // on PG (`function lower(uuid) does not exist`). One failure inside
+        // the sync push transaction aborts the whole PG transaction and
+        // every subsequent statement fails with `current transaction is
+        // aborted` — the regression that wedged compound `@lookup:` filters
+        // on entities like `MJ: Entity Fields` (EntityID + Name).
+        const sqlType = (field.Type || '').trim().toLowerCase();
+        const isStringType = field.NeedsQuotes
+          && sqlType !== 'uniqueidentifier'
+          && sqlType !== 'uuid'
+          && !sqlType.startsWith('date')
+          && !sqlType.startsWith('timestamp')
+          && sqlType !== 'time'
+          && sqlType !== 'datetime'
+          && sqlType !== 'datetimeoffset'
+          && sqlType !== 'datetime2'
+          && sqlType !== 'smalldatetime';
+        if (isStringType) {
           filterParts.push(`LOWER(${fieldName}) = LOWER('${fieldValue.replace(/'/g, "''")}')`);
         } else {
           filterParts.push(`${fieldName} = ${quotes}${fieldValue.replace(/'/g, "''")}${quotes}`);

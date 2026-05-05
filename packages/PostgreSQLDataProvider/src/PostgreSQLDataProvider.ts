@@ -204,7 +204,21 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
         try {
             this._configData = configData;
             this._schemaName = configData.MJCoreSchemaName || '__mj';
-            await this._connectionManager.Initialize(configData.ConnectionConfig);
+
+            // Reuse the existing pool if Config() is being called for a metadata
+            // refresh against the same connection settings (e.g. ProviderBase.Refresh()
+            // → Config() invoked from MJQueryEntityServer.RefreshRelatedMetadata(true)).
+            // Recreating the pool on every refresh is wasteful and races under
+            // parallel sync-push batches: two concurrent Refresh()es each pump the
+            // pool through Close()→new Pool, which produced
+            //   `Called end on pool more than once`
+            // and stranded the in-flight transaction. Only re-init when there's no
+            // pool yet or the connection config actually changed.
+            const cm = this._connectionManager;
+            const sameConn = cm.IsConnected && this.connectionConfigsEqual(cm.Config, configData.ConnectionConfig);
+            if (!sameConn) {
+                await cm.Initialize(configData.ConnectionConfig);
+            }
 
             // Set the platform so RunQuerySQLFilterManager produces PG-appropriate
             // filters (e.g. boolean true/false instead of SQL Server 1/0)
@@ -215,6 +229,17 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
             LogError(`PostgreSQLDataProvider.Config failed: ${err instanceof Error ? err.message : String(err)}`);
             return false;
         }
+    }
+
+    private connectionConfigsEqual(a: unknown, b: unknown): boolean {
+        if (!a || !b) return false;
+        const ka = a as Record<string, unknown>;
+        const kb = b as Record<string, unknown>;
+        return ka.Host === kb.Host
+            && ka.Port === kb.Port
+            && ka.Database === kb.Database
+            && ka.User === kb.User
+            && ka.Password === kb.Password;
     }
 
     /**
