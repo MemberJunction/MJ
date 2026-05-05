@@ -725,7 +725,7 @@ GO
      * Includes primary key fields and all updateable fields, with proper
      * DECLARE statements, SELECT fields, FETCH INTO variables, and SP parameters.
      */
-    private buildUpdateCursorParameters(entity: EntityInfo, _fkField: EntityFieldInfo, prefix: string = ''): {
+    private buildUpdateCursorParameters(entity: EntityInfo, fkField: EntityFieldInfo, prefix: string = ''): {
         declarations: string,
         selectFields: string,
         fetchInto: string,
@@ -768,8 +768,14 @@ GO
 
                 if (allParams !== '')
                     allParams += ', ';
-                // Use named parameters: @ParamName = @VariableValue
-                allParams += `@${ef.CodeName} = @${varPrefix}_${ef.CodeName}`;
+
+                // Use the centralized buildExecParamForField() to generate EXEC
+                // params. For the FK field being cleared, pass clearValue=true so
+                // the tolerant update SP receives @FK_Clear = 1 and actually sets
+                // the column to NULL (instead of treating NULL as "leave unchanged").
+                const isFkBeingCleared = ef.Name === fkField.Name;
+                const paramParts = this.buildExecParamForField(ef, `@${varPrefix}_${ef.CodeName}`, isFkBeingCleared);
+                allParams += paramParts.join(', ');
             }
         }
 
