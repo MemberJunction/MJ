@@ -397,7 +397,7 @@ export class ScheduledGeocodingAction extends BaseAction {
         rv: RunView
     ): Promise<number> {
         let entityRemoved = 0;
-        const orphanFilter = `EntityID = '${entityId}' AND NOT EXISTS (SELECT 1 FROM ${entityInfo.SchemaName}.${entityInfo.BaseTable} src WHERE CAST(src.${pkFieldName} AS NVARCHAR(450)) = RecordID)`;
+        const orphanFilter = `EntityID = '${entityId}' AND NOT EXISTS (SELECT 1 FROM [${entityInfo.SchemaName}].[${entityInfo.BaseView}] src WHERE CAST(src.[${pkFieldName}] AS NVARCHAR(450)) = RecordID)`;
 
         // Paginate: fetch a page, delete it, repeat. Since we're deleting rows,
         // always query from the start — deleted rows won't appear again.
