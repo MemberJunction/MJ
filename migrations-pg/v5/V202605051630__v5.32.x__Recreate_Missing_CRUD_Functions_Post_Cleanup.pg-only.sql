@@ -31,6 +31,27 @@
 -- DB where some/all already exist (CASCADE drop clears any signature drift,
 -- CREATE OR REPLACE follows). Future schema changes to these entities should
 -- be picked up by codegen; this migration is a one-time recovery.
+--
+-- IMPORTANT — view-independence:
+--
+-- The original V202605032116 / V202605032310 SP definitions declare
+-- `RETURNS SETOF __mj."vw<Entity>s"`. PG resolves SETOF result types at
+-- function-create time, not function-call time, so the view must already
+-- exist when CREATE FUNCTION runs. On the customer's fresh-drop replay path
+-- the same V202605041500 cleanup that orphaned these 12 sprocs ALSO
+-- destroyed several supporting views via CASCADE drops upstream — so an
+-- earlier draft of this migration that copied the upstream `RETURNS SETOF
+-- vw<Entity>s` shape failed to apply with `type "__mj.vwAIAgentRuns" does
+-- not exist`.
+--
+-- This rewrite uses `RETURNS SETOF __mj."<BaseTable>"` instead — base tables
+-- are created by the v5.0 baseline and never CASCADE-dropped, so this
+-- migration applies regardless of whether the views are currently present.
+-- The body's terminal `RETURN QUERY SELECT * FROM __mj."<BaseTable>"` is
+-- adjusted to match. The trade-off: callers receive only base-table
+-- columns, not the view's joined-name columns. Codegen will regenerate the
+-- richer view-typed version on a subsequent codegen pass; this is a
+-- recovery floor, not the steady-state shape.
 -- ============================================================================
 
 
@@ -135,7 +156,7 @@ CREATE OR REPLACE FUNCTION ${flyway:defaultSchema}."spCreateAIAgentRun"(
     IN p_CompanyID_Clear BOOLEAN DEFAULT FALSE,
     IN p_CompanyID UUID DEFAULT NULL
 )
-RETURNS SETOF ${flyway:defaultSchema}."vwAIAgentRuns" AS
+RETURNS SETOF ${flyway:defaultSchema}."AIAgentRun" AS
 $$
 BEGIN
 IF p_ID IS NOT NULL THEN
@@ -330,7 +351,7 @@ IF p_ID IS NOT NULL THEN
             );
     END IF;
     -- return the new record from the base view, which might have some calculated fields
-    RETURN QUERY SELECT * FROM ${flyway:defaultSchema}."vwAIAgentRuns" WHERE "ID" = p_ID;
+    RETURN QUERY SELECT * FROM ${flyway:defaultSchema}."AIAgentRun" WHERE "ID" = p_ID;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -439,7 +460,7 @@ CREATE OR REPLACE FUNCTION ${flyway:defaultSchema}."spUpdateAIAgentRun"(
     IN p_CompanyID_Clear BOOLEAN DEFAULT FALSE,
     IN p_CompanyID UUID DEFAULT NULL
 )
-RETURNS SETOF ${flyway:defaultSchema}."vwAIAgentRuns" AS
+RETURNS SETOF ${flyway:defaultSchema}."AIAgentRun" AS
 $$
 DECLARE
     _v_row_count INTEGER;
@@ -496,9 +517,9 @@ UPDATE
     GET DIAGNOSTICS _v_row_count = ROW_COUNT;
 
     IF _v_row_count = 0 THEN
-        RETURN QUERY SELECT * FROM ${flyway:defaultSchema}."vwAIAgentRuns" WHERE 1=0;
+        RETURN QUERY SELECT * FROM ${flyway:defaultSchema}."AIAgentRun" WHERE 1=0;
     ELSE
-        RETURN QUERY SELECT * FROM ${flyway:defaultSchema}."vwAIAgentRuns" WHERE "ID" = p_ID;
+        RETURN QUERY SELECT * FROM ${flyway:defaultSchema}."AIAgentRun" WHERE "ID" = p_ID;
     END IF;
 END;
 $$ LANGUAGE plpgsql;
@@ -616,7 +637,7 @@ CREATE OR REPLACE FUNCTION ${flyway:defaultSchema}."spCreateAIPromptRun"(
     p_modelid uuid DEFAULT NULL,
     p_promptid uuid DEFAULT NULL,
     p_id uuid DEFAULT NULL
-) RETURNS SETOF ${flyway:defaultSchema}."vwAIPromptRuns" AS $$
+) RETURNS SETOF ${flyway:defaultSchema}."AIPromptRun" AS $$
 DECLARE
     v_new_id uuid;
 BEGIN
@@ -914,7 +935,7 @@ CREATE OR REPLACE FUNCTION ${flyway:defaultSchema}."spUpdateAIPromptRun"(
     p_modelid uuid DEFAULT NULL,
     p_promptid uuid DEFAULT NULL,
     p_id uuid DEFAULT NULL
-) RETURNS SETOF ${flyway:defaultSchema}."vwAIPromptRuns" AS $$
+) RETURNS SETOF ${flyway:defaultSchema}."AIPromptRun" AS $$
 DECLARE
     v_updated_count INTEGER;
 BEGIN
@@ -1083,7 +1104,7 @@ CREATE OR REPLACE FUNCTION ${flyway:defaultSchema}."spCreateConversationDetail"(
     IN p_AutomaticCommands TEXT DEFAULT NULL,
     IN p_OriginalMessageChanged BOOLEAN DEFAULT NULL
 )
-RETURNS SETOF ${flyway:defaultSchema}."vwConversationDetails" AS
+RETURNS SETOF ${flyway:defaultSchema}."ConversationDetail" AS
 $$
 BEGIN
 IF p_ID IS NOT NULL THEN
@@ -1202,7 +1223,7 @@ IF p_ID IS NOT NULL THEN
             );
     END IF;
     -- return the new record from the base view, which might have some calculated fields
-    RETURN QUERY SELECT * FROM ${flyway:defaultSchema}."vwConversationDetails" WHERE "ID" = p_ID;
+    RETURN QUERY SELECT * FROM ${flyway:defaultSchema}."ConversationDetail" WHERE "ID" = p_ID;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -1270,7 +1291,7 @@ CREATE OR REPLACE FUNCTION ${flyway:defaultSchema}."spUpdateConversationDetail"(
     IN p_AutomaticCommands TEXT DEFAULT NULL,
     IN p_OriginalMessageChanged BOOLEAN DEFAULT NULL
 )
-RETURNS SETOF ${flyway:defaultSchema}."vwConversationDetails" AS
+RETURNS SETOF ${flyway:defaultSchema}."ConversationDetail" AS
 $$
 DECLARE
     _v_row_count INTEGER;
@@ -1308,9 +1329,9 @@ UPDATE
     GET DIAGNOSTICS _v_row_count = ROW_COUNT;
 
     IF _v_row_count = 0 THEN
-        RETURN QUERY SELECT * FROM ${flyway:defaultSchema}."vwConversationDetails" WHERE 1=0;
+        RETURN QUERY SELECT * FROM ${flyway:defaultSchema}."ConversationDetail" WHERE 1=0;
     ELSE
-        RETURN QUERY SELECT * FROM ${flyway:defaultSchema}."vwConversationDetails" WHERE "ID" = p_ID;
+        RETURN QUERY SELECT * FROM ${flyway:defaultSchema}."ConversationDetail" WHERE "ID" = p_ID;
     END IF;
 END;
 $$ LANGUAGE plpgsql;
@@ -1360,7 +1381,7 @@ CREATE OR REPLACE FUNCTION ${flyway:defaultSchema}."spCreateConversation"(
     IN p_TestRunID_Clear BOOLEAN DEFAULT FALSE,
     IN p_TestRunID UUID DEFAULT NULL
 )
-RETURNS SETOF ${flyway:defaultSchema}."vwConversations" AS
+RETURNS SETOF ${flyway:defaultSchema}."Conversation" AS
 $$
 BEGIN
 IF p_ID IS NOT NULL THEN
@@ -1439,7 +1460,7 @@ IF p_ID IS NOT NULL THEN
             );
     END IF;
     -- return the new record from the base view, which might have some calculated fields
-    RETURN QUERY SELECT * FROM ${flyway:defaultSchema}."vwConversations" WHERE "ID" = p_ID;
+    RETURN QUERY SELECT * FROM ${flyway:defaultSchema}."Conversation" WHERE "ID" = p_ID;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -1488,7 +1509,7 @@ CREATE OR REPLACE FUNCTION ${flyway:defaultSchema}."spUpdateConversation"(
     IN p_TestRunID_Clear BOOLEAN DEFAULT FALSE,
     IN p_TestRunID UUID DEFAULT NULL
 )
-RETURNS SETOF ${flyway:defaultSchema}."vwConversations" AS
+RETURNS SETOF ${flyway:defaultSchema}."Conversation" AS
 $$
 DECLARE
     _v_row_count INTEGER;
@@ -1516,9 +1537,9 @@ UPDATE
     GET DIAGNOSTICS _v_row_count = ROW_COUNT;
 
     IF _v_row_count = 0 THEN
-        RETURN QUERY SELECT * FROM ${flyway:defaultSchema}."vwConversations" WHERE 1=0;
+        RETURN QUERY SELECT * FROM ${flyway:defaultSchema}."Conversation" WHERE 1=0;
     ELSE
-        RETURN QUERY SELECT * FROM ${flyway:defaultSchema}."vwConversations" WHERE "ID" = p_ID;
+        RETURN QUERY SELECT * FROM ${flyway:defaultSchema}."Conversation" WHERE "ID" = p_ID;
     END IF;
 END;
 $$ LANGUAGE plpgsql;
@@ -1557,7 +1578,7 @@ CREATE OR REPLACE FUNCTION ${flyway:defaultSchema}."spCreateTestRunFeedback"(
     IN p_Comments TEXT DEFAULT NULL,
     IN p_ReviewedAt TIMESTAMPTZ DEFAULT NULL
 )
-RETURNS SETOF ${flyway:defaultSchema}."vwTestRunFeedbacks" AS
+RETURNS SETOF ${flyway:defaultSchema}."TestRunFeedback" AS
 $$
 BEGIN
 IF p_ID IS NOT NULL THEN
@@ -1608,7 +1629,7 @@ IF p_ID IS NOT NULL THEN
             );
     END IF;
     -- return the new record from the base view, which might have some calculated fields
-    RETURN QUERY SELECT * FROM ${flyway:defaultSchema}."vwTestRunFeedbacks" WHERE "ID" = p_ID;
+    RETURN QUERY SELECT * FROM ${flyway:defaultSchema}."TestRunFeedback" WHERE "ID" = p_ID;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -1646,7 +1667,7 @@ CREATE OR REPLACE FUNCTION ${flyway:defaultSchema}."spUpdateTestRunFeedback"(
     IN p_Comments TEXT DEFAULT NULL,
     IN p_ReviewedAt TIMESTAMPTZ DEFAULT NULL
 )
-RETURNS SETOF ${flyway:defaultSchema}."vwTestRunFeedbacks" AS
+RETURNS SETOF ${flyway:defaultSchema}."TestRunFeedback" AS
 $$
 DECLARE
     _v_row_count INTEGER;
@@ -1667,9 +1688,9 @@ UPDATE
     GET DIAGNOSTICS _v_row_count = ROW_COUNT;
 
     IF _v_row_count = 0 THEN
-        RETURN QUERY SELECT * FROM ${flyway:defaultSchema}."vwTestRunFeedbacks" WHERE 1=0;
+        RETURN QUERY SELECT * FROM ${flyway:defaultSchema}."TestRunFeedback" WHERE 1=0;
     ELSE
-        RETURN QUERY SELECT * FROM ${flyway:defaultSchema}."vwTestRunFeedbacks" WHERE "ID" = p_ID;
+        RETURN QUERY SELECT * FROM ${flyway:defaultSchema}."TestRunFeedback" WHERE "ID" = p_ID;
     END IF;
 END;
 $$ LANGUAGE plpgsql;
@@ -1710,7 +1731,7 @@ CREATE OR REPLACE FUNCTION ${flyway:defaultSchema}."spCreateTestRunOutput"(
     p_outputtypeid uuid DEFAULT NULL,
     p_testrunid uuid DEFAULT NULL,
     p_id uuid DEFAULT NULL
-) RETURNS SETOF ${flyway:defaultSchema}."vwTestRunOutputs" AS $$
+) RETURNS SETOF ${flyway:defaultSchema}."TestRunOutput" AS $$
 DECLARE
     v_new_id uuid;
 BEGIN
@@ -1793,7 +1814,7 @@ CREATE OR REPLACE FUNCTION ${flyway:defaultSchema}."spUpdateTestRunOutput"(
     p_outputtypeid uuid DEFAULT NULL,
     p_testrunid uuid DEFAULT NULL,
     p_id uuid DEFAULT NULL
-) RETURNS SETOF ${flyway:defaultSchema}."vwTestRunOutputs" AS $$
+) RETURNS SETOF ${flyway:defaultSchema}."TestRunOutput" AS $$
 DECLARE
     v_updated_count INTEGER;
 BEGIN
