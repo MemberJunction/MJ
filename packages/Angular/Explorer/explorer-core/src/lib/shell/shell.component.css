@@ -446,6 +446,15 @@ mj-tab-container ::ng-deep .lm_stack {
   background: var(--mj-bg-page);
 }
 
+.loading-version {
+  margin-top: var(--mj-space-8, 24px);
+  font-size: 11px;
+  color: var(--mj-text-muted);
+  letter-spacing: 0.4px;
+  opacity: 0.6;
+  user-select: none;
+}
+
 /* Loading Recovery Reset Panel */
 .loading-reset-panel {
   display: flex;

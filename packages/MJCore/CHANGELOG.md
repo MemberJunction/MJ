@@ -1,5 +1,16 @@
 # Change Log - @memberjunction/core
 
+## 5.32.0
+
+### Minor Changes
+
+- a7e8b3b: fix(geo): prevent OOM crash loops in ScheduledGeocodingAction by paginating RunView calls (500 records/page), replacing N+1 per-record SQL queries with a bulk Map lookup, adding a safety MaxTotal default of 50,000, and fixing a race condition in CreateGeoCodeRow on concurrent batch inserts
+- b9c67ac: Remove stale MSGraph Migration
+
+### Patch Changes
+
+- @memberjunction/global@5.32.0
+
 ## 5.31.0
 
 ### Minor Changes

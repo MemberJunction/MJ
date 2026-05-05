@@ -1,5 +1,16 @@
 # @memberjunction/geo-core
 
+## 5.32.0
+
+### Patch Changes
+
+- a7e8b3b: fix(geo): prevent OOM crash loops in ScheduledGeocodingAction by paginating RunView calls (500 records/page), replacing N+1 per-record SQL queries with a bulk Map lookup, adding a safety MaxTotal default of 50,000, and fixing a race condition in CreateGeoCodeRow on concurrent batch inserts
+- Updated dependencies [a7e8b3b]
+- Updated dependencies [b9c67ac]
+  - @memberjunction/core@5.32.0
+  - @memberjunction/core-entities@5.32.0
+  - @memberjunction/global@5.32.0
+
 ## 5.31.0
 
 ### Patch Changes

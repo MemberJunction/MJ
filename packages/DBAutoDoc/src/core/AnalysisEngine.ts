@@ -3,11 +3,13 @@
  * Coordinates the entire documentation generation workflow
  */
 
-import { DatabaseDocumentation, AnalysisRun, SchemaDefinition, TableDefinition, ColumnDefinition } from '../types/state.js';
+import { DatabaseDocumentation, AnalysisRun, SchemaDefinition, TableDefinition, ColumnDefinition, ValueListVerdict } from '../types/state.js';
 import { ensureArray } from "../utils/ensureArray.js";
-import { TableNode, BackpropagationTrigger, TableAnalysisContext, TableGroundTruthContext } from '../types/analysis.js';
+import { TableNode, BackpropagationTrigger, TableAnalysisContext, TableGroundTruthContext, EnumCandidateContext } from '../types/analysis.js';
+import { EnumCandidateGate } from '../discovery/EnumCandidateGate.js';
 import {
   TableAnalysisPromptResult,
+  ColumnDescriptionPromptResult,
   SchemaSanityCheckPromptResult,
   CrossSchemaSanityCheckPromptResult,
   SemanticComparisonPromptResult,
@@ -27,6 +29,7 @@ export class AnalysisEngine {
   private backpropagationEngine: BackpropagationEngine;
   private convergenceDetector: ConvergenceDetector;
   private guardrailsManager: GuardrailsManager;
+  private enumCandidateGate: EnumCandidateGate;
   private startTime: number = 0;
   private currentRun?: AnalysisRun;
 
@@ -55,6 +58,7 @@ export class AnalysisEngine {
     );
 
     this.guardrailsManager = new GuardrailsManager(config.analysis.guardrails);
+    this.enumCandidateGate = new EnumCandidateGate();
 
     // Set up guardrail checking in PromptEngine
     this.promptEngine.setGuardrailCheck(() => {
@@ -570,6 +574,9 @@ export class AnalysisEngine {
         }
       }
 
+      // Persist enum/value-list verdicts from LLM response
+      this.persistEnumVerdicts(table, result.result.columnDescriptions, run.modelUsed);
+
       // Process structured FK insights from LLM and feed back to discovery phase
       if (state.phases.keyDetection && result.result.foreignKeys) {
         this.processFKInsightsFromLLM(
@@ -679,6 +686,10 @@ export class AnalysisEngine {
     // Build FK candidate stats from discovery phase for LLM context
     const fkCandidateStats = this.buildFKCandidateStats(state, tableNode.schema, tableNode.table);
 
+    // Evaluate columns for enum candidacy via deterministic pre-filter
+    const enumCandidates = this.enumCandidateGate.evaluateTable(table.columns, table.rowCount);
+    const enumCandidateMap = new Map(enumCandidates.map(c => [c.columnName, c]));
+
     return {
       schema: tableNode.schema,
       table: tableNode.table,
@@ -693,7 +704,8 @@ export class AnalysisEngine {
         checkConstraint: col.checkConstraint,
         defaultValue: col.defaultValue,
         possibleValues: col.possibleValues,
-        statistics: col.statistics
+        statistics: col.statistics,
+        enumCandidate: enumCandidateMap.get(col.name) ?? undefined
       })),
       dependsOn: table.dependsOn,
       dependents: table.dependents,
@@ -703,7 +715,8 @@ export class AnalysisEngine {
       seedContext: state.seedContext ?? this.config.seedContext,
       allTables,
       groundTruth: groundTruthContext,
-      fkCandidateStats
+      fkCandidateStats,
+      enumCandidates: enumCandidates.length > 0 ? enumCandidates : undefined
     };
   }
 
@@ -735,6 +748,67 @@ export class AnalysisEngine {
         cardinalityRatio: fk.evidence.cardinalityRatio,
         confidence: fk.confidence
       }));
+  }
+
+  /**
+   * Persist enum/value-list verdicts from LLM response onto ColumnDefinition.
+   * Keeps the highest-confidence verdict across multiple iterations.
+   */
+  private persistEnumVerdicts(
+    table: TableDefinition,
+    columnDescriptions: ColumnDescriptionPromptResult[] | undefined,
+    modelUsed: string
+  ): void {
+    if (!columnDescriptions) return;
+
+    for (const colDesc of columnDescriptions) {
+      if (!colDesc.valueList) continue;
+
+      const column = table.columns.find(c => c.name === colDesc.columnName);
+      if (!column) continue;
+
+      const vl = colDesc.valueList;
+      // Sanitize LLM-returned values: trim whitespace, drop empties and null sentinels
+      const sanitizedValues = this.sanitizeEnumValues(vl.values);
+      // If sanitization drops all values below 2, skip the verdict
+      if (sanitizedValues.length < 2 && vl.isEnum) continue;
+
+      const newVerdict: ValueListVerdict = {
+        isEnum: vl.isEnum,
+        type: vl.type,
+        confidence: vl.confidence,
+        values: sanitizedValues,
+        reasoning: vl.reasoning,
+        source: 'llm',
+        cardinalityAtDecision: column.statistics
+          ? { distinct: column.statistics.distinctCount, total: column.statistics.totalRows }
+          : undefined,
+        decidedAt: new Date().toISOString(),
+        modelUsed,
+      };
+
+      // Keep highest-confidence verdict across iterations
+      if (!column.valueListVerdict || newVerdict.confidence > column.valueListVerdict.confidence) {
+        column.valueListVerdict = newVerdict;
+      }
+    }
+  }
+
+  /**
+   * Sanitize LLM-returned enum values: trim whitespace, drop empties and null sentinels.
+   */
+  private sanitizeEnumValues(values: string[]): string[] {
+    const sentinels = new Set(['', 'NULL', 'null', 'N/A', 'n/a', '-', '--']);
+    const seen = new Set<string>();
+    const result: string[] = [];
+    for (const raw of values) {
+      const trimmed = raw.trim();
+      if (sentinels.has(trimmed)) continue;
+      if (seen.has(trimmed)) continue;
+      seen.add(trimmed);
+      result.push(trimmed);
+    }
+    return result;
   }
 
   /**
