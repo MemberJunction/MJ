@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { SQLServerCodeGenProvider } from '../SQLServerCodeGenProvider';
-import { EntityInfo } from '@memberjunction/core';
+import { EntityInfo, EntityFieldInfo } from '@memberjunction/core';
 
 /**
  * Tests for tolerant SP-signature codegen (Pillar 1 of the cross-app
@@ -224,6 +224,47 @@ describe('SQLServerCodeGenProvider — tolerant SP signatures', () => {
             // Predicate is `AllowsNull` — every nullable column emits the _Clear CASE wrapper
             // so callers can explicitly persist NULL through Save().
             expect(result).toContain('CASE WHEN @Email_Clear = 1 THEN NULL ELSE ISNULL(@Email');
+        });
+    });
+
+    describe('generateSingleCascadeOperation — _Clear flag for nullable FK', () => {
+        it('cascade update emits _Clear = 1 for the nullable FK field being NULLed', () => {
+            // Parent entity (Conversation) being deleted
+            const parentEntity = createMockEntity(
+                { Name: 'Conversation', BaseTable: 'Conversation', BaseTableCodeName: 'Conversation', SchemaName: '__mj' },
+                [
+                    { ID: 'pk1', Name: 'ID', Type: 'uniqueidentifier', Length: 16, IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: 'newsequentialid()' },
+                ]
+            );
+
+            // Related entity (AIAgentRun) with a nullable FK to Conversation
+            const relatedEntity = createMockEntity(
+                { Name: 'MJ: AI Agent Runs', BaseTable: 'AIAgentRun', BaseTableCodeName: 'MJAIAgentRun', SchemaName: '__mj', AllowUpdateAPI: true },
+                [
+                    { ID: 'pk1', Name: 'ID', Type: 'uniqueidentifier', Length: 16, IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: 'newsequentialid()' },
+                    { ID: 'f1', Name: 'AgentID', Type: 'uniqueidentifier', Length: 16, IsPrimaryKey: false, AllowsNull: false, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                    { ID: 'f2', Name: 'ConversationID', Type: 'uniqueidentifier', Length: 16, IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                    { ID: 'f3', Name: 'Status', Type: 'nvarchar', Length: 100, IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: "'Running'" },
+                ]
+            );
+
+            const fkField = relatedEntity.Fields.find((f: EntityFieldInfo) => f.Name === 'ConversationID')!;
+
+            const result = provider.generateSingleCascadeOperation({
+                parentEntity,
+                relatedEntity,
+                fkField,
+                operation: 'update',
+            });
+
+            // The EXEC call must include @ConversationID_Clear = 1 so the tolerant
+            // update SP actually sets the column to NULL instead of treating NULL as
+            // "leave unchanged".
+            expect(result).toContain('@ConversationID_Clear = 1');
+            expect(result).toContain('@ConversationID = @');
+            // Other nullable fields should NOT get _Clear = 1 — only the FK being cleared
+            expect(result).not.toContain('@Status_Clear = 1');
+            expect(result).not.toContain('@AgentID_Clear');
         });
     });
 });
