@@ -1973,24 +1973,32 @@ export class SQLServerDataProvider
 
 
   /**
-   * Builds a UNION ALL query that checks each child entity's base table for a record
-   * with the given primary key. Returns the first match (disjoint subtypes guarantee
-   * at most one result) unless used with overlapping subtypes.
+   * Builds a UNION ALL query that probes each child entity's BaseView for a
+   * record with the given primary key. Returns the first match (disjoint
+   * subtypes guarantee at most one result) unless used with overlapping
+   * subtypes.
+   *
+   * Probes BaseView rather than BaseTable so the runtime SQL identity, which
+   * has SELECT only on views (not on the underlying tables), can execute it.
+   * All identifier and string-literal formatting is delegated to the dialect
+   * so the same generation logic produces correct SQL on any future platform.
    */
   protected override BuildChildDiscoverySQL(
     childEntities: EntityInfo[],
     recordPKValue: string
   ): string {
-    // Sanitize the PK value to prevent SQL injection
-    const safePKValue = recordPKValue.replace(/'/g, "''");
+    const dialect = this.getDialect();
+    const pkValueLit = dialect.QuoteStringLiteral(recordPKValue);
+    const aliasName = dialect.QuoteColumnAlias('EntityName');
 
     const unionParts = childEntities
       .filter(child => child.PrimaryKeys.length > 0)
       .map(child => {
         const schema = child.SchemaName || '__mj';
-        const table = child.BaseTable;
-        const pkName = child.PrimaryKeys[0].Name;
-        return `SELECT '${child.Name.replace(/'/g, "''")}' AS EntityName FROM [${schema}].[${table}] WHERE [${pkName}] = '${safePKValue}'`;
+        const sourceRef = dialect.QuoteSchema(schema, child.BaseView);
+        const pkRef = dialect.QuoteIdentifier(child.PrimaryKeys[0].Name);
+        const nameLit = dialect.QuoteStringLiteral(child.Name);
+        return `SELECT ${nameLit} AS ${aliasName} FROM ${sourceRef} WHERE ${pkRef} = ${pkValueLit}`;
       });
 
     if (unionParts.length === 0) return '';

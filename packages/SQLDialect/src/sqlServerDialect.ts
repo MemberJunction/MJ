@@ -141,6 +141,15 @@ export class SQLServerDialect extends SQLDialect {
         return `[${schema}].[${object}]`;
     }
 
+    /**
+     * SQL Server identifiers are case-insensitive by default, so a bare
+     * alias preserves the requested casing when echoed in result-set
+     * column metadata. Bracketed quoting would also work but is unnecessary.
+     */
+    QuoteColumnAlias(aliasName: string): string {
+        return aliasName;
+    }
+
     // ─── Pagination ──────────────────────────────────────────────────
 
     LimitClause(limit: number, offset?: number): LimitClauseResult {
