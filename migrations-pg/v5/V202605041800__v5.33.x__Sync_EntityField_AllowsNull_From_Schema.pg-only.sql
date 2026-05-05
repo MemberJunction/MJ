@@ -2,7 +2,7 @@
 -- Synchronize __mj.EntityField.AllowsNull with information_schema.is_nullable
 --
 -- Background:
---   Audit on 2026-05-04 against MJ_PG_RUNTIME @ v5.32.x baseline showed 1,390
+--   Audit on 2026-05-04 against MJ_PG_RUNTIME @ v5.33.x baseline showed 1,390
 --   EntityField rows where AllowsNull = TRUE while the underlying column is
 --   declared `NOT NULL` in the schema. The drift was introduced when the SQL
 --   Server → PostgreSQL converter populated the EntityField metadata rows for

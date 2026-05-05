@@ -14,7 +14,7 @@
 --   written into .ts files, the result is invalid TypeScript and the
 --   downstream `npm run build` of CoreActions fails.
 --
--- Affected columns (audited 2026-05-04 against MJ_PG_RUNTIME @ v5.32.0 base):
+-- Affected columns (audited 2026-05-04 against MJ_PG_RUNTIME @ v5.33.0 base):
 --   - __mj.Action.Code            — 6 rows (TypeScript action bodies)
 --   - __mj.TemplateContent.TemplateText — 26 rows (Nunjucks templates that
 --                                                   reference field.Name etc.)

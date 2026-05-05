@@ -1,5 +1,5 @@
 -- ============================================================================
--- V202605051630 — Recreate 12 CRUD functions orphaned by the v5.32.x cleanup
+-- V202605051630 — Recreate 12 CRUD functions orphaned by the v5.33.x cleanup
 -- chain on fresh-DB applies.
 --
 -- Background:

@@ -545,14 +545,15 @@ export class SQLCodeGenBase {
                             try {
                                 await pool.query(fileContents);
                             }
-                            catch (sqlError: any) {
+                            catch (sqlError) {
                                 // Don't shadow the outer `e` (EntityInfo) — the inner `catch (e)`
                                 // would otherwise rebind `e` to the SQL error, making
                                 // `e.Name` resolve to the error's `.Name` (undefined for pg
                                 // errors) instead of the entity's name. That's why downstream
                                 // logs read `for entity undefined` and were impossible to
                                 // pin to a specific entity.
-                                logError(`Error executing permissions file ${fullPath} for entity ${e.Name}: ${sqlError}`);
+                                const errorMessage = sqlError instanceof Error ? sqlError.message : String(sqlError);
+                                logError(`Error executing permissions file ${fullPath} for entity ${e.Name}: ${errorMessage}`);
                                 innerSuccess = false;
                             }
                         }

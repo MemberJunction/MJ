@@ -8243,7 +8243,7 @@ $$ LANGUAGE plpgsql;
 -- PostgreSQLCodeGenProvider, commit c136d41f03) cuts AIPromptRun's sproc
 -- signatures to ~92 params, well under the limit. The narrow-rule
 -- regeneration is in
--- V202605032310__v5.32.x__SpUpdateExistingEntityFieldsFromSchema_Self_Heal.pg-only.sql,
+-- V202605032310__v5.33.x__SpUpdateExistingEntityFieldsFromSchema_Self_Heal.pg-only.sql,
 -- which runs after this file.
 --
 -- Existing v5.31 Regenerate (V202605021056) signatures for spCreateAIPromptRun
