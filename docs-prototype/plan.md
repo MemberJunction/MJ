@@ -31,7 +31,9 @@
 
 ```
 /                            Landing page — what is MJ + paths into the docs
+                              (Includes a "Skip the ops — run MJ on MJC" CTA linking to central.memberjunction.com)
 /getting-started             Prerequisites, install, first run, quick start
+                              (Includes a "…or skip self-hosting — try MJC" callout next to the install steps)
 /architecture                System overview, layers, design philosophy, links to deep dives
 /guides                      Index of all /guides/*.md files in MJ repo (rendered)
   /guides/caching            Rendered from MJ:/guides/CACHING_AND_PUBSUB_GUIDE.md
@@ -46,6 +48,7 @@
   /guides/app-color-architecture  Rendered from MJ:/guides/APP_COLOR_ARCHITECTURE.md
 /packages                    Full package directory (mirrored from MJ root README)
 /ai-and-agents               AI providers, agent framework, MCP/A2A, prompt engine
+  /ai-and-agents/skills      Catalog of MJ-published Claude Code agent skills (install + usage)
 /migrations                  Database migrations, Skyway, Flyway, schema evolution
 /custom-apps                 Building applications on MJ
 /ecosystem                   Skyway, Forge, VSCode, BizApps, sample apps
@@ -54,9 +57,9 @@
 /404.html                    Custom 404 with "did you mean..." links
 ```
 
-**Top nav (persistent):** Home · Getting Started · Architecture · Guides · Packages · AI & Agents · Ecosystem · API Reference · GitHub.
+**Top nav (persistent):** Home · Getting Started · Architecture · Guides · Packages · AI & Agents · Ecosystem · API Reference · GitHub · **MJC ↗** (visually distinct CTA link to central.memberjunction.com).
 
-**Footer:** Discussions · Issues · Releases · npm · License · Contact.
+**Footer:** Discussions · Issues · Releases · npm · License · Contact · **Hosted MJ (MJC)**.
 
 ---
 
@@ -110,6 +113,14 @@
 - **Need versioned docs across major releases?** Docusaurus.
 
 This plan assumes **Astro Starlight**.
+
+### Hedge against future tooling changes
+
+Starlight supports React, Vue, Svelte, and Solid via Astro's framework integrations, but committing interactive components to any single framework makes a future migration painful. To keep that door open:
+
+- **Author interactive components as Astro components or framework-agnostic web components** wherever practical.
+- Reach for a framework integration (React, Vue, etc.) only when an existing component library justifies it, and isolate those imports so the dependency surface is visible.
+- This rule keeps content portable if we ever switch to Docusaurus (e.g. when versioning becomes a hard requirement) without rewriting the component layer.
 
 ---
 
@@ -411,10 +422,25 @@ For each "ecosystem" repo, the docs site shows:
 - A short excerpt from the README (first ~200 words)
 - A "Read on GitHub" link
 - Last release tag + date (fetched from GH API)
+- **Optional `extraLinks`** — for repos that have their own dedicated docs (e.g. a wiki, a GitHub Pages site, a Confluence space, generated API reference). Rendered as one or more "For more info →" links beneath the excerpt.
 
 Implementation: `scripts/fetch-content.mjs` calls `GET /repos/:owner/:repo` and `GET /repos/:owner/:repo/releases/latest` for each, plus pulls README.md raw.
 
-**Do NOT** mirror entire ecosystem READMEs into the docs site. Excerpt + link is the pattern.
+**SOURCES schema** (per repo entry in `fetch-content.mjs`):
+
+```js
+{
+  owner: 'MemberJunction',
+  repo: 'Forge',
+  // ...
+  extraLinks: [
+    { label: 'Forge Wiki', url: 'https://github.com/MemberJunction/Forge/wiki' },
+    // additional dedicated-docs links as needed
+  ],
+}
+```
+
+**Do NOT** mirror entire ecosystem READMEs into the docs site. Excerpt + link (+ optional `extraLinks`) is the pattern.
 
 ---
 
@@ -457,7 +483,7 @@ Implementation: `scripts/fetch-content.mjs` calls `GET /repos/:owner/:repo` and 
 5. **Analytics?** Plausible vs. GoatCounter vs. nothing.
 6. **Branded social card / OG image?** Need a designed asset for `/og-image.png`.
 7. **Sample app showcase page** — do we want a `/showcase` listing apps built on MJ? Could pull from `committees`, `sample-app`, `mj-sample-open-app`, `bizapps-tasks`, demo apps.
-8. **Where does the `CLAUDE.md` content surface, if at all?** It's a developer handbook; arguably its substance belongs in `/guides/` rather than the site nav. Worth a separate review.
+8. ~~**Where does the `CLAUDE.md` content surface, if at all?**~~ **Resolved:** `CLAUDE.md` is an internal contributor handbook (norms for developers *of* MJ) and will not be surfaced on the public docs site. Instead, **agent skills** (the `.claude/skills/` and plugin skills we ship) get a first-class section at `/ai-and-agents/skills` with a published catalog and copy-paste install instructions — these are useful to developers *using* MJ in their own projects with Claude Code. Source of truth: skills are auto-discovered from `.claude/skills/` and `packages/*/skills/` in MJ at build time and rendered into the catalog page.
 
 ---
 
