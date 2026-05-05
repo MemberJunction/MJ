@@ -1,8 +1,32 @@
+-- ============================================================================
+-- MemberJunction PostgreSQL Migration
+-- Converted from SQL Server using TypeScript conversion pipeline
+-- ============================================================================
+
+-- Extensions
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Schema
+CREATE SCHEMA IF NOT EXISTS __mj;
+SET search_path TO __mj, public;
+
+-- Ensure backslashes in string literals are treated literally (not as escape sequences)
+SET standard_conforming_strings = on;
+
+-- NOTE: Earlier converter versions made INTEGER to BOOLEAN cast implicit by
+-- modifying the system catalog so SS-style INSERT INTO bool_col VALUES (1)
+-- would work. That modification required pg_catalog write privileges, which
+-- managed PG (RDS, Aurora, Cloud SQL, Azure) does not grant. As of v5.30 all
+-- bulk INSERTs are emitted with native TRUE/FALSE values directly, so the
+-- cast modification is no longer needed. Removed to support managed-PG
+-- installs out of the box.
+
 
 -- ===================== DDL: Tables, PKs, Indexes =====================
 
 ALTER TABLE __mj."ComponentLibrary"
- ADD COLUMN "UsageInstructions" TEXT NULL;
+ ADD COLUMN IF NOT EXISTS "UsageInstructions" TEXT NULL;
 
 
 -- ===================== Views =====================
@@ -74,6 +98,14 @@ $do$;
 
 -- ===================== Stored Procedures (sp*) =====================
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateComponentLibrary'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateComponentLibrary"(
     IN p_ID UUID DEFAULT NULL,
     IN p_Name VARCHAR(500) DEFAULT NULL,
@@ -169,6 +201,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateComponentLibrary'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateComponentLibrary"(
     IN p_ID UUID,
     IN p_Name VARCHAR(500) DEFAULT NULL,
@@ -219,6 +259,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteComponentLibrary'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteComponentLibrary"(
     IN p_ID UUID
 )
@@ -306,22 +354,22 @@ BEGIN
         'Markdown-formatted usage instructions for AI code generators and agents. Injected into prompts when a component references this library. Covers container requirements, initialization patterns, required config options, and common pitfalls. Distinct from Description which is a high-level summary of what the library does.',
         'TEXT',
         -1,
-        0,
-        0,
-        1,
-        NULL,
-        0,
-        1,
-        0,
-        NULL,
-        NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        'Search',
+        0,         -- "Precision" (int)
+        0,         -- "Scale" (int)
+        TRUE,      -- "AllowsNull" (boolean — manually coerced from converter's `1`)
+        NULL,      -- "DefaultValue"
+        FALSE,     -- "AutoIncrement" (boolean — manually coerced from `0`)
+        TRUE,      -- "AllowUpdateAPI" (boolean — manually coerced from `1`)
+        FALSE,     -- "IsVirtual" (boolean — manually coerced from `0`)
+        NULL,      -- "RelatedEntityID"
+        NULL,      -- "RelatedEntityFieldName"
+        FALSE,     -- "IsNameField" (boolean — from `0`)
+        FALSE,     -- "IncludeInUserSearchAPI" (boolean — from `0`)
+        FALSE,     -- "IncludeRelatedEntityNameFieldInBaseView" (boolean — from `0`)
+        FALSE,     -- "DefaultInView" (boolean — from `0`)
+        FALSE,     -- "IsPrimaryKey" (boolean — from `0`)
+        FALSE,     -- "IsUnique" (boolean — from `0`)
+        'Search',  -- "RelatedEntityDisplayType"
         NOW(),
         NOW()
         );
@@ -329,39 +377,39 @@ BEGIN
 END $$;
 
 UPDATE __mj."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = '5C4868E1-CE8B-45D7-948A-CF4D0508CFAE'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = 'D989C070-1094-4777-8CC3-BA2FFC520ABB'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = '7366E819-CF7C-4F5F-94F5-CD01914DAD98'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
                SET "UserSearchPredicateAPI" = 'BeginsWith'
                WHERE "ID" = '3894C205-5E5F-4C7C-ADB2-9ACFA1D4F93C'
-               AND "AutoUpdateUserSearchPredicate" = 1;
+               AND "AutoUpdateUserSearchPredicate" = TRUE;
 
 UPDATE __mj."EntityField"
                SET "UserSearchPredicateAPI" = 'Exact'
                WHERE "ID" = '7366E819-CF7C-4F5F-94F5-CD01914DAD98'
-               AND "AutoUpdateUserSearchPredicate" = 1;
+               AND "AutoUpdateUserSearchPredicate" = TRUE;
 
 UPDATE __mj."EntityField"
                SET "UserSearchPredicateAPI" = 'Exact'
                WHERE "ID" = 'D989C070-1094-4777-8CC3-BA2FFC520ABB'
-               AND "AutoUpdateUserSearchPredicate" = 1;
+               AND "AutoUpdateUserSearchPredicate" = TRUE;
 
 UPDATE __mj."Entity"
-            SET "AllowUserSearchAPI" = 1
+            SET "AllowUserSearchAPI" = TRUE
             WHERE "ID" = '2264AA9A-2197-48E2-BB3D-A498006B37A5'
-            AND "AutoUpdateAllowUserSearchAPI" = 1;
+            AND "AutoUpdateAllowUserSearchAPI" = TRUE;
 /* Set categories for 16 fields */
 -- UPDATE Entity Field Category Info MJ: Component Libraries."ID"
 
@@ -371,7 +419,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '5FE19283-3176-4CC8-958C-7EC72018EAE1' AND "AutoUpdateCategory" = 1;
+   "ID" = '5FE19283-3176-4CC8-958C-7EC72018EAE1' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Component Libraries."Name"
 
 UPDATE __mj."EntityField"
@@ -380,7 +428,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '3894C205-5E5F-4C7C-ADB2-9ACFA1D4F93C' AND "AutoUpdateCategory" = 1;
+   "ID" = '3894C205-5E5F-4C7C-ADB2-9ACFA1D4F93C' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Component Libraries."DisplayName"
 
 UPDATE __mj."EntityField"
@@ -389,7 +437,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '5C4868E1-CE8B-45D7-948A-CF4D0508CFAE' AND "AutoUpdateCategory" = 1;
+   "ID" = '5C4868E1-CE8B-45D7-948A-CF4D0508CFAE' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Component Libraries."Version"
 
 UPDATE __mj."EntityField"
@@ -398,7 +446,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'DAF7974B-C104-44CA-960B-550BCBF3A523' AND "AutoUpdateCategory" = 1;
+   "ID" = 'DAF7974B-C104-44CA-960B-550BCBF3A523' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Component Libraries."GlobalVariable"
 
 UPDATE __mj."EntityField"
@@ -407,7 +455,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'D989C070-1094-4777-8CC3-BA2FFC520ABB' AND "AutoUpdateCategory" = 1;
+   "ID" = 'D989C070-1094-4777-8CC3-BA2FFC520ABB' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Component Libraries."Category"
 
 UPDATE __mj."EntityField"
@@ -416,7 +464,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '7366E819-CF7C-4F5F-94F5-CD01914DAD98' AND "AutoUpdateCategory" = 1;
+   "ID" = '7366E819-CF7C-4F5F-94F5-CD01914DAD98' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Component Libraries."CDNUrl"
 
 UPDATE __mj."EntityField"
@@ -426,7 +474,7 @@ SET
    "ExtendedType" = 'URL',
    "CodeType" = NULL
 WHERE 
-   "ID" = '3465499E-959F-41CC-8BBC-2E99E8A78473' AND "AutoUpdateCategory" = 1;
+   "ID" = '3465499E-959F-41CC-8BBC-2E99E8A78473' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Component Libraries."CDNCssUrl"
 
 UPDATE __mj."EntityField"
@@ -436,7 +484,7 @@ SET
    "ExtendedType" = 'URL',
    "CodeType" = NULL
 WHERE 
-   "ID" = 'AA3C7D8C-9455-4CEF-9EE2-39B62C0B1EA7' AND "AutoUpdateCategory" = 1;
+   "ID" = 'AA3C7D8C-9455-4CEF-9EE2-39B62C0B1EA7' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Component Libraries."Description"
 
 UPDATE __mj."EntityField"
@@ -445,7 +493,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'C9652FDE-E74A-44EE-8C44-C155C9731D0D' AND "AutoUpdateCategory" = 1;
+   "ID" = 'C9652FDE-E74A-44EE-8C44-C155C9731D0D' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Component Libraries."UsageInstructions"
 
 UPDATE __mj."EntityField"
@@ -455,7 +503,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '0D9048B3-EF1D-497D-8CB2-A70C8FC35CDB' AND "AutoUpdateCategory" = 1;
+   "ID" = '0D9048B3-EF1D-497D-8CB2-A70C8FC35CDB' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Component Libraries."Status"
 
 UPDATE __mj."EntityField"
@@ -464,7 +512,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'CB48A0F4-C84D-42AB-BD73-B075244F9655' AND "AutoUpdateCategory" = 1;
+   "ID" = 'CB48A0F4-C84D-42AB-BD73-B075244F9655' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Component Libraries."LintRules"
 
 UPDATE __mj."EntityField"
@@ -473,7 +521,7 @@ SET
    "ExtendedType" = 'Code',
    "CodeType" = 'Other'
 WHERE 
-   "ID" = '84EB967A-67A4-41C8-AB1F-54042A66BBDF' AND "AutoUpdateCategory" = 1;
+   "ID" = '84EB967A-67A4-41C8-AB1F-54042A66BBDF' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Component Libraries."Dependencies"
 
 UPDATE __mj."EntityField"
@@ -482,7 +530,7 @@ SET
    "ExtendedType" = 'Code',
    "CodeType" = 'Other'
 WHERE 
-   "ID" = '3A0C1530-DF4A-4630-A9E6-123CE4E2F117' AND "AutoUpdateCategory" = 1;
+   "ID" = '3A0C1530-DF4A-4630-A9E6-123CE4E2F117' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Component Libraries."UsageType"
 
 UPDATE __mj."EntityField"
@@ -491,7 +539,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'FD030E2A-3A2E-427F-971C-9D1CAED65A8B' AND "AutoUpdateCategory" = 1;
+   "ID" = 'FD030E2A-3A2E-427F-971C-9D1CAED65A8B' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Component Libraries.__mj_CreatedAt
 
 UPDATE __mj."EntityField"
@@ -500,7 +548,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'AC898D19-1A34-4803-95F3-EC37A2FA5487' AND "AutoUpdateCategory" = 1;
+   "ID" = 'AC898D19-1A34-4803-95F3-EC37A2FA5487' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Component Libraries.__mj_UpdatedAt
 
 UPDATE __mj."EntityField"
@@ -509,7 +557,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'ED0C1E5D-4943-4CC9-9BFF-41D3F932606D' AND "AutoUpdateCategory" = 1;
+   "ID" = 'ED0C1E5D-4943-4CC9-9BFF-41D3F932606D' AND "AutoUpdateCategory" = TRUE;
 
 
 -- ===================== Grants =====================
