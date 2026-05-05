@@ -19,7 +19,7 @@ function featureLoader(importFn: () => Promise<unknown>): () => Promise<void> {
 // --- @memberjunction/ng-dashboards → ./actions-dashboards.module (7 entries) ---
 const loadActionsDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/actions-dashboards.module'));
 
-// --- @memberjunction/ng-dashboards → ./ai-dashboards.module (14 entries) ---
+// --- @memberjunction/ng-dashboards → ./ai-dashboards.module (15 entries) ---
 const loadAiDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/ai-dashboards.module'));
 
 // --- @memberjunction/ng-dashboards → ./communication-dashboards.module (6 entries) ---
@@ -28,7 +28,7 @@ const loadCommunicationDashboardsModule = featureLoader(() => import('@memberjun
 // --- @memberjunction/ng-dashboards → ./component-studio-dashboards.module (1 entries) ---
 const loadComponentStudioDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/component-studio-dashboards.module'));
 
-// --- @memberjunction/ng-dashboards → ./core-dashboards.module (15 entries) ---
+// --- @memberjunction/ng-dashboards → ./core-dashboards.module (26 entries) ---
 const loadCoreDashboardsModule = featureLoader(() => import('@memberjunction/ng-dashboards/core-dashboards.module'));
 
 // --- @memberjunction/ng-dashboards → ./credentials-dashboards.module (6 entries) ---
@@ -92,6 +92,7 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   'BaseResourceComponent::DuplicateDetectionResource': loadAiDashboardsModule,
   'BaseResourceComponent::KnowledgeConfigResource': loadAiDashboardsModule,
   'BaseResourceComponent::SchedulingResource': loadAiDashboardsModule,
+  'BaseResourceComponent::Tags': loadAiDashboardsModule,
   'BaseResourceComponent::VectorManagementResource': loadAiDashboardsModule,
 
   // @memberjunction/ng-dashboards → ./communication-dashboards.module
@@ -108,14 +109,25 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
   // @memberjunction/ng-dashboards → ./core-dashboards.module
   'BaseApplication::HomeApplication': loadCoreDashboardsModule,
   'BaseDashboard::EntityAdmin': loadCoreDashboardsModule,
+  'BaseResourceComponent::AdminDataSchema': loadCoreDashboardsModule,
+  'BaseResourceComponent::AdminDeveloperTools': loadCoreDashboardsModule,
+  'BaseResourceComponent::AdminIdentityAccess': loadCoreDashboardsModule,
+  'BaseResourceComponent::AdminMonitoring': loadCoreDashboardsModule,
   'BaseResourceComponent::APIKeysResource': loadCoreDashboardsModule,
   'BaseResourceComponent::ApplicationRolesResource': loadCoreDashboardsModule,
+  'BaseResourceComponent::AppStateInspector': loadCoreDashboardsModule,
+  'BaseResourceComponent::ClassRegistryInspector': loadCoreDashboardsModule,
   'BaseResourceComponent::DashboardBrowserResource': loadCoreDashboardsModule,
+  'BaseResourceComponent::EventMonitorInspector': loadCoreDashboardsModule,
+  'BaseResourceComponent::GraphQLConsoleInspector': loadCoreDashboardsModule,
   'BaseResourceComponent::HomeDashboard': loadCoreDashboardsModule,
+  'BaseResourceComponent::LayoutInspector': loadCoreDashboardsModule,
+  'BaseResourceComponent::LazyModuleStatusInspector': loadCoreDashboardsModule,
   'BaseResourceComponent::PermissionsAuditLogResource': loadCoreDashboardsModule,
   'BaseResourceComponent::PermissionsResourceAccessResource': loadCoreDashboardsModule,
   'BaseResourceComponent::PermissionsUserAccessResource': loadCoreDashboardsModule,
   'BaseResourceComponent::QueryBrowserResource': loadCoreDashboardsModule,
+  'BaseResourceComponent::SettingsExplorerInspector': loadCoreDashboardsModule,
   'BaseResourceComponent::SystemDiagnosticsResource': loadCoreDashboardsModule,
   'BaseResourceComponent::VersionHistoryDiffResource': loadCoreDashboardsModule,
   'BaseResourceComponent::VersionHistoryGraphResource': loadCoreDashboardsModule,
@@ -187,4 +199,4 @@ export const LAZY_FEATURE_CONFIG: Record<string, () => Promise<void>> = {
 
 };
 
-export const LAZY_FEATURE_CONFIG_COUNT = 84;
+export const LAZY_FEATURE_CONFIG_COUNT = 96;

@@ -71,6 +71,9 @@ class TestGenericProvider extends GenericDatabaseProvider {
     public testBuildPaginationSQL(maxRows: number, startRow: number): string { return this.BuildPaginationSQL(maxRows, startRow); }
     public testBuildNonPaginatedLimitSQL(maxRows: number): string { return this.BuildNonPaginatedLimitSQL(maxRows); }
     public testTransformExternalSQLClause(clause: string, entityInfo: EntityInfo): string { return this.TransformExternalSQLClause(clause, entityInfo); }
+    public testBuildTotalRowCountSQL(entityInfo: EntityInfo, usingPagination: boolean, maxRowsForQuery: number): string | null {
+        return this.BuildTotalRowCountSQL(entityInfo, usingPagination, maxRowsForQuery);
+    }
 
     // Expose protected methods for testing
     public testEnqueueAfterSaveAIAction(params: { entityAIActionId: string; entityRecord: BaseEntity; actionId: string; modelId: string }, user: UserInfo): void {
@@ -234,6 +237,51 @@ describe('GenericDatabaseProvider', () => {
         it('TransformExternalSQLClause passes empty string through', () => {
             const entityInfo = { Fields: [] } as unknown as EntityInfo;
             expect(provider.testTransformExternalSQLClause('', entityInfo)).toBe('');
+        });
+    });
+
+    describe('BuildTotalRowCountSQL', () => {
+        // Minimal EntityInfo for SQL-shape assertions. Real methods on EntityInfo aren't needed here —
+        // BuildTotalRowCountSQL only reads SchemaName + BaseView and passes them through QuoteSchemaAndView.
+        const entityInfo = {
+            SchemaName: '__mj',
+            BaseView: 'vwEntities',
+        } as unknown as EntityInfo;
+
+        it('returns null when rows are NOT limited (no pagination, no MaxRows)', () => {
+            // When the caller isn't limiting rows, there's no need for a count query —
+            // retData.length IS the full row count. Returning null signals "don't run a count."
+            expect(provider.testBuildTotalRowCountSQL(entityInfo, false, 0)).toBeNull();
+        });
+
+        it('returns count SQL when pagination IS being used', () => {
+            const sql = provider.testBuildTotalRowCountSQL(entityInfo, true, 100);
+            expect(sql).not.toBeNull();
+            expect(sql).toContain('SELECT COUNT(*)');
+            expect(sql).toContain('FROM "__mj"."vwEntities"');
+        });
+
+        // Regression for the "Explorer shows 100 of 100 on PG" bug:
+        // Before this fix, countSQL was only emitted when `topSQL.length > 0`. PG's BuildTopClause
+        // returns empty (PG uses LIMIT, not TOP), so non-paginated MaxRows queries never produced
+        // a count — Explorer fell back to retData.length (the page size) and hid pagination controls.
+        it('returns count SQL even WITHOUT pagination when MaxRows is set (PG fallback case)', () => {
+            const sql = provider.testBuildTotalRowCountSQL(entityInfo, false, 100);
+            expect(sql).not.toBeNull();
+            expect(sql).toContain('SELECT COUNT(*)');
+        });
+
+        // Regression for the "PG case-folds the alias" bug:
+        // PG folds unquoted identifiers to lowercase, so `AS TotalRowCount` returns a row keyed
+        // `totalrowcount`. The consumer reads `countResult[0].TotalRowCount` and gets undefined.
+        // Using `QuoteIdentifier` yields `"TotalRowCount"` on PG and `[TotalRowCount]` on SQL Server
+        // — both preserve case.
+        it('aliases the count via QuoteIdentifier (preserves case on PG)', () => {
+            const sql = provider.testBuildTotalRowCountSQL(entityInfo, true, 100);
+            // Test subclass's QuoteIdentifier uses double-quotes — verifies we're NOT emitting the
+            // raw unquoted `AS TotalRowCount` that caused the PG bug.
+            expect(sql).toContain('AS "TotalRowCount"');
+            expect(sql).not.toMatch(/AS\s+TotalRowCount\s/);
         });
     });
 

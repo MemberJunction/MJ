@@ -120,13 +120,145 @@
         ></mj-form-field>
     </mj-collapsible-panel>
 
-    <!-- Source Configuration Section -->
+    <!-- Tag Pipeline Configuration — typed knobs from IContentSourceConfiguration -->
     <mj-collapsible-panel
-        SectionKey="sourceConfiguration"
-        SectionName="Source Configuration"
+        SectionKey="tagPipelineConfiguration"
+        SectionName="Tag Pipeline Configuration"
         Icon="fa fa-sliders-h"
         [Form]="this"
         [FormContext]="formContext">
+
+        <!-- 1. Taxonomy mode -->
+        <h4 style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--mj-text-muted); margin: 4px 0 8px; font-weight: 700;">
+            Taxonomy mode
+        </h4>
+        <div class="cs-mode-grid">
+            @for (m of TaxonomyModes; track m.value) {
+                <div class="cs-mode-card"
+                     [class.selected]="CurrentMode === m.value"
+                     (click)="EditMode ? SetMode(m.value) : null">
+                    <i class="fa-solid {{ m.icon }} ic"></i>
+                    <div class="nm">{{ m.label }}</div>
+                    <div class="desc">{{ m.desc }}</div>
+                </div>
+            }
+        </div>
+
+        <!-- 2. Scope & root -->
+        <h4 style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--mj-text-muted); margin: 16px 0 8px; font-weight: 700;">
+            Scope &amp; tag root
+        </h4>
+        <div class="cs-grid">
+            <div class="cs-field">
+                <label>Tag root (TagRootID)</label>
+                <input class="cs-input" [disabled]="!EditMode"
+                       [ngModel]="TagRootIDValue"
+                       (ngModelChange)="TagRootIDValue = $event" />
+                <span class="hint">Restricts the LLM's visible taxonomy + auto-grow target. Leave blank for full taxonomy.</span>
+            </div>
+            <div class="cs-field">
+                <label>Embedding model (legacy ContentSource field)</label>
+                <input class="cs-input" disabled [value]="record.EmbeddingModelID || '—'" />
+                <span class="hint">Set in the AI &amp; Indexing section above.</span>
+            </div>
+        </div>
+
+        <div class="cs-toggle-row">
+            <div class="label">
+                <span class="t">Share full taxonomy with the LLM</span>
+                <span class="d">When on, the LLM prompt includes the visible (scope-filtered) taxonomy. Larger taxonomies → higher token cost.</span>
+            </div>
+            <div class="cs-switch" [class.on]="ShareTaxonomyValue"
+                 (click)="EditMode ? (ShareTaxonomyValue = !ShareTaxonomyValue) : null"></div>
+        </div>
+        <div class="cs-toggle-row">
+            <div class="label">
+                <span class="t">Vectorize new content</span>
+                <span class="d">When off, this source skips vectorization (autotagger still runs).</span>
+            </div>
+            <div class="cs-switch" [class.on]="EnableVectorizationValue"
+                 (click)="EditMode ? (EnableVectorizationValue = !EnableVectorizationValue) : null"></div>
+        </div>
+
+        <!-- 3. Thresholds -->
+        <h4 style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--mj-text-muted); margin: 16px 0 8px; font-weight: 700;">
+            Thresholds
+        </h4>
+        <div class="cs-threshold-pair">
+            <div class="cs-grid">
+                <div class="cs-field">
+                    <label>MatchThreshold (auto-apply)</label>
+                    <input type="range" class="cs-slider" min="0.50" max="1.00" step="0.01"
+                           [disabled]="!EditMode"
+                           [ngModel]="MatchThresholdValue"
+                           (ngModelChange)="MatchThresholdValue = $event" />
+                    <div class="cs-slider-row"><span>0.50</span><span class="cur">{{ MatchThresholdValue | number: '1.2-2' }}</span><span>1.00</span></div>
+                </div>
+                <div class="cs-field">
+                    <label>SuggestThreshold (route to inbox)</label>
+                    <input type="range" class="cs-slider" min="0.50" max="1.00" step="0.01"
+                           [disabled]="!EditMode"
+                           [ngModel]="SuggestThresholdValue"
+                           (ngModelChange)="SuggestThresholdValue = $event" />
+                    <div class="cs-slider-row"><span>0.50</span><span class="cur">{{ SuggestThresholdValue | number: '1.2-2' }}</span><span>1.00</span></div>
+                </div>
+            </div>
+            @if (ThresholdValidationMessage) {
+                <div class="cs-validation"><i class="fa-solid fa-circle-exclamation"></i> {{ ThresholdValidationMessage }}</div>
+            } @else {
+                <div class="cs-nudge">
+                    Scores ≥ <strong>{{ MatchThresholdValue | number: '1.2-2' }}</strong> auto-apply.
+                    Scores in <strong>[{{ SuggestThresholdValue | number: '1.2-2' }}, {{ MatchThresholdValue | number: '1.2-2' }})</strong> route to the suggestion inbox.
+                    Below that, the run falls through to handleNoMatch.
+                </div>
+            }
+        </div>
+
+        <!-- 4. Volume + cost budgets -->
+        <h4 style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--mj-text-muted); margin: 16px 0 8px; font-weight: 700;">
+            Volume &amp; cost budgets
+            <span style="text-transform: none; letter-spacing: 0; color: var(--mj-text-muted); font-weight: 400; margin-left: 8px;">When a budget is hit the run pauses (resumes on next start).</span>
+        </h4>
+        <div class="cs-grid four">
+            <div class="cs-field">
+                <label>Max new tags / run</label>
+                <input class="cs-input" type="number" min="0" [disabled]="!EditMode"
+                       [ngModel]="MaxNewTagsPerRunValue ?? ''"
+                       (ngModelChange)="MaxNewTagsPerRunValue = $event" />
+                <span class="hint">unlimited if blank</span>
+            </div>
+            <div class="cs-field">
+                <label>Max new tags / item</label>
+                <input class="cs-input" type="number" min="0" [disabled]="!EditMode"
+                       [ngModel]="MaxNewTagsPerItemValue ?? ''"
+                       (ngModelChange)="MaxNewTagsPerItemValue = $event" />
+                <span class="hint">extras → suggestions</span>
+            </div>
+            <div class="cs-field">
+                <label>Max tokens / run</label>
+                <input class="cs-input" type="number" min="0" [disabled]="!EditMode"
+                       [ngModel]="MaxTokensPerRunValue ?? ''"
+                       (ngModelChange)="MaxTokensPerRunValue = $event" />
+                <span class="hint">across all LLM calls</span>
+            </div>
+            <div class="cs-field">
+                <label>Max cost / run (USD)</label>
+                <input class="cs-input" type="number" min="0" step="0.01" [disabled]="!EditMode"
+                       [ngModel]="MaxCostPerRunValue ?? ''"
+                       (ngModelChange)="MaxCostPerRunValue = $event" />
+                <span class="hint">$ stops the run</span>
+            </div>
+        </div>
+    </mj-collapsible-panel>
+
+    <!-- Raw JSON override — for SourceSpecificConfiguration and other future keys -->
+    <mj-collapsible-panel
+        SectionKey="sourceConfiguration"
+        SectionName="Configuration JSON (advanced)"
+        Icon="fa fa-code"
+        [Form]="this"
+        [FormContext]="formContext"
+        [DefaultExpanded]="false">
         <mj-form-field
             [Record]="record"
             [ShowLabel]="true"

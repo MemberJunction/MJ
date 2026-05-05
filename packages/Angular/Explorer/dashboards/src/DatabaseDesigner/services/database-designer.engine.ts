@@ -127,7 +127,7 @@ export class DatabaseDesignerEngine extends BaseSingleton<DatabaseDesignerEngine
 
     /** Invalidate all per-user caches for the current user (call after create/modify). */
     public invalidateCache(): void {
-        const userId = new Metadata().CurrentUser?.ID;
+        const userId = new Metadata().CurrentUser?.ID; // global-provider-ok: client-side Angular engine, single provider
         if (userId) {
             this._cache.delete(userId);
             this._schemaCache.delete(userId);
@@ -146,7 +146,7 @@ export class DatabaseDesignerEngine extends BaseSingleton<DatabaseDesignerEngine
      * Results are cached per-user with a 5-minute TTL.
      */
     public async loadAccessibleEntities(): Promise<AccessibleEntity[]> {
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: client-side Angular engine, single provider
         const userId = md.CurrentUser?.ID;
         if (!userId) return [];
 
@@ -237,7 +237,7 @@ export class DatabaseDesignerEngine extends BaseSingleton<DatabaseDesignerEngine
      * All items beyond #1 require `Create in Custom Schema` authorization.
      */
     public async loadAvailableSchemas(): Promise<SchemaOption[]> {
-        const userId = new Metadata().CurrentUser?.ID;
+        const userId = new Metadata().CurrentUser?.ID; // global-provider-ok: client-side Angular engine, single provider
         if (!userId) return [];
 
         const cached = this._schemaCache.get(userId);
@@ -252,7 +252,7 @@ export class DatabaseDesignerEngine extends BaseSingleton<DatabaseDesignerEngine
 
     /** Build the schema option list: UDT first, then real DB schemas, then Other. */
     private async fetchAvailableSchemas(): Promise<SchemaOption[]> {
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: client-side Angular engine, single provider
         const evaluator = new AuthorizationEvaluator();
 
         const udtAuth    = md.Authorizations.find(a => a.Name === ENTITY_DESIGNER_AUTH.CREATE_IN_UDT_SCHEMA);
@@ -428,7 +428,7 @@ export class DatabaseDesignerEngine extends BaseSingleton<DatabaseDesignerEngine
 
     /** Check if the current user owns the given entity (via MJ:UDT:Owner setting). */
     private async isCurrentUserOwner(entityId: string): Promise<boolean> {
-        const userId = new Metadata().CurrentUser?.ID;
+        const userId = new Metadata().CurrentUser?.ID; // global-provider-ok: client-side Angular engine, single provider
         if (!userId) return false;
 
         const rv = new RunView();
@@ -448,7 +448,7 @@ export class DatabaseDesignerEngine extends BaseSingleton<DatabaseDesignerEngine
 
     /** True when the current user holds the `Modify Any UDT Entities` authorization. */
     private currentUserCanModifyAny(): boolean {
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: client-side Angular engine, single provider
         const auth = md.Authorizations.find(a => a.Name === ENTITY_DESIGNER_AUTH.MODIFY_ANY_UDT_ENTITIES);
         if (!auth) return false;
         const evaluator = new AuthorizationEvaluator();

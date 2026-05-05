@@ -73,7 +73,7 @@ export class StepRelationshipsComponent {
      * schema that needs filtering here.
      */
     public get AvailableSchemas(): string[] {
-        return [...new Set(new Metadata().Entities.map(e => e.SchemaName))]
+        return [...new Set(new Metadata().Entities.map(e => e.SchemaName))] // global-provider-ok: client-side Angular component, single provider
             .filter(s => !FRONTEND_BLOCKED_SCHEMAS.has(s))
             .sort();
     }
@@ -81,7 +81,7 @@ export class StepRelationshipsComponent {
     /** Entities that belong to the given schema, sorted by BaseTable. */
     public EntitiesForSchema(schemaName: string): EntityInfo[] {
         if (!schemaName) return [];
-        return new Metadata().Entities
+        return new Metadata().Entities // global-provider-ok: client-side Angular component, single provider
             .filter(e => e.SchemaName === schemaName)
             .sort((a, b) => a.BaseTable.localeCompare(b.BaseTable));
     }
@@ -93,7 +93,7 @@ export class StepRelationshipsComponent {
      */
     public ColumnsForEntity(entityId: string): EntityColumnInfo[] {
         if (!entityId) return [];
-        const entity = new Metadata().Entities.find(e => UUIDsEqual(e.ID, entityId));
+        const entity = new Metadata().Entities.find(e => UUIDsEqual(e.ID, entityId)); // global-provider-ok: client-side Angular component, single provider
         if (!entity) return [{ Name: 'ID', SqlType: 'uniqueidentifier' }];
         return entity.Fields
             .filter(f => !f.IsVirtual)
@@ -138,7 +138,7 @@ export class StepRelationshipsComponent {
             this.emit();
             return;
         }
-        const entity = new Metadata().Entities.find(e => UUIDsEqual(e.ID, entityId));
+        const entity = new Metadata().Entities.find(e => UUIDsEqual(e.ID, entityId)); // global-provider-ok: client-side Angular component, single provider
         this.rows = this.rows.map(r => {
             if (r.rowIndex !== rowIndex) return r;
             // Auto-name the source FK column if the user hasn't chosen one — the
@@ -253,7 +253,7 @@ export class StepRelationshipsComponent {
     }
 
     private buildRowState(fk: ForeignKeySpec, index: number): FkRowState {
-        const entity = new Metadata().Entities.find(
+        const entity = new Metadata().Entities.find( // global-provider-ok: client-side Angular component, single provider
             e => e.SchemaName === fk.ReferencedSchema && e.BaseTable === fk.ReferencedTable
         );
         return { ...fk, rowIndex: index, selectedEntityId: entity?.ID ?? '' };

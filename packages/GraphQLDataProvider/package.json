@@ -1,6 +1,6 @@
 {
   "name": "@memberjunction/graphql-dataprovider",
-  "version": "5.30.1",
+  "version": "5.32.0",
   "description": "MemberJunction: GraphQL Client Data Provider",
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
@@ -20,29 +20,32 @@
     "/dist"
   ],
   "scripts": {
+    "prebuild": "node scripts/generate-version.mjs",
     "build": "tsc -noEmit && pkgroll --sourcemap --minify",
     "build-debug": "tsc -noEmit && pkgroll --sourcemap=inline --no-minify",
+    "pretest": "node scripts/generate-version.mjs",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "author": "MemberJunction.com",
   "license": "ISC",
   "devDependencies": {
+    "fake-indexeddb": "^6.2.5",
     "pkgroll": "2.23.0",
     "typescript": "^5.9.3",
     "vitest": "^4.0.18"
   },
   "optionalDependencies": {
-    "@rollup/rollup-linux-x64-gnu": "4.17.2",
-    "@esbuild/win32-x64": "0.24.0"
+    "@esbuild/win32-x64": "0.24.0",
+    "@rollup/rollup-linux-x64-gnu": "4.17.2"
   },
   "dependencies": {
-    "@memberjunction/actions-base": "5.30.1",
-    "@memberjunction/ai-core-plus": "5.30.1",
-    "@memberjunction/core": "5.30.1",
-    "@memberjunction/core-entities": "5.30.1",
-    "@memberjunction/global": "5.30.1",
-    "@memberjunction/interactive-component-types": "5.30.1",
+    "@memberjunction/actions-base": "5.32.0",
+    "@memberjunction/ai-core-plus": "5.32.0",
+    "@memberjunction/core": "5.32.0",
+    "@memberjunction/core-entities": "5.32.0",
+    "@memberjunction/global": "5.32.0",
+    "@memberjunction/interactive-component-types": "5.32.0",
     "@tempfix/idb": "^8.0.3",
     "graphql": "^16.12.0",
     "graphql-request": "^7.4.0",

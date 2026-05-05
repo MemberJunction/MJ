@@ -430,7 +430,7 @@ export class PushService {
           await this.writeDeferredFiles(options, callbacks);
         }
       } catch (error) {
-        // Rollback transaction on error
+        // Rollback transaction on error.
         if (!options.dryRun) {
           callbacks?.onLog?.('\n⚠️  Rolling back database transaction due to error...');
           await transactionManager.rollbackTransaction();

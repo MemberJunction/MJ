@@ -9901,12 +9901,12 @@ export const MJComponentLibrarySchema = z.object({
         * * Description: Library category: Core, Runtime, UI, Charting, Utility, or Other`),
     CDNUrl: z.string().nullable().describe(`
         * * Field Name: CDNUrl
-        * * Display Name: CDN Url
+        * * Display Name: CDN URL
         * * SQL Data Type: nvarchar(1000)
         * * Description: CDN URL for loading the library JavaScript`),
     CDNCssUrl: z.string().nullable().describe(`
         * * Field Name: CDNCssUrl
-        * * Display Name: CDN Css Url
+        * * Display Name: CDN CSS URL
         * * SQL Data Type: nvarchar(1000)
         * * Description: Optional CDN URL for loading library CSS`),
     Description: z.string().nullable().describe(`
@@ -9956,6 +9956,11 @@ export const MJComponentLibrarySchema = z.object({
     *   * Dependency
     *   * Direct
         * * Description: Controls how the library can be used: Direct (by components), Dependency (only as dependency), or Both`),
+    UsageInstructions: z.string().nullable().describe(`
+        * * Field Name: UsageInstructions
+        * * Display Name: Usage Instructions
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Markdown-formatted usage instructions for AI code generators and agents. Injected into prompts when a component references this library. Covers container requirements, initialization patterns, required config options, and common pitfalls. Distinct from Description which is a high-level summary of what the library does.`),
 });
 
 export type MJComponentLibraryEntityType = z.infer<typeof MJComponentLibrarySchema>;
@@ -23173,6 +23178,229 @@ export const MJTagCoOccurrenceSchema = z.object({
 export type MJTagCoOccurrenceEntityType = z.infer<typeof MJTagCoOccurrenceSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Tag Scopes
+ */
+export const MJTagScopeSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    TagID: z.string().describe(`
+        * * Field Name: TagID
+        * * Display Name: Tag ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Tags (vwTags.ID)
+        * * Description: The Tag whose visibility this row constrains.`),
+    ScopeEntityID: z.string().describe(`
+        * * Field Name: ScopeEntityID
+        * * Display Name: Scope Entity ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+        * * Description: Entity that the scope record belongs to (e.g., Companies, AI Agents). Combined with ScopeRecordID identifies the specific tenant or context that may see the tag.`),
+    ScopeRecordID: z.string().describe(`
+        * * Field Name: ScopeRecordID
+        * * Display Name: Scope Record ID
+        * * SQL Data Type: nvarchar(450)
+        * * Description: Primary key value of the scope record. Stored as NVARCHAR(450) to match the polymorphic RecordID convention used by TaggedItem.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Tag: z.string().describe(`
+        * * Field Name: Tag
+        * * Display Name: Tag
+        * * SQL Data Type: nvarchar(255)`),
+    ScopeEntity: z.string().describe(`
+        * * Field Name: ScopeEntity
+        * * Display Name: Scope Entity
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJTagScopeEntityType = z.infer<typeof MJTagScopeSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Tag Suggestions
+ */
+export const MJTagSuggestionSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    ProposedName: z.string().describe(`
+        * * Field Name: ProposedName
+        * * Display Name: Proposed Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The proposed tag name as seen by the classifier or analyzer.`),
+    ProposedParentID: z.string().nullable().describe(`
+        * * Field Name: ProposedParentID
+        * * Display Name: Proposed Parent
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Tags (vwTags.ID)
+        * * Description: Tag under which the suggestion would be created if approved as a new tag. NULL = root.`),
+    BestMatchTagID: z.string().nullable().describe(`
+        * * Field Name: BestMatchTagID
+        * * Display Name: Best Match Tag
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Tags (vwTags.ID)
+        * * Description: When non-null, the existing Tag the system believes is the closest match. The reviewer may accept this as a merge target instead of creating a new tag.`),
+    BestMatchScore: z.number().nullable().describe(`
+        * * Field Name: BestMatchScore
+        * * Display Name: Best Match Score
+        * * SQL Data Type: decimal(4, 3)
+        * * Description: Cosine similarity score (0.000-1.000) between the proposed name embedding and BestMatchTagID's embedding, when applicable.`),
+    Reason: z.string().describe(`
+        * * Field Name: Reason
+        * * Display Name: Reason
+        * * SQL Data Type: nvarchar(50)
+        * * Description: Why this suggestion was created. Free-form NVARCHAR for forward compatibility; conventional values include ConstrainedMode, BelowThreshold, ParentFrozen, AutoGrowDisabled, MaxChildrenExceeded, MaxDepthExceeded, BelowMinWeight, RequiresReview, MergeCandidate, LowUsage, WideNode.`),
+    SourceContentItemID: z.string().nullable().describe(`
+        * * Field Name: SourceContentItemID
+        * * Display Name: Source Content Item
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Content Items (vwContentItems.ID)
+        * * Description: ContentItem that triggered this suggestion, when item-level. NULL for taxonomy-level suggestions (merge candidates, low-usage alerts).`),
+    SourceContentSourceID: z.string().nullable().describe(`
+        * * Field Name: SourceContentSourceID
+        * * Display Name: Source Content Source
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Content Sources (vwContentSources.ID)
+        * * Description: ContentSource that triggered this suggestion, when source-attributable.`),
+    SourceText: z.string().nullable().describe(`
+        * * Field Name: SourceText
+        * * Display Name: Source Text
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional snippet of source text that prompted the suggestion. Useful for reviewer context.`),
+    Status: z.union([z.literal('Approved'), z.literal('Merged'), z.literal('Pending'), z.literal('Rejected')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Approved
+    *   * Merged
+    *   * Pending
+    *   * Rejected
+        * * Description: Pending = awaiting review; Approved = accepted as a new tag; Merged = accepted as a merge into BestMatchTagID; Rejected = dismissed.`),
+    ResolvedTagID: z.string().nullable().describe(`
+        * * Field Name: ResolvedTagID
+        * * Display Name: Resolved Tag
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Tags (vwTags.ID)
+        * * Description: When Approved or Merged, points to the resulting Tag (the new tag for Approved, the merge target for Merged).`),
+    ReviewedByUserID: z.string().nullable().describe(`
+        * * Field Name: ReviewedByUserID
+        * * Display Name: Reviewed By User
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: User who took action on this suggestion.`),
+    ReviewedAt: z.date().nullable().describe(`
+        * * Field Name: ReviewedAt
+        * * Display Name: Reviewed At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp of the review action.`),
+    ReviewerNotes: z.string().nullable().describe(`
+        * * Field Name: ReviewerNotes
+        * * Display Name: Reviewer Notes
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Free-form notes captured at review time. Useful for rejection rationale or merge decisions.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    ProposedParent: z.string().nullable().describe(`
+        * * Field Name: ProposedParent
+        * * Display Name: Proposed Parent Name
+        * * SQL Data Type: nvarchar(255)`),
+    BestMatchTag: z.string().nullable().describe(`
+        * * Field Name: BestMatchTag
+        * * Display Name: Best Match Name
+        * * SQL Data Type: nvarchar(255)`),
+    SourceContentItem: z.string().nullable().describe(`
+        * * Field Name: SourceContentItem
+        * * Display Name: Source Content Item Name
+        * * SQL Data Type: nvarchar(250)`),
+    SourceContentSource: z.string().nullable().describe(`
+        * * Field Name: SourceContentSource
+        * * Display Name: Source Content Source Name
+        * * SQL Data Type: nvarchar(255)`),
+    ResolvedTag: z.string().nullable().describe(`
+        * * Field Name: ResolvedTag
+        * * Display Name: Resolved Tag Name
+        * * SQL Data Type: nvarchar(255)`),
+    ReviewedByUser: z.string().nullable().describe(`
+        * * Field Name: ReviewedByUser
+        * * Display Name: Reviewed By User Name
+        * * SQL Data Type: nvarchar(100)`),
+});
+
+export type MJTagSuggestionEntityType = z.infer<typeof MJTagSuggestionSchema>;
+
+/**
+ * zod schema definition for the entity MJ: Tag Synonyms
+ */
+export const MJTagSynonymSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    TagID: z.string().describe(`
+        * * Field Name: TagID
+        * * Display Name: Tag ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Tags (vwTags.ID)
+        * * Description: The Tag this synonym maps to.`),
+    Synonym: z.string().describe(`
+        * * Field Name: Synonym
+        * * Display Name: Synonym
+        * * SQL Data Type: nvarchar(255)
+        * * Description: The alternate name that should resolve to the Tag. Case-insensitive; uniqueness is enforced per-Tag via UQ_TagSynonym_Tag_Synonym.`),
+    Source: z.union([z.literal('Imported'), z.literal('LLM'), z.literal('Manual'), z.literal('Merged')]).describe(`
+        * * Field Name: Source
+        * * Display Name: Source
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Manual
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Imported
+    *   * LLM
+    *   * Manual
+    *   * Merged
+        * * Description: How this synonym was introduced. Manual = admin-authored; LLM = suggested by an LLM run; Imported = bulk-loaded; Merged = inherited from a tag merged into this one.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    Tag: z.string().describe(`
+        * * Field Name: Tag
+        * * Display Name: Tag Name
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJTagSynonymEntityType = z.infer<typeof MJTagSynonymSchema>;
+
+/**
  * zod schema definition for the entity MJ: Tagged Items
  */
 export const MJTaggedItemSchema = z.object({
@@ -23275,25 +23503,79 @@ export const MJTagSchema = z.object({
         * * Description: Lifecycle status of the tag: Active (in use), Merged (consolidated into another tag), Deprecated (no longer assigned but preserved), Deleted (soft-deleted).`),
     MergedIntoTagID: z.string().nullable().describe(`
         * * Field Name: MergedIntoTagID
-        * * Display Name: Merged Into Tag
+        * * Display Name: Merged Into
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Tags (vwTags.ID)
         * * Description: When Status is Merged, points to the surviving tag this tag was merged into. All TaggedItem and ContentItemTag references are re-pointed during merge.`),
+    IsGlobal: z.boolean().describe(`
+        * * Field Name: IsGlobal
+        * * Display Name: Is Global
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, the tag is visible to every tenant/scope. When 0, the tag is only visible to the (Entity, Record) pairs listed in TagScope. Cannot be set together with TagScope rows — enforced in entity Save() override.`),
+    AllowAutoGrow: z.boolean().describe(`
+        * * Field Name: AllowAutoGrow
+        * * Display Name: Allow Auto Grow
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When 1, the autotagger may auto-create new child tags under this node when running in AutoGrow or FreeFlow mode. When 0, new children must come through the TagSuggestion review queue.`),
+    IsFrozen: z.boolean().describe(`
+        * * Field Name: IsFrozen
+        * * Display Name: Is Frozen
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, this subtree is locked: no new children may be created under this node or any descendant, regardless of taxonomy mode. Existing children remain editable.`),
+    MaxChildren: z.number().nullable().describe(`
+        * * Field Name: MaxChildren
+        * * Display Name: Max Children
+        * * SQL Data Type: int
+        * * Description: Optional cap on the number of direct children allowed under this tag. NULL = unlimited. Auto-grow is blocked once this cap is reached and routed to the TagSuggestion queue.`),
+    MaxDescendantDepth: z.number().nullable().describe(`
+        * * Field Name: MaxDescendantDepth
+        * * Display Name: Max Descendant Depth
+        * * SQL Data Type: int
+        * * Description: Optional cap on the depth of the subtree rooted at this tag. NULL = unlimited. 0 = leaf-only (no children at all). Enforced via ancestor walk during auto-grow.`),
+    MinWeight: z.number().nullable().describe(`
+        * * Field Name: MinWeight
+        * * Display Name: Min Weight
+        * * SQL Data Type: decimal(3, 2)
+        * * Description: Optional minimum classifier confidence (0.00-1.00) required for this tag to be applied. Items below this floor are routed to the TagSuggestion queue instead of being tagged.`),
+    RequiresReview: z.boolean().describe(`
+        * * Field Name: RequiresReview
+        * * Display Name: Requires Review
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, every classifier-applied use of this tag is routed to the TagSuggestion queue for human approval before being persisted as a ContentItemTag → TaggedItem.`),
+    EmbeddingVector: z.string().nullable().describe(`
+        * * Field Name: EmbeddingVector
+        * * Display Name: Embedding Vector
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON-encoded numeric vector representing the tag's embedding under the model identified by EmbeddingModelID. Refreshed automatically on Save() when Name or Description changes. Used to seed the in-memory tag vector cache without a cold-start LLM round-trip.`),
+    EmbeddingModelID: z.string().nullable().describe(`
+        * * Field Name: EmbeddingModelID
+        * * Display Name: Embedding Model
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
+        * * Description: AI model whose embedding produced EmbeddingVector. When the configured tag-embedding model differs from this value, the cached vector is treated as stale and recomputed.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent Name
         * * SQL Data Type: nvarchar(255)`),
     MergedIntoTag: z.string().nullable().describe(`
         * * Field Name: MergedIntoTag
-        * * Display Name: Merged Into Tag Name
+        * * Display Name: Merged Into Name
         * * SQL Data Type: nvarchar(255)`),
+    EmbeddingModel: z.string().nullable().describe(`
+        * * Field Name: EmbeddingModel
+        * * Display Name: Embedding Model Name
+        * * SQL Data Type: nvarchar(50)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent
         * * SQL Data Type: uniqueidentifier`),
     RootMergedIntoTagID: z.string().nullable().describe(`
         * * Field Name: RootMergedIntoTagID
-        * * Display Name: Root Merged Into Tag
+        * * Display Name: Root Merged Into
         * * SQL Data Type: uniqueidentifier`),
 });
 
@@ -28197,9 +28479,9 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
     public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
-        if (Metadata.Provider.ProviderType === ProviderType.Database) {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
-            const provider = Metadata.Provider as DatabaseProviderBase;
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
             
             try {
                 await provider.BeginTransaction();
@@ -33408,9 +33690,9 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
     public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
-        if (Metadata.Provider.ProviderType === ProviderType.Database) {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
-            const provider = Metadata.Provider as DatabaseProviderBase;
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
             
             try {
                 await provider.BeginTransaction();
@@ -33866,9 +34148,9 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
     public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
-        if (Metadata.Provider.ProviderType === ProviderType.Database) {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
-            const provider = Metadata.Provider as DatabaseProviderBase;
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
             
             try {
                 await provider.BeginTransaction();
@@ -35195,9 +35477,9 @@ export class MJAIAgentStepEntity extends BaseEntity<MJAIAgentStepEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
     public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
-        if (Metadata.Provider.ProviderType === ProviderType.Database) {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
-            const provider = Metadata.Provider as DatabaseProviderBase;
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
             
             try {
                 await provider.BeginTransaction();
@@ -35898,9 +36180,9 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
     public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
-        if (Metadata.Provider.ProviderType === ProviderType.Database) {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
-            const provider = Metadata.Provider as DatabaseProviderBase;
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
             
             try {
                 await provider.BeginTransaction();
@@ -37585,9 +37867,9 @@ export class MJAIConfigurationEntity extends BaseEntity<MJAIConfigurationEntityT
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
     public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
-        if (Metadata.Provider.ProviderType === ProviderType.Database) {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
-            const provider = Metadata.Provider as DatabaseProviderBase;
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
             
             try {
                 await provider.BeginTransaction();
@@ -41152,9 +41434,9 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
     public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
-        if (Metadata.Provider.ProviderType === ProviderType.Database) {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
-            const provider = Metadata.Provider as DatabaseProviderBase;
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
             
             try {
                 await provider.BeginTransaction();
@@ -42631,9 +42913,9 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
     public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
-        if (Metadata.Provider.ProviderType === ProviderType.Database) {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
-            const provider = Metadata.Provider as DatabaseProviderBase;
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
             
             try {
                 await provider.BeginTransaction();
@@ -52652,7 +52934,7 @@ export class MJComponentLibraryEntity extends BaseEntity<MJComponentLibraryEntit
 
     /**
     * * Field Name: CDNUrl
-    * * Display Name: CDN Url
+    * * Display Name: CDN URL
     * * SQL Data Type: nvarchar(1000)
     * * Description: CDN URL for loading the library JavaScript
     */
@@ -52665,7 +52947,7 @@ export class MJComponentLibraryEntity extends BaseEntity<MJComponentLibraryEntit
 
     /**
     * * Field Name: CDNCssUrl
-    * * Display Name: CDN Css Url
+    * * Display Name: CDN CSS URL
     * * SQL Data Type: nvarchar(1000)
     * * Description: Optional CDN URL for loading library CSS
     */
@@ -52771,6 +53053,19 @@ export class MJComponentLibraryEntity extends BaseEntity<MJComponentLibraryEntit
     }
     set UsageType(value: 'Both' | 'Dependency' | 'Direct') {
         this.Set('UsageType', value);
+    }
+
+    /**
+    * * Field Name: UsageInstructions
+    * * Display Name: Usage Instructions
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Markdown-formatted usage instructions for AI code generators and agents. Injected into prompts when a component references this library. Covers container requirements, initialization patterns, required config options, and common pitfalls. Distinct from Description which is a high-level summary of what the library does.
+    */
+    get UsageInstructions(): string | null {
+        return this.Get('UsageInstructions');
+    }
+    set UsageInstructions(value: string | null) {
+        this.Set('UsageInstructions', value);
     }
 }
 
@@ -55551,6 +55846,36 @@ export interface MJContentSourceEntity_IContentSourceConfiguration {
     /** Enable vectorization for this source. Default true */
     EnableVectorization?: boolean;
     /**
+     * Lower confidence band (0.0-1.0) that routes a semantic match into the human-in-the-loop
+     * `MJ:Tag Suggestions` queue instead of auto-applying or auto-creating. A score `s` is
+     * routed as: `s >= TagMatchThreshold` → apply; `SuggestThreshold <= s < TagMatchThreshold`
+     * → enqueue suggestion (Reason='BelowThreshold'); `s < SuggestThreshold` → fall through to
+     * `handleNoMatch` (governed by `TagTaxonomyMode`). When unset, defaults to
+     * `TagMatchThreshold - 0.05` at runtime.
+     */
+    SuggestThreshold?: number;
+    /**
+     * Maximum number of new tags the autotagger may auto-create across an entire run before
+     * the run is paused via the existing CancellationRequested machinery. NULL/unset = unlimited.
+     * Pause is graceful — the run resumes from `LastProcessedOffset` when restarted.
+     */
+    MaxNewTagsPerRun?: number;
+    /**
+     * Maximum number of new tags the autotagger may auto-create for a single ContentItem.
+     * Once reached, further free-text tags from that item are routed to `MJ:Tag Suggestions`
+     * with Reason='MaxItemTagsExceeded' instead of being created. NULL/unset = unlimited.
+     */
+    MaxNewTagsPerItem?: number;
+    /**
+     * Maximum cumulative LLM tokens (prompt + completion) the run may consume before pausing.
+     * Reads from `ContentProcessRunDetail.TotalTokensUsed` rollup. NULL/unset = unlimited.
+     */
+    MaxTokensPerRun?: number;
+    /**
+     * Maximum cumulative cost (USD) the run may incur before pausing. NULL/unset = unlimited.
+     */
+    MaxCostPerRun?: number;
+    /**
      * Source-type-specific configuration values. The keys here correspond to the
      * RequiredFields[].Key values defined on the parent ContentSourceType's Configuration.
      *
@@ -56379,9 +56704,9 @@ export class MJConversationArtifactVersionEntity extends BaseEntity<MJConversati
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
     public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
-        if (Metadata.Provider.ProviderType === ProviderType.Database) {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
-            const provider = Metadata.Provider as DatabaseProviderBase;
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
             
             try {
                 await provider.BeginTransaction();
@@ -56582,9 +56907,9 @@ export class MJConversationArtifactEntity extends BaseEntity<MJConversationArtif
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
     public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
-        if (Metadata.Provider.ProviderType === ProviderType.Database) {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
-            const provider = Metadata.Provider as DatabaseProviderBase;
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
             
             try {
                 await provider.BeginTransaction();
@@ -57376,9 +57701,9 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
     public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
-        if (Metadata.Provider.ProviderType === ProviderType.Database) {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
-            const provider = Metadata.Provider as DatabaseProviderBase;
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
             
             try {
                 await provider.BeginTransaction();
@@ -57911,9 +58236,9 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
     public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
-        if (Metadata.Provider.ProviderType === ProviderType.Database) {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
-            const provider = Metadata.Provider as DatabaseProviderBase;
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
             
             try {
                 await provider.BeginTransaction();
@@ -60105,9 +60430,9 @@ export class MJDashboardEntity extends BaseEntity<MJDashboardEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
     public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
-        if (Metadata.Provider.ProviderType === ProviderType.Database) {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
-            const provider = Metadata.Provider as DatabaseProviderBase;
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
             
             try {
                 await provider.BeginTransaction();
@@ -77321,9 +77646,9 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
     public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
-        if (Metadata.Provider.ProviderType === ProviderType.Database) {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
-            const provider = Metadata.Provider as DatabaseProviderBase;
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
             
             try {
                 await provider.BeginTransaction();
@@ -81990,9 +82315,9 @@ export class MJReportEntity extends BaseEntity<MJReportEntityType> {
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
     public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
-        if (Metadata.Provider.ProviderType === ProviderType.Database) {
+        if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
-            const provider = Metadata.Provider as DatabaseProviderBase;
+            const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
             
             try {
                 await provider.BeginTransaction();
@@ -87114,6 +87439,552 @@ export class MJTagCoOccurrenceEntity extends BaseEntity<MJTagCoOccurrenceEntityT
 
 
 /**
+ * MJ: Tag Scopes - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TagScope
+ * * Base View: vwTagScopes
+ * * @description Polymorphic junction binding a Tag to one or more (Entity, Record) scope rows. A Tag with one or more TagScope rows is only visible inside those scopes; a Tag with no rows AND IsGlobal=1 is visible everywhere. Mirrors the shape of TaggedItem.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Tag Scopes')
+export class MJTagScopeEntity extends BaseEntity<MJTagScopeEntityType> {
+    /**
+    * Loads the MJ: Tag Scopes record from the database
+    * @param ID: string - primary key value to load the MJ: Tag Scopes record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTagScopeEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: TagID
+    * * Display Name: Tag ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tags (vwTags.ID)
+    * * Description: The Tag whose visibility this row constrains.
+    */
+    get TagID(): string {
+        return this.Get('TagID');
+    }
+    set TagID(value: string) {
+        this.Set('TagID', value);
+    }
+
+    /**
+    * * Field Name: ScopeEntityID
+    * * Display Name: Scope Entity ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
+    * * Description: Entity that the scope record belongs to (e.g., Companies, AI Agents). Combined with ScopeRecordID identifies the specific tenant or context that may see the tag.
+    */
+    get ScopeEntityID(): string {
+        return this.Get('ScopeEntityID');
+    }
+    set ScopeEntityID(value: string) {
+        this.Set('ScopeEntityID', value);
+    }
+
+    /**
+    * * Field Name: ScopeRecordID
+    * * Display Name: Scope Record ID
+    * * SQL Data Type: nvarchar(450)
+    * * Description: Primary key value of the scope record. Stored as NVARCHAR(450) to match the polymorphic RecordID convention used by TaggedItem.
+    */
+    get ScopeRecordID(): string {
+        return this.Get('ScopeRecordID');
+    }
+    set ScopeRecordID(value: string) {
+        this.Set('ScopeRecordID', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Tag
+    * * Display Name: Tag
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Tag(): string {
+        return this.Get('Tag');
+    }
+
+    /**
+    * * Field Name: ScopeEntity
+    * * Display Name: Scope Entity
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ScopeEntity(): string {
+        return this.Get('ScopeEntity');
+    }
+}
+
+
+/**
+ * MJ: Tag Suggestions - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TagSuggestion
+ * * Base View: vwTagSuggestions
+ * * @description Human-in-the-loop review queue for tag changes the autotagger could not commit autonomously: ambiguous matches, governance-blocked auto-grows, low-usage deprecation candidates, and merge candidates from co-occurrence analysis.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Tag Suggestions')
+export class MJTagSuggestionEntity extends BaseEntity<MJTagSuggestionEntityType> {
+    /**
+    * Loads the MJ: Tag Suggestions record from the database
+    * @param ID: string - primary key value to load the MJ: Tag Suggestions record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTagSuggestionEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: ProposedName
+    * * Display Name: Proposed Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The proposed tag name as seen by the classifier or analyzer.
+    */
+    get ProposedName(): string {
+        return this.Get('ProposedName');
+    }
+    set ProposedName(value: string) {
+        this.Set('ProposedName', value);
+    }
+
+    /**
+    * * Field Name: ProposedParentID
+    * * Display Name: Proposed Parent
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tags (vwTags.ID)
+    * * Description: Tag under which the suggestion would be created if approved as a new tag. NULL = root.
+    */
+    get ProposedParentID(): string | null {
+        return this.Get('ProposedParentID');
+    }
+    set ProposedParentID(value: string | null) {
+        this.Set('ProposedParentID', value);
+    }
+
+    /**
+    * * Field Name: BestMatchTagID
+    * * Display Name: Best Match Tag
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tags (vwTags.ID)
+    * * Description: When non-null, the existing Tag the system believes is the closest match. The reviewer may accept this as a merge target instead of creating a new tag.
+    */
+    get BestMatchTagID(): string | null {
+        return this.Get('BestMatchTagID');
+    }
+    set BestMatchTagID(value: string | null) {
+        this.Set('BestMatchTagID', value);
+    }
+
+    /**
+    * * Field Name: BestMatchScore
+    * * Display Name: Best Match Score
+    * * SQL Data Type: decimal(4, 3)
+    * * Description: Cosine similarity score (0.000-1.000) between the proposed name embedding and BestMatchTagID's embedding, when applicable.
+    */
+    get BestMatchScore(): number | null {
+        return this.Get('BestMatchScore');
+    }
+    set BestMatchScore(value: number | null) {
+        this.Set('BestMatchScore', value);
+    }
+
+    /**
+    * * Field Name: Reason
+    * * Display Name: Reason
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Why this suggestion was created. Free-form NVARCHAR for forward compatibility; conventional values include ConstrainedMode, BelowThreshold, ParentFrozen, AutoGrowDisabled, MaxChildrenExceeded, MaxDepthExceeded, BelowMinWeight, RequiresReview, MergeCandidate, LowUsage, WideNode.
+    */
+    get Reason(): string {
+        return this.Get('Reason');
+    }
+    set Reason(value: string) {
+        this.Set('Reason', value);
+    }
+
+    /**
+    * * Field Name: SourceContentItemID
+    * * Display Name: Source Content Item
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Content Items (vwContentItems.ID)
+    * * Description: ContentItem that triggered this suggestion, when item-level. NULL for taxonomy-level suggestions (merge candidates, low-usage alerts).
+    */
+    get SourceContentItemID(): string | null {
+        return this.Get('SourceContentItemID');
+    }
+    set SourceContentItemID(value: string | null) {
+        this.Set('SourceContentItemID', value);
+    }
+
+    /**
+    * * Field Name: SourceContentSourceID
+    * * Display Name: Source Content Source
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Content Sources (vwContentSources.ID)
+    * * Description: ContentSource that triggered this suggestion, when source-attributable.
+    */
+    get SourceContentSourceID(): string | null {
+        return this.Get('SourceContentSourceID');
+    }
+    set SourceContentSourceID(value: string | null) {
+        this.Set('SourceContentSourceID', value);
+    }
+
+    /**
+    * * Field Name: SourceText
+    * * Display Name: Source Text
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional snippet of source text that prompted the suggestion. Useful for reviewer context.
+    */
+    get SourceText(): string | null {
+        return this.Get('SourceText');
+    }
+    set SourceText(value: string | null) {
+        this.Set('SourceText', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Pending
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Approved
+    *   * Merged
+    *   * Pending
+    *   * Rejected
+    * * Description: Pending = awaiting review; Approved = accepted as a new tag; Merged = accepted as a merge into BestMatchTagID; Rejected = dismissed.
+    */
+    get Status(): 'Approved' | 'Merged' | 'Pending' | 'Rejected' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Approved' | 'Merged' | 'Pending' | 'Rejected') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: ResolvedTagID
+    * * Display Name: Resolved Tag
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tags (vwTags.ID)
+    * * Description: When Approved or Merged, points to the resulting Tag (the new tag for Approved, the merge target for Merged).
+    */
+    get ResolvedTagID(): string | null {
+        return this.Get('ResolvedTagID');
+    }
+    set ResolvedTagID(value: string | null) {
+        this.Set('ResolvedTagID', value);
+    }
+
+    /**
+    * * Field Name: ReviewedByUserID
+    * * Display Name: Reviewed By User
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: User who took action on this suggestion.
+    */
+    get ReviewedByUserID(): string | null {
+        return this.Get('ReviewedByUserID');
+    }
+    set ReviewedByUserID(value: string | null) {
+        this.Set('ReviewedByUserID', value);
+    }
+
+    /**
+    * * Field Name: ReviewedAt
+    * * Display Name: Reviewed At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp of the review action.
+    */
+    get ReviewedAt(): Date | null {
+        return this.Get('ReviewedAt');
+    }
+    set ReviewedAt(value: Date | null) {
+        this.Set('ReviewedAt', value);
+    }
+
+    /**
+    * * Field Name: ReviewerNotes
+    * * Display Name: Reviewer Notes
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Free-form notes captured at review time. Useful for rejection rationale or merge decisions.
+    */
+    get ReviewerNotes(): string | null {
+        return this.Get('ReviewerNotes');
+    }
+    set ReviewerNotes(value: string | null) {
+        this.Set('ReviewerNotes', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: ProposedParent
+    * * Display Name: Proposed Parent Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ProposedParent(): string | null {
+        return this.Get('ProposedParent');
+    }
+
+    /**
+    * * Field Name: BestMatchTag
+    * * Display Name: Best Match Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get BestMatchTag(): string | null {
+        return this.Get('BestMatchTag');
+    }
+
+    /**
+    * * Field Name: SourceContentItem
+    * * Display Name: Source Content Item Name
+    * * SQL Data Type: nvarchar(250)
+    */
+    get SourceContentItem(): string | null {
+        return this.Get('SourceContentItem');
+    }
+
+    /**
+    * * Field Name: SourceContentSource
+    * * Display Name: Source Content Source Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get SourceContentSource(): string | null {
+        return this.Get('SourceContentSource');
+    }
+
+    /**
+    * * Field Name: ResolvedTag
+    * * Display Name: Resolved Tag Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ResolvedTag(): string | null {
+        return this.Get('ResolvedTag');
+    }
+
+    /**
+    * * Field Name: ReviewedByUser
+    * * Display Name: Reviewed By User Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get ReviewedByUser(): string | null {
+        return this.Get('ReviewedByUser');
+    }
+}
+
+
+/**
+ * MJ: Tag Synonyms - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: TagSynonym
+ * * Base View: vwTagSynonyms
+ * * @description Alternate names that should resolve to a Tag during autotagging. Consulted before exact/fuzzy/semantic match tiers in TagEngine.ResolveTag.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Tag Synonyms')
+export class MJTagSynonymEntity extends BaseEntity<MJTagSynonymEntityType> {
+    /**
+    * Loads the MJ: Tag Synonyms record from the database
+    * @param ID: string - primary key value to load the MJ: Tag Synonyms record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJTagSynonymEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: TagID
+    * * Display Name: Tag ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Tags (vwTags.ID)
+    * * Description: The Tag this synonym maps to.
+    */
+    get TagID(): string {
+        return this.Get('TagID');
+    }
+    set TagID(value: string) {
+        this.Set('TagID', value);
+    }
+
+    /**
+    * * Field Name: Synonym
+    * * Display Name: Synonym
+    * * SQL Data Type: nvarchar(255)
+    * * Description: The alternate name that should resolve to the Tag. Case-insensitive; uniqueness is enforced per-Tag via UQ_TagSynonym_Tag_Synonym.
+    */
+    get Synonym(): string {
+        return this.Get('Synonym');
+    }
+    set Synonym(value: string) {
+        this.Set('Synonym', value);
+    }
+
+    /**
+    * * Field Name: Source
+    * * Display Name: Source
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Manual
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Imported
+    *   * LLM
+    *   * Manual
+    *   * Merged
+    * * Description: How this synonym was introduced. Manual = admin-authored; LLM = suggested by an LLM run; Imported = bulk-loaded; Merged = inherited from a tag merged into this one.
+    */
+    get Source(): 'Imported' | 'LLM' | 'Manual' | 'Merged' {
+        return this.Get('Source');
+    }
+    set Source(value: 'Imported' | 'LLM' | 'Manual' | 'Merged') {
+        this.Set('Source', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: Tag
+    * * Display Name: Tag Name
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Tag(): string {
+        return this.Get('Tag');
+    }
+}
+
+
+/**
  * MJ: Tagged Items - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: TaggedItem
@@ -87384,7 +88255,7 @@ export class MJTagEntity extends BaseEntity<MJTagEntityType> {
 
     /**
     * * Field Name: MergedIntoTagID
-    * * Display Name: Merged Into Tag
+    * * Display Name: Merged Into
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Tags (vwTags.ID)
     * * Description: When Status is Merged, points to the surviving tag this tag was merged into. All TaggedItem and ContentItemTag references are re-pointed during merge.
@@ -87394,6 +88265,128 @@ export class MJTagEntity extends BaseEntity<MJTagEntityType> {
     }
     set MergedIntoTagID(value: string | null) {
         this.Set('MergedIntoTagID', value);
+    }
+
+    /**
+    * * Field Name: IsGlobal
+    * * Display Name: Is Global
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, the tag is visible to every tenant/scope. When 0, the tag is only visible to the (Entity, Record) pairs listed in TagScope. Cannot be set together with TagScope rows — enforced in entity Save() override.
+    */
+    get IsGlobal(): boolean {
+        return this.Get('IsGlobal');
+    }
+    set IsGlobal(value: boolean) {
+        this.Set('IsGlobal', value);
+    }
+
+    /**
+    * * Field Name: AllowAutoGrow
+    * * Display Name: Allow Auto Grow
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When 1, the autotagger may auto-create new child tags under this node when running in AutoGrow or FreeFlow mode. When 0, new children must come through the TagSuggestion review queue.
+    */
+    get AllowAutoGrow(): boolean {
+        return this.Get('AllowAutoGrow');
+    }
+    set AllowAutoGrow(value: boolean) {
+        this.Set('AllowAutoGrow', value);
+    }
+
+    /**
+    * * Field Name: IsFrozen
+    * * Display Name: Is Frozen
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, this subtree is locked: no new children may be created under this node or any descendant, regardless of taxonomy mode. Existing children remain editable.
+    */
+    get IsFrozen(): boolean {
+        return this.Get('IsFrozen');
+    }
+    set IsFrozen(value: boolean) {
+        this.Set('IsFrozen', value);
+    }
+
+    /**
+    * * Field Name: MaxChildren
+    * * Display Name: Max Children
+    * * SQL Data Type: int
+    * * Description: Optional cap on the number of direct children allowed under this tag. NULL = unlimited. Auto-grow is blocked once this cap is reached and routed to the TagSuggestion queue.
+    */
+    get MaxChildren(): number | null {
+        return this.Get('MaxChildren');
+    }
+    set MaxChildren(value: number | null) {
+        this.Set('MaxChildren', value);
+    }
+
+    /**
+    * * Field Name: MaxDescendantDepth
+    * * Display Name: Max Descendant Depth
+    * * SQL Data Type: int
+    * * Description: Optional cap on the depth of the subtree rooted at this tag. NULL = unlimited. 0 = leaf-only (no children at all). Enforced via ancestor walk during auto-grow.
+    */
+    get MaxDescendantDepth(): number | null {
+        return this.Get('MaxDescendantDepth');
+    }
+    set MaxDescendantDepth(value: number | null) {
+        this.Set('MaxDescendantDepth', value);
+    }
+
+    /**
+    * * Field Name: MinWeight
+    * * Display Name: Min Weight
+    * * SQL Data Type: decimal(3, 2)
+    * * Description: Optional minimum classifier confidence (0.00-1.00) required for this tag to be applied. Items below this floor are routed to the TagSuggestion queue instead of being tagged.
+    */
+    get MinWeight(): number | null {
+        return this.Get('MinWeight');
+    }
+    set MinWeight(value: number | null) {
+        this.Set('MinWeight', value);
+    }
+
+    /**
+    * * Field Name: RequiresReview
+    * * Display Name: Requires Review
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, every classifier-applied use of this tag is routed to the TagSuggestion queue for human approval before being persisted as a ContentItemTag → TaggedItem.
+    */
+    get RequiresReview(): boolean {
+        return this.Get('RequiresReview');
+    }
+    set RequiresReview(value: boolean) {
+        this.Set('RequiresReview', value);
+    }
+
+    /**
+    * * Field Name: EmbeddingVector
+    * * Display Name: Embedding Vector
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON-encoded numeric vector representing the tag's embedding under the model identified by EmbeddingModelID. Refreshed automatically on Save() when Name or Description changes. Used to seed the in-memory tag vector cache without a cold-start LLM round-trip.
+    */
+    get EmbeddingVector(): string | null {
+        return this.Get('EmbeddingVector');
+    }
+    set EmbeddingVector(value: string | null) {
+        this.Set('EmbeddingVector', value);
+    }
+
+    /**
+    * * Field Name: EmbeddingModelID
+    * * Display Name: Embedding Model
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: AI Models (vwAIModels.ID)
+    * * Description: AI model whose embedding produced EmbeddingVector. When the configured tag-embedding model differs from this value, the cached vector is treated as stale and recomputed.
+    */
+    get EmbeddingModelID(): string | null {
+        return this.Get('EmbeddingModelID');
+    }
+    set EmbeddingModelID(value: string | null) {
+        this.Set('EmbeddingModelID', value);
     }
 
     /**
@@ -87407,11 +88400,20 @@ export class MJTagEntity extends BaseEntity<MJTagEntityType> {
 
     /**
     * * Field Name: MergedIntoTag
-    * * Display Name: Merged Into Tag Name
+    * * Display Name: Merged Into Name
     * * SQL Data Type: nvarchar(255)
     */
     get MergedIntoTag(): string | null {
         return this.Get('MergedIntoTag');
+    }
+
+    /**
+    * * Field Name: EmbeddingModel
+    * * Display Name: Embedding Model Name
+    * * SQL Data Type: nvarchar(50)
+    */
+    get EmbeddingModel(): string | null {
+        return this.Get('EmbeddingModel');
     }
 
     /**
@@ -87425,7 +88427,7 @@ export class MJTagEntity extends BaseEntity<MJTagEntityType> {
 
     /**
     * * Field Name: RootMergedIntoTagID
-    * * Display Name: Root Merged Into Tag
+    * * Display Name: Root Merged Into
     * * SQL Data Type: uniqueidentifier
     */
     get RootMergedIntoTagID(): string | null {

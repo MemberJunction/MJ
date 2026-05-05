@@ -47,7 +47,7 @@ export default class Push extends Command {
   async run(): Promise<void> {
     const {
       PushService, ValidationService, FormattingService,
-      loadMJConfig, loadSyncConfig, initializeProvider,
+      loadMJConfig, loadSyncConfig, initializeProvider, cleanupProvider,
       getSyncEngine, getSystemUser, resetSyncEngine, configManager,
     } = await import('@memberjunction/metadata-sync');
 
@@ -266,8 +266,24 @@ export default class Push extends Command {
       // Exit with error code but don't show stack trace again (already logged by handlers)
       this.exit(1);
     } finally {
-      // Reset singletons
+      // Reset singletons + close DB pool so the process can exit cleanly.
+      // Without cleanupProvider, the pg.Pool / mssql.ConnectionPool keep the
+      // event loop alive and the CLI hangs after a successful push.
       resetSyncEngine();
+      try {
+        await cleanupProvider();
+      } catch (cleanupErr) {
+        // Best-effort: log but don't fail the command on cleanup error
+        // eslint-disable-next-line no-console
+        console.warn('Warning: cleanup failed:', cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr));
+      }
+      // Force-exit to terminate any lingering background work that holds the
+      // event loop open (e.g. @huggingface/transformers ONNX worker threads
+      // spawned for embedding compute, or pg.Pool clients that didn't release
+      // cleanly). Without this the CLI hangs indefinitely after a successful
+      // push when local embedding generation ran. Use exit code 0 here because
+      // any error path above has already called this.exit(1).
+      process.exit(0);
     }
   }
 }

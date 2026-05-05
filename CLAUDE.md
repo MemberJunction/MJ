@@ -9,6 +9,10 @@ See **[claude-full-auto.md](claude-full-auto.md)** for the full-autonomy develop
 
 # MemberJunction Development Guide
 
+## 📜 Project-Wide Standards
+
+- **[Publish-Then-No-Breaking-Changes Policy](packages/OpenApp/PUBLISH_NO_BREAK_POLICY.md)** — within a published OpenApp major version, only additive schema changes are allowed. No dropping tables or columns, no narrowing types, no renaming, no adding required parameters. Breaking changes force a major version bump. Consult this before authoring any migration that modifies an existing schema. (Adopted 2026-04-29; applies prospectively from each app's next published version going forward.)
+
 ## 🚨 CRITICAL RULES - VIOLATIONS ARE UNACCEPTABLE 🚨
 
 ### 1. NO COMMITS WITHOUT EXPLICIT APPROVAL
@@ -204,6 +208,8 @@ The `/guides/` folder contains comprehensive best practices guides for specific 
   - Adding new feature modules with subpath exports
   - How the auto-generated lazy config is produced by `mj codegen manifest --lazy-config`
   - Troubleshooting lazy loading issues
+
+- **[BaseEntity Server-Side Patterns](guides/BASE_ENTITY_SERVER_PATTERNS.md)**: Use **before** writing a new server-side entity subclass under `MJCoreEntitiesServer`. Covers the persisted-embedding pattern (`Save()` + `EmbedTextLocal` + engine cache sync), cross-record invariants via `ValidateAsync` (NOT DB triggers), and FK cleanup before delete. Reference implementations: `MJAIAgentNoteEntityServer`, `MJTagEntityServer`, `MJTagScopeEntityServer`. Lift the recipes from there — don't reinvent.
 
 When building dashboards, creating new Angular applications, comparing UUIDs, or implementing complex UI features, **read the relevant guide first** to ensure consistency with established patterns.
 

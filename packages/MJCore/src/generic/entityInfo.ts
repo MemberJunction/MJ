@@ -1049,6 +1049,33 @@ export class EntityFieldInfo extends BaseInfo {
     }
 
     /**
+     * Returns true when the field's `spUpdate` / `spCreate` procedure
+     * exposes a `<Param>_Clear` companion parameter — i.e. the field is
+     * nullable and has a non-NULL database default.
+     *
+     * Codegen emits the companion so a caller can disambiguate
+     * "leave unchanged / apply default" (omit the parameter) from
+     * "explicitly set this column to NULL" (`<Param>_Clear = 1`).
+     * Without it, the SP body's `ISNULL(@Param, [Col])` merge silently
+     * substitutes the existing value or default, and a literal NULL
+     * could never be persisted.
+     *
+     * Save-time callers in the data providers use this to decide whether
+     * to also emit the `_Clear` companion parameter when the entity
+     * intentionally sets such a field to NULL. Stays in sync with
+     * `CodeGenLib`'s `needsClearCompanion`.
+     *
+     * Note: relies on `DefaultValue` already being normalized by
+     * `ExtractActualDefaultValue` at populate time — that helper strips
+     * the DB's wrapping parens and converts a literal `NULL` default to
+     * JS `null`. So if `HasDefaultValue` is true, the default is
+     * guaranteed to be non-NULL.
+     */
+    get NeedsClearCompanion(): boolean {
+        return this.AllowsNull;
+    }
+
+    /**
      * Returns true if the field is a "special" field (see list below) and is handled inside the DB layer and should be ignored in validation by the BaseEntity architecture
      * Also, we skip validation if we have a field that is:
      *  - the primary key

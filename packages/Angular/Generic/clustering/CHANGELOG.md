@@ -1,5 +1,21 @@
 # @memberjunction/ng-clustering
 
+## 5.32.0
+
+### Patch Changes
+
+- @memberjunction/ai-vectors-memory@5.32.0
+- @memberjunction/ng-entity-card@5.32.0
+
+## 5.31.0
+
+### Patch Changes
+
+- 7ed7a4b: no metadata/migration changes
+- Updated dependencies [7ed7a4b]
+  - @memberjunction/ai-vectors-memory@5.31.0
+  - @memberjunction/ng-entity-card@5.31.0
+
 ## 5.30.1
 
 ### Patch Changes

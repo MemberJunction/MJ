@@ -290,6 +290,9 @@ import { MJSQLDialectFormComponent } from "./Entities/MJSQLDialect/mjsqldialect.
 import { MJStateProvinceFormComponent } from "./Entities/MJStateProvince/mjstateprovince.form.component";
 import { MJTagAuditLogFormComponent } from "./Entities/MJTagAuditLog/mjtagauditlog.form.component";
 import { MJTagCoOccurrenceFormComponent } from "./Entities/MJTagCoOccurrence/mjtagcooccurrence.form.component";
+import { MJTagScopeFormComponent } from "./Entities/MJTagScope/mjtagscope.form.component";
+import { MJTagSuggestionFormComponent } from "./Entities/MJTagSuggestion/mjtagsuggestion.form.component";
+import { MJTagSynonymFormComponent } from "./Entities/MJTagSynonym/mjtagsynonym.form.component";
 import { MJTaggedItemFormComponent } from "./Entities/MJTaggedItem/mjtaggeditem.form.component";
 import { MJTagFormComponent } from "./Entities/MJTag/mjtag.form.component";
 import { MJTaskDependencyFormComponent } from "./Entities/MJTaskDependency/mjtaskdependency.form.component";
@@ -823,11 +826,20 @@ declarations: [
     MJStateProvinceFormComponent,
     MJTagAuditLogFormComponent,
     MJTagCoOccurrenceFormComponent,
+    MJTagScopeFormComponent,
+    MJTagSuggestionFormComponent,
+    MJTagSynonymFormComponent,
     MJTaggedItemFormComponent,
     MJTagFormComponent,
     MJTaskDependencyFormComponent,
     MJTaskTypeFormComponent,
-    MJTaskFormComponent],
+    MJTaskFormComponent,
+    MJTemplateCategoryFormComponent,
+    MJTemplateContentTypeFormComponent,
+    MJTemplateContentFormComponent,
+    MJTemplateParamFormComponent,
+    MJTemplateFormComponent,
+    MJTestRubricFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -844,12 +856,6 @@ export class GeneratedForms_SubModule_13 { }
 
 @NgModule({
 declarations: [
-    MJTemplateCategoryFormComponent,
-    MJTemplateContentTypeFormComponent,
-    MJTemplateContentFormComponent,
-    MJTemplateParamFormComponent,
-    MJTemplateFormComponent,
-    MJTestRubricFormComponent,
     MJTestRunFeedbackFormComponent,
     MJTestRunOutputTypeFormComponent,
     MJTestRunOutputFormComponent,
@@ -863,7 +869,13 @@ declarations: [
     MJUserApplicationFormComponent,
     MJUserFavoriteFormComponent,
     MJUserNotificationPreferenceFormComponent,
-    MJUserNotificationTypeFormComponent],
+    MJUserNotificationTypeFormComponent,
+    MJUserNotificationFormComponent,
+    MJUserRecordLogFormComponent,
+    MJUserRoleFormComponent,
+    MJUserSettingFormComponent,
+    MJUserViewCategoryFormComponent,
+    MJUserViewRunDetailFormComponent],
 imports: [
     CommonModule,
     FormsModule,
@@ -880,12 +892,6 @@ export class GeneratedForms_SubModule_14 { }
 
 @NgModule({
 declarations: [
-    MJUserNotificationFormComponent,
-    MJUserRecordLogFormComponent,
-    MJUserRoleFormComponent,
-    MJUserSettingFormComponent,
-    MJUserViewCategoryFormComponent,
-    MJUserViewRunDetailFormComponent,
     MJUserViewRunFormComponent,
     MJUserViewFormComponent,
     MJUserFormComponent,

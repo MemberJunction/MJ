@@ -165,7 +165,7 @@ export class Metadata {
     }
 
     public get AuthorizationRoles(): AuthorizationRoleInfo[] {
-        return Metadata.Provider.AuthorizationRoles;
+        return Metadata.Provider.AuthorizationRoles;  // global-provider-ok: Metadata helper class — proxies to the global static Provider by design
     }
 
     public get Libraries(): LibraryInfo[] {

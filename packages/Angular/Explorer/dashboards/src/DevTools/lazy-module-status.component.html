@@ -1,0 +1,129 @@
+<div class="mj-inspector mj-inspector--solo">
+    <div class="mj-inspector__header">
+        <div class="mj-inspector__header-icon"><i class="fa-solid fa-puzzle-piece"></i></div>
+        <div>
+            <h3 class="mj-inspector__header-title">Lazy Loading</h3>
+            <div class="mj-inspector__header-sub">Code-split chunks: registered, loaded, and on-demand</div>
+        </div>
+        <span class="mj-inspector__header-spacer"></span>
+        <div class="mj-inspector__header-actions">
+            <button class="mj-inspector__btn" type="button" (click)="refresh()" title="Refresh">
+                <i class="fa-solid fa-rotate"></i> Refresh
+            </button>
+        </div>
+    </div>
+
+    @if (!Available) {
+        <div class="lz-unavailable">
+            <i class="fa-solid fa-circle-info"></i>
+            <div>
+                <strong>Lazy registry not available.</strong>
+                The shell hasn't published the LazyModuleRegistry to globalThis yet, or you're viewing this in an environment that doesn't use it.
+            </div>
+        </div>
+    } @else {
+        <div class="lz-summary">
+            <div class="lz-progress">
+                <div class="lz-progress-bar">
+                    <div class="lz-progress-fill" [style.width.%]="Stats.percent"></div>
+                </div>
+                <div class="lz-progress-meta">
+                    <span class="lz-progress-pct">{{ Stats.percent }}%</span>
+                    <span class="lz-progress-label">{{ Stats.loadedChunks }} of {{ Stats.chunkCount }} chunks loaded</span>
+                </div>
+            </div>
+            <div class="lz-summary-stats">
+                <div class="lz-summary-stat">
+                    <div class="lz-summary-value">{{ Stats.totalKeys }}</div>
+                    <div class="lz-summary-label">Registered keys</div>
+                </div>
+                <div class="lz-summary-stat">
+                    <div class="lz-summary-value">{{ Stats.loadedKeys }}</div>
+                    <div class="lz-summary-label">Loaded keys</div>
+                </div>
+                <div class="lz-summary-stat">
+                    <div class="lz-summary-value">{{ Stats.chunkCount }}</div>
+                    <div class="lz-summary-label">Total chunks</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="lz-filter-bar">
+            <button type="button"
+                    class="lz-filter"
+                    [class.lz-filter--active]="Filter === 'all'"
+                    (click)="OnFilterClick('all')">
+                All <span class="lz-filter-count">{{ Stats.chunkCount }}</span>
+            </button>
+            <button type="button"
+                    class="lz-filter"
+                    [class.lz-filter--active]="Filter === 'loaded'"
+                    (click)="OnFilterClick('loaded')">
+                <i class="fa-solid fa-check-circle"></i> Loaded <span class="lz-filter-count">{{ Stats.loadedChunks }}</span>
+            </button>
+            <button type="button"
+                    class="lz-filter"
+                    [class.lz-filter--active]="Filter === 'not-loaded'"
+                    (click)="OnFilterClick('not-loaded')">
+                <i class="fa-regular fa-circle"></i> Not loaded <span class="lz-filter-count">{{ Stats.chunkCount - Stats.loadedChunks }}</span>
+            </button>
+            <span class="lz-spacer"></span>
+            <span class="lz-refreshed">Refreshed {{ LastRefreshedLabel }}</span>
+        </div>
+
+        <div class="lz-grid">
+            @for (chunk of FilteredChunks; track TrackByChunk($index, chunk)) {
+                <div class="lz-card" [class.lz-card--loaded]="chunk.loaded">
+                    <div class="lz-card-head">
+                        <div class="lz-card-status" [class.lz-card-status--loaded]="chunk.loaded">
+                            @if (chunk.loaded) {
+                                <i class="fa-solid fa-circle-check"></i>
+                            } @else {
+                                <i class="fa-regular fa-circle"></i>
+                            }
+                        </div>
+                        <div class="lz-card-title">
+                            <code>{{ chunk.label }}</code>
+                            <span class="lz-card-kcount">{{ chunk.keys.length }} entries</span>
+                        </div>
+                        @if (!chunk.loaded) {
+                            <button type="button"
+                                    class="lz-load-btn"
+                                    [disabled]="chunk.loading"
+                                    (click)="OnForceLoad(chunk)"
+                                    title="Force-load this chunk now">
+                                @if (chunk.loading) {
+                                    <i class="fa-solid fa-spinner fa-spin"></i> Loading
+                                } @else {
+                                    <i class="fa-solid fa-bolt"></i> Load
+                                }
+                            </button>
+                        }
+                    </div>
+                    <div class="lz-card-keys" [class.lz-card-keys--expanded]="chunk.expanded">
+                        @for (k of VisibleKeys(chunk); track k) {
+                            <span class="lz-key">{{ k }}</span>
+                        }
+                    </div>
+                    @if (HiddenCount(chunk) > 0 || chunk.expanded) {
+                        <button class="lz-card-expand"
+                                type="button"
+                                (click)="ToggleChunkExpand(chunk)">
+                            @if (chunk.expanded) {
+                                <i class="fa-solid fa-chevron-up"></i> Show less
+                            } @else {
+                                <i class="fa-solid fa-chevron-down"></i> Show all {{ chunk.keys.length }} entries
+                            }
+                        </button>
+                    }
+                </div>
+            }
+            @if (FilteredChunks.length === 0) {
+                <div class="lz-empty">
+                    <i class="fa-solid fa-circle-info"></i>
+                    No chunks match the current filter.
+                </div>
+            }
+        </div>
+    }
+</div>

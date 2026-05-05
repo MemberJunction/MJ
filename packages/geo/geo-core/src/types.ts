@@ -37,6 +37,20 @@ export interface GeocodeResult {
 }
 
 /**
+ * Lightweight summary of an existing RecordGeoCode row, used by bulk lookup
+ * to eliminate per-record SQL queries during batch geocoding.
+ *
+ * The map is keyed by `RecordID|LocationType` for O(1) lookup.
+ */
+export interface ExistingGeoCodeInfo {
+    ID: string;
+    RecordID: string;
+    LocationType: string;
+    SourceFieldHash: string | null;
+    Status: string;
+}
+
+/**
  * Distance unit for proximity queries.
  */
 export type DistanceUnit = 'mi' | 'km';

@@ -89,6 +89,7 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJArchiveConfigurations', sectionName: 'Archive Configurations', isExpanded: false },
             { sectionKey: 'mJMCPToolFavorites', sectionName: 'MCP Tool Favorites', isExpanded: false },
             { sectionKey: 'mJResourcePermissionsSharedByUserID', sectionName: 'Resource Permissions (Shared By User ID)', isExpanded: false },
+            { sectionKey: 'mJTagSuggestions', sectionName: 'Tag Suggestions', isExpanded: false },
             { sectionKey: 'mJResourcePermissionsUserID', sectionName: 'Resource Permissions', isExpanded: false },
             { sectionKey: 'mJAIAgentRequestsResponseByUserID', sectionName: 'AI Agent Requests', isExpanded: false },
             { sectionKey: 'mJConversationDetails', sectionName: 'Conversation Details', isExpanded: false },

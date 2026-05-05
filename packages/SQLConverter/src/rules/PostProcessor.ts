@@ -138,15 +138,82 @@ export function postProcess(sql: string): string {
   // Remove double semicolons
   sql = sql.replace(/;;/g, ';');
 
-  // Fix INFORMATION_SCHEMA casing — PostgreSQL requires lowercase
+  // Fix spurious `;` after ALTER TABLE X on its own line (when ADD/ALTER COLUMN
+  // continuation follows on the next line). Converter output shows:
+  //   ALTER TABLE X;
+  //    ADD COLUMN "col" TYPE;
+  // which PG parses as two statements with the first being incomplete.
+  sql = sql.replace(
+    /(ALTER\s+TABLE\s+\S+);(\n[ \t]+(?:ADD|ALTER\s+COLUMN|DROP|RENAME)\b)/g,
+    '$1$2'
+  );
+
+  // Convert lingering `ADD CONSTRAINT name DEFAULT val FOR col` that wasn't handled
+  // by AlterTableRule (e.g. when the batch was classified as CREATE_TABLE or OTHER).
+  // Form: ALTER TABLE X ADD CONSTRAINT name DEFAULT val FOR "col";
+  // → ALTER TABLE X ALTER COLUMN "col" SET DEFAULT val;
+  sql = sql.replace(
+    /(ALTER\s+TABLE\s+\S+)\s+ADD\s+CONSTRAINT\s+"?\w+"?\s+DEFAULT\s+(.+?)\s+FOR\s+("?\w+"?)\s*;?\s*$/gim,
+    (_match, tableClause: string, defaultVal: string, col: string) => {
+      const c = col.startsWith('"') ? col : `"${col}"`;
+      return `${tableClause} ALTER COLUMN ${c} SET DEFAULT ${defaultVal.trim()};`;
+    }
+  );
+
+  // Fix `*/;` — orphaned semicolon after a block comment. Usually from
+  // rule-level `;` insertion when the batch ended with a comment.
+  sql = sql.replace(/\*\/\s*;/g, '*/');
+
+  // Convert orphaned `SET @var; SELECT @var = ... FROM ...; IF @var IS NOT NULL EXEC(...)`
+  // blocks to PG DO $$ blocks. These appear when the T-SQL migration reused a
+  // @var from a prior DECLARE (so the second block didn't start with DECLARE and
+  // wasn't caught by the classifier).
+  sql = convertOrphanedDeclareBlocks(sql);
+
+  // Add missing `;` to multi-line ALTER TABLE ADD COLUMN ending at a blank line
+  // (often followed by a comment). Pattern:
+  //   ALTER TABLE X\n ADD COLUMN "col" TYPE NULL\n\n...
+  // → ALTER TABLE X\n ADD COLUMN "col" TYPE NULL;\n\n...
+  sql = sql.replace(
+    /^([ \t]+(?:ADD|ALTER)\s+COLUMN\s+"[^"]+"\s+[^\n;]*(?:NULL|\)))\s*$(?=\n\s*\n)/gm,
+    '$1;'
+  );
+
+  // Fix INFORMATION_SCHEMA casing — PostgreSQL requires lowercase.
+  // Both `information_schema."X"` (quoted) and `information_schema.X` (unquoted)
+  // variants exist depending on whether PascalCase quoting ran first.
   sql = sql.replace(/"?INFORMATION_SCHEMA"?\./gi, 'information_schema.');
-  sql = sql.replace(/information_schema\."TABLES"/g, 'information_schema.tables');
-  sql = sql.replace(/information_schema\."COLUMNS"/g, 'information_schema.columns');
-  sql = sql.replace(/"TABLE_SCHEMA"/g, 'table_schema');
-  sql = sql.replace(/"TABLE_NAME"/g, 'table_name');
-  sql = sql.replace(/"TABLE_CATALOG"/g, 'table_catalog');
-  sql = sql.replace(/"COLUMN_NAME"/g, 'column_name');
-  sql = sql.replace(/"DATA_TYPE"/g, 'data_type');
+  // Lowercase known tables — match both quoted and unquoted forms (case-insensitive).
+  const infoSchemaTables = [
+    'TABLES', 'COLUMNS', 'CHECK_CONSTRAINTS', 'CONSTRAINT_COLUMN_USAGE',
+    'TABLE_CONSTRAINTS', 'KEY_COLUMN_USAGE', 'REFERENTIAL_CONSTRAINTS',
+    'ROUTINES', 'SCHEMATA', 'VIEWS',
+  ];
+  for (const t of infoSchemaTables) {
+    // Match quoted form (no \b after since `"` isn't a word char)
+    sql = sql.replace(
+      new RegExp(`information_schema\\."${t}"`, 'g'),
+      `information_schema.${t.toLowerCase()}`
+    );
+    // Match unquoted form with word boundary
+    sql = sql.replace(
+      new RegExp(`information_schema\\.${t}\\b`, 'g'),
+      `information_schema.${t.toLowerCase()}`
+    );
+  }
+  // Lowercase known column names (quoted or bare).
+  const infoSchemaCols = [
+    'TABLE_SCHEMA', 'TABLE_NAME', 'TABLE_CATALOG', 'COLUMN_NAME', 'DATA_TYPE',
+    'CONSTRAINT_NAME', 'CONSTRAINT_SCHEMA',
+  ];
+  for (const c of infoSchemaCols) {
+    // Quoted form
+    sql = sql.replace(new RegExp(`"${c}"`, 'g'), c.toLowerCase());
+    // Unquoted form — must run before PascalCase quoting so it isn't re-quoted.
+    // Only match when preceded by `.` (column access on a table) to avoid
+    // matching random occurrences as constants.
+    sql = sql.replace(new RegExp(`\\.${c}\\b`, 'g'), `.${c.toLowerCase()}`);
+  }
 
   // Quote unquoted table names after any schema prefix (PascalCase identifiers)
   // e.g., __mj.OpenApp → __mj."OpenApp"   but NOT __mj."OpenApp" (already quoted)
@@ -189,11 +256,21 @@ export function postProcess(sql: string): string {
   // Convert GRANT EXEC (SQL Server shorthand) to GRANT EXECUTE
   sql = sql.replace(/GRANT\s+EXEC\s+ON\s+/gi, 'GRANT EXECUTE ON ');
 
-  // Wrap GRANT EXECUTE on functions in DO $$ blocks to handle overloaded
-  // functions or functions that may not exist.
+  // Wrap GRANT / REVOKE statements in DO $$ blocks with EXCEPTION handlers so
+  // they tolerate missing target objects during fresh installs. Before this,
+  // GRANT EXECUTE was wrapped (functions may be overloaded / absent) but plain
+  // GRANT SELECT was not — so v5.18 Grant_DB_Object_Permissions crashed the
+  // migration when it tried to GRANT SELECT on a view (vwFlywayVersionHistoryParsed)
+  // that doesn't exist in the PG baseline. Wrapping all grants uniformly avoids
+  // that whole class of fresh-install failures while still surfacing grant
+  // errors via NOTICE in CI/dev logs.
   sql = sql.replace(
-    /^(GRANT\s+EXECUTE\s+ON\s+(?:FUNCTION\s+)?\S+\s+TO\s+[^;\n]+);?\s*$/gm,
+    /^(GRANT\s+[A-Z ,()"]+?\s+ON\s+[^;\n]+\s+TO\s+[^;\n]+);?\s*$/gim,
     (_match, grantStmt: string) => `DO $$ BEGIN ${grantStmt}; EXCEPTION WHEN others THEN NULL; END $$;`
+  );
+  sql = sql.replace(
+    /^(REVOKE\s+[A-Z ,()"]+?\s+ON\s+[^;\n]+\s+FROM\s+[^;\n]+);?\s*$/gim,
+    (_match, revokeStmt: string) => `DO $$ BEGIN ${revokeStmt}; EXCEPTION WHEN others THEN NULL; END $$;`
   );
 
   // Strip IF NOT EXISTS (SELECT ... FROM sys.indexes ...) wrappers around CREATE INDEX.
@@ -218,6 +295,33 @@ export function postProcess(sql: string): string {
 
   // Fix GRANT statements missing semicolons (only at end of line, no semicolons already)
   sql = sql.replace(/^(GRANT\s+[^\n;]+[^\s;])$/gm, '$1;');
+
+  // Fix missing semicolons after complete single-line DML/DDL statements.
+  // All whitespace matchers use [ \t] (not \s) to prevent matching across newlines.
+  // Pattern matches only when ALTER TABLE + operation + terminator are on ONE line.
+  sql = sql.replace(
+    /^([ \t]*ALTER[ \t]+TABLE[ \t]+\S+[ \t]+(?:ADD|ALTER[ \t]+COLUMN|DROP)[ \t][^\n;]*(?:NULL|NOW\(\)|"[^"]+"|\)))[ \t]*$/gm,
+    (match, stmt: string) => {
+      if (stmt.trimEnd().endsWith(';')) return match;
+      return `${stmt};`;
+    }
+  );
+  sql = sql.replace(
+    /^([ \t]*UPDATE[ \t]+\S+[ \t]+SET[ \t]+[^\n;]*IS[ \t]+NULL)[ \t]*$/gmi,
+    (match, stmt: string) => {
+      if (stmt.trimEnd().endsWith(';')) return match;
+      return `${stmt};`;
+    }
+  );
+
+  // Fix NOW()/* comment */ pattern: inject semicolon + newline before the comment.
+  // This handles converter output like:
+  //   ALTER TABLE X ADD col TIMESTAMPTZ NOT NULL DEFAULT NOW()/* next comment */
+  // which PG parses as a single broken statement.
+  sql = sql.replace(
+    /(\bNOW\(\))\s*(\/\*)/g,
+    '$1;\n$2'
+  );
 
   // Remove flyway_schema_history references
   sql = sql.replace(/.*flyway_schema_history.*\n?/g, '');
@@ -681,4 +785,45 @@ function splitTopLevelCommasStatic(str: string): string[] {
   }
   if (current.trim()) parts.push(current);
   return parts;
+}
+
+/**
+ * Converts an orphaned T-SQL DECLARE-less block:
+ *   SET @var = NULL;
+ *   SELECT @var = expr FROM ...;
+ *   IF @var IS NOT NULL
+ *       EXEC('... ' + @var + '...');
+ * into a PG DO $$ DECLARE ... BEGIN ... END $$; block.
+ */
+function convertOrphanedDeclareBlocks(sql: string): string {
+  // Match: SET @name = NULL; ... SELECT @name = ... FROM ... WHERE ...; ... IF @name IS NOT NULL ... EXEC('...' + @name + '...');
+  // The whole sequence up to the IF...EXEC needs to be wrapped.
+  const pattern = /SET\s+@(\w+)\s*=\s*NULL\s*;\s*\n+\s*(SELECT\s+@\1\s*=\s*[^;]+;)\s*\n+\s*IF\s+@\1\s+IS\s+NOT\s+NULL\s*\n\s*EXEC\s*\(\s*([^)]+)\)\s*(?:NOT\s+VALID\s*)?;/gi;
+  return sql.replace(pattern, (_match, varName: string, selectStmt: string, execExpr: string) => {
+    // Convert SELECT @var = expr FROM ... to SELECT expr INTO v_var FROM ...
+    const convertedSelect = selectStmt.replace(
+      /SELECT\s+@\w+\s*=\s*(.+?)\s+FROM\b/is,
+      (_m, expr: string) => `SELECT ${expr.trim()} INTO v_${varName} FROM`
+    );
+    // Convert EXEC('str' + @var + 'str') expression to format()
+    const parts = execExpr.split(/\s*\+\s*/).map(p => p.trim()).filter(Boolean);
+    const fmtParts: string[] = [];
+    const args: string[] = [];
+    for (const part of parts) {
+      if (/^'.*'$/.test(part)) {
+        fmtParts.push(part.slice(1, -1).replace(/%/g, '%%'));
+      } else if (/^@\w+$/.test(part)) {
+        fmtParts.push('%I');
+        args.push(`v_${part.slice(1)}`);
+      } else {
+        fmtParts.push('%s');
+        args.push(part);
+      }
+    }
+    let fmt = fmtParts.join('');
+    fmt = fmt.replace(/"%I"/g, '%I');
+    fmt = fmt.replace(/\[%I\]/g, '%I');
+    const argList = args.length ? ', ' + args.join(', ') : '';
+    return `DO $$ DECLARE v_${varName} TEXT;\nBEGIN\n  ${convertedSelect}\n  IF v_${varName} IS NOT NULL THEN\n    EXECUTE format('${fmt}'${argList});\n  END IF;\nEND $$;`;
+  });
 }

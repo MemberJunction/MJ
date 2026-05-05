@@ -369,6 +369,32 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**
+     * Ensures the engine is loaded before the caller reads engine state. This is
+     * the right call to make at every consumption point — especially for engines
+     * registered with `@RegisterForStartup({ deferred: true })` whose initial load
+     * runs in the background after app boot.
+     *
+     * Idempotent: if the engine is already loaded, returns immediately. If a load
+     * is in flight (e.g. the deferred startup or another consumer triggered it),
+     * returns the same in-progress promise rather than starting a second load —
+     * BaseEngine.Load handles this internally via `_loadingSubject`.
+     *
+     * Equivalent to `this.Config(false)` but reads more clearly at call sites:
+     *
+     * ```ts
+     * await AIEngineBase.Instance.EnsureLoaded();
+     * const models = AIEngineBase.Instance.Models;
+     * ```
+     *
+     * @param contextUser - Optional context user (server-side only)
+     * @param provider - Optional metadata provider override
+     */
+    public async EnsureLoaded(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        if (this._loaded) return;
+        await this.Config(false, contextUser, provider);
+    }
+
+    /**
      * This method should be called by sub-classes to load up their specific metadata requirements. For more complex metadata
      * loading or for post-processing of metadata loading done here, overide the AdditionalLoading method to add your logic.
      * @param configs

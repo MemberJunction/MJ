@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, Input, Output, EventEmitter, inject } from '@angular/core';
+import { Component, OnInit, OnDestroy, Input, Output, EventEmitter, ChangeDetectorRef, inject } from '@angular/core';
 import { RunView, UserInfo } from '@memberjunction/core';
 import { MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -57,6 +57,7 @@ export class ArtifactSelectionDialogComponent extends BaseAngularComponent imple
   private searchSubject = new Subject<string>();
 
   private notificationService = inject(MJNotificationService);
+  private cdr = inject(ChangeDetectorRef);
 
   async ngOnInit() {
     // Setup search debouncing
@@ -78,6 +79,7 @@ export class ArtifactSelectionDialogComponent extends BaseAngularComponent imple
 
   async loadArtifacts() {
     this.isLoading = true;
+    this.cdr.detectChanges();
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
@@ -106,6 +108,7 @@ export class ArtifactSelectionDialogComponent extends BaseAngularComponent imple
       console.error('Error loading artifacts:', error);
     } finally {
       this.isLoading = false;
+      this.cdr.detectChanges();
     }
   }
 
@@ -152,6 +155,7 @@ export class ArtifactSelectionDialogComponent extends BaseAngularComponent imple
     this.showNewArtifactForm = false;
     this.versionAction = 'new';
     this.selectedVersion = null;
+    this.cdr.detectChanges();
 
     // Load versions for this artifact
     await this.loadVersions(artifact.ID);
@@ -173,6 +177,8 @@ export class ArtifactSelectionDialogComponent extends BaseAngularComponent imple
     } catch (error) {
       console.error('Error loading versions:', error);
       this.artifactVersions = [];
+    } finally {
+      this.cdr.detectChanges();
     }
   }
 

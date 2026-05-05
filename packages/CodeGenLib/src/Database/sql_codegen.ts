@@ -4,7 +4,7 @@ import * as fs from 'fs';
 import path from 'path';
 
 import { SQLUtilityBase } from './sql';
-import { CodeGenDatabaseProvider, BaseViewGenerationContext, CascadeDeleteContext, CodeGenConnection } from './codeGenDatabaseProvider';
+import { CodeGenDatabaseProvider, BaseViewGenerationContext, CascadeDeleteContext, CodeGenConnection, PhasedExecutionResult } from './codeGenDatabaseProvider';
 import { SQLServerCodeGenProvider } from './providers/sqlserver/SQLServerCodeGenProvider';
 
 import { autoIndexForeignKeys, configInfo, customSqlScripts, dbDatabase, mjCoreSchema, MAX_INDEX_NAME_LENGTH } from '../Config/config';
@@ -154,8 +154,11 @@ export class SQLCodeGenBase {
             // ALWAYS use the first filter where we only include entities that have IncludeInAPI = 1
             // Entities are already sorted by name in PostProcessEntityMetadata (see providerBase.ts)
             const baselineEntities = entities.filter(e => e.IncludeInAPI);
-            const includedEntities = baselineEntities.filter(e => configInfo.excludeSchemas.find(s => s.toLowerCase() === e.SchemaName.toLowerCase()) === undefined); //only include entities that are NOT in the excludeSchemas list
-            const excludedEntities = baselineEntities.filter(e => configInfo.excludeSchemas.find(s => s.toLowerCase() === e.SchemaName.toLowerCase()) !== undefined); //only include entities that ARE in the excludeSchemas list in this array
+
+            // OPTIMIZATION: Use a Set for O(1) lookups instead of O(n) array finds to improve performance
+            const excludeSchemasSet = new Set(configInfo.excludeSchemas.map(s => s.toLowerCase()));
+            const includedEntities = baselineEntities.filter(e => !excludeSchemasSet.has(e.SchemaName.toLowerCase())); //only include entities that are NOT in the excludeSchemas list
+            const excludedEntities = baselineEntities.filter(e => excludeSchemasSet.has(e.SchemaName.toLowerCase())); //only include entities that ARE in the excludeSchemas list in this array
 
             // Initialize temp batch files for each schema
             // These will be populated as SQL is generated and will be used for actual execution
@@ -176,44 +179,64 @@ export class SQLCodeGenBase {
             startSpinner(`Generating SQL for ${includedEntities.length} entities...`);
             const step2StartTime: Date = new Date();
 
+            // When the provider offers a phased executor (PG today), run per-entity
+            // execution DURING file generation. This gives us view → CRUD fns →
+            // grants phasing with 42P16 recovery, and lets us skip the bulk
+            // file-execution pass at step 2(e) — re-running the same SQL there
+            // could re-trigger 42P16 without the phased recovery wrapper.
+            const useProviderPhasedExecution = !!this._dbProvider.executeEntityPhased;
+            const perEntitySkipExecution = !useProviderPhasedExecution;
+
             // First, separate entities that need cascade delete regeneration from others
             const entitiesWithoutCascadeRegeneration = includedEntities.filter(e => !this.entitiesNeedingDeleteSPRegeneration.has(e.ID));
             const entitiesForCascadeRegeneration = this.orderedEntitiesForDeleteSPRegeneration
                 .map(id => includedEntities.find(e => UUIDsEqual(e.ID, id)))
                 .filter(e => e !== undefined) as EntityInfo[];
 
+            // Track per-batch success without short-circuiting. Historically,
+            // any single batch failure here returned `false` immediately, which
+            // skipped the cascade-regen and excluded-perms batches and left
+            // their entities with no SQL emitted at all. The post-run CRUD
+            // validator (in runCodeGen.ts) is the authoritative ship-gate now,
+            // so we want every batch to attempt its work and surface the
+            // complete picture of what's missing — partial generation is
+            // strictly more useful than nothing.
+            let entityGenSuccess = true;
+
             // Generate SQL for entities that don't need cascade delete regeneration
             const genResult = await this.generateAndExecuteEntitySQLToSeparateFiles({
-                pool, 
-                entities: entitiesWithoutCascadeRegeneration, 
-                directory, 
-                onlyPermissions: false, 
-                skipExecution: true, // skip execution because we execute it all in a giant batch below
-                writeFiles: true, 
-                batchSize: 5, 
+                pool,
+                entities: entitiesWithoutCascadeRegeneration,
+                directory,
+                onlyPermissions: false,
+                // PG uses phased per-entity execution (with 42P16 fallback);
+                // other dialects defer to the bulk step 2(e) below.
+                skipExecution: perEntitySkipExecution,
+                writeFiles: true,
+                batchSize: 5,
                 enableSQLLoggingForNewOrModifiedEntities: true
             }); // enable sql logging for NEW entities....
             if (!genResult.Success) {
-                failSpinner('Failed to generate entity SQL files');
-                return false;
+                logError('Main entity SQL generation batch had failures — continuing with cascade-regen and excluded-perms batches; validator will report any missing routines.');
+                entityGenSuccess = false;
             }
-            
+
             // Generate SQL for cascade delete regenerations in dependency order (sequentially)
             if (entitiesForCascadeRegeneration.length > 0) {
                 updateSpinner(`Regenerating ${entitiesForCascadeRegeneration.length} delete SPs in dependency order...`);
                 const cascadeGenResult = await this.generateAndExecuteEntitySQLToSeparateFiles({
-                    pool, 
-                    entities: entitiesForCascadeRegeneration, 
-                    directory, 
-                    onlyPermissions: false, 
-                    skipExecution: true,
-                    writeFiles: true, 
+                    pool,
+                    entities: entitiesForCascadeRegeneration,
+                    directory,
+                    onlyPermissions: false,
+                    skipExecution: perEntitySkipExecution,
+                    writeFiles: true,
                     batchSize: 1, // Process sequentially to maintain dependency order
                     enableSQLLoggingForNewOrModifiedEntities: true
                 });
                 if (!cascadeGenResult.Success) {
-                    failSpinner('Failed to regenerate cascade delete SPs');
-                    return false;
+                    logError('Cascade-regen batch had failures — continuing; validator will report any missing routines.');
+                    entityGenSuccess = false;
                 }
                 genResult.Files.push(...cascadeGenResult.Files);
             }
@@ -221,9 +244,9 @@ export class SQLCodeGenBase {
             // STEP 2(c) - for the excludedEntities, while we don't want to generate SQL, we do want to generate the permissions files for them
             updateSpinner(`Generating permissions for ${excludedEntities.length} excluded entities...`);
             const genResult2 = await this.generateAndExecuteEntitySQLToSeparateFiles({
-                pool, 
-                entities: excludedEntities, 
-                directory, 
+                pool,
+                entities: excludedEntities,
+                directory,
                 onlyPermissions: true,
                 skipExecution: true, // skip execution because we execute it all in a giant batch below
                 batchSize: 5,
@@ -231,10 +254,14 @@ export class SQLCodeGenBase {
                 enableSQLLoggingForNewOrModifiedEntities: false /*don't log this stuff, it is just permissions for excluded entities*/
             });
             if (!genResult2.Success) {
-                failSpinner('Failed to generate permissions for excluded entities');
-                return false;
+                logError('Excluded-entities permissions batch had failures — continuing; validator will report any missing routines.');
+                entityGenSuccess = false;
             }
-            succeedSpinner(`Entity generation completed (${(new Date().getTime() - step2StartTime.getTime())/1000}s)`);
+            if (entityGenSuccess) {
+                succeedSpinner(`Entity generation completed (${(new Date().getTime() - step2StartTime.getTime())/1000}s)`);
+            } else {
+                failSpinner(`Entity generation completed with batch failures (${(new Date().getTime() - step2StartTime.getTime())/1000}s) — see post-run CRUD validator for the authoritative gap report`);
+            }
 
             // STEP 2(d) now that we've generated the SQL, let's create a combined file in each schema sub-directory for convenience for a DBA
             startSpinner('Creating combined SQL files...');
@@ -247,7 +274,15 @@ export class SQLCodeGenBase {
             const step2eStartTime: Date = new Date();
 
             let executionSuccess = false;
-            if (TempBatchFile.hasContent()) {
+            if (useProviderPhasedExecution) {
+                // Per-entity phased execution already ran during steps 2(b)/(c).
+                // Skip the bulk file re-execution — replaying the same SQL here
+                // would re-trigger 42P16 without the phased recovery wrapper and
+                // undo the work the phased executor just did.
+                TempBatchFile.cleanup();
+                executionSuccess = true;
+                logIf(configInfo?.verboseOutput ?? false, 'Skipping bulk SQL file execution — per-entity phased execution already ran');
+            } else if (TempBatchFile.hasContent()) {
                 // Execute temp batch files in dependency order (matches CodeGen run log)
                 const tempFiles = TempBatchFile.getTempFilePaths();
                 logIf(configInfo?.verboseOutput ?? false, `Executing ${tempFiles.length} temp batch file(s) in dependency order`);
@@ -261,7 +296,9 @@ export class SQLCodeGenBase {
                 executionSuccess = await this.SQLUtilityObject.executeSQLFiles(allEntityFiles, configInfo?.verboseOutput ?? false);
             }
 
-            let overallSuccess = true;
+            // Initialize from entityGenSuccess so any per-batch failures from
+            // STEP 2(b)/(c) carry forward instead of being lost. Bug 2 fix.
+            let overallSuccess = entityGenSuccess;
             if (!executionSuccess) {
                 failSpinner('Failed to execute entity SQL files');
                 TempBatchFile.cleanup(); // Cleanup on error
@@ -519,8 +556,16 @@ export class SQLCodeGenBase {
 
         const files: string[] = [];
         try {
-            let bFail: boolean = false;
+            const failedEntities: EntityInfo[] = [];
             const totalEntities = options.entities.length;
+
+            // Build the will-regenerate set once per batch. A dialect phased
+            // executor (e.g. PG) uses this to skip restoring dependents that
+            // are about to be rebuilt with new definitions — avoids stale
+            // captured definitions conflicting with newly-regenerated targets.
+            const willRegenerate = new Set(
+                options.entities.map(e => `${e.SchemaName}.${e.BaseView}`)
+            );
 
             for (let i = 0; i < totalEntities; i += options.batchSize) {
                 const batch = options.entities.slice(i, i + options.batchSize);
@@ -528,28 +573,41 @@ export class SQLCodeGenBase {
                     const pkeyField = e.Fields.find(f => f.IsPrimaryKey)
                     if (!pkeyField) {
                         logError(`SKIPPING SQL GENERATION: Entity ${e.Name} has no primary key field in metadata. If using soft primary keys, ensure metadata was refreshed after applySoftPKFKConfig().`);
-                        return {Success: false, Files: []};
+                        return {entity: e, result: {Success: false, Files: []}};
                     }
-                    return this.generateAndExecuteSingleEntitySQLToSeparateFiles({
+                    const result = await this.generateAndExecuteSingleEntitySQLToSeparateFiles({
                         pool: options.pool,
                         entity: e,
                         directory: options.directory,
                         onlyPermissions: options.onlyPermissions,
                         writeFiles: options.writeFiles,
                         skipExecution: options.skipExecution,
-                        enableSQLLoggingForNewOrModifiedEntities: options.enableSQLLoggingForNewOrModifiedEntities
+                        enableSQLLoggingForNewOrModifiedEntities: options.enableSQLLoggingForNewOrModifiedEntities,
+                        willRegenerate,
                     });
+                    return {entity: e, result};
                 });
 
                 const results = await Promise.all(promises);
-                results.forEach(r => {
-                    if (!r.Success)
-                        bFail = true; // keep going, but will return false at the end
-                    files.push(...r.Files); // add the files to the main files array
+                results.forEach(({entity, result}) => {
+                    if (!result.Success)
+                        failedEntities.push(entity);
+                    files.push(...result.Files); // add the files to the main files array
                 });
             }
 
-            return {Success: !bFail, Files: files};
+            // Batch summary — makes the full failure scope visible in one pass instead of
+            // forcing the operator to bisect across individually-logged per-entity errors.
+            // Per-entity error detail is already emitted inside generateAndExecuteSingleEntitySQLToSeparateFiles;
+            // this just recaps WHO failed so it's easy to spot.
+            if (failedEntities.length > 0) {
+                const list = failedEntities
+                    .map(e => `  - ${e.SchemaName}.${e.Name}`)
+                    .join('\n');
+                logError(`SQL generation/execution failed for ${failedEntities.length} of ${totalEntities} entity(ies):\n${list}`);
+            }
+
+            return {Success: failedEntities.length === 0, Files: files};
         }
         catch (err) {
             logError(err as string);
@@ -606,29 +664,131 @@ export class SQLCodeGenBase {
 
 
     public async generateAndExecuteSingleEntitySQLToSeparateFiles(options: {
-        pool: CodeGenConnection, 
-        entity: EntityInfo, 
-        directory: string, 
-        onlyPermissions: boolean, 
-        writeFiles: boolean, 
-        skipExecution: boolean, 
-        enableSQLLoggingForNewOrModifiedEntities?: boolean
+        pool: CodeGenConnection,
+        entity: EntityInfo,
+        directory: string,
+        onlyPermissions: boolean,
+        writeFiles: boolean,
+        skipExecution: boolean,
+        enableSQLLoggingForNewOrModifiedEntities?: boolean,
+        /** Names of other entities regenerating in this run — passed to the PG
+         *  phased executor's willRegenerate so stale captured dependents that
+         *  will be rebuilt anyway aren't restored. */
+        willRegenerate?: Set<string>
     }): Promise<{Success: boolean, Files: string[]}> {
         try {
             const {sql, permissionsSQL, files} = await this.generateSingleEntitySQLToSeparateFiles(options); // this creates the files and returns a single string with all the SQL we can then execute
-            if (!options.skipExecution) {
-                return {
-                    Success: await this.SQLUtilityObject.executeSQLScript(options.pool, sql + "\n\nGO\n\n" + permissionsSQL, true), // combine the SQL and permissions and execute it,
-                    Files: files
-                }
-            }
-            else
+            if (options.skipExecution) {
                 return {Success: true, Files: files};
+            }
+
+            // Dialect-specific phased execution path — providers that implement
+            // executeEntityPhased run view → CRUD functions → permissions in
+            // distinct phases so a view failure doesn't silently skip the
+            // CREATE FUNCTIONs that follow (pg simple-query-protocol). Phase 2
+            // is explicitly gated on phase 1 success so we never create fn_*
+            // against a missing or stale view rowtype.
+            if (!options.onlyPermissions && this._dbProvider.executeEntityPhased) {
+                const phaseResult = await this.executeEntityInPhases(
+                    options.pool,
+                    options.entity,
+                    options.willRegenerate
+                );
+                if (!phaseResult.success) {
+                    const where = phaseResult.phase ?? 'unknown';
+                    logError(
+                        `Phased execution for ${options.entity.SchemaName}.${options.entity.Name} failed in phase "${where}": ${
+                            phaseResult.error?.message ?? '(no message)'
+                        }`
+                    );
+                    return { Success: false, Files: files };
+                }
+                return { Success: true, Files: files };
+            }
+
+            // Fallback: original monolithic path (SQL Server; also the path when
+            // `onlyPermissions` is set — then we just want the permissions SQL).
+            return {
+                Success: await this.SQLUtilityObject.executeSQLScript(options.pool, sql + "\n\nGO\n\n" + permissionsSQL, true),
+                Files: files
+            }
         }
         catch (err) {
             logError(err as string);
             return {Success: false, Files: []};
         }
+    }
+
+    /**
+     * Generates the entity's per-phase SQL pieces (view, CRUD functions, view
+     * permissions) and dispatches them to the provider's phased executor. Lives
+     * here because it needs access to the internal generators; the provider
+     * doesn't own context building for the view.
+     */
+    private async executeEntityInPhases(
+        pool: CodeGenConnection,
+        entity: EntityInfo,
+        willRegenerate: Set<string> | undefined
+    ): Promise<PhasedExecutionResult> {
+        // Pieces needed for the phased executor. Empty string when the entity
+        // doesn't warrant that phase's DDL (e.g. virtual entities don't have
+        // views; entities with AllowCreateAPI=false don't get fn_create_*).
+
+        // Root-ID TVFs — entities with self-referencing ParentID FKs need a
+        // recursive helper function (fn_<table>_<field>_get_root_id) that the
+        // base view references. These MUST exist before phase 1 (view) runs;
+        // otherwise PG raises `function does not exist` and phase 2 (CRUD)
+        // gets gated off.
+        const tvfSQL = entity.BaseViewGenerated && !entity.VirtualEntity
+            ? this.generateRecursiveFKTVFs(entity)
+            : '';
+
+        const viewPieces = entity.BaseViewGenerated && !entity.VirtualEntity
+            ? await this.generateBaseViewPieces(pool, entity)
+            : { viewSQL: '', viewPermSQL: '' };
+
+        const crudCreateSQL =
+            entity.AllowCreateAPI && entity.spCreateGenerated && !entity.VirtualEntity
+                ? this.generateSPCreate(entity)
+                : '';
+        const crudUpdateSQL =
+            entity.AllowUpdateAPI && entity.spUpdateGenerated && !entity.VirtualEntity
+                ? this.generateSPUpdate(entity)
+                : '';
+        const crudDeleteSQL =
+            entity.AllowDeleteAPI && entity.spDeleteGenerated && !entity.VirtualEntity
+                ? await this.generateSPDelete(entity, pool)
+                : '';
+
+        return this._dbProvider.executeEntityPhased!({
+            entity,
+            tvfSQL,
+            viewSQL: viewPieces.viewSQL,
+            crudCreateSQL,
+            crudUpdateSQL,
+            crudDeleteSQL,
+            viewPermSQL: viewPieces.viewPermSQL,
+            willRegenerate,
+        });
+    }
+
+    /**
+     * Concatenates the root-ID TVF SQL for every recursive ParentID-style FK
+     * on this entity. Mirrors the inline TVF generation in
+     * `generateSingleEntitySQLToSeparateFiles` so the phased executor can run
+     * the same DDL ahead of the base view.
+     */
+    private generateRecursiveFKTVFs(entity: EntityInfo): string {
+        const recursiveFKs = this.detectRecursiveForeignKeys(entity);
+        if (recursiveFKs.length === 0) return '';
+        let combined = '';
+        for (const field of recursiveFKs) {
+            const functionName = `fn${entity.BaseTable}${field.Name}_GetRootID`;
+            combined += this.generateSingleEntitySQLFileHeader(entity, functionName)
+                + this.generateRootIDFunction(entity, field)
+                + '\n' + this._dbProvider.BatchSeparator + '\n';
+        }
+        return combined;
     }
 
     /**
@@ -1380,7 +1540,22 @@ export class SQLCodeGenBase {
     }
 
     async generateBaseView(pool: CodeGenConnection, entity: EntityInfo): Promise<string> {
-        const viewName: string = entity.BaseView ? entity.BaseView : `vw${entity.CodeName}`;
+        const { viewSQL, viewPermSQL } = await this.generateBaseViewPieces(pool, entity);
+        return viewSQL + viewPermSQL;
+    }
+
+    /**
+     * Same as `generateBaseView`, but returns the view DDL and the GRANT/permissions
+     * DDL as separate strings rather than concatenating. Used by phased per-entity
+     * execution paths (e.g. PG's phased executor) where the view must run under
+     * 42P16 fallback recovery but the permissions must run afterwards in a later
+     * phase — concatenating them would prevent the executor from detecting where
+     * a failure actually occurred.
+     */
+    async generateBaseViewPieces(
+        pool: CodeGenConnection,
+        entity: EntityInfo
+    ): Promise<{ viewSQL: string; viewPermSQL: string }> {
         const classNameFirstChar: string = entity.BaseTableCodeName.charAt(0).toLowerCase();
         let relatedFieldsString: string = await this.generateBaseViewRelatedFieldsString(pool, entity.Fields);
         const relatedFieldsJoinString: string = this.generateBaseViewJoins(entity, entity.Fields);
@@ -1397,10 +1572,6 @@ export class SQLCodeGenBase {
             }
         }
         const permissions: string = this.generateViewPermissions(entity);
-        const qi = this._dbProvider.Dialect.QuoteIdentifier.bind(this._dbProvider.Dialect);
-        const whereClause: string = entity.DeleteType === 'Soft' ? `WHERE
-    ${qi(classNameFirstChar)}.${qi(EntityInfo.DeletedAtFieldName)} IS NULL
-` : '';
 
         // Detect recursive foreign keys and generate TVF joins and root field selects
         const recursiveFKs = this.detectRecursiveForeignKeys(entity);
@@ -1420,7 +1591,10 @@ export class SQLCodeGenBase {
             rootFieldsSelect: rootFields,
             rootJoins: rootJoins,
         };
-        return this._dbProvider.generateBaseView(context) + permissions
+        return {
+            viewSQL: this._dbProvider.generateBaseView(context),
+            viewPermSQL: permissions,
+        };
     }
 
     protected generateViewPermissions(entity: EntityInfo): string {
@@ -1536,6 +1710,26 @@ export class SQLCodeGenBase {
         // Result: _RelatedEntityJoinFieldMappings is populated with all fields to be joined from the related entity.
         //         If both old and new configs are set, they work together (new fields extend or replace the NameField).
         const qualifyingFields = entityFields.filter(f => f.RelatedEntityID && (f.IncludeRelatedEntityNameFieldInBaseView || f.RelatedEntityJoinFieldsConfig));
+
+        // PostgreSQL bootstrap fix: on a fresh PG install, vwEntityFields may be a simple
+        // SELECT * without JOINs, so related entity properties (RelatedEntity, RelatedEntityClassName,
+        // RelatedEntitySchemaName, RelatedEntityBaseTable, RelatedEntityBaseView, RelatedEntityCodeName)
+        // are NULL even though ef.RelatedEntityID is populated. Resolve all of them from the loaded
+        // entities list so the first CodeGen run can generate proper JOIN-based views.
+        for (const ef of qualifyingFields) {
+            if (ef.RelatedEntityID && (!ef.RelatedEntity || !ef.RelatedEntityClassName || !ef.RelatedEntitySchemaName || !ef.RelatedEntityBaseTable)) {
+                const relatedEntity = md.Entities.find(e => e.ID.toLowerCase() === ef.RelatedEntityID!.toLowerCase());
+                if (relatedEntity) {
+                    if (!ef.RelatedEntity) ef.RelatedEntity = relatedEntity.Name;
+                    if (!ef.RelatedEntityClassName) ef.RelatedEntityClassName = relatedEntity.ClassName || relatedEntity.BaseTable;
+                    if (!ef.RelatedEntitySchemaName) ef.RelatedEntitySchemaName = relatedEntity.SchemaName;
+                    if (!ef.RelatedEntityBaseTable) ef.RelatedEntityBaseTable = relatedEntity.BaseTable;
+                    if (!ef.RelatedEntityBaseView) ef.RelatedEntityBaseView = relatedEntity.BaseView;
+                    if (!ef.RelatedEntityCodeName) ef.RelatedEntityCodeName = relatedEntity.CodeName;
+                }
+            }
+        }
+
         for (const ef of qualifyingFields) {
             const config = ef.RelatedEntityJoinFieldsConfig || { mode: 'extend' };
             if (config.mode === 'disable') {

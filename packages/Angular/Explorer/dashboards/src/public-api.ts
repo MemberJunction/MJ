@@ -11,6 +11,8 @@ export * from './DataExplorer';
 export * from './Communication/communication-dashboard.component';
 export * from './Credentials';
 export * from './SystemDiagnostics';
+export * from './DevTools';
+export * from './Admin';
 export * from './Lists';
 
 // Export AI components as resources (BaseResourceComponent-based)
@@ -26,6 +28,8 @@ export {
   PerformanceHeatmapComponent,
   AgentRequestsResourceComponent,
   AutotaggingPipelineResourceComponent,
+  TagsResourceComponent,
+  LoadTagsResource,
   VectorManagementResourceComponent,
   DuplicateDetectionResourceComponent,
   AIAnalyticsResourceComponent,

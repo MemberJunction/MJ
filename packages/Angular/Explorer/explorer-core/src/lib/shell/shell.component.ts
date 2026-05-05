@@ -22,8 +22,9 @@ import { NavItemClickEvent } from './components/header/app-nav.component';
 import { MJAuthBase } from '@memberjunction/ng-auth-services';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { UserAvatarService } from '@memberjunction/ng-user-avatar';
-import { SettingsDialogService } from './services/settings-dialog.service';
 import { UserSharingCenterDialogService } from './services/user-sharing-center-dialog.service';
+import { AboutDialogService } from './services/about-dialog.service';
+import { ProfileDialogService } from './services/profile-dialog.service';
 import { LoadingTheme, LoadingAnimationType, AnimationStep, getActiveTheme } from './loading-themes';
 import { AppAccessDialogComponent, AppAccessDialogConfig, AppAccessDialogResult } from './components/dialogs/app-access-dialog.component';
 import { TabContainerComponent } from './components/tabs/tab-container.component';
@@ -32,6 +33,7 @@ import { MJUserEntity, InstanceConfigEngine } from '@memberjunction/core-entitie
 import { CommandPaletteService } from '../command-palette/command-palette.service';
 import { FileOpenService } from '@memberjunction/ng-file-storage';
 import { FeedbackDialogService, FeedbackService } from '@memberjunction/ng-feedback';
+import { PACKAGE_VERSION } from '@memberjunction/graphql-dataprovider';
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 /**
@@ -81,6 +83,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   private animationSequenceTimeout: ReturnType<typeof setTimeout> | null = null;
   // Loading recovery reset
   ShowResetOption = false;
+
+  /** MemberJunction framework version, shown in the loading screen and About dialog. */
+  public readonly MJVersion: string = PACKAGE_VERSION;
   private loadingResetTimeout: ReturnType<typeof setTimeout> | null = null;
   private readonly loadingResetDelayMs = 20_000; // 20 seconds before showing reset option
   currentLoadingText: string;
@@ -162,8 +167,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     private authBase: MJAuthBase,
     private cdr: ChangeDetectorRef,
     private userAvatarService: UserAvatarService,
-    private settingsDialogService: SettingsDialogService,
     private userSharingCenterDialogService: UserSharingCenterDialogService,
+    private aboutDialogService: AboutDialogService,
+    private profileDialogService: ProfileDialogService,
     private viewContainerRef: ViewContainerRef,
     private titleService: TitleService,
     public developerModeService: DeveloperModeService,
@@ -1955,7 +1961,9 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
       workspaceManager: this.workspaceManager,
       authService: this.authBase,
       pinService: this.homePinService,
-      openSettings: () => this.openSettingsDialog(),
+      // Legacy hook retained for plugin compatibility — no-op now that the
+      // multi-tab Settings dialog has been replaced by the Identity Card flow.
+      openSettings: () => { /* deprecated; profile menu item now emits 'profile' */ },
       themePreference: this.themeService.Preference,
       availableThemes: this.themeService.AvailableThemes,
       appliedTheme: this.themeService.AppliedTheme,
@@ -2016,12 +2024,6 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     const result = await this.userMenu.HandleItemClick(itemId);
 
     // Handle special signals from menu handlers
-    if (result.message === 'toggle-dev-mode') {
-      await this.developerModeService.Toggle();
-      // Menu will refresh via the subscription above
-      return;
-    }
-
     if (result.message?.startsWith('select-theme-')) {
       const themeId = result.message.substring('select-theme-'.length);
       await this.themeService.SetTheme(themeId);
@@ -2064,6 +2066,24 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     if (result.message === 'submit-feedback') {
       this.userMenuVisible = false;
       this.ShowFeedbackDialog();
+      return;
+    }
+
+    if (result.message === 'about') {
+      this.userMenuVisible = false;
+      this.aboutDialogService.open(this.viewContainerRef, {
+        avatarUrl: this.userImageURL || null,
+        avatarIconClass: this.userIconClass || null
+      });
+      return;
+    }
+
+    if (result.message === 'profile') {
+      this.userMenuVisible = false;
+      this.profileDialogService.open(this.viewContainerRef, {
+        avatarUrl: this.userImageURL || null,
+        avatarIconClass: this.userIconClass || null
+      });
       return;
     }
 
@@ -2113,20 +2133,6 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
     return element as UserMenuItem;
   }
 
-  /**
-   * Open the settings dialog
-   */
-  private openSettingsDialog(): void {
-    this.settingsDialogService.open(this.viewContainerRef);
-  }
-
-  /**
-   * Open Settings in a full-screen modal dialog
-   */
-  onSettings(): void {
-    this.userMenuVisible = false;
-    this.openSettingsDialog();
-  }
 
   /**
    * Pin the currently active resource to the Home dashboard

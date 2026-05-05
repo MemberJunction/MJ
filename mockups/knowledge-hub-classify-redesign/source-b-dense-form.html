@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>ContentSource Configuration · Option B — dense form</title>
+<link rel="stylesheet" href="mockup.css" />
+<style>
+  .cfg-shell { display: grid; grid-template-columns: 1fr 320px; gap: 20px; }
+  .cfg-section {
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 10px;
+    padding: 18px 22px;
+    margin-bottom: 16px;
+  }
+  .cfg-section h3 {
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--mj-text-muted);
+    margin: 0 0 14px;
+    font-weight: 700;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .cfg-section h3 .num {
+    width: 22px; height: 22px;
+    background: var(--mj-brand-primary-tint);
+    color: var(--mj-brand-primary);
+    border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+  }
+  .cfg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 20px; }
+  .cfg-grid.three { grid-template-columns: 1fr 1fr 1fr; }
+  .cfg-grid.four  { grid-template-columns: 1fr 1fr 1fr 1fr; }
+  .seg-mode {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .seg-mode label {
+    border: 1px solid var(--mj-border-default);
+    border-radius: 8px;
+    padding: 10px 12px;
+    cursor: pointer;
+    background: var(--mj-bg-surface);
+    text-align: center;
+    transition: all .12s;
+  }
+  .seg-mode label.selected {
+    background: var(--mj-brand-primary-tint);
+    border-color: var(--mj-brand-primary);
+    box-shadow: inset 0 0 0 2px var(--mj-brand-primary);
+  }
+  .seg-mode .ic { font-size: 22px; }
+  .seg-mode .nm { font-size: 13px; font-weight: 700; }
+  .seg-mode .desc { font-size: 11px; color: var(--mj-text-muted); }
+
+  .nav-affix { position: sticky; top: 80px; background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-radius: 10px; padding: 14px 16px; }
+  .nav-affix h4 { font-size: 11px; text-transform: uppercase; color: var(--mj-text-muted); margin: 0 0 10px; }
+  .nav-affix a { display: block; padding: 5px 8px; border-radius: 4px; font-size: 12px; color: var(--mj-text-secondary); }
+  .nav-affix a.active { background: var(--mj-brand-primary-tint); color: var(--mj-brand-primary); font-weight: 600; }
+  .nav-affix .preview-card {
+    margin-top: 18px;
+    background: var(--mj-bg-surface-card);
+    border-radius: 8px;
+    padding: 12px;
+    border-left: 3px solid var(--mj-brand-primary);
+  }
+  .nav-affix .preview-card h4 { color: var(--mj-brand-primary); margin: 0 0 6px; }
+  .nav-affix .preview-card .row { display: flex; justify-content: space-between; font-size: 11px; padding: 3px 0; }
+
+  .slider {
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    background: var(--mj-bg-surface-sunken);
+    border-radius: 3px;
+  }
+  .slider-pair {
+    background: var(--mj-bg-surface-card);
+    padding: 14px;
+    border-radius: 8px;
+    border: 1px solid var(--mj-border-default);
+  }
+  .nudge {
+    background: #fffbeb;
+    border-left: 3px solid var(--mj-status-warning);
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #78350f;
+    margin-top: 8px;
+  }
+</style>
+</head>
+<body>
+
+<div class="mockup-ribbon">
+  <span><strong>Mockup B:</strong> ContentSource Configuration — dense single-page form</span>
+  <span><a href="index.html">← Back to index</a> · <a href="source-a-wizard.html">A</a> · <strong>B</strong> · <a href="source-c-pipeline.html">C</a></span>
+</div>
+
+<header class="mj-app-header">
+  <div class="logo"><span class="logo-mark">MJ</span> MJ Explorer</div>
+  <div class="breadcrumbs">
+    <span>Knowledge Hub</span><span class="sep">›</span>
+    <span>Classify</span><span class="sep">›</span>
+    <span>Sources</span><span class="sep">›</span>
+    <span class="current">HubSpot · Help Center</span>
+  </div>
+  <div class="right">
+    <span class="badge warning">unsaved changes</span>
+    <span class="avatar">AN</span>
+  </div>
+</header>
+
+<div class="page wide">
+  <div class="page-title">
+    <div>
+      <h1>HubSpot · Help Center</h1>
+      <div class="subtitle">All knobs, one page · grouped by concern · for power users</div>
+    </div>
+    <div class="flex gap-8">
+      <button class="btn">Cancel</button>
+      <button class="btn">Test run on 5 items</button>
+      <button class="btn primary">Save</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab">Pipeline</div>
+    <div class="tab active">Sources <span class="count">8</span></div>
+    <div class="tab">Taxonomy</div>
+    <div class="tab">Suggestions</div>
+    <div class="tab">Tag Health</div>
+    <div class="tab">Logs</div>
+  </div>
+
+  <div class="cfg-shell">
+
+    <div>
+
+      <div class="cfg-section" id="basics">
+        <h3><span class="num">1</span> Basics</h3>
+        <div class="cfg-grid">
+          <div class="field"><label>Source name</label><input class="input" value="HubSpot · Help Center" /></div>
+          <div class="field"><label>Source type</label><select class="input"><option>HubSpot Knowledge Base API</option></select></div>
+          <div class="field"><label>Owning team</label><input class="input" value="Customer Education" /></div>
+          <div class="field"><label>Schedule</label><select class="input"><option>Every 6 hours</option></select></div>
+        </div>
+      </div>
+
+      <div class="cfg-section" id="mode">
+        <h3><span class="num">2</span> Taxonomy mode</h3>
+        <div class="seg-mode">
+          <label><div class="ic">🔒</div><div class="nm">Constrained</div><div class="desc">Curated only</div></label>
+          <label class="selected"><div class="ic">⚖️</div><div class="nm">Hybrid</div><div class="desc">Curated + suggested</div></label>
+          <label><div class="ic">🌱</div><div class="nm">AutoGrow</div><div class="desc">Bounded auto-creation</div></label>
+          <label><div class="ic">🌊</div><div class="nm">FreeFlow</div><div class="desc">Anything goes</div></label>
+        </div>
+        <div class="nudge">
+          <strong>Hybrid:</strong> auto-match enabled, but never auto-creates. Anything ambiguous lands in
+          the <a href="suggestions-a-inbox.html">Suggestions Inbox</a> for human approval. Recommended starting point.
+        </div>
+      </div>
+
+      <div class="cfg-section" id="scope">
+        <h3><span class="num">3</span> Scope &amp; tag root</h3>
+        <div class="cfg-grid">
+          <div class="field">
+            <label>Tag root (TagRootID)</label>
+            <input class="input" value="Technology / AI / Machine Learning" />
+            <span class="hint">Restricts the LLM's visible taxonomy to this subtree. Empty = full tree.</span>
+          </div>
+          <div class="field">
+            <label>Share full taxonomy with LLM?</label>
+            <select class="input"><option>Yes — include in prompt</option><option>No — let it match against vectors only</option></select>
+            <span class="hint">Larger taxonomies push token costs up.</span>
+          </div>
+        </div>
+        <div class="cfg-grid mt-8">
+          <div class="field" style="grid-column: span 2;">
+            <label>Tenant scope inheritance</label>
+            <div style="display: flex; gap: 6px; flex-wrap: wrap; padding: 8px; border: 1px solid var(--mj-border-default); border-radius: 6px;">
+              <span class="chip scoped">Acme Corp</span>
+              <span class="chip scoped">Globex Inc.</span>
+              <button class="btn xs">+ Add tenant</button>
+            </div>
+            <span class="hint">New tags created by this source inherit these scopes. Promotion to global is admin-only.</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="cfg-section" id="thresholds">
+        <h3><span class="num">4</span> Thresholds</h3>
+        <div class="slider-pair">
+          <div class="threshold-track" style="margin: 28px 6px 18px;">
+            <div class="marker" style="left: 70%; width: 4px; background: var(--mj-status-warning);"><span class="lbl" style="top: -22px;">SuggestThreshold</span></div>
+            <div class="marker" style="left: 85%; width: 4px; background: var(--mj-status-success);"><span class="lbl" style="top: -22px;">MatchThreshold</span></div>
+          </div>
+
+          <div class="cfg-grid">
+            <div class="field">
+              <label>MatchThreshold (auto-apply)</label>
+              <input type="range" class="slider" min="50" max="100" value="85" />
+              <div class="flex between"><span class="muted">0.50</span><span class="bold mono">0.85</span><span class="muted">1.00</span></div>
+            </div>
+            <div class="field">
+              <label>SuggestThreshold (route to inbox)</label>
+              <input type="range" class="slider" min="50" max="100" value="70" />
+              <div class="flex between"><span class="muted">0.50</span><span class="bold mono">0.70</span><span class="muted">1.00</span></div>
+            </div>
+          </div>
+          <div class="nudge">
+            <strong>Validation:</strong> SuggestThreshold must be lower than MatchThreshold. Default gap is 0.05.
+            Wider gap = more items routed to human review.
+          </div>
+        </div>
+      </div>
+
+      <div class="cfg-section" id="budgets">
+        <h3><span class="num">5</span> Volume &amp; cost budgets</h3>
+        <p class="muted" style="font-size: 12px; margin: -6px 0 12px;">When a budget is hit, the run is <strong>paused</strong> (not failed). Resume picks up where it stopped.</p>
+        <div class="cfg-grid four">
+          <div class="field">
+            <label>Max new tags per run</label>
+            <input class="input" value="50" />
+            <span class="hint">unlimited if blank</span>
+          </div>
+          <div class="field">
+            <label>Max new tags per item</label>
+            <input class="input" value="3" />
+            <span class="hint">extras → suggestions</span>
+          </div>
+          <div class="field">
+            <label>Max tokens per run</label>
+            <input class="input" value="2,000,000" />
+            <span class="hint">across all LLM calls</span>
+          </div>
+          <div class="field">
+            <label>Max cost per run (USD)</label>
+            <input class="input" value="15.00" />
+            <span class="hint">$ stops the run</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="cfg-section" id="advanced">
+        <h3><span class="num">6</span> Advanced</h3>
+        <div class="cfg-grid">
+          <div class="field"><label>Embedding model</label><select class="input"><option>text-embedding-3-small (OpenAI)</option><option>text-embedding-3-large</option></select></div>
+          <div class="field"><label>Vectorize new content</label><select class="input"><option>Yes</option><option>No</option></select></div>
+          <div class="field" style="grid-column: span 2;">
+            <label>SourceSpecificConfiguration (JSON)</label>
+            <textarea class="input" rows="4" style="font-family: ui-monospace, monospace; font-size: 12px;">{
+  "hubspot.workspace_id": "47281",
+  "hubspot.include_drafts": false,
+  "language_filter": ["en", "fr"]
+}</textarea>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- right rail nav -->
+    <aside>
+      <div class="nav-affix">
+        <h4>On this page</h4>
+        <a class="active" href="#basics">1 · Basics</a>
+        <a href="#mode">2 · Taxonomy mode</a>
+        <a href="#scope">3 · Scope &amp; root</a>
+        <a href="#thresholds">4 · Thresholds</a>
+        <a href="#budgets">5 · Budgets</a>
+        <a href="#advanced">6 · Advanced</a>
+
+        <div class="preview-card">
+          <h4>Preview · what changes</h4>
+          <div class="row"><span>Mode</span><strong>Hybrid</strong></div>
+          <div class="row"><span>Tag root</span><strong>Tech/AI/ML</strong></div>
+          <div class="row"><span>MatchThreshold</span><strong>0.85</strong></div>
+          <div class="row"><span>SuggestThreshold</span><strong>0.70</strong></div>
+          <div class="row"><span>MaxNewTagsPerRun</span><strong>50</strong></div>
+          <div class="row"><span>MaxCostPerRun</span><strong>$15</strong></div>
+          <hr class="divider" />
+          <div class="muted" style="font-size: 11px;">Last run: 2h ago · 142 items, 3 new tags, $1.84.</div>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <div class="design-notes">
+    <h3>Design notes — Option B</h3>
+    <p>Power-user surface. Everything on one page, grouped into six numbered sections. Sticky right-rail
+    navigation jumps between groups; preview card shows the diff at a glance. Threshold sliders sit on a
+    threshold-band visualization that mirrors the Suggestions Inbox detail view, reinforcing the same metaphor across the app.</p>
+    <ul>
+      <li><strong>Strengths:</strong> fastest for editing; everything visible without state-juggling; great for SE/admins; preview card shows diff impact.</li>
+      <li><strong>Weaknesses:</strong> overwhelming first time; can't enforce "set thresholds before budgets"; long page on small screens.</li>
+      <li><strong>Best for:</strong> ops folks tweaking dozens of sources.</li>
+      <li><strong>Distinctive:</strong> threshold-band slider pair; segmented mode picker (compact vs. wizard's big cards); sticky preview-of-changes panel.</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+  document.querySelectorAll('.seg-mode label').forEach(l => l.addEventListener('click', () => {
+    document.querySelectorAll('.seg-mode label').forEach(x => x.classList.remove('selected'));
+    l.classList.add('selected');
+  }));
+</script>
+</body>
+</html>

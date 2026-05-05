@@ -429,7 +429,7 @@ export class AuthorizationInfo extends BaseInfo {
      * `AuthorizationRoleInfo` objects are lightweight and the collection is small.
      */
     public get Roles(): AuthorizationRoleInfo[] {
-        return Metadata.Provider?.AuthorizationRoles?.filter(
+        return Metadata.Provider?.AuthorizationRoles?.filter( // global-provider-ok: AuthorizationInfo is a metadata DTO — resolves roles from the global provider like QueryInfo.Permissions
             ar => UUIDsEqual(ar.AuthorizationID, this.ID)
         ) ?? [];
     }

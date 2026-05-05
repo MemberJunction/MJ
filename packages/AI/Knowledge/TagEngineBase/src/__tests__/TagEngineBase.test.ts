@@ -51,11 +51,21 @@ vi.mock('@memberjunction/global', () => ({
         return a.toLowerCase() === b.toLowerCase();
     },
     NormalizeUUID: (id: string) => id.toLowerCase(),
+    BaseSingleton: class<T> {
+        public constructor() {}
+        public static getInstance<T>(this: new () => T): T {
+            const ctor = this as unknown as { _inst?: T };
+            if (!ctor._inst) ctor._inst = new (this as unknown as new () => T)();
+            return ctor._inst as T;
+        }
+    },
 }));
 
 vi.mock('@memberjunction/core-entities', () => ({
     MJTagEntity: class {},
     MJTaggedItemEntity: class {},
+    MJTagScopeEntity: class {},
+    MJTagSynonymEntity: class {},
 }));
 
 import { TagEngineBase, TagTreeNode } from '../TagEngineBase';

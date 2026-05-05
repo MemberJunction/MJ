@@ -84,6 +84,7 @@
           #reactComponent
           [component]="LocalComponentSpec"
           (componentEvent)="OnComponentEvent($event)"
+          (initialized)="OnReactInitialized()"
           (openEntityRecord)="OnOpenEntityRecord($event)">
         </mj-react-component>
       </div>
