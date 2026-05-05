@@ -829,7 +829,7 @@ export class ProfileDialogComponent implements OnInit, OnDestroy {
         channel.saving = true;
         this.cdr.markForCheck();
 
-        const provider = Metadata.Provider;
+        const provider = Metadata.Provider; // global-provider-ok: profile dialog mutates the active session's user notification prefs
         const currentUser = provider?.CurrentUser;
         if (!provider || !currentUser) {
             channel.saving = false;
@@ -889,7 +889,7 @@ export class ProfileDialogComponent implements OnInit, OnDestroy {
     // ---------- private helpers ----------
 
     private populateIdentity(): void {
-        const provider = Metadata.Provider;
+        const provider = Metadata.Provider; // global-provider-ok: profile dialog reads the active session's signed-in user
         const user = provider?.CurrentUser;
         if (user) {
             const name = user.Name || `${user.FirstName ?? ''} ${user.LastName ?? ''}`.trim();

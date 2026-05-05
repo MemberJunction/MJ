@@ -616,7 +616,7 @@ export class AboutDialogComponent implements OnInit, OnDestroy {
     }
 
     private populate(): void {
-        const provider = Metadata.Provider;
+        const provider = Metadata.Provider; // global-provider-ok: About dialog displays the active session's global provider stats
 
         this.EntityCount = provider?.Entities?.length ?? 0;
         this.ApplicationCount = provider?.Applications?.length ?? 0;
