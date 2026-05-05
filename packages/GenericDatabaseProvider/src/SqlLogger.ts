@@ -460,14 +460,22 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
 
   /**
    * Escapes ${...} patterns within SQL string literals to prevent Flyway from interpreting them as placeholders.
-   * Converts ${templateVariable} to $' + N'{templateVariable} within string literals.
+   * Converts ${templateVariable} to $' + CAST(N'' AS NVARCHAR(MAX)) + N'{templateVariable} within string literals.
    *
-   * The N prefix on the continuation string is critical: without it, the second half of the split N'...' literal
-   * is treated as VARCHAR and implicitly promoted to NVARCHAR(4000) during concatenation, truncating any content
-   * beyond 4,000 chars. With N, both halves remain NVARCHAR and the full value is preserved.
+   * The CAST(N'' AS NVARCHAR(MAX)) interleaver is required for correctness, not just style. SQL Server string
+   * concatenation of NVARCHAR(N) literals (even with the N prefix on every operand) produces a result type of
+   * NVARCHAR(N+M), capped at NVARCHAR(4000). Once the running concatenation exceeds 4,000 characters, SQL Server
+   * silently truncates anything beyond — there is no error, no warning, and the destination variable being
+   * declared NVARCHAR(MAX) does NOT save you because the truncation happens on the right-hand side before
+   * assignment. Interleaving an explicit CAST(N'' AS NVARCHAR(MAX)) at every split forces NVARCHAR(MAX)
+   * precedence on the entire chain, preserving the full literal value regardless of size.
+   *
+   * See /BUG_NVARCHAR_TRUNCATION_IN_METADATASYNC.md for the full root-cause analysis. Components with many
+   * ${...} template-literal expressions (e.g. DataExportPanel — 21 expressions, ~65 KB) were silently truncated
+   * to ~57 KB on Flyway apply prior to this fix.
    */
   private _escapeFlywaySyntaxInStrings(sql: string): string {
-    return sql.replaceAll(/\$\{/g, "$$'+N'{");
+    return sql.replaceAll(/\$\{/g, "$$'+CAST(N'' AS NVARCHAR(MAX))+N'{");
   }
 
 }

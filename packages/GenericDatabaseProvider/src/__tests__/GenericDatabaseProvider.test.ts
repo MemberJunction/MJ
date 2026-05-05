@@ -774,20 +774,60 @@ describe('SqlLoggingSessionImpl', () => {
             const input = "INSERT INTO T VALUES (N'${someVar}')";
             const result = escapeFlyway(input);
             expect(result).not.toContain('${someVar}');
-            expect(result).toContain("$'+N'{someVar}");
+            // The escape interleaves an NVARCHAR(MAX) cast between the split halves to force
+            // NVARCHAR(MAX) precedence on the running T-SQL concat — without it, the chain
+            // caps at NVARCHAR(4000) and silently truncates large literals.
+            expect(result).toContain("$'+CAST(N'' AS NVARCHAR(MAX))+N'{someVar}");
         });
 
         it('should handle multiple ${...} occurrences', () => {
             const input = "N'${a} and ${b}'";
             const result = escapeFlyway(input);
-            expect(result).toContain("$'+N'{a}");
-            expect(result).toContain("$'+N'{b}");
+            expect(result).toContain("$'+CAST(N'' AS NVARCHAR(MAX))+N'{a}");
+            expect(result).toContain("$'+CAST(N'' AS NVARCHAR(MAX))+N'{b}");
         });
 
         it('should return unchanged SQL when no ${...} patterns exist', () => {
             const input = "SELECT * FROM Users WHERE Name = 'John'";
             const result = escapeFlyway(input);
             expect(result).toBe(input);
+        });
+
+        // =====================================================================
+        // Regression test for the silent NVARCHAR(4000) truncation bug
+        // documented in /BUG_NVARCHAR_TRUNCATION_IN_METADATASYNC.md.
+        //
+        // The escape currently splits each ${...} as `$' + N'{...}`. T-SQL
+        // string concatenation of NVARCHAR(N) literals caps the running result
+        // at NVARCHAR(4000) and silently drops content past that boundary
+        // unless one operand is explicitly NVARCHAR(MAX). The split therefore
+        // must interleave `CAST(N'' AS NVARCHAR(MAX))` so the concat chain
+        // inherits MAX precedence — otherwise large component Specifications
+        // (e.g. DataExportPanel, 21 ${...} expressions, ~65 KB) get truncated
+        // to ~57 KB on Flyway apply with no error.
+        //
+        // This test FAILS on the current implementation (which emits
+        // `$'+N'{`) and PASSES once `_escapeFlywaySyntaxInStrings` is changed
+        // to emit `$'+CAST(N'' AS NVARCHAR(MAX))+N'{`.
+        // =====================================================================
+        it('forces NVARCHAR(MAX) precedence at every split so multi-chunk concat does not silently truncate at 4000 chars', () => {
+            const input = "SET @x = N'`Hello ${name}, you have ${count} items`'";
+            const result = escapeFlyway(input);
+
+            // Each ${ in the source must produce a corresponding NVARCHAR(MAX)
+            // cast in the escape. Without it, NVARCHAR + NVARCHAR concat caps
+            // at NVARCHAR(4000) and silently truncates.
+            const castMatches = result.match(/CAST\(N'' AS NVARCHAR\(MAX\)\)/g) || [];
+            expect(castMatches.length).toBe(2);
+
+            // The cast must appear between the closing $' and the opening N'{
+            // — otherwise it doesn't actually break the NVARCHAR-only chain.
+            expect(result).toContain("$'+CAST(N'' AS NVARCHAR(MAX))+N'{name}");
+            expect(result).toContain("$'+CAST(N'' AS NVARCHAR(MAX))+N'{count}");
+
+            // And the original ${...} must still be defeated for Flyway —
+            // i.e. no adjacent `${` should remain in the output.
+            expect(result).not.toMatch(/\$\{/);
         });
     });
 
