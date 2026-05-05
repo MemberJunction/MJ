@@ -44,6 +44,58 @@ export class LazyModuleRegistry {
     MJGlobal.Instance.ClassFactory.RegisterLazyLoader(
       (baseClassName: string, key: string) => this.Load(`${baseClassName}::${key}`)
     );
+    // Publish to a well-known global so introspection tools (e.g. the Admin
+    // app's "Lazy Loading" inspector in ng-dashboards) can read the snapshot
+    // without creating a hard package dependency on explorer-core. Dev tools only.
+    (globalThis as { __mj_lazy_registry__?: LazyModuleRegistry }).__mj_lazy_registry__ = this;
+  }
+
+  /**
+   * Read-only snapshot of the registry state — for diagnostic tools.
+   * Groups compound keys by chunk (the underlying loader function) so
+   * inspectors can show "X chunks, Y loaded" plus the keys covered by each.
+   */
+  GetSnapshot(): {
+    registered: string[];
+    loaded: string[];
+    chunks: Array<{ chunkId: string; loaded: boolean; keys: string[] }>;
+    chunkCount: number;
+  } {
+    const byChunk = new Map<string, string[]>();
+    for (const [compoundKey, loader] of this.registry.entries()) {
+      const id = loader.toString();
+      const arr = byChunk.get(id) ?? [];
+      arr.push(compoundKey);
+      byChunk.set(id, arr);
+    }
+
+    const chunks = Array.from(byChunk.entries())
+      .map(([chunkId, keys]) => ({
+        chunkId,
+        loaded: this.loadedChunks.has(chunkId),
+        keys: keys.sort()
+      }))
+      .sort((a, b) => b.keys.length - a.keys.length);
+
+    const loaded: string[] = [];
+    for (const c of chunks) {
+      if (c.loaded) loaded.push(...c.keys);
+    }
+
+    return {
+      registered: Array.from(this.registry.keys()).sort(),
+      loaded: loaded.sort(),
+      chunks,
+      chunkCount: this.loadedChunks.size
+    };
+  }
+
+  /**
+   * Programmatically trigger a lazy chunk load by compound key. Returns true
+   * on success. Useful for dev tools that want to "preload" a chunk.
+   */
+  async ForceLoad(compoundKey: string): Promise<boolean> {
+    return this.Load(compoundKey);
   }
 
   /**

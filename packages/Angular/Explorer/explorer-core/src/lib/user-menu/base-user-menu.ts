@@ -119,8 +119,6 @@ export class BaseUserMenu {
      * Developer role AND developer mode is enabled.
      */
     public GetMenuItems(): UserMenuItem[] {
-        const devModeEnabled = this._context?.developerModeEnabled ?? false;
-
         return [
             // === PRIMARY GROUP ===
             {
@@ -168,41 +166,9 @@ export class BaseUserMenu {
                 tooltip: 'Report a bug or request a feature'
             },
 
-            // === DEVELOPER GROUP (Only visible to developers) ===
-            {
-                id: 'toggle-dev-mode',
-                label: devModeEnabled ? 'Developer Mode (On)' : 'Developer Mode (Off)',
-                icon: devModeEnabled ? 'fa-solid fa-toggle-on' : 'fa-solid fa-toggle-off',
-                color: devModeEnabled ? '#4CAF50' : undefined,
-                group: 'developer',
-                order: 10,
-                developerOnly: true,
-                visible: true,
-                enabled: true,
-                tooltip: 'Toggle developer tools visibility'
-            },
-            {
-                id: 'log-layout',
-                label: 'Log Layout (Debug)',
-                icon: 'fa-solid fa-terminal',
-                group: 'developer',
-                order: 20,
-                developerOnly: true,
-                visible: devModeEnabled,
-                enabled: true,
-                tooltip: 'Output current layout configuration to console'
-            },
-            {
-                id: 'inspect-state',
-                label: 'Inspect App State',
-                icon: 'fa-solid fa-magnifying-glass-chart',
-                group: 'developer',
-                order: 30,
-                developerOnly: true,
-                visible: devModeEnabled,
-                enabled: true,
-                tooltip: 'View current application state in console'
-            },
+            // Developer tools live in the Admin app's "Developer Tools" section,
+            // not in this menu. The DeveloperModeService still exists for
+            // per-record dev affordances (e.g. "open in CodeGen" links).
 
             // === SYSTEM GROUP (Theme selection) ===
             ...this.BuildThemeMenuItems(),
@@ -216,6 +182,17 @@ export class BaseUserMenu {
                 visible: true,
                 enabled: true,
                 tooltip: 'Reset workspace to default layout'
+            },
+            {
+                id: 'about',
+                label: 'About MemberJunction',
+                icon: 'fa-solid fa-circle-info',
+                group: 'system',
+                order: 20,
+                developerOnly: false,
+                visible: true,
+                enabled: true,
+                tooltip: 'Version, diagnostics, and links'
             },
 
             // === DANGER GROUP ===
@@ -350,56 +327,15 @@ export class BaseUserMenu {
     // ========================================
 
     /**
-     * Handle "My Profile" click - Opens user profile/settings
+     * Handle "My Profile" click — signals the shell to open the new
+     * Identity Card profile dialog. The shell wires this to ProfileDialogService.
      */
     protected async Handle_profile(): Promise<UserMenuActionResult> {
-        if (this._context?.openSettings) {
-            this._context.openSettings();
-        }
-        return { success: true, closeMenu: true };
-    }
-
-    /**
-     * Handle "Toggle Developer Mode" click
-     */
-    protected async Handle_toggle_dev_mode(): Promise<UserMenuActionResult> {
-        // This will be handled by the shell component which has access to DeveloperModeService
-        // The result signals that the menu should refresh to show the updated state
         return {
             success: true,
-            closeMenu: false, // Keep menu open to see updated state
-            message: 'toggle-dev-mode' // Special signal for shell to handle
+            closeMenu: true,
+            message: 'profile'
         };
-    }
-
-    /**
-     * Handle "Log Layout" click - Debug utility
-     */
-    protected async Handle_log_layout(): Promise<UserMenuActionResult> {
-        if (!this._context?.workspaceManager) {
-            return { success: false, closeMenu: true, message: 'Workspace manager not available' };
-        }
-
-        const config = this._context.workspaceManager.GetConfiguration();
-        console.log('📋 Workspace Configuration:', JSON.stringify(config, null, 2));
-        console.log('📋 Workspace Configuration (object):', config);
-
-        return { success: true, closeMenu: true };
-    }
-
-    /**
-     * Handle "Inspect App State" click - Debug utility
-     */
-    protected async Handle_inspect_state(): Promise<UserMenuActionResult> {
-        console.group('🔍 Application State Inspection');
-        console.log('User:', this._context?.userEntity);
-        console.log('Current App:', this._context?.currentApplication);
-        console.log('Developer Mode:', this._context?.developerModeEnabled);
-        console.log('Is Developer:', this._context?.isDeveloper);
-        console.log('Workspace Config:', this._context?.workspaceManager?.GetConfiguration());
-        console.groupEnd();
-
-        return { success: true, closeMenu: true };
     }
 
     /**
@@ -480,6 +416,15 @@ export class BaseUserMenu {
             success: true,
             closeMenu: true,
             message: 'submit-feedback'
+        };
+    }
+
+    /** Signal the shell to open the About dialog */
+    protected async Handle_about(): Promise<UserMenuActionResult> {
+        return {
+            success: true,
+            closeMenu: true,
+            message: 'about'
         };
     }
 
