@@ -39,12 +39,12 @@ export class ShutdownRegistry extends BaseSingleton<ShutdownRegistry> {
     private _items: Set<IShutdownable> = new Set();
     private _shuttingDown = false;
 
-    public constructor() {
+    protected constructor() {
         super();
     }
 
     public static get Instance(): ShutdownRegistry {
-        return ShutdownRegistry.getInstance<ShutdownRegistry>();
+        return super.getInstance<ShutdownRegistry>();
     }
 
     /**
