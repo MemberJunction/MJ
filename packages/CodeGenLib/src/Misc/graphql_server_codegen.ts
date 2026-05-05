@@ -263,6 +263,17 @@ export class ${serverGraphQLTypeName} {`;
       case 'ntext':
       case 'nchar':
       case 'nvarchar':
+      // PG-side string aliases — these are the names PG's information_schema and
+      // pg_catalog return for CHAR(N) / VARCHAR(N) columns. Without these cases,
+      // PG character columns (e.g. User.Type = `character(15)`) fall through to
+      // the `default: '() => Int'` branch and codegen emits `@Field(() => Int)`
+      // for a string column. The runtime then errors at GraphQL serialization
+      // with `Int cannot represent non-integer value: "User           "` on
+      // every CurrentUser query, blocking MJExplorer login on PG.
+      case 'character':         // information_schema name for CHAR(N)
+      case 'bpchar':            // pg_catalog internal type — "blank-padded char"
+      case 'character varying': // information_schema name for VARCHAR(N)
+      case 'citext':            // PG case-insensitive text extension
       case 'uniqueidentifier': //treat this as a string
       case 'uuid': // PostgreSQL UUID type
       case 'bytea': // PostgreSQL binary data, treat as string
