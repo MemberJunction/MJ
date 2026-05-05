@@ -19,6 +19,8 @@ You are analyzing a database table to generate comprehensive documentation. Your
   {% if col.statistics and col.statistics.min is defined %}- Range: {{ col.statistics.min }} to {{ col.statistics.max }}{% if col.statistics.avg %} (avg: {{ col.statistics.avg | round(2) }}){% endif %}{% endif %}
   {% if col.statistics and col.statistics.avgLength %}- Avg Length: {{ col.statistics.avgLength | round(1) }} chars{% endif %}
   {% if col.statistics.sampleValues and col.statistics.sampleValues.length > 0 %}- Sample Values: {{ col.statistics.sampleValues | jsoninline }}{% endif %}
+  {% if col.enumCandidate %}- **Enum Candidate**: Yes (pre-filter passed: distinctCount={{ col.enumCandidate.distinctCount }}, totalRows={{ col.enumCandidate.totalRows }}, cardinality={{ (col.enumCandidate.cardinalityRatio * 100) | round(1) }}%, dataType={{ col.enumCandidate.dataType }})
+  - **Candidate Values**: {{ col.enumCandidate.values | join(', ') }}{% endif %}
 {% endfor %}
 
 ## Relationships
@@ -119,7 +121,14 @@ Based on the evidence above, generate a JSON response with this exact structure:
     {
       "columnName": "ColumnName",
       "description": "What this column represents and why it exists",
-      "reasoning": "Brief explanation of the evidence"
+      "reasoning": "Brief explanation of the evidence",
+      "valueList": {
+        "isEnum": true,
+        "type": "List",
+        "confidence": 0.92,
+        "values": ["Active", "Inactive", "Pending"],
+        "reasoning": "Three lifecycle states observed across 12,400 rows with stable distribution — consistent with a closed status enum."
+      }
     }
   ],
   "primaryKey": {
@@ -151,7 +160,7 @@ Based on the evidence above, generate a JSON response with this exact structure:
 1. **Table Description**: Focus on WHAT the table stores and WHY it exists. Be specific about the real-world entities or business processes it represents.
 2. **Reasoning**: Reference specific evidence (column names, FK relationships, sample values, cardinality patterns)
 3. **Confidence**: 0-1 scale. Be conservative. Use < 0.7 if ambiguous.
-4. **Column Descriptions**: Every column should be described. Explain its role and meaning.
+4. **Column Descriptions**: Every column should be described. Explain its role and meaning. For columns marked as "Enum Candidate: Yes", include a `valueList` object with your verdict. Omit `valueList` for columns that are not enum candidates.
 5. **Primary Key**: Identify the column(s) that most likely form this table's primary key.
    - Look for columns with 100% uniqueness, zero nulls, and names like `ID`, `TableNameID`, or `Code`
    - For junction/bridge tables (e.g., `ProductModelIllustration`), the PK is likely a composite of the FK columns
@@ -177,6 +186,11 @@ Based on the evidence above, generate a JSON response with this exact structure:
 **Important:**
 - **When mentioning table names in descriptions, ALWAYS use the exact `schema.table` format from the "All Database Tables" list**
 - If column has low cardinality (< 20 distinct values), those are likely enum/category values - use them to understand meaning
+- **Enum/Value-List Detection**: When a column's per-column context says "Enum Candidate: Yes", evaluate whether the column genuinely represents a finite, closed (or near-closed) set of values, OR whether it merely *happens* to have low cardinality at this point in time. Include a `valueList` object in your `columnDescriptions` entry for that column.
+  - Examples that are **NOT** enums even with low cardinality: `Customer.State` in a system with only a few customers (the universe of US states is 50, not 3); `LastName` where a sample shows 8 distinct values across 8 rows; `City`, `Country`, `Department` for small organizations; free-text fields where users happened to repeat phrases.
+  - Examples that **ARE** enums: `Status`/`State` columns on workflow records (`Active`, `Inactive`, `Pending`); `Type` discriminators (`Individual`, `Corporate`, `Student`); `Severity`, `Priority`, `Tier` ratings.
+  - Use the column name, the *semantic* meaning of the values, the row volume, and the distribution to decide. **When in doubt, set `isEnum: false`.** A false positive locks a UI to a dropdown that won't accept legitimate new values; a false negative just leaves the field as free text — much lower cost.
+  - If you're between 70% and 90% confident, prefer `"type": "ListOrUserEntry"` (dropdown that also accepts new values) over `"type": "List"` (strictly closed set).
 - Foreign keys reveal relationships and context - use parent table descriptions to inform your analysis
 - High uniqueness ratio (> 95%) suggests identifier/code column
 - String length patterns can reveal format (e.g., phone, email, code)
