@@ -104,7 +104,7 @@ the Search Scopes & RAG+ initiative). Highlights:
   mutation + `SearchStreamEvents` subscription.
 
 **Migration**
-- `V202605011700__v5.32.x__Search_Scopes_And_RAG_Plus.sql` —
+- `V202605021500__v5.32.x__Search_Scopes_And_RAG_Plus.sql` —
   consolidated. Contains six DDL sections (Phase 1 baseline,
   `SearchScopePermission`, `SearchScope.RerankerBudgetCents`,
   `SearchExecutionLog`, `SearchScopeTestQuery`, unique-constraint
