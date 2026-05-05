@@ -373,6 +373,35 @@ export abstract class CodeGenDatabaseProvider {
     }
 
     /**
+     * Builds the EXEC parameter fragment(s) for a single field when calling a
+     * tolerant update SP. Returns an array of `@ParamName = value` strings.
+     *
+     * For most fields this is just `['@FieldName = @variable']`. But when
+     * `clearValue` is true and the field has a `_Clear` companion (see
+     * {@link needsClearCompanion}), an additional `@FieldName_Clear = 1` is
+     * prepended so the tolerant SP actually sets the column to NULL instead
+     * of treating the NULL parameter as "leave unchanged".
+     *
+     * **This is the single source of truth for the calling convention of
+     * tolerant update SPs.** All codepaths that generate EXEC calls to
+     * spUpdate — cascade-update cursors, future SP-to-SP calls, etc. —
+     * should use this method to stay in sync with the SP declaration logic
+     * in {@link generateCRUDParamString}.
+     *
+     * @param ef         The entity field being passed
+     * @param valueExpr  The SQL expression for the value (e.g. `@prefixed_var`)
+     * @param clearValue Whether this field is being explicitly set to NULL
+     */
+    protected buildExecParamForField(ef: EntityFieldInfo, valueExpr: string, clearValue: boolean = false): string[] {
+        const parts: string[] = [];
+        if (clearValue && this.needsClearCompanion(ef)) {
+            parts.push(`@${ef.CodeName}_Clear = 1`);
+        }
+        parts.push(`@${ef.CodeName} = ${valueExpr}`);
+        return parts;
+    }
+
+    /**
      * Returns true when this field should appear in the parameter list of
      * a CRUD routine for the given operation (`isUpdate` true → spUpdate,
      * false → spCreate). Pure decision logic shared across all dialects:
