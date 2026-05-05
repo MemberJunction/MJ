@@ -129,7 +129,7 @@ export class AppStateInspectorComponent extends BaseResourceComponent implements
     }
 
     private userData(): unknown {
-        const user = Metadata.Provider?.CurrentUser;
+        const user = Metadata.Provider?.CurrentUser; // global-provider-ok: DevTools inspector explicitly displays the global default provider's state
         if (!user) return { error: 'No current user' };
         return {
             ID: user.ID,
@@ -146,7 +146,7 @@ export class AppStateInspectorComponent extends BaseResourceComponent implements
     }
 
     private providerData(): unknown {
-        const provider = Metadata.Provider;
+        const provider = Metadata.Provider; // global-provider-ok: DevTools inspector explicitly displays the global default provider's state
         if (!provider) return { error: 'No provider' };
         const data: Record<string, unknown> = {
             type: provider.constructor.name,

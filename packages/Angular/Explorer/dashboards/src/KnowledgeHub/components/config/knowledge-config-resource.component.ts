@@ -604,7 +604,7 @@ export class KnowledgeConfigResourceComponent extends BaseResourceComponent impl
 
     public async CreateNewScope(): Promise<void> {
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const scope = await md.GetEntityObject<MJSearchScopeEntity>('MJ: Search Scopes');
             scope.Name = this.pickUniqueNewScopeName();
             scope.Description = 'New scope — configure providers, entities, or storage below.';

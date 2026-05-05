@@ -128,7 +128,7 @@ export class MJSearchScopeProviderFormComponentExtended extends MJSearchScopePro
      */
     private async fetchRegisteredDriverClasses(): Promise<string[]> {
         try {
-            const dataProvider = Metadata.Provider as GraphQLDataProvider;
+            const dataProvider = this.ProviderToUse as GraphQLDataProvider;
             const response = await dataProvider.ExecuteGQL(
                 `query AvailableSearchProviders { AvailableSearchProviders { DriverClass SourceType } }`,
                 {}

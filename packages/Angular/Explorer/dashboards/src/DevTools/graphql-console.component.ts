@@ -152,7 +152,7 @@ export class GraphQLConsoleComponent extends BaseResourceComponent implements On
 
     private loadEntities(): void {
         try {
-            const md = Metadata.Provider;
+            const md = Metadata.Provider; // global-provider-ok: DevTools GraphQL console queries the global default provider's entity catalog
             if (!md) return;
             const items: EntityListItem[] = (md.Entities ?? []).map(e => ({
                 info: e,

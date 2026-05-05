@@ -799,8 +799,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
     /** Resolve the EntityID → EntityName via MJ Metadata (for passing to providers that key by name). */
     private lookupEntityName(entityID: string): string {
         try {
-            const md = new Metadata();
-            const entity = md.Entities.find(e => UUIDsEqual(e.ID, entityID));
+            const entity = this.ProviderToUse.Entities.find(e => UUIDsEqual(e.ID, entityID));
             return entity?.Name ?? '';
         } catch {
             return '';
@@ -1282,8 +1281,7 @@ export class SearchEngine extends BaseSingleton<SearchEngine> {
         AIAgentID?: string | null;
     }): Promise<void> {
         try {
-            const md = new Metadata();
-            const log = await md.GetEntityObject<MJSearchExecutionLogEntity>(
+            const log = await this.ProviderToUse.GetEntityObject<MJSearchExecutionLogEntity>(
                 'MJ: Search Execution Logs',
                 input.ContextUser,
             );

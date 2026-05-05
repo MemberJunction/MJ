@@ -155,7 +155,7 @@ export class SimpleVectorDatabase extends VectorDBBase {
         config: SimpleVectorProviderConfig,
         contextUser: UserInfo | undefined,
     ): Promise<Array<Record<string, unknown>> | null> {
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: VectorDBBase has no per-request provider context; entity lookup is read-only metadata access
         const entity = md.Entities.find(e => e.Name === config.entityName);
         if (!entity) return null;
 

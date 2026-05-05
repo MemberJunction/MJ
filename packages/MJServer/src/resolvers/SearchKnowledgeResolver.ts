@@ -316,7 +316,7 @@ export class SearchKnowledgeResolver extends ResolverBase {
     private async loadAgent(agentID: string | undefined, contextUser: UserInfo): Promise<MJAIAgentEntity | null> {
         if (!agentID) return null;
         try {
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: ResolverBase has no bound IMetadataProvider; contextUser is the per-request scope
             const agent = await md.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', contextUser);
             const loaded = await agent.Load(agentID);
             return loaded ? agent : null;

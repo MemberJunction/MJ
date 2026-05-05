@@ -219,7 +219,7 @@ export class SearchScopeChildGridComponent implements OnDestroy {
     public async AddRow(): Promise<void> {
         if (this.Disabled || !this._parentID || !this.ChildEntityName) return;
         try {
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: child grid does not yet accept a Provider input — multi-provider threading is the team's separate Phase 6 effort
             const entity = await md.GetEntityObject<BaseEntity>(this.ChildEntityName);
             entity.Set(this.ParentFieldName, this._parentID);
             this.applyColumnDefaults(entity);

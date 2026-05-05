@@ -158,7 +158,7 @@ export class SearchService {
         ElapsedMs?: number;
         ErrorMessage?: string;
     }> {
-        const provider = Metadata.Provider;
+        const provider = Metadata.Provider; // global-provider-ok: streaming search service consumes the GraphQL channel of the global default provider
         if (!(provider instanceof GraphQLDataProvider)) {
             return throwError(() => new Error('GraphQL provider not available'));
         }
@@ -534,7 +534,7 @@ export class SearchService {
 
         const load = (async (): Promise<SearchScopeInfo[]> => {
             try {
-                const provider = Metadata.Provider;
+                const provider = Metadata.Provider; // global-provider-ok: scope discovery consumes the GraphQL channel of the global default provider
                 if (!(provider instanceof GraphQLDataProvider)) {
                     this.Scopes$.next([]);
                     return [];

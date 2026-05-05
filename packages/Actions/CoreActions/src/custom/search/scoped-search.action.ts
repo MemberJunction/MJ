@@ -461,7 +461,7 @@ export class ScopedSearchAction extends BaseAction {
 
     private async loadAgent(agentID: string, contextUser: UserInfo): Promise<MJAIAgentEntity | null> {
         try {
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: BaseAction has no bound IMetadataProvider; contextUser is the per-request scope
             const entity = await md.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', contextUser);
             const loaded = await entity.Load(agentID);
             if (!loaded) return null;
