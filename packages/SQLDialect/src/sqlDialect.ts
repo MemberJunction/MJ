@@ -184,6 +184,26 @@ export abstract class SQLDialect implements SQLParserDialect {
      */
     abstract QuoteSchema(schema: string, object: string): string;
 
+    /**
+     * Quotes a column alias used in `SELECT ... AS <alias>`. SQL Server is
+     * case-insensitive and accepts a bare identifier; PostgreSQL folds
+     * unquoted identifiers to lowercase, so we must quote the alias when the
+     * caller cares about preserving case (e.g. matching a TypeScript property
+     * name in the result row).
+     */
+    abstract QuoteColumnAlias(aliasName: string): string;
+
+    /**
+     * Quotes a value as a SQL string literal. Both SQL Server and PostgreSQL
+     * use single quotes with `''` doubling to escape internal apostrophes —
+     * this is concrete in the base class so callers don't reinvent the
+     * `value.replace(/'/g, "''")` pattern. Subclasses may override if a
+     * future dialect needs a different escape rule.
+     */
+    QuoteStringLiteral(value: string): string {
+        return `'${value.replace(/'/g, "''")}'`;
+    }
+
     // ─── Pagination ──────────────────────────────────────────────────
 
     /**
@@ -278,6 +298,22 @@ export abstract class SQLDialect implements SQLParserDialect {
      * SQL Server: CAST(expr AS NVARCHAR(MAX)), PostgreSQL: CAST(expr AS TEXT)
      */
     abstract CastToText(expr: string): string;
+
+    /**
+     * Returns a CAST to a bounded-width string type. Used when the result
+     * needs to be comparable against an indexed column (SQL Server cannot
+     * compare/index `NVARCHAR(MAX)`) or against a fixed-width text column
+     * such as MJ's `RecordID` (NVARCHAR(450) on SQL Server).
+     *
+     * Implemented by composing `ResolveAbstractType({ type: 'string', maxLength })`,
+     * which dialects already supply — SQL Server emits `NVARCHAR(N)` and
+     * PostgreSQL emits `VARCHAR(N)`. Defaults to MJ's standard 450-char
+     * width to match the cap on indexable string columns in SQL Server.
+     */
+    CastToBoundedString(expr: string, maxLength: number = 450): string {
+        const sqlType = this.ResolveAbstractType({ type: 'string', maxLength });
+        return `CAST(${expr} AS ${sqlType})`;
+    }
 
     /**
      * Returns a CAST-to-UUID expression.

@@ -88,18 +88,22 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
         return PostgreSQLDataProvider._pgDefaultPattern;
     }
 
+    /**
+     * Probes each child entity's BaseView (not BaseTable) so the runtime SQL
+     * identity — which has SELECT only on views — can execute the union. All
+     * identifier and string-literal formatting goes through the dialect.
+     */
     protected override BuildChildDiscoverySQL(childEntities: EntityInfo[], recordPKValue: string): string {
-        const safePKValue = recordPKValue.replace(/'/g, "''");
+        const pkValueLit = pgDialect.QuoteStringLiteral(recordPKValue);
+        const aliasName = pgDialect.QuoteColumnAlias('EntityName');
         const unionParts = childEntities
             .filter(child => child.PrimaryKeys.length > 0)
             .map(child => {
                 const schema = child.SchemaName || '__mj';
-                const table = child.BaseTable;
-                const pkName = child.PrimaryKeys[0].Name;
-                const safeName = child.Name.replace(/'/g, "''");
-                const safeSchema = pgDialect.QuoteSchema(schema, table);
-                const safePK = pgDialect.QuoteIdentifier(pkName);
-                return "SELECT '" + safeName + '\' AS "EntityName" FROM ' + safeSchema + ' WHERE ' + safePK + " = '" + safePKValue + "'";
+                const sourceRef = pgDialect.QuoteSchema(schema, child.BaseView);
+                const pkRef = pgDialect.QuoteIdentifier(child.PrimaryKeys[0].Name);
+                const nameLit = pgDialect.QuoteStringLiteral(child.Name);
+                return `SELECT ${nameLit} AS ${aliasName} FROM ${sourceRef} WHERE ${pkRef} = ${pkValueLit}`;
             });
         if (unionParts.length === 0) return '';
         return unionParts.join(' UNION ALL ');

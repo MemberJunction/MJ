@@ -168,6 +168,17 @@ export class PostgreSQLDialect extends SQLDialect {
         return `${schema}."${object}"`;
     }
 
+    /**
+     * PostgreSQL folds unquoted identifiers to lowercase, which would turn
+     * `AS EntityName` into the result column `entityname`. Quoting the
+     * alias preserves the requested casing for callers that key off the
+     * column name (e.g. when consuming results into a TypeScript object
+     * with a PascalCase property).
+     */
+    QuoteColumnAlias(aliasName: string): string {
+        return `"${aliasName}"`;
+    }
+
     // ─── Pagination ──────────────────────────────────────────────────
 
     LimitClause(limit: number, offset?: number): LimitClauseResult {

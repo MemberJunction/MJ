@@ -67,6 +67,14 @@ export interface ColumnDescriptionPromptResult {
   columnName: string;
   description: string;
   reasoning: string;
+  /** Optional enum/value-list verdict — present only for columns flagged as enum candidates */
+  valueList?: {
+    isEnum: boolean;
+    type: 'List' | 'ListOrUserEntry';
+    confidence: number;
+    values: string[];
+    reasoning: string;
+  };
 }
 
 export interface BackpropagationPromptResult {
