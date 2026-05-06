@@ -474,7 +474,14 @@ export class AlterTableRule implements IConversionRule {
       if (!colName.startsWith('"')) {
         colName = `"${colName}"`;
       }
-      return `ADD COLUMN ${colName}${rest}`;
+      // IF NOT EXISTS — idempotency by default: if the column already exists, no-op
+      // instead of erroring. This is the safe default for PG migrations because
+      // (a) Skyway/Flyway does not auto-wrap multi-statement scripts in transactions,
+      // so a partial-commit failure can leave the column already added on retry; and
+      // (b) CI's idempotency gate (Step 5b) re-applies each migration on top of the
+      // already-migrated DB and will fail without it. The original T-SQL ADD COLUMN
+      // also fails on duplicate, so IF NOT EXISTS is strictly more permissive.
+      return `ADD COLUMN IF NOT EXISTS ${colName}${rest}`;
     });
 
     if (colDefs.some(d => d === null)) return sql;

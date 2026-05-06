@@ -232,6 +232,22 @@ export abstract class CodeGenDatabaseProvider {
      */
     abstract get PlatformKey(): DatabasePlatform;
 
+    /**
+     * Whether this dialect can handle a base view that LEFT-JOINs itself to read
+     * a virtual computed column (e.g. `vwRecordChanges` joining to itself for the
+     * `RestoredFromID` virtual NameField lookup).
+     *
+     * Default: `true` — SQL Server's `CREATE VIEW` parser tolerates the self-
+     * reference because the view has already been declared by name when the body
+     * is checked. PostgreSQL's strict parser rejects with `42P01 undefined_table`
+     * because the view doesn't yet exist. PG override returns `false`, telling
+     * `sql_codegen.ts` to skip the self-virtual-NameField join entirely (matches
+     * the baseline-shipped view's shape — no `RestoredFrom` virtual column).
+     */
+    canSelfJoinViewForVirtualNameField(): boolean {
+        return true;
+    }
+
     // ─── DROP GUARDS ─────────────────────────────────────────────────────
 
     /**
@@ -373,6 +389,35 @@ export abstract class CodeGenDatabaseProvider {
     }
 
     /**
+     * Builds the EXEC parameter fragment(s) for a single field when calling a
+     * tolerant update SP. Returns an array of `@ParamName = value` strings.
+     *
+     * For most fields this is just `['@FieldName = @variable']`. But when
+     * `clearValue` is true and the field has a `_Clear` companion (see
+     * {@link needsClearCompanion}), an additional `@FieldName_Clear = 1` is
+     * prepended so the tolerant SP actually sets the column to NULL instead
+     * of treating the NULL parameter as "leave unchanged".
+     *
+     * **This is the single source of truth for the calling convention of
+     * tolerant update SPs.** All codepaths that generate EXEC calls to
+     * spUpdate — cascade-update cursors, future SP-to-SP calls, etc. —
+     * should use this method to stay in sync with the SP declaration logic
+     * in {@link generateCRUDParamString}.
+     *
+     * @param ef         The entity field being passed
+     * @param valueExpr  The SQL expression for the value (e.g. `@prefixed_var`)
+     * @param clearValue Whether this field is being explicitly set to NULL
+     */
+    protected buildExecParamForField(ef: EntityFieldInfo, valueExpr: string, clearValue: boolean = false): string[] {
+        const parts: string[] = [];
+        if (clearValue && this.needsClearCompanion(ef)) {
+            parts.push(`@${ef.CodeName}_Clear = 1`);
+        }
+        parts.push(`@${ef.CodeName} = ${valueExpr}`);
+        return parts;
+    }
+
+    /**
      * Returns true when this field should appear in the parameter list of
      * a CRUD routine for the given operation (`isUpdate` true → spUpdate,
      * false → spCreate). Pure decision logic shared across all dialects:
@@ -468,7 +513,7 @@ export abstract class CodeGenDatabaseProvider {
             // _Clear companion is emitted immediately before its main parameter
             // for nullable columns whose database default is non-NULL.
             if (!ef.IsPrimaryKey && this.needsClearCompanion(ef)) {
-                parts.push(`${dialect.ParameterRef(ef.CodeName + '_Clear')} bit${dialect.ParameterDefault('0')}`);
+                parts.push(`${dialect.ParameterRef(ef.CodeName + '_Clear')} ${dialect.BooleanParameterType()}${dialect.ParameterDefault(dialect.BooleanLiteral(false))}`);
             }
 
             const defaultClause = this.isParamRequired(ef, isUpdate) ? '' : nullDefault;
@@ -558,7 +603,7 @@ export abstract class CodeGenDatabaseProvider {
                 // Nullable with non-NULL default: _Clear companion CASE
                 const formattedDefault = this.formatInsertDefaultValue(ef);
                 const clearRef = dialect.ParameterRef(ef.CodeName + '_Clear');
-                parts.push(`CASE WHEN ${clearRef} = 1 THEN ${dialect.NullLiteral} ELSE ${dialect.IsNull(paramRef, formattedDefault)} END`);
+                parts.push(`CASE WHEN ${clearRef} = ${dialect.BooleanLiteral(true)} THEN ${dialect.NullLiteral} ELSE ${dialect.IsNull(paramRef, formattedDefault)} END`);
             } else {
                 // Plain pass-through (PKs, plain nullables, non-defaulted required fields)
                 parts.push(paramRef);
@@ -600,7 +645,7 @@ export abstract class CodeGenDatabaseProvider {
             const paramRef = dialect.ParameterRef(ef.CodeName);
             if (this.needsClearCompanion(ef)) {
                 const clearRef = dialect.ParameterRef(ef.CodeName + '_Clear');
-                parts.push(`${colRef} = CASE WHEN ${clearRef} = 1 THEN ${dialect.NullLiteral} ELSE ${dialect.IsNull(paramRef, colRef)} END`);
+                parts.push(`${colRef} = CASE WHEN ${clearRef} = ${dialect.BooleanLiteral(true)} THEN ${dialect.NullLiteral} ELSE ${dialect.IsNull(paramRef, colRef)} END`);
             } else {
                 parts.push(`${colRef} = ${dialect.IsNull(paramRef, colRef)}`);
             }

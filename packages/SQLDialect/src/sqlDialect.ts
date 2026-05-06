@@ -1,8 +1,14 @@
 import { DataTypeMap, MappedType } from './dataTypeMap.js';
 
 /**
- * Supported database platforms.
- * Extensible — add new platforms as support is implemented.
+ * Canonical database-platform value used across MJ. Single source of truth —
+ * config validation, env-var parsing, and runtime branching all compare
+ * against these literals. Aliases (`mssql`, `postgres`, `pg`) are not
+ * recognized.
+ *
+ * Lives in `@memberjunction/sql-dialect` (not `core` or `global`) because
+ * this is the package that owns SQL dialect semantics; every other package
+ * imports it from here (or from core, which re-exports for back-compat).
  */
 export type DatabasePlatform = 'sqlserver' | 'postgresql';
 
@@ -184,6 +190,26 @@ export abstract class SQLDialect implements SQLParserDialect {
      */
     abstract QuoteSchema(schema: string, object: string): string;
 
+    /**
+     * Quotes a column alias used in `SELECT ... AS <alias>`. SQL Server is
+     * case-insensitive and accepts a bare identifier; PostgreSQL folds
+     * unquoted identifiers to lowercase, so we must quote the alias when the
+     * caller cares about preserving case (e.g. matching a TypeScript property
+     * name in the result row).
+     */
+    abstract QuoteColumnAlias(aliasName: string): string;
+
+    /**
+     * Quotes a value as a SQL string literal. Both SQL Server and PostgreSQL
+     * use single quotes with `''` doubling to escape internal apostrophes —
+     * this is concrete in the base class so callers don't reinvent the
+     * `value.replace(/'/g, "''")` pattern. Subclasses may override if a
+     * future dialect needs a different escape rule.
+     */
+    QuoteStringLiteral(value: string): string {
+        return `'${value.replace(/'/g, "''")}'`;
+    }
+
     // ─── Pagination ──────────────────────────────────────────────────
 
     /**
@@ -202,10 +228,89 @@ export abstract class SQLDialect implements SQLParserDialect {
     abstract BooleanLiteral(value: boolean): string;
 
     /**
+     * Returns the SQL type token for a boolean parameter in a stored-procedure /
+     * function signature. Used by codegen when emitting tolerant-SP `_Clear`
+     * companion parameters and other boolean-typed params.
+     *
+     * SQL Server: `bit` (BIT type, 0/1)
+     * PostgreSQL: `boolean` (BOOLEAN type, TRUE/FALSE)
+     *
+     * Hardcoding `bit` everywhere worked on SQL Server but produced sprocs
+     * that PG rejected as `operator does not exist: boolean = integer` when
+     * the generated CASE compared a `bit`-declared parameter with `= 1`.
+     */
+    abstract BooleanParameterType(): string;
+
+    /**
      * Returns the current UTC timestamp expression.
      * SQL Server: GETUTCDATE(), PostgreSQL: NOW() AT TIME ZONE 'UTC'
      */
     abstract CurrentTimestampUTC(): string;
+
+    /**
+     * Wraps an expression in the dialect's lowercase function — used for
+     * case-insensitive comparison when authoring filters that must work on
+     * both SS (default case-insensitive collation) and PG (case-sensitive).
+     *
+     * Both SQL Server and PostgreSQL implement `LOWER()` per the ANSI SQL
+     * standard, so the default returns `LOWER(${expr})`. A subclass would
+     * override only for an exotic dialect (e.g. one that exposes `lc()` or
+     * needs a CAST first).
+     *
+     * Use this instead of hardcoding `LOWER(...)` in callers — keeps the
+     * dialect-aware SQL surface in one place per the SQLDialect contract.
+     */
+    LowerCase(expr: string): string {
+        return `LOWER(${expr})`;
+    }
+
+    // ─── Type-Name Sets (single source of truth for SQL ↔ category mapping) ──
+    //
+    // Each dialect declares the SQL type names it uses for each conceptual
+    // category. Cross-dialect predicates (`IsBooleanSQLType`, `IsStringSQLType`,
+    // etc. — see ./typeClassification.ts) union these lists so callers can
+    // classify any type name without knowing which platform produced it.
+    //
+    // Adding a new dialect = implementing these getters + registering with the
+    // classification module. NEVER hardcode lists of SQL type names in
+    // call sites — use the predicates.
+    //
+    // Returned names MUST be lowercase, trimmed, and match the strings that
+    // appear in `EntityField.Type` for that platform (i.e. what the platform's
+    // `information_schema` / `sys.columns` reports).
+
+    /** SQL type names this dialect uses for boolean columns. */
+    abstract get BooleanTypeNames(): readonly string[];
+
+    /** SQL type names this dialect uses for variable-length character / text columns. */
+    abstract get StringTypeNames(): readonly string[];
+
+    /** SQL type names this dialect uses for date / time / timestamp columns. */
+    abstract get DateTypeNames(): readonly string[];
+
+    /** SQL type names this dialect uses for integer columns (int, bigint, smallint, …). */
+    abstract get IntegerTypeNames(): readonly string[];
+
+    /** SQL type names this dialect uses for floating-point / decimal columns. */
+    abstract get FloatTypeNames(): readonly string[];
+
+    /** SQL type names this dialect uses for UUID / uniqueidentifier columns. */
+    abstract get UuidTypeNames(): readonly string[];
+
+    /** SQL type names this dialect uses for binary blob columns (image, bytea, varbinary). */
+    abstract get BinaryTypeNames(): readonly string[];
+
+    /** SQL type names this dialect uses for JSON / XML structured columns. */
+    abstract get JsonTypeNames(): readonly string[];
+
+    /** SQL type names this dialect uses for fixed-precision currency columns. */
+    abstract get CurrencyTypeNames(): readonly string[];
+
+    /** SQL type names this dialect uses for interval / duration columns. */
+    abstract get IntervalTypeNames(): readonly string[];
+
+    /** SQL type names this dialect uses for network address columns (inet, cidr, …). */
+    abstract get NetworkTypeNames(): readonly string[];
 
     /**
      * Returns a new UUID generation expression.
@@ -264,6 +369,22 @@ export abstract class SQLDialect implements SQLParserDialect {
      * SQL Server: CAST(expr AS NVARCHAR(MAX)), PostgreSQL: CAST(expr AS TEXT)
      */
     abstract CastToText(expr: string): string;
+
+    /**
+     * Returns a CAST to a bounded-width string type. Used when the result
+     * needs to be comparable against an indexed column (SQL Server cannot
+     * compare/index `NVARCHAR(MAX)`) or against a fixed-width text column
+     * such as MJ's `RecordID` (NVARCHAR(450) on SQL Server).
+     *
+     * Implemented by composing `ResolveAbstractType({ type: 'string', maxLength })`,
+     * which dialects already supply — SQL Server emits `NVARCHAR(N)` and
+     * PostgreSQL emits `VARCHAR(N)`. Defaults to MJ's standard 450-char
+     * width to match the cap on indexable string columns in SQL Server.
+     */
+    CastToBoundedString(expr: string, maxLength: number = 450): string {
+        const sqlType = this.ResolveAbstractType({ type: 'string', maxLength });
+        return `CAST(${expr} AS ${sqlType})`;
+    }
 
     /**
      * Returns a CAST-to-UUID expression.
@@ -426,6 +547,17 @@ export abstract class SQLDialect implements SQLParserDialect {
      * PostgreSQL: column->>'path' or jsonb_extract_path_text
      */
     abstract JsonExtract(column: string, path: string): string;
+
+    // ─── Migration Emission ──────────────────────────────────────────
+
+    /**
+     * Splits `${...}` inside SQL string literals so Flyway doesn't treat
+     * them as placeholders. Each `${name}` becomes a concat-split that
+     * round-trips back to `${name}` at execution but contains no adjacent
+     * `${` in the file text. Form is platform-specific (concat operator,
+     * truncation rules) — see each dialect's implementation.
+     */
+    abstract EscapeFlywayStringInterpolation(sql: string): string;
 
     // ─── Procedure / Function Calls ──────────────────────────────────
 

@@ -9,13 +9,14 @@ import {
     inject
 } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { Metadata, UserRoleInfo } from '@memberjunction/core';
+import { UserRoleInfo } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import {
     MJUserNotificationPreferenceEntity,
     UserInfoEngine
 } from '@memberjunction/core-entities';
 import { MJAuthBase } from '@memberjunction/ng-auth-services';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ThemeService, SharedService, ThemeDefinition } from '@memberjunction/ng-shared';
 import { ExplorerSettingsModule } from '@memberjunction/ng-explorer-settings';
 import { Subscription } from 'rxjs';
@@ -716,7 +717,7 @@ img.mj-profile__avatar { background: var(--mj-bg-surface-card); }
 }
     `]
 })
-export class ProfileDialogComponent implements OnInit, OnDestroy {
+export class ProfileDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy {
     @Output() CloseRequested = new EventEmitter<void>();
 
     @Input() AvatarUrl: string | null = null;
@@ -829,7 +830,7 @@ export class ProfileDialogComponent implements OnInit, OnDestroy {
         channel.saving = true;
         this.cdr.markForCheck();
 
-        const provider = Metadata.Provider;
+        const provider = this.ProviderToUse;
         const currentUser = provider?.CurrentUser;
         if (!provider || !currentUser) {
             channel.saving = false;
@@ -889,7 +890,7 @@ export class ProfileDialogComponent implements OnInit, OnDestroy {
     // ---------- private helpers ----------
 
     private populateIdentity(): void {
-        const provider = Metadata.Provider;
+        const provider = this.ProviderToUse;
         const user = provider?.CurrentUser;
         if (user) {
             const name = user.Name || `${user.FirstName ?? ''} ${user.LastName ?? ''}`.trim();
