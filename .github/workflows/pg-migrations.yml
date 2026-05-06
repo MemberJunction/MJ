@@ -54,17 +54,16 @@ jobs:
       - name: Validate PG migration filenames
         run: ./.github/scripts/validate-migration-filenames.sh migrations-pg/v5
 
-      # ─── Step 2: Build SQLConverter (needed for conversion + dedup) ──
-      # Install from root so workspace symlinks are set up, then use turbo
-      # with --filter to build SQLConverter AND its workspace deps
-      # (@memberjunction/sqlglot-ts, @memberjunction/sql-dialect) in the
-      # correct order. Building SQLConverter in isolation fails because
-      # tsc can't resolve the types of unbuilt workspace dependencies.
+      # ─── Step 2: Build MJCLI + SQLConverter ─────────────────────────
+      # MJCLI (`@memberjunction/cli`) is the production migration entry point —
+      # applying via `npx mj migrate` is what real users run, so CI runs the
+      # same path. Turbo builds MJCLI's full transitive dep graph, which also
+      # covers SQLConverter (so we don't need a second build step).
       - name: Install dependencies
         run: npm ci --ignore-scripts
 
-      - name: Build SQLConverter (and workspace deps)
-        run: npx turbo build --filter=@memberjunction/sql-converter
+      - name: Build MJ CLI + SQLConverter
+        run: npx turbo build --filter=@memberjunction/cli --filter=@memberjunction/sql-converter
 
       # ─── Step 3: Verify committed PG migration files exist ──────────
       # Previously this step regenerated all V*.pg.sql from T-SQL via the
@@ -101,8 +100,12 @@ jobs:
             echo "skip_apply=false" >> "$GITHUB_OUTPUT"
           fi
 
-      # ─── Step 4: Bootstrap PG (roles + helper procs) ────────────────
-      - name: Bootstrap PostgreSQL
+      # ─── Step 4: Bootstrap PG roles ─────────────────────────────────
+      # Skyway creates `__mj.flyway_schema_history` itself at startup, so the
+      # only thing CI has to seed is the cdp_* roles that migration GRANT
+      # statements reference. Skipping this would surface as
+      # `role "cdp_UI" does not exist` on the first GRANT.
+      - name: Bootstrap PostgreSQL roles
         env:
           PGHOST: localhost
           PGPORT: 5432
@@ -110,139 +113,55 @@ jobs:
           PGPASSWORD: testpass
           PGDATABASE: mj_pg_ci
         run: |
-          # Create roles referenced by migration GRANT statements, plus a stub
-          # of the Flyway/Skyway schema-history table. In real installs Skyway
-          # creates this table at startup before applying any V-migration; CI
-          # uses raw psql, so we have to mimic that bootstrap step. Without it,
-          # any view that joins __mj.flyway_schema_history (e.g.
-          # vwFlywayVersionHistoryParsed) fails to create with
-          # `relation "__mj.flyway_schema_history" does not exist`.
           psql <<'SQL'
           DO $$ BEGIN CREATE ROLE "cdp_UI" NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
           DO $$ BEGIN CREATE ROLE "cdp_Developer" NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
           DO $$ BEGIN CREATE ROLE "cdp_Integration" NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
           GRANT USAGE ON SCHEMA public TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
-          CREATE SCHEMA IF NOT EXISTS __mj;
-          CREATE TABLE IF NOT EXISTS __mj.flyway_schema_history (
-              installed_rank INTEGER NOT NULL PRIMARY KEY,
-              version VARCHAR(50),
-              description VARCHAR(200) NOT NULL,
-              type VARCHAR(20) NOT NULL,
-              script VARCHAR(1000) NOT NULL,
-              checksum INTEGER,
-              installed_by VARCHAR(100) NOT NULL,
-              installed_on TIMESTAMP NOT NULL DEFAULT now(),
-              execution_time INTEGER NOT NULL,
-              success BOOLEAN NOT NULL
-          );
           SQL
 
-      # ─── Step 5: Apply PG migrations ────────────────────────────────
-      - name: Apply PG migrations
+      # ─── Step 5: Apply PG migrations via mj migrate ─────────────────
+      # Real production installs invoke `mj migrate` which delegates to
+      # @memberjunction/skyway-postgres. CI now runs the same code path,
+      # so any regression in the production migrate flow (placeholder
+      # resolution, baseline auto-select, transaction semantics, schema-
+      # history checksum tracking) fails CI here. This replaced an
+      # earlier psql-based loop that hand-rolled Skyway's behavior and
+      # drifted from production over time.
+      - name: Apply PG migrations via mj migrate
         id: apply
         if: steps.verify_committed.outputs.skip_apply != 'true'
         env:
+          DB_TYPE: postgresql
+          DB_HOST: localhost
+          DB_PORT: '5432'
+          DB_USERNAME: postgres
+          DB_PASSWORD: testpass
+          DB_DATABASE: mj_pg_ci
+          # PG* equivalents kept so the verification + report steps below
+          # can still use raw psql for read-only schema introspection.
           PGHOST: localhost
           PGPORT: 5432
           PGUSER: postgres
           PGPASSWORD: testpass
           PGDATABASE: mj_pg_ci
         run: |
-          # Resolve Flyway/Skyway placeholders in all migration files before applying
-          # (Skyway does this at runtime; psql needs them pre-resolved)
-          for f in migrations-pg/v5/*.sql; do
-            sed -i 's/\${flyway:defaultSchema}/__mj/g' "$f"
-          done
+          npx mj migrate --dir=migrations-pg/v5 -v
 
-          # Apply baseline first
-          BASELINE=$(ls migrations-pg/v5/B*.pg.sql 2>/dev/null | head -1)
-          if [ -n "$BASELINE" ]; then
-            echo "Applying baseline: $(basename $BASELINE)"
-            psql -v ON_ERROR_STOP=0 -f "$BASELINE" > /dev/null 2>&1
-            BASELINE_EXIT=$?
-            if [ $BASELINE_EXIT -ne 0 ]; then
-              echo "::warning::Baseline had non-fatal errors (expected — some procs may fail on first run)"
-            fi
-          fi
-
-          # Determine baseline timestamp — V-migrations with timestamps <= baseline
-          # are already included in the baseline and should be skipped (same as Skyway behavior)
-          BASELINE_TS=""
-          if [ -n "$BASELINE" ]; then
-            BASELINE_NAME=$(basename "$BASELINE")
-            BASELINE_TS=$(echo "$BASELINE_NAME" | grep -oP '(?<=^B)\d{12}')
-            echo "Baseline timestamp: $BASELINE_TS — skipping V-migrations at or before this version"
-          fi
-
-          # Apply V-migrations in order, tracking results
-          TOTAL=0
-          PASSED=0
-          FAILED=0
-          SKIPPED_BASELINE=0
-          FAILED_FILES=""
-
-          for f in $(ls migrations-pg/v5/V*.sql 2>/dev/null | sort); do
-            FILENAME=$(basename "$f")
-
-            # Skip V-migrations that predate the baseline (their content is already in the baseline)
-            if [ -n "$BASELINE_TS" ]; then
-              V_TS=$(echo "$FILENAME" | grep -oP '(?<=^V)\d{12}')
-              if [ -n "$V_TS" ] && [ "$V_TS" -le "$BASELINE_TS" ]; then
-                SKIPPED_BASELINE=$((SKIPPED_BASELINE + 1))
-                continue
-              fi
-            fi
-
-            TOTAL=$((TOTAL + 1))
-
-            # Run with ON_ERROR_STOP to catch real failures
-            if psql -v ON_ERROR_STOP=1 -f "$f" > /dev/null 2>&1; then
-              PASSED=$((PASSED + 1))
-            else
-              # Some migrations call stored procs that may not exist yet (Metadata_Sync pattern)
-              # Check if this is a known Metadata_Sync failure (contains stored proc calls)
-              if grep -q 'SELECT __mj\."fn_create_\|SELECT __mj\."fn_update_\|SELECT __mj\."spCreate\|PERFORM __mj\.' "$f" 2>/dev/null; then
-                echo "::notice::$FILENAME — skipped (Metadata_Sync: needs CodeGen before stored proc calls work)"
-                PASSED=$((PASSED + 1))  # Count as passed — expected behavior
-              else
-                FAILED=$((FAILED + 1))
-                FAILED_FILES="$FAILED_FILES\n  $FILENAME"
-                echo "::error::$FILENAME — FAILED"
-                # Show the actual error
-                psql -v ON_ERROR_STOP=1 -f "$f" 2>&1 | tail -5
-              fi
-            fi
-          done
-
-          echo ""
-          echo "=== PG Migration Results ==="
-          echo "  Total:   $TOTAL"
-          echo "  Passed:  $PASSED"
-          echo "  Failed:  $FAILED"
-          echo "  Skipped (pre-baseline): $SKIPPED_BASELINE"
-
-          if [ $FAILED -gt 0 ]; then
-            echo "::error::$FAILED migration(s) failed:$FAILED_FILES"
-            exit 1
-          fi
-
-          echo "pg_passed=$PASSED" >> "$GITHUB_OUTPUT"
-          echo "pg_total=$TOTAL" >> "$GITHUB_OUTPUT"
-          echo "baseline_ts=$BASELINE_TS" >> "$GITHUB_OUTPUT"
+          # Read back the applied count from Skyway's history table for the
+          # parity report. `mj migrate` exits non-zero on any failure, so by
+          # the time we're here the apply has succeeded.
+          PG_APPLIED=$(psql -tA -c "SELECT COUNT(*) FROM __mj.flyway_schema_history WHERE success = TRUE" 2>/dev/null || echo "0")
+          echo "pg_applied=$PG_APPLIED" >> "$GITHUB_OUTPUT"
+          echo "Applied $PG_APPLIED migrations via mj migrate"
 
       # ─── Step 5b: Idempotency check (re-apply each V-migration) ─────
-      # After step 5 succeeds, re-apply each V-migration on top of the
-      # already-migrated database. Idempotent migrations succeed; non-
-      # idempotent ones fail with errors like "column already exists",
-      # "relation already exists", or UNIQUE constraint violations on
-      # hardcoded INSERTs.
-      #
-      # The check exists because real users hit non-idempotent migrations
-      # via two paths: (1) Skyway/Flyway repair after a partial-commit
-      # failure (psql doesn't auto-wrap multi-statement scripts in
-      # transactions, so a failure mid-file leaves prior statements
-      # committed); (2) restoring from a backup taken mid-migration.
+      # Skyway prevents re-runs at the framework level via flyway_schema_history,
+      # so this step uses raw psql to test a concern Skyway hides: a migration
+      # that gets re-applied after a partial-commit failure or a backup restored
+      # mid-migration. Idempotent migrations succeed; non-idempotent ones fail
+      # with errors like "column already exists", "relation already exists", or
+      # UNIQUE constraint violations on hardcoded INSERTs.
       #
       # Failure modes this catches that step 5 cannot:
       #   - ALTER TABLE ADD COLUMN without IF NOT EXISTS
@@ -270,28 +189,34 @@ jobs:
           PGUSER: postgres
           PGPASSWORD: testpass
           PGDATABASE: mj_pg_ci
-          BASELINE_TS: ${{ steps.apply.outputs.baseline_ts }}
         run: |
           echo "=== Idempotency check: re-applying each V-migration ==="
+
+          # Source-of-truth for "which migrations did Skyway actually apply" is
+          # flyway_schema_history. Pre-baseline files are absent from it, so we
+          # iterate just the rows Skyway recorded as success.
+          mapfile -t APPLIED_VERSIONS < <(psql -tA -c "SELECT version FROM __mj.flyway_schema_history WHERE success = TRUE AND type = 'SQL' ORDER BY installed_rank")
+
+          # The flyway_schema_history table has no `script` column for the
+          # filename, so we resolve filename by matching version prefix.
+
+          # Resolve the same Flyway placeholder Skyway resolves at apply time.
+          # We use a tmp directory so we don't mutate the working tree.
+          TMPDIR=$(mktemp -d)
+          for f in migrations-pg/v5/V*.sql; do
+            sed 's/\${flyway:defaultSchema}/__mj/g' "$f" > "$TMPDIR/$(basename "$f")"
+          done
 
           TOTAL=0
           IDEMPOTENT=0
           NOT_IDEMPOTENT=0
           ALLOWLISTED=0
-          SKIPPED_BASELINE=0
           NON_IDEMPOTENT_FILES=""
 
-          for f in $(ls migrations-pg/v5/V*.sql 2>/dev/null | sort); do
+          for version in "${APPLIED_VERSIONS[@]}"; do
+            f=$(ls "$TMPDIR"/V"$version"__*.sql 2>/dev/null | head -1)
+            [ -z "$f" ] && continue
             FILENAME=$(basename "$f")
-
-            # Skip pre-baseline V-migrations (same logic as first pass)
-            if [ -n "$BASELINE_TS" ]; then
-              V_TS=$(echo "$FILENAME" | grep -oP '(?<=^V)\d{12}')
-              if [ -n "$V_TS" ] && [ "$V_TS" -le "$BASELINE_TS" ]; then
-                SKIPPED_BASELINE=$((SKIPPED_BASELINE + 1))
-                continue
-              fi
-            fi
 
             # Skip files explicitly opted out via the allowlist marker
             if grep -qE '^[[:space:]]*--[[:space:]]*pg-test:non-idempotent\b' "$f"; then
@@ -301,7 +226,7 @@ jobs:
             fi
 
             # Skip Metadata_Sync-pattern files (sproc-call-driven, expected to
-            # require CodeGen between runs — same exception step 5 makes)
+            # require CodeGen between runs)
             if grep -q 'SELECT __mj\."fn_create_\|SELECT __mj\."fn_update_\|SELECT __mj\."spCreate\|PERFORM __mj\.' "$f" 2>/dev/null; then
               ALLOWLISTED=$((ALLOWLISTED + 1))
               echo "::notice::$FILENAME — skipped (Metadata_Sync: stored-proc-call file, idempotency depends on CodeGen state)"
@@ -327,7 +252,6 @@ jobs:
           echo "  Idempotent:    $IDEMPOTENT"
           echo "  NOT idempotent: $NOT_IDEMPOTENT"
           echo "  Allowlisted:   $ALLOWLISTED"
-          echo "  Pre-baseline:  $SKIPPED_BASELINE"
 
           {
             echo "## PG Migration Idempotency Report"
