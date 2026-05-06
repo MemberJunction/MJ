@@ -5,7 +5,6 @@ import path from 'path';
 
 import { SQLUtilityBase } from './sql';
 import { CodeGenDatabaseProvider, BaseViewGenerationContext, CascadeDeleteContext, CodeGenConnection, PhasedExecutionResult } from './codeGenDatabaseProvider';
-import { SQLServerCodeGenProvider } from './providers/sqlserver/SQLServerCodeGenProvider';
 
 import { autoIndexForeignKeys, configInfo, customSqlScripts, dbDatabase, mjCoreSchema, MAX_INDEX_NAME_LENGTH } from '../Config/config';
 import { ManageMetadataBase, ViewRegenEntry } from './manage-metadata';
@@ -13,7 +12,7 @@ import { ManageMetadataBase, ViewRegenEntry } from './manage-metadata';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { combineFiles, logIf, sortBySequenceAndCreatedAt } from '../Misc/util';
 import { MJEntityEntity } from '@memberjunction/core-entities';
-import { MJGlobal, UUIDsEqual, DatabasePlatform } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { SQLLogging } from '../Misc/sql_logging';
 import { TempBatchFile } from '../Misc/temp_batch_file';
 
@@ -32,40 +31,6 @@ export type SPType = typeof SPType[keyof typeof SPType];
  * databases. The base class implements support for SQL Server. In future versions of MJ, we will break out an abstract base class that has the skeleton of the logic and then the SQL Server version will be a sub-class
  * of that abstract base class and other databases will be sub-classes of the abstract base class as well.
  */
-/**
- * Creates the appropriate CodeGen database provider for the configured platform.
- * Falls back to SQLServerCodeGenProvider for any unrecognized value.
- *
- * @param platform Canonical {@link DatabasePlatform} value from configuration
- * @returns A CodeGenDatabaseProvider instance for the specified platform
- */
-function createCodeGenProvider(platform: DatabasePlatform): CodeGenDatabaseProvider {
-    switch (platform) {
-        case 'postgresql':
-            // Dynamic import is avoided - the PostgreSQL provider should be
-            // registered via MJGlobal ClassFactory for proper decoupling.
-            // For now, attempt to resolve from ClassFactory.
-            try {
-                const pgProvider = MJGlobal.Instance.ClassFactory.CreateInstance<CodeGenDatabaseProvider>(
-                    CodeGenDatabaseProvider,
-                    'PostgreSQLCodeGenProvider'
-                );
-                if (pgProvider) {
-                    return pgProvider;
-                }
-            } catch {
-                // Fall through to error
-            }
-            throw new Error(
-                'PostgreSQL CodeGen provider not found. Ensure @memberjunction/postgresql-dataprovider ' +
-                'is installed and its CodeGen provider is registered before running CodeGen.'
-            );
-        case 'sqlserver':
-        default:
-            return new SQLServerCodeGenProvider();
-    }
-}
-
 export class SQLCodeGenBase {
     protected _sqlUtilityObject: SQLUtilityBase = MJGlobal.Instance.ClassFactory.CreateInstance<SQLUtilityBase>(SQLUtilityBase)!;
     public get SQLUtilityObject(): SQLUtilityBase {
@@ -73,11 +38,20 @@ export class SQLCodeGenBase {
     }
 
     /**
-     * The database-specific code generation provider. Defaults to SQL Server.
-     * Override this property or set it before calling generation methods to use
-     * a different database platform (e.g., PostgreSQL).
+     * The database-specific code generation provider, resolved from
+     * `MJGlobal.ClassFactory` against the configured `dbPlatform`. Each provider
+     * (`SQLServerCodeGenProvider`, `PostgreSQLCodeGenProvider`, …) registers
+     * itself with `@RegisterClass(CodeGenDatabaseProvider, '<platform>')` —
+     * the canonical {@link DatabasePlatform} value as its key — so this
+     * single line picks up the right one without dialect-specific branching.
+     * Subclasses can override via `@RegisterClass(... priority)` to plug in
+     * customized codegen behavior, same hook every other MJ class uses.
      */
-    protected _dbProvider: CodeGenDatabaseProvider = createCodeGenProvider(configInfo.dbPlatform);
+    protected _dbProvider: CodeGenDatabaseProvider =
+        MJGlobal.Instance.ClassFactory.CreateInstance<CodeGenDatabaseProvider>(
+            CodeGenDatabaseProvider,
+            configInfo.dbPlatform,
+        )!;
     public get DBProvider(): CodeGenDatabaseProvider {
         return this._dbProvider;
     }

@@ -21,8 +21,12 @@ const pgDialect = new PostgreSQLDialect();
  * PostgreSQL implementation of the CodeGen database provider.
  * Generates PostgreSQL-native DDL for views, CRUD functions, triggers, indexes,
  * full-text search, permissions, and other database objects.
+ *
+ * Registered with `MJGlobal.ClassFactory` against the canonical `'postgresql'`
+ * platform key — `SQLCodeGenBase` resolves this provider via
+ * `ClassFactory.CreateInstance(CodeGenDatabaseProvider, configInfo.dbPlatform)`.
  */
-@RegisterClass(CodeGenDatabaseProvider, 'PostgreSQLCodeGenProvider')
+@RegisterClass(CodeGenDatabaseProvider, 'postgresql')
 export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
     /** @inheritdoc */
     get Dialect(): SQLDialect {

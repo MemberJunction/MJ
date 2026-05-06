@@ -135,9 +135,15 @@ jobs:
           DB_TYPE: postgresql
           DB_HOST: localhost
           DB_PORT: '5432'
-          DB_USERNAME: postgres
-          DB_PASSWORD: testpass
           DB_DATABASE: mj_pg_ci
+          # MJCLI reads credentials from CODEGEN_DB_USERNAME / CODEGEN_DB_PASSWORD
+          # (see packages/MJCLI/src/config.ts:27-28) — NOT the generic
+          # DB_USERNAME / DB_PASSWORD other parts of the stack use. Setting only
+          # DB_USERNAME / DB_PASSWORD would leave MJCLI seeing empty creds and
+          # failing with "Database credentials are missing or empty" before the
+          # migrate even starts.
+          CODEGEN_DB_USERNAME: postgres
+          CODEGEN_DB_PASSWORD: testpass
           # PG* equivalents kept so the verification + report steps below
           # can still use raw psql for read-only schema introspection.
           PGHOST: localhost
