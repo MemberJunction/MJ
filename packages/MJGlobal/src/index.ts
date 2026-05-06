@@ -8,7 +8,6 @@ export * from './DeepDiff'
 export * from './ClassUtils'
 export * from './util/PatternUtils';
 export * from './util/UUIDUtils';
-export * from './util/DBPlatform';
 export * from './ValidationTypes'
 export * from './JSONValidator'
 export * from './SafeExpressionEvaluator'

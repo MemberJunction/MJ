@@ -1,11 +1,16 @@
 import { DataTypeMap, MappedType } from './dataTypeMap.js';
-import type { DatabasePlatform } from '@memberjunction/global';
 
-// `DatabasePlatform` is defined in @memberjunction/global so dialect, core,
-// codegen, and every other package that branches on platform share one
-// canonical type. Re-exported here for existing
-// `import { DatabasePlatform } from '@memberjunction/sql-dialect'` callsites.
-export type { DatabasePlatform } from '@memberjunction/global';
+/**
+ * Canonical database-platform value used across MJ. Single source of truth —
+ * config validation, env-var parsing, and runtime branching all compare
+ * against these literals. Aliases (`mssql`, `postgres`, `pg`) are not
+ * recognized.
+ *
+ * Lives in `@memberjunction/sql-dialect` (not `core` or `global`) because
+ * this is the package that owns SQL dialect semantics; every other package
+ * imports it from here (or from core, which re-exports for back-compat).
+ */
+export type DatabasePlatform = 'sqlserver' | 'postgresql';
 
 /**
  * Abstract field type used by SchemaEngine to describe columns

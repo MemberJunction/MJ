@@ -17,7 +17,8 @@ import type { RequestHandler, Request, Response, NextFunction } from 'express';
 import { DatabaseProviderBase } from '@memberjunction/core';
 import { SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { Metadata } from '@memberjunction/core';
-import { UUIDsEqual, resolveDbPlatformFromEnv } from '@memberjunction/global';
+import { UUIDsEqual } from '@memberjunction/global';
+import { resolveDbPlatformFromEnv } from '@memberjunction/core';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 
 /**

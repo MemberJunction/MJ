@@ -12,6 +12,9 @@ vi.mock('tree-kill', () => ({
 
 vi.mock('@memberjunction/global', () => ({
     RegisterClass: () => (target: unknown) => target,
+}));
+
+vi.mock('@memberjunction/core', () => ({
     resolveDbPlatformFromEnv: vi.fn().mockReturnValue(undefined),
 }));
 

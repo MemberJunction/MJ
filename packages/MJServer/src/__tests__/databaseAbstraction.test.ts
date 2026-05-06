@@ -92,6 +92,20 @@ vi.mock('@memberjunction/core', () => ({
   LogStatus: vi.fn(),
   DatabasePlatform: {},
   SetProvider: vi.fn(),
+  // The function lives in core but the surrounding mock blocks the real
+  // import. Inline the real implementation so the env-var-handling tests
+  // below exercise the genuine behavior (they're testing this function).
+  resolveDbPlatformFromEnv: (envVarName: string = 'DB_PLATFORM'): 'sqlserver' | 'postgresql' | undefined => {
+    const raw = process.env[envVarName];
+    if (raw === undefined) return undefined;
+    const normalized = raw.trim().toLowerCase();
+    if (normalized === '') return undefined;
+    if (normalized === 'sqlserver' || normalized === 'postgresql') return normalized;
+    throw new Error(
+      `Invalid ${envVarName} value '${raw}'. Must be 'sqlserver' or 'postgresql' (case-insensitive). ` +
+        `Legacy aliases ('mssql', 'postgres', 'pg') and the legacy env var DB_TYPE are no longer supported.`,
+    );
+  },
 }));
 
 vi.mock('@memberjunction/sqlserver-dataprovider', () => ({
@@ -120,7 +134,7 @@ import {
 // module load time, which is too heavy for a unit test. Re-derive the same
 // logic here using the canonical helper from @memberjunction/global so the
 // behavior under test stays in lockstep with production.
-import { resolveDbPlatformFromEnv, DatabasePlatform } from '@memberjunction/global';
+import { resolveDbPlatformFromEnv, DatabasePlatform } from '@memberjunction/core';
 function getDbType(): DatabasePlatform {
   return resolveDbPlatformFromEnv() ?? 'sqlserver';
 }

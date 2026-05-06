@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { simpleGit, SimpleGit } from 'simple-git';
 import { z } from 'zod';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
-import { resolveDbPlatformFromEnv } from '@memberjunction/global';
+import { resolveDbPlatformFromEnv } from '@memberjunction/core';
 
 export type MJConfig = z.infer<typeof mjConfigSchema>;
 

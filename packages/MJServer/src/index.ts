@@ -4,8 +4,8 @@ dotenv.config({ quiet: true });
 
 import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
-import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView } from '@memberjunction/core';
-import { MJGlobal, MJEventType, UUIDsEqual, resolveDbPlatformFromEnv } from '@memberjunction/global';
+import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView, resolveDbPlatformFromEnv } from '@memberjunction/core';
+import { MJGlobal, MJEventType, UUIDsEqual } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
 import { default as BodyParser } from 'body-parser';

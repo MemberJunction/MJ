@@ -10,7 +10,8 @@ vi.mock('cosmiconfig', () => ({
 vi.mock('@memberjunction/core', () => ({
     LogError: vi.fn(),
     LogStatus: vi.fn(),
-    SeverityType: { Info: 'Info', Warning: 'Warning', Critical: 'Critical' }
+    SeverityType: { Info: 'Info', Warning: 'Warning', Critical: 'Critical' },
+    resolveDbPlatformFromEnv: vi.fn().mockReturnValue(undefined),
 }));
 
 vi.mock('@memberjunction/global', () => ({
@@ -22,7 +23,6 @@ vi.mock('@memberjunction/global', () => ({
         }
     },
     RegisterClass: () => (target: unknown) => target,
-    resolveDbPlatformFromEnv: vi.fn().mockReturnValue(undefined),
 }));
 
 vi.mock('@memberjunction/config', () => ({
