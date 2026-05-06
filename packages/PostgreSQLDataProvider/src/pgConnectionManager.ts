@@ -130,11 +130,20 @@ export class PGConnectionManager {
      * Closes the connection pool and releases all connections.
      * If the pool was shared via InitializeWithExistingPool(), this is a no-op
      * since the pool lifecycle is managed by the original owner.
+     *
+     * Race-safe: clears `_pool` *before* awaiting `pool.end()` so concurrent
+     * callers (e.g. parallel `Refresh()` → `Config()` → `Initialize()` paths
+     * during `mj sync push --parallel-batch-size > 1`) can't both observe a
+     * non-null `_pool` and both invoke `pool.end()` on the same pool, which
+     * `pg-pool` rejects with `Called end on pool more than once`. The local
+     * `pool` reference keeps the awaited end() bound to the correct instance.
      */
     async Close(): Promise<void> {
-        if (this._pool && this._ownsPool) {
-            await this._pool.end();
-        }
+        const pool = this._pool;
+        const ownsPool = this._ownsPool;
         this._pool = null;
+        if (pool && ownsPool) {
+            await pool.end();
+        }
     }
 }

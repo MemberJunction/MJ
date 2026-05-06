@@ -216,8 +216,12 @@ export class GetDataResolver {
     async GetAllEntities(
     @Ctx() context: AppContext
     ): Promise<SimpleEntityResultType> {
-        try { 
-            const md = GetReadOnlyProvider(context.providers);
+        try {
+            // System-key contexts often only have a read-write provider configured;
+            // without the fallback, GetReadOnlyProvider returns null and `md.Entities`
+            // throws TypeError. Every other resolver passes this option — adding it
+            // here brings the call into line with the rest of the codebase.
+            const md = GetReadOnlyProvider(context.providers, { allowFallbackToReadWrite: true });
             const result = md.Entities.map((e) => {
                 return { 
                     ID: e.ID, 

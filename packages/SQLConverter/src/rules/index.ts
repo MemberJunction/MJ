@@ -47,7 +47,7 @@ export { PostgreSQLHeaderBuilder, getHeaderBuilder, registerHeaderBuilder } from
 export type { DialectHeaderBuilder } from './DialectHeaderBuilder.js';
 
 // Centralized type resolution
-export { resolveType, resolveInlineType, parseTypeString } from './TypeResolver.js';
+export { resolveType, resolveInlineType, parseTypeString, MJ_OVERRIDES } from './TypeResolver.js';
 export type { ParsedType } from './TypeResolver.js';
 
 // Post-processor

@@ -7,6 +7,7 @@ import {
     FullTextSearchResult,
 } from '../../codeGenDatabaseProvider';
 import { SQLServerDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
+import { RegisterClass } from '@memberjunction/global';
 import { sortBySequenceAndCreatedAt } from '../../../Misc/util';
 import { dbDatabase } from '../../../Config/config';
 import { MSSQLConnection } from '../../../Config/db-connection';
@@ -21,9 +22,13 @@ const ssDialect = new SQLServerDialect();
  * Generates SQL Server-native DDL for views, stored procedures, triggers, indexes,
  * full-text search, permissions, and other database objects.
  *
- * This provider extracts the SQL Server-specific generation logic that was previously
- * hardcoded in SQLCodeGenBase, enabling the orchestrator to be database-agnostic.
+ * Registered with `MJGlobal.ClassFactory` against the canonical `'sqlserver'`
+ * platform key — `SQLCodeGenBase` resolves this provider via
+ * `ClassFactory.CreateInstance(CodeGenDatabaseProvider, configInfo.dbPlatform)`.
+ * Downstream packages can subclass and re-register with higher priority to
+ * override codegen behavior — same extension hook every other MJ class uses.
  */
+@RegisterClass(CodeGenDatabaseProvider, 'sqlserver')
 export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
     /** @inheritdoc */
     get Dialect(): SQLDialect {

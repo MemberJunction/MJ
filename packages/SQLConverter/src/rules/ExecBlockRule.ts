@@ -473,7 +473,14 @@ export class ExecBlockRule implements IConversionRule {
     const out: string[] = [];
 
     if (comments.trim()) out.push(comments);
-    out.push('DO $$');
+    // Use a tagged dollar-quote ($mj$) instead of the bare $$ delimiter.
+    // Metadata_Sync output stores raw JS / React component source code in
+    // NVARCHAR(MAX) variables, and that source frequently contains literal
+    // `$$` (e.g. `**Total Revenue:** $${X}`). With a bare $$ DO block, PG's
+    // parser sees the inner `$$` and prematurely terminates the dollar-quote,
+    // producing `syntax error at or near "{"` (or similar). Tagged delimiter
+    // matches PG's documented recommendation and executes identically.
+    out.push('DO $mj$');
     out.push('DECLARE');
     for (const v of vars) {
       out.push(`  ${v.name} ${v.pgType};`);
@@ -503,7 +510,7 @@ export class ExecBlockRule implements IConversionRule {
     const paramList = exec.params.map(p => `${p.paramName} := ${p.valueExpr}`).join(', ');
     out.push(`  PERFORM ${exec.procRef}(${paramList});`);
 
-    out.push('END $$;');
+    out.push('END $mj$;');
     return out.join('\n') + '\n';
   }
 

@@ -232,6 +232,22 @@ export abstract class CodeGenDatabaseProvider {
      */
     abstract get PlatformKey(): DatabasePlatform;
 
+    /**
+     * Whether this dialect can handle a base view that LEFT-JOINs itself to read
+     * a virtual computed column (e.g. `vwRecordChanges` joining to itself for the
+     * `RestoredFromID` virtual NameField lookup).
+     *
+     * Default: `true` — SQL Server's `CREATE VIEW` parser tolerates the self-
+     * reference because the view has already been declared by name when the body
+     * is checked. PostgreSQL's strict parser rejects with `42P01 undefined_table`
+     * because the view doesn't yet exist. PG override returns `false`, telling
+     * `sql_codegen.ts` to skip the self-virtual-NameField join entirely (matches
+     * the baseline-shipped view's shape — no `RestoredFrom` virtual column).
+     */
+    canSelfJoinViewForVirtualNameField(): boolean {
+        return true;
+    }
+
     // ─── DROP GUARDS ─────────────────────────────────────────────────────
 
     /**
@@ -497,7 +513,7 @@ export abstract class CodeGenDatabaseProvider {
             // _Clear companion is emitted immediately before its main parameter
             // for nullable columns whose database default is non-NULL.
             if (!ef.IsPrimaryKey && this.needsClearCompanion(ef)) {
-                parts.push(`${dialect.ParameterRef(ef.CodeName + '_Clear')} bit${dialect.ParameterDefault('0')}`);
+                parts.push(`${dialect.ParameterRef(ef.CodeName + '_Clear')} ${dialect.BooleanParameterType()}${dialect.ParameterDefault(dialect.BooleanLiteral(false))}`);
             }
 
             const defaultClause = this.isParamRequired(ef, isUpdate) ? '' : nullDefault;
@@ -587,7 +603,7 @@ export abstract class CodeGenDatabaseProvider {
                 // Nullable with non-NULL default: _Clear companion CASE
                 const formattedDefault = this.formatInsertDefaultValue(ef);
                 const clearRef = dialect.ParameterRef(ef.CodeName + '_Clear');
-                parts.push(`CASE WHEN ${clearRef} = 1 THEN ${dialect.NullLiteral} ELSE ${dialect.IsNull(paramRef, formattedDefault)} END`);
+                parts.push(`CASE WHEN ${clearRef} = ${dialect.BooleanLiteral(true)} THEN ${dialect.NullLiteral} ELSE ${dialect.IsNull(paramRef, formattedDefault)} END`);
             } else {
                 // Plain pass-through (PKs, plain nullables, non-defaulted required fields)
                 parts.push(paramRef);
@@ -629,7 +645,7 @@ export abstract class CodeGenDatabaseProvider {
             const paramRef = dialect.ParameterRef(ef.CodeName);
             if (this.needsClearCompanion(ef)) {
                 const clearRef = dialect.ParameterRef(ef.CodeName + '_Clear');
-                parts.push(`${colRef} = CASE WHEN ${clearRef} = 1 THEN ${dialect.NullLiteral} ELSE ${dialect.IsNull(paramRef, colRef)} END`);
+                parts.push(`${colRef} = CASE WHEN ${clearRef} = ${dialect.BooleanLiteral(true)} THEN ${dialect.NullLiteral} ELSE ${dialect.IsNull(paramRef, colRef)} END`);
             } else {
                 parts.push(`${colRef} = ${dialect.IsNull(paramRef, colRef)}`);
             }
