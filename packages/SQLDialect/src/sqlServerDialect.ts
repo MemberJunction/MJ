@@ -206,6 +206,17 @@ export class SQLServerDialect extends SQLDialect {
         return `CAST(${expr} AS NVARCHAR(MAX))`;
     }
 
+    /**
+     * SQL Server-specific Flyway escape. Interleaves a `CAST(N'' AS NVARCHAR(MAX))`
+     * between the split halves so the running T-SQL concat chain inherits
+     * NVARCHAR(MAX) precedence. Without the cast, `N'a' + N'b'` produces
+     * NVARCHAR(a+b) capped at NVARCHAR(4000) and silently truncates anything
+     * past 4,000 characters.
+     */
+    EscapeFlywayStringInterpolation(sql: string): string {
+        return sql.replaceAll(/\$\{/g, "$$'+CAST(N'' AS NVARCHAR(MAX))+N'{");
+    }
+
     CastToUUID(expr: string): string {
         return `CAST(${expr} AS UNIQUEIDENTIFIER)`;
     }

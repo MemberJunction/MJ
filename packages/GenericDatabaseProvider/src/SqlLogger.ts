@@ -12,6 +12,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { format as formatSql } from 'sql-formatter';
 import { ensureRegExps } from '@memberjunction/global';
+import { SQLDialect, SQLServerDialect } from '@memberjunction/sql-dialect';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 
 /**
@@ -31,12 +32,20 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
   private _fileHandle: fs.promises.FileHandle | null = null;
   private _disposed: boolean = false;
   private _compiledPatterns: RegExp[] | undefined;
+  private _dialect: SQLDialect;
 
-  constructor(id: string, filePath: string, options: SqlLoggingOptions = {}) {
+  /**
+   * @param dialect - The SQL dialect to use for platform-specific SQL emission
+   *   (e.g. Flyway placeholder escaping, batch separators). Defaults to SQL
+   *   Server when not provided so existing callers and tests keep working
+   *   without immediately threading a dialect through every call site.
+   */
+  constructor(id: string, filePath: string, options: SqlLoggingOptions = {}, dialect: SQLDialect = new SQLServerDialect()) {
     this.id = id;
     this.filePath = filePath;
     this.startTime = new Date();
     this.options = options;
+    this._dialect = dialect;
 
     // Compile patterns once during construction
     if (options.filterPatterns && options.filterPatterns.length > 0) {
@@ -460,18 +469,12 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
 
   /**
    * Escapes ${...} patterns within SQL string literals to prevent Flyway from interpreting them as placeholders.
-   * Converts ${templateVariable} to $' + CAST(N'' AS NVARCHAR(MAX)) + N'{templateVariable} within string literals.
-   *
-   * The CAST(N'' AS NVARCHAR(MAX)) interleaver is required for correctness, not just style. SQL Server string
-   * concatenation of NVARCHAR(N) literals (even with the N prefix on every operand) produces a result type of
-   * NVARCHAR(N+M), capped at NVARCHAR(4000). Once the running concatenation exceeds 4,000 characters, SQL Server
-   * silently truncates anything beyond — there is no error, no warning, and the destination variable being
-   * declared NVARCHAR(MAX) does NOT save you because the truncation happens on the right-hand side before
-   * assignment. Interleaving an explicit CAST(N'' AS NVARCHAR(MAX)) at every split forces NVARCHAR(MAX)
-   * precedence on the entire chain, preserving the full literal value regardless of size.
+   * The actual escape form is platform-specific and delegated to the configured `SQLDialect` — see
+   * `SQLDialect.EscapeFlywayStringInterpolation` for the rationale (NVARCHAR(4000) truncation on SQL Server,
+   * different concat operator on PostgreSQL, etc.).
    */
   private _escapeFlywaySyntaxInStrings(sql: string): string {
-    return sql.replaceAll(/\$\{/g, "$$'+CAST(N'' AS NVARCHAR(MAX))+N'{");
+    return this._dialect.EscapeFlywayStringInterpolation(sql);
   }
 
 }

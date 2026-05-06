@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { GenericDatabaseProvider } from '../GenericDatabaseProvider';
 import { SqlLoggingSessionImpl } from '../SqlLogger';
+import { SQLServerDialect, PostgreSQLDialect } from '@memberjunction/sql-dialect';
 
 // Mock sql-formatter (used by SqlLoggingSessionImpl)
 vi.mock('sql-formatter', () => ({
@@ -764,9 +765,16 @@ describe('SqlLoggingSessionImpl', () => {
     });
 
     describe('_escapeFlywaySyntaxInStrings', () => {
-        // Access private method for testing via prototype
-        const escapeFlyway = (sql: string) => {
-            const session = new SqlLoggingSessionImpl('t', '/tmp/t.sql');
+        // Access private method for testing via prototype.
+        // The escape form is delegated to the configured SQLDialect; the helper
+        // accepts a dialect so each test can pin its platform explicitly.
+        // Defaults to SQLServerDialect to match the historical (and most-used)
+        // call site.
+        const escapeFlyway = (
+            sql: string,
+            dialect: SQLServerDialect | PostgreSQLDialect = new SQLServerDialect()
+        ) => {
+            const session = new SqlLoggingSessionImpl('t', '/tmp/t.sql', {}, dialect);
             return (session as Record<string, CallableFunction>)._escapeFlywaySyntaxInStrings(sql);
         };
 
@@ -819,6 +827,30 @@ describe('SqlLoggingSessionImpl', () => {
 
             // And the original ${...} must still be defeated for Flyway —
             // i.e. no adjacent `${` should remain in the output.
+            expect(result).not.toMatch(/\$\{/);
+        });
+
+        // Cross-dialect coverage. Proves the escape is plumbed through the
+        // SQLDialect abstraction and that swapping dialects yields the
+        // platform-correct form (no NVARCHAR/CAST/N-prefix bleed-through into
+        // the PostgreSQL output). This guards against future regressions
+        // where someone hard-codes SQL Server syntax in the shared session
+        // implementation.
+        it('uses PostgreSQL-specific concat (||) and no NVARCHAR(MAX) cast when the dialect is PostgreSQL', () => {
+            const result = escapeFlyway(
+                "INSERT INTO t VALUES ('${someVar}')",
+                new PostgreSQLDialect()
+            );
+
+            // PostgreSQL TEXT concat has no length cap — the split uses ||
+            // and no cast is needed.
+            expect(result).toContain("$'||'{someVar}");
+
+            // No SQL Server-only constructs should appear in PG output.
+            expect(result).not.toContain("CAST(N'' AS NVARCHAR(MAX))");
+            expect(result).not.toContain("+N'{");
+
+            // And the original ${...} must still be defeated for Flyway.
             expect(result).not.toMatch(/\$\{/);
         });
     });
