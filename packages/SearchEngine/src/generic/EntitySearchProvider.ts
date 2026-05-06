@@ -35,7 +35,7 @@ export class EntitySearchProvider extends BaseSearchProvider {
      * keeps running in SQL Server until completion (we can't cancel mssql Requests
      * here), but other entities' results still land for the user.
      */
-    private static readonly PER_ENTITY_TIMEOUT_MS = 5_000;
+    private static readonly PER_ENTITY_TIMEOUT_MS = 30_000;
 
     /**
      * Execute an entity search across all entities with AllowUserSearchAPI=true.
