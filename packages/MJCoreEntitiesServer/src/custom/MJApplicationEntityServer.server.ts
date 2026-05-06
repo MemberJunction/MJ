@@ -195,8 +195,10 @@ export class MJApplicationEntityServer extends MJApplicationEntity {
         try {
             LogStatus(`Creating UserApplication records for all users for application: ${this.Name}`);
 
-            // Use the entity's provider
-            const md = this.ProviderToUse as any as IMetadataProvider;
+            // Use the entity's provider for metadata operations. ProviderToUse is
+            // typed as IEntityDataProvider; the concrete DatabaseProviderBase also
+            // implements IMetadataProvider, so we narrow through unknown.
+            const md = this.ProviderToUse as unknown as IMetadataProvider;
             const rv = this.RunViewProviderToUse;
 
             // Load all data in a single RunViews call.
@@ -204,6 +206,8 @@ export class MJApplicationEntityServer extends MJApplicationEntity {
             // Server (BIT) but fails on PostgreSQL (BOOLEAN) with `operator does not
             // exist: boolean = integer`. Filtering client-side avoids the dialect
             // dependency for a small, indexed table.
+            type UserRow = { ID: string; Name: string; IsActive: boolean };
+            type UserAppRow = { ID: string; UserID: string; ApplicationID: string; Sequence: number };
             const [usersResult, allUserAppsResult] = await rv.RunViews([
                 {
                     EntityName: 'MJ: Users',
@@ -225,15 +229,15 @@ export class MJApplicationEntityServer extends MJApplicationEntity {
                 throw new Error(`Failed to load user applications: ${allUserAppsResult.ErrorMessage}`);
             }
 
-            const users = (usersResult.Results || []).filter((u: any) => u.IsActive);
-            const allUserApps = allUserAppsResult.Results || [];
+            const users = ((usersResult.Results ?? []) as UserRow[]).filter(u => u.IsActive);
+            const allUserApps = (allUserAppsResult.Results ?? []) as UserAppRow[];
 
             LogStatus(`Found ${users.length} active users`);
 
             // For each user, create a UserApplication record
             for (const user of users) {
                 // Filter existing UserApplications for this user/app combination (client-side)
-                const existingForUserApp = allUserApps.filter((ua: any) =>
+                const existingForUserApp = allUserApps.filter(ua =>
                     UUIDsEqual(ua.UserID, user.ID) && UUIDsEqual(ua.ApplicationID, this.ID)
                 );
 
