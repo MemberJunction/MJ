@@ -92,9 +92,14 @@ vi.mock('@memberjunction/core', () => ({
   LogStatus: vi.fn(),
   DatabasePlatform: {},
   SetProvider: vi.fn(),
-  // The function lives in core but the surrounding mock blocks the real
-  // import. Inline the real implementation so the env-var-handling tests
-  // below exercise the genuine behavior (they're testing this function).
+}));
+
+// `resolveDbPlatformFromEnv` lives in `@memberjunction/generic-database-provider`
+// (server-only — it touches `process.env`). The real package would pull in
+// AI / actions / queue transitively, which is too heavy for a unit-test mock.
+// Inline the actual implementation here so the env-var-handling tests below
+// exercise the genuine behavior (they're testing this function).
+vi.mock('@memberjunction/generic-database-provider', () => ({
   resolveDbPlatformFromEnv: (envVarName: string = 'DB_PLATFORM'): 'sqlserver' | 'postgresql' | undefined => {
     const raw = process.env[envVarName];
     if (raw === undefined) return undefined;
@@ -134,7 +139,8 @@ import {
 // module load time, which is too heavy for a unit test. Re-derive the same
 // logic here using the canonical helper from @memberjunction/global so the
 // behavior under test stays in lockstep with production.
-import { resolveDbPlatformFromEnv, DatabasePlatform } from '@memberjunction/core';
+import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
+import type { DatabasePlatform } from '@memberjunction/core';
 function getDbType(): DatabasePlatform {
   return resolveDbPlatformFromEnv() ?? 'sqlserver';
 }

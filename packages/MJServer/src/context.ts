@@ -18,7 +18,7 @@ import { DatabaseProviderBase } from '@memberjunction/core';
 import { SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { Metadata } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
-import { resolveDbPlatformFromEnv } from '@memberjunction/core';
+import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 
 /**

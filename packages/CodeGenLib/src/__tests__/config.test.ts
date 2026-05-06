@@ -11,7 +11,6 @@ vi.mock('@memberjunction/core', () => ({
     LogError: vi.fn(),
     LogStatus: vi.fn(),
     SeverityType: { Info: 'Info', Warning: 'Warning', Critical: 'Critical' },
-    resolveDbPlatformFromEnv: vi.fn().mockReturnValue(undefined),
 }));
 
 vi.mock('@memberjunction/global', () => ({
@@ -23,6 +22,10 @@ vi.mock('@memberjunction/global', () => ({
         }
     },
     RegisterClass: () => (target: unknown) => target,
+}));
+
+vi.mock('@memberjunction/generic-database-provider', () => ({
+    resolveDbPlatformFromEnv: vi.fn().mockReturnValue(undefined),
 }));
 
 vi.mock('@memberjunction/config', () => ({

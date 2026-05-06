@@ -8,7 +8,8 @@ import { z } from 'zod';
 import { cosmiconfigSync } from 'cosmiconfig';
 import path from 'path';
 import { logStatus } from '../Misc/status_logging';
-import { LogError, resolveDbPlatformFromEnv, DatabasePlatform } from '@memberjunction/core';
+import { LogError, DatabasePlatform } from '@memberjunction/core';
+import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
 
 /** Global configuration explorer for finding MJ config files */

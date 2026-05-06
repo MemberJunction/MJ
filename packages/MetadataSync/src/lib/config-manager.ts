@@ -10,7 +10,7 @@
 import { cosmiconfigSync } from 'cosmiconfig';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
 import { BaseSingleton } from '@memberjunction/global';
-import { resolveDbPlatformFromEnv } from '@memberjunction/core';
+import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { MJConfig } from '../config';
 
 const ENV_DB_PLATFORM = resolveDbPlatformFromEnv();
