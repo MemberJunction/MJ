@@ -242,6 +242,37 @@ export class PostgreSQLDialect extends SQLDialect {
         return "(NOW() AT TIME ZONE 'UTC')";
     }
 
+    // ─── Type-Name Sets ──────────────────────────────────────────────
+    // PostgreSQL's column-type names as they appear in `pg_catalog` /
+    // `information_schema` / `EntityField.Type` for entities backed by PG.
+    // Includes both the formal name (`character varying`) and the internal
+    // / short alias (`varchar`, `bpchar`) since both surface depending on
+    // the metadata source.
+
+    private static readonly _BooleanTypeNames = ['bool', 'boolean'] as const;
+    private static readonly _StringTypeNames = ['text', 'varchar', 'char', 'character', 'character varying', 'bpchar', 'citext', 'name'] as const;
+    private static readonly _DateTypeNames = ['date', 'time', 'time without time zone', 'time with time zone', 'timestamp', 'timestamptz', 'timestamp with time zone', 'timestamp without time zone'] as const;
+    private static readonly _IntegerTypeNames = ['int', 'int2', 'int4', 'int8', 'integer', 'bigint', 'smallint', 'serial', 'bigserial', 'smallserial', 'oid'] as const;
+    private static readonly _FloatTypeNames = ['decimal', 'numeric', 'real', 'double precision', 'float4', 'float8'] as const;
+    private static readonly _UuidTypeNames = ['uuid'] as const;
+    private static readonly _BinaryTypeNames = ['bytea'] as const;
+    private static readonly _JsonTypeNames = ['json', 'jsonb', 'xml'] as const;
+    private static readonly _CurrencyTypeNames = ['money'] as const;
+    private static readonly _IntervalTypeNames = ['interval'] as const;
+    private static readonly _NetworkTypeNames = ['inet', 'cidr', 'macaddr', 'macaddr8'] as const;
+
+    get BooleanTypeNames(): readonly string[]  { return PostgreSQLDialect._BooleanTypeNames; }
+    get StringTypeNames(): readonly string[]   { return PostgreSQLDialect._StringTypeNames; }
+    get DateTypeNames(): readonly string[]     { return PostgreSQLDialect._DateTypeNames; }
+    get IntegerTypeNames(): readonly string[]  { return PostgreSQLDialect._IntegerTypeNames; }
+    get FloatTypeNames(): readonly string[]    { return PostgreSQLDialect._FloatTypeNames; }
+    get UuidTypeNames(): readonly string[]     { return PostgreSQLDialect._UuidTypeNames; }
+    get BinaryTypeNames(): readonly string[]   { return PostgreSQLDialect._BinaryTypeNames; }
+    get JsonTypeNames(): readonly string[]     { return PostgreSQLDialect._JsonTypeNames; }
+    get CurrencyTypeNames(): readonly string[] { return PostgreSQLDialect._CurrencyTypeNames; }
+    get IntervalTypeNames(): readonly string[] { return PostgreSQLDialect._IntervalTypeNames; }
+    get NetworkTypeNames(): readonly string[]  { return PostgreSQLDialect._NetworkTypeNames; }
+
     NewUUID(): string {
         return 'gen_random_uuid()';
     }

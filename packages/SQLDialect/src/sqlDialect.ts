@@ -243,6 +243,71 @@ export abstract class SQLDialect implements SQLParserDialect {
     abstract CurrentTimestampUTC(): string;
 
     /**
+     * Wraps an expression in the dialect's lowercase function — used for
+     * case-insensitive comparison when authoring filters that must work on
+     * both SS (default case-insensitive collation) and PG (case-sensitive).
+     *
+     * Both SQL Server and PostgreSQL implement `LOWER()` per the ANSI SQL
+     * standard, so the default returns `LOWER(${expr})`. A subclass would
+     * override only for an exotic dialect (e.g. one that exposes `lc()` or
+     * needs a CAST first).
+     *
+     * Use this instead of hardcoding `LOWER(...)` in callers — keeps the
+     * dialect-aware SQL surface in one place per the SQLDialect contract.
+     */
+    LowerCase(expr: string): string {
+        return `LOWER(${expr})`;
+    }
+
+    // ─── Type-Name Sets (single source of truth for SQL ↔ category mapping) ──
+    //
+    // Each dialect declares the SQL type names it uses for each conceptual
+    // category. Cross-dialect predicates (`IsBooleanSQLType`, `IsStringSQLType`,
+    // etc. — see ./typeClassification.ts) union these lists so callers can
+    // classify any type name without knowing which platform produced it.
+    //
+    // Adding a new dialect = implementing these getters + registering with the
+    // classification module. NEVER hardcode lists of SQL type names in
+    // call sites — use the predicates.
+    //
+    // Returned names MUST be lowercase, trimmed, and match the strings that
+    // appear in `EntityField.Type` for that platform (i.e. what the platform's
+    // `information_schema` / `sys.columns` reports).
+
+    /** SQL type names this dialect uses for boolean columns. */
+    abstract get BooleanTypeNames(): readonly string[];
+
+    /** SQL type names this dialect uses for variable-length character / text columns. */
+    abstract get StringTypeNames(): readonly string[];
+
+    /** SQL type names this dialect uses for date / time / timestamp columns. */
+    abstract get DateTypeNames(): readonly string[];
+
+    /** SQL type names this dialect uses for integer columns (int, bigint, smallint, …). */
+    abstract get IntegerTypeNames(): readonly string[];
+
+    /** SQL type names this dialect uses for floating-point / decimal columns. */
+    abstract get FloatTypeNames(): readonly string[];
+
+    /** SQL type names this dialect uses for UUID / uniqueidentifier columns. */
+    abstract get UuidTypeNames(): readonly string[];
+
+    /** SQL type names this dialect uses for binary blob columns (image, bytea, varbinary). */
+    abstract get BinaryTypeNames(): readonly string[];
+
+    /** SQL type names this dialect uses for JSON / XML structured columns. */
+    abstract get JsonTypeNames(): readonly string[];
+
+    /** SQL type names this dialect uses for fixed-precision currency columns. */
+    abstract get CurrencyTypeNames(): readonly string[];
+
+    /** SQL type names this dialect uses for interval / duration columns. */
+    abstract get IntervalTypeNames(): readonly string[];
+
+    /** SQL type names this dialect uses for network address columns (inet, cidr, …). */
+    abstract get NetworkTypeNames(): readonly string[];
+
+    /**
      * Returns a new UUID generation expression.
      * SQL Server: NEWID(), PostgreSQL: gen_random_uuid()
      */

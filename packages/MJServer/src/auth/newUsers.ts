@@ -110,15 +110,16 @@ export class NewUserBase {
                         LogStatus(`Created User Application ${application.Name} for new user ${user.Name}`);
 
                         const rv: RunView = new RunView();
-                        // Filter on ApplicationID in SQL (server-side), then on DefaultForNewUser
-                        // in JS (client-side). Doing the boolean check in SQL via "= 1" works on
-                        // SQL Server (BIT) but fails on PostgreSQL (BOOLEAN) with `operator does
-                        // not exist: boolean = integer`. A typical Application Entity table is
-                        // small enough that JS-side filtering is negligible, and this avoids
-                        // dialect-specific SQL.
+                        // Boolean literal goes through the active provider's dialect:
+                        //   SQL Server emits `= 1`, PostgreSQL emits `= TRUE`.
+                        // This keeps the filter server-side (no client-side `.filter()`
+                        // pass) and uses the single source-of-truth helper instead of
+                        // hardcoded SQL that is correct on one dialect but breaks on
+                        // the other.
+                        const trueLit = provider.Dialect.BooleanLiteral(true);
                         const rvResult: RunViewResult<MJApplicationEntityEntityType> = await rv.RunView({
                             EntityName: 'MJ: Application Entities',
-                            ExtraFilter: `ApplicationID = '${application.ID}'`,
+                            ExtraFilter: `ApplicationID = '${application.ID}' AND DefaultForNewUser = ${trueLit}`,
                         }, contextUser);
 
                         if(!rvResult.Success){
@@ -126,7 +127,7 @@ export class NewUserBase {
                             continue;
                         }
 
-                        const defaultForNewUserEntities = rvResult.Results.filter(e => e.DefaultForNewUser);
+                        const defaultForNewUserEntities = rvResult.Results;
 
                         LogStatus(`Creating ${defaultForNewUserEntities.length} User Application Entities for User Application ${application.Name} for new user ${user.Name}`);
 

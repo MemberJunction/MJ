@@ -13,6 +13,8 @@ import fs from 'fs-extra';
 import crypto from 'crypto';
 import axios from 'axios';
 import { EntityInfo, Metadata, RunView, BaseEntity, CompositeKey, UserInfo } from '@memberjunction/core';
+import { GetDialect, IsDateSQLType, IsUuidSQLType } from '@memberjunction/sql-dialect';
+import { resolveDbPlatformFromEnv } from '@memberjunction/global';
 import { EntityConfig, FolderConfig } from '../config';
 import { JsonPreprocessor } from './json-preprocessor';
 import { BatchContextIndex, BatchContextStub } from './batch-context-index';
@@ -589,19 +591,17 @@ export class SyncEngine {
         // every subsequent statement fails with `current transaction is
         // aborted` — the regression that wedged compound `@lookup:` filters
         // on entities like `MJ: Entity Fields` (EntityID + Name).
-        const sqlType = (field.Type || '').trim().toLowerCase();
+        //
+        // Type-class checks AND the lowercase wrapper come from
+        // @memberjunction/sql-dialect so the list of "what is a date/uuid type"
+        // and the SQL form of LOWER() both live in one place across MJ.
         const isStringType = field.NeedsQuotes
-          && sqlType !== 'uniqueidentifier'
-          && sqlType !== 'uuid'
-          && !sqlType.startsWith('date')
-          && !sqlType.startsWith('timestamp')
-          && sqlType !== 'time'
-          && sqlType !== 'datetime'
-          && sqlType !== 'datetimeoffset'
-          && sqlType !== 'datetime2'
-          && sqlType !== 'smalldatetime';
+          && !IsUuidSQLType(field.Type)
+          && !IsDateSQLType(field.Type);
         if (isStringType) {
-          filterParts.push(`LOWER(${fieldName}) = LOWER('${fieldValue.replace(/'/g, "''")}')`);
+          const dialect = GetDialect(resolveDbPlatformFromEnv() ?? 'sqlserver');
+          const escaped = fieldValue.replace(/'/g, "''");
+          filterParts.push(`${dialect.LowerCase(fieldName)} = ${dialect.LowerCase(`'${escaped}'`)}`);
         } else {
           filterParts.push(`${fieldName} = ${quotes}${fieldValue.replace(/'/g, "''")}${quotes}`);
         }

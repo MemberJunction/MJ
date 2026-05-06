@@ -3,6 +3,7 @@ import path from 'path';
 import fastGlob from 'fast-glob';
 import { BaseEntity, Metadata, UserInfo, EntitySaveOptions } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
+import { IsStringSQLType } from '@memberjunction/sql-dialect';
 import { SyncEngine, RecordData, DeferrableLookupError, SyncResolutionCollector, BatchContext } from '../lib/sync-engine';
 import { BatchContextIndex, BatchContextStub } from '../lib/batch-context-index';
 import { loadEntityConfig, loadSyncConfig, EntityConfig, SyncConfig } from '../config';
@@ -152,20 +153,15 @@ export class PushService {
    * Used to decide if an `@file:` resolved JSON object should be JSON.stringify'd
    * before going to entity.Set — naked objects on string columns become
    * `[object Object]` via toString().
+   *
+   * Delegates to `@memberjunction/sql-dialect`'s `IsStringSQLType` so the list
+   * of string-shaped type names is single-sourced. Also accepts the synthetic
+   * value `'string'` because EntityField.Type can carry the TS-side type label
+   * for virtual fields rather than a real SQL type.
    */
   private isTextLikeColumn(sqlType: string): boolean {
-    const t = (sqlType || '').trim().toLowerCase();
-    return (
-      t === 'text'
-      || t === 'ntext'
-      || t === 'varchar'
-      || t === 'nvarchar'
-      || t === 'char'
-      || t === 'nchar'
-      || t === 'character'
-      || t === 'character varying'
-      || t === 'string'
-    );
+    const t = (sqlType ?? '').trim().toLowerCase();
+    return t === 'string' || IsStringSQLType(t);
   }
 
   async push(options: PushOptions, callbacks?: PushCallbacks): Promise<PushResult> {

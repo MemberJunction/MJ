@@ -195,23 +195,24 @@ export class MJApplicationEntityServer extends MJApplicationEntity {
         try {
             LogStatus(`Creating UserApplication records for all users for application: ${this.Name}`);
 
-            // Use the entity's provider for metadata operations. ProviderToUse is
-            // typed as IEntityDataProvider; the concrete DatabaseProviderBase also
-            // implements IMetadataProvider, so we narrow through unknown.
-            const md = this.ProviderToUse as unknown as IMetadataProvider;
+            // Use the entity's provider for metadata + dialect operations.
+            // ProviderToUse is typed as IEntityDataProvider; the concrete
+            // DatabaseProviderBase also implements IMetadataProvider AND
+            // exposes the dialect via `.Dialect`, so we narrow through unknown.
+            const provider = this.ProviderToUse as unknown as DatabaseProviderBase;
+            const md = provider as unknown as IMetadataProvider;
             const rv = this.RunViewProviderToUse;
 
-            // Load all data in a single RunViews call.
-            // IsActive filter is applied in JS post-fetch — `IsActive = 1` works on SQL
-            // Server (BIT) but fails on PostgreSQL (BOOLEAN) with `operator does not
-            // exist: boolean = integer`. Filtering client-side avoids the dialect
-            // dependency for a small, indexed table.
-            type UserRow = { ID: string; Name: string; IsActive: boolean };
+            // Filter active users server-side using the dialect's boolean
+            // literal — emits `= 1` on SS, `= TRUE` on PG. Avoids loading
+            // every user just to drop the inactive ones.
+            type UserRow = { ID: string; Name: string };
             type UserAppRow = { ID: string; UserID: string; ApplicationID: string; Sequence: number };
+            const trueLit = provider.Dialect.BooleanLiteral(true);
             const [usersResult, allUserAppsResult] = await rv.RunViews([
                 {
                     EntityName: 'MJ: Users',
-                    ExtraFilter: '',
+                    ExtraFilter: `IsActive = ${trueLit}`,
                     ResultType: 'simple'
                 },
                 {
@@ -229,7 +230,7 @@ export class MJApplicationEntityServer extends MJApplicationEntity {
                 throw new Error(`Failed to load user applications: ${allUserAppsResult.ErrorMessage}`);
             }
 
-            const users = ((usersResult.Results ?? []) as UserRow[]).filter(u => u.IsActive);
+            const users = (usersResult.Results ?? []) as UserRow[];
             const allUserApps = (allUserAppsResult.Results ?? []) as UserAppRow[];
 
             LogStatus(`Found ${users.length} active users`);

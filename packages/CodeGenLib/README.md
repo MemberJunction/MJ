@@ -319,21 +319,30 @@ All configuration is validated at startup using Zod schemas, with clear error me
 | `excludeSchemas` / `excludeTables` | Filter schemas and tables from metadata discovery |
 | `entityNaming` | Controls ALL CAPS normalization and compound word splitting for entity/field names |
 | `additionalSchemaInfo` | Path to JSON file with soft PK/FK definitions and schema prefix rules |
-| `dbType` / `dbPlatform` | Database backend selector. See **Database Platform Selection** below. |
+| `dbPlatform` | Database backend selector. See **Database Platform Selection** below. |
 
-### Database Platform Selection (`dbType` / `dbPlatform`)
+### Database Platform Selection (`dbPlatform`)
 
-CodeGenLib historically used `dbType: 'mssql' \| 'postgresql'`. `@memberjunction/cli` uses `dbPlatform: 'sqlserver' \| 'postgresql'`. As of this release both are accepted and reconciled before validation:
+CodeGenLib accepts a single canonical `dbPlatform` field with two values:
 
-| You set | What CodeGen does |
+```javascript
+// mj.config.cjs
+module.exports = {
+    dbPlatform: 'sqlserver',     // or 'postgresql'
+    // …
+};
+```
+
+| Value | Backend |
 |---|---|
-| `dbType` only | Derives `dbPlatform` for symmetry. |
-| `dbPlatform` only | Derives `dbType` (`sqlserver` → `mssql`, `postgresql` → `postgresql`). |
-| Both, in agreement | Keeps both. |
-| Both, conflicting | Throws a clear error at startup — silent dialect mismatch is never tolerated. |
-| Neither | Default `dbType: 'mssql'` applies. |
+| `'sqlserver'` (default) | Microsoft SQL Server |
+| `'postgresql'` | PostgreSQL 14+ |
 
-This means a config file with **only `dbPlatform: 'postgresql'`** now correctly drives PG codegen. Previously CodeGen silently fell through to its `dbType: 'mssql'` default and produced MSSQL output against a PG database.
+The same vocabulary is used by `@memberjunction/cli`, `@memberjunction/server`, and every other MJ package that needs to branch on platform. There is **one** name (`dbPlatform`) and **one** pair of values (`'sqlserver'`, `'postgresql'`) — no aliases (`'mssql'`, `'postgres'`, `'pg'`) are recognized in config or env vars.
+
+If `dbPlatform` is not set in `mj.config.cjs`, CodeGen reads `DB_TYPE` from the environment (also restricted to the canonical pair) and falls back to `'sqlserver'`.
+
+> **Migration note (was `dbType`):** Earlier versions used `dbType: 'mssql' | 'postgresql'`. That field has been removed. Rename `dbType: 'mssql'` to `dbPlatform: 'sqlserver'` (and `dbType: 'postgresql'` to `dbPlatform: 'postgresql'`) in your `mj.config.cjs`. Same for `DB_TYPE=mssql` in `.env` → `DB_TYPE=sqlserver`.
 
 ### Entity Naming Normalization
 

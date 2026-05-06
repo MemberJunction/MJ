@@ -3,6 +3,19 @@ import type { EntityInfo } from "./entityInfo";
 import type { IEntityDataProvider, IMetadataProvider } from "./interfaces";
 import { LogError } from "./logging";
 import type { UserInfo } from "./securityInfo";
+import {
+    IsBooleanSQLType,
+    IsBinarySQLType,
+    IsCurrencySQLType,
+    IsDateSQLType,
+    IsFloatSQLType,
+    IsIntegerSQLType,
+    IsIntervalSQLType,
+    IsJsonSQLType,
+    IsNetworkSQLType,
+    IsStringSQLType,
+    IsUuidSQLType,
+} from "@memberjunction/sql-dialect";
 
 /**
  * Minimal structural shape consulted by `RunMaybeSerial`. Anything that exposes
@@ -15,41 +28,17 @@ export interface TransactionAwareProvider {
 }
 
 /**
- * Returns the TypeScript type that corresponds to the SQL type passed in
+ * Returns the TypeScript type that corresponds to the SQL type passed in.
+ *
+ * Classification is delegated to `@memberjunction/sql-dialect` so adding a new
+ * dialect or column type is a one-stop change in the dialect class — never a
+ * grep-and-edit through every util / codegen / sync site.
  */
 export function TypeScriptTypeFromSQLType(sqlType: string): 'string' | 'number' | 'boolean' | 'Date' {
-    switch (sqlType.trim().toLowerCase()) {
-        case 'text':
-        case 'char':
-        case 'character': // PG returns this for CHAR(N) via information_schema
-        case 'bpchar':    // PG returns this for CHAR(N) via pg_catalog (internal type name — "blank-padded char")
-        case 'character varying': // PG returns this for VARCHAR(N)
-        case 'varchar':
-        case 'ntext':
-        case 'nchar':
-        case 'nvarchar':
-        case 'citext': // PostgreSQL case-insensitive text
-        case 'uniqueidentifier': //treat this as a string
-        case 'uuid': // PostgreSQL UUID type
-        case 'bytea': // PostgreSQL binary data, treat as string (base64)
-            return 'string';
-        case 'datetime':
-        case 'datetime2':
-        case 'datetimeoffset':
-        case 'date':
-        case 'time':
-        case 'timestamp': // PostgreSQL timestamp
-        case 'timestamptz': // PostgreSQL timestamp with time zone
-        case 'timestamp with time zone': // PostgreSQL full type name
-        case 'timestamp without time zone': // PostgreSQL full type name
-            return 'Date';
-        case 'bit':
-        case 'bool': // PostgreSQL boolean type (internal name)
-        case 'boolean': // PostgreSQL boolean type (full name)
-            return 'boolean';
-        default:
-            return 'number';      
-    }
+    if (IsStringSQLType(sqlType) || IsUuidSQLType(sqlType) || IsBinarySQLType(sqlType)) return 'string';
+    if (IsDateSQLType(sqlType)) return 'Date';
+    if (IsBooleanSQLType(sqlType)) return 'boolean';
+    return 'number';
 }
 
 export function TypeScriptTypeFromSQLTypeWithNullableOption(sqlType: string, addNullableOption: boolean): 'string' | 'string | null' | 'number' | 'number | null' | 'boolean' | 'boolean | null' | 'Date' | 'Date | null' {
@@ -93,70 +82,66 @@ export function FormatValue(sqlType: string,
 }
 
 // internal only function used by FormatValue() to do the actual formatting
-function FormatValueInternal(sqlType: string, 
-                             value: any, 
-                             decimals: number = 2, 
-                             currency: string = 'USD', 
-                             maxLength: number = 0, 
+function FormatValueInternal(sqlType: string,
+                             value: any,
+                             decimals: number = 2,
+                             currency: string = 'USD',
+                             // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                             maxLength: number = 0,
+                             // eslint-disable-next-line @typescript-eslint/no-unused-vars
                              trailingChars: string = "...") {
     if (value === null || value === undefined) {
         return value;
     }
 
-    switch (sqlType.trim().toLowerCase()) {
-        case 'money':
-        case 'numeric': // PostgreSQL equivalent of money when used for currency
-            if (isNaN(value))
-                return value;
-            else
-                return new Intl.NumberFormat(undefined, { style: 'currency',
-                                                    currency: currency,
-                                                    minimumFractionDigits: decimals,
-                                                    maximumFractionDigits: decimals}).format(value);
-        case 'date':
-        case 'time':
-        case 'datetime':
-        case 'datetime2':
-        case 'datetimeoffset':
-        case 'timestamp': // PostgreSQL timestamp without time zone
-        case 'timestamptz': // PostgreSQL timestamp with time zone
-        case 'timestamp with time zone': // PostgreSQL full type name
-        case 'timestamp without time zone': // PostgreSQL full type name
-        case 'interval': // PostgreSQL interval type — format as string
-          let date = new Date(value);
-          return new Intl.DateTimeFormat().format(date);
-        case 'decimal':
-        case 'real':
-        case 'float':
-        case 'double precision': // PostgreSQL double precision
-          return new Intl.NumberFormat(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(value);
-        case 'int':
-        case 'integer': // PostgreSQL integer
-        case 'bigint': // PostgreSQL / SQL Server large integer
-        case 'smallint': // PostgreSQL / SQL Server small integer
-        case 'serial': // PostgreSQL auto-increment integer
-        case 'bigserial': // PostgreSQL auto-increment big integer
-          return new Intl.NumberFormat(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(value);
-        case 'percent':
-          return new Intl.NumberFormat(undefined, { style: 'percent',
-                                                    minimumFractionDigits: decimals,
-                                                    maximumFractionDigits: decimals}).format(value);
-        case 'boolean': // PostgreSQL boolean
-        case 'bool': // PostgreSQL boolean short form
-        case 'bit': // SQL Server boolean
-          return value ? 'true' : 'false';
-        case 'uuid': // PostgreSQL UUID
-        case 'uniqueidentifier': // SQL Server UUID
-        case 'text': // PostgreSQL unlimited text
-        case 'json': // PostgreSQL JSON
-        case 'jsonb': // PostgreSQL binary JSON
-        case 'bytea': // PostgreSQL binary data
-        case 'inet': // PostgreSQL network address
-        case 'cidr': // PostgreSQL network address range
-          return String(value);
-        default:
-          return value;
-    }    
+    // Special-case the synthetic 'percent' type — not a real SQL type, just a
+    // formatting hint callers pass in via FormatValue().
+    if (sqlType.trim().toLowerCase() === 'percent') {
+        return new Intl.NumberFormat(undefined, {
+            style: 'percent',
+            minimumFractionDigits: decimals,
+            maximumFractionDigits: decimals,
+        }).format(value);
+    }
+
+    if (IsCurrencySQLType(sqlType)) {
+        if (isNaN(value)) return value;
+        return new Intl.NumberFormat(undefined, {
+            style: 'currency',
+            currency,
+            minimumFractionDigits: decimals,
+            maximumFractionDigits: decimals,
+        }).format(value);
+    }
+
+    if (IsDateSQLType(sqlType) || IsIntervalSQLType(sqlType)) {
+        return new Intl.DateTimeFormat().format(new Date(value));
+    }
+
+    if (IsFloatSQLType(sqlType)) {
+        return new Intl.NumberFormat(undefined, {
+            minimumFractionDigits: decimals,
+            maximumFractionDigits: decimals,
+        }).format(value);
+    }
+
+    if (IsIntegerSQLType(sqlType)) {
+        return new Intl.NumberFormat(undefined, {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0,
+        }).format(value);
+    }
+
+    if (IsBooleanSQLType(sqlType)) {
+        return value ? 'true' : 'false';
+    }
+
+    if (IsUuidSQLType(sqlType) || IsStringSQLType(sqlType) || IsJsonSQLType(sqlType)
+        || IsBinarySQLType(sqlType) || IsNetworkSQLType(sqlType)) {
+        return String(value);
+    }
+
+    return value;
 }
 
 
