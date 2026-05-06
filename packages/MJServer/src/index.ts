@@ -5,6 +5,7 @@ dotenv.config({ quiet: true });
 import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
 import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView } from '@memberjunction/core';
+import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
@@ -58,15 +59,19 @@ import { ServerExtensionLoader, ServerExtensionConfig } from '@memberjunction/se
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
 
 /**
- * Returns the configured database platform type based on the DB_TYPE environment variable.
- * Defaults to 'sqlserver' for backward compatibility.
+ * Returns the configured database platform from the `DB_PLATFORM` environment
+ * variable, falling back to `'sqlserver'` when the env var is unset. An
+ * unrecognized non-empty value (typo, legacy alias) throws — silent fallback
+ * is the bug we don't want, because it routes the wrong provider against a
+ * real database.
+ *
+ * Implementation note: the actual env-parsing lives in
+ * `@memberjunction/global` (single source of truth across MJCLI, MJServer,
+ * CodeGenLib). This wrapper keeps the public `getDbType()` symbol that
+ * MJServer consumers (and the broader stack) already import.
  */
 export function getDbType(): DatabasePlatform {
-    const dbType = process.env.DB_TYPE?.toLowerCase();
-    if (dbType === 'postgresql' || dbType === 'postgres' || dbType === 'pg') {
-        return 'postgresql';
-    }
-    return 'sqlserver';
+    return resolveDbPlatformFromEnv() ?? 'sqlserver';
 }
 
 export { MaxLength } from 'class-validator';

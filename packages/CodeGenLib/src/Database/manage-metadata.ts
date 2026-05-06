@@ -1,7 +1,7 @@
 import { SQLDialect } from '@memberjunction/sql-dialect';
 import { CodeGenConnection, CodeGenTransaction, CodeGenQueryResult, CodeGenDatabaseProvider } from './codeGenDatabaseProvider';
 import { SQLServerCodeGenProvider } from './providers/sqlserver/SQLServerCodeGenProvider';
-import { configInfo, currentWorkingDirectory, dbType, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
+import { configInfo, currentWorkingDirectory, dbPlatform, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
 import { ApplicationInfo, CodeNameFromString, EntityFieldExtendedType, EntityFieldInfo, EntityInfo, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
 import { MJApplicationEntity, MJEntityFieldSchema } from "@memberjunction/core-entities";
 import { logError, logMessage, logStatus, startSpinner, updateSpinner, succeedSpinner } from "../Misc/status_logging";
@@ -240,17 +240,17 @@ export class ManageMetadataBase {
 
    // ─── Database Provider Infrastructure ─────────────────────────────
    // All platform-specific SQL generation is delegated to the CodeGenDatabaseProvider.
-   // The provider is lazily initialized from the dbType() config on first access.
+   // The provider is lazily initialized from the dbPlatform() config on first access.
 
    private _dbProvider: CodeGenDatabaseProvider | null = null;
 
    /**
     * Returns the CodeGenDatabaseProvider for the current database platform.
-    * Lazily initialized from dbType() configuration.
+    * Lazily initialized from dbPlatform() configuration.
     */
    protected get dbProvider(): CodeGenDatabaseProvider {
       if (!this._dbProvider) {
-         const platform = dbType();
+         const platform = dbPlatform();
          if (platform === 'postgresql') {
             const pgProvider = MJGlobal.Instance.ClassFactory.CreateInstance<CodeGenDatabaseProvider>(
                CodeGenDatabaseProvider,

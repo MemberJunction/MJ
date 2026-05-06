@@ -1786,12 +1786,29 @@ export class EntityInfo extends BaseInfo {
      * If no fields match, if there is a field called "Name", that is returned. If there is no field called "Name", null is returned.
      */
     get NameField(): EntityFieldInfo | null {
-      const f = this.Fields.find((f) => f.IsNameField);
-
-      if (!f)
-        return this.Fields.find((f) => f.Name?.trim().toLowerCase() === 'name');
-      else
-        return f;
+      // Multiple fields can have IsNameField=true (e.g. Entity has both `Name`
+      // and `DisplayName` marked). Without a deterministic preference, the
+      // pick depends on `this.Fields` insertion order — which differs between
+      // SQL Server (where `Name` happens to come first) and PostgreSQL (where
+      // `DisplayName` does). Codegen builds JOIN aliases off NameField, so
+      // the divergence produces views like `vwDatasetItems` that SELECT the
+      // wrong column on PG (`DisplayName AS "Entity"` instead of
+      // `Name AS "Entity"`), and downstream consumers like
+      // TemplateEngineBase.GetDatasetByName then look up `"Templates"`
+      // (the DisplayName) instead of `"MJ: Templates"` (the actual Name) and
+      // crash with `Entity Templates not found in metadata`.
+      //
+      // Resolution rule: when more than one field claims IsNameField, prefer
+      // the one literally named `Name`. Falls back to the first IsNameField
+      // match (preserves prior behavior when there's no `Name` field), then
+      // to a field named `Name` even without IsNameField set (legacy default).
+      const candidates = this.Fields.filter((f) => f.IsNameField);
+      if (candidates.length > 1) {
+        const literalName = candidates.find((f) => f.Name?.trim().toLowerCase() === 'name');
+        if (literalName) return literalName;
+      }
+      if (candidates.length > 0) return candidates[0];
+      return this.Fields.find((f) => f.Name?.trim().toLowerCase() === 'name') ?? null;
     }
 
     /**************************************************************************

@@ -227,6 +227,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     public async CreateSqlLogger(filePath: string, options?: SqlLoggingOptions): Promise<SqlLoggingSession> {
         const sessionId = uuidv4();
         const mjCoreSchema = this.ConfigData.MJCoreSchemaName;
+        const dialect = this.getDialect();
         const session = new SqlLoggingSessionImpl(sessionId, filePath,
             {
                 defaultSchemaName: mjCoreSchema,
@@ -234,7 +235,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 // hardcode 'GO'. Callers can still override by passing batchSeparator explicitly.
                 batchSeparator: this.PlatformBatchSeparator || undefined,
                 ...options
-            });
+            },
+            // Pass the platform dialect through so SQL emission (Flyway placeholder escaping etc.)
+            // uses the right form for SQL Server vs. PostgreSQL. Falls back to the constructor's
+            // default (SQLServerDialect) when a subclass hasn't overridden getDialect().
+            dialect ?? undefined);
 
         // Initialize the session (create file, write header)
         await session.initialize();

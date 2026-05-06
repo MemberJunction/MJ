@@ -11,7 +11,11 @@ vi.mock('tree-kill', () => ({
 }));
 
 vi.mock('@memberjunction/global', () => ({
-    RegisterClass: () => (target: unknown) => target
+    RegisterClass: () => (target: unknown) => target,
+}));
+
+vi.mock('@memberjunction/generic-database-provider', () => ({
+    resolveDbPlatformFromEnv: vi.fn().mockReturnValue(undefined),
 }));
 
 import { RunCommandsBase } from '../Misc/runCommand';

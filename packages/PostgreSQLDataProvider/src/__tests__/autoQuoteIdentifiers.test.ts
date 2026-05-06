@@ -219,4 +219,30 @@ SELECT * FROM save_result`;
             expect(quote('SELECT [Length] FROM x')).toBe('SELECT [Length] FROM x');
         });
     });
+
+    describe('PG type names in CAST/:: expressions', () => {
+        // Regression: hand-written runtime SQL like CAST(x AS INTEGER) used to
+        // emit "INTEGER" (quoted), which PG resolves as a user-defined type
+        // name and rejects with `type "INTEGER" does not exist`. INTEGER and
+        // related PG type keywords must pass through unquoted.
+        it('does not quote INTEGER in a CAST expression', () => {
+            expect(quote('SELECT CAST(x AS INTEGER) FROM t'))
+                .toBe('SELECT CAST(x AS INTEGER) FROM t');
+        });
+
+        it('does not quote INTEGER in a :: cast', () => {
+            expect(quote("SELECT '5'::INTEGER FROM t"))
+                .toBe("SELECT '5'::INTEGER FROM t");
+        });
+
+        it('does not quote DOUBLE PRECISION', () => {
+            expect(quote('SELECT CAST(x AS DOUBLE PRECISION) FROM t'))
+                .toBe('SELECT CAST(x AS DOUBLE PRECISION) FROM t');
+        });
+
+        it('does not quote BYTEA', () => {
+            expect(quote("SELECT 'x'::BYTEA FROM t"))
+                .toBe("SELECT 'x'::BYTEA FROM t");
+        });
+    });
 });

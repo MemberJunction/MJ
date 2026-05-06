@@ -18,7 +18,14 @@ import type { DataTypeMap } from '@memberjunction/sql-dialect';
  * info, so the converter maps DATETIME/DATETIME2/SMALLDATETIME -> TIMESTAMPTZ.
  * The dialect also doesn't know about SQL_VARIANT or HIERARCHYID.
  */
-const MJ_OVERRIDES: Map<string, string> = new Map([
+/**
+ * Public so test/comparison tooling can read the canonical override list
+ * without duplicating it. The schema-equivalence comparison script
+ * (`scripts/compare-pg-ss-snapshots.mjs`) uses this to know that e.g.
+ * `datetime → TIMESTAMPTZ` is intentional MJ design and must NOT be
+ * reported as drift. Keep this as the single source of truth.
+ */
+export const MJ_OVERRIDES: Map<string, string> = new Map([
   ['DATETIME', 'TIMESTAMPTZ'],
   ['DATETIME2', 'TIMESTAMPTZ'],
   ['SMALLDATETIME', 'TIMESTAMPTZ'],
