@@ -1429,6 +1429,24 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     /**************************************************************************/
 
     /**
+     * Parses a timestamp string sent by the client.
+     *
+     * Accepts both ISO 8601 strings (the canonical form) and all-digit strings
+     * representing milliseconds since epoch. The numeric form has been observed
+     * in the wild from clients whose cache layer round-tripped a Date through a
+     * lossy serializer — `new Date('1778004618383')` returns `Invalid Date`,
+     * but `new Date(Number('1778004618383'))` is a valid timestamp. Returning
+     * `null` on unparseable input lets callers degrade to a stale-cache fallback
+     * instead of throwing `RangeError: Invalid time value` on a downstream
+     * `.toISOString()`.
+     */
+    protected parseClientTimestamp(raw: string | null | undefined): Date | null {
+        if (!raw) return null;
+        const d = /^\d+$/.test(raw) ? new Date(Number(raw)) : new Date(raw);
+        return isNaN(d.getTime()) ? null : d;
+    }
+
+    /**
      * Compares client cache status with server status to determine if cache is current.
      * Checks both row count and maxUpdatedAt timestamp.
      */
@@ -1437,9 +1455,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         serverStatus: { maxUpdatedAt?: string; rowCount?: number },
     ): boolean {
         if (clientStatus.rowCount !== serverStatus.rowCount) return false;
-        const clientDate = new Date(clientStatus.maxUpdatedAt);
+        const clientDate = this.parseClientTimestamp(clientStatus.maxUpdatedAt);
+        if (!clientDate) return false;
         const serverDate = serverStatus.maxUpdatedAt ? new Date(serverStatus.maxUpdatedAt) : null;
         if (!serverDate) return clientStatus.rowCount === 0;
+        if (isNaN(serverDate.getTime())) return false;
         return clientDate.toISOString() === serverDate.toISOString();
     }
 
@@ -1792,11 +1812,16 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const deletedRecordIDs = await this.getDeletedRecordIDsSince(entityInfo.ID, clientMaxUpdatedAt, contextUser);
 
             // Validation: detect hidden deletes not tracked in RecordChanges
-            const clientMaxUpdatedDate = new Date(clientMaxUpdatedAt);
+            const clientMaxUpdatedDate = this.parseClientTimestamp(clientMaxUpdatedAt);
+            if (!clientMaxUpdatedDate) {
+                // Unparseable client timestamp — can't trust the differential math; fall back.
+                return this.runFullQueryAndReturn<T>(params, viewIndex, contextUser);
+            }
             const newInserts = updatedRows.filter(row => {
                 const createdAt = (row as Record<string, unknown>)['__mj_CreatedAt'];
                 if (!createdAt) return false;
-                return new Date(String(createdAt)) > clientMaxUpdatedDate;
+                const created = new Date(String(createdAt));
+                return !isNaN(created.getTime()) && created > clientMaxUpdatedDate;
             }).length;
 
             const serverRowCount = serverStatus.rowCount ?? 0;
