@@ -1,8 +1,9 @@
 import { Component, Input, Output, EventEmitter, ChangeDetectorRef, ChangeDetectionStrategy, OnInit } from '@angular/core';
 import { MJCredentialCategoryEntity } from '@memberjunction/core-entities';
-import { Metadata, RunView } from '@memberjunction/core';
+import { RunView } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 @Component({
   standalone: false,
@@ -11,7 +12,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
     styleUrls: ['./credential-category-edit-panel.component.css'],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class CredentialCategoryEditPanelComponent implements OnInit {
+export class CredentialCategoryEditPanelComponent extends BaseAngularComponent implements OnInit {
     @Input() category: MJCredentialCategoryEntity | null = null;
     @Input() isOpen = false;
 
@@ -48,9 +49,9 @@ export class CredentialCategoryEditPanelComponent implements OnInit {
         { icon: 'fa-solid fa-globe', label: 'Web' }
     ];
 
-    private _metadata = new Metadata();
+    private get _metadata() { return this.ProviderToUse; }
 
-    constructor(private cdr: ChangeDetectorRef) {}
+    constructor(private cdr: ChangeDetectorRef) { super(); }
 
     ngOnInit(): void {
         this.loadCategories();
@@ -113,7 +114,7 @@ export class CredentialCategoryEditPanelComponent implements OnInit {
 
     private async loadCategories(): Promise<void> {
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<MJCredentialCategoryEntity>({
                 EntityName: 'MJ: Credential Categories',
                 OrderBy: 'Name',

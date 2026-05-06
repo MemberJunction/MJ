@@ -1,10 +1,11 @@
 import { Component, OnInit, ChangeDetectorRef, NgZone } from '@angular/core';
-import { Metadata, RunView, LogError, LogStatus } from '@memberjunction/core';
+import { IMetadataProvider, Metadata, RunView, LogError, LogStatus } from '@memberjunction/core';
 import { MJUserApplicationEntity } from '@memberjunction/core-entities';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
 import { SharedService } from '@memberjunction/ng-shared';
 import { UUIDsEqual } from '@memberjunction/global';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 /**
  * Represents an app item in the configuration UI
  */
@@ -28,7 +29,7 @@ interface AppConfigItem {
   templateUrl: './application-settings.component.html',
   styleUrls: ['./application-settings.component.css']
 })
-export class ApplicationSettingsComponent implements OnInit {
+export class ApplicationSettingsComponent extends BaseAngularComponent implements OnInit {
   // All available apps from the system
   AllApps: AppConfigItem[] = [];
 
@@ -53,7 +54,8 @@ export class ApplicationSettingsComponent implements OnInit {
     private sharedService: SharedService,
     private cdr: ChangeDetectorRef,
     private ngZone: NgZone
-  ) {}
+  ) {
+    super();}
 
   async ngOnInit(): Promise<void> {
     await this.LoadConfiguration();
@@ -67,8 +69,8 @@ export class ApplicationSettingsComponent implements OnInit {
     this.ErrorMessage = '';
 
     try {
-      const md = new Metadata();
-      const rv = new RunView();
+      const md = this.ProviderToUse;
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
       // Load all system apps from ApplicationManager
       const systemApps = this.appManager.GetAuthorizedSystemApps();
@@ -292,7 +294,7 @@ export class ApplicationSettingsComponent implements OnInit {
     this.SuccessMessage = '';
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
 
       // Process each app config item
       for (const item of this.AllApps) {
@@ -331,7 +333,7 @@ export class ApplicationSettingsComponent implements OnInit {
   /**
    * Updates an existing UserApplication record
    */
-  private async UpdateUserApplication(md: Metadata, item: AppConfigItem): Promise<void> {
+  private async UpdateUserApplication(md: IMetadataProvider, item: AppConfigItem): Promise<void> {
     const userApp = await md.GetEntityObject<MJUserApplicationEntity>('MJ: User Applications');
     await userApp.Load(item.UserAppId!);
 
@@ -350,7 +352,7 @@ export class ApplicationSettingsComponent implements OnInit {
   /**
    * Creates a new UserApplication record
    */
-  private async CreateUserApplication(md: Metadata, item: AppConfigItem): Promise<void> {
+  private async CreateUserApplication(md: IMetadataProvider, item: AppConfigItem): Promise<void> {
     const userApp = await md.GetEntityObject<MJUserApplicationEntity>('MJ: User Applications');
     userApp.NewRecord();
 

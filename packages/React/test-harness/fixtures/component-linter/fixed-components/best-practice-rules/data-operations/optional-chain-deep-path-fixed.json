@@ -10,10 +10,29 @@
   "registry": "MJ",
   "status": "Active",
   "dataRequirements": {
-    "queries": [{
-      "name": "Order Details",
-      "categoryPath": "Sales/Reports",
-      "fields": ["OrderID", "OrderDate", "TotalAmount", "CustomerName"]
-    }]
+    "queries": [
+      {
+        "name": "Order Details",
+        "categoryPath": "Sales/Reports",
+        "fields": [
+          {
+            "name": "OrderID",
+            "type": "uniqueidentifier"
+          },
+          {
+            "name": "OrderDate",
+            "type": "datetimeoffset"
+          },
+          {
+            "name": "TotalAmount",
+            "type": "int"
+          },
+          {
+            "name": "CustomerName",
+            "type": "nvarchar"
+          }
+        ]
+      }
+    ]
   }
 }

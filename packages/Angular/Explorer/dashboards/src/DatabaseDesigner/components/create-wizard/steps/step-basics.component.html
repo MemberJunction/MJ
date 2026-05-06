@@ -1,0 +1,96 @@
+<div class="step-basics">
+
+  <!-- ── Entity Name ─────────────────────────────────────────────────────── -->
+  <div class="field-group">
+    <label class="field-label" for="entityName">
+      Entity Name <span class="req">*</span>
+    </label>
+    <input
+      id="entityName"
+      type="text"
+      class="mj-input"
+      placeholder="e.g. Project Milestones"
+      [value]="EntityName"
+      (input)="OnEntityNameChange($any($event.target).value)"
+      autocomplete="off" />
+    <span class="field-hint">
+      The display name used throughout MemberJunction (e.g., "Expense Reports")
+    </span>
+  </div>
+
+  <!-- ── Table Name ──────────────────────────────────────────────────────── -->
+  <div class="field-group">
+    <label class="field-label" for="tableName">
+      Table Name <span class="req">*</span>
+    </label>
+    <div class="table-name-wrap">
+      <input
+        id="tableName"
+        type="text"
+        class="mj-input"
+        placeholder="e.g. ProjectMilestones"
+        [value]="TableName"
+        (input)="OnTableNameChange($any($event.target).value)"
+        autocomplete="off" />
+      <span class="auto-badge" [class.active]="tableNameIsAuto">auto</span>
+    </div>
+    <span class="field-hint">
+      SQL table identifier. PascalCase, no spaces.
+      @if (tableNameIsAuto) {
+        Auto-derived from entity name — edit to override.
+      }
+    </span>
+  </div>
+
+  <!-- ── Schema ──────────────────────────────────────────────────────────── -->
+  <div class="field-group">
+    <label class="field-label" for="schemaName">
+      Schema <span class="req">*</span>
+    </label>
+    @if (AvailableSchemas.length > 0) {
+      <select
+        id="schemaName"
+        class="mj-input"
+        [value]="SchemaName"
+        (change)="OnSchemaChange($any($event.target).value)">
+        @for (schema of AvailableSchemas; track schema.value) {
+          <option [value]="schema.value">{{ schema.label }}</option>
+        }
+      </select>
+    } @else {
+      <div class="no-schemas-warning">
+        <i class="fa-solid fa-lock"></i>
+        You do not have authorization to create entities in any schema.
+        Contact your administrator.
+      </div>
+    }
+
+    @if (ShowCustomSchemaInput) {
+      <input
+        type="text"
+        class="mj-input mt-sm"
+        placeholder="Enter schema name (e.g. sales, finance)"
+        [value]="CustomSchemaName"
+        (input)="OnCustomSchemaChange($any($event.target).value)"
+        autocomplete="off" />
+      <span class="field-hint">
+        <i class="fa-solid fa-triangle-exclamation warning-icon"></i>
+        Custom schema requires elevated access. Confirm with your DBA.
+      </span>
+    }
+  </div>
+
+  <!-- ── Description ────────────────────────────────────────────────────── -->
+  <div class="field-group">
+    <label class="field-label" for="description">Description</label>
+    <textarea
+      id="description"
+      class="mj-textarea"
+      rows="3"
+      placeholder="Optional — briefly describe the purpose of this entity"
+      [value]="Description"
+      (input)="OnDescriptionChange($any($event.target).value)">
+    </textarea>
+  </div>
+
+</div>

@@ -56,16 +56,31 @@ ALTER TABLE ${flyway:defaultSchema}.AIAgentNote
     CHECK (ProtectionTier IN ('Immutable', 'Protected', 'Standard', 'Ephemeral'));
 
 -- 8. Update Status CHECK to include 'Archived' (used by decay-based archival)
-ALTER TABLE ${flyway:defaultSchema}.AIAgentNote
-    DROP CONSTRAINT [CK__AIAgentNo__Statu__4749136D];
+--    Drop by dynamic lookup since system-generated constraint names vary per database.
+DECLARE @NoteStatusConstraint NVARCHAR(200);
+SELECT @NoteStatusConstraint = cc.name
+FROM sys.check_constraints cc
+JOIN sys.columns c ON cc.parent_object_id = c.object_id AND cc.parent_column_id = c.column_id
+WHERE c.name = 'Status'
+  AND cc.parent_object_id = OBJECT_ID('${flyway:defaultSchema}.AIAgentNote');
+
+IF @NoteStatusConstraint IS NOT NULL
+    EXEC('ALTER TABLE ${flyway:defaultSchema}.AIAgentNote DROP CONSTRAINT [' + @NoteStatusConstraint + ']');
 
 ALTER TABLE ${flyway:defaultSchema}.AIAgentNote
     ADD CONSTRAINT CK_AIAgentNote_Status
     CHECK (Status IN ('Active', 'Pending', 'Revoked', 'Archived'));
 
 -- 8b. Also update AIAgentExample Status CHECK to include 'Archived'
-ALTER TABLE ${flyway:defaultSchema}.AIAgentExample
-    DROP CONSTRAINT [CK__AIAgentEx__Statu__559732C4];
+DECLARE @ExampleStatusConstraint NVARCHAR(200);
+SELECT @ExampleStatusConstraint = cc.name
+FROM sys.check_constraints cc
+JOIN sys.columns c ON cc.parent_object_id = c.object_id AND cc.parent_column_id = c.column_id
+WHERE c.name = 'Status'
+  AND cc.parent_object_id = OBJECT_ID('${flyway:defaultSchema}.AIAgentExample');
+
+IF @ExampleStatusConstraint IS NOT NULL
+    EXEC('ALTER TABLE ${flyway:defaultSchema}.AIAgentExample DROP CONSTRAINT [' + @ExampleStatusConstraint + ']');
 
 ALTER TABLE ${flyway:defaultSchema}.AIAgentExample
     ADD CONSTRAINT CK_AIAgentExample_Status

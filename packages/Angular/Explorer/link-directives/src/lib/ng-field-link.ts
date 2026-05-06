@@ -38,7 +38,7 @@ export class FieldLink extends BaseLink implements OnInit {
     if (relatedEntity && relatedEntity.length > 0) {
       this._targetEntity = relatedEntity;
       this._targetRecordID = this.field.Value;
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       this._targetEntityInfo = md.Entities.find(e => e.Name === relatedEntity);
       if (!this._targetEntityInfo)
         throw new Error('Related entity not found in metadata: ' + relatedEntity);

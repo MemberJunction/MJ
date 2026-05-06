@@ -1,0 +1,41 @@
+{
+  "fields": {
+    "Name": "Permissions",
+    "Description": "Unified permissions administration — view who can access what, audit changes, and inspect grants across every MJ permission domain",
+    "Icon": "fa-solid fa-shield-halved",
+    "DefaultForNewUser": false,
+    "Color": "#14b8a6",
+    "DefaultSequence": 1100,
+    "DefaultNavItems": [
+      {
+        "Label": "User Access",
+        "Icon": "fa-solid fa-user",
+        "ResourceType": "Custom",
+        "DriverClass": "PermissionsUserAccessResource",
+        "isDefault": true
+      },
+      {
+        "Label": "Resource Access",
+        "Icon": "fa-solid fa-cube",
+        "ResourceType": "Custom",
+        "DriverClass": "PermissionsResourceAccessResource"
+      },
+      {
+        "Label": "Audit Log",
+        "Icon": "fa-solid fa-clock-rotate-left",
+        "ResourceType": "Custom",
+        "DriverClass": "PermissionsAuditLogResource"
+      }
+    ]
+  },
+  "relatedEntities": {
+    "MJ: Application Entities": []
+  },
+  "primaryKey": {
+    "ID": "3D2C4287-3EAD-49D1-B2F6-295A665C76A8"
+  },
+  "sync": {
+    "lastModified": "2026-04-23T00:51:47.588Z",
+    "checksum": "ea7c7b5aa26e6ea78ffe3c8e269a6c87c6fbb5b9226403d46f8339fd244193da"
+  }
+}

@@ -23,6 +23,8 @@
     "ai-models",
     "ai-configurations",
     "artifact-types",
+    "authorizations",
+    "authorization-roles",
     "action-categories",
     "actions",
     "prompt-categories",

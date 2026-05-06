@@ -5,8 +5,10 @@ import {
   CompositeKey,
   DatabaseProviderBase,
   EntityFieldTSType,
+  EntityInfo,
   EntityPermissionType,
   EntitySaveOptions,
+  IMetadataProvider,
   IRunViewProvider,
   LogDebug,
   LogError,
@@ -65,7 +67,7 @@ export class ResolverBase {
    * @param contextUser - Optional user context for decryption (required for encrypted fields)
    * @returns The processed data object
    */
-  protected async MapFieldNamesToCodeNames(entityName: string, dataObject: any, contextUser?: UserInfo): Promise<any> {
+  protected async MapFieldNamesToCodeNames(entityName: string, dataObject: any, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<any> {
     // Return null for empty objects (e.g. when no rows found due to RLS filtering)
     if (!dataObject || Object.keys(dataObject).length === 0) {
       return null;
@@ -77,8 +79,8 @@ export class ResolverBase {
     // with the CodeName, because we can't transfer those via GraphQL as they are not
     // valid property names in GraphQL
     {
-      const md = new Metadata();
-      const entityInfo = md.Entities.find((e) => e.Name === entityName);
+      const md = provider ?? new Metadata();
+      const entityInfo = md.EntityByName(entityName);
       if (!entityInfo) throw new Error(`Entity ${entityName} not found in metadata`);
       // const fields = entityInfo.Fields.filter((f) => f.Name !== f.CodeName || f.Name.startsWith('__mj_'));
       const mapper = new FieldMapper();
@@ -209,12 +211,13 @@ export class ResolverBase {
   protected async FilterEncryptedFieldsForAPI(
     entityName: string,
     dataObject: Record<string, unknown>,
-    contextUser: UserInfo
+    contextUser: UserInfo,
+    provider?: IMetadataProvider
   ): Promise<Record<string, unknown>> {
     if (!dataObject) return dataObject;
 
-    const md = new Metadata();
-    const entityInfo = md.Entities.find((e) => e.Name === entityName);
+    const md = provider ?? new Metadata();
+    const entityInfo = md.EntityByName(entityName);
     if (!entityInfo) return dataObject;
 
     // Find all encrypted fields that need filtering
@@ -269,13 +272,14 @@ export class ResolverBase {
   protected async ArrayFilterEncryptedFieldsForAPI(
     entityName: string,
     dataObjectArray: Record<string, unknown>[],
-    contextUser: UserInfo
+    contextUser: UserInfo,
+    provider?: IMetadataProvider
   ): Promise<Record<string, unknown>[]> {
     if (!dataObjectArray || dataObjectArray.length === 0) return dataObjectArray;
 
     // Check if entity has any encrypted fields first to avoid unnecessary processing
-    const md = new Metadata();
-    const entityInfo = md.Entities.find((e) => e.Name === entityName);
+    const md = provider ?? new Metadata();
+    const entityInfo = md.EntityByName(entityName);
     if (!entityInfo) return dataObjectArray;
 
     const encryptedFields = entityInfo.Fields.filter(f => f.Encrypt && !f.AllowDecryptInAPI);
@@ -283,7 +287,7 @@ export class ResolverBase {
 
     // Process each element
     for (const element of dataObjectArray) {
-      await this.FilterEncryptedFieldsForAPI(entityName, element, contextUser);
+      await this.FilterEncryptedFieldsForAPI(entityName, element, contextUser, provider);
     }
 
     return dataObjectArray;
@@ -562,9 +566,9 @@ export class ResolverBase {
     }
   }
 
-  protected CheckUserReadPermissions(entityName: string, userPayload: UserPayload | null) {
-    const md = new Metadata();
-    const entityInfo = md.Entities.find((e) => e.Name === entityName);
+  protected CheckUserReadPermissions(entityName: string, userPayload: UserPayload | null, provider?: IMetadataProvider) {
+    const md = provider ?? new Metadata();
+    const entityInfo = md.EntityByName(entityName);
     if (!userPayload) {
       throw new Error(`userPayload is null`);
     }
@@ -796,10 +800,10 @@ export class ResolverBase {
       // Skip processing if no params
       if (!params.length) return [];
 
-      let md: Metadata | null = null;
+      let md: IMetadataProvider | null = null;
       const rv = params[0].provider as any as IRunViewProvider;
       let runViewParams: RunViewParams[] = [];
-      
+
       // Fix #1: Get user info only once for all queries
       let contextUser: UserInfo | null = null;
       if (params[0]?.userPayload?.email) {
@@ -810,10 +814,12 @@ export class ResolverBase {
         }
         contextUser = user;
       }
-      
+
       // Create a map of entities to validate only once per entity
       const validatedEntities = new Set<string>();
-      md = new Metadata();
+      // Use the per-request provider that came in on params instead of `new Metadata()` so
+      // multi-tenant servers resolve metadata against the request's own connection.
+      md = params[0].provider as unknown as IMetadataProvider;
 
       // Transform parameters
       for (const param of params) {
@@ -821,7 +827,7 @@ export class ResolverBase {
           // Validate entity only once per entity type
           const entityName = param.viewInfo.Entity;
           if (!validatedEntities.has(entityName)) {
-            const entityInfo = md.Entities.find(e => e.Name === entityName);
+            const entityInfo = md.EntityByName(entityName);
             if (!entityInfo) {
               throw new Error(`Entity ${entityName} not found in metadata`);
             }
@@ -998,7 +1004,7 @@ export class ResolverBase {
   }
 
   public get MJCoreSchema(): string {
-    return Metadata.Provider.ConfigData.MJCoreSchemaName;
+    return Metadata.Provider.ConfigData.MJCoreSchemaName; // global-provider-ok: process-wide config (schema name) read once at module level
   }
 
   /**
@@ -1356,9 +1362,10 @@ export class ResolverBase {
           }
         });
 
-        // Create ErrorLog record in the database
+        // Create ErrorLog record in the database — use the entity's bound provider so the
+        // ErrorLog write goes to the same connection as the entity that triggered it.
         try {
-          const md = new Metadata();
+          const md = entityObject.ProviderToUse as unknown as IMetadataProvider;
           const errorLogEntity = await md.GetEntityObject<MJErrorLogEntity>('MJ: Error Logs', contextUser);
           errorLogEntity.Code = 'ENTITY_SAVE_INCONSISTENCY';
           errorLogEntity.Message = `Entity save inconsistency detected for ${entityObject.EntityInfo.Name}: ${JSON.stringify(msg)}`;

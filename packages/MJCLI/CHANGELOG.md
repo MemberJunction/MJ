@@ -1,5 +1,137 @@
 # Change Log - @memberjunction/cli
 
+## 5.32.0
+
+### Patch Changes
+
+- Updated dependencies [a7e8b3b]
+- Updated dependencies [b9c67ac]
+- Updated dependencies [ef8f900]
+  - @memberjunction/core@5.32.0
+  - @memberjunction/codegen-lib@5.32.0
+  - @memberjunction/server-bootstrap-lite@5.32.0
+  - @memberjunction/ai-cli@5.32.0
+  - @memberjunction/db-auto-doc@5.32.0
+  - @memberjunction/metadata-sync@5.32.0
+  - @memberjunction/open-app-engine@5.32.0
+  - @memberjunction/query-gen@5.32.0
+  - @memberjunction/sqlserver-dataprovider@5.32.0
+  - @memberjunction/testing-cli@5.32.0
+  - @memberjunction/config@5.32.0
+  - @memberjunction/installer@5.32.0
+  - @memberjunction/sql-converter@5.32.0
+
+## 5.31.0
+
+### Minor Changes
+
+- 60e7541: Add --incremental flag for push/pull, lazy embedding loading, indexed batch context lookups, batched pull queries
+
+### Patch Changes
+
+- 7ed7a4b: no metadata/migration changes
+- 3c5176f: Bring MJ to a state where it runs end-to-end on PostgreSQL — including managed PG services (RDS, Aurora, Cloud SQL, Azure) — on a developer machine and in self-hosted environments.
+
+  **Runtime (`@memberjunction/postgresql-dataprovider`):** new `autoQuoteIdentifiers` tokenizer in `ExecuteSQL` auto-quotes mixed-case identifiers in raw SQL (PascalCase columns, `vw*` views) so hand-written queries from MJ resolvers, engines, and dashboards work on PG without per-call quoting. Conservative — only quotes PascalCase or lowercase-first identifiers preceded by `.` (object refs). 30 new tokenizer tests covering keywords, dollar-quoted blocks, positional `$N` params, string literals, `[bracketed]` SQL Server identifiers, and the regression cases from Memory Manager and ConversationEngine flows.
+
+  **Converter (`@memberjunction/sql-converter`):** `quoteAsAliases` regex made case-insensitive on the `AS` keyword (caught the `vwEntityPermissions.RoleName` alias case-fold bug). `SequenceDeduplicator` now auto-detects and fixes EntityField sequence collisions as a post-conversion step. Heavy regression tests gated behind `process.env.CI === 'true'` (with `CI_HEAVY_REGRESSION=true` opt-out for nightly) — pg-migrations.yml workflow already does the equivalent gate at the workflow level.
+
+  **CodeGen (`@memberjunction/codegen-lib`):** CodeGen audit SQL output now routes to `migrations-pg/v5/` when `dbPlatform=postgresql` (was always going to `migrations/v5/`).
+
+  **CLI (`@memberjunction/cli`):** consumes published Skyway 0.6.0 multi-dialect packages (`skyway-core`, `skyway-sqlserver`, `skyway-postgres`).
+
+  **Managed-PG support:** historical PG migrations rewritten to drop the `pg_cast` UPDATE that required superuser, with INSERT VALUES tuples / WHERE-comparisons / CHECK constraints rewritten to use BOOLEAN literals (`TRUE`/`FALSE`) directly. 50 files touched in the companion `pg-migration-files` PR; 10,967 INSERT tuples + 3,510 comparisons + 9 CHECK constraints fixed.
+
+  The actual PG migration content — v5.0 baseline + every V\*.pg.sql for v5.0–v5.30 — ships in the companion `pg-migration-files` PR. The two PRs merge together.
+
+  See `migrations-pg/TESTING_GUIDE.md` for the verification strategy used during this PR's development (per-migration audit, schema dump diff, snapshot scripts, autoQuoter coverage).
+
+- Updated dependencies [7ed7a4b]
+- Updated dependencies [9457655]
+- Updated dependencies [60e7541]
+- Updated dependencies [18be074]
+- Updated dependencies [17b8087]
+- Updated dependencies [6779c1e]
+- Updated dependencies [3c5176f]
+- Updated dependencies [e545a51]
+- Updated dependencies [132ce24]
+- Updated dependencies [b3d88ff]
+- Updated dependencies [de34786]
+- Updated dependencies [5db36d9]
+  - @memberjunction/ai-cli@5.31.0
+  - @memberjunction/codegen-lib@5.31.0
+  - @memberjunction/config@5.31.0
+  - @memberjunction/db-auto-doc@5.31.0
+  - @memberjunction/core@5.31.0
+  - @memberjunction/installer@5.31.0
+  - @memberjunction/metadata-sync@5.31.0
+  - @memberjunction/open-app-engine@5.31.0
+  - @memberjunction/query-gen@5.31.0
+  - @memberjunction/sql-converter@5.31.0
+  - @memberjunction/sqlserver-dataprovider@5.31.0
+  - @memberjunction/server-bootstrap-lite@5.31.0
+  - @memberjunction/testing-cli@5.31.0
+
+## 5.30.1
+
+### Patch Changes
+
+- 1826093: Fix migration V202604260056 failure on existing databases by replacing hardcoded CHECK constraint names with dynamic lookups via sys.check_constraints
+  - @memberjunction/ai-cli@5.30.1
+  - @memberjunction/codegen-lib@5.30.1
+  - @memberjunction/config@5.30.1
+  - @memberjunction/db-auto-doc@5.30.1
+  - @memberjunction/core@5.30.1
+  - @memberjunction/installer@5.30.1
+  - @memberjunction/metadata-sync@5.30.1
+  - @memberjunction/open-app-engine@5.30.1
+  - @memberjunction/query-gen@5.30.1
+  - @memberjunction/sql-converter@5.30.1
+  - @memberjunction/sqlserver-dataprovider@5.30.1
+  - @memberjunction/server-bootstrap-lite@5.30.1
+  - @memberjunction/testing-cli@5.30.1
+
+## 5.30.0
+
+### Patch Changes
+
+- 29a1fad: no migration/metadata, just da patch
+- 0279a5c: Open App: exact version pins, per-repo tokens, and workspace-wide prefix bumps
+  - `--version` flag now pins packages to exact versions (no ^ prefix) and validates the GitHub tag exists before proceeding
+  - Per-repo GitHub token map (`openApps.github.tokens`) for multi-private-repo dependency chains
+  - `GetLatestVersion` falls back to tags when no GitHub Releases exist
+  - Schema reuse when `createIfNotExists: true` and schema already exists (adopts sidestep installs)
+  - Don't pass `--registry` for default npm registry (fixes private scoped package auth)
+  - Prevent duplicate `dynamicPackages.server` entries on re-install
+  - npm install failures demoted to warnings when package.json was updated (auth issues don't abort install)
+  - `packages.prefix` manifest field for workspace-wide dependency bumps during install/upgrade
+
+- fe35537: Scope CodeGen Pass 2 entity field management to changed entities. Adds optional `@EntityIDs` (comma-delimited UUID list) parameter to `spDeleteUnneededEntityFields` and `spUpdateExistingEntityFieldsFromSchema`; adds `--forced-advanced-gen` CLI flag for bypassing scoped behavior in regression testing.
+- Updated dependencies [366e646]
+- Updated dependencies [8980b38]
+- Updated dependencies [68bf87f]
+- Updated dependencies [29a1fad]
+- Updated dependencies [963f2df]
+- Updated dependencies [0279a5c]
+- Updated dependencies [4729398]
+- Updated dependencies [fe35537]
+- Updated dependencies [b1f32a4]
+- Updated dependencies [c199f3b]
+- Updated dependencies [216ddc3]
+  - @memberjunction/server-bootstrap-lite@5.30.0
+  - @memberjunction/codegen-lib@5.30.0
+  - @memberjunction/core@5.30.0
+  - @memberjunction/open-app-engine@5.30.0
+  - @memberjunction/query-gen@5.30.0
+  - @memberjunction/db-auto-doc@5.30.0
+  - @memberjunction/metadata-sync@5.30.0
+  - @memberjunction/ai-cli@5.30.0
+  - @memberjunction/sqlserver-dataprovider@5.30.0
+  - @memberjunction/testing-cli@5.30.0
+  - @memberjunction/config@5.30.0
+  - @memberjunction/installer@5.30.0
+  - @memberjunction/sql-converter@5.30.0
+
 ## 5.29.0
 
 ### Patch Changes

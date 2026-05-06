@@ -133,6 +133,108 @@ describe('AlterTableRule', () => {
     });
   });
 
+  describe('ALTER COLUMN nullability', () => {
+    it('should convert ALTER COLUMN TYPE NOT NULL → SET NOT NULL', () => {
+      const sql = `ALTER TABLE [__mj].[Foo] ALTER COLUMN [Status] [nvarchar](20) NOT NULL`;
+      const result = convert(sql);
+      expect(result).toContain('SET NOT NULL');
+      expect(result).not.toMatch(/nvarchar.*NOT NULL/i);
+    });
+
+    it('should convert ALTER COLUMN TYPE NULL → DROP NOT NULL', () => {
+      const sql = `ALTER TABLE [__mj].[DuplicateRun] ALTER COLUMN [SourceListID] [uniqueidentifier] NULL`;
+      const result = convert(sql);
+      expect(result).toContain('DROP NOT NULL');
+      expect(result).toContain('"SourceListID"');
+      expect(result).not.toMatch(/uniqueidentifier.*NULL/i);
+    });
+
+    it('should convert ALTER COLUMN with sized type and NULL', () => {
+      const sql = `ALTER TABLE [__mj].[Foo] ALTER COLUMN [Name] [nvarchar](100) NULL`;
+      const result = convert(sql);
+      expect(result).toContain('DROP NOT NULL');
+      expect(result).toContain('"Name"');
+    });
+  });
+
+  describe('ADD COLUMN idempotency (IF NOT EXISTS)', () => {
+    // PG migrations need idempotent DDL: CI's Step 5b re-applies each V-migration
+    // on top of the already-migrated DB, and Skyway can re-run a migration after a
+    // partial-commit failure. ADD COLUMN without IF NOT EXISTS errors on duplicate.
+    // T-SQL ADD COLUMN also errors on duplicate, so emitting IF NOT EXISTS is strictly
+    // more permissive — never weaker than the source semantics.
+    it('should emit ADD COLUMN IF NOT EXISTS for a single ADD', () => {
+      const sql = `ALTER TABLE [__mj].[ComponentLibrary] ADD [UsageInstructions] [NVARCHAR](MAX) NULL`;
+      const result = convert(sql);
+      expect(result).toContain('ADD COLUMN IF NOT EXISTS');
+      expect(result).toContain('"UsageInstructions"');
+      expect(result).not.toMatch(/ADD COLUMN\s+"UsageInstructions"/);
+    });
+
+    it('should emit IF NOT EXISTS on every column in a multi-column ADD', () => {
+      const sql = `ALTER TABLE [__mj].[Entity]
+        ADD [Col1] [NVARCHAR](100) NULL,
+            [Col2] [BIT] NOT NULL DEFAULT 1`;
+      const result = convert(sql);
+      const matches = result.match(/ADD COLUMN IF NOT EXISTS/g) || [];
+      expect(matches.length).toBe(2);
+      expect(result).toContain('"Col1"');
+      expect(result).toContain('"Col2"');
+    });
+
+    it('should NOT emit IF NOT EXISTS for ADD CONSTRAINT', () => {
+      const sql = `ALTER TABLE [__mj].[Orders] ADD CONSTRAINT [PK_Orders] PRIMARY KEY ([ID])`;
+      const result = convert(sql);
+      expect(result).toContain('ADD CONSTRAINT');
+      expect(result).not.toContain('IF NOT EXISTS');
+    });
+  });
+
+  describe('Boolean DEFAULT conversion in ADD COLUMN', () => {
+    it('should convert BIT DEFAULT 1 to BOOLEAN DEFAULT TRUE', () => {
+      const sql = `ALTER TABLE [__mj].[AIAgent] ADD [AllowEphemeralClientTools] [BIT] NOT NULL DEFAULT 1`;
+      const result = convert(sql);
+      expect(result).toContain('BOOLEAN');
+      expect(result).toContain('DEFAULT TRUE');
+      expect(result).not.toContain('DEFAULT 1');
+    });
+
+    it('should convert BIT DEFAULT 0 to BOOLEAN DEFAULT FALSE', () => {
+      const sql = `ALTER TABLE [__mj].[Entity] ADD [SupportsGeoCoding] [BIT] NOT NULL DEFAULT 0`;
+      const result = convert(sql);
+      expect(result).toContain('BOOLEAN');
+      expect(result).toContain('DEFAULT FALSE');
+      expect(result).not.toContain('DEFAULT 0');
+    });
+
+    it('should handle multiple BOOLEAN columns in one ALTER TABLE', () => {
+      const sql = `ALTER TABLE [__mj].[Entity]
+        ADD [AutoUpdateFullTextSearch] [BIT] NOT NULL DEFAULT 1,
+            [SupportsGeoCoding] [BIT] NOT NULL DEFAULT 0`;
+      const result = convert(sql);
+      expect(result).toContain('DEFAULT TRUE');
+      expect(result).toContain('DEFAULT FALSE');
+    });
+  });
+
+  describe('DEFAULT FOR column', () => {
+    it('should convert ADD DEFAULT val FOR col to ALTER COLUMN SET DEFAULT', () => {
+      const sql = `ALTER TABLE [__mj].[Foo] ADD DEFAULT 0.7 FOR [Threshold]`;
+      const result = convert(sql);
+      expect(result).toContain('ALTER COLUMN');
+      expect(result).toContain('SET DEFAULT');
+      expect(result).toContain('0.7');
+    });
+
+    it('should convert ADD CONSTRAINT name DEFAULT val FOR col', () => {
+      const sql = `ALTER TABLE [__mj].[Foo] ADD CONSTRAINT [DF_Foo_Status] DEFAULT 'Active' FOR [Status]`;
+      const result = convert(sql);
+      expect(result).toContain('ALTER COLUMN');
+      expect(result).toContain('SET DEFAULT');
+      expect(result).not.toContain('DF_Foo_Status');
+    });
+  });
+
   describe('output formatting', () => {
     it('should ensure output ends with semicolon and newline', () => {
       const sql = `ALTER TABLE [__mj].[Foo] ADD CONSTRAINT [PK_Foo] PRIMARY KEY ([ID])`;

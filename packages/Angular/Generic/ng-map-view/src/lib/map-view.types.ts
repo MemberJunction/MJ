@@ -1,7 +1,7 @@
 /**
  * Rendering modes for the map view component.
  */
-export type MapRenderMode = 'point' | 'choropleth' | 'heatmap';
+export type MapRenderMode = 'point' | 'boundary' | 'choropleth' | 'heatmap';
 
 /**
  * Choropleth grouping level.

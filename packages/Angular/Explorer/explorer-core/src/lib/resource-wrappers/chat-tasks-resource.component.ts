@@ -58,7 +58,7 @@ export class ChatTasksResource extends BaseResourceComponent implements OnDestro
 
   ngOnInit() {
     super.ngOnInit();
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     this.currentUser = md.CurrentUser;
 
     // Apply initial state from query params or tab config

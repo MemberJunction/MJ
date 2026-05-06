@@ -145,8 +145,10 @@ describe('CatalogViewRule', () => {
       expect(result).toContain('DO $do$');
       expect(result).toContain('CREATE OR REPLACE VIEW');
       expect(result).toContain('"vwUsers"');
-      // Should NOT contain any pg_catalog references (it's not a catalog view)
-      expect(result).not.toContain('pg_catalog');
+      // (The DO-block wrapper's EXCEPTION handler uses pg_catalog.pg_get_viewdef
+      // to capture dependent views before a CASCADE drop. That's infrastructure,
+      // not a catalog-view delegation. The main SELECT must not hit pg_catalog.)
+      expect(result).not.toMatch(/FROM\s+pg_catalog/);
     });
 
     it('should still skip non-catalog views that reference sys.* (via ViewRule)', () => {

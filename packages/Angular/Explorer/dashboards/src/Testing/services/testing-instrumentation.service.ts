@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { Observable, BehaviorSubject, from, combineLatest } from 'rxjs';
 import { map, switchMap, shareReplay, tap } from 'rxjs/operators';
-import { RunView, Metadata } from '@memberjunction/core';
+import { RunView, Metadata, IMetadataProvider } from '@memberjunction/core';
 import { MJTestRunFeedbackEntity } from '@memberjunction/core-entities';
 import { TestEngineBase } from '@memberjunction/testing-engine-base';
 
@@ -183,7 +183,20 @@ export class TestingInstrumentationService {
   private readonly _testTypeFilter$ = new BehaviorSubject<string | null>(null);
   private readonly _refreshTrigger$ = new BehaviorSubject<number>(0);
   private readonly _isLoading$ = new BehaviorSubject<boolean>(false);
-  private readonly metadata = new Metadata();
+  private _provider: IMetadataProvider | null = null;
+
+  /** Set the metadata provider this service should use. Components should call this after injection. */
+  public set Provider(value: IMetadataProvider | null) {
+      this._provider = value;
+  }
+
+  public get Provider(): IMetadataProvider {
+      return this._provider ?? Metadata.Provider;
+  }
+
+  private get metadata(): IMetadataProvider {
+    return this.Provider;
+  }
 
   // Expose observables
   readonly isLoading$ = this._isLoading$.asObservable();
@@ -293,7 +306,7 @@ export class TestingInstrumentationService {
 
   private async loadKPIs(): Promise<TestingDashboardKPIs> {
     const { start, end } = this._dateRange$.value;
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
 
     // Get Tests from TestEngineBase cache instead of querying DB
     const engine = TestEngineBase.Instance;
@@ -373,7 +386,7 @@ export class TestingInstrumentationService {
   private async countTestsPendingReview(testRunIDs: string[]): Promise<number> {
     if (testRunIDs.length === 0) return 0;
 
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     const idList = testRunIDs.join("','");
 
     const feedbackResult = await rv.RunView<{TestRunID: string}>({
@@ -405,7 +418,7 @@ export class TestingInstrumentationService {
       filter += ` AND TestID IN (SELECT ID FROM [__mj].[vwTests] WHERE TypeID = '${typeFilter}')`;
     }
 
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     const result = await rv.RunView<TestRunSimple>({
       EntityName: 'MJ: Test Runs',
       ExtraFilter: filter,
@@ -445,7 +458,7 @@ export class TestingInstrumentationService {
 
   private async loadSuiteHierarchy(): Promise<SuiteHierarchyNode[]> {
     const { start, end } = this._dateRange$.value;
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
 
     // Get Test Suites from TestEngineBase cache instead of querying DB
     const engine = TestEngineBase.Instance;
@@ -529,7 +542,7 @@ export class TestingInstrumentationService {
 
     // Create time buckets
     const buckets = this.createTimeBuckets(start, end);
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
 
     // Load all test runs for the period - use simple result type with only needed fields
     type TrendRun = {Status: string; Score: number; CostUSD: number; StartedAt: string | Date; CompletedAt: string | Date | null};
@@ -592,7 +605,7 @@ export class TestingInstrumentationService {
 
   private async loadAnalytics(): Promise<TestAnalytics> {
     const { start, end } = this._dateRange$.value;
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
 
     // Use simple result type with only needed fields
     type AnalyticsRun = {Test: string; Status: string; Score: number; CostUSD: number; StartedAt: string | Date; CompletedAt: string | Date | null};
@@ -716,7 +729,7 @@ export class TestingInstrumentationService {
 
   private async loadPendingFeedback(): Promise<FeedbackPending[]> {
     const { start, end } = this._dateRange$.value;
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
 
     // Use simple result types with only needed fields
     type FeedbackTestRun = {ID: string; Test: string; Score: number; Status: string; StartedAt: string | Date};
@@ -788,7 +801,7 @@ export class TestingInstrumentationService {
 
   private async loadFeedbackStats(): Promise<FeedbackStats> {
     const { start, end } = this._dateRange$.value;
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
 
     // Load all feedback for the period - use simple result type with only needed fields
     type FeedbackStatItem = {Rating: number; IsCorrect: boolean};
@@ -858,7 +871,7 @@ export class TestingInstrumentationService {
   }
 
   async getVersionMetrics(): Promise<VersionMetrics[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
 
     // Use simple result type with only needed fields
     type VersionRun = {TotalTests: number; PassedTests: number; TotalCostUSD: number; StartedAt: string | Date; GitCommit: string; AgentVersion: string};
@@ -959,7 +972,7 @@ export class TestingInstrumentationService {
       filter += ` AND TestID IN (SELECT ID FROM [__mj].[vwTests] WHERE TypeID = '${typeFilter}')`;
     }
 
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
 
     // Load test runs with additional fields for evaluation
     type MJTestRunExtended = {

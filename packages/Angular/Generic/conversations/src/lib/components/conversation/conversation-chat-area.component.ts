@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, ViewChild, ViewChildren, QueryList, ElementRef, AfterViewChecked } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, RunView, RunQuery, Metadata, CompositeKey, LogStatusEx, TransformSimpleObjectToEntityObject, DataSnapshot } from '@memberjunction/core';
 import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, ConversationEngine, ConversationDetailComplete, RatingJSON } from '@memberjunction/core-entities';
 import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
@@ -9,6 +10,10 @@ import { ActiveTasksService } from '../../services/active-tasks.service';
 import { MentionAutocompleteService } from '../../services/mention-autocomplete.service';
 import { ArtifactPermissionService } from '../../services/artifact-permission.service';
 import { ConversationAttachmentService } from '../../services/conversation-attachment.service';
+import { MJResourcePermissionShareAdapter, ResourceShareContext } from '@memberjunction/ng-resource-permissions';
+
+/** `MJ: Resource Types.ID` for Conversations. */
+const CONVERSATIONS_RESOURCE_TYPE_ID = '81D4BC3D-9FEB-EF11-B01A-286B35C04427';
 import { MessageAttachment } from '../message/message-item.component';
 import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MessageInputComponent } from '../message/message-input.component';
@@ -32,7 +37,7 @@ const DEFAULT_ARTIFACT_PANE_WIDTH = 40;
   templateUrl: `./conversation-chat-area.component.html`,
   styleUrls: ['./conversation-chat-area.component.css']
 })
-export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterViewChecked {
+export class ConversationChatAreaComponent extends BaseAngularComponent implements OnInit, OnDestroy, AfterViewChecked  {
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
 
@@ -159,6 +164,9 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   public artifactCountDisplay: number = 0;
   public isShared: boolean = false;
   public showExportModal: boolean = false;
+  public showShareModal: boolean = false;
+  public shareContext: ResourceShareContext | null = null;
+  public shareAdapter = new MJResourcePermissionShareAdapter(CONVERSATIONS_RESOURCE_TYPE_ID);
   public showAgentPanel: boolean = false;
   public showMembersModal: boolean = false;
   public showProjectSelector: boolean = false;
@@ -295,9 +303,20 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     private confirmDialog: ConversationsDialogService,
     private bridge: ConversationBridgeService,
     private analyzeArtifactService: AnalyzeArtifactService
-  ) {}
+  ) {
+  super();}
 
   async ngOnInit() {
+    // Bind provider-aware services to this component's provider so multi-server
+    // browser apps don't silently fall back to the global Metadata.Provider.
+    const p = this.ProviderToUse;
+    this.agentStateService.Provider = p;
+    this.conversationAgentService.Provider = p;
+    this.activeTasks.Provider = p;
+    this.artifactPermissionService.Provider = p;
+    this.attachmentService.Provider = p;
+    this.analyzeArtifactService.Provider = p;
+
     // The workspace component initializes AI Engine and mention service before
     // any child components render, so we can safely skip duplicate initialization.
     // This prevents race conditions and ensures agents are fully loaded.
@@ -874,7 +893,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     }
 
     // Load the current user's avatar data
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const userEntity = await md.GetEntityObject<any>('MJ: Users');
     await userEntity.Load(userId);
 
@@ -911,7 +930,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
       }
       else {
         // we do NOT have an existingAgentRun base entity, but rather a simple JSON object so we need to create an object here
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const newEntity = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs');
         newEntity.LoadFromData(existingAgentRun);
         // swap the map entry to have this object now
@@ -1164,7 +1183,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     try {
       // Always refresh if forced, or if not in map yet
       if (forceRefresh || !this.agentRunsByDetailId.has(conversationDetailId)) {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const agentRun = await md.GetEntityObject<MJAIAgentRunEntityExtended>('MJ: AI Agent Runs', this.currentUser);
         if (await agentRun.Load(agentRunId)) {
           this.agentRunsByDetailId.set(conversationDetailId, agentRun);
@@ -1201,7 +1220,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   private async reloadArtifactsForMessage(conversationDetailId: string): Promise<void> {
     LogStatusEx({message: `🔄 Reloading artifacts for message ${conversationDetailId}`, verboseOnly: true});
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
 
       // Get the ConversationID for this detail
       const detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.currentUser);
@@ -1476,8 +1495,60 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
   }
 
   shareConversation(): void {
-    // TODO: Implement share functionality
-    LogStatusEx({message: 'Share conversation', verboseOnly: true});
+    if (!this.conversation) return;
+    this.shareContext = {
+      ResourceID: this.conversation.ID,
+      ResourceName: this.conversation.Name ?? 'Conversation',
+      OwnerUserID: this.conversation.UserID ?? null,
+      OwnerDisplayName: this.conversation.User ?? 'You',
+      CurrentUserID: this.currentUser?.ID ?? null
+    };
+    this.showShareModal = true;
+  }
+
+  onShareDialogResult(_result: { Action: 'save' | 'cancel' }): void {
+    this.showShareModal = false;
+  }
+
+  /**
+   * Display info for the header "Shared by {email}" badge. Returns `null`
+   * when the current user owns the conversation or when the share has no
+   * recorded grantor (legacy share pre-dating `SharedByUserID`).
+   */
+  public get sharedByBadge(): { display: string; fullTooltip: string } | null {
+    if (!this.conversation) return null;
+    const info = this.engine.GetSharedByInfo(this.conversation.ID);
+    if (!info || !info.UserID) return null;
+    const display = info.Email ?? info.Name ?? 'another user';
+    const tooltip = info.Email && info.Name ? `${info.Name} <${info.Email}>` : display;
+    return { display, fullTooltip: `Shared by ${tooltip}` };
+  }
+
+  /**
+   * `true` when the current user only has `View` access to this conversation
+   * (i.e., it was shared with them read-only). Gates the message input and
+   * any other write-capable UI.
+   */
+  public get isReadOnlyView(): boolean {
+    if (!this.conversation) return false;
+    const info = this.engine.GetSharedByInfo(this.conversation.ID);
+    return info?.Level === 'View';
+  }
+
+  /**
+   * `true` when the current user is allowed to create new shares on this
+   * conversation. Only the conversation's owner — or a user with an existing
+   * Owner-level grant — may do so. Matches the server-side gate in
+   * {@link MJResourcePermissionEntityExtended.callerMayGrantShare}, so the UI
+   * doesn't offer an action the save would refuse.
+   */
+  public get canShareConversation(): boolean {
+    if (!this.conversation || !this.currentUser) return false;
+    if (this.conversation.UserID && this.conversation.UserID.toLowerCase() === this.currentUser.ID.toLowerCase()) {
+      return true;
+    }
+    const info = this.engine.GetSharedByInfo(this.conversation.ID);
+    return info?.Level === 'Owner';
   }
 
   onReplyInThread(message: MJConversationDetailEntity): void {
@@ -1628,7 +1699,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
     // Load all entities in parallel, then delete in parallel.
     // entity.Delete() calls spDeleteConversationDetail which handles all FK children:
     // hard-deletes junction tables (Artifact/Attachment/Rating), nullifies FKs on AI* records.
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const loadResults = await Promise.all(
       toHide.map(async msg => {
         const entity = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.currentUser);
@@ -2123,7 +2194,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
    */
   async onArtifactShareRequested(artifactId: string): Promise<void> {
     // Load the artifact entity to pass to the modal
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts');
     await artifact.Load(artifactId);
 
@@ -2419,7 +2490,7 @@ export class ConversationChatAreaComponent implements OnInit, OnDestroy, AfterVi
    * Handle intent check started - show temporary "Analyzing intent..." message
    */
   async onIntentCheckStarted(): Promise<void> {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const tempMessage = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', this.currentUser);
 
     // Create a temporary message that looks like an AI response in-progress

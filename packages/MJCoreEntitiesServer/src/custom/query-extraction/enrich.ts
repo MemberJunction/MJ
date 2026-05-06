@@ -178,15 +178,44 @@ function ResolveParameterType(
 
 /**
  * Resolves the default value, preferring the deterministic value over LLM.
+ * For array-typed parameters, ensures the default is a valid JSON array string
+ * so downstream consumers (e.g., queryParameterProcessor) can parse it safely.
  */
 function ResolveDefaultValue(
     dp: MJParameterInfo,
     llmMatch: ExtractedParameter | undefined,
 ): string | null {
-    if (dp.defaultValue !== null) {
-        return String(dp.defaultValue);
+    const raw = dp.defaultValue !== null
+        ? String(dp.defaultValue)
+        : (llmMatch?.defaultValue ?? null);
+
+    if (raw === null) return null;
+
+    return NormalizeDefaultForType(raw, dp.type === 'unknown' ? (llmMatch?.type ?? 'string') : dp.type);
+}
+
+/**
+ * Normalizes a raw default value string based on the parameter type.
+ * For array types, ensures the value is a valid JSON array string.
+ * Plain strings like "Attended" become '["Attended"]'; already-valid
+ * JSON arrays like '["a","b"]' pass through unchanged.
+ */
+export function NormalizeDefaultForType(
+    rawDefault: string,
+    paramType: string,
+): string {
+    if (paramType !== 'array') return rawDefault;
+
+    // Already a valid JSON array? Pass through.
+    try {
+        const parsed = JSON.parse(rawDefault);
+        if (Array.isArray(parsed)) return rawDefault;
+        // Parsed to a non-array (e.g., a number or string) — wrap it
+        return JSON.stringify([parsed]);
+    } catch {
+        // Not valid JSON (e.g., "Attended") — wrap as single-element array
+        return JSON.stringify([rawDefault]);
     }
-    return llmMatch?.defaultValue ?? null;
 }
 
 /**

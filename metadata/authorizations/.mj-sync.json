@@ -1,0 +1,26 @@
+{
+  "entity": "MJ: Authorizations",
+  "filePattern": "**/.*.json",
+  "defaults": {
+  },
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".authorizations.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [],
+    "excludeFields": [],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "",
+    "externalizeFields": [],
+    "lookupFields": {
+      "ParentID": {
+        "entity": "MJ: Authorizations",
+        "field": "ID"
+      }
+    },
+    "relatedEntities": {}
+  }
+}

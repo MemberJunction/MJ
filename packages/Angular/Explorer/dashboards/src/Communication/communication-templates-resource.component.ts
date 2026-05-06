@@ -335,7 +335,7 @@ export class CommunicationTemplatesResourceComponent extends BaseResourceCompone
             this.isLoading = true;
             this.cdr.detectChanges();
 
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const [templatesResult, contentsResult] = await Promise.all([
                 rv.RunView<MJTemplateEntity>({
                     EntityName: 'MJ: Templates',
@@ -416,7 +416,7 @@ export class CommunicationTemplatesResourceComponent extends BaseResourceCompone
 
     public openTemplate(template: MJTemplateEntity): void {
         const pk = new CompositeKey();
-        pk.LoadFromEntityInfoAndRecord(new Metadata().Entities.find(e => e.Name === 'MJ: Templates')!, template);
+        pk.LoadFromEntityInfoAndRecord(this.ProviderToUse.Entities.find(e => e.Name === 'MJ: Templates')!, template);
         this.navService.OpenEntityRecord('MJ: Templates', pk);
     }
 

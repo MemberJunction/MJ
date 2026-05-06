@@ -231,7 +231,7 @@ export default class TranslateSQL extends Command {
 
         try {
             const { Metadata } = await import('@memberjunction/core');
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: CLI tool, single-provider context
 
             // Queries
             if (scope === 'all' || scope === 'queries') {
@@ -250,7 +250,7 @@ export default class TranslateSQL extends Command {
 
             // Row Level Security Filters (accessed via Provider, not exposed on Metadata directly)
             if (scope === 'all' || scope === 'filters') {
-                for (const filter of Metadata.Provider.RowLevelSecurityFilters) {
+                for (const filter of Metadata.Provider.RowLevelSecurityFilters) { // global-provider-ok: CLI tool, single-provider context
                     if (filter.FilterText) {
                         fragments.push({
                             label: `RLS Filter: ${filter.Name}`,

@@ -9,7 +9,7 @@
  * @module @memberjunction/search-engine
  */
 
-import { LogError, Metadata, UserInfo } from '@memberjunction/core';
+import { IRunViewProvider, LogError, Metadata, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSearchProvider, SearchProviderConfig } from './ISearchProvider';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType } from './search.types';
@@ -22,6 +22,12 @@ import { SearchEnricher } from './SearchEnricher';
 @RegisterClass(BaseSearchProvider, 'FullTextSearchProvider')
 export class FullTextSearchProvider extends BaseSearchProvider {
     public readonly SourceType: SearchSource = 'fulltext';
+
+    /**
+     * Minimum trimmed term length we accept. SQL Server FTS treats single
+     * characters as noise; rejecting them matches the EntitySearchProvider guard.
+     */
+    private static readonly MIN_TERM_LENGTH = 3;
 
     private enricher: SearchEnricher | null = null;
 
@@ -45,10 +51,16 @@ export class FullTextSearchProvider extends BaseSearchProvider {
         filters: SearchFilters | undefined,
         contextUser: UserInfo
     ): Promise<SearchResultItem[]> {
+        const trimmed = (query ?? '').trim();
+        if (trimmed.length < FullTextSearchProvider.MIN_TERM_LENGTH) return [];
         try {
-            const md = new Metadata();
+            const md = this.Provider as unknown as IRunViewProvider;
+            if (!md.FullTextSearch) {
+                LogError('FullTextSearchProvider: provider does not support FullTextSearch');
+                return [];
+            }
             const ftsResult = await md.FullTextSearch({
-                SearchText: query,
+                SearchText: trimmed,
                 EntityNames: filters?.EntityNames,
                 MaxRowsPerEntity: Math.max(3, Math.ceil(topK / 10))
             }, contextUser);

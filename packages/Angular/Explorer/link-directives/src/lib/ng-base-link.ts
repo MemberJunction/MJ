@@ -1,7 +1,9 @@
-import { ElementRef, Renderer2 } from '@angular/core';
+import { Directive, ElementRef, Renderer2 } from '@angular/core';
 import { EntityField } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
-export abstract class BaseLink {
+@Directive()
+export abstract class BaseLink extends BaseAngularComponent {
     protected CreateLink(el: ElementRef, field: EntityField, renderer: Renderer2, href: string, newTab: boolean = false) {
         const parent = el.nativeElement.parentNode;
         const a = renderer.createElement('a');

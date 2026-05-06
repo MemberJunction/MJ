@@ -66,6 +66,20 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     public readonly EmbeddingModelTypeName: string = 'Embeddings';
     public readonly LocalEmbeddingModelVendorName: string = 'LocalEmbeddings';
 
+    private _provider: IMetadataProvider | null = null;
+
+    /**
+     * Optional metadata provider override. Callers should set
+     * `AIEngine.Instance.Provider = providerToUse` before invoking entity-AI execution methods
+     * in multi-provider contexts. Falls back to the global default provider when unset.
+     */
+    public get Provider(): IMetadataProvider {
+        return this._provider ?? (new Metadata() as unknown as IMetadataProvider);
+    }
+    public set Provider(value: IMetadataProvider | null) {
+        this._provider = value;
+    }
+
     // Vector service for agent embeddings - initialized during Config
     private _agentVectorService: SimpleVectorService<AgentEmbeddingMetadata> | null = null;
 
@@ -366,6 +380,25 @@ export class AIEngine extends BaseSingleton<AIEngine> {
     }
 
     /**
+     * Ensures AIEngine is fully loaded (both base metadata and server-specific
+     * capabilities like vector services) before the caller reads engine state.
+     * Idempotent: if already loaded, returns immediately. If a load is in flight
+     * (e.g. the deferred startup or another consumer triggered it), returns the
+     * same in-progress promise.
+     *
+     * Mirrors BaseEngine.EnsureLoaded — added here because AIEngine extends
+     * BaseSingleton (not BaseEngine) and has its own load orchestration to
+     * cover server-specific setup (`RefreshServerSpecificMetadata`).
+     *
+     * Use at any consumption point that touches AIEngine state, especially
+     * given AIEngineBase is registered as deferred at startup.
+     */
+    public async EnsureLoaded(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        if (this._loaded) return;
+        await this.Config(false, contextUser, provider);
+    }
+
+    /**
      * Internal loading logic - separated for clean promise management
      */
     private async innerLoad(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
@@ -405,15 +438,40 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         // Load actions from the Action system
         await this.RefreshActions(contextUser);
 
-        // Load all embeddings in parallel since they are independent
-        await Promise.all([
-            this.RefreshAgentEmbeddings(),
-            this.RefreshActionEmbeddings(),
-            this.RefreshNoteEmbeddings(contextUser),
-            this.RefreshExampleEmbeddings(contextUser)
-        ]);
+        // Embedding generation is deferred to first use (FindSimilar* calls).
+        // This avoids loading the ~50MB local embedding model during Config(),
+        // which is expensive in short-lived CLI processes that never need search.
+        this._embeddingsGenerated = false;
+    }
 
-        this._embeddingsGenerated = true;
+    /**
+     * Ensures embeddings are generated, loading the model if needed.
+     * Called lazily from FindSimilar* methods on first use.
+     */
+    private _embeddingsPromise: Promise<void> | null = null;
+
+    private async ensureEmbeddingsGenerated(): Promise<void> {
+        if (this._embeddingsGenerated) return;
+        if (!this._embeddingsPromise) {
+            this._embeddingsPromise = (async () => {
+                try {
+                    await Promise.all([
+                        this.RefreshAgentEmbeddings(),
+                        this.RefreshActionEmbeddings(),
+                        this.RefreshNoteEmbeddings(this._contextUser),
+                        this.RefreshExampleEmbeddings(this._contextUser)
+                    ]);
+                    this._embeddingsGenerated = true;
+                } finally {
+                    // Always clear the in-flight promise so the next caller can retry
+                    // after a transient failure (e.g., model download flake). Without
+                    // this, a single failed load would poison every subsequent
+                    // FindSimilar* call for the lifetime of the process.
+                    this._embeddingsPromise = null;
+                }
+            })();
+        }
+        await this._embeddingsPromise;
     }
 
     // ========================================================================
@@ -932,6 +990,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         topK: number = 5,
         minSimilarity: number = 0.5
     ): Promise<AgentMatchResult[]> {
+        await this.ensureEmbeddingsGenerated();
         if (!this._agentVectorService) {
             throw new Error('Agent embeddings not loaded. Ensure AIEngine.Config() has completed.');
         }
@@ -953,6 +1012,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         topK: number = 10,
         minSimilarity: number = 0.5
     ): Promise<ActionMatchResult[]> {
+        await this.ensureEmbeddingsGenerated();
         if (!this._actionVectorService) {
             throw new Error('Action embeddings not loaded. Ensure AIEngine.Config() has completed.');
         }
@@ -979,8 +1039,8 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         minSimilarity: number = 0.5,
         additionalFilter?: (metadata: NoteEmbeddingMetadata) => boolean
     ): Promise<NoteMatchResult[]> {
+        await this.ensureEmbeddingsGenerated();
         if (!this._noteVectorService) {
-            // Vector service not available - fall back to returning notes from cache filtered by scope
             LogError('FindSimilarAgentNotes: Note vector service not initialized. Falling back to cached notes without semantic ranking.');
             return this.fallbackGetNotesFromCache(agentId, userId, companyId, topK, additionalFilter);
         }
@@ -1092,8 +1152,8 @@ export class AIEngine extends BaseSingleton<AIEngine> {
         minSimilarity: number = 0.5,
         additionalFilter?: (metadata: ExampleEmbeddingMetadata) => boolean
     ): Promise<ExampleMatchResult[]> {
+        await this.ensureEmbeddingsGenerated();
         if (!this._exampleVectorService) {
-            // Vector service not available - fall back to returning examples from cache filtered by scope
             LogError('FindSimilarAgentExamples: Example vector service not initialized. Falling back to cached examples without semantic ranking.');
             return this.fallbackGetExamplesFromCache(agentId, userId, companyId, topK, additionalFilter);
         }
@@ -1260,7 +1320,7 @@ export class AIEngine extends BaseSingleton<AIEngine> {
                     }
                 }
                 else if (entityAction.OutputType.trim().toLowerCase() === 'entity') {
-                    const md = new Metadata();
+                    const md = this.Provider;
                     const newRecord = await md.GetEntityObject(entityAction.OutputEntity);
                     newRecord.NewRecord();
                     newRecord.Set('EntityID', params.entityRecord.EntityInfo.ID);

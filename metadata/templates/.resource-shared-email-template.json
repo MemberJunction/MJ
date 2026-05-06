@@ -1,0 +1,35 @@
+{
+  "fields": {
+    "Name": "Resource Shared - Email",
+    "Description": "Email template sent when another user shares a resource (conversation, dashboard, artifact, etc.) with you",
+    "UserID": "@lookup:MJ: Users.Name=System",
+    "IsActive": true
+  },
+  "relatedEntities": {
+    "MJ: Template Contents": [
+      {
+        "fields": {
+          "TemplateID": "@parent:ID",
+          "TypeID": "@lookup:MJ: Template Content Types.Name=HTML",
+          "TemplateText": "@file:templates/resource-shared-email.html",
+          "Priority": 100,
+          "IsActive": true
+        },
+        "primaryKey": {
+          "ID": "886B5026-F96C-4DFB-9076-A308EC9D3FFC"
+        },
+        "sync": {
+          "lastModified": "2026-04-23T20:24:33.511Z",
+          "checksum": "057eadcbc389d3846dcec10031554c82b5fc751acae8b00e7be4d35d9fdda72d"
+        }
+      }
+    ]
+  },
+  "primaryKey": {
+    "ID": "0B429D1B-7029-4F0C-90F9-56049235BF9D"
+  },
+  "sync": {
+    "lastModified": "2026-04-23T20:24:31.063Z",
+    "checksum": "e31a53ba6ebbef9a38a49416493cdd4da2356a1717ac8519710a86af792b9877"
+  }
+}

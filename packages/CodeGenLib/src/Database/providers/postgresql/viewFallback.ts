@@ -1,0 +1,345 @@
+/**
+ * 42P16 recovery for PostgreSQL base view regeneration.
+ *
+ * PG's `CREATE OR REPLACE VIEW` rejects every non-additive change (rename,
+ * reorder, drop-column, type-change) with SQLSTATE `42P16 invalid_table_definition`.
+ * The industry-standard recovery — `DROP VIEW ... CASCADE; CREATE VIEW ...` —
+ * silently destroys every dependent view, function, grant, and comment. This
+ * module wraps that recovery so destruction is bounded and reversible:
+ *
+ *   1. Try `CREATE OR REPLACE VIEW` first (non-destructive happy path).
+ *   2. On 42P16: open a transaction, capture every dependent object via
+ *      `viewDependencyCapture`, issue DROP CASCADE, run the new CREATE, then
+ *      replay the captured dependents in dependency order (shallowest-first
+ *      views → functions → grants → comment → owner). Commit on success,
+ *      rollback on any failure.
+ *   3. On any other error: propagate — it's not a schema-compatibility issue,
+ *      so the fallback can't help.
+ *
+ * Inside the transaction, a single restore failure (e.g. a dependent function
+ * body references a column the new view doesn't have) rolls back EVERYTHING,
+ * leaving the pre-replace state intact. That's a hard failure the operator
+ * should see, not a silent partial success.
+ *
+ * This module is orchestration only — the capture queries live in
+ * `viewDependencyCapture.ts` and the base-view SQL emission stays in
+ * `PostgreSQLCodeGenProvider.generateBaseView`. Wiring this into the
+ * per-entity regeneration loop is a separate commit.
+ */
+
+import {
+    type PGQueryable,
+    resolveViewOid,
+    captureDependentViews,
+    captureDependentFunctions,
+    captureGrants,
+    captureMetadata,
+    type DependentView,
+    type DependentFunction,
+    type ViewGrant,
+    type ViewMetadata,
+} from './viewDependencyCapture';
+
+const SQLSTATE_INVALID_TABLE_DEFINITION = '42P16';
+
+/**
+ * An error thrown from the restore phase. Tagged so callers can distinguish
+ * a port regression (restore failed because the new view has incompatible
+ * column shape) from an original-CREATE regression.
+ */
+export class ViewFallbackRestoreError extends Error {
+    constructor(
+        public readonly phase: 'restore-view' | 'restore-function' | 'restore-grant' | 'restore-comment' | 'restore-owner',
+        public readonly target: { schema?: string; name?: string; sql?: string },
+        cause: unknown
+    ) {
+        const causeMsg = cause instanceof Error ? cause.message : String(cause);
+        super(`Fallback ${phase} failed for ${target.schema ?? ''}.${target.name ?? ''}: ${causeMsg}`);
+        this.name = 'ViewFallbackRestoreError';
+    }
+}
+
+export interface ExecuteWithFallbackOptions {
+    /** A connected pg Client (not a pool) — we issue BEGIN/COMMIT on this. */
+    client: PGQueryable;
+    schema: string;
+    viewName: string;
+    /** The exact `CREATE OR REPLACE VIEW ...` SQL the generator produced. */
+    createOrReplaceSQL: string;
+    /**
+     * Optional — set of view names in `schema.name` form that CodeGen will
+     * regenerate later in the same run. Dependents in this set are skipped
+     * at restore time because CodeGen's own loop will recreate them with
+     * their new definitions. Without this, a captured stale definition could
+     * break when its own column list no longer matches the regenerated base.
+     *
+     * Names are compared case-sensitively because PG identifiers are stored
+     * as-written when quoted.
+     */
+    willRegenerate?: Set<string>;
+    /**
+     * Optional — the qualified base table this view selects from
+     * (e.g. `__mj."RecordChange"`). Used to materialize a stub view first
+     * when the view body has a self-reference (`FROM ... vwSelf`) and the
+     * view doesn't yet exist (so CREATE OR REPLACE can't resolve the
+     * self-reference without erroring "relation does not exist").
+     *
+     * When provided AND the first CREATE OR REPLACE fails with 42P01
+     * (undefined_table) for the view we're trying to create, we materialize
+     * an empty-shape stub view from the base table, then retry the real
+     * CREATE OR REPLACE — which now succeeds because the self-reference
+     * can resolve to the stub.
+     */
+    baseTableQualified?: string;
+}
+
+/**
+ * Attempt CREATE OR REPLACE VIEW; on 42P16, perform the full capture + drop +
+ * recreate + restore dance inside a transaction.
+ *
+ * Caller must pass a connected pg Client. Concurrent usage of the same client
+ * from other code is not allowed — this function manages transaction state.
+ */
+export async function executeWithFallback(opts: ExecuteWithFallbackOptions): Promise<void> {
+    const { client, schema, viewName, createOrReplaceSQL, baseTableQualified } = opts;
+    const willRegenerate = opts.willRegenerate ?? new Set<string>();
+
+    // First attempt: happy-path CREATE OR REPLACE. If this succeeds there's
+    // nothing to capture or restore.
+    try {
+        await client.query(createOrReplaceSQL);
+        return;
+    } catch (e) {
+        // Self-reference recovery (42P01 — undefined_table for the view we're
+        // creating). Some entity views reference themselves via a LEFT JOIN
+        // (e.g. vwRecordChanges joins to itself for parent lookup). When the
+        // view doesn't exist (e.g. an earlier CASCADE drop wiped it),
+        // CREATE OR REPLACE fails because the body's FROM clause can't
+        // resolve the self-reference. Materialize a stub from the base table
+        // first, then retry the real CREATE OR REPLACE.
+        if (is42P01ForSelf(e, schema, viewName) && baseTableQualified) {
+            const qualified = quoteQualified(schema, viewName);
+            await client.query(`CREATE OR REPLACE VIEW ${qualified} AS SELECT * FROM ${baseTableQualified} WHERE FALSE`);
+            try {
+                await client.query(createOrReplaceSQL);
+                return;
+            } catch (e2) {
+                // If the retry STILL fails, drop into the 42P16 path below
+                // (which captures + drop-cascade + recreate). This handles
+                // the case where the stub's column list doesn't match the
+                // real one closely enough for CREATE OR REPLACE additive rules.
+                if (!is42P16(e2)) throw e2;
+            }
+        } else if (!is42P16(e)) {
+            throw e;
+        }
+    }
+
+    // 42P16 path. Everything from here runs inside a transaction so a failed
+    // restore rolls back to the pre-drop state.
+    await client.query('BEGIN');
+    try {
+        const oid = await resolveViewOid(client, schema, viewName);
+        // If the view doesn't exist, 42P16 would never have been raised — so
+        // this should be impossible, but fail loudly if it happens.
+        if (oid === null) {
+            throw new Error(
+                `Cannot fall back — view ${schema}.${viewName} resolved to no oid after 42P16.`
+            );
+        }
+
+        const dependents = await captureDependentViews(client, oid);
+
+        // Capture functions transitively. A DROP VIEW ... CASCADE on the
+        // target removes BOTH directly-dependent functions (those whose
+        // RETURNS SETOF references the target's rowtype) AND functions that
+        // depend on the cascaded dependent views. Without the transitive
+        // sweep, codegen pass 1 leaves spCreateX/spUpdateX functions
+        // permanently missing for any entity X whose view is reached only
+        // through the cascade chain — surfacing as "Post-CodeGen CRUD
+        // validation FAILED: missing create routine spCreateX" and forcing
+        // a second codegen pass to converge.
+        const directFunctions = await captureDependentFunctions(client, oid);
+        const transitiveFnLists = await Promise.all(
+            dependents.map(async (dep) => {
+                const depOid = await resolveViewOid(client, dep.schema, dep.name);
+                return depOid !== null ? captureDependentFunctions(client, depOid) : [];
+            })
+        );
+        // De-duplicate by schema+name — direct + transitive lists can overlap
+        // when the same function depends on both target and a dependent view.
+        const seen = new Set<string>();
+        const dependentFunctions = [...directFunctions, ...transitiveFnLists.flat()].filter(fn => {
+            const key = `${fn.schema}.${fn.name}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+        });
+
+
+        const grants = await captureGrants(client, schema, viewName);
+        const metadata = await captureMetadata(client, oid);
+
+        const qualified = quoteQualified(schema, viewName);
+        await client.query(`DROP VIEW IF EXISTS ${qualified} CASCADE`);
+        await client.query(createOrReplaceSQL);
+
+        await restoreDependents(
+            client,
+            schema,
+            viewName,
+            dependents,
+            dependentFunctions,
+            grants,
+            metadata,
+            willRegenerate
+        );
+
+        await client.query('COMMIT');
+    } catch (err) {
+        await safelyRollback(client);
+        throw err;
+    }
+}
+
+// ─── Restore ─────────────────────────────────────────────────────────────
+
+async function restoreDependents(
+    client: PGQueryable,
+    targetSchema: string,
+    targetName: string,
+    dependents: DependentView[],
+    dependentFunctions: DependentFunction[],
+    grants: ViewGrant[],
+    metadata: ViewMetadata,
+    willRegenerate: Set<string>
+): Promise<void> {
+    // 1. Dependent views/matviews in shallowest-first order. The capture query
+    //    already returns them sorted, so we just walk the array.
+    //
+    // Strategy change: ALWAYS try to restore. The previous behavior — skip
+    // anything CodeGen will regenerate — left the DB in a temporarily
+    // inconsistent state where ANOTHER entity processed in-between (whose own
+    // view body references the skipped dependent) failed phase 1 with
+    // `relation "__mj.vwX" does not exist`. With "always restore," the
+    // dropped dependent comes back as its captured (pre-this-run) definition;
+    // when its owning entity processes later, CREATE OR REPLACE VIEW
+    // overwrites it with the fresh definition. Best-effort: if a stale
+    // captured definition can't be re-created (e.g. it referenced columns
+    // that no longer exist), swallow the error — the owning entity's regen
+    // will fix it. Anything that owns a captured definition AND isn't slated
+    // for regen WILL surface as a hard error (re-thrown below).
+    // ALWAYS-BEST-EFFORT for dependents (changed strategy):
+    //
+    // The previous policy rethrew on a non-willRegenerate dependent restore
+    // failure, which ROLLBACK'd the entire transaction including the just-
+    // recreated TARGET view. The result: target view permanently missing,
+    // dependent CRUD functions (RETURNS SETOF target) failing in their
+    // phase, and 16+ entities (AIModel, UserApplicationEntity, etc.) ending
+    // up with no spCreate/spUpdate at all. Losing the target is worse than
+    // losing a dependent.
+    //
+    // New policy: log dependent failures, continue. The target view's
+    // recreation always commits. Dependents that couldn't be restored stay
+    // missing — they'll either come back in a later codegen pass (if
+    // willRegenerate) or surface as a missing-routine warning at validator
+    // time (which is actionable and visible, vs. a silent ROLLBACK).
+    for (const dep of dependents) {
+        const kind = dep.relkind === 'm' ? 'MATERIALIZED VIEW' : 'VIEW';
+        const sql = `CREATE ${kind} ${quoteQualified(dep.schema, dep.name)} AS ${dep.definition}`;
+        try {
+            await client.query(sql);
+        } catch (e) {
+            // Best-effort: log, continue. Target view stays committed.
+            const msg = e instanceof Error ? e.message : String(e);
+            // eslint-disable-next-line no-console
+            console.warn(`[viewFallback] best-effort restore skipped dependent ${dep.schema}.${dep.name}: ${msg}`);
+        }
+    }
+
+    // 2. Dependent functions via pg_get_functiondef. Same best-effort policy.
+    for (const fn of dependentFunctions) {
+        try {
+            await client.query(fn.definition);
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            // eslint-disable-next-line no-console
+            console.warn(`[viewFallback] best-effort restore skipped dependent function ${fn.schema}.${fn.name}: ${msg}`);
+        }
+    }
+
+    // 3. GRANTs on the target. `pg_depend` doesn't track grants — they live on
+    //    the old view's `relacl` which vanished with the CASCADE — so we replay
+    //    from what we captured before the drop. PUBLIC is a pseudo-role and
+    //    must be unquoted; anything else is quoted to preserve case.
+    const qualifiedTarget = quoteQualified(targetSchema, targetName);
+    for (const g of grants) {
+        const grantee = g.grantee === 'PUBLIC' ? 'PUBLIC' : `"${g.grantee}"`;
+        const option = g.withGrantOption ? ' WITH GRANT OPTION' : '';
+        const sql = `GRANT ${g.privilege} ON ${qualifiedTarget} TO ${grantee}${option}`;
+        try {
+            await client.query(sql);
+        } catch (e) {
+            throw new ViewFallbackRestoreError('restore-grant', { schema: targetSchema, name: targetName, sql }, e);
+        }
+    }
+
+    // 4. Comment, if one was set. PG's COMMENT ON is DDL — it does NOT accept
+    //    parameterized values, so we inline the text with single-quote escaping
+    //    (SQL-92: double every internal single-quote).
+    if (metadata.comment !== null) {
+        const escaped = metadata.comment.replace(/'/g, "''");
+        try {
+            await client.query(`COMMENT ON VIEW ${qualifiedTarget} IS '${escaped}'`);
+        } catch (e) {
+            throw new ViewFallbackRestoreError('restore-comment', { schema: targetSchema, name: targetName }, e);
+        }
+    }
+
+    // 5. Owner. CREATE VIEW sets owner to the session user; restore the
+    //    captured owner so grants / default privileges remain consistent.
+    try {
+        await client.query(`ALTER VIEW ${qualifiedTarget} OWNER TO "${metadata.owner}"`);
+    } catch (e) {
+        throw new ViewFallbackRestoreError('restore-owner', { schema: targetSchema, name: targetName }, e);
+    }
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────
+
+function is42P16(err: unknown): boolean {
+    return typeof err === 'object' && err !== null && (err as { code?: string }).code === SQLSTATE_INVALID_TABLE_DEFINITION;
+}
+
+const SQLSTATE_UNDEFINED_TABLE = '42P01';
+
+/**
+ * Returns true if the error is an `undefined_table` error for the same view
+ * we're trying to create — i.e. the CREATE OR REPLACE failed because the
+ * body's FROM clause references the view itself, but the view doesn't yet
+ * exist. Caller can recover by materializing a stub first.
+ *
+ * Match logic: PG's error message is `relation "schema.name" does not exist`
+ * or sometimes `relation "name" does not exist`. We check both.
+ */
+function is42P01ForSelf(err: unknown, schema: string, viewName: string): boolean {
+    if (typeof err !== 'object' || err === null) return false;
+    const e = err as { code?: string; message?: string };
+    if (e.code !== SQLSTATE_UNDEFINED_TABLE) return false;
+    const msg = e.message ?? '';
+    // Match `relation "<schema>.<name>"` or `relation "<name>"` — both forms occur in PG.
+    return msg.includes(`relation "${schema}.${viewName}"`)
+        || msg.includes(`relation "${viewName}"`);
+}
+
+function quoteQualified(schema: string, name: string): string {
+    return `"${schema.replace(/"/g, '""')}"."${name.replace(/"/g, '""')}"`;
+}
+
+async function safelyRollback(client: PGQueryable): Promise<void> {
+    try {
+        await client.query('ROLLBACK');
+    } catch {
+        /* best-effort — if ROLLBACK itself fails the connection is broken anyway */
+    }
+}

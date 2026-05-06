@@ -7,6 +7,7 @@ import { MJAIPromptRunEntity } from '@memberjunction/core-entities';
 import * as d3 from 'd3';
 import { AIAgentRunCostService } from './ai-agent-run-cost.service';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 interface PromptMetrics {
   totalCount: number;
   totalExecutionTime: number;
@@ -68,7 +69,7 @@ interface SimpleActionLog {
   styleUrls: ['./ai-agent-run-analytics.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterViewInit {
+export class AIAgentRunAnalyticsComponent extends BaseAngularComponent implements OnInit, OnDestroy, AfterViewInit {
   @Input() agentRunId!: string;
   
   private destroy$ = new Subject<void>();
@@ -164,7 +165,8 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
   constructor(
     private cdr: ChangeDetectorRef,
     private costService: AIAgentRunCostService
-  ) {}
+  ) {
+    super();}
   
   ngOnInit() {
     if (this.agentRunId) {
@@ -294,7 +296,7 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
   }
   
   private async loadAllRunData() {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     
     // Get all agent run IDs in hierarchy (including root and children)
     const agentRunIds = await this.getAllAgentRunIds(this.agentRunId);
@@ -1623,7 +1625,7 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
    * Get all agent run IDs in hierarchy, starting from the root run
    */
   private async getAllAgentRunIds(rootRunId: string): Promise<string[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const agentRunIds: string[] = [rootRunId];
     
     // Simple recursive approach to find all child runs
@@ -1654,7 +1656,7 @@ export class AIAgentRunAnalyticsComponent implements OnInit, OnDestroy, AfterVie
   private async loadAllPromptRuns(agentRunIds: string[]): Promise<any[]> {
     if (agentRunIds.length === 0) return [];
     
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     
     // First, get all the prompt steps for the agent runs
     const stepsResult = await rv.RunView({

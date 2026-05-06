@@ -11,6 +11,8 @@ export * from './DataExplorer';
 export * from './Communication/communication-dashboard.component';
 export * from './Credentials';
 export * from './SystemDiagnostics';
+export * from './DevTools';
+export * from './Admin';
 export * from './Lists';
 
 // Export AI components as resources (BaseResourceComponent-based)
@@ -26,6 +28,8 @@ export {
   PerformanceHeatmapComponent,
   AgentRequestsResourceComponent,
   AutotaggingPipelineResourceComponent,
+  TagsResourceComponent,
+  LoadTagsResource,
   VectorManagementResourceComponent,
   DuplicateDetectionResourceComponent,
   AIAnalyticsResourceComponent,
@@ -141,7 +145,6 @@ export {
 } from './DashboardBrowser/dashboard-browser-resource.component';
 export {
   DashboardShareDialogComponent,
-  UserSharePermission,
   ShareDialogResult
 } from './DashboardBrowser/dashboard-share-dialog.component';
 
@@ -151,6 +154,20 @@ export { HomeDashboardComponent } from './Home/home-dashboard.component';
 
 // Application Roles
 export { ApplicationRolesResourceComponent, LoadApplicationRolesResource } from './ApplicationRoles/application-roles-resource.component';
+
+// Permissions admin — three independent resource tabs (Phase 2a/b/c — unified permissions)
+export {
+    PermissionsUserAccessResourceComponent,
+    LoadPermissionsUserAccessResource,
+} from './Permissions/user-access-resource.component';
+export {
+    PermissionsResourceAccessResourceComponent,
+    LoadPermissionsResourceAccessResource,
+} from './Permissions/resource-access-resource.component';
+export {
+    PermissionsAuditLogResourceComponent,
+    LoadPermissionsAuditLogResource,
+} from './Permissions/audit-log-resource.component';
 
 // API Keys
 export { APIKeysResourceComponent } from './APIKeys/api-keys-resource.component';
@@ -185,5 +202,7 @@ export * from './credentials-dashboards.module';
 export * from './data-explorer-dashboards.module';
 export * from './lists-dashboards.module';
 export * from './component-studio-dashboards.module';
+export * from './DatabaseDesigner/database-designer-dashboards.module';
+export { DatabaseDesignerDashboardComponent, LoadDatabaseDesignerDashboard } from './DatabaseDesigner/components/database-designer-dashboard.component';
 export * from './shared/shared-dashboard-widgets.module';
 export * from './archiving-dashboards.module';

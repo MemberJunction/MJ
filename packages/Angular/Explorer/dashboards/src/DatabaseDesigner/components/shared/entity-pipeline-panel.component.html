@@ -1,0 +1,92 @@
+<div class="pipeline-panel">
+
+  <!-- ── Running state ───────────────────────────────────────────────────── -->
+  @if (State === 'idle' || State === 'running') {
+    <div class="panel-running" aria-live="polite" aria-label="Creating entity…">
+      <div class="running-header">
+        <i class="fa-solid fa-spinner fa-spin running-spinner"></i>
+        <span class="running-title">
+          @if (ModificationType === 'create') { Creating entity… }
+          @else { Applying changes… }
+        </span>
+      </div>
+      @if (TableDefinition) {
+        <p class="running-target">
+          {{ TableDefinition.SchemaName }}.{{ TableDefinition.TableName }}
+        </p>
+      }
+      <p class="running-note">
+        This typically takes 5–10 minutes. The server is running migrations,
+        regenerating code, and restarting. You can safely close this panel —
+        check back in Database Designer once it's done.
+      </p>
+    </div>
+  }
+
+  <!-- ── Success state ───────────────────────────────────────────────────── -->
+  @if (State === 'success' && PipelineResult) {
+    <div class="panel-success">
+
+      <!-- Step list -->
+      @if (Steps.length > 0) {
+        <div class="steps-list" aria-label="Pipeline steps">
+          @for (step of Steps; track TrackByStep($index, step)) {
+            <div class="step-item" [class.step-failed]="step.Status === 'failed'" [class.step-skipped]="step.Status === 'skipped'">
+              <i [class]="StepIcon(step)"></i>
+              <span class="step-name">{{ step.Name }}</span>
+              <span class="step-duration">{{ FormatDuration(step.DurationMs) }}</span>
+            </div>
+          }
+        </div>
+      }
+
+      <!-- Success card -->
+      <div class="success-card">
+        <i class="fa-solid fa-circle-check success-icon"></i>
+        <h3 class="success-title">{{ PipelineResult.EntityName }} created!</h3>
+        <p class="success-path">{{ FullTablePath }}</p>
+        <p class="success-cols">{{ SuccessColumnSummary }}</p>
+        <p class="success-refresh-hint">
+          <i class="fa-solid fa-rotate-right"></i>
+          Don't see it in the entity list? Click <strong>Refresh</strong> to reload.
+        </p>
+      </div>
+    </div>
+  }
+
+  <!-- ── Failed state ────────────────────────────────────────────────────── -->
+  @if (State === 'failed') {
+    <div class="panel-failed">
+
+      <!-- Step list (partial results if available) -->
+      @if (Steps.length > 0) {
+        <div class="steps-list" aria-label="Pipeline steps">
+          @for (step of Steps; track TrackByStep($index, step)) {
+            <div class="step-item" [class.step-failed]="step.Status === 'failed'" [class.step-skipped]="step.Status === 'skipped'">
+              <i [class]="StepIcon(step)"></i>
+              <span class="step-name">{{ step.Name }}</span>
+              @if (step.Message) {
+                <span class="step-message">{{ step.Message }}</span>
+              }
+            </div>
+          }
+        </div>
+      }
+
+      <!-- Error card -->
+      <div class="error-card">
+        <i class="fa-solid fa-circle-xmark error-icon"></i>
+        <h3 class="error-title">
+          @if (ModificationType === 'create') { Entity creation failed }
+          @else { Apply changes failed }
+        </h3>
+        <p class="error-message">{{ ErrorMessage }}</p>
+        <button mjButton buttonStyle="secondary" (click)="Reset()">
+          <i class="fa-solid fa-rotate-right"></i>
+          Try Again
+        </button>
+      </div>
+    </div>
+  }
+
+</div>

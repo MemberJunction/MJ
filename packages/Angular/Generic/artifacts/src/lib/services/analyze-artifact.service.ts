@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { DataSnapshot, LogStatus, Metadata, UserInfo } from '@memberjunction/core';
+import { DataSnapshot, LogStatus, Metadata, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import {
   ArtifactMetadataEngine,
   MJArtifactEntity,
@@ -72,6 +72,19 @@ export interface AnalyzeArtifactResult {
  */
 @Injectable({ providedIn: 'root' })
 export class AnalyzeArtifactService {
+  private _provider: IMetadataProvider | null = null;
+
+  /**
+   * Set the metadata provider this service should use. When unset, falls back to Metadata.Provider.
+   */
+  public set Provider(value: IMetadataProvider | null) {
+      this._provider = value;
+  }
+
+  public get Provider(): IMetadataProvider {
+      return this._provider ?? Metadata.Provider;
+  }
+
   /**
    * Creates ONLY the Artifact + ArtifactVersion for a captured snapshot.
    * Does not create a conversation or any junctions. Used by callers who
@@ -96,7 +109,7 @@ export class AnalyzeArtifactService {
       );
     }
 
-    const md = new Metadata();
+    const md = this.Provider;
 
     const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', currentUser);
     artifact.Name = title;
@@ -143,7 +156,7 @@ export class AnalyzeArtifactService {
       title,
     });
 
-    const md = new Metadata();
+    const md = this.Provider;
 
     // 4. Create the conversation
     const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', currentUser);

@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { RunView, Metadata, UserInfo } from '@memberjunction/core';
+import { RunView, Metadata, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import {
   MJConversationDetailAttachmentEntity,
   MJConversationDetailArtifactEntity,
@@ -26,7 +26,20 @@ import { UUIDsEqual } from '@memberjunction/global';
   providedIn: 'root'
 })
 export class ConversationAttachmentService {
+  private _provider: IMetadataProvider | null = null;
+
   constructor() {}
+
+  /**
+   * Set the metadata provider this service should use. When unset, falls back to Metadata.Provider.
+   */
+  public set Provider(value: IMetadataProvider | null) {
+      this._provider = value;
+  }
+
+  public get Provider(): IMetadataProvider {
+      return this._provider ?? Metadata.Provider;
+  }
 
   /**
    * Load all attachments for a list of conversation detail IDs.
@@ -43,7 +56,7 @@ export class ConversationAttachmentService {
     }
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.Provider);
       const idList = conversationDetailIds.map(id => `'${id}'`).join(',');
 
       const attachmentResult = await rv.RunView<MJConversationDetailAttachmentEntity>({
@@ -166,7 +179,7 @@ export class ConversationAttachmentService {
     contextUser?: UserInfo
   ): Promise<MJConversationDetailAttachmentEntity[]> {
     const savedAttachments: MJConversationDetailAttachmentEntity[] = [];
-    const md = new Metadata();
+    const md = this.Provider;
 
     for (let i = 0; i < pendingAttachments.length; i++) {
       const pending = pendingAttachments[i];

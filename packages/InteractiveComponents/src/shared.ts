@@ -275,6 +275,30 @@ export interface SimpleSearch {
     PreviewSearch: (query: string, maxResults?: number) => Promise<SimpleSearchResult>;
 }
 
+// =========================================================================
+// GeoData — Coordinate-based geographic resolution
+// =========================================================================
+
+/**
+ * Result of resolving a coordinate to geographic regions.
+ */
+export interface SimpleGeoPointResolution {
+    Country?: { ID: string; Name: string; BoundaryGeoJSON?: string | null } | undefined;
+    State?: { ID: string; Name: string; BoundaryGeoJSON?: string | null } | undefined;
+}
+
+/**
+ * Provides coordinate-based geographic resolution via point-in-polygon.
+ * Used by map components to resolve lat/lng to country/state for choropleth rendering.
+ */
+export interface SimpleGeoDataEngine {
+    /**
+     * Resolve a coordinate pair to its containing country and state/province.
+     * Uses cached GeoJSON boundaries with ray-casting point-in-polygon.
+     */
+    ResolvePointToLocation(lat: number, lng: number): SimpleGeoPointResolution;
+}
+
 /**
  * Provides a simple interface for InteractiveComponents to perform a wide variety of common AI operations
  * such as prompt execution with LLMs, calculating embeddings on strings, and using vector search for small to mediun

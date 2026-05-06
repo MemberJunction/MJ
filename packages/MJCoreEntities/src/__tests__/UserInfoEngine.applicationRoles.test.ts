@@ -28,6 +28,13 @@ vi.mock('@memberjunction/core', () => {
             async Load(): Promise<void> {
                 // no-op in tests
             }
+            // Multi-provider migration: engines now use this.ProviderToUse instead of new Metadata()
+            get ProviderToUse() {
+                return {
+                    get CurrentUser() { return mockCurrentUser; },
+                    Applications: [],
+                };
+            }
         },
         BaseEnginePropertyConfig: class {},
         IMetadataProvider: class {},

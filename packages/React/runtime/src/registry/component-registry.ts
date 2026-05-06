@@ -53,6 +53,11 @@ export class ComponentRegistry {
    * @param component - Compiled component object
    * @param namespace - Component namespace (default: 'Global')
    * @param version - Component version (default: 'v1')
+   * @param contentHash - Optional content fingerprint. When provided, the entry
+   *   is keyed by `(name, namespace, version, contentHash)` so multiple specs
+   *   that share `(name, namespace, version)` but carry different `code` (e.g.
+   *   a registry-reference stub vs. an inline-code Studio export of the same
+   *   artifact) coexist in the cache instead of clobbering each other.
    * @param tags - Optional tags for categorization
    * @returns The registered component's metadata
    */
@@ -61,10 +66,11 @@ export class ComponentRegistry {
     component: ComponentObject,
     namespace: string = 'Global',
     version: string = 'v1',
+    contentHash?: string,
     tags?: string[]
   ): ComponentMetadata {
-    const id = this.generateRegistryKey(name, namespace, version);
-    
+    const id = this.generateRegistryKey(name, namespace, version, contentHash);
+
     // Create metadata
     const metadata: ComponentMetadata = {
       id,
@@ -99,12 +105,14 @@ export class ComponentRegistry {
    * @param name - Component name
    * @param namespace - Component namespace
    * @param version - Component version
+   * @param contentHash - Optional content fingerprint. When provided, looks up
+   *   the exact `(name, namespace, version, contentHash)` entry. When omitted,
+   *   falls back to the most recently registered entry matching the other keys
+   *   (existing behavior).
    * @returns The component object if found, undefined otherwise
    */
-  get(name: string, namespace: string = 'Global', version?: string): ComponentObject | undefined {
-    const id = version 
-      ? this.generateRegistryKey(name, namespace, version)
-      : this.findLatestVersion(name, namespace);
+  get(name: string, namespace: string = 'Global', version?: string, contentHash?: string): ComponentObject | undefined {
+    const id = this.resolveLookupKey(name, namespace, version, contentHash);
 
     if (!id) return undefined;
 
@@ -124,13 +132,11 @@ export class ComponentRegistry {
    * @param name - Component name
    * @param namespace - Component namespace
    * @param version - Component version
+   * @param contentHash - Optional content fingerprint (see {@link get})
    * @returns true if the component exists
    */
-  has(name: string, namespace: string = 'Global', version?: string): boolean {
-    const id = version 
-      ? this.generateRegistryKey(name, namespace, version)
-      : this.findLatestVersion(name, namespace);
-
+  has(name: string, namespace: string = 'Global', version?: string, contentHash?: string): boolean {
+    const id = this.resolveLookupKey(name, namespace, version, contentHash);
     return id ? this.registry.has(id) : false;
   }
 
@@ -139,15 +145,12 @@ export class ComponentRegistry {
    * @param name - Component name
    * @param namespace - Component namespace
    * @param version - Component version
+   * @param contentHash - Optional content fingerprint (see {@link get})
    * @returns true if the component was removed
    */
-  unregister(name: string, namespace: string = 'Global', version?: string): boolean {
-    const id = version 
-      ? this.generateRegistryKey(name, namespace, version)
-      : this.findLatestVersion(name, namespace);
-
+  unregister(name: string, namespace: string = 'Global', version?: string, contentHash?: string): boolean {
+    const id = this.resolveLookupKey(name, namespace, version, contentHash);
     if (!id) return false;
-
     return this.registry.delete(id);
   }
 
@@ -222,12 +225,10 @@ export class ComponentRegistry {
    * @param name - Component name
    * @param namespace - Component namespace
    * @param version - Component version
+   * @param contentHash - Optional content fingerprint (see {@link get})
    */
-  release(name: string, namespace: string = 'Global', version?: string): void {
-    const id = version 
-      ? this.generateRegistryKey(name, namespace, version)
-      : this.findLatestVersion(name, namespace);
-
+  release(name: string, namespace: string = 'Global', version?: string, contentHash?: string): void {
+    const id = this.resolveLookupKey(name, namespace, version, contentHash);
     if (!id) return;
 
     const entry = this.registry.get(id);
@@ -352,17 +353,55 @@ export class ComponentRegistry {
   }
 
   /**
-   * Generates a unique registry key
-   * @param name - Component name
-   * @param namespace - Component namespace
-   * @param version - Component version
-   * @returns Registry key
+   * Generates a unique registry key. When `contentHash` is supplied, it is
+   * appended so two specs that share `(name, namespace, version)` but have
+   * different code body don't collide.
    */
-  private generateRegistryKey(name: string, namespace: string, version: string): string {
-    if (this.config.enableNamespaces) {
-      return `${namespace}::${name}@${version}`;
+  private generateRegistryKey(name: string, namespace: string, version: string, contentHash?: string): string {
+    const base = this.config.enableNamespaces ? `${namespace}::${name}@${version}` : `${name}@${version}`;
+    return contentHash ? `${base}#${contentHash}` : base;
+  }
+
+  /**
+   * Resolves a lookup to an exact internal key. Centralizes the four
+   * lookup-shape variants used by `get`, `has`, `unregister`, and `release`:
+   *
+   * - hash + version  → exact hash-suffixed key
+   * - version only    → latest entry matching `(name, namespace, version)` across all hashes
+   * - hash only       → no version → fall back to latest version (hash isn't enough alone)
+   * - neither         → latest entry matching `(name, namespace)`
+   */
+  private resolveLookupKey(name: string, namespace: string, version?: string, contentHash?: string): string | undefined {
+    if (version && contentHash) {
+      return this.generateRegistryKey(name, namespace, version, contentHash);
     }
-    return `${name}@${version}`;
+    if (version) {
+      return this.findLatestForVersion(name, namespace, version);
+    }
+    return this.findLatestVersion(name, namespace);
+  }
+
+  /**
+   * Find the most recently registered entry whose metadata matches
+   * `(name, namespace, version)`. Different content hashes for the same
+   * version are scanned and the newest by `registeredAt` wins.
+   */
+  private findLatestForVersion(name: string, namespace: string, version: string): string | undefined {
+    let latestKey: string | undefined;
+    let latestDate: Date | undefined;
+
+    for (const [key, entry] of this.registry) {
+      if (entry.metadata.name === name &&
+          entry.metadata.namespace === namespace &&
+          entry.metadata.version === version) {
+        if (!latestDate || entry.metadata.registeredAt > latestDate) {
+          latestDate = entry.metadata.registeredAt;
+          latestKey = key;
+        }
+      }
+    }
+
+    return latestKey;
   }
 
   /**
@@ -376,7 +415,7 @@ export class ComponentRegistry {
     let latestDate: Date | undefined;
 
     for (const [key, entry] of this.registry) {
-      if (entry.metadata.name === name && 
+      if (entry.metadata.name === name &&
           entry.metadata.namespace === namespace) {
         if (!latestDate || entry.metadata.registeredAt > latestDate) {
           latestDate = entry.metadata.registeredAt;

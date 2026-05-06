@@ -294,5 +294,30 @@
         </div>
         }
     </mj-collapsible-panel>
+
+    <!-- Tag Suggestions Section -->
+    <mj-collapsible-panel
+        SectionKey="mJTagSuggestions"
+        SectionName="Tag Suggestions"
+        Icon="fa fa-tags"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJTagSuggestions')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Suggestions','SourceContentItemID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tag Suggestions')"
+                [AllowLoad]="IsSectionExpanded('mJTagSuggestions')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJTagSuggestions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
 </mj-record-form-container>
         

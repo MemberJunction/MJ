@@ -4,6 +4,7 @@ import { LogError, Metadata, RunView } from '@memberjunction/core';
 import { MJDashboardEntityExtended, MJDashboardUserPreferenceEntity, MJApplicationEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface DashboardPreferencesResult {
   saved: boolean;
   preferences?: MJDashboardUserPreferenceEntity[];
@@ -15,7 +16,7 @@ export interface DashboardPreferencesResult {
   templateUrl: './dashboard-preferences-dialog.component.html',
   styleUrls: ['./dashboard-preferences-dialog.component.css']
 })
-export class DashboardPreferencesDialogComponent implements OnInit {
+export class DashboardPreferencesDialogComponent extends BaseAngularComponent implements OnInit {
   @Input() public applicationId: string | null = null;
   @Input() public scope: 'Global' | 'App' = 'Global';
   @Output() public result = new EventEmitter<DashboardPreferencesResult>();
@@ -46,7 +47,7 @@ export class DashboardPreferencesDialogComponent implements OnInit {
   }
 
   private async loadData(): Promise<void> {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     
     // Check if current user is sysadmin
     this.isSysAdmin = md.CurrentUser.Type.trim().toLowerCase() === 'owner';
@@ -95,7 +96,7 @@ export class DashboardPreferencesDialogComponent implements OnInit {
     if (!this.applicationId) return;
     
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const ds = await md.GetAndCacheDatasetByName("MJ_Metadata");
       const appList = ds.Results.find(r => r.Code === 'Applications');
       if (appList) {
@@ -109,8 +110,8 @@ export class DashboardPreferencesDialogComponent implements OnInit {
   }
 
   private async loadCurrentPreferences(): Promise<void> {
-    const rv = new RunView();
-    const md = new Metadata();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+    const md = this.ProviderToUse;
     
     const appFilter = this.applicationId ? ` AND ApplicationID='${this.applicationId}'` : '';
     const baseCondition = `Scope='${this.scope}'${appFilter}`;
@@ -274,8 +275,8 @@ export class DashboardPreferencesDialogComponent implements OnInit {
       this.saving = true;
       console.log('Starting save process with configured dashboards:', this.configuredDashboards.map(d => ({ id: d.ID, name: d.Name })));
       
-      const md = new Metadata();
-      const rv = new RunView();
+      const md = this.ProviderToUse;
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
       // Get existing preferences for this scope
       const baseCondition = this.scope === 'Global' 

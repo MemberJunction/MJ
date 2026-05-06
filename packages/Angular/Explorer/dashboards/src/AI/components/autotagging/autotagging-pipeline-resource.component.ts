@@ -670,7 +670,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             const engine = KnowledgeHubMetadataEngine.Instance;
             const docs = engine.GetActiveEntityDocuments();
             const entityMap = new Map<string, string>();
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             for (const doc of docs) {
                 const entityName = doc.Get('Entity') as string;
                 if (entityName) {
@@ -693,7 +693,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         if (!this.FormSourceEntityID) return [];
         try {
             const engine = KnowledgeHubMetadataEngine.Instance;
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, this.FormSourceEntityID));
             if (!entityInfo) return [];
             return engine.GetActiveEntityDocuments()
@@ -739,7 +739,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             if (!entityID) return [];
             try {
                 const engine = KnowledgeHubMetadataEngine.Instance;
-                const md = new Metadata();
+                const md = this.ProviderToUse;
                 const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityID));
                 if (!entityInfo) return [];
                 return engine.GetActiveEntityDocuments()
@@ -1125,7 +1125,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
     public async LoadPipelineData(): Promise<void> {
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const [sourcesResult, itemsResult, runsResult, tagsResult, sourceTypesResult, contentTypesResult] = await rv.RunViews([
                 { EntityName: 'MJ: Content Sources', OrderBy: 'Name', ResultType: 'simple' },
                 { EntityName: 'MJ: Content Items', OrderBy: '__mj_UpdatedAt DESC', MaxRows: 200, ResultType: 'simple', Fields: ['ID', 'Name', 'ContentSourceID', 'ContentSourceTypeID', 'ContentSource', 'ContentSourceType', 'ContentType', 'ContentFileType', 'URL', 'Text', 'Checksum', 'EntityRecordDocumentID', '__mj_CreatedAt', '__mj_UpdatedAt'] },
@@ -1162,12 +1162,15 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     }
 
     private buildNavItems(): void {
+        // Classify dashboard owns the autotag pipeline run-management surface.
+        // Tag Library + Taxonomy moved to the canonical "Tags" dashboard
+        // (TagsResourceComponent under Knowledge Hub) — this nav intentionally
+        // omits them. The underlying state + methods remain in this file as
+        // dead code for the moment; a follow-up will strip them.
         this.NavItems = [
             { Tab: 'pipeline', Icon: 'fa-solid fa-gauge-high', Label: 'Pipeline', BadgeText: this.IsRunning ? 'Live' : '', BadgeClass: 'nav-badge-live' },
             { Tab: 'sources', Icon: 'fa-solid fa-database', Label: 'Sources', BadgeText: String(this.contentSourcesRaw.length), BadgeClass: '' },
             { Tab: 'types', Icon: 'fa-solid fa-sliders', Label: 'Content Types', BadgeText: String(this.contentTypesRaw.length), BadgeClass: '' },
-            { Tab: 'tags', Icon: 'fa-solid fa-tag', Label: 'Tag Library', BadgeText: String(this.totalContentTagCount), BadgeClass: '' },
-            { Tab: 'taxonomy', Icon: 'fa-solid fa-sitemap', Label: 'Taxonomy', BadgeText: String(this.tagsRaw.length || ''), BadgeClass: '' },
         ];
     }
 
@@ -1347,7 +1350,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             const engine = KnowledgeHubMetadataEngine.Instance;
             const source = engine.ContentSources.find(cs => UUIDsEqual(cs.ID, sourceId));
             if (!source?.EntityID) return null;
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, source.EntityID));
             return entityInfo?.Name ?? null;
         } catch {
@@ -1372,7 +1375,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
     private async loadContentTypesData(): Promise<void> {
         if (this.contentTypesRaw.length === 0) {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView({ EntityName: 'MJ: Content Types', ResultType: 'simple' });
             if (result.Success) this.contentTypesRaw = result.Results;
         }
@@ -1554,7 +1557,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
     private async loadRunHistoryData(): Promise<void> {
         if (this.contentRunsRaw.length === 0) {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView({
                 EntityName: 'MJ: Content Process Runs',
                 OrderBy: 'StartTime DESC',
@@ -1649,7 +1652,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
      * D2/D3/D8: Load ContentProcessRunDetail records for a given run and map to RunDetailRow[].
      */
     private async loadRunDetailRows(runID: string): Promise<void> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView({
             EntityName: 'MJ: Content Process Run Details',
             ExtraFilter: `ContentProcessRunID='${runID}'`,
@@ -1679,7 +1682,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         this.IsLoadingLiveDetails = true;
         this.cdr.detectChanges();
 
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView({
             EntityName: 'MJ: Content Process Run Details',
             ExtraFilter: `ContentProcessRunID='${String(runningRun['ID'])}'`,
@@ -1803,7 +1806,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         this.cdr.detectChanges();
 
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const entity = await md.GetEntityObject<MJContentSourceEntity>('MJ: Content Sources');
 
             if (this.FormMode === 'edit-source' && this.EditingSourceID) {
@@ -1894,7 +1897,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         if (!confirm(`Delete source "${card.Name}"? This cannot be undone.`)) return;
 
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const entity = await md.GetEntityObject<BaseEntity>('MJ: Content Sources');
             await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: card.ID }]));
             const deleted = await entity.Delete();
@@ -1947,7 +1950,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         const card = this.SchedulingSourceCard;
 
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
 
             // 1. Find the "Autotag and Vectorize Content" action
             const actionID = await this.findAutotagActionID();
@@ -2061,7 +2064,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         const toLoad = uniqueIDs.filter(id => !this.scheduledActionsCache.has(id));
         if (toLoad.length === 0) return;
 
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const filter = toLoad.map(id => `'${id}'`).join(',');
         const result = await rv.RunView<MJScheduledActionEntity>({
             EntityName: 'MJ: Scheduled Actions',
@@ -2078,7 +2081,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
     /** Finds the Action ID for "Autotag and Vectorize Content" by querying actions */
     private async findAutotagActionID(): Promise<string | null> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<{ ID: string }>({
             EntityName: 'Actions',
             ExtraFilter: `Name = 'Autotag and Vectorize Content'`,
@@ -2098,7 +2101,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
      */
     private async createSourceIDParam(scheduledActionID: string, actionID: string, sourceID: string): Promise<void> {
         // Find the "EntityNames" action param to get its ID
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const paramResult = await rv.RunView<{ ID: string; Name: string }>({
             EntityName: 'Action Params',
             ExtraFilter: `ActionID = '${actionID}' AND Name = 'EntityNames'`,
@@ -2112,7 +2115,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             return;
         }
 
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const param = await md.GetEntityObject<MJScheduledActionParamEntity>('MJ: Scheduled Action Params');
         param.NewRecord();
         param.ScheduledActionID = scheduledActionID;
@@ -2131,7 +2134,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
      * the ContentSource.ScheduledActionID field.
      */
     private async linkScheduleToSource(sourceID: string, scheduledActionID: string | null): Promise<void> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const entity = await md.GetEntityObject<MJContentSourceEntity>('MJ: Content Sources');
         await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: sourceID }]));
         entity.ScheduledActionID = scheduledActionID;
@@ -2172,7 +2175,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         this.cdr.detectChanges();
 
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const entity = await md.GetEntityObject<BaseEntity>('MJ: Content Types');
 
             if (this.FormMode === 'edit-type' && this.EditingTypeID) {
@@ -2227,7 +2230,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     public async RunPipeline(contentSourceIDs?: string[]): Promise<void> {
         if (this.IsRunning) return;
 
-        const provider = Metadata.Provider as GraphQLDataProvider;
+        const provider = this.ProviderToUse as GraphQLDataProvider;
         if (!provider) return;
 
         this.IsRunning = true;
@@ -2274,7 +2277,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     public async PausePipeline(): Promise<void> {
         if (!this.IsRunning || this.IsPaused || !this.CurrentProcessRunID) return;
 
-        const provider = Metadata.Provider as GraphQLDataProvider;
+        const provider = this.ProviderToUse as GraphQLDataProvider;
         if (!provider) return;
 
         try {
@@ -2302,7 +2305,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     public async ResumePipeline(): Promise<void> {
         if (!this.IsPaused || !this.CurrentProcessRunID) return;
 
-        const provider = Metadata.Provider as GraphQLDataProvider;
+        const provider = this.ProviderToUse as GraphQLDataProvider;
         if (!provider) return;
 
         try {
@@ -2335,7 +2338,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     public async CancelPipeline(): Promise<void> {
         if (!this.CurrentProcessRunID && !this.IsRunning) return;
 
-        const provider = Metadata.Provider as GraphQLDataProvider;
+        const provider = this.ProviderToUse as GraphQLDataProvider;
         if (!provider) return;
 
         // If we have a process run ID, request server-side cancellation
@@ -2360,7 +2363,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     }
 
     private subscribeToPipelineProgress(pipelineRunID: string): void {
-        const provider = Metadata.Provider as GraphQLDataProvider;
+        const provider = this.ProviderToUse as GraphQLDataProvider;
         const subscriptionQuery = `
             subscription PipelineProgress($pipelineRunID: String!) {
                 PipelineProgress(pipelineRunID: $pipelineRunID) {
@@ -2770,7 +2773,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     private async refreshSourcesTab(): Promise<void> {
         this.tabDataLoaded.delete('sources');
         this.tabDataLoaded.delete('pipeline');
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView({ EntityName: 'MJ: Content Sources', OrderBy: 'Name', ResultType: 'simple' });
         if (result.Success) this.contentSourcesRaw = result.Results;
         await this.loadScheduledActionsForSources();
@@ -2781,7 +2784,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
     private async refreshContentTypesTab(): Promise<void> {
         this.tabDataLoaded.delete('types');
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView({ EntityName: 'MJ: Content Types', ResultType: 'simple' });
         if (result.Success) this.contentTypesRaw = result.Results;
         this.buildContentTypeCards();
@@ -2814,7 +2817,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             if (source) {
                 const entityID = source['EntityID'] as string | null;
                 if (entityID) {
-                    const md = new Metadata();
+                    const md = this.ProviderToUse;
                     const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityID));
                     entityName = entityInfo?.Name ?? null;
                     // Get RecordID from the EntityRecordDocument linked to this content item
@@ -2879,7 +2882,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             if (source) {
                 const entityID = source['EntityID'] as string | null;
                 if (entityID) {
-                    const md = new Metadata();
+                    const md = this.ProviderToUse;
                     const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityID));
                     entityName = entityInfo?.Name ?? null;
                     const erdID = rawItem['EntityRecordDocumentID'] as string | null;
@@ -2925,7 +2928,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     }
 
     public OpenRecordFromItem(item: ContentItemDetail): void {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const pkey = new CompositeKey();
 
         // For entity sources: navigate to the actual entity record, not the ContentItem
@@ -2950,7 +2953,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     /** Load ERD RecordIDs for entity-sourced content items */
     private async loadEntityRecordDocCache(): Promise<void> {
         if (this.entityRecordDocCache.size > 0) return;
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<{ ID: string; RecordID: string }>({
             EntityName: 'MJ: Entity Record Documents',
             ResultType: 'simple',
@@ -3108,7 +3111,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     }
 
     private async loadContentItemsForSource(sourceId: string): Promise<ContentItemDetail[]> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView({
             EntityName: 'MJ: Content Items',
             ExtraFilter: `ContentSourceID='${sourceId}'`,
@@ -3153,7 +3156,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     }
 
     private async loadRunHistoryForSource(sourceId: string): Promise<RunHistoryRow[]> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView({
             EntityName: 'MJ: Content Process Runs',
             ExtraFilter: `SourceID='${sourceId}'`,
@@ -3220,7 +3223,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
      */
     private async loadTaxonomyData(): Promise<void> {
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const [tagsResult, taggedItemsResult, auditResult] = await rv.RunViews([
                 { EntityName: 'MJ: Tags', OrderBy: 'Name', ResultType: 'simple' },
                 { EntityName: 'MJ: Tagged Items', ResultType: 'simple' },
@@ -3514,7 +3517,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     public async SaveEditTag(): Promise<void> {
         if (!this.TaxSelectedNode) return;
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
             await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: this.TaxSelectedNode.ID }]));
             entity.Set('Name', this.TaxEditName);
@@ -3539,7 +3542,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
     public async MoveTag(node: TaxTreeNode, newParentId: string | null): Promise<void> {
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
             await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: node.ID }]));
             entity.Set('ParentID', newParentId);
@@ -3561,7 +3564,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             `Delete tag "${node.Name}"? This will also remove all tagged item associations.`,
             async () => {
                 try {
-                    const md = new Metadata();
+                    const md = this.ProviderToUse;
                     const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
                     await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: node.ID }]));
                     const deleted = await entity.Delete();
@@ -3618,7 +3621,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         if (!name) return;
 
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
             entity.NewRecord();
             entity.Set('Name', name);
@@ -3712,7 +3715,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         this.TaxTreeSaving = true;
         this.cdr.detectChanges();
 
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         let movedCount = 0;
         for (const tagID of validIDs) {
             try {
@@ -3752,7 +3755,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         this.TaxTreeSaving = true;
         this.cdr.detectChanges();
 
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         let movedCount = 0;
         for (const tagID of dragIDs) {
             try {
@@ -3789,7 +3792,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         try {
             // Re-parent tagged items from source to target
             const itemsToMove = this.taggedItemsRaw.filter(ti => (ti['TagID'] as string) === sourceTagId);
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             for (const ti of itemsToMove) {
                 const entity = await md.GetEntityObject<BaseEntity>('MJ: Tagged Items');
                 await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: ti['ID'] as string }]));
@@ -3828,7 +3831,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
 
     public async MakeChildTag(childTagId: string, parentTagId: string): Promise<void> {
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
             await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: childTagId }]));
             entity.Set('ParentID', parentTagId);
@@ -4083,7 +4086,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
      * Without this, the FK constraint on TagCoOccurrence blocks the delete.
      */
     private async cleanupTagReferences(tagId: string): Promise<void> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const coOccResult = await rv.RunView<BaseEntity>({
             EntityName: 'MJ: Tag Co Occurrences',
             ExtraFilter: `TagAID='${tagId}' OR TagBID='${tagId}'`,
@@ -4103,7 +4106,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             async () => {
                 try {
                     await this.cleanupTagReferences(orphan.ID);
-                    const md = new Metadata();
+                    const md = this.ProviderToUse;
                     const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
                     await entity.InnerLoad(new CompositeKey([{ FieldName: 'ID', Value: orphan.ID }]));
                     const deleted = await entity.Delete();
@@ -4130,7 +4133,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             'Bulk Delete Orphan Tags',
             `Delete ${selected.length} selected orphan tag${selected.length > 1 ? 's' : ''}? This cannot be undone.`,
             async () => {
-                const md = new Metadata();
+                const md = this.ProviderToUse;
                 let deletedCount = 0;
                 for (const orphan of selected) {
                     try {
@@ -4162,7 +4165,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
             'Delete All Orphaned Tags',
             `Delete all ${this.TaxOrphans.length} orphaned tag${this.TaxOrphans.length > 1 ? 's' : ''}? This cannot be undone.`,
             async () => {
-                const md = new Metadata();
+                const md = this.ProviderToUse;
                 let deletedCount = 0;
                 for (const orphan of this.TaxOrphans) {
                     try {
@@ -4505,7 +4508,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         const parentId = this.splitTargetNode.ParentID;
 
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             for (const name of names) {
                 const entity = await md.GetEntityObject<BaseEntity>('MJ: Tags');
                 entity.NewRecord();
@@ -4673,7 +4676,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         this.cdr.detectChanges();
 
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<{
                 ID: string; ContentItemA: string; ContentItemB: string;
                 ContentItemAID: string; ContentItemBID: string;
@@ -4720,7 +4723,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
         const map = new Map<string, string>();
         if (itemIDs.length === 0) return map;
 
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const idFilter = itemIDs.map(id => `ID='${id}'`).join(' OR ');
         const result = await rv.RunView<{ ID: string; ContentSource: string }>({
             EntityName: 'MJ: Content Items',
@@ -4740,7 +4743,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     /** Confirm a content duplicate pair */
     public async ConfirmContentDuplicate(dupRow: ContentDuplicateRow): Promise<void> {
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const entity = await md.GetEntityObject<MJContentItemDuplicateEntity>('MJ: Content Item Duplicates');
             const loaded = await entity.Load(dupRow.ID);
             if (!loaded) return;
@@ -4761,7 +4764,7 @@ export class AutotaggingPipelineResourceComponent extends BaseResourceComponent 
     /** Dismiss a content duplicate pair */
     public async DismissContentDuplicate(dupRow: ContentDuplicateRow): Promise<void> {
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const entity = await md.GetEntityObject<MJContentItemDuplicateEntity>('MJ: Content Item Duplicates');
             const loaded = await entity.Load(dupRow.ID);
             if (!loaded) return;

@@ -1,6 +1,4 @@
-import _traverse, { NodePath } from '@babel/traverse';
-type TraverseModule = typeof _traverse & { default?: typeof _traverse };
-const traverse = (((_traverse as TraverseModule).default) ?? _traverse) as typeof _traverse;
+import { traverse, NodePath } from '../lint-utils';
 import * as t from '@babel/types';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseLintRule } from '../lint-rule';
@@ -21,8 +19,11 @@ import { TypeContext } from '../type-context';
 
 /** Grid component names to check */
 const GRID_COMPONENT_NAMES = new Set([
-  'EntityGrid', 'DataGrid', 'DataTable',
+  'EntityGrid', 'EntityDataGrid', 'DataGrid', 'DataTable', 'SingleRecordView',
 ]);
+
+/** Grid components that are inherently entity-bound (always validate) */
+const ENTITY_BOUND_GRIDS = new Set(['EntityGrid', 'EntityDataGrid']);
 
 /**
  * Checks if a JSX element is a grid component by name or by having grid-related props.
@@ -48,10 +49,11 @@ function collectAvailableFields(
       queries?: { name: string; categoryPath: string; fields?: { name: string; type: string }[] }[];
     };
   },
-): { exactSet: Set<string>; caseMap: Map<string, string>; hasEntityFields: boolean } {
+): { exactSet: Set<string>; caseMap: Map<string, string>; hasEntityFields: boolean; hasQueryFields: boolean } {
   const exactSet = new Set<string>();
   const caseMap = new Map<string, string>(); // lowercase -> original name
   let hasEntityFields = false;
+  let hasQueryFields = false;
 
   if (componentSpec.dataRequirements?.entities) {
     for (const entity of componentSpec.dataRequirements.entities) {
@@ -81,6 +83,7 @@ function collectAvailableFields(
           if (typeof fieldName !== 'string') continue;
           exactSet.add(fieldName);
           caseMap.set(fieldName.toLowerCase(), fieldName);
+          hasQueryFields = true;
         }
       }
       if (query.fields) {
@@ -88,12 +91,13 @@ function collectAvailableFields(
           if (typeof f.name !== 'string') continue;
           exactSet.add(f.name);
           caseMap.set(f.name.toLowerCase(), f.name);
+          hasQueryFields = true;
         }
       }
     }
   }
 
-  return { exactSet, caseMap, hasEntityFields };
+  return { exactSet, caseMap, hasEntityFields, hasQueryFields };
 }
 
 /**
@@ -207,7 +211,7 @@ export class DatagridFieldValidationRule extends BaseLintRule {
     }
 
     const typeContext = new TypeContext(componentSpec);
-    const { exactSet, caseMap, hasEntityFields } = collectAvailableFields(typeContext, componentSpec);
+    const { exactSet, caseMap, hasEntityFields, hasQueryFields } = collectAvailableFields(typeContext, componentSpec);
 
     if (exactSet.size === 0) {
       return violations;
@@ -229,12 +233,19 @@ export class DatagridFieldValidationRule extends BaseLintRule {
         const hasGridProps = propsMap.has('fields') || propsMap.has('columns');
         if (!isGridComponent(nameNode.name, hasGridProps)) return;
 
-        // If this is an entity-based grid (name contains "Entity" or it has an
-        // entityName prop) and we have no entity field metadata loaded, skip
-        // validation. The grid fields reference entity columns that we can't
-        // verify without metadata.
-        const isEntityGrid = nameNode.name.includes('Entity') || propsMap.has('entityName');
-        if (isEntityGrid && !hasEntityFields) return;
+        // Determine if this grid has a known schema to validate against:
+        // 1. Entity-bound grids (EntityGrid, EntityDataGrid) — always validate against entity fields
+        // 2. Any grid with an explicit entityName prop — schema is known
+        // 3. Plain DataGrid fed by RunQuery results — query fields represent the actual
+        //    data shape and can be validated
+        //
+        // For plain DataGrid/DataTable/SingleRecordView WITHOUT entityName and without
+        // query fields, the data is likely from a client-side transformation
+        // (renamed/computed fields). Validating against the raw entity schema would
+        // produce false positives, so we skip.
+        const isEntityBound = ENTITY_BOUND_GRIDS.has(nameNode.name) || propsMap.has('entityName');
+        if (isEntityBound && !hasEntityFields) return; // Entity-bound but no metadata loaded
+        if (!isEntityBound && !hasQueryFields) return; // Not entity-bound and no query fields — data is likely transformed
 
         // Validate `fields` prop: fields={['Name', 'Email']}
         const fieldsAttr = propsMap.get('fields');

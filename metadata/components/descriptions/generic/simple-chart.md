@@ -15,3 +15,5 @@ Standalone single-level chart component with NO built-in drill-down functionalit
 **Use For:** standalone visualizations, dashboard widgets, building blocks in custom multi-level drill-downs.
 
 Auto-aggregates data client-side by groupBy field with count/sum/average/min/max methods. Smart auto-type selection: date fields→line, ≤5 categories→pie (preferred over doughnut), else→bar. Single-series bar charts use different colors for each bar. Formats values automatically: currency ($ for Amount fields), dates (locale format), numbers (commas). Exports as PNG image. Click events highlight the selected element and return {label, value, records: Array<object>, percentage} for parent to implement custom drill logic. No re-animation on element clicks.
+
+**Layout:** SimpleChart manages its own height via the `height` prop (default 400px). To control chart size, pass `height` directly — do not use a fixed-height wrapper div.

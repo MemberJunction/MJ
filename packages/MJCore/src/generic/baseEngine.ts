@@ -314,7 +314,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * Returns the metadata provider to use for the engine. If a provider is set via the Config method, that provider will be used, otherwise the default provider will be used.
      */
     public get ProviderToUse(): IMetadataProvider {
-        return this._provider || Metadata.Provider;
+        return this._provider || Metadata.Provider; // global-provider-ok: explicit fallback in BaseEngine accessor
     }
 
     /**
@@ -366,6 +366,32 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             options.contextUser,
             options.provider
         );
+    }
+
+    /**
+     * Ensures the engine is loaded before the caller reads engine state. This is
+     * the right call to make at every consumption point — especially for engines
+     * registered with `@RegisterForStartup({ deferred: true })` whose initial load
+     * runs in the background after app boot.
+     *
+     * Idempotent: if the engine is already loaded, returns immediately. If a load
+     * is in flight (e.g. the deferred startup or another consumer triggered it),
+     * returns the same in-progress promise rather than starting a second load —
+     * BaseEngine.Load handles this internally via `_loadingSubject`.
+     *
+     * Equivalent to `this.Config(false)` but reads more clearly at call sites:
+     *
+     * ```ts
+     * await AIEngineBase.Instance.EnsureLoaded();
+     * const models = AIEngineBase.Instance.Models;
+     * ```
+     *
+     * @param contextUser - Optional context user (server-side only)
+     * @param provider - Optional metadata provider override
+     */
+    public async EnsureLoaded(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        if (this._loaded) return;
+        await this.Config(false, contextUser, provider);
     }
 
     /**
@@ -665,7 +691,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     ): Promise<boolean> {
         try {
             const recordData = JSON.parse(recordDataJSON);
-            const md = new Metadata();
+            // Use this engine's bound provider (ProviderToUse) instead of `new Metadata()` so
+            // multi-provider client setups instantiate entities against the correct server.
+            const md = this.ProviderToUse;
             // Find the proper entity name with original casing from the config
             const originalEntityName = matchingConfigs[0].EntityName!;
             const entity = await md.GetEntityObject(originalEntityName, this._contextUser);
@@ -1109,8 +1137,16 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             return;
         }
 
-        // Get the updated timestamp from the entity
-        const updatedAt = entity.Get('__mj_UpdatedAt') as string | null || new Date().toISOString();
+        // Get the updated timestamp from the entity and normalize to an ISO string.
+        // entity.Get returns Date|string|number|null depending on field hydration and the
+        // storage round-trip. The downstream cache and smart-cache-check protocol require
+        // an ISO string — without this normalization, a Date or numeric ms can leak into
+        // the GraphQL request as `cacheStatus.maxUpdatedAt` and crash the server's
+        // `new Date(...).toISOString()` with `RangeError: Invalid time value`.
+        const rawUpdatedAt = entity.Get('__mj_UpdatedAt') as Date | string | number | null;
+        const updatedAt = rawUpdatedAt
+            ? new Date(rawUpdatedAt).toISOString()
+            : new Date().toISOString();
 
         if (event.type === 'delete') {
             await LocalCacheManager.Instance.RemoveSingleEntity(

@@ -7,7 +7,7 @@
  * Uses MJ's RunView + Metadata directly for strongly typed entity operations.
  */
 import { Metadata, RunView, CompositeKey } from '@memberjunction/core';
-import type { UserInfo, TransactionGroupBase, BaseEntity } from '@memberjunction/core';
+import type { UserInfo, TransactionGroupBase, BaseEntity, IMetadataProvider } from '@memberjunction/core';
 import type { AppStatus, InstallAction, ErrorPhase, InstalledAppInfo, AppInstallCallbacks } from '../types/open-app-types.js';
 import type { MJAppManifest } from '../manifest/manifest-schema.js';
 
@@ -38,14 +38,15 @@ export async function RecordAppInstallation(
   callbacks?: AppInstallCallbacks,
   transactionGroup?: TransactionGroupBase,
   initialStatus: AppStatus = 'Active',
+  provider?: IMetadataProvider,
 ): Promise<string> {
   callbacks?.OnProgress?.('Record', 'Recording app installation...');
 
-  const md = new Metadata();
+  const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
   const entity = await md.GetEntityObject('MJ: Open Apps', contextUser);
 
   // Check for existing record (e.g. previously removed app being reinstalled)
-  const existing = await FindInstalledApp(contextUser, manifest.name);
+  const existing = await FindInstalledApp(contextUser, manifest.name, provider);
   if (existing) {
     const key = new CompositeKey([{ FieldName: 'ID', Value: existing.ID }]);
     await entity.InnerLoad(key);
@@ -104,8 +105,8 @@ function SetAppFields(
  * @param appId - The OpenApp record ID
  * @param updates - Fields to update
  */
-export async function UpdateAppRecord(contextUser: UserInfo, appId: string, updates: Record<string, unknown>): Promise<void> {
-  const md = new Metadata();
+export async function UpdateAppRecord(contextUser: UserInfo, appId: string, updates: Record<string, unknown>, provider?: IMetadataProvider): Promise<void> {
+  const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
   const entity = await md.GetEntityObject('MJ: Open Apps', contextUser);
   const loaded = await entity.InnerLoad(CompositeKey.FromID(appId));
   if (!loaded) {
@@ -152,8 +153,9 @@ export async function RecordInstallHistoryEntry(
     Summary?: string;
   },
   transactionGroup?: TransactionGroupBase,
+  provider?: IMetadataProvider,
 ): Promise<string> {
-  const md = new Metadata();
+  const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
   const entity = await md.GetEntityObject('MJ: Open App Install Histories', contextUser);
   entity.NewRecord();
   entity.Set('OpenAppID', appId);
@@ -193,8 +195,9 @@ export async function RecordAppDependencies(
   appId: string,
   dependencies: Record<string, string | { version?: string; repository?: string }>,
   transactionGroup?: TransactionGroupBase,
+  provider?: IMetadataProvider,
 ): Promise<void> {
-  const md = new Metadata();
+  const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
   const rv = new RunView();
 
   for (const [depName, depValue] of Object.entries(dependencies)) {
@@ -260,8 +263,8 @@ export async function DeleteAppDependencies(contextUser: UserInfo, appId: string
  * @param appName - The app name to look up
  * @returns The app record, or null if not found
  */
-export async function FindInstalledApp(contextUser: UserInfo, appName: string): Promise<InstalledAppInfo | null> {
-  const rv = new RunView();
+export async function FindInstalledApp(contextUser: UserInfo, appName: string, provider?: IMetadataProvider): Promise<InstalledAppInfo | null> {
+  const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
   const result = await rv.RunView<InstalledAppInfo>(
     {
       EntityName: 'MJ: Open Apps',

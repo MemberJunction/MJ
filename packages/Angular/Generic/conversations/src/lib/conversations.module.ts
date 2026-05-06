@@ -16,6 +16,9 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 // Markdown module
 import { MarkdownModule } from '@memberjunction/ng-markdown';
 
+// Resource permissions (generic share dialog)
+import { ResourcePermissionsModule } from '@memberjunction/ng-resource-permissions';
+
 // Components
 import { MessageItemComponent } from './components/message/message-item.component';
 import { MessageListComponent } from './components/message/message-list.component';
@@ -137,6 +140,7 @@ const COMPONENTS = [
     SharedGenericModule,
     MarkdownModule,
     DynamicFormsModule,
+    ResourcePermissionsModule,
     // Standalone components
     TasksFullViewComponent,
     CollectionShareModalComponent,

@@ -3,7 +3,6 @@ import {
   BaseEngine,
   BaseEnginePropertyConfig,
   IMetadataProvider,
-  Metadata,
   RegisterForStartup,
   UserInfo,
 } from '@memberjunction/core';
@@ -119,7 +118,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * @param provider - Optional custom metadata provider
    */
   public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
-    const md = new Metadata();
+    const md = provider ?? this.ProviderToUse;
     const userId = contextUser?.ID || md.CurrentUser?.ID;
 
     if (!userId) {
@@ -288,7 +287,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * @returns true if successful, false otherwise
    */
   public async SetSetting(settingKey: string, value: string, contextUser?: UserInfo): Promise<boolean> {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const userId = contextUser?.ID || md.CurrentUser?.ID;
 
     if (!userId) {
@@ -685,6 +684,14 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   }
 
   /**
+   * Read-only view of the ApplicationRole catalog. Used by permission providers
+   * that need to reason about grants for arbitrary users (not just CurrentUser).
+   */
+  public get ApplicationRoles(): readonly MJApplicationRoleEntity[] {
+    return this._applicationRoles;
+  }
+
+  /**
    * Checks if the current user's roles grant access to the application.
    * If no ApplicationRole records exist for the app, access is open (backwards compatible).
    * If records exist, user must have at least one role with CanAccess=1.
@@ -698,7 +705,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
     if (appRoles.length === 0) return true;
 
     // Check if any of the user's roles have CanAccess=1
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const user = md.CurrentUser;
     if (!user || !user.UserRoles) return false;
 
@@ -719,7 +726,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
     );
     if (appRoles.length === 0) return false; // No admin without explicit grant
 
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const user = md.CurrentUser;
     if (!user || !user.UserRoles) return false;
 
@@ -735,7 +742,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * @param applicationId - The application ID to check
    */
   public IsApplicationInactive(applicationId: string): boolean {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const appInfo = md.Applications.find((a) => UUIDsEqual(a.ID, applicationId));
     return appInfo != null && appInfo.Status !== 'Active';
   }
@@ -745,7 +752,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * @param applicationId - The application ID to find
    */
   public GetApplicationInfo(applicationId: string): ApplicationInfo | undefined {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     return md.Applications.find((a) => UUIDsEqual(a.ID, applicationId));
   }
 
@@ -755,7 +762,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public FindApplicationByPathOrName(pathOrName: string): ApplicationInfo | undefined {
     const normalized = pathOrName.trim().toLowerCase();
-    const md = new Metadata();
+    const md = this.ProviderToUse;
 
     // First try path match
     const pathMatch = md.Applications.find((a) => a.Path?.toLowerCase() === normalized);
@@ -811,7 +818,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * @returns The newly created MJUserApplicationEntity, or null if failed
    */
   public async InstallApplication(applicationId: string, contextUser?: UserInfo): Promise<MJUserApplicationEntity | null> {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const userId = contextUser?.ID || md.CurrentUser?.ID;
 
     if (!userId) {
@@ -1008,7 +1015,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * Separated to allow the public method to manage the promise state.
    */
   private async doCreateDefaultApplications(contextUser?: UserInfo): Promise<MJUserApplicationEntity[]> {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const userId = contextUser?.ID || md.CurrentUser?.ID;
 
     if (!userId) {

@@ -91,7 +91,7 @@
     {
       "name": "height",
       "type": "number",
-      "description": "Chart height in pixels",
+      "description": "Chart height in pixels. The chart renders at exactly this height. IMPORTANT: Do NOT wrap SimpleChart in a container with a different fixed height — this causes the chart to visually overflow and overlap sibling components. Either pass the desired height via this prop, or let the chart flow naturally without a height-constrained wrapper.",
       "required": false,
       "defaultValue": 400
     },
@@ -180,7 +180,7 @@
       "parameters": [
         {
           "name": "clickData",
-          "type": "{ seriesName: string; value: number; label: string; records: Array<object>; chartType: string; percentage?: number }",
+          "type": "{ series: string; value: number; label: string; records: Array<object>; chartType: string; percentage?: number }",
           "description": "Object containing series name, data value, label, original records, and chart type"
         }
       ]
@@ -191,8 +191,8 @@
       "parameters": [
         {
           "name": "chartInfo",
-          "type": "{ chartType: string; dataPointCount: number; aggregationMethod: string; isEmpty: boolean }",
-          "description": "Information about the rendered chart including type, data point count, and aggregation method"
+          "type": "{ chartType: string; dataPointCount: number; aggregateMethod: string; totalValue: number }",
+          "description": "Information about the rendered chart including type, data point count, aggregation method, and total sum value"
         }
       ]
     }

@@ -147,7 +147,7 @@ export class MJQueryEntityServer extends MJQueryEntity {
      * Returns a slash-delimited path like "Ground-Truth-Queries/Sales" or "Ground-Truth-Queries".
      */
     public BuildCategoryPathFromID(categoryID: string): string {
-        const categories = Metadata.Provider.QueryCategories;
+        const categories = (this.ProviderToUse as unknown as IMetadataProvider).QueryCategories;
         const segments: string[] = [];
         let currentID: string | null = categoryID;
 
@@ -389,7 +389,7 @@ export class MJQueryEntityServer extends MJQueryEntity {
     public async RefreshRelatedMetadata(refreshFromDB: boolean): Promise<void> {
         const md = this.ProviderToUse as unknown as IMetadataProvider;
         if (refreshFromDB) {
-            const globalMetadataProvider = Metadata.Provider;
+            const globalMetadataProvider = Metadata.Provider; // global-provider-ok: explicit refresh from canonical global metadata
             await globalMetadataProvider.Refresh(md);
             if (globalMetadataProvider !== md) {
                 await md.Refresh();

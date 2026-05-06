@@ -308,7 +308,7 @@ export class CommunicationLogsResourceComponent extends BaseResourceComponent im
             this.isLoading = true;
             this.cdr.detectChanges();
 
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<MJCommunicationLogEntity>({
                 EntityName: 'MJ: Communication Logs',
                 OrderBy: 'MessageDate DESC',

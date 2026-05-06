@@ -12,6 +12,7 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { RunView } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UUIDsEqual } from '@memberjunction/global';
 import { GlobalFilterState } from '../../../interfaces/analytics-preferences.interface';
 
@@ -553,7 +554,7 @@ const COST_COLORS = [
         }
     `]
 })
-export class AnalyticsAgentRunsComponent implements OnInit, OnDestroy {
+export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements OnInit, OnDestroy {
     @Input() TimeRange = '7d';
     @Input() Filters: AgentRunFilters = { Agents: [], Statuses: [] };
 
@@ -649,7 +650,7 @@ export class AnalyticsAgentRunsComponent implements OnInit, OnDestroy {
         this.cdr.detectChanges();
 
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const dateFilter = this.buildDateFilter('StartedAt');
             const agentFilter = this.buildAgentFilter();
             const statusFilter = this.buildStatusFilter();

@@ -58,6 +58,50 @@ describe('PostgreSQLDialect', () => {
         });
     });
 
+    describe('NullLiteral / IsNullLiteral', () => {
+        it('NullLiteral returns NULL', () => {
+            expect(dialect.NullLiteral).toBe('NULL');
+        });
+
+        it('IsNullLiteral matches case-insensitively', () => {
+            expect(dialect.IsNullLiteral('NULL')).toBe(true);
+            expect(dialect.IsNullLiteral('null')).toBe(true);
+            expect(dialect.IsNullLiteral('Null')).toBe(true);
+            expect(dialect.IsNullLiteral('  NULL  ')).toBe(true);
+        });
+
+        it('IsNullLiteral rejects non-NULL values', () => {
+            expect(dialect.IsNullLiteral('false')).toBe(false);
+            expect(dialect.IsNullLiteral('0')).toBe(false);
+            expect(dialect.IsNullLiteral("'Active'")).toBe(false);
+            expect(dialect.IsNullLiteral('')).toBe(false);
+        });
+    });
+
+    describe('ParameterRef', () => {
+        it('converts PascalCase to p_-prefixed flat lowercase (matching baseline-ported SPs)', () => {
+            expect(dialect.ParameterRef('Name')).toBe('p_name');
+            expect(dialect.ParameterRef('UserViewMaxRows')).toBe('p_userviewmaxrows');
+            expect(dialect.ParameterRef('ID')).toBe('p_id');
+        });
+
+        it('handles consecutive capitals correctly', () => {
+            expect(dialect.ParameterRef('FullTextSearchEnabled')).toBe('p_fulltextsearchenabled');
+        });
+
+        it('preserves existing underscores (e.g. _Clear companion suffix)', () => {
+            expect(dialect.ParameterRef('CompanyID_Clear')).toBe('p_companyid_clear');
+        });
+    });
+
+    describe('ParameterDefault', () => {
+        it('returns " DEFAULT value" with leading space', () => {
+            expect(dialect.ParameterDefault('NULL')).toBe(' DEFAULT NULL');
+            expect(dialect.ParameterDefault('0')).toBe(' DEFAULT 0');
+            expect(dialect.ParameterDefault("'Active'")).toBe(" DEFAULT 'Active'");
+        });
+    });
+
     describe('CurrentTimestampUTC', () => {
         it('should return NOW() AT TIME ZONE UTC', () => {
             expect(dialect.CurrentTimestampUTC()).toBe("(NOW() AT TIME ZONE 'UTC')");
@@ -440,6 +484,16 @@ describe('PostgreSQLDialect', () => {
         });
     });
 
+    describe('IsNull', () => {
+        it('emits COALESCE on PostgreSQL (no ISNULL keyword in PG)', () => {
+            expect(dialect.IsNull('col1', "'default'")).toBe("COALESCE(col1, 'default')");
+        });
+
+        it('handles parameter-ref / column-ref pairs cleanly', () => {
+            expect(dialect.IsNull('p_status', '"Status"')).toBe('COALESCE(p_status, "Status")');
+        });
+    });
+
     describe('MapDataType convenience method', () => {
         it('should delegate to TypeMap.MapType', () => {
             const result = dialect.MapDataType('NVARCHAR', 100);
@@ -463,6 +517,36 @@ describe('PostgreSQLDialect', () => {
             expect(ddl).toContain("to_tsvector('english'");
             expect(ddl).toContain('CREATE TRIGGER');
             expect(ddl).toContain('BEFORE INSERT OR UPDATE');
+        });
+    });
+
+    describe('QuoteStringLiteral', () => {
+        it('wraps a value in single quotes', () => {
+            expect(dialect.QuoteStringLiteral('hello')).toBe("'hello'");
+        });
+
+        it("doubles internal apostrophes (same convention as SQL Server)", () => {
+            expect(dialect.QuoteStringLiteral("O'Brien")).toBe("'O''Brien'");
+        });
+    });
+
+    describe('QuoteColumnAlias', () => {
+        it('double-quotes the alias to preserve case', () => {
+            expect(dialect.QuoteColumnAlias('EntityName')).toBe('"EntityName"');
+        });
+
+        it('preserves mixed casing exactly (PG would lowercase otherwise)', () => {
+            expect(dialect.QuoteColumnAlias('IDValue')).toBe('"IDValue"');
+        });
+    });
+
+    describe('CastToBoundedString', () => {
+        it('emits CAST AS VARCHAR(450) by default', () => {
+            expect(dialect.CastToBoundedString('src."ID"')).toBe('CAST(src."ID" AS VARCHAR(450))');
+        });
+
+        it('honours an explicit maxLength', () => {
+            expect(dialect.CastToBoundedString('x', 100)).toBe('CAST(x AS VARCHAR(100))');
         });
     });
 });

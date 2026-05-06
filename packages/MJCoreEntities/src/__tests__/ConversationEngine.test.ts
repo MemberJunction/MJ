@@ -81,6 +81,15 @@ vi.mock('@memberjunction/core', () => {
             ): Promise<void> {
                 // no-op
             }
+            // Multi-provider migration: engines now use this.ProviderToUse instead of new Metadata().
+            // Mock returns the same mock metadata shape that the tests previously got via new Metadata().
+            get ProviderToUse() {
+                return {
+                    GetEntityObject: () => Promise.resolve(mockConversationEntity),
+                    CreateTransactionGroup: async () => ({ Submit: vi.fn().mockResolvedValue(true) }),
+                    CurrentUser: { ID: 'user-1' },
+                };
+            }
         },
         Metadata: MockMetadata,
         RunView: class MockRunView {
@@ -103,8 +112,20 @@ vi.mock('@memberjunction/core', () => {
             ID = 'user-1';
         },
         BaseEnginePropertyConfig: class MockConfig {},
+        RegisterForStartup: () => () => {},
     };
 });
+
+// ConversationEngine imports ResourcePermissionEngine to pull in shared conversation IDs.
+// Mock it so the engine can be constructed without touching the real cache.
+vi.mock('../custom/ResourcePermissions/ResourcePermissionEngine', () => ({
+    ResourcePermissionEngine: {
+        Instance: {
+            Config: vi.fn().mockResolvedValue(undefined),
+            GetUserAvailableResources: vi.fn().mockReturnValue([]),
+        },
+    },
+}));
 
 vi.mock('../generated/entity_subclasses', () => ({
     MJConversationEntity: class MockConversation {},

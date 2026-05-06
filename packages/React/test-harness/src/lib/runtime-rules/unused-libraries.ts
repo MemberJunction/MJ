@@ -1,6 +1,4 @@
-import _traverse, { NodePath } from '@babel/traverse';
-type TraverseModule = typeof _traverse & { default?: typeof _traverse };
-const traverse = (((_traverse as TraverseModule).default) ?? _traverse) as typeof _traverse;
+import { traverse, NodePath } from '../lint-utils';
 import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
@@ -29,7 +27,7 @@ export class UnusedLibrariesRule extends BaseLintRule {
       return violations;
     }
 
-    // Get the function body to search within
+    // Get the function body to search within — include root AND child component code
     let functionBody: string = '';
     traverse(ast, {
       FunctionDeclaration(path: NodePath<t.FunctionDeclaration>) {
@@ -42,6 +40,24 @@ export class UnusedLibrariesRule extends BaseLintRule {
     // If we couldn't find the function body, use the whole code
     if (!functionBody) {
       functionBody = ast.toString ? ast.toString() : '';
+    }
+
+    // Also include child component code — libraries declared on the root spec
+    // may be used by child components in multi-component trees
+    if (componentSpec?.dependencies) {
+      for (const dep of componentSpec.dependencies) {
+        if (dep.code) {
+          functionBody += '\n' + dep.code;
+        }
+        // Include grandchildren too
+        if (dep.dependencies) {
+          for (const grandchild of dep.dependencies) {
+            if (grandchild.code) {
+              functionBody += '\n' + grandchild.code;
+            }
+          }
+        }
+      }
     }
 
     // Track which libraries are used and unused

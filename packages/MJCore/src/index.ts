@@ -48,9 +48,10 @@ export * from "./generic/dataHooks";
 export * from "./generic/column-descriptors";
 export * from "./generic/data-table";
 export * from "./generic/data-snapshot";
+export * from "./generic/permissionInterfaces";
 
 export function SetProvider(provider) {
-    Metadata.Provider = provider;
+    Metadata.Provider = provider; // global-provider-ok: this IS the global provider setter
     BaseEntity.Provider = provider;
     RunView.Provider = provider;
     RunReport.Provider = provider;

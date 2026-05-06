@@ -9,6 +9,7 @@ import {
 import { MJActionCategoryEntity, MJActionExecutionLogEntity } from '@memberjunction/core-entities';
 import { MJActionEntityExtended } from '@memberjunction/actions-base';
 import { RunView } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 export interface ActionExecutionStats {
   totalExecutions: number;
@@ -25,7 +26,7 @@ export interface ActionExecutionStats {
   styleUrls: ['./action-card.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class ActionCardComponent {
+export class ActionCardComponent extends BaseAngularComponent {
   @Input() Action!: MJActionEntityExtended;
   @Input() Categories: Map<string, MJActionCategoryEntity> = new Map();
   @Output() ActionClick = new EventEmitter<MJActionEntityExtended>();
@@ -42,7 +43,7 @@ export class ActionCardComponent {
     isLoaded: false
   };
 
-  constructor(private cdr: ChangeDetectorRef) {}
+  constructor(private cdr: ChangeDetectorRef) { super(); }
 
   public onCardClick(): void {
     this.ActionClick.emit(this.Action);
@@ -79,7 +80,7 @@ export class ActionCardComponent {
     this.cdr.markForCheck();
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
       // Load both executions and result codes in parallel
       const [executionsResult, resultCodesResult] = await rv.RunViews([

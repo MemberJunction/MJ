@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, Metadata, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual } from "@memberjunction/global";
 import { MJUserViewEntityExtended } from "../custom/MJUserViewEntityExtended";
 
@@ -47,7 +47,7 @@ export class UserViewEngine extends BaseEngine<UserViewEngine> {
      * @param provider - Optional custom metadata provider
      */
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
-        const md = new Metadata();
+        const md = provider ?? this.ProviderToUse;
         const userId = contextUser?.ID || md.CurrentUser?.ID;
 
         console.debug(`[UserViewEngine] Config() called: loaded=${this.Loaded}, forceRefresh=${forceRefresh}, viewCount=${this._views?.length ?? 0}`);
@@ -118,8 +118,8 @@ export class UserViewEngine extends BaseEngine<UserViewEngine> {
      * @returns Array of views for the entity
      */
     public GetViewsForEntityByName(entityName: string): MJUserViewEntityExtended[] {
-        const md = new Metadata();
-        const entity = md.Entities.find(e => e.Name.toLowerCase() === entityName.toLowerCase());
+        const md = this.ProviderToUse;
+        const entity = md.EntityByName(entityName);
         if (!entity) return [];
         return this.GetViewsForEntity(entity.ID);
     }

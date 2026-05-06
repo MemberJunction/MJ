@@ -10,10 +10,33 @@
   "registry": "MJ",
   "status": "Active",
   "dataRequirements": {
-    "queries": [{
-      "name": "Product Catalog",
-      "categoryPath": "Products/Reports",
-      "fields": ["ProductID", "ProductName", "Price", "Category", "StockLevel"]
-    }]
+    "queries": [
+      {
+        "name": "Product Catalog",
+        "categoryPath": "Products/Reports",
+        "fields": [
+          {
+            "name": "ProductID",
+            "type": "uniqueidentifier"
+          },
+          {
+            "name": "ProductName",
+            "type": "nvarchar"
+          },
+          {
+            "name": "Price",
+            "type": "decimal"
+          },
+          {
+            "name": "Category",
+            "type": "nvarchar"
+          },
+          {
+            "name": "StockLevel",
+            "type": "nvarchar"
+          }
+        ]
+      }
+    ]
   }
 }

@@ -1,6 +1,13 @@
 import { BaseInfo } from "./baseInfo";
 import { IMetadataProvider } from "./interfaces";
 import { LogError } from "./logging";
+// NOTE: Circular import with metadata.ts is intentional and safe.
+// Both modules reference each other at the type/getter level only;
+// all cross-module calls happen inside function bodies (never at
+// class-field initialisation time), so the modules are fully
+// evaluated before any getter is invoked.  This is the same
+// pattern already used by queryInfo.ts ↔ metadata.ts.
+import { Metadata } from "./metadata";
 import { DatabasePlatform } from "./platformSQL";
 import { ParsePlatformVariants, PlatformVariantsJSON, ResolvePlatformVariant } from "./platformVariants";
 import { UUIDsEqual } from "@memberjunction/global";
@@ -413,68 +420,73 @@ export class AuthorizationInfo extends BaseInfo {
      */
     Parent: string
 
-    private _AuthorizationRoles: AuthorizationRoleInfo[] = []
-    get Roles(): AuthorizationRoleInfo[] {
-        return this._AuthorizationRoles
-    }
-
-    constructor (md: IMetadataProvider, initData: any = null) {
-        super()
-        this.copyInitData(initData)
-        if (initData) 
-            this.SetupAuthorizationRoles(md, initData.AuthorizationRoles || initData._AuthorizationRoles)
+    /**
+     * Returns the role assignments for this authorization.
+     *
+     * **Lazy resolution** — filters from the global `Metadata.Provider.AuthorizationRoles`
+     * collection on every call, like `QueryInfo.Permissions` filters from
+     * `Metadata.Provider.QueryPermissions`.  No result caching is applied because
+     * `AuthorizationRoleInfo` objects are lightweight and the collection is small.
+     */
+    public get Roles(): AuthorizationRoleInfo[] {
+        return Metadata.Provider?.AuthorizationRoles?.filter( // global-provider-ok: AuthorizationInfo is a metadata DTO — resolves roles from the global provider like QueryInfo.Permissions
+            ar => UUIDsEqual(ar.AuthorizationID, this.ID)
+        ) ?? [];
     }
 
     /**
-     * Sets up the roles associated with this authorization using the provided metadata and initial data.
-     * 
-     * @param {IMetadataProvider} md - The metadata provider to fetch role information.
-     * @param {AuthorizationRoleInfo[]} authorizationRoles - An array of `AuthorizationRoleInfo` instances or equivalent data to be associated with this authorization.
+     * @param initData - Raw data row from the metadata dataset / database view.
+     *   `copyInitData` maps this into the typed properties (ID, Name, ParentID, etc.).
+     * @param _md - Accepted but unused; retained so the signature matches the universal
+     *   `new m.class(dataRow, metadataProvider)` convention used by
+     *   `MetadataFromSimpleObjectWithoutUser`.
      */
-    public SetupAuthorizationRoles(md: IMetadataProvider, authorizationRoles: AuthorizationRoleInfo[]) {
-        if (authorizationRoles) {
-            const mdRoles = md.Roles;
-            this._AuthorizationRoles=  [];
-            for (let i = 0; i < authorizationRoles.length; i++) {
-                // 
-                const ari = new AuthorizationRoleInfo(authorizationRoles[i])
-                this._AuthorizationRoles.push(ari)
-    
-                const match = mdRoles.find(r => UUIDsEqual(r.ID, ari.RoleID))
-                if (match)
-                    ari._setRole(match)
-            }
-        }
+    constructor (initData: any = null, _md?: IMetadataProvider) {
+        super()
+        this.copyInitData(initData)
     }
 
     /**
      * Determines if a given user can execute actions under this authorization based on their roles.
-     * 
+     *
+     * Evaluation rules (fixed in Phase 2b):
+     * - Match by `AuthorizationRoleInfo.RoleID` (the FK to Roles), not the authorization-role PK.
+     * - Honour the `Type` column: any matching Deny row wins; without a Deny, at least one Allow is required.
+     *
      * @param {UserInfo} user - The user to check for execution rights.
-     * @returns {boolean} True if the user can execute actions under this authorization, otherwise false.
+     * @returns {boolean} True if the user has a matching Allow role and no matching Deny role; false otherwise.
      */
     public UserCanExecute(user: UserInfo): boolean {
-        if (this.IsActive && user && user.UserRoles) {
-            for (let i = 0; i < user.UserRoles.length; i++) {
-                const matchingRole = this.Roles.find(r => UUIDsEqual(r.ID, user.UserRoles[i].RoleID))
-                if (matchingRole)
-                    return true; // as soon as we find a single matching role we can bail out as the user can execute
+        if (!this.IsActive || !user || !user.UserRoles) return false;
+        let hasAllow = false;
+        for (const userRole of user.UserRoles) {
+            const matchingAuthRoles = this.Roles.filter(r => UUIDsEqual(r.RoleID, userRole.RoleID));
+            for (const ar of matchingAuthRoles) {
+                if (ar.AuthorizationType() === AuthorizationRoleType.Deny) return false; // Deny wins globally
+                if (ar.AuthorizationType() === AuthorizationRoleType.Allow) hasAllow = true;
             }
         }
-        return false
+        return hasAllow;
     }
 
     /**
      * Determines if a given role can execute actions under this authorization.
-     * 
+     *
+     * Phase 2b also honours Deny semantics for consistency with {@link UserCanExecute}.
+     *
      * @param {RoleInfo} role - The role to check for execution rights.
-     * @returns {boolean} True if the role can execute actions under this authorization, otherwise false.
+     * @returns {boolean} True if an Allow authorization-role exists for this role and no Deny does.
      */
     public RoleCanExecute(role: RoleInfo): boolean {
-        if (this.IsActive) {
-            return this.Roles.find(r => UUIDsEqual(r.ID, role.ID)) != null
+        if (!this.IsActive) return false;
+        const matchingAuthRoles = this.Roles.filter(r => UUIDsEqual(r.RoleID, role.ID));
+        if (matchingAuthRoles.length === 0) return false;
+        let hasAllow = false;
+        for (const ar of matchingAuthRoles) {
+            if (ar.AuthorizationType() === AuthorizationRoleType.Deny) return false;
+            if (ar.AuthorizationType() === AuthorizationRoleType.Allow) hasAllow = true;
         }
-        return false
+        return hasAllow;
     }
 }
 

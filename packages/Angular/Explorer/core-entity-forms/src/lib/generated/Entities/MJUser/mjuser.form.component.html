@@ -1683,31 +1683,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Open Apps Section -->
-    <mj-collapsible-panel
-        SectionKey="mJOpenApps"
-        SectionName="Open Apps"
-        Icon="fa fa-table"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJOpenApps')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Open Apps','InstalledByUserID')"
-                [NewRecordValues]="NewRecordValues('MJ: Open Apps')"
-                [AllowLoad]="IsSectionExpanded('mJOpenApps')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJOpenApps', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Open App Install Histories Section -->
     <mj-collapsible-panel
         SectionKey="mJOpenAppInstallHistories"
@@ -1733,25 +1708,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Archive Configurations Section -->
+    <!-- Open Apps Section -->
     <mj-collapsible-panel
-        SectionKey="mJArchiveConfigurations"
-        SectionName="Archive Configurations"
-        Icon="fa fa-archive"
+        SectionKey="mJOpenApps"
+        SectionName="Open Apps"
+        Icon="fa fa-table"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJArchiveConfigurations')"
+        [BadgeCount]="GetSectionRowCount('mJOpenApps')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Archive Configurations','CreatedByUserID')"
-                [NewRecordValues]="NewRecordValues('MJ: Archive Configurations')"
-                [AllowLoad]="IsSectionExpanded('mJArchiveConfigurations')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Open Apps','InstalledByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Open Apps')"
+                [AllowLoad]="IsSectionExpanded('mJOpenApps')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJArchiveConfigurations', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJOpenApps', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -1777,31 +1752,6 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJContentItemDuplicates', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Tag Audit Logs Section -->
-    <mj-collapsible-panel
-        SectionKey="mJTagAuditLogs"
-        SectionName="Tag Audit Logs"
-        Icon="fa fa-history"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJTagAuditLogs')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Audit Logs','PerformedByUserID')"
-                [NewRecordValues]="NewRecordValues('MJ: Tag Audit Logs')"
-                [AllowLoad]="IsSectionExpanded('mJTagAuditLogs')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJTagAuditLogs', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -1858,6 +1808,56 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Tag Audit Logs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJTagAuditLogs"
+        SectionName="Tag Audit Logs"
+        Icon="fa fa-history"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJTagAuditLogs')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Audit Logs','PerformedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tag Audit Logs')"
+                [AllowLoad]="IsSectionExpanded('mJTagAuditLogs')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJTagAuditLogs', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Archive Configurations Section -->
+    <mj-collapsible-panel
+        SectionKey="mJArchiveConfigurations"
+        SectionName="Archive Configurations"
+        Icon="fa fa-archive"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJArchiveConfigurations')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Archive Configurations','CreatedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Archive Configurations')"
+                [AllowLoad]="IsSectionExpanded('mJArchiveConfigurations')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJArchiveConfigurations', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- MCP Tool Favorites Section -->
     <mj-collapsible-panel
         SectionKey="mJMCPToolFavorites"
@@ -1883,25 +1883,75 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Resource Permissions (Shared By User ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJResourcePermissionsSharedByUserID"
+        SectionName="Resource Permissions (Shared By User ID)"
+        Icon="fa fa-lock"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJResourcePermissionsSharedByUserID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Resource Permissions','SharedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Resource Permissions')"
+                [AllowLoad]="IsSectionExpanded('mJResourcePermissionsSharedByUserID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJResourcePermissionsSharedByUserID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Tag Suggestions Section -->
+    <mj-collapsible-panel
+        SectionKey="mJTagSuggestions"
+        SectionName="Tag Suggestions"
+        Icon="fa fa-tags"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJTagSuggestions')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Suggestions','ReviewedByUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tag Suggestions')"
+                [AllowLoad]="IsSectionExpanded('mJTagSuggestions')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJTagSuggestions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Resource Permissions Section -->
     <mj-collapsible-panel
-        SectionKey="mJResourcePermissions"
+        SectionKey="mJResourcePermissionsUserID"
         SectionName="Resource Permissions"
         Icon="fa fa-lock"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJResourcePermissions')"
+        [BadgeCount]="GetSectionRowCount('mJResourcePermissionsUserID')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
                 [Params]="BuildRelationshipViewParamsByEntityName('MJ: Resource Permissions','UserID')"
                 [NewRecordValues]="NewRecordValues('MJ: Resource Permissions')"
-                [AllowLoad]="IsSectionExpanded('mJResourcePermissions')"
+                [AllowLoad]="IsSectionExpanded('mJResourcePermissionsUserID')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJResourcePermissions', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJResourcePermissionsUserID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -2258,31 +2308,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Archive Runs Section -->
-    <mj-collapsible-panel
-        SectionKey="mJArchiveRuns"
-        SectionName="Archive Runs"
-        Icon="fa fa-history"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJArchiveRuns')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Archive Runs','UserID')"
-                [NewRecordValues]="NewRecordValues('MJ: Archive Runs')"
-                [AllowLoad]="IsSectionExpanded('mJArchiveRuns')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJArchiveRuns', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- File Storage Account Permissions Section -->
     <mj-collapsible-panel
         SectionKey="mJFileStorageAccountPermissions"
@@ -2302,6 +2327,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJFileStorageAccountPermissions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Archive Runs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJArchiveRuns"
+        SectionName="Archive Runs"
+        Icon="fa fa-archive"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJArchiveRuns')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Archive Runs','UserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Archive Runs')"
+                [AllowLoad]="IsSectionExpanded('mJArchiveRuns')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJArchiveRuns', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

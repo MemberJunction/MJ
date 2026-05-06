@@ -2,6 +2,10 @@
 
 AI-powered content ingestion, autotagging, and vectorization engine for MemberJunction. Scans content from multiple sources (local files, websites, RSS feeds, cloud storage), extracts text from documents, uses LLMs to generate weighted tags and metadata attributes, and vectorizes content for semantic search.
 
+> **Read these guides first** if you're working on tag classification, taxonomy growth, or governance:
+> - [Content Autotagging Guide](../../guides/CONTENT_AUTOTAGGING_GUIDE.md) — pipeline architecture, prompt structure, source-type providers
+> - [Taxonomy & Tagging Guide](../../guides/TAXONOMY_TAGGING_GUIDE.md) — the tag taxonomy itself: 4+1-tier resolver, per-tag governance, scoping, the suggestion queue, Tag Health, and per-source configuration knobs
+
 ## Overview
 
 The `@memberjunction/content-autotagging` package provides an extensible framework for ingesting content from diverse sources and leveraging AI models to extract meaningful tags, summaries, and metadata. Built on the MemberJunction platform, it helps organizations automatically organize and categorize their content. The engine uses the managed **"Content Autotagging"** AI prompt via `AIPromptRunner` (rather than direct `BaseLLM` calls), enabling prompt versioning, model routing, and centralized prompt management.

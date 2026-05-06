@@ -86,6 +86,11 @@ export function classifyBatch(batch: string): StatementType {
     if (/\b(?:UPDATE\s+\w+|INSERT\s+INTO\b|DELETE\s+FROM\b)/i.test(upper)) {
       return 'DECLARE_DML_BLOCK';
     }
+    // DECLARE blocks with dynamic EXEC('...') → also DECLARE_DML_BLOCK
+    // Example: DECLARE @n; SELECT @n = ...; IF @n IS NOT NULL EXEC('ALTER ... ' + @n);
+    if (/\bEXEC\s*\(/i.test(upper)) {
+      return 'DECLARE_DML_BLOCK';
+    }
     // DECLARE blocks without EXEC or DML → SQL Server-specific variable declarations
     return 'SKIP_SQLSERVER';
   }

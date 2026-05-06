@@ -1,6 +1,6 @@
 import { Component, ChangeDetectorRef, ViewChild, OnInit } from '@angular/core';
 import { RegisterClass } from '@memberjunction/global';
-import { CompositeKey, Metadata, RunView } from '@memberjunction/core';
+import { CompositeKey, RunView } from '@memberjunction/core';
 import { MJArtifactVersionEntity } from '@memberjunction/core-entities';
 import { BaseConfigPanel } from './base-config-panel';
 import { PanelConfig } from '../models/dashboard-types';
@@ -57,8 +57,7 @@ export class ArtifactConfigPanelComponent extends BaseConfigPanel implements OnI
 
     ngOnInit(): void {
         // Get current user ID for filtering
-        const md = new Metadata();
-        const userId = md.CurrentUser?.ID;
+        const userId = this.ProviderToUse.CurrentUser?.ID;
 
         // Tree configuration for Collections (branches) and Artifacts (leaves)
         // Collections have hierarchical ParentID structure.
@@ -224,7 +223,7 @@ export class ArtifactConfigPanelComponent extends BaseConfigPanel implements OnI
         this.cdr.detectChanges();
 
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<MJArtifactVersionEntity>({
                 EntityName: 'MJ: Artifact Versions',
                 ExtraFilter: `ArtifactID = '${artifactId}'`,

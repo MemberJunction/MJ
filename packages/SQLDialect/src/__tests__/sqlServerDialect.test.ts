@@ -58,6 +58,41 @@ describe('SQLServerDialect', () => {
         });
     });
 
+    describe('NullLiteral / IsNullLiteral', () => {
+        it('NullLiteral returns NULL', () => {
+            expect(dialect.NullLiteral).toBe('NULL');
+        });
+
+        it('IsNullLiteral matches case-insensitively', () => {
+            expect(dialect.IsNullLiteral('NULL')).toBe(true);
+            expect(dialect.IsNullLiteral('null')).toBe(true);
+            expect(dialect.IsNullLiteral('Null')).toBe(true);
+            expect(dialect.IsNullLiteral('  NULL  ')).toBe(true);
+        });
+
+        it('IsNullLiteral rejects non-NULL values', () => {
+            expect(dialect.IsNullLiteral('0')).toBe(false);
+            expect(dialect.IsNullLiteral('1')).toBe(false);
+            expect(dialect.IsNullLiteral("'Active'")).toBe(false);
+            expect(dialect.IsNullLiteral('')).toBe(false);
+        });
+    });
+
+    describe('ParameterRef', () => {
+        it('returns @-prefixed PascalCase', () => {
+            expect(dialect.ParameterRef('Name')).toBe('@Name');
+            expect(dialect.ParameterRef('UserViewMaxRows')).toBe('@UserViewMaxRows');
+        });
+    });
+
+    describe('ParameterDefault', () => {
+        it('returns " = value" with leading space', () => {
+            expect(dialect.ParameterDefault('NULL')).toBe(' = NULL');
+            expect(dialect.ParameterDefault('0')).toBe(' = 0');
+            expect(dialect.ParameterDefault("'Active'")).toBe(" = 'Active'");
+        });
+    });
+
     describe('CurrentTimestampUTC', () => {
         it('should return GETUTCDATE()', () => {
             expect(dialect.CurrentTimestampUTC()).toBe('GETUTCDATE()');
@@ -302,9 +337,51 @@ describe('SQLServerDialect', () => {
         });
     });
 
-    describe('IsNull (inherited)', () => {
-        it('should use COALESCE under the hood', () => {
-            expect(dialect.IsNull('col1', "'default'")).toBe("COALESCE(col1, 'default')");
+    describe('IsNull', () => {
+        it('emits native ISNULL on SQL Server (T-SQL convention)', () => {
+            expect(dialect.IsNull('col1', "'default'")).toBe("ISNULL(col1, 'default')");
+        });
+
+        it('handles parameter-ref / column-ref pairs cleanly', () => {
+            expect(dialect.IsNull('@MyParam', '[Status]')).toBe('ISNULL(@MyParam, [Status])');
+        });
+    });
+
+    describe('QuoteStringLiteral', () => {
+        it('wraps a value in single quotes', () => {
+            expect(dialect.QuoteStringLiteral('hello')).toBe("'hello'");
+        });
+
+        it("doubles internal apostrophes for SQL injection safety", () => {
+            expect(dialect.QuoteStringLiteral("O'Brien")).toBe("'O''Brien'");
+        });
+
+        it("handles values with multiple apostrophes", () => {
+            expect(dialect.QuoteStringLiteral("it's a 'test'")).toBe("'it''s a ''test'''");
+        });
+
+        it('returns just the quotes for empty input', () => {
+            expect(dialect.QuoteStringLiteral('')).toBe("''");
+        });
+    });
+
+    describe('QuoteColumnAlias', () => {
+        it('returns a bare identifier (SQL Server is case-insensitive)', () => {
+            expect(dialect.QuoteColumnAlias('EntityName')).toBe('EntityName');
+        });
+    });
+
+    describe('CastToBoundedString', () => {
+        it('emits CAST AS NVARCHAR(450) by default to match indexable RecordID width', () => {
+            expect(dialect.CastToBoundedString('src.[ID]')).toBe('CAST(src.[ID] AS NVARCHAR(450))');
+        });
+
+        it('honours an explicit maxLength', () => {
+            expect(dialect.CastToBoundedString('x', 100)).toBe('CAST(x AS NVARCHAR(100))');
+        });
+
+        it('falls back to NVARCHAR(MAX) above 4000 chars (matches resolveStringType)', () => {
+            expect(dialect.CastToBoundedString('x', 8000)).toBe('CAST(x AS NVARCHAR(MAX))');
         });
     });
 });

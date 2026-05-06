@@ -1,6 +1,6 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectorRef, ViewEncapsulation } from '@angular/core';
-import { Metadata } from '@memberjunction/core';
 import { GraphQLActionClient, GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ActionParam } from '@memberjunction/actions-base';
 import { HomeAppPinnedItem, ActionPinConfiguration } from '@memberjunction/ng-shared';
 
@@ -23,7 +23,7 @@ interface RuntimeField {
     styleUrls: ['./action-pin-runner-dialog.component.css'],
     encapsulation: ViewEncapsulation.None
 })
-export class ActionPinRunnerDialogComponent implements OnChanges {
+export class ActionPinRunnerDialogComponent extends BaseAngularComponent implements OnChanges {
     @Input() Visible = false;
     @Input() Pin: HomeAppPinnedItem | null = null;
     @Output() Result = new EventEmitter<ActionPinRunResult>();
@@ -34,7 +34,7 @@ export class ActionPinRunnerDialogComponent implements OnChanges {
     public ResultMessage: string | null = null;
     public ErrorMessage: string | null = null;
 
-    constructor(private cdr: ChangeDetectorRef) {}
+    constructor(private cdr: ChangeDetectorRef) { super(); }
 
     ngOnChanges(changes: SimpleChanges): void {
         if (changes['Visible'] && this.Visible && this.Pin) {
@@ -92,7 +92,7 @@ export class ActionPinRunnerDialogComponent implements OnChanges {
 
         try {
             const params = this.buildActionParams(cfg);
-            const provider = Metadata.Provider as GraphQLDataProvider;
+            const provider = this.ProviderToUse as GraphQLDataProvider;
             const actionClient = new GraphQLActionClient(provider);
             const result = await actionClient.RunAction(cfg.actionId, params);
             this.RunSucceeded = result.Success;

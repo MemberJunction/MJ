@@ -9,6 +9,7 @@ import { EventCodes, SharedService } from '@memberjunction/ng-shared';
 import { BehaviorSubject, Subject } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 interface IconCategory {
   name: string;
   icons: string[];
@@ -20,7 +21,7 @@ interface IconCategory {
   templateUrl: './user-profile-settings.component.html',
   styleUrls: ['./user-profile-settings.component.css']
 })
-export class UserProfileSettingsComponent implements OnInit, OnDestroy {
+export class UserProfileSettingsComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   currentUser!: MJUserEntity;
   selectedTab: 'upload' | 'url' | 'icon' | 'provider' = 'url';
 
@@ -130,10 +131,11 @@ export class UserProfileSettingsComponent implements OnInit, OnDestroy {
     private sharedService: SharedService,
     private cdr: ChangeDetectorRef,
     private ngZone: NgZone
-  ) {}
+  ) {
+    super();}
 
   async ngOnInit() {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const currentUserInfo = md.CurrentUser;
 
     // Load the full MJUserEntity to access avatar fields

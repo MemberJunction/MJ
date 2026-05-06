@@ -594,7 +594,7 @@ export class ModelManagementComponent extends BaseResourceComponent implements O
 
   public async createNewModel(): Promise<void> {
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const newModel = await md.GetEntityObject<MJAIModelEntityExtended>('MJ: AI Models');
       
       if (newModel) {

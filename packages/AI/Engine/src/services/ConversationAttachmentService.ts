@@ -85,16 +85,26 @@ interface ModalityCache {
  * Handles validation, storage, thumbnails, and CRUD operations.
  */
 export class ConversationAttachmentService {
-    private _defaultProvider: IMetadataProvider;
+    private _defaultProvider: IMetadataProvider | null = null;
     private modalityCache: ModalityCache = { byName: new Map(), loaded: false };
 
-    constructor() {
-        this._defaultProvider = Metadata.Provider;
+    constructor() {}
+
+    /**
+     * Optional metadata provider override. Callers should set
+     * `instance.Provider = providerToUse` before invoking service methods
+     * in multi-provider contexts. Falls back to the global default provider when unset.
+     */
+    public get Provider(): IMetadataProvider {
+        return this._defaultProvider ?? Metadata.Provider;
+    }
+    public set Provider(value: IMetadataProvider | null) {
+        this._defaultProvider = value;
     }
 
     /** Resolves the provider to use: caller-supplied or the default captured at construction. */
     private resolveProvider(provider?: IMetadataProvider): IMetadataProvider {
-        return provider ?? this._defaultProvider;
+        return provider ?? this.Provider;
     }
 
 
@@ -106,7 +116,7 @@ export class ConversationAttachmentService {
             return;
         }
 
-        const rv = RunView.FromMetadataProvider(provider ?? this._defaultProvider);
+        const rv = RunView.FromMetadataProvider(provider ?? this.Provider);
         const result = await rv.RunView<MJAIModalityEntity>({
             EntityName: 'MJ: AI Modalities',
             ResultType: 'entity_object'
@@ -402,7 +412,7 @@ export class ConversationAttachmentService {
         contextUser: UserInfo,
         provider?: IMetadataProvider
     ): Promise<MJConversationDetailAttachmentEntity[]> {
-        const rv = RunView.FromMetadataProvider(provider ?? this._defaultProvider);
+        const rv = RunView.FromMetadataProvider(provider ?? this.Provider);
         const result = await rv.RunView<MJConversationDetailAttachmentEntity>({
             EntityName: 'MJ: Conversation Detail Attachments',
             ExtraFilter: `ConversationDetailID='${conversationDetailId}'`,
@@ -435,7 +445,7 @@ export class ConversationAttachmentService {
 
         const idList = conversationDetailIds.map(id => `'${id}'`).join(',');
 
-        const rv = RunView.FromMetadataProvider(provider ?? this._defaultProvider);
+        const rv = RunView.FromMetadataProvider(provider ?? this.Provider);
         const result = await rv.RunView<MJConversationDetailAttachmentEntity>({
             EntityName: 'MJ: Conversation Detail Attachments',
             ExtraFilter: `ConversationDetailID IN (${idList})`,

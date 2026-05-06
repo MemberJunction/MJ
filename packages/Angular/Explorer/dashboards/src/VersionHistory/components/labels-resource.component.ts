@@ -77,7 +77,7 @@ export class VersionHistoryLabelsResourceComponent extends BaseResourceComponent
     // Create Label Wizard
     public ShowCreateWizard = false;
 
-    private metadata = new Metadata();
+    private metadata = this.ProviderToUse;
     protected override destroy$ = new Subject<void>();
 
     constructor(private cdr: ChangeDetectorRef) {
@@ -113,7 +113,7 @@ export class VersionHistoryLabelsResourceComponent extends BaseResourceComponent
             this.IsLoading = true;
             this.cdr.markForCheck();
 
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
             const [labelsResult, itemsResult] = await rv.RunViews([
                 {

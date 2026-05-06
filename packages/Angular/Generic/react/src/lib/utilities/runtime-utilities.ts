@@ -15,11 +15,13 @@ import {
 } from '@memberjunction/core';
 
 import { MJGlobal, RegisterClass } from '@memberjunction/global';
-import { 
-  ComponentUtilities, 
-  SimpleAITools, 
-  SimpleMetadata, 
-  SimpleRunQuery, 
+import { GeoDataEngine } from '@memberjunction/core-entities';
+import {
+  ComponentUtilities,
+  SimpleAITools,
+  SimpleGeoDataEngine,
+  SimpleMetadata,
+  SimpleRunQuery,
   SimpleRunView,
   SimpleExecutePromptParams,
   SimpleExecutePromptResult,
@@ -44,7 +46,7 @@ export class RuntimeUtilities {
    */
   public buildUtilities(debug: boolean = false): ComponentUtilities {
     this.debug = debug;
-    const md = new Metadata();
+    const md = new Metadata();  // global-provider-ok: utility — single-provider context
     return this.SetupUtilities(md);
   }
 
@@ -58,8 +60,9 @@ export class RuntimeUtilities {
       md: this.CreateSimpleMetadata(md),
       rv: this.CreateSimpleRunView(rv),
       rq: this.CreateSimpleRunQuery(rq),
-      ai: this.CreateSimpleAITools()
-    };            
+      ai: this.CreateSimpleAITools(),
+      geoDataEngine: this.CreateSimpleGeoDataEngine()
+    };
     return u;
   }
 
@@ -146,6 +149,21 @@ export class RuntimeUtilities {
       GetEntityObject: (entityName: string) => {
         return md.GetEntityObject(entityName)
       }
+    }
+  }
+
+  private CreateSimpleGeoDataEngine(): SimpleGeoDataEngine | undefined {
+    try {
+      const geo = GeoDataEngine.Instance;
+      if (!geo) return undefined;
+      return {
+        ResolvePointToLocation: (lat: number, lng: number) => {
+          return geo.ResolvePointToLocation(lat, lng);
+        }
+      };
+    } catch {
+      // GeoDataEngine may not be configured yet — return undefined
+      return undefined;
     }
   }
 

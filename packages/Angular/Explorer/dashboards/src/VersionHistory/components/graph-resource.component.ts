@@ -55,7 +55,7 @@ export class VersionHistoryGraphResourceComponent extends BaseResourceComponent 
 
     private static readonly PREFS_KEY = 'VersionHistory.Graph.UserPreferences';
     private preferencesLoaded = false;
-    private metadata = new Metadata();
+    private metadata = this.ProviderToUse;
     protected override destroy$ = new Subject<void>();
 
     constructor(private cdr: ChangeDetectorRef) {

@@ -113,7 +113,7 @@
       "type": "number",
       "description": "Number of rows per page when paging is enabled",
       "required": false,
-      "defaultValue": 10
+      "defaultValue": 20
     },
     {
       "name": "showPageSizeChanger",
@@ -217,55 +217,45 @@
     },
     {
       "name": "selectionChanged",
-      "description": "Fired when row selection changes",
+      "description": "Fired when row selection changes. Callback receives a single object with a selectedRows property.",
       "parameters": [
         {
-          "name": "selectedRows",
-          "type": "Array<object>",
-          "description": "Array of selected entity objects"
+          "name": "event",
+          "type": "{ selectedRows: Array<object> }",
+          "description": "Object containing the array of selected record objects"
         }
       ]
     },
     {
       "name": "pageChanged",
-      "description": "Fired when page changes",
+      "description": "Fired when page changes. Callback receives a single object with pageNumber, pageSize, and visibleRows.",
       "parameters": [
         {
-          "name": "pageNumber",
-          "type": "number",
-          "description": "Current page number (0-based)"
-        },
-        {
-          "name": "visibleRows",
-          "type": "Array<object>",
-          "description": "Array of entity objects visible on current page"
+          "name": "event",
+          "type": "{ pageNumber: number, pageSize: number, visibleRows: Array<object> }",
+          "description": "Object with 0-based pageNumber, current pageSize, and the array of records visible on the new page"
         }
       ]
     },
     {
       "name": "sortChanged",
-      "description": "Fired when sort configuration changes",
+      "description": "Fired when sort configuration changes. Callback receives a single object with a sortState property.",
       "parameters": [
         {
-          "name": "sortState",
-          "type": "{column: string, direction: 'asc' | 'desc'}",
-          "description": "Object with 'column' and 'direction' properties"
+          "name": "event",
+          "type": "{ sortState: { column: string, direction: 'asc' | 'desc' } }",
+          "description": "Object with sortState containing the column name and sort direction"
         }
       ]
     },
     {
       "name": "filterChanged",
-      "description": "Fired when filter changes",
+      "description": "Fired when filter changes. Callback receives a single object with filterValue and matchingData.",
       "parameters": [
         {
-          "name": "filterValue",
-          "type": "string",
-          "description": "Current filter text"
-        },
-        {
-          "name": "matchingData",
-          "type": "Array<object>",
-          "description": "Array of all matching entity objects"
+          "name": "event",
+          "type": "{ filterValue: string, matchingData: Array<object> }",
+          "description": "Object with the current filter text and array of all matching records"
         }
       ]
     }
@@ -279,5 +269,5 @@
   ],
   "dependencies": [],
   "code": "@file:../../code/generic/data-grid.js",
-  "exampleUsage": "// Simple column configuration (backward compatible)\n<DataGrid\n  entityName=\"Products\"\n  data={products}\n  columns={['Name', 'SKU', 'Price', 'Category', 'InStock']}\n  onRowClick={handleRowClick}\n/>\n\n// Advanced column configuration with custom rendering\n<DataGrid\n  entityName=\"Products\"\n  data={products}\n  columns={[\n    { field: 'Name', header: 'Product Name', width: '200px' },\n    { \n      field: 'Price',\n      header: 'Unit Price',\n      render: (value) => (\n        <span style={{ fontWeight: 'bold', color: '#059669' }}>\n          {value >= 1000 ? `$${(value/1000).toFixed(1)}K` : `$${value}`}\n        </span>\n      ),\n      width: '120px',\n      sortable: true\n    },\n    {\n      field: 'InStock',\n      header: 'Availability',\n      render: (value) => (\n        <span style={{ \n          padding: '2px 8px',\n          borderRadius: '12px',\n          backgroundColor: value ? '#D1FAE5' : '#FEE2E2',\n          color: value ? '#065F46' : '#991B1B'\n        }}>\n          {value ? 'In Stock' : 'Out of Stock'}\n        </span>\n      ),\n      width: '130px',\n      sortable: false\n    },\n    'Category'  // Simple string still works\n  ]}\n  sorting={true}\n  paging={true}\n  pageSize={20}\n  filtering={true}\n  filterFields={['Name', 'SKU', 'Category']}\n  selectionMode=\"none\"\n  onRowClick={handleRowClick}\n  onSelectionChanged={handleSelection}\n  onPageChanged={handlePageChange}\n  onSortChanged={handleSortChange}\n  onFilterChanged={handleFilterChange}\n/>"
+  "exampleUsage": "// Row click handler - access the clicked record via e.record\nconst handleRowClick = (e) => {\n  // e.record contains the full row data object\n  // e.cancel can be set to true to prevent default OpenEntityRecord behavior\n  const row = e.record;\n  console.log('Clicked:', row.Name, row.ID);\n  \n  // To open a specific entity record:\n  if (callbacks?.OpenEntityRecord) {\n    callbacks.OpenEntityRecord('Products', [{ FieldName: 'ID', Value: row.ID }]);\n  }\n  \n  // To prevent default behavior (when entityName + entityPrimaryKeys are set):\n  e.cancel = true;\n};\n\n// Simple column configuration (backward compatible)\n<DataGrid\n  entityName=\"Products\"\n  data={products}\n  columns={['Name', 'SKU', 'Price', 'Category', 'InStock']}\n  onRowClick={handleRowClick}\n/>\n\n// Advanced column configuration with custom rendering\n<DataGrid\n  entityName=\"Products\"\n  data={products}\n  columns={[\n    { field: 'Name', header: 'Product Name', width: '200px' },\n    { \n      field: 'Price',\n      header: 'Unit Price',\n      render: (value) => (\n        <span style={{ fontWeight: 'bold', color: '#059669' }}>\n          {value >= 1000 ? `$${(value/1000).toFixed(1)}K` : `$${value}`}\n        </span>\n      ),\n      width: '120px',\n      sortable: true\n    },\n    {\n      field: 'InStock',\n      header: 'Availability',\n      render: (value) => (\n        <span style={{ \n          padding: '2px 8px',\n          borderRadius: '12px',\n          backgroundColor: value ? '#D1FAE5' : '#FEE2E2',\n          color: value ? '#065F46' : '#991B1B'\n        }}>\n          {value ? 'In Stock' : 'Out of Stock'}\n        </span>\n      ),\n      width: '130px',\n      sortable: false\n    },\n    'Category'  // Simple string still works\n  ]}\n  sorting={true}\n  paging={true}\n  pageSize={20}\n  filtering={true}\n  filterFields={['Name', 'SKU', 'Category']}\n  selectionMode=\"none\"\n  onRowClick={handleRowClick}\n  onSelectionChanged={handleSelection}\n  onPageChanged={handlePageChange}\n  onSortChanged={handleSortChange}\n  onFilterChanged={handleFilterChange}\n/>"
 }

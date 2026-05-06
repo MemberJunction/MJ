@@ -4,6 +4,7 @@ import { MJActionCategoryEntity, MJActionEntity } from '@memberjunction/core-ent
 import { Subject, BehaviorSubject } from 'rxjs';
 import { debounceTime, takeUntil, distinctUntilChanged } from 'rxjs/operators';
 import { UUIDsEqual } from '@memberjunction/global';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 interface CategoryWithStats extends MJActionCategoryEntity {
   actionCount?: number;
@@ -299,7 +300,7 @@ interface CategoryWithStats extends MJActionCategoryEntity {
     }
   `]
 })
-export class CategoriesListViewComponent implements OnInit, OnDestroy {
+export class CategoriesListViewComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   @Output() openEntityRecord = new EventEmitter<{entityName: string; recordId: string}>();
 
   public isLoading = true;
@@ -309,7 +310,7 @@ export class CategoriesListViewComponent implements OnInit, OnDestroy {
 
   private destroy$ = new Subject<void>();
 
-  constructor() {}
+  constructor() { super(); }
 
   ngOnInit(): void {
     this.setupSearch();
@@ -336,7 +337,7 @@ export class CategoriesListViewComponent implements OnInit, OnDestroy {
       this.isLoading = true;
       console.log('Loading categories data...');
       
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const [categoriesResult, actionsResult] = await rv.RunViews([
         {
           EntityName: 'MJ: Action Categories', 

@@ -797,6 +797,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Tags Section -->
+    <mj-collapsible-panel
+        SectionKey="mJTags"
+        SectionName="Tags"
+        Icon="fa fa-tags"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJTags')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tags','EmbeddingModelID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tags')"
+                [AllowLoad]="IsSectionExpanded('mJTags')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJTags', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- AI Models Section -->
     <mj-collapsible-panel
         SectionKey="mJAIModels"

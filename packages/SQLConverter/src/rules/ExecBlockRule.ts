@@ -22,6 +22,7 @@
  */
 import type { IConversionRule, ConversionContext, StatementType } from './types.js';
 import { resolveType } from './TypeResolver.js';
+import { removeNPrefix } from './ExpressionHelpers.js';
 
 interface DeclaredVar {
   name: string;
@@ -45,6 +46,7 @@ export class ExecBlockRule implements IConversionRule {
   AppliesTo: StatementType[] = ['EXEC_BLOCK'];
   Priority = 52;
   BypassSqlglot = true;
+  BypassJustification = 'DECLARE @var; SET @var = ...; EXEC schema.proc(...) blocks (the metadata-sync EXEC pattern) need conversion to PG PERFORM calls inside DO $ blocks with variable renaming and parameter passing. sqlglot does not understand the T-SQL @var → PG variable mapping or how to wrap as PERFORM.';
 
   PostProcess(sql: string, _originalSQL: string, _context: ConversionContext): string {
     // Split into individual DECLARE/SET/EXEC blocks (a file may contain many)
@@ -391,7 +393,7 @@ export class ExecBlockRule implements IConversionRule {
     let result = value;
 
     // Remove N prefix from string literals
-    result = result.replace(/(?<![a-zA-Z])N'/g, "'");
+    result = removeNPrefix(result);
 
     // Convert CAST types: CAST(x AS NVARCHAR(MAX)) → CAST(x AS TEXT)
     result = result.replace(/\bAS\s+NVARCHAR\s*\(\s*MAX\s*\)/gi, 'AS TEXT');
@@ -471,7 +473,14 @@ export class ExecBlockRule implements IConversionRule {
     const out: string[] = [];
 
     if (comments.trim()) out.push(comments);
-    out.push('DO $$');
+    // Use a tagged dollar-quote ($mj$) instead of the bare $$ delimiter.
+    // Metadata_Sync output stores raw JS / React component source code in
+    // NVARCHAR(MAX) variables, and that source frequently contains literal
+    // `$$` (e.g. `**Total Revenue:** $${X}`). With a bare $$ DO block, PG's
+    // parser sees the inner `$$` and prematurely terminates the dollar-quote,
+    // producing `syntax error at or near "{"` (or similar). Tagged delimiter
+    // matches PG's documented recommendation and executes identically.
+    out.push('DO $mj$');
     out.push('DECLARE');
     for (const v of vars) {
       out.push(`  ${v.name} ${v.pgType};`);
@@ -501,7 +510,7 @@ export class ExecBlockRule implements IConversionRule {
     const paramList = exec.params.map(p => `${p.paramName} := ${p.valueExpr}`).join(', ');
     out.push(`  PERFORM ${exec.procRef}(${paramList});`);
 
-    out.push('END $$;');
+    out.push('END $mj$;');
     return out.join('\n') + '\n';
   }
 

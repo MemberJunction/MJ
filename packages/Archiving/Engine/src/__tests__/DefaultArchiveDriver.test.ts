@@ -15,9 +15,19 @@ vi.mock('@memberjunction/core', () => {
     return {
         LogError: vi.fn(),
         LogStatus: vi.fn(),
-        Metadata: class MockMetadata {
-            GetEntityObject = vi.fn().mockImplementation(() => Promise.resolve(mockGetEntityObjectResult));
-        },
+        Metadata: (() => {
+            class MockMetadata {
+                GetEntityObject = vi.fn().mockImplementation(() => Promise.resolve(mockGetEntityObjectResult));
+                // Multi-provider migration: DefaultArchiveDriver uses this.ProviderToUse, which
+                // falls back to Metadata.Provider. Mirror the helper instance shape on the static
+                // Provider so GetEntityObject calls find the same handler.
+                static Provider: { GetEntityObject: () => Promise<unknown> };
+            }
+            MockMetadata.Provider = {
+                GetEntityObject: () => Promise.resolve(mockGetEntityObjectResult),
+            };
+            return MockMetadata;
+        })(),
         CompositeKey: class MockCompositeKey {
             KeyValuePairs: Array<{ FieldName: string; Value: string }>;
             constructor(pairs: Array<{ FieldName: string; Value: string }>) {

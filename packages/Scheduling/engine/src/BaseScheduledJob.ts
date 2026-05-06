@@ -3,7 +3,7 @@
  * @module @memberjunction/scheduling-engine
  */
 
-import { LogError, LogStatusEx, IsVerboseLoggingEnabled, ValidationResult, UserInfo, Metadata } from '@memberjunction/core';
+import { LogError, LogStatusEx, IsVerboseLoggingEnabled, ValidationResult, UserInfo, Metadata, IMetadataProvider } from '@memberjunction/core';
 import { MJScheduledJobEntity, MJScheduledJobRunEntity, MJScheduledJobTypeEntity } from '@memberjunction/core-entities';
 import { ScheduledJobResult, ScheduledJobConfiguration, NotificationContent } from '@memberjunction/scheduling-base-types';
 
@@ -126,9 +126,10 @@ export abstract class BaseScheduledJob {
      */
     protected async getJobType(
         schedule: MJScheduledJobEntity,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<MJScheduledJobTypeEntity> {
-        const md = new Metadata();
+        const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
         const jobType = await md.GetEntityObject<MJScheduledJobTypeEntity>('MJ: Scheduled Job Types', contextUser);
         await jobType.Load(schedule.JobTypeID);
         return jobType;

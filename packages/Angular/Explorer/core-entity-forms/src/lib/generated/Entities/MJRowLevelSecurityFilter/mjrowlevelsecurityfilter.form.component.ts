@@ -20,9 +20,9 @@ export class MJRowLevelSecurityFilterFormComponent extends BaseFormComponent {
             { sectionKey: 'filterDefinition', sectionName: 'Filter Definition', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJEntityPermissionsDeleteRLSFilterID', sectionName: 'Entity Permissions', isExpanded: false },
-            { sectionKey: 'mJEntityPermissionsReadRLSFilterID', sectionName: 'Entity Permissions (Read RLSFilter ID)', isExpanded: false },
-            { sectionKey: 'mJEntityPermissionsCreateRLSFilterID', sectionName: 'Entity Permissions (Create RLSFilter ID)', isExpanded: false },
-            { sectionKey: 'mJEntityPermissionsUpdateRLSFilterID', sectionName: 'Entity Permissions (Update RLSFilter ID)', isExpanded: false }
+            { sectionKey: 'mJEntityPermissionsReadRLSFilterID', sectionName: 'Entity Permissions (Read Filter ID)', isExpanded: false },
+            { sectionKey: 'mJEntityPermissionsCreateRLSFilterID', sectionName: 'Entity Permissions (Create Filter ID)', isExpanded: false },
+            { sectionKey: 'mJEntityPermissionsUpdateRLSFilterID', sectionName: 'Entity Permissions (Update Filter ID)', isExpanded: false }
         ]);
     }
 }

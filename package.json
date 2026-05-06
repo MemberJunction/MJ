@@ -15,6 +15,7 @@
     "packages/AI/Vectors/Memory/*",
     "packages/AI/Knowledge/*",
     "packages/AI/AgentManager/*",
+    "packages/AI/DatabaseDesigner/*",
     "packages/AI/AICLI",
     "packages/Communication/*",
     "packages/Communication/providers/*",
@@ -30,7 +31,9 @@
     "packages/APIKeys/*",
     "packages/OpenApp/*",
     "packages/Integration/*",
-    "packages/Archiving/*"
+    "packages/Archiving/*",
+    "packages/geo/*"
+
   ],
   "scripts": {
     "prebuild": "node -e \"try { require.resolve('turbo') } catch (e) { console.error('\\n❌ Dependencies not installed. Run: npm install\\n'); process.exit(1); }\"",

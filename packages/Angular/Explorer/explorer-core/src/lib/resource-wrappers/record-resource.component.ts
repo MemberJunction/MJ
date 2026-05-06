@@ -2,7 +2,7 @@ import { Component } from '@angular/core';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, CompositeKey } from '@memberjunction/core';
+import { Metadata, CompositeKey, EntityInfo, IMetadataProvider } from '@memberjunction/core';
 @RegisterClass(BaseResourceComponent, 'RecordResource')
 @Component({
   standalone: false,
@@ -12,12 +12,13 @@ import { Metadata, CompositeKey } from '@memberjunction/core';
 })
 export class EntityRecordResource extends BaseResourceComponent {
     public get PrimaryKey(): CompositeKey {
-        return EntityRecordResource.GetPrimaryKey(this.Data);
+        return EntityRecordResource.GetPrimaryKey(this.Data, this.ProviderToUse);
     }
 
-    public static GetPrimaryKey(data: ResourceData): CompositeKey {
-        const md = new Metadata();
-        const e = md.Entities.find(e => e.Name.trim().toLowerCase() === data.Configuration.Entity.trim().toLowerCase());
+    public static GetPrimaryKey(data: ResourceData, provider?: IMetadataProvider): CompositeKey {
+        // global-provider-ok: static helper has no component instance scope; falls back to default provider
+        const md = (provider ?? Metadata.Provider) as IMetadataProvider;
+        const e = md.Entities.find((e: EntityInfo) => e.Name.trim().toLowerCase() === data.Configuration.Entity.trim().toLowerCase());
         if (!e){
             throw new Error(`Entity ${data.Configuration.Entity} not found in metadata`);
         }
@@ -32,13 +33,13 @@ export class EntityRecordResource extends BaseResourceComponent {
             return '';
         }
 
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const e = md.EntityByName(data.Configuration.Entity);
         if (!e) {
             return '';
         }
 
-        const pk: CompositeKey = EntityRecordResource.GetPrimaryKey(data);
+        const pk: CompositeKey = EntityRecordResource.GetPrimaryKey(data, this.ProviderToUse);
         if (pk.HasValue) {
             const name = await md.GetEntityRecordName(data.Configuration.Entity, pk);
             return name ? name : e.DisplayNameOrName;
@@ -52,7 +53,7 @@ export class EntityRecordResource extends BaseResourceComponent {
             return ''
         }
         else {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const e = md.Entities.find(e => e.Name.trim().toLowerCase() === data.Configuration.Entity.trim().toLowerCase());
             if (e)
                 return e?.Icon;
