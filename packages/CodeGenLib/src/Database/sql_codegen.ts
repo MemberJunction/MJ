@@ -13,7 +13,7 @@ import { ManageMetadataBase, ViewRegenEntry } from './manage-metadata';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { combineFiles, logIf, sortBySequenceAndCreatedAt } from '../Misc/util';
 import { MJEntityEntity } from '@memberjunction/core-entities';
-import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
+import { MJGlobal, UUIDsEqual, DatabasePlatform } from '@memberjunction/global';
 import { SQLLogging } from '../Misc/sql_logging';
 import { TempBatchFile } from '../Misc/temp_batch_file';
 
@@ -33,14 +33,14 @@ export type SPType = typeof SPType[keyof typeof SPType];
  * of that abstract base class and other databases will be sub-classes of the abstract base class as well.
  */
 /**
- * Creates the appropriate CodeGen database provider based on the configured database type.
- * Falls back to SQLServerCodeGenProvider for backward compatibility.
- * 
- * @param dbType The database platform type from configuration
+ * Creates the appropriate CodeGen database provider for the configured platform.
+ * Falls back to SQLServerCodeGenProvider for any unrecognized value.
+ *
+ * @param platform Canonical {@link DatabasePlatform} value from configuration
  * @returns A CodeGenDatabaseProvider instance for the specified platform
  */
-function createCodeGenProvider(dbType: string): CodeGenDatabaseProvider {
-    switch (dbType) {
+function createCodeGenProvider(platform: DatabasePlatform): CodeGenDatabaseProvider {
+    switch (platform) {
         case 'postgresql':
             // Dynamic import is avoided - the PostgreSQL provider should be
             // registered via MJGlobal ClassFactory for proper decoupling.
@@ -60,7 +60,7 @@ function createCodeGenProvider(dbType: string): CodeGenDatabaseProvider {
                 'PostgreSQL CodeGen provider not found. Ensure @memberjunction/postgresql-dataprovider ' +
                 'is installed and its CodeGen provider is registered before running CodeGen.'
             );
-        case 'mssql':
+        case 'sqlserver':
         default:
             return new SQLServerCodeGenProvider();
     }
@@ -77,7 +77,7 @@ export class SQLCodeGenBase {
      * Override this property or set it before calling generation methods to use
      * a different database platform (e.g., PostgreSQL).
      */
-    protected _dbProvider: CodeGenDatabaseProvider = createCodeGenProvider(configInfo.dbType);
+    protected _dbProvider: CodeGenDatabaseProvider = createCodeGenProvider(configInfo.dbPlatform);
     public get DBProvider(): CodeGenDatabaseProvider {
         return this._dbProvider;
     }
@@ -239,7 +239,7 @@ export class SQLCodeGenBase {
             // AI Engine init because vwAIModels is gone. SQL Server doesn't
             // hit this because its execution path is bulk-monolithic, not
             // phased per-entity.
-            const perEntityBatchSize = configInfo.dbType === 'postgresql' ? 1 : 5;
+            const perEntityBatchSize = configInfo.dbPlatform === 'postgresql' ? 1 : 5;
 
             // Generate SQL for entities that don't need cascade delete regeneration
             const genResult = await this.generateAndExecuteEntitySQLToSeparateFiles({

@@ -1,10 +1,11 @@
 import { DataTypeMap, MappedType } from './dataTypeMap.js';
+import type { DatabasePlatform } from '@memberjunction/global';
 
-/**
- * Supported database platforms.
- * Extensible — add new platforms as support is implemented.
- */
-export type DatabasePlatform = 'sqlserver' | 'postgresql';
+// `DatabasePlatform` is defined in @memberjunction/global so dialect, core,
+// codegen, and every other package that branches on platform share one
+// canonical type. Re-exported here for existing
+// `import { DatabasePlatform } from '@memberjunction/sql-dialect'` callsites.
+export type { DatabasePlatform } from '@memberjunction/global';
 
 /**
  * Abstract field type used by SchemaEngine to describe columns

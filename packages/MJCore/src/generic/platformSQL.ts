@@ -1,8 +1,9 @@
-/**
- * Supported database platforms.
- * Extensible — add new platforms as support is implemented.
- */
-export type DatabasePlatform = 'sqlserver' | 'postgresql';
+// `DatabasePlatform` is defined in @memberjunction/global so a single type
+// definition is shared by core, sql-dialect, codegen-lib, and every other
+// package that needs to branch on platform. Re-exported here so existing
+// `import { DatabasePlatform } from '@memberjunction/core'` callsites keep
+// compiling. New code should import from @memberjunction/global directly.
+export type { DatabasePlatform } from '@memberjunction/global';
 
 /**
  * Represents a SQL fragment that may have platform-specific variants.

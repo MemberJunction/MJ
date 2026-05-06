@@ -1,5 +1,5 @@
 import { CodeGenConnection } from '../Database/codeGenDatabaseProvider';
-import { configInfo, mj_core_schema, SQLOutputConfig, dbType } from "../Config/config";
+import { configInfo, mj_core_schema, SQLOutputConfig, dbPlatform } from "../Config/config";
 import { logError, logStatus } from "./status_logging";
 import * as fs from 'fs';
 import path from 'path';
@@ -39,7 +39,7 @@ export class SQLLogging {
                 // the rest of the PG tooling. Users who explicitly override folderPath are
                 // honored as-is.
                 let folderPath = config.folderPath;
-                if (dbType() === 'postgresql' && folderPath === DEFAULT_SS_SQL_OUTPUT_FOLDER) {
+                if (dbPlatform() === 'postgresql' && folderPath === DEFAULT_SS_SQL_OUTPUT_FOLDER) {
                     folderPath = DEFAULT_PG_SQL_OUTPUT_FOLDER;
                 }
 

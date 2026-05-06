@@ -4,7 +4,7 @@
  * metadata management, SQL generation, TypeScript entities, Angular components,
  * GraphQL resolvers, and more.
  * 
- * Supports both SQL Server and PostgreSQL database platforms via the dbType configuration.
+ * Supports both SQL Server and PostgreSQL database platforms via the dbPlatform configuration.
  */
 
 import { GraphQLServerGeneratorBase } from './Misc/graphql_server_codegen';
@@ -13,7 +13,7 @@ import { EntitySubClassGeneratorBase } from './Misc/entity_subclasses_codegen';
 import { SQLServerDataProvider, UserCache, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
 import { MSSQLConnection, sqlConfig } from './Config/db-connection';
 import { ManageMetadataBase } from './Database/manage-metadata';
-import { outputDir, commands, mj_core_schema, configInfo, getSettingValue, dbType, getExternalEntitySchemas, initializeConfig } from './Config/config';
+import { outputDir, commands, mj_core_schema, configInfo, getSettingValue, dbPlatform, getExternalEntitySchemas, initializeConfig } from './Config/config';
 import { logError, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner, warnSpinner } from './Misc/status_logging';
 import { CodeGenReporter } from './Misc/codegen-reporter';
 import * as MJ from '@memberjunction/core';
@@ -66,7 +66,7 @@ export class RunCodeGenBase {
    */
   public async setupDataSource(): Promise<DataSourceResult> {
     startSpinner('Initializing database connection...');
-    const platform = dbType();
+    const platform = dbPlatform();
 
     if (platform === 'postgresql') {
       return this.setupPostgreSQLDataSource();
@@ -179,7 +179,7 @@ export class RunCodeGenBase {
   public async Run(skipDatabaseGeneration: boolean = false, skipFileGeneration: boolean = false) {
     try {
       const startTime = new Date();
-      const platform = dbType();
+      const platform = dbPlatform();
       startSpinner('Starting MemberJunction CodeGen (' + platform + ') @ ' + startTime.toLocaleString());
 
       const dataSource = await this.setupDataSource();
@@ -201,7 +201,7 @@ export class RunCodeGenBase {
       const startTime = new Date();
       const reporter = CodeGenReporter.Instance;
       reporter.startRun();
-      reporter.mark('platform', dbType());
+      reporter.mark('platform', dbPlatform());
       reporter.mark('skipDB', skipDatabaseGeneration || getSettingValue('skip_database_generation', false));
       let pipelineSuccess = true;
 

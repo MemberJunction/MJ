@@ -15,7 +15,9 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
   },
-  "dependencies": {},
+  "dependencies": {
+    "@memberjunction/global": "5.32.0"
+  },
   "devDependencies": {
     "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.3",

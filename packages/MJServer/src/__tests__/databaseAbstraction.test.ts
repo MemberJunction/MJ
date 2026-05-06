@@ -116,14 +116,13 @@ import {
   GetReadWriteProvider,
 } from '../util.js';
 
-// getDbType is a pure function in index.ts, but importing index.ts triggers
-// type-graphql. Replicate the logic here for isolated testing.
-function getDbType(): 'sqlserver' | 'postgresql' {
-  const dbType = process.env.DB_TYPE?.toLowerCase();
-  if (dbType === 'postgresql' || dbType === 'postgres' || dbType === 'pg') {
-    return 'postgresql';
-  }
-  return 'sqlserver';
+// `index.ts` exports `getDbType` but importing it triggers type-graphql at
+// module load time, which is too heavy for a unit test. Re-derive the same
+// logic here using the canonical helper from @memberjunction/global so the
+// behavior under test stays in lockstep with production.
+import { resolveDbPlatformFromEnv, DatabasePlatform } from '@memberjunction/global';
+function getDbType(): DatabasePlatform {
+  return resolveDbPlatformFromEnv() ?? 'sqlserver';
 }
 
 // --------------------------------------------------------------------------
@@ -199,49 +198,50 @@ describe('Database Abstraction Layer', () => {
   // 1. DB_TYPE detection
   // ======================================================================
   describe('getDbType – DB_TYPE environment detection', () => {
-    it('should return "sqlserver" when DB_TYPE is not set', () => {
+    it('returns "sqlserver" when DB_TYPE is not set', () => {
       delete process.env.DB_TYPE;
       expect(getDbType()).toBe('sqlserver');
     });
 
-    it('should return "postgresql" when DB_TYPE is "postgresql"', () => {
+    it('returns "postgresql" when DB_TYPE is the canonical "postgresql"', () => {
       process.env.DB_TYPE = 'postgresql';
       expect(getDbType()).toBe('postgresql');
     });
 
-    it('should return "postgresql" when DB_TYPE is "postgres"', () => {
-      process.env.DB_TYPE = 'postgres';
-      expect(getDbType()).toBe('postgresql');
+    it('returns "sqlserver" when DB_TYPE is the canonical "sqlserver"', () => {
+      process.env.DB_TYPE = 'sqlserver';
+      expect(getDbType()).toBe('sqlserver');
     });
 
-    it('should return "postgresql" when DB_TYPE is "pg"', () => {
-      process.env.DB_TYPE = 'pg';
-      expect(getDbType()).toBe('postgresql');
-    });
-
-    it('should be case-insensitive for DB_TYPE values', () => {
+    it('is case-insensitive for canonical values', () => {
       process.env.DB_TYPE = 'PostgreSQL';
       expect(getDbType()).toBe('postgresql');
 
-      process.env.DB_TYPE = 'POSTGRES';
-      expect(getDbType()).toBe('postgresql');
-
-      process.env.DB_TYPE = 'PG';
-      expect(getDbType()).toBe('postgresql');
+      process.env.DB_TYPE = 'SQLSERVER';
+      expect(getDbType()).toBe('sqlserver');
     });
 
-    it('should return "sqlserver" for unrecognized DB_TYPE values', () => {
+    it('falls back to "sqlserver" for legacy aliases (mssql, postgres, pg)', () => {
+      // Strict policy: only the canonical {sqlserver, postgresql} pair is
+      // recognized. Aliases that older docs/envs may have used are no longer
+      // honored — they fall through to the default.
+      process.env.DB_TYPE = 'mssql';
+      expect(getDbType()).toBe('sqlserver');
+
+      process.env.DB_TYPE = 'postgres';
+      expect(getDbType()).toBe('sqlserver');
+
+      process.env.DB_TYPE = 'pg';
+      expect(getDbType()).toBe('sqlserver');
+    });
+
+    it('falls back to "sqlserver" for unrecognized DB_TYPE values', () => {
       process.env.DB_TYPE = 'mysql';
       expect(getDbType()).toBe('sqlserver');
     });
 
-    it('should return "sqlserver" for empty-string DB_TYPE', () => {
+    it('falls back to "sqlserver" for empty-string DB_TYPE', () => {
       process.env.DB_TYPE = '';
-      expect(getDbType()).toBe('sqlserver');
-    });
-
-    it('should return "sqlserver" when DB_TYPE is "sqlserver"', () => {
-      process.env.DB_TYPE = 'sqlserver';
       expect(getDbType()).toBe('sqlserver');
     });
   });
@@ -487,32 +487,27 @@ describe('Database Abstraction Layer', () => {
   // 7. Context creation – database type branching in contextFunction
   // ======================================================================
   describe('Database type branching for context creation', () => {
-    it('should identify postgres when DB_TYPE is "postgresql"', () => {
+    // The branching logic in context creation goes through the same
+    // canonical helper that getDbType() uses, so all callers see one
+    // consistent platform value.
+    it('identifies postgres when DB_TYPE is "postgresql"', () => {
       process.env.DB_TYPE = 'postgresql';
-      const dbType = process.env.DB_TYPE?.toLowerCase();
-      const isPostgres = dbType === 'postgresql' || dbType === 'postgres' || dbType === 'pg';
-      expect(isPostgres).toBe(true);
+      expect(getDbType() === 'postgresql').toBe(true);
     });
 
-    it('should identify postgres when DB_TYPE is "pg"', () => {
+    it('does NOT identify postgres for legacy alias "pg"', () => {
       process.env.DB_TYPE = 'pg';
-      const dbType = process.env.DB_TYPE?.toLowerCase();
-      const isPostgres = dbType === 'postgresql' || dbType === 'postgres' || dbType === 'pg';
-      expect(isPostgres).toBe(true);
+      expect(getDbType() === 'postgresql').toBe(false);
     });
 
-    it('should not identify postgres when DB_TYPE is "sqlserver"', () => {
+    it('does not identify postgres when DB_TYPE is "sqlserver"', () => {
       process.env.DB_TYPE = 'sqlserver';
-      const dbType = process.env.DB_TYPE?.toLowerCase();
-      const isPostgres = dbType === 'postgresql' || dbType === 'postgres' || dbType === 'pg';
-      expect(isPostgres).toBe(false);
+      expect(getDbType() === 'postgresql').toBe(false);
     });
 
-    it('should not identify postgres when DB_TYPE is undefined', () => {
+    it('does not identify postgres when DB_TYPE is undefined', () => {
       delete process.env.DB_TYPE;
-      const dbType = process.env.DB_TYPE?.toLowerCase();
-      const isPostgres = dbType === 'postgresql' || dbType === 'postgres' || dbType === 'pg';
-      expect(isPostgres).toBe(false);
+      expect(getDbType() === 'postgresql').toBe(false);
     });
   });
 
