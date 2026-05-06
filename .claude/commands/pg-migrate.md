@@ -560,7 +560,17 @@ If the user ID differs, look it up: `SELECT "ID" FROM __mj."User" WHERE "Email" 
 cd /workspace/MJ
 npx turbo build --filter=@memberjunction/ng-explorer
 cd /workspace/MJ/packages/MJExplorer
-npm run start > /tmp/mjexplorer.log 2>&1 &
+# --configuration=development is REQUIRED — it triggers Angular's
+# fileReplacements to swap environment.ts → environment.development.ts.
+# Without it, MJExplorer loads environment.ts (hardcoded AUTH_TYPE: 'msal'
+# with a 00000000-... placeholder Microsoft App ID) and the Playwright
+# login flow lands on a Microsoft AAD error page (AADSTS700038). The dev
+# Auth0 config lives in environment.development.ts (already committed,
+# Auth0 SPA client IDs ship in every browser bundle by design — not a
+# secret). Port 4200 keeps the skill consistent with the rest of Phase 4
+# (npm run start defaults to 4201 per package.json which would cause the
+# port-4200 health check below to time out).
+NODE_OPTIONS=--max-old-space-size=16384 npx ng serve --port 4200 --host 0.0.0.0 --configuration=development > /tmp/mjexplorer.log 2>&1 &
 EXPLORER_PID=$!
 ```
 
@@ -739,7 +749,7 @@ curl -s http://localhost:4200/ > /dev/null 2>&1 && echo "Explorer: UP" || echo "
 
 If either is down, start them:
 - MJAPI: `cd /workspace/MJ/packages/MJAPI && DB_PLATFORM=postgresql PG_HOST=postgres-claude PG_PORT=5432 PG_USERNAME=mj_admin PG_PASSWORD=Claude2Pg99 PG_DATABASE={{PG_DB_NAME}} DB_HOST=postgres-claude DB_PORT=5432 DB_USERNAME=mj_admin DB_PASSWORD=Claude2Pg99 DB_DATABASE={{PG_DB_NAME}} GRAPHQL_PORT=4000 npm run start > /tmp/mjapi.log 2>&1 &`
-- MJExplorer: Kill port 4200 first (`fuser -k 4200/tcp 2>/dev/null`), then `cd /workspace/MJ/packages/MJExplorer && NODE_OPTIONS=--max-old-space-size=16384 npx ng serve --port 4200 --host 0.0.0.0 > /tmp/mjexplorer.log 2>&1 &`
+- MJExplorer: Kill port 4200 first (`fuser -k 4200/tcp 2>/dev/null`), then `cd /workspace/MJ/packages/MJExplorer && NODE_OPTIONS=--max-old-space-size=16384 npx ng serve --port 4200 --host 0.0.0.0 --configuration=development > /tmp/mjexplorer.log 2>&1 &` (the `--configuration=development` flag is REQUIRED — see Phase 4 Step 6 for the full explanation)
 - Wait for both to be ready before proceeding.
 
 ## Auth0 Credentials
