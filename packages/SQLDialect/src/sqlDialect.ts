@@ -548,6 +548,17 @@ export abstract class SQLDialect implements SQLParserDialect {
      */
     abstract JsonExtract(column: string, path: string): string;
 
+    // ─── Migration Emission ──────────────────────────────────────────
+
+    /**
+     * Splits `${...}` inside SQL string literals so Flyway doesn't treat
+     * them as placeholders. Each `${name}` becomes a concat-split that
+     * round-trips back to `${name}` at execution but contains no adjacent
+     * `${` in the file text. Form is platform-specific (concat operator,
+     * truncation rules) — see each dialect's implementation.
+     */
+    abstract EscapeFlywayStringInterpolation(sql: string): string;
+
     // ─── Procedure / Function Calls ──────────────────────────────────
 
     /**

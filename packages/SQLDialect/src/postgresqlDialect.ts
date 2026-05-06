@@ -281,6 +281,18 @@ export class PostgreSQLDialect extends SQLDialect {
         return `CAST(${expr} AS TEXT)`;
     }
 
+    /**
+     * PostgreSQL-specific Flyway escape. PostgreSQL string concatenation uses
+     * `||` (not `+`), and TEXT has no length cap — so a simple split with `||`
+     * suffices and no cast-to-MAX dance is needed (unlike SQL Server, which
+     * silently truncates `NVARCHAR(N) + NVARCHAR(M)` past 4,000 chars).
+     * PostgreSQL string literals don't take an `N` prefix either; everything
+     * is already Unicode.
+     */
+    EscapeFlywayStringInterpolation(sql: string): string {
+        return sql.replaceAll(/\$\{/g, "$$'||'{");
+    }
+
     CastToUUID(expr: string): string {
         return `CAST(${expr} AS UUID)`;
     }
