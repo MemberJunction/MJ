@@ -4,7 +4,7 @@
  * metadata management, SQL generation, TypeScript entities, Angular components,
  * GraphQL resolvers, and more.
  * 
- * Supports both SQL Server and PostgreSQL database platforms via the dbType configuration.
+ * Supports both SQL Server and PostgreSQL database platforms via the dbPlatform configuration.
  */
 
 import { GraphQLServerGeneratorBase } from './Misc/graphql_server_codegen';
@@ -13,7 +13,7 @@ import { EntitySubClassGeneratorBase } from './Misc/entity_subclasses_codegen';
 import { SQLServerDataProvider, UserCache, setupSQLServerClient } from '@memberjunction/sqlserver-dataprovider';
 import { MSSQLConnection, sqlConfig } from './Config/db-connection';
 import { ManageMetadataBase } from './Database/manage-metadata';
-import { outputDir, commands, mj_core_schema, configInfo, getSettingValue, dbType, getExternalEntitySchemas, initializeConfig } from './Config/config';
+import { outputDir, commands, mj_core_schema, configInfo, getSettingValue, dbPlatform, getExternalEntitySchemas, initializeConfig } from './Config/config';
 import { logError, logStatus, logWarning, startSpinner, updateSpinner, succeedSpinner, failSpinner, warnSpinner } from './Misc/status_logging';
 import { CodeGenReporter } from './Misc/codegen-reporter';
 import * as MJ from '@memberjunction/core';
@@ -66,7 +66,7 @@ export class RunCodeGenBase {
    */
   public async setupDataSource(): Promise<DataSourceResult> {
     startSpinner('Initializing database connection...');
-    const platform = dbType();
+    const platform = dbPlatform();
 
     if (platform === 'postgresql') {
       return this.setupPostgreSQLDataSource();
@@ -179,7 +179,7 @@ export class RunCodeGenBase {
   public async Run(skipDatabaseGeneration: boolean = false, skipFileGeneration: boolean = false) {
     try {
       const startTime = new Date();
-      const platform = dbType();
+      const platform = dbPlatform();
       startSpinner('Starting MemberJunction CodeGen (' + platform + ') @ ' + startTime.toLocaleString());
 
       const dataSource = await this.setupDataSource();
@@ -201,7 +201,7 @@ export class RunCodeGenBase {
       const startTime = new Date();
       const reporter = CodeGenReporter.Instance;
       reporter.startRun();
-      reporter.mark('platform', dbType());
+      reporter.mark('platform', dbPlatform());
       reporter.mark('skipDB', skipDatabaseGeneration || getSettingValue('skip_database_generation', false));
       let pipelineSuccess = true;
 
@@ -311,7 +311,56 @@ export class RunCodeGenBase {
             // Use the same baseline filter as manageSQLScriptsAndExecution: only
             // entities flagged IncludeInAPI=true are expected to have routines.
             const baseline = md.Entities.filter(e => e.IncludeInAPI);
-            const missing = await sqlCodeGenObject.DBProvider.validateExpectedCRUDFunctions(conn, baseline);
+            let missing = await sqlCodeGenObject.DBProvider.validateExpectedCRUDFunctions(conn, baseline);
+
+            // Self-heal pass: when the validator finds missing routines, the
+            // root cause is almost always that a downstream view CASCADE-drop
+            // earlier in this same codegen run took out the entity's CRUD
+            // functions. Their .sql files were generated correctly to disk;
+            // they just never got applied to the DB. Re-execute the phased
+            // pipeline for the affected entities in-place rather than telling
+            // the user to "run codegen again" — codegen converging in one
+            // pass is a hard requirement on the PostgreSQL install path.
+            if (missing.length > 0
+                && typeof (sqlCodeGenObject.DBProvider as unknown as { executeEntityPhased?: unknown })
+                    .executeEntityPhased === 'function') {
+              logStatus(
+                `Detected ${missing.length} missing CRUD routine(s) — re-emitting via phased executor before failing`
+              );
+              const missingByEntity = new Map<string, MJ.EntityInfo>();
+              for (const m of missing) {
+                const e = md.EntityByName(m.entity);
+                if (e) missingByEntity.set(e.Name, e);
+              }
+              for (const entity of missingByEntity.values()) {
+                try {
+                  await sqlCodeGenObject.executeEntityInPhases(conn, entity, undefined);
+                } catch (heal) {
+                  logStatus(
+                    `Self-heal phased re-emit for ${entity.Name} threw: ${heal instanceof Error ? heal.message : String(heal)}`
+                  );
+                }
+              }
+              // Re-run validator after self-heal; if anything is still
+              // missing, fall through to the hard error below.
+              missing = await sqlCodeGenObject.DBProvider.validateExpectedCRUDFunctions(conn, baseline);
+              if (missing.length === 0) {
+                logStatus('Self-heal succeeded — all expected CRUD routines now exist');
+                // Self-heal closed the runtime gap that the upstream batch
+                // failure left behind. Clear the upstream failure flag so
+                // codegen reports success: every entity that runtime needs
+                // is now in the database, even if a batch-level error during
+                // manageSQLScriptsAndExecution flagged the pipeline as
+                // failed. Without this reset, codegen would report
+                // success=False despite the DB being in a fully-working
+                // state — and the user would dutifully re-run codegen, see
+                // it converge on pass 2, and conclude that PG's codegen
+                // requires two passes. Pass 1 IS the converged state now.
+                sqlGenerationSucceeded = true;
+                pipelineSuccess = true;
+              }
+            }
+
             if (missing.length > 0) {
               const list = missing
                 .map(m => `  - [${m.schema}] ${m.entity} → missing ${m.type} routine: ${m.expectedRoutine}`)

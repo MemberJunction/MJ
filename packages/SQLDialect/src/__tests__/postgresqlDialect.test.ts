@@ -79,14 +79,18 @@ describe('PostgreSQLDialect', () => {
     });
 
     describe('ParameterRef', () => {
-        it('converts PascalCase to p_-prefixed snake_case', () => {
+        it('converts PascalCase to p_-prefixed flat lowercase (matching baseline-ported SPs)', () => {
             expect(dialect.ParameterRef('Name')).toBe('p_name');
-            expect(dialect.ParameterRef('UserViewMaxRows')).toBe('p_user_view_max_rows');
+            expect(dialect.ParameterRef('UserViewMaxRows')).toBe('p_userviewmaxrows');
             expect(dialect.ParameterRef('ID')).toBe('p_id');
         });
 
         it('handles consecutive capitals correctly', () => {
-            expect(dialect.ParameterRef('FullTextSearchEnabled')).toBe('p_full_text_search_enabled');
+            expect(dialect.ParameterRef('FullTextSearchEnabled')).toBe('p_fulltextsearchenabled');
+        });
+
+        it('preserves existing underscores (e.g. _Clear companion suffix)', () => {
+            expect(dialect.ParameterRef('CompanyID_Clear')).toBe('p_companyid_clear');
         });
     });
 

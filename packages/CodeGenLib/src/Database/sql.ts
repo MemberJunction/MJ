@@ -26,7 +26,7 @@ private _dbProvider: CodeGenDatabaseProvider | null = null;
  */
 protected get dbProvider(): CodeGenDatabaseProvider {
    if (!this._dbProvider) {
-      const platform = configInfo.dbType;
+      const platform = configInfo.dbPlatform;
       if (platform === 'postgresql') {
          const pgProvider = MJGlobal.Instance.ClassFactory.CreateInstance<CodeGenDatabaseProvider>(
             CodeGenDatabaseProvider, 'PostgreSQLCodeGenProvider'
