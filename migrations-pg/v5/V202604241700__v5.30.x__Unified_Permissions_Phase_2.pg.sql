@@ -2327,7 +2327,7 @@ BEGIN
         (
         '3a9425c5-bb17-4f0c-8e81-08dbdaca9fda',
         'C30F80EC-E7CE-468E-B6C6-B8888F0F45C6', -- "Entity": "MJ": "Archive" "Run" "Details"
-        100029, -- auto-bumped from 100028 (UQ_EntityField_EntityID_Sequence dedup),
+        100028,
         'ArchiveRun',
         'Archive Run',
         NULL,
