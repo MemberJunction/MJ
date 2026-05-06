@@ -132,7 +132,7 @@ jobs:
         id: apply
         if: steps.verify_committed.outputs.skip_apply != 'true'
         env:
-          DB_TYPE: postgresql
+          DB_PLATFORM: postgresql
           DB_HOST: localhost
           DB_PORT: '5432'
           DB_DATABASE: mj_pg_ci

@@ -58,9 +58,11 @@ import { ServerExtensionLoader, ServerExtensionConfig } from '@memberjunction/se
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
 
 /**
- * Returns the configured database platform from the `DB_TYPE` environment
- * variable, falling back to `'sqlserver'` when the env var is unset or
- * holds a value outside the canonical {@link DatabasePlatform} vocabulary.
+ * Returns the configured database platform from the `DB_PLATFORM` environment
+ * variable, falling back to `'sqlserver'` when the env var is unset. An
+ * unrecognized non-empty value (typo, legacy alias) throws — silent fallback
+ * is the bug we don't want, because it routes the wrong provider against a
+ * real database.
  *
  * Implementation note: the actual env-parsing lives in
  * `@memberjunction/global` (single source of truth across MJCLI, MJServer,

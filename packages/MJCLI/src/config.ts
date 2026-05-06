@@ -13,8 +13,9 @@ const MJ_REPO_URL = 'https://github.com/MemberJunction/MJ.git';
 
 // Resolve dbPlatform from env once, up-front, so dbPort can default sensibly
 // per dialect. The shared helper in @memberjunction/global is the single
-// source of truth for DB_TYPE → dbPlatform resolution across MJCLI, MJServer,
-// and CodeGenLib — no parallel implementations.
+// source of truth for env → dbPlatform resolution across MJCLI, MJServer,
+// and CodeGenLib — no parallel implementations. It reads DB_PLATFORM (matches
+// the `dbPlatform` config key) and throws on unrecognized non-empty values.
 const ENV_DB_PLATFORM = resolveDbPlatformFromEnv();
 
 const DEFAULT_CLI_CONFIG = {

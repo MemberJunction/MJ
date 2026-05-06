@@ -9,22 +9,8 @@
 
 import { cosmiconfigSync } from 'cosmiconfig';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
-import { BaseSingleton } from '@memberjunction/global';
+import { BaseSingleton, resolveDbPlatformFromEnv } from '@memberjunction/global';
 import { MJConfig } from '../config';
-
-/**
- * Resolve dbPlatform from DB_TYPE env. Mirrors the helper in MJCLI/src/config.ts
- * so a single .env drives mj migrate, mj codegen, and mj sync push consistently.
- * Accepts the same alias set MJServer/MJCLI do: postgresql | postgres | pg |
- * sqlserver | mssql.
- */
-function resolveDbPlatformFromEnv(): 'sqlserver' | 'postgresql' | undefined {
-  const raw = process.env.DB_TYPE?.trim().toLowerCase();
-  if (!raw) return undefined;
-  if (raw === 'postgresql' || raw === 'postgres' || raw === 'pg') return 'postgresql';
-  if (raw === 'sqlserver' || raw === 'mssql') return 'sqlserver';
-  return undefined;
-}
 
 const ENV_DB_PLATFORM = resolveDbPlatformFromEnv();
 

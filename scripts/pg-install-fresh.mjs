@@ -153,7 +153,7 @@ function step2_scaffold() {
 function step3_configFiles() {
     step(3, 'Write PG config files');
     const envContent = `#PG Fresh Install via Skyway
-DB_TYPE=postgresql
+DB_PLATFORM=postgresql
 DB_HOST=${PG_ADMIN.host}
 DB_PORT=${PG_ADMIN.port}
 DB_DATABASE=${DB_NAME}

@@ -340,9 +340,9 @@ module.exports = {
 
 The same vocabulary is used by `@memberjunction/cli`, `@memberjunction/server`, and every other MJ package that needs to branch on platform. There is **one** name (`dbPlatform`) and **one** pair of values (`'sqlserver'`, `'postgresql'`) — no aliases (`'mssql'`, `'postgres'`, `'pg'`) are recognized in config or env vars.
 
-If `dbPlatform` is not set in `mj.config.cjs`, CodeGen reads `DB_TYPE` from the environment (also restricted to the canonical pair) and falls back to `'sqlserver'`.
+If `dbPlatform` is not set in `mj.config.cjs`, CodeGen reads `DB_PLATFORM` from the environment (restricted to the canonical pair) and falls back to `'sqlserver'`. An unrecognized non-empty `DB_PLATFORM` value throws — silent fallback is the bug we don't want, because it routes the wrong provider at the wrong dialect against a real database.
 
-> **Migration note (was `dbType`):** Earlier versions used `dbType: 'mssql' | 'postgresql'`. That field has been removed. Rename `dbType: 'mssql'` to `dbPlatform: 'sqlserver'` (and `dbType: 'postgresql'` to `dbPlatform: 'postgresql'`) in your `mj.config.cjs`. Same for `DB_TYPE=mssql` in `.env` → `DB_TYPE=sqlserver`.
+> **Migration note (was `dbType` / `DB_TYPE`):** Earlier dev builds of the PG support exposed both `dbType` (config key) and `DB_TYPE` (env var). Both have been replaced by `dbPlatform` / `DB_PLATFORM` with strict canonical values. Rename `dbType: 'mssql'` to `dbPlatform: 'sqlserver'` (and `dbType: 'postgresql'` to `dbPlatform: 'postgresql'`) in your `mj.config.cjs`. Same for `DB_TYPE=...` in `.env` → `DB_PLATFORM=...`. Legacy aliases (`mssql`, `postgres`, `pg`) are no longer accepted in either.
 
 ### Entity Naming Normalization
 
