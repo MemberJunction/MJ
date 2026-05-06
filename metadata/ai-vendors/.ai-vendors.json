@@ -336,6 +336,13 @@
       "Name": "DeepSeek",
       "Description": "DeepSeek is a Chinese AI research company that develops large language models including the V-series (V4 Pro/Flash) and R-series (reasoning) families. Models are released under permissive open-source licenses (MIT) with full open weights. The DeepSeek API offers OpenAI-compatible and Anthropic-compatible interfaces.",
       "CredentialTypeID": "@lookup:MJ: Credential Types.Name=API Key"
+    },
+    "primaryKey": {
+      "ID": "D6518557-8F8C-446C-B913-B0ABA451963F"
+    },
+    "sync": {
+      "lastModified": "2026-05-06T17:58:40.184Z",
+      "checksum": "41df91fd00c1ad43f8e226361ea0273229325341e37edc1d9a9e134fb4838576"
     }
   }
 ]
