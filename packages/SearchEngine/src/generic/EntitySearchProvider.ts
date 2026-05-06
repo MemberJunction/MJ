@@ -23,6 +23,21 @@ export class EntitySearchProvider extends BaseSearchProvider {
     public readonly SourceType: SearchSource = 'entity';
 
     /**
+     * Minimum trimmed term length we accept. One- and two-character substrings against
+     * a `LIKE '%term%'` pattern across every searchable entity is essentially a
+     * full-database scan with negligible relevance, so we early-return for those.
+     */
+    private static readonly MIN_TERM_LENGTH = 3;
+
+    /**
+     * Per-entity hard timeout. If one entity's RunView is taking longer than this,
+     * we drop its results rather than hold the entire fan-out hostage. The query
+     * keeps running in SQL Server until completion (we can't cancel mssql Requests
+     * here), but other entities' results still land for the user.
+     */
+    private static readonly PER_ENTITY_TIMEOUT_MS = 30_000;
+
+    /**
      * Execute an entity search across all entities with AllowUserSearchAPI=true.
      *
      * @param query - The search query text
@@ -38,6 +53,8 @@ export class EntitySearchProvider extends BaseSearchProvider {
         contextUser: UserInfo,
         scopeConstraints?: ScopeConstraints
     ): Promise<SearchResultItem[]> {
+        const trimmed = (query ?? '').trim();
+        if (trimmed.length < EntitySearchProvider.MIN_TERM_LENGTH) return [];
         try {
             // Honor per-provider query transform (e.g., FTS keyword extraction, AI rewrite)
             const rawQuery = scopeConstraints?.QueryTransforms?.[this.SourceType] ?? query;
@@ -84,7 +101,10 @@ export class EntitySearchProvider extends BaseSearchProvider {
             // Calculate per-entity limit: distribute topK across entities
             const perEntityLimit = Math.max(3, Math.ceil(topK / Math.max(1, scoped.length)));
 
-            // Search all entities in parallel, threading per-entity ExtraFilter + UserSearchString override
+            // Search all entities in parallel, threading per-entity ExtraFilter + UserSearchString
+            // override; each call is gated by a hard PER_ENTITY_TIMEOUT_MS timeout (next PR #2532)
+            // so a slow entity cannot hold up the whole fan-out — partial results from the other
+            // entities still land.
             const searchPromises = scoped.map(item =>
                 this.searchOneEntity(
                     item.EntityName,
@@ -156,13 +176,38 @@ export class EntitySearchProvider extends BaseSearchProvider {
     }
 
     /**
-     * Search a single entity using RunView with UserSearchString.
+     * Search a single entity using RunView with UserSearchString. Wraps the
+     * underlying RunView in a hard PER_ENTITY_TIMEOUT_MS timeout so a slow
+     * entity cannot hold up the whole fan-out — partial results from the
+     * other entities still land.
      *
      * Note: `contextUser` is passed to RunView so row-level security (RLS) is applied
      * automatically — this is the Entity provider's permission push-down per Section 3.6
      * of plans/search-scopes-rag-plus.md.
      */
     private async searchOneEntity(
+        entityName: string,
+        userSearchString: string,
+        maxRows: number,
+        contextUser: UserInfo,
+        extraFilter?: string
+    ): Promise<SearchResultItem[]> {
+        const work = this.searchOneEntityRaw(entityName, userSearchString, maxRows, contextUser, extraFilter);
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const timeout = new Promise<SearchResultItem[]>(resolve => {
+            timer = setTimeout(() => {
+                LogError(`EntitySearchProvider: timeout (${EntitySearchProvider.PER_ENTITY_TIMEOUT_MS}ms) searching "${entityName}"`);
+                resolve([]);
+            }, EntitySearchProvider.PER_ENTITY_TIMEOUT_MS);
+        });
+        try {
+            return await Promise.race([work, timeout]);
+        } finally {
+            if (timer) clearTimeout(timer);
+        }
+    }
+
+    private async searchOneEntityRaw(
         entityName: string,
         userSearchString: string,
         maxRows: number,

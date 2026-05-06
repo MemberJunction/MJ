@@ -1334,7 +1334,14 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
     /**
      * Builds user search SQL for the given entity and search string.
+     *
      * Supports full-text search (if enabled) and field-by-field LIKE searching.
+     * For the LIKE path:
+     *   - honors EntityField.UserSearchPredicateAPI (Exact / BeginsWith / EndsWith / Contains)
+     *     so index-seekable predicates can be expressed,
+     *   - escapes LIKE metacharacters (%, _, [, ]) in user input with ESCAPE '\\',
+     *   - skips fields that are not sensible text-search targets (non-text types,
+     *     unbounded text columns when FTX is off).
      */
     protected createViewUserSearchSQL(entityInfo: EntityInfo, userSearchString: string): string {
         let sUserSearchSQL = '';
@@ -1355,20 +1362,77 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const pkName = this.QuoteIdentifier(entityInfo.FirstPrimaryKey?.Name ?? 'ID');
             sUserSearchSQL = `${pkName} IN (SELECT ${pkName} FROM ${this.QuoteSchemaAndView(entityInfo.SchemaName, entityInfo.FullTextSearchFunction ?? '')}('${u}'))`;
         } else {
+            const escapedTerm = this.escapeLikeTerm(safeUserSearchString);
             for (const field of entityInfo.Fields) {
-                if (field.IncludeInUserSearchAPI) {
-                    let sParam = '';
-                    if (sUserSearchSQL.length > 0) sUserSearchSQL += ' OR ';
-                    if (field.UserSearchParamFormatAPI && field.UserSearchParamFormatAPI.length > 0)
-                        sParam = field.UserSearchParamFormatAPI.replace('{0}', safeUserSearchString);
-                    else
-                        sParam = ` LIKE '%${safeUserSearchString}%'`;
-                    sUserSearchSQL += `(${this.QuoteIdentifier(field.Name)} ${sParam})`;
-                }
+                if (!field.IncludeInUserSearchAPI) continue;
+                const sParam = this.buildPerFieldSearchPredicate(field, escapedTerm, safeUserSearchString);
+                if (!sParam) continue;
+                if (sUserSearchSQL.length > 0) sUserSearchSQL += ' OR ';
+                sUserSearchSQL += `(${this.QuoteIdentifier(field.Name)} ${sParam})`;
             }
             if (sUserSearchSQL.length > 0) sUserSearchSQL = '(' + sUserSearchSQL + ')';
         }
         return sUserSearchSQL;
+    }
+
+    /**
+     * Build the SQL fragment that compares one EntityField against a user search term.
+     *
+     * Resolution order:
+     *   1. UserSearchParamFormatAPI (custom override) wins if set, with `{0}` replaced
+     *      by the single-quote-escaped raw term. Caller is responsible for escaping
+     *      LIKE metacharacters in their format string if needed.
+     *   2. Otherwise, the field must be a text-searchable type. Non-text and unbounded-
+     *      text fields return '' (caller skips them).
+     *   3. Otherwise, the predicate is chosen from UserSearchPredicateAPI:
+     *        Exact      -> = N'term'                     (index-seekable)
+     *        BeginsWith -> LIKE N'term%' ESCAPE '\\'     (index-seekable)
+     *        EndsWith   -> LIKE N'%term' ESCAPE '\\'
+     *        Contains   -> LIKE N'%term%' ESCAPE '\\'   (default, non-seekable)
+     */
+    protected buildPerFieldSearchPredicate(
+        field: EntityFieldInfo,
+        escapedTerm: string,
+        rawSafeTerm: string,
+    ): string {
+        if (field.UserSearchParamFormatAPI && field.UserSearchParamFormatAPI.length > 0) {
+            return field.UserSearchParamFormatAPI.replace('{0}', rawSafeTerm);
+        }
+        if (!this.isTextSearchableType(field)) return '';
+        const pred = (field.UserSearchPredicateAPI ?? 'Contains').trim();
+        switch (pred) {
+            case 'Exact':
+                return ` = N'${rawSafeTerm}'`;
+            case 'BeginsWith':
+                return ` LIKE N'${escapedTerm}%' ESCAPE '\\'`;
+            case 'EndsWith':
+                return ` LIKE N'%${escapedTerm}' ESCAPE '\\'`;
+            case 'Contains':
+            default:
+                return ` LIKE N'%${escapedTerm}%' ESCAPE '\\'`;
+        }
+    }
+
+    /**
+     * Escape characters that have special meaning in SQL Server LIKE patterns.
+     * The backslash itself must be escaped first so its replacement isn't reprocessed.
+     * Pair with `ESCAPE '\\'` on the LIKE clause.
+     */
+    protected escapeLikeTerm(safeTerm: string): string {
+        return safeTerm.replace(/[\\%_\[\]]/g, m => '\\' + m);
+    }
+
+    /**
+     * True if the field's column type is appropriate for text-pattern search.
+     * Non-text types are rejected because LIKE forces an implicit per-row CONVERT
+     * to nvarchar. Unbounded (MAX/ntext/text) columns are rejected because the
+     * LIKE path cannot seek them; FTX is the right tool for those.
+     */
+    protected isTextSearchableType(field: EntityFieldInfo): boolean {
+        const t = (field.Type ?? '').toLowerCase();
+        if (t !== 'nvarchar' && t !== 'varchar' && t !== 'char' && t !== 'nchar') return false;
+        if (field.Length === -1) return false;
+        return true;
     }
 
     /**************************************************************************/

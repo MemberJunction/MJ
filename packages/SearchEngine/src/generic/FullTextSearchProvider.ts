@@ -23,6 +23,12 @@ import { SearchEnricher } from './SearchEnricher';
 export class FullTextSearchProvider extends BaseSearchProvider {
     public readonly SourceType: SearchSource = 'fulltext';
 
+    /**
+     * Minimum trimmed term length we accept. SQL Server FTS treats single
+     * characters as noise; rejecting them matches the EntitySearchProvider guard.
+     */
+    private static readonly MIN_TERM_LENGTH = 3;
+
     private enricher: SearchEnricher | null = null;
 
     /** Set the enricher instance. Called by SearchEngine after construction. */
@@ -46,6 +52,8 @@ export class FullTextSearchProvider extends BaseSearchProvider {
         contextUser: UserInfo,
         scopeConstraints?: ScopeConstraints
     ): Promise<SearchResultItem[]> {
+        const trimmed = (query ?? '').trim();
+        if (trimmed.length < FullTextSearchProvider.MIN_TERM_LENGTH) return [];
         try {
             // Honor per-provider query transform (keyword extraction / rewrite)
             const effectiveQuery = scopeConstraints?.QueryTransforms?.[this.SourceType] ?? query;
