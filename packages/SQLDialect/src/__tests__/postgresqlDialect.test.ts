@@ -515,4 +515,34 @@ describe('PostgreSQLDialect', () => {
             expect(ddl).toContain('BEFORE INSERT OR UPDATE');
         });
     });
+
+    describe('QuoteStringLiteral', () => {
+        it('wraps a value in single quotes', () => {
+            expect(dialect.QuoteStringLiteral('hello')).toBe("'hello'");
+        });
+
+        it("doubles internal apostrophes (same convention as SQL Server)", () => {
+            expect(dialect.QuoteStringLiteral("O'Brien")).toBe("'O''Brien'");
+        });
+    });
+
+    describe('QuoteColumnAlias', () => {
+        it('double-quotes the alias to preserve case', () => {
+            expect(dialect.QuoteColumnAlias('EntityName')).toBe('"EntityName"');
+        });
+
+        it('preserves mixed casing exactly (PG would lowercase otherwise)', () => {
+            expect(dialect.QuoteColumnAlias('IDValue')).toBe('"IDValue"');
+        });
+    });
+
+    describe('CastToBoundedString', () => {
+        it('emits CAST AS VARCHAR(450) by default', () => {
+            expect(dialect.CastToBoundedString('src."ID"')).toBe('CAST(src."ID" AS VARCHAR(450))');
+        });
+
+        it('honours an explicit maxLength', () => {
+            expect(dialect.CastToBoundedString('x', 100)).toBe('CAST(x AS VARCHAR(100))');
+        });
+    });
 });

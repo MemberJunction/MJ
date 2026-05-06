@@ -1411,6 +1411,22 @@
             "lastModified": "2026-04-06T11:01:32.473Z",
             "checksum": "997de1960f15c66147e70257a981fd028cf8084e0ad251931e8a59d87fdc3caf"
           }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash-Lite",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "ConfigurationID": "@lookup:MJ: AI Configurations.Name=Sage Multimodal",
+            "Priority": 30
+          },
+          "primaryKey": {
+            "ID": "ED9F8A84-ADD0-4012-B86E-D9C4DE32D7AC"
+          },
+          "sync": {
+            "lastModified": "2026-05-05T16:03:48.429Z",
+            "checksum": "13d12919065497a2846039dd501c8c0a1d6cc7c73cede093abe890c7a3ef803e"
+          }
         }
       ]
     },
@@ -1611,7 +1627,7 @@
       "ID": "F89C5890-D5CD-4824-B431-329799047372"
     },
     "sync": {
-      "lastModified": "2026-04-27T18:51:16.589Z",
+      "lastModified": "2026-05-05T15:49:00.413Z",
       "checksum": "58c5a32b26dbd537e582dbf4e529ecb30e9a1ac298435277fe32df922914eb48"
     }
   }

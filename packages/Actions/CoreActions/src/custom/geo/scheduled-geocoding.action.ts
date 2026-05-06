@@ -3,10 +3,11 @@ import { BaseAction } from '@memberjunction/actions';
 import { RegisterClass, MJGlobal, MJEventType } from '@memberjunction/global';
 import {
     RunView, Metadata, LogStatus, LogError, UserInfo, EntityInfo,
-    CompositeKey, BaseEntity, BaseEntityEvent, IMetadataProvider
+    CompositeKey, BaseEntity, BaseEntityEvent, IMetadataProvider, DatabaseProviderBase
 } from '@memberjunction/core';
 import { MJRecordGeoCodeEntity } from '@memberjunction/core-entities';
 import { GeoCodeSyncService, ExistingGeoCodeInfo } from '@memberjunction/geo-core';
+import { GetDialect, SQLDialect } from '@memberjunction/sql-dialect';
 
 /**
  * Scheduled geocoding maintenance action that handles three tasks:
@@ -348,6 +349,12 @@ export class ScheduledGeocodingAction extends BaseAction {
     ): Promise<number> {
         const rv = new RunView();
         const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
+        // Resolve the dialect for the active provider once — the orphan filter
+        // is built per-entity but the dialect (SQL Server vs PostgreSQL) is
+        // bound to the provider, not the entity, so deriving it here keeps
+        // the per-entity loop dialect-agnostic.
+        const platformKey = (md as unknown as DatabaseProviderBase).PlatformKey ?? 'sqlserver';
+        const dialect = GetDialect(platformKey);
         let totalRemoved = 0;
 
         // Get distinct EntityIDs from RecordGeoCode (lightweight — just IDs)
@@ -371,7 +378,7 @@ export class ScheduledGeocodingAction extends BaseAction {
                 if (!pkField) continue;
 
                 const entityRemoved = await this.cleanupOrphansForEntity(
-                    entityId, entityInfo, pkField.Name, contextUser, batchSize, rv
+                    entityId, entityInfo, pkField.Name, contextUser, batchSize, rv, dialect
                 );
                 totalRemoved += entityRemoved;
             } catch (e: unknown) {
@@ -394,10 +401,15 @@ export class ScheduledGeocodingAction extends BaseAction {
         pkFieldName: string,
         contextUser: UserInfo,
         batchSize: number,
-        rv: RunView
+        rv: RunView,
+        dialect: SQLDialect
     ): Promise<number> {
         let entityRemoved = 0;
-        const orphanFilter = `EntityID = '${entityId}' AND NOT EXISTS (SELECT 1 FROM ${entityInfo.SchemaName}.${entityInfo.BaseTable} src WHERE CAST(src.${pkFieldName} AS NVARCHAR(450)) = RecordID)`;
+        const sourceRef = dialect.QuoteSchema(entityInfo.SchemaName, entityInfo.BaseView);
+        const pkRef = `src.${dialect.QuoteIdentifier(pkFieldName)}`;
+        const pkAsString = dialect.CastToBoundedString(pkRef, 450);
+        const entityIdLit = dialect.QuoteStringLiteral(entityId);
+        const orphanFilter = `EntityID = ${entityIdLit} AND NOT EXISTS (SELECT 1 FROM ${sourceRef} src WHERE ${pkAsString} = RecordID)`;
 
         // Paginate: fetch a page, delete it, repeat. Since we're deleting rows,
         // always query from the start — deleted rows won't appear again.

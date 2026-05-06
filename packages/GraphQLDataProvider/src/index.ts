@@ -1,5 +1,6 @@
 export { gql } from 'graphql-request';
 export { setupGraphQLClient } from './config';
+export { PACKAGE_VERSION } from './version.generated';
 export { GraphQLDataProvider, GraphQLProviderConfigData } from './graphQLDataProvider';
 export type { AuthenticationErrorCallback, SocketConnectionState } from './graphQLDataProvider';
 export * from './graphQLTransactionGroup';
