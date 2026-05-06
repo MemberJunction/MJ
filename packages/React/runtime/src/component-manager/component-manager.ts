@@ -84,6 +84,25 @@ export class ComponentManager {
     // Check if already loading to prevent duplicate work
     const existingPromise = this.loadingPromises.get(componentKey);
     if (existingPromise && !options.forceRefresh) {
+      // Before returning the pending promise, check if the compiled component
+      // is already in the registry. This prevents deadlock in circular dependency
+      // chains: A's Step 6 loads B, B's Step 6 loads A again — but A was already
+      // compiled and registered (Step 5 runs before Step 6). Returning the pending
+      // promise would deadlock because it's waiting on its own call chain.
+      const namespace = spec.namespace || options.defaultNamespace || 'Global';
+      const version = spec.version || options.defaultVersion || 'latest';
+      const contentHash = this.calculateHash(spec);
+      const registered = this.registry.get(spec.name, namespace, version, contentHash);
+      if (registered) {
+        this.log(`Component already registered (circular dep resolution): ${spec.name}`);
+        return {
+          success: true,
+          component: registered,
+          spec,
+          fromCache: true
+        };
+      }
+
       this.log(`Component already loading: ${spec.name}, waiting...`);
       return existingPromise;
     }
@@ -406,8 +425,13 @@ export class ComponentManager {
       }
       
       // Load dependencies
-      if (result.spec?.dependencies) {
-        for (const dep of result.spec.dependencies) {
+      // Prefer the input spec's dependencies over the cached result's dependencies.
+      // When a parent component is served from cache, result.spec contains stale
+      // dependency code. The input spec has the latest dependency code from the caller.
+      // Each dependency still gets its own individual cache check via loadComponent.
+      const dependencies = spec.dependencies || result.spec?.dependencies;
+      if (dependencies) {
+        for (const dep of dependencies) {
           // Normalize dependency spec for local registry lookup
           const depSpec = { ...dep };
           // OPTIMIZATION: If the dependency already has code (from registry population),

@@ -912,4 +912,280 @@ describe('AdditionalSchemaInfoGenerator', () => {
       expect(connection.ForeignKeys[0]).toHaveProperty('RelatedField');
     });
   });
+
+  describe('Value-list Fields[] emission', () => {
+    it('should emit Fields[] for columns with high-confidence enum verdicts', () => {
+      const state = createTestState({
+        schemas: [createSchema('dbo', [
+          createTable({
+            name: 'Orders',
+            columns: [
+              createColumn({
+                name: 'Status',
+                dataType: 'varchar(20)',
+                valueListVerdict: {
+                  isEnum: true,
+                  type: 'List',
+                  confidence: 0.92,
+                  values: ['Pending', 'Active', 'Cancelled'],
+                  reasoning: 'Closed set of order lifecycle states',
+                  source: 'llm',
+                  decidedAt: '2024-01-01T00:00:00Z',
+                },
+              }),
+              createColumn({ name: 'Notes', dataType: 'nvarchar(500)' }),
+            ],
+          }),
+        ])],
+      });
+
+      const result = JSON.parse(generator.generate(state));
+      expect(result.dbo).toHaveLength(1);
+      expect(result.dbo[0].Fields).toHaveLength(1);
+      expect(result.dbo[0].Fields[0].FieldName).toBe('Status');
+      expect(result.dbo[0].Fields[0].ValueListType).toBe('List');
+      // Values should be sorted alphabetically
+      expect(result.dbo[0].Fields[0].PossibleValues).toEqual(['Active', 'Cancelled', 'Pending']);
+      expect(result.dbo[0].Fields[0].Confidence).toBe(92);
+    });
+
+    it('should not emit Fields[] for columns below the confidence threshold', () => {
+      const state = createTestState({
+        schemas: [createSchema('dbo', [
+          createTable({
+            name: 'Items',
+            columns: [
+              createColumn({
+                name: 'Category',
+                dataType: 'varchar(20)',
+                valueListVerdict: {
+                  isEnum: true,
+                  type: 'ListOrUserEntry',
+                  confidence: 0.70,  // Below default 85% threshold
+                  values: ['Electronics', 'Books'],
+                  reasoning: 'Low confidence',
+                  source: 'llm',
+                  decidedAt: '2024-01-01T00:00:00Z',
+                },
+              }),
+            ],
+          }),
+        ])],
+      });
+
+      const result = JSON.parse(generator.generate(state));
+      // No PK/FK/Fields → table not emitted
+      expect(result.dbo).toBeUndefined();
+    });
+
+    it('should emit Fields[] when custom threshold is met', () => {
+      const state = createTestState({
+        schemas: [createSchema('dbo', [
+          createTable({
+            name: 'Items',
+            columns: [
+              createColumn({
+                name: 'Category',
+                dataType: 'varchar(20)',
+                valueListVerdict: {
+                  isEnum: true,
+                  type: 'ListOrUserEntry',
+                  confidence: 0.70,
+                  values: ['Electronics', 'Books'],
+                  reasoning: 'Reasonable confidence',
+                  source: 'llm',
+                  decidedAt: '2024-01-01T00:00:00Z',
+                },
+              }),
+            ],
+          }),
+        ])],
+      });
+
+      // Lower threshold to 60%
+      const result = JSON.parse(generator.generate(state, { valueListConfidenceThreshold: 60 }));
+      expect(result.dbo).toHaveLength(1);
+      expect(result.dbo[0].Fields).toHaveLength(1);
+      expect(result.dbo[0].Fields[0].ValueListType).toBe('ListOrUserEntry');
+    });
+
+    it('should not emit Fields[] when isEnum is false', () => {
+      const state = createTestState({
+        schemas: [createSchema('dbo', [
+          createTable({
+            name: 'Users',
+            columns: [
+              createColumn({
+                name: 'City',
+                dataType: 'varchar(50)',
+                valueListVerdict: {
+                  isEnum: false,
+                  type: 'List',
+                  confidence: 0.30,
+                  values: ['New York', 'London'],
+                  reasoning: 'Not a real enum',
+                  source: 'llm',
+                  decidedAt: '2024-01-01T00:00:00Z',
+                },
+              }),
+            ],
+          }),
+        ])],
+      });
+
+      const result = JSON.parse(generator.generate(state));
+      expect(result.dbo).toBeUndefined();
+    });
+
+    it('should skip Fields[] when excludeValueLists is true', () => {
+      const state = createTestState({
+        schemas: [createSchema('dbo', [
+          createTable({
+            name: 'Orders',
+            columns: [
+              createColumn({
+                name: 'Status',
+                dataType: 'varchar(20)',
+                valueListVerdict: {
+                  isEnum: true,
+                  type: 'List',
+                  confidence: 0.95,
+                  values: ['Active', 'Inactive'],
+                  reasoning: 'Clear enum',
+                  source: 'llm',
+                  decidedAt: '2024-01-01T00:00:00Z',
+                },
+              }),
+            ],
+          }),
+        ])],
+      });
+
+      const result = JSON.parse(generator.generate(state, { excludeValueLists: true }));
+      // No PK/FK and Fields excluded → table not emitted
+      expect(result.dbo).toBeUndefined();
+    });
+
+    it('should emit table with both PK and Fields[]', () => {
+      const state = createTestState({
+        schemas: [createSchema('dbo', [
+          createTable({
+            name: 'Products',
+            columns: [
+              createColumn({ name: 'ID', dataType: 'int', isPrimaryKey: true }),
+              createColumn({
+                name: 'Category',
+                dataType: 'varchar(30)',
+                description: 'Product category',
+                valueListVerdict: {
+                  isEnum: true,
+                  type: 'List',
+                  confidence: 0.90,
+                  values: ['Hardware', 'Software', 'Services'],
+                  reasoning: 'Three product categories',
+                  source: 'llm',
+                  decidedAt: '2024-01-01T00:00:00Z',
+                },
+              }),
+            ],
+          }),
+        ])],
+      });
+
+      const result = JSON.parse(generator.generate(state));
+      expect(result.dbo[0].PrimaryKey).toHaveLength(1);
+      expect(result.dbo[0].Fields).toHaveLength(1);
+      expect(result.dbo[0].Fields[0].Description).toBe('Product category');
+    });
+
+    it('should respect confirmedOnly for Fields[] when set', () => {
+      const state = createTestState({
+        schemas: [createSchema('dbo', [
+          createTable({
+            name: 'Tasks',
+            columns: [
+              createColumn({
+                name: 'Priority',
+                dataType: 'varchar(10)',
+                userApproved: false,
+                valueListVerdict: {
+                  isEnum: true,
+                  type: 'List',
+                  confidence: 0.95,
+                  values: ['High', 'Medium', 'Low'],
+                  reasoning: 'Priority levels',
+                  source: 'llm',
+                  decidedAt: '2024-01-01T00:00:00Z',
+                },
+              }),
+              createColumn({
+                name: 'Status',
+                dataType: 'varchar(20)',
+                userApproved: true,
+                valueListVerdict: {
+                  isEnum: true,
+                  type: 'List',
+                  confidence: 0.90,
+                  values: ['Open', 'Closed'],
+                  reasoning: 'Task status',
+                  source: 'llm',
+                  decidedAt: '2024-01-01T00:00:00Z',
+                },
+              }),
+            ],
+          }),
+        ])],
+      });
+
+      // confirmedOnly: only user-approved columns should emit Fields
+      const result = JSON.parse(generator.generate(state, { confirmedOnly: true }));
+      expect(result.dbo[0].Fields).toHaveLength(1);
+      expect(result.dbo[0].Fields[0].FieldName).toBe('Status');
+    });
+
+    it('should emit multiple Fields[] entries for multiple enum columns', () => {
+      const state = createTestState({
+        schemas: [createSchema('hr', [
+          createTable({
+            name: 'Employees',
+            columns: [
+              createColumn({ name: 'ID', dataType: 'int', isPrimaryKey: true }),
+              createColumn({
+                name: 'Department',
+                dataType: 'varchar(30)',
+                valueListVerdict: {
+                  isEnum: true,
+                  type: 'List',
+                  confidence: 0.88,
+                  values: ['Engineering', 'Marketing', 'Sales'],
+                  reasoning: 'Department list',
+                  source: 'llm',
+                  decidedAt: '2024-01-01T00:00:00Z',
+                },
+              }),
+              createColumn({
+                name: 'Level',
+                dataType: 'varchar(10)',
+                valueListVerdict: {
+                  isEnum: true,
+                  type: 'ListOrUserEntry',
+                  confidence: 0.86,
+                  values: ['Junior', 'Mid', 'Senior', 'Lead'],
+                  reasoning: 'Career levels',
+                  source: 'llm',
+                  decidedAt: '2024-01-01T00:00:00Z',
+                },
+              }),
+            ],
+          }),
+        ])],
+      });
+
+      const result = JSON.parse(generator.generate(state));
+      expect(result.hr[0].Fields).toHaveLength(2);
+      expect(result.hr[0].Fields[0].FieldName).toBe('Department');
+      expect(result.hr[0].Fields[1].FieldName).toBe('Level');
+      expect(result.hr[0].Fields[1].ValueListType).toBe('ListOrUserEntry');
+    });
+  });
 });

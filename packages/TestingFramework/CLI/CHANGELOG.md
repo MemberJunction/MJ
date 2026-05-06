@@ -1,5 +1,18 @@
 # @memberjunction/testing-cli
 
+## 5.32.0
+
+### Patch Changes
+
+- Updated dependencies [a7e8b3b]
+- Updated dependencies [b9c67ac]
+  - @memberjunction/core@5.32.0
+  - @memberjunction/core-entities@5.32.0
+  - @memberjunction/sqlserver-dataprovider@5.32.0
+  - @memberjunction/testing-engine@5.32.0
+  - @memberjunction/testing-engine-base@5.32.0
+  - @memberjunction/global@5.32.0
+
 ## 5.31.0
 
 ### Patch Changes

@@ -1079,7 +1079,7 @@ export class EntityFieldInfo extends BaseInfo {
      * guaranteed to be non-NULL.
      */
     get NeedsClearCompanion(): boolean {
-        return this.AllowsNull && this.HasDefaultValue;
+        return this.AllowsNull;
     }
 
     /**

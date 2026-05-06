@@ -1137,8 +1137,16 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             return;
         }
 
-        // Get the updated timestamp from the entity
-        const updatedAt = entity.Get('__mj_UpdatedAt') as string | null || new Date().toISOString();
+        // Get the updated timestamp from the entity and normalize to an ISO string.
+        // entity.Get returns Date|string|number|null depending on field hydration and the
+        // storage round-trip. The downstream cache and smart-cache-check protocol require
+        // an ISO string — without this normalization, a Date or numeric ms can leak into
+        // the GraphQL request as `cacheStatus.maxUpdatedAt` and crash the server's
+        // `new Date(...).toISOString()` with `RangeError: Invalid time value`.
+        const rawUpdatedAt = entity.Get('__mj_UpdatedAt') as Date | string | number | null;
+        const updatedAt = rawUpdatedAt
+            ? new Date(rawUpdatedAt).toISOString()
+            : new Date().toISOString();
 
         if (event.type === 'delete') {
             await LocalCacheManager.Instance.RemoveSingleEntity(

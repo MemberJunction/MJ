@@ -1,5 +1,24 @@
 # @memberjunction/scheduling-engine
 
+## 5.32.0
+
+### Patch Changes
+
+- 26ee07c: fix vectorization crash from using non-provider Metadata() fallback, and harden ScheduledJobEngine lock lifecycle with save verification and DB reload after stale lock cleanup
+- Updated dependencies [a7e8b3b]
+- Updated dependencies [b9c67ac]
+  - @memberjunction/core@5.32.0
+  - @memberjunction/ai-agents@5.32.0
+  - @memberjunction/ai-core-plus@5.32.0
+  - @memberjunction/actions-base@5.32.0
+  - @memberjunction/actions@5.32.0
+  - @memberjunction/integration-engine@5.32.0
+  - @memberjunction/core-entities@5.32.0
+  - @memberjunction/sqlserver-dataprovider@5.32.0
+  - @memberjunction/scheduling-engine-base@5.32.0
+  - @memberjunction/global@5.32.0
+  - @memberjunction/scheduling-base-types@5.32.0
+
 ## 5.31.0
 
 ### Patch Changes

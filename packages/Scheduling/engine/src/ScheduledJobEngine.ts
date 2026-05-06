@@ -541,7 +541,18 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             if (job.ExpectedCompletionAt && now > job.ExpectedCompletionAt) {
                 console.log(`      → Lock is STALE, cleaning up...`);
                 this.log(`Detected stale lock on job ${job.Name}, cleaning up`);
-                await this.cleanupStaleLock(job);
+                const cleaned = await this.cleanupStaleLock(job);
+                if (!cleaned) {
+                    console.log(`      ❌ Failed to clean up stale lock, skipping`);
+                    return false;
+                }
+                // Reload from DB to verify cleanup succeeded
+                await job.Load(job.ID);
+                if (job.LockToken != null) {
+                    console.log(`      ❌ Lock still present after cleanup (re-acquired by ${job.LockedByInstance}), skipping`);
+                    return false;
+                }
+                console.log(`      ✓ Stale lock cleaned successfully`);
             } else {
                 console.log(`      → Lock is ACTIVE (not stale), returning false`);
                 return false;
@@ -550,11 +561,22 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
             console.log(`      → No lock exists, will try to acquire`);
         }
 
+        return this.attemptLockAcquisition(job);
+    }
+
+    /**
+     * Attempt to acquire a fresh lock on a job that is currently unlocked.
+     * Separated from tryAcquireLock to keep the stale-cleanup and acquisition
+     * paths distinct and easier to follow.
+     * @private
+     */
+    private async attemptLockAcquisition(job: MJScheduledJobEntity): Promise<boolean> {
         const lockToken = this.generateGuid();
         const instanceId = this.getInstanceIdentifier();
         const expectedCompletion = new Date(Date.now() + 10 * 60 * 1000);
 
         try {
+            // Reload to get latest DB state right before acquiring
             await job.Load(job.ID);
 
             if (job.LockToken != null) {
@@ -575,46 +597,59 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
                 console.log(`      ✅ Lock acquired successfully!`);
                 return true;
             } else {
-                console.log(`      ❌ Save failed - likely race condition with another server`);
-                job.LockToken = null;
-                job.LockedAt = null;
-                job.LockedByInstance = null;
-                job.ExpectedCompletionAt = null;
+                console.log(`      ❌ Save failed: ${job.LatestResult?.CompleteMessage ?? 'unknown'}`);
+                this.clearInMemoryLockFields(job);
                 return false;
             }
         } catch (error) {
             this.logError(`Failed to acquire lock for job ${job.Name}`, error);
-            job.LockToken = null;
-            job.LockedAt = null;
-            job.LockedByInstance = null;
-            job.ExpectedCompletionAt = null;
+            this.clearInMemoryLockFields(job);
             return false;
         }
+    }
+
+    /**
+     * Clear in-memory lock fields without saving — used when a save attempt
+     * fails and we need the in-memory object to reflect "unlocked" so the
+     * next poll cycle doesn't see a phantom lock.
+     * @private
+     */
+    private clearInMemoryLockFields(job: MJScheduledJobEntity): void {
+        job.LockToken = null;
+        job.LockedAt = null;
+        job.LockedByInstance = null;
+        job.ExpectedCompletionAt = null;
     }
 
     /**
      * Release a lock after job execution
      * @private
      */
-    private async releaseLock(job: MJScheduledJobEntity): Promise<void> {
+    private async releaseLock(job: MJScheduledJobEntity): Promise<boolean> {
         try {
             job.LockToken = null;
             job.LockedAt = null;
             job.LockedByInstance = null;
             job.ExpectedCompletionAt = null;
-            await job.Save();
+            const saved = await job.Save();
+            if (!saved) {
+                this.logError(`Failed to release lock for job ${job.Name}: ${job.LatestResult?.CompleteMessage ?? 'Save returned false'}`);
+            }
+            return saved;
         } catch (error) {
             this.logError(`Failed to release lock for job ${job.Name}`, error);
+            return false;
         }
     }
 
     /**
-     * Clean up a stale lock
+     * Clean up a stale lock. Returns true if the lock was successfully
+     * cleared in the database, false if the save failed.
      * @private
      */
-    private async cleanupStaleLock(job: MJScheduledJobEntity): Promise<void> {
+    private async cleanupStaleLock(job: MJScheduledJobEntity): Promise<boolean> {
         this.log(`Cleaning up stale lock on job ${job.Name} (locked by ${job.LockedByInstance})`);
-        await this.releaseLock(job);
+        return this.releaseLock(job);
     }
 
     /**
