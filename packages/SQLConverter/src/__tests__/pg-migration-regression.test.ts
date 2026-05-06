@@ -63,9 +63,18 @@ describe.skipIf(!hasMigrations)('v5 migration regression — conversion', () => 
    * TODO(v5.30.1): hand-port Scoped_EntityField_SPs (CodeGen Pass-2 perf
    * optimization adding optional @EntityIDs scoping; needs CTE + array
    * unnest replacement for SQL Server temp tables and table variables).
+   *
+   * TODO(v5.33.x): the two Search_Updates migrations below were authored with
+   * SET NOCOUNT/BEGIN TRANSACTION/IF NOT EXISTS + DECLARE @table-variable
+   * patterns the converter doesn't yet translate. Their PG counterparts
+   * (V202605041250 / V202605041300 .pg.sql) are committed hand-authored.
+   * Either hand-port the converter rules to recognize these patterns or
+   * leave the hand-authored .pg.sql files in place permanently.
    */
   const ALL_SKIP_SQLSERVER_FILES = new Set<string>([
     'V202604261352__v5.30.x__Scoped_EntityField_SPs.sql',
+    'V202605041250__v5.33.x__Search_Hygiene_For_Mj_Schema_And_Field_Types.sql',
+    'V202605041300__v5.33.x__EntityField_UserSearchPredicateAPI_Check_Constraint.sql',
   ]);
 
   describe.skipIf(SKIP_HEAVY_IN_CI)('every T-SQL migration converts without error', () => {

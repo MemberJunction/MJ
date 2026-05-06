@@ -149,19 +149,18 @@ function makeField(opts: FieldOpts): EntityFieldInfo {
 }
 
 function makeEntity(opts: { ftx?: boolean; ftxFunction?: string; pkName?: string; fields: EntityFieldInfo[] }): EntityInfo {
-    // EntityInfo has a heavy constructor / initialization path; we build a
-    // minimal shape via Object.create + property assignment. The SUT only
-    // touches FullTextSearchEnabled, FullTextSearchFunction, SchemaName,
-    // FirstPrimaryKey?.Name, and Fields.
-    const entity = Object.create(EntityInfo.prototype) as EntityInfo;
-    Object.assign(entity, {
+    // EntityInfo has a heavy constructor / initialization path AND a `FirstPrimaryKey`
+    // getter on its prototype, so `Object.create(EntityInfo.prototype) + Object.assign`
+    // would throw on the FirstPrimaryKey override. Build a plain object cast to
+    // EntityInfo instead — the SUT only touches FullTextSearchEnabled,
+    // FullTextSearchFunction, SchemaName, FirstPrimaryKey?.Name, and Fields.
+    return {
         FullTextSearchEnabled: !!opts.ftx,
         FullTextSearchFunction: opts.ftxFunction ?? 'fnSearchTest',
         SchemaName: 'crm',
         FirstPrimaryKey: { Name: opts.pkName ?? 'ID' },
         Fields: opts.fields,
-    });
-    return entity;
+    } as unknown as EntityInfo;
 }
 
 const provider = new SearchSQLTestProvider();

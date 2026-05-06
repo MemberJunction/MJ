@@ -1368,8 +1368,13 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 const sParam = this.buildPerFieldSearchPredicate(field, escapedTerm, safeUserSearchString);
                 if (!sParam) continue;
                 if (sUserSearchSQL.length > 0) sUserSearchSQL += ' OR ';
-                sUserSearchSQL += `(${this.QuoteIdentifier(field.Name)} ${sParam})`;
+                sUserSearchSQL += `${this.QuoteIdentifier(field.Name)} ${sParam}`;
             }
+            // One outer paren wraps the whole OR-joined expression (or single field).
+            // Per-field parens are intentionally omitted — callers already wrap with
+            // `(${sUserSearchSQL})` when concatenating into WHERE, and double-wrapping
+            // would emit `((...))` which the createViewUserSearchSQL.test.ts assertions
+            // (single + multi field) reject.
             if (sUserSearchSQL.length > 0) sUserSearchSQL = '(' + sUserSearchSQL + ')';
         }
         return sUserSearchSQL;
