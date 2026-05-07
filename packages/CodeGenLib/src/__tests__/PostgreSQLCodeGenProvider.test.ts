@@ -288,6 +288,138 @@ describe('PostgreSQLCodeGenProvider', () => {
         });
     });
 
+    describe('generateCRUDCreate / generateCRUDUpdate (JSON-arg shape for wide entities)', () => {
+        // Build an entity that will project past POSTGRESQL_PROCEDURE_PARAM_LIMIT (90)
+        // under broad rule. ~50 nullable cols × 2 (base + _Clear) + ~10 not-null cols + PK
+        // = comfortably over 90.
+        function createWideEntity(): EntityInfo {
+            const fields: Record<string, unknown>[] = [
+                {
+                    ID: 'pk',
+                    Name: 'ID',
+                    Type: 'uniqueidentifier',
+                    Length: 16,
+                    IsPrimaryKey: true,
+                    AllowsNull: false,
+                    AllowUpdateAPI: true,
+                    IsVirtual: false,
+                    AutoIncrement: false,
+                    DefaultValue: 'newsequentialid()',
+                },
+            ];
+            for (let i = 0; i < 10; i++) {
+                fields.push({
+                    ID: `not-null-${i}`,
+                    Name: `RequiredCol${i}`,
+                    Type: 'nvarchar',
+                    Length: 100,
+                    IsPrimaryKey: false,
+                    AllowsNull: false,
+                    AllowUpdateAPI: true,
+                    IsVirtual: false,
+                    AutoIncrement: false,
+                    DefaultValue: '',
+                });
+            }
+            for (let i = 0; i < 50; i++) {
+                fields.push({
+                    ID: `nullable-${i}`,
+                    Name: `OptionalCol${i}`,
+                    Type: i % 4 === 0 ? 'int' : i % 4 === 1 ? 'datetimeoffset' : i % 4 === 2 ? 'bit' : 'nvarchar',
+                    Length: 100,
+                    IsPrimaryKey: false,
+                    AllowsNull: true,
+                    AllowUpdateAPI: true,
+                    IsVirtual: false,
+                    AutoIncrement: false,
+                    DefaultValue: '',
+                });
+            }
+            return createMockEntity({ BaseTable: 'WideEntity', BaseTableCodeName: 'WideEntity', BaseView: 'vwWideEntities' }, fields);
+        }
+
+        it('UPDATE wide entity uses single p_data JSONB param', () => {
+            const entity = createWideEntity();
+            const sql = provider.generateCRUDUpdate(entity);
+            expect(sql).toContain('JSON-arg shape');
+            expect(sql).toContain('(p_data JSONB)');
+            // No typed-param explosion:
+            expect(sql).not.toMatch(/p_optionalcol\d+\s+(integer|timestamp|boolean|nvarchar|text)/i);
+        });
+
+        it('UPDATE wide entity body uses CASE WHEN p_data ? for each writable column', () => {
+            const entity = createWideEntity();
+            const sql = provider.generateCRUDUpdate(entity);
+            expect(sql).toContain(`CASE WHEN p_data ? 'OptionalCol0' THEN`);
+            expect(sql).toContain(`CASE WHEN p_data ? 'RequiredCol0' THEN`);
+            // ELSE branch preserves the existing column value
+            expect(sql).toMatch(/ELSE "OptionalCol0" END/);
+        });
+
+        it('UPDATE wide entity body always touches __mj_UpdatedAt', () => {
+            const entity = createWideEntity();
+            const sql = provider.generateCRUDUpdate(entity);
+            expect(sql).toContain('"__mj_UpdatedAt" = NOW()');
+        });
+
+        it('UPDATE wide entity raises when p_data is missing the PK', () => {
+            const entity = createWideEntity();
+            const sql = provider.generateCRUDUpdate(entity);
+            expect(sql).toMatch(/RAISE EXCEPTION.*p_data must include.*"ID"/);
+        });
+
+        it('UPDATE wide entity casts non-text columns appropriately', () => {
+            const entity = createWideEntity();
+            const sql = provider.generateCRUDUpdate(entity);
+            // Integer cast (i % 4 === 0): OptionalCol0, OptionalCol4, ...
+            expect(sql).toContain(`(p_data->>'OptionalCol0')::INT`);
+            // Boolean cast (i % 4 === 2): OptionalCol2, OptionalCol6, ...
+            expect(sql).toContain(`(p_data->>'OptionalCol2')::BOOLEAN`);
+            // TIMESTAMPTZ cast (i % 4 === 1): OptionalCol1, OptionalCol5, ...
+            expect(sql).toContain(`(p_data->>'OptionalCol1')::TIMESTAMPTZ`);
+            // Plain text — no cast suffix
+            expect(sql).toContain(`(p_data->>'OptionalCol3')`);
+        });
+
+        it('CREATE wide entity uses single p_data JSONB param and dynamic INSERT', () => {
+            const entity = createWideEntity();
+            const sql = provider.generateCRUDCreate(entity);
+            expect(sql).toContain('JSON-arg shape');
+            expect(sql).toContain('(p_data JSONB)');
+            expect(sql).toContain(`format(`);
+            expect(sql).toContain(`'INSERT INTO`);
+            expect(sql).toContain('FOREACH v_field_name IN ARRAY');
+        });
+
+        it('CREATE wide entity auto-generates UUID PK when absent from p_data', () => {
+            const entity = createWideEntity();
+            const sql = provider.generateCRUDCreate(entity);
+            expect(sql).toContain(`IF p_data ? 'ID' THEN`);
+            expect(sql).toContain('gen_random_uuid()');
+        });
+
+        it('narrow entities still emit typed-arg shape', () => {
+            const entity = createMockEntity(); // 3 fields, well under the limit
+            const createSql = provider.generateCRUDCreate(entity);
+            const updateSql = provider.generateCRUDUpdate(entity);
+            // No JSON-arg markers
+            expect(createSql).not.toContain('p_data JSONB');
+            expect(updateSql).not.toContain('p_data JSONB');
+            expect(createSql).not.toContain('JSON-arg shape');
+            expect(updateSql).not.toContain('JSON-arg shape');
+            // Typed-arg markers present
+            expect(createSql).toContain('p_name');
+            expect(updateSql).toContain('"ID" = p_id');
+        });
+
+        it('spDelete stays typed-arg even on wide entities', () => {
+            const entity = createWideEntity();
+            const sql = provider.generateCRUDDelete(entity, '');
+            expect(sql).not.toContain('p_data JSONB');
+            expect(sql).toContain('p_id');
+        });
+    });
+
     describe('generateCRUDDelete', () => {
         it('should generate hard delete function', () => {
             const entity = createMockEntity({ DeleteType: 'Hard' });

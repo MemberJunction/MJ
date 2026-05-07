@@ -615,4 +615,71 @@ describe('PostgreSQLDataProvider', () => {
             expect(validator.ValidateDeleteResult(entity, [{ TagAID: 'a1', TagBID: 'wrong' }], result)).toBe(false);
         });
     });
+
+    describe('JSON-arg CRUD payload (wide entities)', () => {
+        // Reach into the private helper directly — avoids needing a mocked
+        // BaseEntity for these unit tests. The integration with `buildCRUDParams`
+        // and `UseJsonArgShape` dispatch is covered separately by codegen tests
+        // and end-to-end DB tests.
+        type WithJsonArg = {
+            buildJsonArgCRUDParams(
+                fieldValueMap: Map<unknown, unknown>
+            ): { paramValues: unknown[]; paramPlaceholders: string };
+        };
+
+        function field(name: string, type = 'nvarchar'): { Name: string; Type: string } {
+            return { Name: name, Type: type };
+        }
+
+        it('serializes a payload with all field values into a single JSONB placeholder', () => {
+            const map = new Map<unknown, unknown>([
+                [field('ID'), 'abc-123'],
+                [field('Name'), 'Test'],
+                [field('LockToken'), null],
+                [field('RetryCount', 'int'), 3],
+            ]);
+            const result = (provider as unknown as WithJsonArg).buildJsonArgCRUDParams(map);
+            expect(result.paramPlaceholders).toBe('p_data => $1::jsonb');
+            expect(result.paramValues).toHaveLength(1);
+            const parsed = JSON.parse(result.paramValues[0] as string) as Record<string, unknown>;
+            expect(parsed).toEqual({
+                ID: 'abc-123',
+                Name: 'Test',
+                LockToken: null,
+                RetryCount: 3,
+            });
+        });
+
+        it('preserves explicit nulls so key-presence semantics can clear columns', () => {
+            const map = new Map<unknown, unknown>([
+                [field('ID'), 'abc'],
+                [field('LockToken'), null],
+            ]);
+            const result = (provider as unknown as WithJsonArg).buildJsonArgCRUDParams(map);
+            const parsed = JSON.parse(result.paramValues[0] as string) as Record<string, unknown>;
+            expect(parsed).toHaveProperty('LockToken');
+            expect(parsed.LockToken).toBeNull();
+        });
+
+        it('encodes binary fields as base64', () => {
+            const buf = Buffer.from('hello world', 'utf8');
+            const map = new Map<unknown, unknown>([
+                [field('ID'), 'abc'],
+                [field('Blob', 'varbinary(max)'), buf],
+            ]);
+            const result = (provider as unknown as WithJsonArg).buildJsonArgCRUDParams(map);
+            const parsed = JSON.parse(result.paramValues[0] as string) as Record<string, unknown>;
+            expect(parsed.Blob).toBe(buf.toString('base64'));
+        });
+
+        it('leaves null binary fields as null (no base64 encoding)', () => {
+            const map = new Map<unknown, unknown>([
+                [field('ID'), 'abc'],
+                [field('Blob', 'varbinary'), null],
+            ]);
+            const result = (provider as unknown as WithJsonArg).buildJsonArgCRUDParams(map);
+            const parsed = JSON.parse(result.paramValues[0] as string) as Record<string, unknown>;
+            expect(parsed.Blob).toBeNull();
+        });
+    });
 });

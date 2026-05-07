@@ -975,6 +975,13 @@ SELECT * FROM delete_result`;
         // Encrypt field values using the generic method from GenericDatabaseProvider
         await this.EncryptFieldValuesForSave(entity, fieldValueMap, contextUser);
 
+        // Wide entities use the JSON-arg sproc shape — single JSONB payload
+        // instead of N typed args. Codegen emits the matching shape; the same
+        // `useJsonArgShape` predicate gates both sides.
+        if (this.UseJsonArgShape(entityInfo, isNew ? 'create' : 'update')) {
+            return this.buildJsonArgCRUDParams(fieldValueMap);
+        }
+
         // Build parameterized query components from (possibly encrypted) values
         const paramValues: unknown[] = [];
         const placeholders: string[] = [];
@@ -1007,6 +1014,54 @@ SELECT * FROM delete_result`;
         }
 
         return { paramValues, paramPlaceholders: placeholders.join(', ') };
+    }
+
+    /**
+     * Builds the JSON-arg CRUD payload for wide entities. Returns a single
+     * positional `$1::jsonb` placeholder backed by a JSON-stringified payload
+     * keyed by entity field names. Mirrors the typed-arg path's lossless
+     * "include every writable field" behavior — key-presence semantics on
+     * the JSONB sproc body interpret missing keys as "leave unchanged" and
+     * key-with-null as "clear", so an explicit null in the payload doubles as
+     * the `_Clear` signal without needing a companion arg.
+     *
+     * Binary fields (BYTEA / varbinary) are base64-encoded inline; the codegen-
+     * emitted sproc body decodes via `decode(p_data->>'Field', 'base64')`.
+     * Date/timestamp values serialize via JSON `Date.toISOString()` and the
+     * sproc casts back to TIMESTAMPTZ.
+     */
+    private buildJsonArgCRUDParams(
+        fieldValueMap: Map<EntityFieldInfo, unknown>
+    ): { paramValues: unknown[]; paramPlaceholders: string } {
+        const payload: Record<string, unknown> = {};
+        for (const [field, value] of fieldValueMap) {
+            const processed = PGQueryParameterProcessor.ProcessParameterValue(value);
+            // Binary columns serialize as base64 strings (no native JSON binary).
+            // The codegen-emitted sproc body decodes via `decode(..., 'base64')`.
+            if (this.isBinaryField(field) && processed !== null && processed !== undefined) {
+                payload[field.Name] = this.encodeBinaryToBase64(processed);
+            } else {
+                payload[field.Name] = processed;
+            }
+        }
+        return {
+            paramValues: [JSON.stringify(payload)],
+            paramPlaceholders: 'p_data => $1::jsonb',
+        };
+    }
+
+    private isBinaryField(field: EntityFieldInfo): boolean {
+        const t = (field.Type || '').toLowerCase().trim();
+        return t === 'bytea' || t.startsWith('varbinary') || t.startsWith('image');
+    }
+
+    private encodeBinaryToBase64(value: unknown): string {
+        if (value instanceof Uint8Array) return Buffer.from(value).toString('base64');
+        if (Buffer.isBuffer(value)) return value.toString('base64');
+        if (typeof value === 'string') return value; // already encoded
+        // Fallback — coerce via Buffer.from; throws on incompatible types,
+        // surfacing the encoding failure at save time rather than silent corruption.
+        return Buffer.from(value as ArrayBufferLike).toString('base64');
     }
 
     /**
