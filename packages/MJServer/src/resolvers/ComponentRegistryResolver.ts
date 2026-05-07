@@ -1,8 +1,8 @@
 import { Arg, Ctx, Field, InputType, ObjectType, Query, Mutation, Resolver } from 'type-graphql';
-import { UserInfo, IMetadataProvider, Metadata, LogError, LogStatus } from '@memberjunction/core';
+import { UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
-import { MJComponentEntity, MJComponentRegistryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
+import { MJComponentRegistryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import {
     ComponentRegistryClient,
@@ -16,7 +16,6 @@ import {
 } from '@memberjunction/component-registry-client-sdk';
 import { AppContext } from '../types.js';
 import { configInfo } from '../config.js';
-import { GetReadWriteProvider } from '../util.js';
 
 /**
  * GraphQL types for Component Registry operations
@@ -182,7 +181,7 @@ export class ComponentRegistryExtendedResolver {
         @Arg('registryName') registryName: string,
         @Arg('namespace') namespace: string,
         @Arg('name') name: string,
-        @Ctx() { userPayload, providers }: AppContext,
+        @Ctx() { userPayload }: AppContext,
         @Arg('version', { nullable: true }) version?: string,
         @Arg('hash', { nullable: true }) hash?: string
     ): Promise<ComponentSpecWithHashType> {
@@ -231,12 +230,6 @@ export class ComponentRegistryExtendedResolver {
             const component = response.specification;
             if (!component) {
                 throw new Error(`Component ${namespace}/${name} returned without specification`);
-            }
-            
-            // Optional: Cache in database if configured
-            if (this.shouldCache(registry)) {
-                const writeProvider = GetReadWriteProvider(providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
-                await this.cacheComponent(component, registry.ID, user, writeProvider);
             }
             
             // Return the ComponentSpec as a JSON string
@@ -489,100 +482,7 @@ export class ComponentRegistryExtendedResolver {
             headers: config?.headers
         });
     }
-    
-    /**
-     * Check if component should be cached
-     */
-    private shouldCache(registry: MJComponentRegistryEntity): boolean {
-        // Check config for caching settings
-        const config = configInfo.componentRegistries?.find(r =>
-            UUIDsEqual(r.id, registry.ID) || r.name === registry.Name
-        );
-        return config?.cache !== false; // Cache by default
-    }
-    
-    /**
-     * Cache component in database
-     */
-    private async cacheComponent(
-        component: ComponentSpec,
-        registryId: string,
-        userInfo: UserInfo,
-        provider?: IMetadataProvider
-    ): Promise<void> {
-        try {
-            // Find or create component entity
-            const md = provider ?? new Metadata();
-            const componentEntity = await md.GetEntityObject<MJComponentEntity>('MJ: Components', userInfo);
-            
-            // Check if component already exists
-            const existingComponent = this.componentEngine.Components?.find(
-                c => c.Name === component.name && 
-                     c.Namespace === component.namespace &&
-                     UUIDsEqual(c.SourceRegistryID, registryId)
-            );
-            
-            if (existingComponent) {
-                // Update existing component
-                if (!await componentEntity.Load(existingComponent.ID)) {
-                    throw new Error(`Failed to load component: ${existingComponent.ID}`);
-                }
-            } else {
-                // Create new component
-                componentEntity.NewRecord();
-                componentEntity.SourceRegistryID = registryId;
-            }
-            
-            // Update component fields
-            componentEntity.Name = component.name;
-            componentEntity.Namespace = component.namespace || '';
-            componentEntity.Version = component.version || '1.0.0';
-            componentEntity.Title = component.title;
-            componentEntity.Description = component.description;
-            componentEntity.Type = this.mapComponentType(component.type);
-            componentEntity.FunctionalRequirements = component.functionalRequirements;
-            componentEntity.TechnicalDesign = component.technicalDesign;
-            componentEntity.Specification = JSON.stringify(component);
-            componentEntity.LastSyncedAt = new Date();
-            
-            if (!existingComponent) {
-                componentEntity.ReplicatedAt = new Date();
-            }
-            
-            // Save component
-            const result = await componentEntity.Save();
-            if (!result) {
-                throw new Error(`Failed to cache component: ${component.name}`);
-            }
-            
-            // Refresh metadata cache
-            await this.componentEngine.Config(true, userInfo);
-        } catch (error) {
-            // Log but don't throw - caching failure shouldn't break the operation
-            LogError('Failed to cache component:');
-        }
-    }
-    
-    /**
-     * Map component type string to entity enum
-     */
-    private mapComponentType(type: string): MJComponentEntity['Type'] {
-        const typeMap: Record<string, MJComponentEntity['Type']> = {
-            'report': 'Report',
-            'dashboard': 'Dashboard',
-            'form': 'Form',
-            'table': 'Table',
-            'chart': 'Chart',
-            'navigation': 'Navigation',
-            'search': 'Search',
-            'widget': 'Widget',
-            'utility': 'Utility',
-            'other': 'Other'
-        };
-        
-        return typeMap[type.toLowerCase()] || 'Other';
-    }
-    
+
     /**
      * Map search result to GraphQL type
      */
