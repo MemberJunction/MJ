@@ -466,7 +466,8 @@ $do$;
 ------------------------------------------------------------
 ${this.generateDropAllOverloadsBlock(entity.SchemaName, fnName)}
 CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(p_data JSONB)
-RETURNS SETOF ${pgDialect.QuoteSchema(entity.SchemaName, viewName)} AS $$
+RETURNS SETOF ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}
+AS $$
 DECLARE
 ${pkExtractions}
     v_updated_count INTEGER;
@@ -562,7 +563,8 @@ ${trigger}
 ------------------------------------------------------------
 ${this.generateDropAllOverloadsBlock(entity.SchemaName, fnName)}
 CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(p_data JSONB)
-RETURNS SETOF ${pgDialect.QuoteSchema(entity.SchemaName, viewName)} AS $$
+RETURNS SETOF ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}
+AS $$
 DECLARE
     v_id ${pkPgType};
     v_field_name TEXT;
