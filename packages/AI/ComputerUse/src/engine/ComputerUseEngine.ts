@@ -83,6 +83,9 @@ export class ComputerUseEngine {
     /** Whether Stop() has been called — checked at the top of each step */
     protected cancelled: boolean = false;
 
+    /** Whether this engine owns its browser adapter lifecycle (Launch/Close) */
+    private _ownsAdapter: boolean = true;
+
     constructor() {
         // Components are initialized lazily in Run() based on params.
         // Set defaults that will be overwritten.
@@ -140,6 +143,16 @@ export class ComputerUseEngine {
             await this.closeBrowser();
             this.log('Browser closed');
         }
+    }
+
+    /**
+     * Inject a pre-created browser adapter for shared session support.
+     * When set, the engine skips Launch()/Close() — the caller owns the lifecycle.
+     * Used by parallel test execution to share browser contexts across tests.
+     */
+    public SetBrowserAdapter(adapter: BaseBrowserAdapter): void {
+        this.browserAdapter = adapter;
+        this._ownsAdapter = false;
     }
 
     /**
@@ -254,8 +267,16 @@ export class ComputerUseEngine {
     // ─── Browser Lifecycle ──────────────────────────────────
 
     private async launchBrowser(params: RunComputerUseParams): Promise<void> {
+        // If adapter was injected externally and is already open, just launch a
+        // new page within the existing context (SharedContextBrowserAdapter handles this)
         const config = params.BrowserConfig ?? new BrowserConfig();
         config.Headless = params.Headless;
+
+        if (!this._ownsAdapter) {
+            // Shared adapter: Launch() creates a new page in the shared context
+            await this.browserAdapter.Launch(config);
+            return;
+        }
 
         // Pre-populate localStorage entries via Playwright's storageState.
         // This injects localStorage BEFORE any page loads, which avoids the
@@ -309,6 +330,30 @@ export class ComputerUseEngine {
     }
 
     private async closeBrowser(): Promise<void> {
+        if (!this._ownsAdapter) {
+            // Shared adapter: between tests, the BrowserContext lives on but
+            // we must clean per-session state (IndexedDB, sessionStorage,
+            // non-auth localStorage, service workers) — otherwise stale
+            // cache from this test deadlocks the next test's app boot.
+            // Auth tokens in localStorage are preserved so the next test
+            // doesn't have to re-login.
+            const startUrl = this.activeParams?.StartUrl;
+            if (startUrl) {
+                try {
+                    const origin = new URL(startUrl).origin;
+                    await this.browserAdapter.ResetStatePreservingAuth(origin);
+                } catch { /* swallow — best effort */ }
+            }
+
+            // Now close the page; the context and browser are owned by the pool
+            try {
+                if (this.browserAdapter.IsOpen) {
+                    await this.browserAdapter.Close();
+                }
+            } catch { /* swallow */ }
+            return;
+        }
+
         try {
             if (this.browserAdapter.IsOpen) {
                 await this.browserAdapter.Close();

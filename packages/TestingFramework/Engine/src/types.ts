@@ -85,6 +85,14 @@ export interface DriverExecutionContext {
    * May be undefined if no variables are defined for this test type.
    */
   resolvedVariables?: ResolvedTestVariables;
+
+  /**
+   * Worker index for parallel suite execution. When set, indicates this test
+   * is running in a parallel worker and drivers can use it to construct
+   * session-sharing keys (e.g. "suite:<id>:worker-<index>").
+   * Undefined in sequential execution.
+   */
+  workerIndex?: number;
 }
 
 /**

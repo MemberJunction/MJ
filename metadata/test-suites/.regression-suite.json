@@ -1,0 +1,393 @@
+{
+  "fields": {
+    "Name": "MJ Explorer Regression Suite",
+    "Description": "Full-stack E2E regression suite for MJ Explorer. Uses Computer Use (LLM-driven browser automation) to validate login, navigation, CRUD, and core application workflows. P0 tests are release-blocking.",
+    "Status": "Active"
+  },
+  "relatedEntities": {
+    "MJ: Test Suite Tests": [
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T01 - Login Smoke",
+          "Sequence": 1,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "ABFDAC0A-2209-4B94-A6BE-1F4B01F3DEE1"
+        },
+        "sync": {
+          "lastModified": "2026-04-30T01:05:08.179Z",
+          "checksum": "92a5b034bbc1a8c61fe1cd457cbd5e67abf43937249896947e3f21da2231ffd5"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T02 - Home Application Load",
+          "Sequence": 2,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "8CD3E2CD-0D14-4834-8FA8-F1F260CEF90C"
+        },
+        "sync": {
+          "lastModified": "2026-04-30T01:05:08.189Z",
+          "checksum": "e9230ee4588379f3689c3ca60d56d6dba390e8ad26207c7fb5fc046472b399a7"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T03 - Application Switcher",
+          "Sequence": 3,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "99C9DE9E-0130-4530-ADCE-69B682093F80"
+        },
+        "sync": {
+          "lastModified": "2026-04-30T01:05:08.199Z",
+          "checksum": "63740cb7f97a45c435a0daf7386d8d1f9265e73eab0e2674c03324370a42479f"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T04 - Data Explorer Browse Entities",
+          "Sequence": 4,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "E955BF43-36B1-4732-89E8-56AB655C7D13"
+        },
+        "sync": {
+          "lastModified": "2026-04-30T01:05:08.209Z",
+          "checksum": "08bd6998c18ee78fb510b0c8df41dfa852ff7d52af95c6b23a4568b91e8b19c8"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T05 - Data Explorer Open Entity Record",
+          "Sequence": 5,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "369AE569-A016-4FD5-A972-AC5839FE695E"
+        },
+        "sync": {
+          "lastModified": "2026-04-30T01:05:08.219Z",
+          "checksum": "74b9a57f4e6551c384ddd5c610d10ab6a1c72b42985a5a00c34e025dbc2989d7"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T06 - Data Explorer Search",
+          "Sequence": 6,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "86AC1B2F-A73E-4690-8BF4-0B60D657A90E"
+        },
+        "sync": {
+          "lastModified": "2026-04-30T01:05:08.229Z",
+          "checksum": "ad3f422f4ae4b3566d414c295b6574250e476df4abcba5bffba177b17fc5f3e0"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T07 - Entity Form View Record Details",
+          "Sequence": 7,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "5C5E9C2C-0308-4078-AF9D-64C110769A5A"
+        },
+        "sync": {
+          "lastModified": "2026-04-30T01:05:08.239Z",
+          "checksum": "af7c985d7647368e6f3b514082cd81bbb88427eb2f21dddfbe3583e461634bcc"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T08 - Navigation and Tab Management",
+          "Sequence": 8,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "8BCC471A-408D-4DC6-A0E2-3C50CEB77778"
+        },
+        "sync": {
+          "lastModified": "2026-04-30T01:05:08.248Z",
+          "checksum": "827d7536151c5fc80b77dc8e48aa057cb312c918376fb516c4a1aba6126f75a3"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T09 - Entity Form Create New Record",
+          "Sequence": 9,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "777FC6DB-0307-4DD4-AA6F-23847196FA18"
+        },
+        "sync": {
+          "lastModified": "2026-04-30T01:05:08.259Z",
+          "checksum": "3e141608d99c3bcccee4be1af0873c2d5adea9a973d60df8526801515b2bf124"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T10 - Entity Form Edit and Save Record",
+          "Sequence": 10,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "433194D4-E840-47DD-9807-33816522C19D"
+        },
+        "sync": {
+          "lastModified": "2026-04-30T01:05:08.268Z",
+          "checksum": "350f9079aa05ec762afc86b6f498b1e804eb5ab5cf472f23c93d73e83b497689"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T11 - Run a Saved Query",
+          "Sequence": 11,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "40C1B848-922F-446C-B00D-57210C2D03D1"
+        },
+        "sync": {
+          "lastModified": "2026-04-30T01:05:08.364Z",
+          "checksum": "59959e11bd0a8f4527ec8ab75459eea3bfb4784f6ac0ad5d555ff807d31c7978"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T12 - Admin Dashboard ERD Viewer",
+          "Sequence": 12,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "853B1CC3-E2C7-4287-A7FB-288E61C59B19"
+        },
+        "sync": {
+          "lastModified": "2026-04-30T01:05:08.374Z",
+          "checksum": "c59b99618cfe3f059e1610457f5e4829bc99d11e48aa2673bf7af7247d4db04d"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T13 - Admin Dashboard User Management",
+          "Sequence": 13,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "16DDABBA-E0E3-4055-9C31-312239F45A08"
+        },
+        "sync": {
+          "lastModified": "2026-04-30T01:05:08.384Z",
+          "checksum": "0cb4068fb44708ead84b6c27eda0296e72a23d9c12ef8e9abe79faca8b323bf6"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T14 - AI Application Agent List View",
+          "Sequence": 14,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "20B63720-4CC0-4C50-826A-1E070D7B9653"
+        },
+        "sync": {
+          "lastModified": "2026-04-30T01:05:08.394Z",
+          "checksum": "335298a34ed445e9fb4cf87b0764a9d037736f28d0c76d30c2e72965993416a1"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T15 - AI Application Prompt Management",
+          "Sequence": 15,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "E9A2A466-6A36-488E-8646-71D404E051BF"
+        },
+        "sync": {
+          "lastModified": "2026-04-30T01:05:08.403Z",
+          "checksum": "81b4779f6429b34fe24b77c0930cd54e7ff5b4df20a7852c96d1995352c10ca3"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T16 - Lists Create and Populate",
+          "Sequence": 16,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "7AB967B0-0B8A-447E-9251-32827EAC03F4"
+        },
+        "sync": {
+          "lastModified": "2026-04-30T01:05:08.414Z",
+          "checksum": "23b87e6b64ec604ba5942ea4a929082eeed9668fcfc5d17bf2d93aebdf6368e5"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T17 - Settings Page Navigation",
+          "Sequence": 17,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "D9F0E5C2-47F7-41DC-BC50-A63D4D0FA5B5"
+        },
+        "sync": {
+          "lastModified": "2026-04-30T01:05:08.423Z",
+          "checksum": "9f7ca0efecadb088c9f84de255fecc710e860e3fa11627c2460c3ed2023d67a2"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T18 - Communication Templates View",
+          "Sequence": 18,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "04F0C370-00D8-4036-B368-23E4E953E663"
+        },
+        "sync": {
+          "lastModified": "2026-04-30T01:05:08.434Z",
+          "checksum": "266b89e7783e7ffa7c5a1c430ae3cb502e71aeb04dcc54ac6ad92b7c7d4c0ea1"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T19 - Query Browser Execute Query",
+          "Sequence": 19,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "234F521C-0511-4546-A579-19675128B92C"
+        },
+        "sync": {
+          "lastModified": "2026-04-30T01:05:08.445Z",
+          "checksum": "6784ec26ecc51ff68acf6bc49395ce5fc1895c3892c14b6c1722c27561b3c107"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T20 - Dashboard Browser",
+          "Sequence": 20,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "A1A9B0AF-1526-4D83-9BC7-955C76B49866"
+        },
+        "sync": {
+          "lastModified": "2026-04-30T01:05:08.454Z",
+          "checksum": "9d8c7cc30c341bdf3ee384d041a0bf9adb934087ce243c6be746a72dd8a5c386"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T21 - AI Monitor Dashboard",
+          "Sequence": 21,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "7AD289E9-A855-4F6C-A5CB-EF6B03FE7DCA"
+        },
+        "sync": {
+          "lastModified": "2026-04-30T01:05:08.513Z",
+          "checksum": "1887dcc7c76790413a85b8eba47e6295cd050a5ee6d5eba147852c5af2991800"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T22 - Integrations Overview",
+          "Sequence": 22,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "DECEA4A6-3BAB-4C9F-83B0-5AEDB98113C7"
+        },
+        "sync": {
+          "lastModified": "2026-04-30T01:05:08.527Z",
+          "checksum": "7bc2b6f703de2a02db0be571591eb96425f6d8e95d0a42d3aa860be067214870"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T23 - Handle Invalid Navigation Gracefully",
+          "Sequence": 23,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "1D20D08B-5E1B-4E90-B879-54A8A1ADC98D"
+        },
+        "sync": {
+          "lastModified": "2026-04-30T01:05:08.538Z",
+          "checksum": "dfa57d8c63bc2d9ca94f4849e75dcfeb7bfd0672287f533abef5904557ef3851"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T24 - Session Persistence Reload Page",
+          "Sequence": 24,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "B76F740D-10E5-45E6-83A1-08103D19566B"
+        },
+        "sync": {
+          "lastModified": "2026-04-30T01:05:08.548Z",
+          "checksum": "a9a526c052a1f42d63563823dcc0cd2d033daba7e7621be92976615504a01cc4"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=T25 - Multiple Tab Workflow",
+          "Sequence": 25,
+          "Status": "Active"
+        },
+        "primaryKey": {
+          "ID": "F5F1CA0C-8237-47B0-9C84-D812F183C808"
+        },
+        "sync": {
+          "lastModified": "2026-04-30T01:05:08.557Z",
+          "checksum": "9e859e4ddbb1ba6d557edbdea30858253c41c8893a88f11a5eb7e9f031009b02"
+        }
+      }
+    ]
+  },
+  "primaryKey": {
+    "ID": "71428DF0-78F4-4775-95E5-A52D2B4602D1"
+  },
+  "sync": {
+    "lastModified": "2026-04-30T01:05:08.065Z",
+    "checksum": "9c97cd6ec2416de31ab82848db67ae0330480fe08610737b73279d667e9638b8"
+  }
+}

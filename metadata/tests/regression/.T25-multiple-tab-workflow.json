@@ -1,0 +1,81 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "T25 - Multiple Tab Workflow",
+    "Description": "Opens three different entity types in separate tabs, verifies each tab has correct content, closes the middle tab, and verifies remaining tabs work.",
+    "InputDefinition": {
+      "goal": "IMPORTANT ENVIRONMENT NOTE: This application runs in a resource-constrained Docker environment and may take 10-30 seconds to load pages, initialize the workspace, or complete navigation transitions. If you see a loading screen, spinner, or blank page — DO NOT navigate away, go back, refresh, or retry login. Simply wait with increasing intervals (5s, then 10s, then 15s) until the content appears. The application WILL load; it just needs time. Only request judgement if you have waited over 60 seconds total on the same loading state with no change.\n\nNavigate to Data Explorer. Open three different records, each in its own tab, by following these steps for each one: (1) select an entity type (try Members first, then Events, then a third entity such as Board Members), (2) click any row in the records grid so the detail panel slides out on the right, (3) Shift+Click the 'Open Full Record' button at the bottom of that detail panel — Shift+Click opens the record in a new tab instead of replacing the current one. After opening all three records this way, three tabs will appear underneath the top navigation. Switch between the tabs to confirm each shows its own record. Then close the middle tab (click the small × on it) and confirm the remaining two tabs are still functional with their original record content. Note: clicking entity cards in the entity list does NOT open new tabs — only Shift+Click on the 'Open Full Record' button does.",
+      "startUrl": "http://localhost:4200",
+      "allowedDomains": [
+        "localhost",
+        "*.auth0.com"
+      ],
+      "auth": {
+        "bindings": [
+          {
+            "domains": [
+              "localhost",
+              "*.auth0.com"
+            ],
+            "method": {
+              "Type": "Basic",
+              "Username": "computeruse@bluecypress.io",
+              "Password": "computerpassword2!",
+              "Strategy": "FormLogin"
+            }
+          }
+        ]
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "minConfidence": 0.7,
+      "maxSteps": 45,
+      "judgeValidationCriteria": [
+        "Three tabs were opened with different entity content",
+        "Middle tab was closed",
+        "Remaining two tabs are still functional with correct content"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 45,
+      "maxExecutionTime": 420000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.6,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.4,
+          "config": {
+            "maxSteps": 45
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.6,
+        "step-count": 0.4
+      }
+    },
+    "Status": "Active",
+    "Tags": "P3,regression"
+  },
+  "primaryKey": {
+    "ID": "98B5BFE9-41F3-465E-9C68-25CBD4B7E48A"
+  },
+  "sync": {
+    "lastModified": "2026-04-30T01:03:56.339Z",
+    "checksum": "0e0f9dadf99bf7d47a1a115a0f3a7526c73b000ab4ad56d08cafe1c3c3edef8a"
+  }
+}

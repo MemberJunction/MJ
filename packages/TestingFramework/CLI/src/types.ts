@@ -69,6 +69,21 @@ export interface SuiteFlags extends CommonFlags {
      * Can be specified multiple times for multiple variables
      */
     var?: string[];
+    /**
+     * Maximum number of parallel workers (default 4).
+     */
+    maxParallel?: number;
+    /**
+     * Delay in milliseconds between test executions.
+     * Useful for avoiding rate limits (e.g., Auth0 brute-force protection).
+     */
+    delay?: number;
+    /**
+     * Run each test N times to detect flakiness via score variance.
+     * Tests with score variance > 0.3 across iterations are flagged [FLAKY].
+     * Recommended: 3 (statistical minimum), 5 (more reliable detection).
+     */
+    flakyCheck?: number;
 }
 
 /**
@@ -123,4 +138,8 @@ export interface CompareFlags extends CommonFlags {
     version?: string[];
     commit?: string[];
     diffOnly?: boolean;
+    /** Compare the two most recent completed suite runs */
+    latest?: boolean;
+    /** Compare two results.json files directly (no DB needed). Takes two file paths. */
+    fromJson?: string[];
 }

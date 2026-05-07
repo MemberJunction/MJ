@@ -71,6 +71,7 @@ import {
     LocalStorageInjectionAuthMethod,
 } from '@memberjunction/computer-use';
 import type { AuthMethod, ComputerUseResult } from '@memberjunction/computer-use';
+import { BaseBrowserAdapter } from '@memberjunction/computer-use';
 
 import { MJComputerUseEngine } from '../engine/MJComputerUseEngine.js';
 import { MJRunComputerUseParams, PromptEntityRef, ActionRef } from '../types/mj-params.js';
@@ -145,10 +146,15 @@ export class ComputerUseTestDriver extends BaseTestDriver {
 
             // 3. Execute with timeout
             const effectiveTimeout = this.getEffectiveTimeout(context.test, config);
-            const { result, timedOut } = await this.executeWithTimeout(runParams, effectiveTimeout, context);
+            const { result, timedOut, browserDiagnostics } = await this.executeWithTimeout(runParams, effectiveTimeout, context, config);
 
             // 4. Build actual output with execution configuration
             const actualOutput = this.buildActualOutput(result);
+
+            // Attach browser diagnostics (console errors, network failures, crashes)
+            if (browserDiagnostics.length > 0) {
+                (actualOutput as Record<string, unknown>).browserDiagnostics = browserDiagnostics;
+            }
 
             // Add test configuration metadata for debugging
             (actualOutput as Record<string, unknown>).executionConfig = {
@@ -313,10 +319,13 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         }
 
         // Browser config
-        if (config.viewportWidth || config.viewportHeight) {
+        if (config.viewportWidth || config.viewportHeight || config.browserArgs) {
             const browserConfig = new BrowserConfig();
             browserConfig.ViewportWidth = config.viewportWidth ?? 1280;
             browserConfig.ViewportHeight = config.viewportHeight ?? 720;
+            if (config.browserArgs) {
+                browserConfig.Args = config.browserArgs;
+            }
             params.BrowserConfig = browserConfig;
         }
 
@@ -375,13 +384,30 @@ export class ComputerUseTestDriver extends BaseTestDriver {
     /**
      * Execute the engine with a timeout.
      * Uses engine.Stop() for graceful cancellation.
+     *
+     * When running in parallel (workerIndex is set), uses HeadlessBrowserEngine
+     * singleton to get a recycled browser context keyed by session strategy.
      */
     private async executeWithTimeout(
         params: MJRunComputerUseParams,
         timeoutMs: number,
-        context: DriverExecutionContext
-    ): Promise<{ result: ComputerUseResult; timedOut: boolean }> {
+        context: DriverExecutionContext,
+        config: ComputerUseTestConfig
+    ): Promise<{ result: ComputerUseResult; timedOut: boolean; browserDiagnostics: unknown[] }> {
         const engine = new MJComputerUseEngine();
+
+        // Resolve browser session strategy
+        const adapter = await this.resolveBrowserAdapter(config, context);
+        if (adapter) {
+            engine.SetBrowserAdapter(adapter);
+        }
+
+        // Pre-flight: probe MJAPI health before starting the test
+        const preflightHealth = await this.probeMjapiHealth();
+        if (!preflightHealth.ok) {
+            this.logToTestRun(context, 'warn', `MJAPI pre-flight unhealthy: ${preflightHealth.error}`);
+        }
+
         let timedOut = false;
         let timeoutId: ReturnType<typeof setTimeout> | undefined;
 
@@ -395,12 +421,84 @@ export class ComputerUseTestDriver extends BaseTestDriver {
 
         try {
             const result = await engine.Run(params);
-            return { result, timedOut };
+
+            // Collect browser diagnostics (console errors, network failures, crashes).
+            // Cast via unknown: GetDiagnostics is on BaseBrowserAdapter but compiled
+            // types may not reflect it until the computer-use package is rebuilt.
+            const adapterObj = adapter as unknown as { GetDiagnostics?: () => unknown[] } | null;
+            const browserDiagnostics = adapterObj && typeof adapterObj.GetDiagnostics === 'function'
+                ? adapterObj.GetDiagnostics()
+                : [];
+            if (browserDiagnostics.length > 0) {
+                this.logToTestRun(context, 'warn', `Browser captured ${browserDiagnostics.length} diagnostic event(s)`);
+            }
+
+            return { result, timedOut, browserDiagnostics };
         } finally {
             if (timeoutId) {
                 clearTimeout(timeoutId);
             }
         }
+    }
+
+    /**
+     * Quick MJAPI health probe. Returns { ok, error? } — never throws.
+     */
+    private async probeMjapiHealth(): Promise<{ ok: boolean; status?: number; error?: string }> {
+        try {
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 5000);
+            const resp = await fetch('http://mjapi:4000/healthcheck', { signal: controller.signal });
+            clearTimeout(timeout);
+            return { ok: resp.ok, status: resp.status };
+        } catch (err) {
+            const message = err instanceof Error
+                ? (err.name === 'AbortError' ? 'timeout (5s)' : err.message)
+                : String(err);
+            return { ok: false, error: message };
+        }
+    }
+
+    /**
+     * Resolve the browser adapter based on the test config's browserSession
+     * strategy and the execution context's workerIndex.
+     *
+     * - "new" → fresh context (returns null, engine creates its own)
+     * - "shared:suite" → recycled by suite run + worker index
+     * - "shared:global" → recycled by worker index only
+     * - Any other string → used as a literal key
+     * - Undefined + workerIndex set → defaults to "shared:suite"
+     * - Undefined + no workerIndex → returns null (fresh)
+     */
+    private async resolveBrowserAdapter(
+        config: ComputerUseTestConfig,
+        context: DriverExecutionContext
+    ): Promise<BaseBrowserAdapter | null> {
+        const strategy = config.browserSession
+            ?? (context.workerIndex != null ? 'shared:suite' : 'new');
+
+        if (strategy === 'new') return null;
+
+        const { HeadlessBrowserEngine, BrowserConfig: BConfig } = await import('@memberjunction/computer-use');
+        const browserEngine = HeadlessBrowserEngine.Instance;
+
+        // Build a BrowserConfig from test config
+        const browserConfig = new BConfig();
+        browserConfig.Headless = config.headless ?? true;
+        browserConfig.ViewportWidth = config.viewportWidth ?? 1280;
+        browserConfig.ViewportHeight = config.viewportHeight ?? 720;
+
+        // Build the session key
+        let key: string;
+        if (strategy === 'shared:suite') {
+            key = `suite:${context.testRun.TestSuiteRunID ?? 'standalone'}:worker-${context.workerIndex ?? 0}`;
+        } else if (strategy === 'shared:global') {
+            key = `global:worker-${context.workerIndex ?? 0}`;
+        } else {
+            key = strategy; // Literal key
+        }
+
+        return browserEngine.GetRecycled(key, browserConfig);
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -473,6 +571,34 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         // Step screenshots
         for (const step of result.Steps) {
             if (step.Screenshot) {
+                // Store full action data for visual overlay rendering in the HTML report.
+                // Each action includes type + coordinates/bounding boxes where applicable.
+                const actionRecords = step.ActionsRequested.map(a => {
+                    const rec: Record<string, unknown> = { type: a.Type };
+                    switch (a.Type) {
+                        case 'Click':
+                            rec.x = a.X; rec.y = a.Y;
+                            rec.button = a.Button; rec.clickCount = a.ClickCount;
+                            if (a.BoundingBox) rec.bbox = { xMin: a.BoundingBox.XMin, yMin: a.BoundingBox.YMin, xMax: a.BoundingBox.XMax, yMax: a.BoundingBox.YMax };
+                            break;
+                        case 'Type':
+                            rec.text = a.Text;
+                            break;
+                        case 'Scroll':
+                            rec.deltaX = a.DeltaX; rec.deltaY = a.DeltaY;
+                            break;
+                        case 'Wait':
+                            rec.durationMs = a.DurationMs;
+                            break;
+                        case 'Navigate':
+                            rec.url = a.Url;
+                            break;
+                        case 'Keypress': case 'KeyDown': case 'KeyUp':
+                            rec.key = a.Key;
+                            break;
+                    }
+                    return rec;
+                });
                 outputs.push({
                     outputTypeName: 'Screenshot',
                     sequence,
@@ -481,9 +607,15 @@ export class ComputerUseTestDriver extends BaseTestDriver {
                     description: step.Url ? `Page: ${step.Url}` : undefined,
                     mimeType: 'image/png',
                     inlineData: step.Screenshot,
-                    metadata: step.ControllerReasoning
-                        ? { reasoning: step.ControllerReasoning }
-                        : undefined,
+                    metadata: {
+                        reasoning: step.ControllerReasoning || undefined,
+                        actions: actionRecords.length > 0 ? actionRecords : undefined,
+                        url: step.Url || undefined,
+                        // Coordinates in actions are in 1000x1000 normalized space
+                        // (the LLM controller's coordinate system). The HTML overlay
+                        // uses viewBox="0 0 1000 1000" to map directly.
+                        coordinateSpace: 1000,
+                    },
                 });
                 sequence++;
             }

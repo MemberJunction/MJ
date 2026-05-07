@@ -79,23 +79,38 @@ export class SuiteCommand {
             const variables = parseVariableFlags(flags.var);
 
             // Execute suite
-            this.spinner.start(`Running test suite: ${suite.Name}...`);
+            const flakyMsg = flags.flakyCheck && flags.flakyCheck > 1
+                ? ` (flaky-check: each test ×${flags.flakyCheck})`
+                : '';
+            this.spinner.start(`Running test suite: ${suite.Name}${flakyMsg}...`);
 
-            // Note: parallel and failFast are handled by RunSuite internally
-            // We only pass the standard TestRunOptions
             const result = await engine.RunSuite(suite.ID, {
                 verbose: flags.verbose,
-                variables
+                variables,
+                delayBetweenTests: flags.delay,
+                parallel: flags.parallel,
+                maxParallel: flags.maxParallel,
+                repeatCountOverride: flags.flakyCheck && flags.flakyCheck > 1 ? flags.flakyCheck : undefined,
             }, contextUser);
 
             this.spinner.stop();
 
+            // If --flaky-check was used, compute per-test variance and report flaky tests.
+            // The engine returns multiple results per test (one per iteration); we group by
+            // testId and compute score variance to identify inconsistent tests.
+            let flakyReport = '';
+            if (flags.flakyCheck && flags.flakyCheck > 1) {
+                flakyReport = this.buildFlakyReport(result.testResults, flags.flakyCheck);
+            }
+
             // Format and display result
             const output = OutputFormatter.formatSuiteResult(result, format);
             console.log(output);
+            if (flakyReport) console.log(flakyReport);
 
-            // Write to file if requested
-            OutputFormatter.writeToFile(output, flags.output);
+            // Write to file if requested (include flaky report in markdown/console output)
+            const fileOutput = flakyReport && format !== 'json' ? output + '\n' + flakyReport : output;
+            OutputFormatter.writeToFile(fileOutput, flags.output);
 
             // Clean up resources
             await closeMJProvider();
@@ -116,5 +131,76 @@ export class SuiteCommand {
 
             process.exit(1);
         }
+    }
+
+    /**
+     * Build a flaky-test summary by grouping iteration results by testId and
+     * computing score variance. A test is "flaky" if its scores vary by more
+     * than VARIANCE_THRESHOLD across iterations OR if its statuses are mixed
+     * (some Passed, some Failed).
+     *
+     * Variance threshold of 0.3 is the plan-recommended cutoff — small enough
+     * to catch real instability, large enough to ignore minor LLM judge noise.
+     */
+    private buildFlakyReport(testResults: Array<{ testId: string; testName: string; score: number; status: string }>, iterations: number): string {
+        const VARIANCE_THRESHOLD = 0.3;
+
+        // Group by testId — when --flaky-check N is used, each test produces N entries
+        const byTest = new Map<string, { name: string; scores: number[]; statuses: string[] }>();
+        for (const r of testResults) {
+            const entry = byTest.get(r.testId) ?? { name: r.testName, scores: [], statuses: [] };
+            entry.scores.push(r.score);
+            entry.statuses.push(r.status);
+            byTest.set(r.testId, entry);
+        }
+
+        // Compute variance + status mixing per test
+        type FlakyRow = { name: string; scores: number[]; statuses: string[]; variance: number; mixedStatus: boolean; flaky: boolean };
+        const rows: FlakyRow[] = [];
+        for (const [, entry] of byTest) {
+            // Skip tests that didn't actually run multiple times (e.g. if an iteration errored)
+            if (entry.scores.length < 2) continue;
+
+            const max = Math.max(...entry.scores);
+            const min = Math.min(...entry.scores);
+            const variance = max - min;
+            const uniqueStatuses = new Set(entry.statuses);
+            const mixedStatus = uniqueStatuses.size > 1;
+            const flaky = variance > VARIANCE_THRESHOLD || mixedStatus;
+            rows.push({ ...entry, variance, mixedStatus, flaky });
+        }
+
+        const flakyRows = rows.filter(r => r.flaky).sort((a, b) => b.variance - a.variance);
+
+        const lines: string[] = [];
+        lines.push('');
+        lines.push('  Flaky Test Detection');
+        lines.push('  ─────────────────────────────────────────');
+        lines.push(`  Each test ran ${iterations}× (variance threshold: ${VARIANCE_THRESHOLD})`);
+        lines.push('');
+
+        if (flakyRows.length === 0) {
+            lines.push('  ✓ No flaky tests detected — all tests produced consistent results.');
+            lines.push('');
+            return lines.join('\n');
+        }
+
+        lines.push(`  ⚠ ${flakyRows.length} flaky test(s) detected:`);
+        lines.push('');
+        for (const r of flakyRows) {
+            const reasons: string[] = [];
+            if (r.variance > VARIANCE_THRESHOLD) {
+                reasons.push(`variance ${(r.variance * 100).toFixed(0)}%`);
+            }
+            if (r.mixedStatus) {
+                reasons.push(`mixed: ${r.statuses.join('/')}`);
+            }
+            const scoresStr = r.scores.map(s => (s * 100).toFixed(0) + '%').join(', ');
+            lines.push(`  [FLAKY] ${r.name}`);
+            lines.push(`          scores: ${scoresStr}  (${reasons.join(', ')})`);
+        }
+        lines.push('');
+
+        return lines.join('\n');
     }
 }
