@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { attemptDeleteFile } from './util';
-import { dbType } from '../Config/config';
+import { dbPlatform } from '../Config/config';
 
 /**
  * Utility class for managing temporary batch SQL files during CodeGen execution.
@@ -48,7 +48,7 @@ export class TempBatchFile {
         if (!filePath) return;
 
         // SQL Server uses GO as a batch separator; PostgreSQL doesn't need it
-        const separator = dbType() === 'postgresql' ? '\n\n' : '\nGO\n\n';
+        const separator = dbPlatform() === 'postgresql' ? '\n\n' : '\nGO\n\n';
         fs.appendFileSync(filePath, sql + separator);
     }
 

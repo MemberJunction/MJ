@@ -12,6 +12,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { format as formatSql } from 'sql-formatter';
 import { ensureRegExps } from '@memberjunction/global';
+import { SQLDialect, SQLServerDialect } from '@memberjunction/sql-dialect';
 import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 
 /**
@@ -31,12 +32,20 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
   private _fileHandle: fs.promises.FileHandle | null = null;
   private _disposed: boolean = false;
   private _compiledPatterns: RegExp[] | undefined;
+  private _dialect: SQLDialect;
 
-  constructor(id: string, filePath: string, options: SqlLoggingOptions = {}) {
+  /**
+   * @param dialect - The SQL dialect to use for platform-specific SQL emission
+   *   (e.g. Flyway placeholder escaping, batch separators). Defaults to SQL
+   *   Server when not provided so existing callers and tests keep working
+   *   without immediately threading a dialect through every call site.
+   */
+  constructor(id: string, filePath: string, options: SqlLoggingOptions = {}, dialect: SQLDialect = new SQLServerDialect()) {
     this.id = id;
     this.filePath = filePath;
     this.startTime = new Date();
     this.options = options;
+    this._dialect = dialect;
 
     // Compile patterns once during construction
     if (options.filterPatterns && options.filterPatterns.length > 0) {
@@ -460,14 +469,12 @@ export class SqlLoggingSessionImpl implements SqlLoggingSession {
 
   /**
    * Escapes ${...} patterns within SQL string literals to prevent Flyway from interpreting them as placeholders.
-   * Converts ${templateVariable} to $' + N'{templateVariable} within string literals.
-   *
-   * The N prefix on the continuation string is critical: without it, the second half of the split N'...' literal
-   * is treated as VARCHAR and implicitly promoted to NVARCHAR(4000) during concatenation, truncating any content
-   * beyond 4,000 chars. With N, both halves remain NVARCHAR and the full value is preserved.
+   * The actual escape form is platform-specific and delegated to the configured `SQLDialect` — see
+   * `SQLDialect.EscapeFlywayStringInterpolation` for the rationale (NVARCHAR(4000) truncation on SQL Server,
+   * different concat operator on PostgreSQL, etc.).
    */
   private _escapeFlywaySyntaxInStrings(sql: string): string {
-    return sql.replaceAll(/\$\{/g, "$$'+N'{");
+    return this._dialect.EscapeFlywayStringInterpolation(sql);
   }
 
 }

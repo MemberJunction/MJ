@@ -326,4 +326,91 @@ END`;
       expect(result).toMatch(/\n$/);
     });
   });
+
+  describe('CREATE SCHEMA conditional pattern (sys.schemas + EXEC)', () => {
+    it('should convert IF NOT EXISTS sys.schemas + EXEC CREATE SCHEMA to PG-native CREATE SCHEMA IF NOT EXISTS', () => {
+      const sql = `IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = '__mj_UDT')
+BEGIN
+    EXEC('CREATE SCHEMA [__mj_UDT]')
+END`;
+      const result = convert(sql);
+      expect(result).toContain('CREATE SCHEMA IF NOT EXISTS "__mj_UDT"');
+      // Should NOT fall through to the DO $$ block path
+      expect(result).not.toContain('DO $$');
+      expect(result).not.toContain('sys.schemas');
+      expect(result).not.toContain('EXEC');
+    });
+
+    it('should preserve schema name with mixed case', () => {
+      const sql = `IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'MyCustomSchema')
+BEGIN
+    EXEC('CREATE SCHEMA [MyCustomSchema]')
+END`;
+      const result = convert(sql);
+      expect(result).toContain('CREATE SCHEMA IF NOT EXISTS "MyCustomSchema"');
+    });
+
+    it('should not match if there is no CREATE SCHEMA in the body', () => {
+      // sys.schemas reference but body doesn't create a schema → fall through to DO block
+      const sql = `IF NOT EXISTS (SELECT * FROM sys.schemas WHERE name = 'X')
+BEGIN
+    PRINT 'Schema X does not exist';
+END`;
+      const result = convert(sql);
+      expect(result).not.toContain('CREATE SCHEMA IF NOT EXISTS');
+    });
+  });
+
+  describe('Schema-level extended property conditional pattern', () => {
+    it('should convert IF NOT EXISTS sys.extended_properties + EXEC sp_addextendedproperty (SCHEMA level) to COMMENT ON SCHEMA', () => {
+      const sql = `IF NOT EXISTS (
+    SELECT 1 FROM sys.extended_properties
+    WHERE class = 3
+      AND major_id = SCHEMA_ID('__mj_UDT')
+      AND name = N'MS_Description'
+)
+BEGIN
+    EXEC sp_addextendedproperty
+        @name = N'MS_Description',
+        @value = N'Schema for user-defined tables.',
+        @level0type = N'SCHEMA',
+        @level0name = N'__mj_UDT'
+END`;
+      const result = convert(sql);
+      expect(result).toContain('COMMENT ON SCHEMA "__mj_UDT" IS');
+      expect(result).toContain("'Schema for user-defined tables.'");
+      // Should NOT fall through to the DO $$ block path
+      expect(result).not.toContain('DO $$');
+      expect(result).not.toContain('sp_addextendedproperty');
+    });
+
+    it('should escape single quotes in the description value', () => {
+      const sql = `IF NOT EXISTS (SELECT 1 FROM sys.extended_properties WHERE class = 3 AND major_id = SCHEMA_ID('test') AND name = N'MS_Description')
+BEGIN
+    EXEC sp_addextendedproperty
+        @name = N'MS_Description',
+        @value = N'It''s a test schema',
+        @level0type = N'SCHEMA',
+        @level0name = N'test'
+END`;
+      const result = convert(sql);
+      expect(result).toContain("COMMENT ON SCHEMA \"test\" IS 'It''s a test schema'");
+    });
+
+    it('should NOT match TABLE-level extended properties (those use the dedicated ExtendedPropertyRule)', () => {
+      const sql = `IF NOT EXISTS (SELECT 1 FROM sys.extended_properties WHERE class = 1)
+BEGIN
+    EXEC sp_addextendedproperty
+        @name = N'MS_Description',
+        @value = N'Table description',
+        @level0type = N'SCHEMA',
+        @level0name = N'__mj',
+        @level1type = N'TABLE',
+        @level1name = N'MyTable'
+END`;
+      const result = convert(sql);
+      // Has @level1type = TABLE, so this rule should reject and fall through
+      expect(result).not.toContain('COMMENT ON SCHEMA');
+    });
+  });
 });

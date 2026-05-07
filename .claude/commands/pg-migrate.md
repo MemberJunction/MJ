@@ -198,17 +198,42 @@ Read the converted file. Check for:
 - Missing semicolons or malformed PL/pgSQL
 
 ### Step 3: Test on fresh PG database
-Drop and recreate a test database, then run ALL PG v5 migrations through the current file:
+Drop and recreate a test database, then run ALL PG v5 migrations via Skyway
+(`mj migrate`) — same code path real installs use. Skyway handles placeholder
+substitution, history tracking, and apply ordering automatically; we only
+need to bootstrap the `cdp_*` roles that GRANT statements target (Skyway
+doesn't create those).
 
 ```bash
 export PGPASSWORD=Claude2Pg99
+
+# Drop & recreate the test DB
 psql -h postgres-claude -U mj_admin -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = 'MJ_PG_Migrate_Test' AND pid <> pg_backend_pid();" 2>/dev/null
 psql -h postgres-claude -U mj_admin -d postgres -c "DROP DATABASE IF EXISTS \"MJ_PG_Migrate_Test\";"
 psql -h postgres-claude -U mj_admin -d postgres -c "CREATE DATABASE \"MJ_PG_Migrate_Test\";"
-for f in $(ls /workspace/MJ/migrations-pg/v5/*.pg.sql | sort); do
-  echo "Running: $(basename $f)"
-  psql -h postgres-claude -U mj_admin -d MJ_PG_Migrate_Test -f "$f" 2>&1 | tail -5
-done
+
+# Bootstrap CREATE ROLE — Skyway doesn't create these but migrations GRANT to them
+psql -h postgres-claude -U mj_admin -d MJ_PG_Migrate_Test <<BOOT
+DO \$boot\$ BEGIN CREATE ROLE "cdp_UI" NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END \$boot\$;
+DO \$boot\$ BEGIN CREATE ROLE "cdp_Developer" NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END \$boot\$;
+DO \$boot\$ BEGIN CREATE ROLE "cdp_Integration" NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END \$boot\$;
+GRANT USAGE ON SCHEMA public TO "cdp_UI", "cdp_Developer", "cdp_Integration";
+BOOT
+
+# Apply migrations via Skyway. DB_PLATFORM=postgresql triggers the PG provider
+# AND the migrationsLocation auto-swap (`migrations` → `migrations-pg`), so
+# Skyway applies migrations-pg/v5/B*.pg.sql + V*.pg.sql + V*.pg-only.sql in
+# order and writes its history into __mj.flyway_schema_history.
+cd /workspace/MJ
+DB_PLATFORM=postgresql \
+DB_HOST=postgres-claude \
+DB_PORT=5432 \
+DB_DATABASE=MJ_PG_Migrate_Test \
+DB_ENCRYPT=false \
+DB_TRUST_SERVER_CERTIFICATE=true \
+CODEGEN_DB_USERNAME=mj_admin \
+CODEGEN_DB_PASSWORD=Claude2Pg99 \
+npx mj migrate --verbose
 ```
 
 ### Step 4: Handle failures
@@ -276,36 +301,69 @@ Your job: Run a schema parity comparison between SQL Server and PostgreSQL using
 
 ## Step 1: Fresh SQL Server database with v5 migrations
 
-```bash
-/opt/mssql-tools18/bin/sqlcmd -S sql-claude -U sa -P Claude2Sql99 -C -Q "IF DB_ID('MJ_SQL_Compare') IS NOT NULL BEGIN ALTER DATABASE MJ_SQL_Compare SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE MJ_SQL_Compare; END; CREATE DATABASE MJ_SQL_Compare;"
-```
+Drop & recreate the SS comparison DB, then apply all v5 SS migrations via
+Skyway (`mj migrate`). Skyway handles baseline detection, ordering,
+placeholder substitution, and history tracking — same code path real installs
+use.
 
-Then create __mj schema and run v5 migrations:
 ```bash
-/opt/mssql-tools18/bin/sqlcmd -S sql-claude -U sa -P Claude2Sql99 -C -d MJ_SQL_Compare -Q "CREATE SCHEMA __mj;"
-for f in $(ls /workspace/MJ/migrations/v5/*.sql | sort); do
-  echo "Running: $(basename $f)"
-  /opt/mssql-tools18/bin/sqlcmd -S sql-claude -U sa -P Claude2Sql99 -C -d MJ_SQL_Compare -i "$f" 2>&1 | tail -3
-done
+# Drop & recreate
+/opt/mssql-tools18/bin/sqlcmd -S sql-claude -U sa -P Claude2Sql99 -C -Q "IF DB_ID('MJ_SQL_Compare') IS NOT NULL BEGIN ALTER DATABASE MJ_SQL_Compare SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE MJ_SQL_Compare; END; CREATE DATABASE MJ_SQL_Compare;"
+
+# Create __mj schema (Skyway expects target schema to exist on SS for the
+# history table). `-I` enables QUOTED_IDENTIFIER which several migrations
+# require for indexed-view / sproc creation.
+/opt/mssql-tools18/bin/sqlcmd -S sql-claude -U sa -P Claude2Sql99 -C -d MJ_SQL_Compare -I -Q "CREATE SCHEMA __mj;"
+
+# Apply via Skyway
+cd /workspace/MJ
+DB_PLATFORM=sqlserver \
+DB_HOST=sql-claude \
+DB_PORT=1433 \
+DB_DATABASE=MJ_SQL_Compare \
+DB_ENCRYPT=false \
+DB_TRUST_SERVER_CERTIFICATE=true \
+CODEGEN_DB_USERNAME=sa \
+CODEGEN_DB_PASSWORD=Claude2Sql99 \
+npx mj migrate --verbose
 ```
 
 ## Step 2: Fresh PostgreSQL database with v5 PG migrations
 
-The database name uses the versioned convention: `{{PG_DB_NAME}}` (e.g., `MJ_PG_5_11_0`).
+The database name uses the versioned convention: `{{PG_DB_NAME}}` (e.g., `MJ_PG_5_33_0`).
 
 ```bash
 export PGPASSWORD=Claude2Pg99
+
+# Drop & recreate the parity DB
 psql -h postgres-claude -U mj_admin -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '{{PG_DB_NAME}}' AND pid <> pg_backend_pid();" 2>/dev/null
 psql -h postgres-claude -U mj_admin -d postgres -c "DROP DATABASE IF EXISTS \"{{PG_DB_NAME}}\";"
 psql -h postgres-claude -U mj_admin -d postgres -c "CREATE DATABASE \"{{PG_DB_NAME}}\";"
 
-for f in $(ls /workspace/MJ/migrations-pg/v5/*.pg.sql /workspace/MJ/migrations-pg/v5/*.pg-only.sql 2>/dev/null | sort); do
-  echo "Running: $(basename $f)"
-  psql -h postgres-claude -U mj_admin -d {{PG_DB_NAME}} -f "$f" 2>&1 | tail -3
-done
+# Bootstrap CREATE ROLE — Skyway doesn't create these but migrations GRANT to them
+psql -h postgres-claude -U mj_admin -d {{PG_DB_NAME}} <<BOOT
+DO \$boot\$ BEGIN CREATE ROLE "cdp_UI" NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END \$boot\$;
+DO \$boot\$ BEGIN CREATE ROLE "cdp_Developer" NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END \$boot\$;
+DO \$boot\$ BEGIN CREATE ROLE "cdp_Integration" NOLOGIN; EXCEPTION WHEN duplicate_object THEN NULL; END \$boot\$;
+GRANT USAGE ON SCHEMA public TO "cdp_UI", "cdp_Developer", "cdp_Integration";
+BOOT
+
+# Apply via Skyway. DB_PLATFORM=postgresql auto-swaps migrations →
+# migrations-pg so Skyway picks up B*.pg.sql + V*.pg.sql + V*.pg-only.sql in
+# order.
+cd /workspace/MJ
+DB_PLATFORM=postgresql \
+DB_HOST=postgres-claude \
+DB_PORT=5432 \
+DB_DATABASE={{PG_DB_NAME}} \
+DB_ENCRYPT=false \
+DB_TRUST_SERVER_CERTIFICATE=true \
+CODEGEN_DB_USERNAME=mj_admin \
+CODEGEN_DB_PASSWORD=Claude2Pg99 \
+npx mj migrate --verbose
 ```
 
-NOTE: Some PG migrations may produce errors for columns/tables that already exist from the baseline. Log these but continue — they're expected for idempotent migrations running after a baseline.
+NOTE: Some PG migrations may produce errors for columns/tables that already exist from the baseline. Skyway treats these as migration-level failures and stops; check Skyway's error output, classify the failure (idempotency-safe vs real bug), and decide whether to mark the file as deserving a fix or accept the baseline overlap.
 
 ## Step 3: Compare schemas
 
@@ -402,7 +460,7 @@ Key settings (adapt variable names to match what the .env uses):
 - DB_USERNAME=mj_admin / PG_USERNAME=mj_admin
 - DB_PASSWORD=Claude2Pg99 / PG_PASSWORD=Claude2Pg99
 - DB_DATABASE={{PG_DB_NAME}} / PG_DATABASE={{PG_DB_NAME}}
-- DB_TYPE=pg (if applicable)
+- DB_PLATFORM=postgresql
 - GRAPHQL_PORT=4000
 
 Start MJAPI and wait up to 120 seconds for it to be listening:
@@ -502,7 +560,17 @@ If the user ID differs, look it up: `SELECT "ID" FROM __mj."User" WHERE "Email" 
 cd /workspace/MJ
 npx turbo build --filter=@memberjunction/ng-explorer
 cd /workspace/MJ/packages/MJExplorer
-npm run start > /tmp/mjexplorer.log 2>&1 &
+# --configuration=development is REQUIRED — it triggers Angular's
+# fileReplacements to swap environment.ts → environment.development.ts.
+# Without it, MJExplorer loads environment.ts (hardcoded AUTH_TYPE: 'msal'
+# with a 00000000-... placeholder Microsoft App ID) and the Playwright
+# login flow lands on a Microsoft AAD error page (AADSTS700038). The dev
+# Auth0 config lives in environment.development.ts (already committed,
+# Auth0 SPA client IDs ship in every browser bundle by design — not a
+# secret). Port 4200 keeps the skill consistent with the rest of Phase 4
+# (npm run start defaults to 4201 per package.json which would cause the
+# port-4200 health check below to time out).
+NODE_OPTIONS=--max-old-space-size=16384 npx ng serve --port 4200 --host 0.0.0.0 --configuration=development > /tmp/mjexplorer.log 2>&1 &
 EXPLORER_PID=$!
 ```
 
@@ -680,8 +748,8 @@ curl -s http://localhost:4200/ > /dev/null 2>&1 && echo "Explorer: UP" || echo "
 ```
 
 If either is down, start them:
-- MJAPI: `cd /workspace/MJ/packages/MJAPI && DB_TYPE=postgresql PG_HOST=postgres-claude PG_PORT=5432 PG_USERNAME=mj_admin PG_PASSWORD=Claude2Pg99 PG_DATABASE={{PG_DB_NAME}} DB_HOST=postgres-claude DB_PORT=5432 DB_USERNAME=mj_admin DB_PASSWORD=Claude2Pg99 DB_DATABASE={{PG_DB_NAME}} GRAPHQL_PORT=4000 npm run start > /tmp/mjapi.log 2>&1 &`
-- MJExplorer: Kill port 4200 first (`fuser -k 4200/tcp 2>/dev/null`), then `cd /workspace/MJ/packages/MJExplorer && NODE_OPTIONS=--max-old-space-size=16384 npx ng serve --port 4200 --host 0.0.0.0 > /tmp/mjexplorer.log 2>&1 &`
+- MJAPI: `cd /workspace/MJ/packages/MJAPI && DB_PLATFORM=postgresql PG_HOST=postgres-claude PG_PORT=5432 PG_USERNAME=mj_admin PG_PASSWORD=Claude2Pg99 PG_DATABASE={{PG_DB_NAME}} DB_HOST=postgres-claude DB_PORT=5432 DB_USERNAME=mj_admin DB_PASSWORD=Claude2Pg99 DB_DATABASE={{PG_DB_NAME}} GRAPHQL_PORT=4000 npm run start > /tmp/mjapi.log 2>&1 &`
+- MJExplorer: Kill port 4200 first (`fuser -k 4200/tcp 2>/dev/null`), then `cd /workspace/MJ/packages/MJExplorer && NODE_OPTIONS=--max-old-space-size=16384 npx ng serve --port 4200 --host 0.0.0.0 --configuration=development > /tmp/mjexplorer.log 2>&1 &` (the `--configuration=development` flag is REQUIRED — see Phase 4 Step 6 for the full explanation)
 - Wait for both to be ready before proceeding.
 
 ## Auth0 Credentials

@@ -5,18 +5,23 @@ import { tmpdir } from 'node:os';
 import { simpleGit, SimpleGit } from 'simple-git';
 import { z } from 'zod';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
+import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 
 export type MJConfig = z.infer<typeof mjConfigSchema>;
 
 const MJ_REPO_URL = 'https://github.com/MemberJunction/MJ.git';
 
-/**
- * Default database configuration for MJCLI.
- * Database settings come from environment variables with sensible defaults.
- */
+// Resolve dbPlatform from env once, up-front, so dbPort can default sensibly
+// per dialect. The shared helper in @memberjunction/global is the single
+// source of truth for env → dbPlatform resolution across MJCLI, MJServer,
+// and CodeGenLib — no parallel implementations. It reads DB_PLATFORM (matches
+// the `dbPlatform` config key) and throws on unrecognized non-empty values.
+const ENV_DB_PLATFORM = resolveDbPlatformFromEnv();
+
 const DEFAULT_CLI_CONFIG = {
+  dbPlatform: ENV_DB_PLATFORM ?? ('sqlserver' as const),
   dbHost: process.env.DB_HOST ?? 'localhost',
-  dbPort: process.env.DB_PORT ? parseInt(process.env.DB_PORT) : 1433,
+  dbPort: process.env.DB_PORT ? parseInt(process.env.DB_PORT) : (ENV_DB_PLATFORM === 'postgresql' ? 5432 : 1433),
   dbDatabase: process.env.DB_DATABASE ?? '',
   dbEncrypt: process.env.DB_ENCRYPT !== undefined ? parseBooleanEnv(process.env.DB_ENCRYPT) : true,
   dbTrustServerCertificate: parseBooleanEnv(process.env.DB_TRUST_SERVER_CERTIFICATE),
@@ -308,9 +313,11 @@ export const getSkywayConfig = async (
     Migrations: {
       Locations: [cleanLocation],
       DefaultSchema: targetSchema,
-      // Only pass BaselineVersion if explicitly set in config;
-      // when omitted, Skyway auto-detects the latest B__baseline file.
-      ...(mjConfig.baselineVersion ? { BaselineVersion: mjConfig.baselineVersion } : {}),
+      // Pass through the user's configured baselineVersion (or undefined).
+      // skyway-core's config layer applies its own `?? '1'` default and the
+      // resolver treats '1' as the auto-select-highest-baseline sentinel,
+      // so MJCLI doesn't need to duplicate that defaulting.
+      BaselineVersion: mjConfig.baselineVersion,
       BaselineOnMigrate: mjConfig.baselineOnMigrate,
       OutOfOrder: mjConfig.outOfOrder,
     },

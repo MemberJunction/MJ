@@ -90,6 +90,38 @@ export function transformCodeOnly(sql: string, transform: (code: string) => stri
   }).join('');
 }
 
+/**
+ * Emit a DO-block that drops every overload of a function in a given schema.
+ *
+ * PG dispatches functions by `(name, ordered-arg-type-list)`. `CREATE OR
+ * REPLACE FUNCTION` only replaces the body when the new signature exactly
+ * matches the prior signature; adding (or renaming, or retyping) any
+ * parameter creates a NEW overload alongside the old one. The result —
+ * silent duplicate overloads that pile up across migrations until a caller
+ * hits "function ... is not unique" at runtime.
+ *
+ * Emit this block immediately before any `CREATE OR REPLACE FUNCTION` in
+ * generated migrations so the next CREATE always either replaces (matching
+ * sig) or creates fresh (no prior overload). The block is idempotent — when
+ * no overload exists the FOR loop iterates zero times.
+ *
+ * Used by ProcedureToFunctionRule and FunctionRule. Keeps the wording
+ * identical across both so reviewers reading converter output recognize
+ * the pattern at a glance.
+ */
+export function emitDropOverloadsBlock(funcName: string, schema: string = '__mj'): string {
+  return (
+    `DO $$ DECLARE r record;\n` +
+    `BEGIN\n` +
+    `  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc\n` +
+    `           WHERE proname = '${funcName}'\n` +
+    `             AND pronamespace = '${schema}'::regnamespace\n` +
+    `  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';\n` +
+    `  END LOOP;\n` +
+    `END $$;\n`
+  );
+}
+
 /** Convert [schema].[name] bracket identifiers to schema."name" double-quote format.
  *  Also converts T-SQL temp table #name references to PostgreSQL equivalents.
  *  Skips content inside SQL string literals and comments. */
@@ -601,8 +633,26 @@ export function convertTopToLimit(sql: string): string {
 /**
  * Convert common T-SQL CAST patterns to PostgreSQL types.
  * Used in views, procedures, and expressions.
+ *
+ * Note on quoted type names: when input T-SQL uses bracket-wrapped types
+ * like `CAST(x AS [INT])`, the upstream `convertIdentifiers` pass turns
+ * `[INT]` into `"INT"`. PG then parses `"INT"` as a quoted identifier
+ * (column reference), not a type, and rejects with `type "INT" does not
+ * exist`. We strip quotes from known T-SQL type names first so the
+ * existing patterns below match.
  */
 export function convertCastTypes(sql: string): string {
+  // Strip quotes from quoted T-SQL type tokens produced by convertIdentifiers
+  // when the source SQL had bracket-wrapped types (e.g. CAST(x AS [INT])).
+  const quotedTypes = [
+    'UNIQUEIDENTIFIER', 'NVARCHAR', 'VARCHAR', 'BIT',
+    'DATETIMEOFFSET', 'DATETIME2', 'DATETIME', 'FLOAT',
+    'TINYINT', 'IMAGE', 'MONEY', 'INT', 'INTEGER',
+  ];
+  for (const t of quotedTypes) {
+    sql = sql.replace(new RegExp(`\\bAS\\s+"${t}"`, 'gi'), `AS ${t}`);
+  }
+
   sql = sql.replace(/\bAS\s+UNIQUEIDENTIFIER\b/gi, 'AS UUID');
   sql = sql.replace(/\bAS\s+NVARCHAR\s*\(\s*MAX\s*\)/gi, 'AS TEXT');
   sql = sql.replace(/\bAS\s+NVARCHAR\s*\(\s*(\d+)\s*\)/gi, 'AS VARCHAR($1)');

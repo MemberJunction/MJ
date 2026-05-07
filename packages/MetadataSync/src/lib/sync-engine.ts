@@ -13,6 +13,8 @@ import fs from 'fs-extra';
 import crypto from 'crypto';
 import axios from 'axios';
 import { EntityInfo, Metadata, RunView, BaseEntity, CompositeKey, UserInfo } from '@memberjunction/core';
+import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
+import { GetDialect, IsDateSQLType, IsUuidSQLType } from '@memberjunction/sql-dialect';
 import { EntityConfig, FolderConfig } from '../config';
 import { JsonPreprocessor } from './json-preprocessor';
 import { BatchContextIndex, BatchContextStub } from './batch-context-index';
@@ -570,7 +572,39 @@ export class SyncEngine {
         filterParts.push(`${fieldName} IS NULL`);
       } else {
         const quotes = field.NeedsQuotes ? "'" : '';
-        filterParts.push(`${fieldName} = ${quotes}${fieldValue.replace(/'/g, "''")}${quotes}`);
+        // String comparisons must be case-insensitive on both backends so
+        // metadata authored against SQL Server (case-insensitive default
+        // collation) works unchanged on PostgreSQL (case-sensitive).
+        // Without LOWER() wrapping, lookups like
+        //   `@lookup:MJ: Action Categories.Name=Hootsuite&Parent=Social Media`
+        // fail on PG when the canonical row uses different casing
+        // (e.g. `HootSuite`), turning every PG sync push into a forced
+        // metadata-file edit. Numbers, dates, booleans, and uuids skip the
+        // wrapper since (a) they don't have casing semantics and (b) PG
+        // refuses LOWER(uuid).
+        //
+        // `field.NeedsQuotes` only filters out Number and Boolean — UUIDs
+        // (Type='uniqueidentifier' on SQL Server, 'uuid' on PG) and Date
+        // columns are reported as quoted but cannot be wrapped in LOWER()
+        // on PG (`function lower(uuid) does not exist`). One failure inside
+        // the sync push transaction aborts the whole PG transaction and
+        // every subsequent statement fails with `current transaction is
+        // aborted` — the regression that wedged compound `@lookup:` filters
+        // on entities like `MJ: Entity Fields` (EntityID + Name).
+        //
+        // Type-class checks AND the lowercase wrapper come from
+        // @memberjunction/sql-dialect so the list of "what is a date/uuid type"
+        // and the SQL form of LOWER() both live in one place across MJ.
+        const isStringType = field.NeedsQuotes
+          && !IsUuidSQLType(field.Type)
+          && !IsDateSQLType(field.Type);
+        if (isStringType) {
+          const dialect = GetDialect(resolveDbPlatformFromEnv() ?? 'sqlserver');
+          const escaped = fieldValue.replace(/'/g, "''");
+          filterParts.push(`${dialect.LowerCase(fieldName)} = ${dialect.LowerCase(`'${escaped}'`)}`);
+        } else {
+          filterParts.push(`${fieldName} = ${quotes}${fieldValue.replace(/'/g, "''")}${quotes}`);
+        }
       }
     }
     
@@ -578,8 +612,18 @@ export class SyncEngine {
     const result = await rv.RunView({
       EntityName: entityName,
       ExtraFilter: extraFilter,
-      MaxRows: 1
-    }, this.contextUser);
+      MaxRows: 1,
+      // BypassCache: lookups during a push must always go to the DB.
+      // The provider's RunView cache can return stale or filtered results
+      // (especially across the LOWER()-based case-insensitive lookups
+      // introduced for PG parity), and a stale empty result here
+      // surfaces as `Lookup failed: No record found in 'X' where Name='Y'`
+      // even when the row plainly exists. Lookups are point queries, so
+      // we sacrifice the cache hit for correctness.
+      ResultType: 'simple',
+      Fields: entityInfo.PrimaryKeys.map(pk => pk.Name),
+      BypassCache: true
+    } as any, this.contextUser);
     
     if (result.Success && result.Results.length > 0) {
       if (entityInfo.PrimaryKeys.length > 0) {

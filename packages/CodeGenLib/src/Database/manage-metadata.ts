@@ -1,7 +1,7 @@
 import { SQLDialect } from '@memberjunction/sql-dialect';
 import { CodeGenConnection, CodeGenTransaction, CodeGenQueryResult, CodeGenDatabaseProvider } from './codeGenDatabaseProvider';
 import { SQLServerCodeGenProvider } from './providers/sqlserver/SQLServerCodeGenProvider';
-import { configInfo, currentWorkingDirectory, dbType, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
+import { configInfo, currentWorkingDirectory, dbPlatform, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
 import { ApplicationInfo, CodeNameFromString, EntityFieldExtendedType, EntityFieldInfo, EntityInfo, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
 import { MJApplicationEntity, MJEntityFieldSchema } from "@memberjunction/core-entities";
 import { logError, logMessage, logStatus, startSpinner, updateSpinner, succeedSpinner } from "../Misc/status_logging";
@@ -240,17 +240,17 @@ export class ManageMetadataBase {
 
    // ─── Database Provider Infrastructure ─────────────────────────────
    // All platform-specific SQL generation is delegated to the CodeGenDatabaseProvider.
-   // The provider is lazily initialized from the dbType() config on first access.
+   // The provider is lazily initialized from the dbPlatform() config on first access.
 
    private _dbProvider: CodeGenDatabaseProvider | null = null;
 
    /**
     * Returns the CodeGenDatabaseProvider for the current database platform.
-    * Lazily initialized from dbType() configuration.
+    * Lazily initialized from dbPlatform() configuration.
     */
    protected get dbProvider(): CodeGenDatabaseProvider {
       if (!this._dbProvider) {
-         const platform = dbType();
+         const platform = dbPlatform();
          if (platform === 'postgresql') {
             const pgProvider = MJGlobal.Instance.ClassFactory.CreateInstance<CodeGenDatabaseProvider>(
                CodeGenDatabaseProvider,
@@ -4772,6 +4772,8 @@ export class ManageMetadataBase {
             if (fieldAnalysis) {
                await this.applySmartFieldIdentification(pool, {
                   ID: entity.ID,
+                  Name: entity.Name,
+                  SchemaName: entityRecord.SchemaName as string | undefined,
                   AllowUserSearchAPI: entityRecord.AllowUserSearchAPI as boolean | undefined,
                   AutoUpdateAllowUserSearchAPI: entityRecord.AutoUpdateAllowUserSearchAPI as boolean | undefined,
                   FullTextSearchEnabled: entityRecord.FullTextSearchEnabled as boolean | undefined,
@@ -4887,7 +4889,7 @@ export class ManageMetadataBase {
     */
    protected async applySmartFieldIdentification(
       pool: CodeGenConnection,
-      entity: { ID: string; AllowUserSearchAPI?: boolean; AutoUpdateAllowUserSearchAPI?: boolean; FullTextSearchEnabled?: boolean; AutoUpdateFullTextSearch?: boolean },
+      entity: { ID: string; Name?: string; SchemaName?: string; AllowUserSearchAPI?: boolean; AutoUpdateAllowUserSearchAPI?: boolean; FullTextSearchEnabled?: boolean; AutoUpdateFullTextSearch?: boolean },
       fields: Array<Record<string, unknown>>,
       result: SmartFieldIdentificationResult
    ): Promise<void> {
@@ -4895,7 +4897,7 @@ export class ManageMetadataBase {
 
       this.applyNameFieldUpdates(sqlStatements, fields, result);
       this.applyDefaultInViewUpdates(sqlStatements, fields, result);
-      this.applySearchableFieldUpdates(sqlStatements, fields, result);
+      this.applySearchableFieldUpdates(sqlStatements, fields, result, entity);
       this.applySearchPredicateUpdates(sqlStatements, fields, result);
       this.applyEntitySearchConfig(sqlStatements, entity, result);
       if (configInfo.advancedGeneration?.allowFullTextSearchAutoUpdate) {
@@ -4971,12 +4973,21 @@ export class ManageMetadataBase {
    }
 
    /**
-    * Generate SQL UPDATEs for IncludeInUserSearchAPI on the identified searchable fields
+    * Generate SQL UPDATEs for IncludeInUserSearchAPI on the identified searchable fields.
+    *
+    * Guardrails: even if the SmartFieldIdentificationResult flags a field as searchable,
+    * we refuse to enable IncludeInUserSearchAPI when the field is a primary key, a
+    * non-text type (LIKE forces an implicit per-row CONVERT and never seeks an index),
+    * or an unbounded text type whose parent entity is not FTX-enabled (the LIKE path
+    * cannot seek MAX/ntext/text columns; FTX is the right tool there). These are
+    * always-wrong cases — they cause the data provider to emit unindexed scans on
+    * every search.
     */
    protected applySearchableFieldUpdates(
       sqlStatements: string[],
       fields: Array<Record<string, unknown>>,
-      result: SmartFieldIdentificationResult
+      result: SmartFieldIdentificationResult,
+      entity?: { FullTextSearchEnabled?: boolean }
    ): void {
       if (!result.searchableFields || result.searchableFields.length === 0) {
          return;
@@ -4993,7 +5004,13 @@ export class ManageMetadataBase {
          logError(`Smart field identification returned invalid searchableFields: ${missingSearchableFields.join(', ')} not found in entity`);
       }
 
+      const ftxEnabled = !!entity?.FullTextSearchEnabled;
       for (const field of searchableFields) {
+         if (!this.isFieldEligibleForUserSearch(field, ftxEnabled)) {
+            // Silently skip — the LLM proposed a field we cannot honor without
+            // creating an unindexed scan. This is a guardrail, not a bug.
+            continue;
+         }
          if (!field.IncludeInUserSearchAPI) {
             sqlStatements.push(`
                UPDATE ${this.qs(mj_core_schema(), 'EntityField')}
@@ -5003,6 +5020,26 @@ export class ManageMetadataBase {
             `);
          }
       }
+   }
+
+   /**
+    * Returns true if the field is a sensible target for LIKE-based user search.
+    * Mirrors the runtime guard in GenericDatabaseProvider.isTextSearchableType /
+    * the Phase 1 hygiene migration so CodeGen stops re-introducing invalid flags.
+    */
+   protected isFieldEligibleForUserSearch(
+      field: Record<string, unknown>,
+      ftxEnabled: boolean
+   ): boolean {
+      if (field.IsPrimaryKey === true) return false;
+      const type = (field.Type as string | undefined ?? '').toLowerCase();
+      // Non-text types are never appropriate for substring search.
+      const textTypes = new Set(['nvarchar', 'varchar', 'char', 'nchar']);
+      if (!textTypes.has(type)) return false;
+      // Unbounded text on a non-FTX entity cannot be index-seeked.
+      const length = field.Length as number | undefined;
+      if (length === -1 && !ftxEnabled) return false;
+      return true;
    }
 
    /**
@@ -5039,11 +5076,18 @@ export class ManageMetadataBase {
    }
 
    /**
-    * Generate SQL UPDATEs for entity-level AllowUserSearchAPI
+    * Generate SQL UPDATEs for entity-level AllowUserSearchAPI.
+    *
+    * Guardrail: even if the LLM proposes enabling AllowUserSearchAPI on an entity
+    * that looks like an audit/log/run-history table by name, refuse — those tables
+    * grow unboundedly, the LIKE fan-out across them dominates global-search latency,
+    * and they're virtually never the right target for a user-facing search box.
+    * The team can still enable search on such an entity by setting
+    * AutoUpdateAllowUserSearchAPI=0 and flipping the flag manually.
     */
    protected applyEntitySearchConfig(
       sqlStatements: string[],
-      entity: { ID: string; AllowUserSearchAPI?: boolean; AutoUpdateAllowUserSearchAPI?: boolean },
+      entity: { ID: string; Name?: string; SchemaName?: string; AllowUserSearchAPI?: boolean; AutoUpdateAllowUserSearchAPI?: boolean },
       result: SmartFieldIdentificationResult
    ): void {
       if (result.allowUserSearch == null || !entity.AutoUpdateAllowUserSearchAPI) {
@@ -5051,6 +5095,11 @@ export class ManageMetadataBase {
       }
       const newValue = result.allowUserSearch;
       const currentValue = !!entity.AllowUserSearchAPI;
+      // If the LLM is proposing to ENABLE search on a log/audit/run-history-style
+      // entity, drop the proposal. We never block a proposal to DISABLE search.
+      if (newValue && !currentValue && this.isLikelyLogOrAuditEntity(entity.Name, entity.SchemaName)) {
+         return;
+      }
       if (newValue !== currentValue) {
          sqlStatements.push(`
             UPDATE ${this.qs(mj_core_schema(), 'Entity')}
@@ -5059,6 +5108,25 @@ export class ManageMetadataBase {
             AND AutoUpdateAllowUserSearchAPI = ${this.boolLit(true)}
          `);
       }
+   }
+
+   /**
+    * Heuristic: does the entity name match the shape of an audit / log /
+    * run-history / change-tracking table? These are the entities that drive
+    * the most LIKE-scan time and almost never belong in global search.
+    */
+   protected isLikelyLogOrAuditEntity(name: string | undefined, _schemaName: string | undefined): boolean {
+      if (!name) return false;
+      const n = name.trim();
+      // Common patterns: ends in "Logs"/"Log", ends in "Runs"/"Run History",
+      // contains "Audit", or matches MJ's "Record Changes" naming.
+      if (/\bLogs?$/i.test(n)) return true;
+      if (/\bAudit\b/i.test(n)) return true;
+      if (/\bRecord Changes?$/i.test(n)) return true;
+      if (/\bRuns?$/i.test(n) && !/Test Runs?$/i.test(n)) return true;
+      if (/\bRun (History|Steps|Messages)$/i.test(n)) return true;
+      if (/\bExecution Logs?$/i.test(n)) return true;
+      return false;
    }
 
    /**

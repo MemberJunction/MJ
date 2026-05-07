@@ -231,7 +231,7 @@ describe.skipIf(!hasPGMigrations)('v5 migration regression — committed PG file
 
 describe.skipIf(!hasMigrations || !hasPGMigrations)('v5 migration regression — parity', () => {
   /**
-   * Intentionally-removed pre-baseline files. These two T-SQL migrations exist
+   * Intentionally-removed pre-baseline files. These T-SQL migrations exist
    * upstream for SQL Server but have no PG counterpart by design — they were
    * pre-baseline upgrades that the v5.0 PG baseline already incorporates, so
    * shipping a PG version would re-apply the same DDL on top of the baseline.
