@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnChanges, SimpleChanges, ChangeDetectorRef, NgZone } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { EntityInfo, EntityRelationshipInfo, EntityOrganicKeyInfo, EntityOrganicKeyRelatedEntityInfo, RunView, Metadata, RunViewParams, EntityFieldValueListType, EntityFieldInfo, CompositeKey } from '@memberjunction/core';
 import { buildCompositeKey, buildPkString } from '../utils/record.util';
 
@@ -92,7 +93,7 @@ export interface OpenForeignKeyRecordEvent {
   templateUrl: './entity-record-detail-panel.component.html',
   styleUrls: ['./entity-record-detail-panel.component.css']
 })
-export class EntityRecordDetailPanelComponent implements OnChanges {
+export class EntityRecordDetailPanelComponent extends BaseAngularComponent implements OnChanges  {
   @Input() entity: EntityInfo | null = null;
   @Input() record: Record<string, unknown> | null = null;
 
@@ -110,14 +111,15 @@ export class EntityRecordDetailPanelComponent implements OnChanges {
   public organicKeyMatches: OrganicKeyMatchData[] = [];
   public isLoadingOrganicKeys = false;
 
-  private metadata = new Metadata();
+  private metadata = this.ProviderToUse;
 
   // Sections expanded state
   public detailsSectionExpanded = true;
   public relationshipsSectionExpanded = true;
   public organicKeysSectionExpanded = true;
 
-  constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {}
+  constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {
+  super();}
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['record'] && this.record && this.entity) {
@@ -161,7 +163,7 @@ export class EntityRecordDetailPanelComponent implements OnChanges {
     }));
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const results = await rv.RunViews(viewParams);
 
       // Map results back to relationship data
@@ -243,7 +245,7 @@ export class EntityRecordDetailPanelComponent implements OnChanges {
     });
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const results = await rv.RunViews(viewParams);
 
       this.organicKeyMatches = allPairs.map((pair, index) => {
@@ -319,7 +321,7 @@ export class EntityRecordDetailPanelComponent implements OnChanges {
         match.organicKey,
       );
 
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const relatedEntityInfo = this.metadata.Entities.find(e => e.Name === match.relatedEntity.RelatedEntity);
       const fields = relatedEntityInfo
         ? [...relatedEntityInfo.PrimaryKeys.map(pk => pk.Name),
@@ -685,7 +687,7 @@ export class EntityRecordDetailPanelComponent implements OnChanges {
     this.cdr.detectChanges();
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       // Look up related entity info to compute fields
       const relatedEntityInfo = this.metadata.Entities.find(e => e.Name === relEntity.relationship.RelatedEntity);
       const fields = relatedEntityInfo

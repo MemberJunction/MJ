@@ -5,6 +5,7 @@ import { RunView } from '@memberjunction/core';
 import { MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface PromptSelectorConfig {
   /** Title for the dialog */
   title: string;
@@ -39,7 +40,7 @@ export interface PromptSelectorResult {
   templateUrl: './prompt-selector-dialog.component.html',
   styleUrls: ['./prompt-selector-dialog.component.css']
 })
-export class PromptSelectorDialogComponent implements OnInit, OnDestroy {
+export class PromptSelectorDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   
   // Input configuration
   config: PromptSelectorConfig = { title: 'Select Prompts' };
@@ -65,7 +66,8 @@ export class PromptSelectorDialogComponent implements OnInit, OnDestroy {
 
   constructor(
     private cdr: ChangeDetectorRef
-  ) {}
+  ) {
+    super();}
 
   ngOnInit() {
     this.setupSearch();
@@ -103,7 +105,7 @@ export class PromptSelectorDialogComponent implements OnInit, OnDestroy {
     this.isLoading$.next(true);
     
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       
       // Build filter - default to active prompts
       let filter = "Status = 'Active'";

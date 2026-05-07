@@ -1,4 +1,5 @@
 import { Component, Input, OnInit, ChangeDetectorRef } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { MJConversationDetailRatingEntity, RatingJSON } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
@@ -135,7 +136,7 @@ import { UUIDsEqual } from '@memberjunction/global';
         }
     `]
 })
-export class ConversationMessageRatingComponent implements OnInit {
+export class ConversationMessageRatingComponent extends BaseAngularComponent implements OnInit  {
     @Input() conversationDetailId!: string;
     @Input() currentUser!: UserInfo;
     @Input() ratingsData?: RatingJSON[];
@@ -153,7 +154,8 @@ export class ConversationMessageRatingComponent implements OnInit {
         return this.currentUser?.ID || '';
     }
 
-    constructor(private cdr: ChangeDetectorRef) {}
+    constructor(private cdr: ChangeDetectorRef) {
+    super();}
 
     async ngOnInit() {
         if (this.ratingsData) {
@@ -203,7 +205,7 @@ export class ConversationMessageRatingComponent implements OnInit {
 
     private async loadRatings(): Promise<void> {
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<MJConversationDetailRatingEntity>({
                 EntityName: 'MJ: Conversation Detail Ratings',
                 ExtraFilter: `ConversationDetailID='${this.conversationDetailId}'`,
@@ -270,7 +272,7 @@ export class ConversationMessageRatingComponent implements OnInit {
     private async persistRating(rating: number, prevRatingId: string | null): Promise<void> {
         if (prevRatingId) {
             // Update existing rating (switch thumbs up ↔ down)
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const entity = await md.GetEntityObject<MJConversationDetailRatingEntity>('MJ: Conversation Detail Ratings');
             const loaded = await entity.Load(prevRatingId);
             if (loaded) {
@@ -279,7 +281,7 @@ export class ConversationMessageRatingComponent implements OnInit {
             }
         } else {
             // Create new rating
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const entity = await md.GetEntityObject<MJConversationDetailRatingEntity>('MJ: Conversation Detail Ratings');
             entity.ConversationDetailID = this.conversationDetailId;
             entity.UserID = this.currentUserId;

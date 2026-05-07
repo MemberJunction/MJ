@@ -94,6 +94,29 @@ export class BaseEnginePropertyConfig extends BaseInfo {
      */
     CacheLocalTTL?: number;
 
+    /**
+     * Controls whether loaded rows are returned as full BaseEntity subclass instances
+     * ('entity_object') or plain JavaScript objects ('simple').
+     *
+     * - 'entity_object': Full BaseEntity subclass instances with ORM capabilities
+     *   (.Save(), .Delete(), validation, dirty-tracking). Required for engines whose
+     *   data participates in immediate-mutation cache updates on entity save/delete events.
+     * - 'simple': Skips BaseEntity construction and class-factory lookup. Rows are plain
+     *   objects with typed field values. Much faster for read-only configuration data
+     *   that engines never mutate. NOTE: configs using 'simple' should be considered
+     *   read-only — the immediate-mutation path operates on BaseEntity arrays and is
+     *   not type-compatible with plain-object arrays.
+     *
+     * Resolution order when this property is left undefined:
+     *   1. The engine subclass's EngineDefaultResultType getter (override per engine)
+     *   2. The base getter, which returns 'entity_object'
+     *
+     * In other words, the effective default is 'entity_object' — leaving this undefined
+     * preserves the historical behavior. Do NOT initialize this field to a literal value
+     * here; it must remain undefined so the engine-level default can take effect.
+     */
+    ResultType?: 'simple' | 'entity_object';
+
     constructor(init?: Partial<BaseEnginePropertyConfig>) {
         super();
         // now copy the values from init to this object
@@ -264,6 +287,21 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**
+     * Controls the default RunView ResultType for all entity configs loaded by this engine.
+     * Override in subclasses to change the default for the entire engine without modifying
+     * each individual config entry.
+     *
+     * - 'entity_object': Full BaseEntity subclass instances (slower, required for .Save()/.Delete())
+     * - 'simple': Plain JavaScript objects (much faster, suitable for read-only engines)
+     *
+     * Individual configs can still override this via their own ResultType property.
+     * @default 'entity_object'
+     */
+    protected get EngineDefaultResultType(): 'simple' | 'entity_object' {
+        return 'entity_object';
+    }
+
+    /**
      * All BaseEngine sub-classes get an implementation of IStartupSink so they can be set the auto start in their
      * app container, if desired, simply by adding the @see @RegisterForStartup decorator. The BaseEngine implementation
      * of IStartupSink.HandleStartup is to simply call @see Config
@@ -276,7 +314,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * Returns the metadata provider to use for the engine. If a provider is set via the Config method, that provider will be used, otherwise the default provider will be used.
      */
     public get ProviderToUse(): IMetadataProvider {
-        return this._provider || Metadata.Provider;
+        return this._provider || Metadata.Provider; // global-provider-ok: explicit fallback in BaseEngine accessor
     }
 
     /**
@@ -328,6 +366,32 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             options.contextUser,
             options.provider
         );
+    }
+
+    /**
+     * Ensures the engine is loaded before the caller reads engine state. This is
+     * the right call to make at every consumption point — especially for engines
+     * registered with `@RegisterForStartup({ deferred: true })` whose initial load
+     * runs in the background after app boot.
+     *
+     * Idempotent: if the engine is already loaded, returns immediately. If a load
+     * is in flight (e.g. the deferred startup or another consumer triggered it),
+     * returns the same in-progress promise rather than starting a second load —
+     * BaseEngine.Load handles this internally via `_loadingSubject`.
+     *
+     * Equivalent to `this.Config(false)` but reads more clearly at call sites:
+     *
+     * ```ts
+     * await AIEngineBase.Instance.EnsureLoaded();
+     * const models = AIEngineBase.Instance.Models;
+     * ```
+     *
+     * @param contextUser - Optional context user (server-side only)
+     * @param provider - Optional metadata provider override
+     */
+    public async EnsureLoaded(contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        if (this._loaded) return;
+        await this.Config(false, contextUser, provider);
     }
 
     /**
@@ -627,7 +691,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     ): Promise<boolean> {
         try {
             const recordData = JSON.parse(recordDataJSON);
-            const md = new Metadata();
+            // Use this engine's bound provider (ProviderToUse) instead of `new Metadata()` so
+            // multi-provider client setups instantiate entities against the correct server.
+            const md = this.ProviderToUse;
             // Find the proper entity name with original casing from the config
             const originalEntityName = matchingConfigs[0].EntityName!;
             const entity = await md.GetEntityObject(originalEntityName, this._contextUser);
@@ -879,7 +945,9 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * Immediate mutations are only safe when:
      * 1. The config has no Filter (no server-side filtering that might exclude the entity)
      * 2. The config has no OrderBy (no server-side ordering that would need to be maintained)
-     * 3. The subclass has not overridden AdditionalLoading (no post-processing that depends on full data)
+     * 3. The config does not use ResultType='simple' (immediate-mutation pushes BaseEntity
+     *    instances; arrays loaded as plain objects would become type-mixed)
+     * 4. The subclass has not overridden AdditionalLoading (no post-processing that depends on full data)
      *
      * @param config - The configuration to check
      * @param skipAdditionalLoadingCheck - When true, skips the AdditionalLoading override check.
@@ -899,6 +967,17 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         // - For creates: we'd need to insert at the correct position
         // - For updates: the entity might need to move to a different position
         if (config.OrderBy) {
+            return false;
+        }
+
+        // applyImmediateMutation pushes/replaces with the BaseEntity instance from the
+        // event payload. If the config loaded as 'simple', the property holds plain JS
+        // objects — mixing in a BaseEntity would create a heterogeneous array. Check the
+        // effective ResultType (config override OR engine-wide default) and force a full
+        // refresh in the simple case so the array stays homogeneous and respects the
+        // configured ResultType.
+        const effectiveResultType = config.ResultType || this.EngineDefaultResultType;
+        if (effectiveResultType === 'simple') {
             return false;
         }
 
@@ -1058,8 +1137,16 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             return;
         }
 
-        // Get the updated timestamp from the entity
-        const updatedAt = entity.Get('__mj_UpdatedAt') as string | null || new Date().toISOString();
+        // Get the updated timestamp from the entity and normalize to an ISO string.
+        // entity.Get returns Date|string|number|null depending on field hydration and the
+        // storage round-trip. The downstream cache and smart-cache-check protocol require
+        // an ISO string — without this normalization, a Date or numeric ms can leak into
+        // the GraphQL request as `cacheStatus.maxUpdatedAt` and crash the server's
+        // `new Date(...).toISOString()` with `RangeError: Invalid time value`.
+        const rawUpdatedAt = entity.Get('__mj_UpdatedAt') as Date | string | number | null;
+        const updatedAt = rawUpdatedAt
+            ? new Date(rawUpdatedAt).toISOString()
+            : new Date().toISOString();
 
         if (event.type === 'delete') {
             await LocalCacheManager.Instance.RemoveSingleEntity(
@@ -1162,7 +1249,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
         const rv = new RunView(p);
         const result = await rv.RunView({
             EntityName: config.EntityName,
-            ResultType: 'entity_object',
+            ResultType: config.ResultType || this.EngineDefaultResultType,
             ExtraFilter: config.Filter,
             OrderBy: config.OrderBy,
             IgnoreMaxRows: true, // Engines always need ALL data — bypass entity-level UserViewMaxRows caps
@@ -1208,7 +1295,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             const viewConfigs = configs.map(c => {
                 return <RunViewParams>{
                     EntityName: c.EntityName,
-                    ResultType: 'entity_object',
+                    ResultType: c.ResultType || this.EngineDefaultResultType,
                     ExtraFilter: c.Filter,
                     OrderBy: c.OrderBy,
                     IgnoreMaxRows: true, // Engines always need ALL data — bypass entity-level UserViewMaxRows caps
@@ -1245,7 +1332,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      */
     protected async LoadSingleDatasetConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo): Promise<void> {
         const p = this.ProviderToUse;
-        const result: DatasetResultType = await p.GetAndCacheDatasetByName(config.DatasetName, config.DatasetItemFilters)
+        const result: DatasetResultType = await p.GetAndCacheDatasetByName(config.DatasetName, config.DatasetItemFilters);
         if (!result) {
             LogError(`LoadSingleDatasetConfig: GetAndCacheDatasetByName("${config.DatasetName}") returned undefined/null — provider: ${p?.constructor?.name}`);
             return;
@@ -1255,7 +1342,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 if (config.DatasetResultHandling === 'single_property') {
                     const singleObject = {};
                     for (const item of result.Results) {
-                        //convert the results to entity objects before 
+                        //convert the results to entity objects before
                         //adding them to the singleObject
                         const entities: BaseEntity[] = [];
                         for(const entityData of item.Results) {

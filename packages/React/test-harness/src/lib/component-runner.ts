@@ -2012,7 +2012,7 @@ export class ComponentRunner {
     console.log("   Building local MJ utilities");
     const rv = new RunView();
     const rq = new RunQuery();
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: test/demo harness, single-provider context
     return {
       rv: {
         RunView: rv.RunView,
@@ -2491,7 +2491,7 @@ export class ComponentRunner {
         // Created global Metadata mock with Provider (late)
       } else {
         // Update the existing one to ensure it has the latest mock data
-        (window as any).Metadata.Provider = mockMd;
+        (window as any).Metadata.Provider = mockMd; // global-provider-ok: test/demo harness, single-provider context
         // Updated existing Metadata.Provider with mock data
       }
     });

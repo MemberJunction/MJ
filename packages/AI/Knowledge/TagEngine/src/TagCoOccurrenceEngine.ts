@@ -1,5 +1,5 @@
 import { BaseSingleton, NormalizeUUID } from '@memberjunction/global';
-import { UserInfo, Metadata, RunView, LogError, LogStatus } from '@memberjunction/core';
+import { UserInfo, Metadata, RunView, LogError, LogStatus, IMetadataProvider } from '@memberjunction/core';
 import { MJTagCoOccurrenceEntity, MJTagEntity } from '@memberjunction/core-entities';
 
 /**
@@ -105,6 +105,20 @@ export class TagCoOccurrenceEngine extends BaseSingleton<TagCoOccurrenceEngine> 
 
     public static get Instance(): TagCoOccurrenceEngine {
         return TagCoOccurrenceEngine.getInstance<TagCoOccurrenceEngine>();
+    }
+
+    private _provider: IMetadataProvider | null = null;
+
+    /**
+     * Optional metadata provider override. Callers should set
+     * `instance.Provider = providerToUse` before invoking engine methods
+     * in multi-provider contexts. Falls back to the global default provider when unset.
+     */
+    public get Provider(): IMetadataProvider {
+        return this._provider ?? (new Metadata() as unknown as IMetadataProvider);
+    }
+    public set Provider(value: IMetadataProvider | null) {
+        this._provider = value;
     }
 
     // ========================================================================
@@ -416,7 +430,7 @@ export class TagCoOccurrenceEngine extends BaseSingleton<TagCoOccurrenceEngine> 
      * Update an existing co-occurrence record with a new count.
      */
     private async updateExistingPair(recordID: string, count: number, contextUser: UserInfo): Promise<boolean> {
-        const md = new Metadata();
+        const md = this.Provider;
         const entity = await md.GetEntityObject<MJTagCoOccurrenceEntity>('MJ: Tag Co Occurrences', contextUser);
         const loaded = await entity.Load(recordID);
         if (!loaded) {
@@ -440,7 +454,7 @@ export class TagCoOccurrenceEngine extends BaseSingleton<TagCoOccurrenceEngine> 
     private async createNewPair(pairKey: string, count: number, contextUser: UserInfo): Promise<boolean> {
         const [tagAID, tagBID] = pairKey.split('|');
 
-        const md = new Metadata();
+        const md = this.Provider;
         const entity = await md.GetEntityObject<MJTagCoOccurrenceEntity>('MJ: Tag Co Occurrences', contextUser);
         entity.NewRecord();
         entity.TagAID = tagAID;
@@ -460,7 +474,7 @@ export class TagCoOccurrenceEngine extends BaseSingleton<TagCoOccurrenceEngine> 
      * Delete a co-occurrence record that no longer has any co-occurring items.
      */
     private async deleteStalePair(recordID: string, contextUser: UserInfo): Promise<boolean> {
-        const md = new Metadata();
+        const md = this.Provider;
         const entity = await md.GetEntityObject<MJTagCoOccurrenceEntity>('MJ: Tag Co Occurrences', contextUser);
         const loaded = await entity.Load(recordID);
         if (!loaded) {

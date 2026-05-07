@@ -1,5 +1,164 @@
 # Change Log - @memberjunction/core-actions
 
+## 5.32.0
+
+### Patch Changes
+
+- a7e8b3b: fix(geo): prevent OOM crash loops in ScheduledGeocodingAction by paginating RunView calls (500 records/page), replacing N+1 per-record SQL queries with a bulk Map lookup, adding a safety MaxTotal default of 50,000, and fixing a race condition in CreateGeoCodeRow on concurrent batch inserts
+- Updated dependencies [a7e8b3b]
+- Updated dependencies [b9c67ac]
+  - @memberjunction/core@5.32.0
+  - @memberjunction/geo-core@5.32.0
+  - @memberjunction/ai-agent-manager@5.32.0
+  - @memberjunction/ai-agents@5.32.0
+  - @memberjunction/ai-engine-base@5.32.0
+  - @memberjunction/ai-core-plus@5.32.0
+  - @memberjunction/aiengine@5.32.0
+  - @memberjunction/ai-mcp-client@5.32.0
+  - @memberjunction/ai-prompts@5.32.0
+  - @memberjunction/ai-vector-sync@5.32.0
+  - @memberjunction/actions-base@5.32.0
+  - @memberjunction/code-execution@5.32.0
+  - @memberjunction/actions@5.32.0
+  - @memberjunction/communication-types@5.32.0
+  - @memberjunction/communication-engine@5.32.0
+  - @memberjunction/content-autotagging@5.32.0
+  - @memberjunction/external-change-detection@5.32.0
+  - @memberjunction/generic-database-provider@5.32.0
+  - @memberjunction/integration-engine@5.32.0
+  - @memberjunction/core-entities@5.32.0
+  - @memberjunction/core-entities-server@5.32.0
+  - @memberjunction/storage@5.32.0
+  - @memberjunction/sqlserver-dataprovider@5.32.0
+  - @memberjunction/search-engine@5.32.0
+  - @memberjunction/ai@5.32.0
+  - @memberjunction/ai-betty-bot@5.32.0
+  - @memberjunction/export-engine@5.32.0
+  - @memberjunction/global@5.32.0
+
+## 5.31.0
+
+### Patch Changes
+
+- 7ed7a4b: no metadata/migration changes
+- Updated dependencies [fc8b9b8]
+- Updated dependencies [cde4d2c]
+- Updated dependencies [7ed7a4b]
+- Updated dependencies [84494bb]
+- Updated dependencies [60e7541]
+- Updated dependencies [18be074]
+- Updated dependencies [17b8087]
+- Updated dependencies [6779c1e]
+- Updated dependencies [de34786]
+- Updated dependencies [5db36d9]
+  - @memberjunction/core-entities@5.31.0
+  - @memberjunction/core-entities-server@5.31.0
+  - @memberjunction/content-autotagging@5.31.0
+  - @memberjunction/ai-agent-manager@5.31.0
+  - @memberjunction/ai-agents@5.31.0
+  - @memberjunction/ai-engine-base@5.31.0
+  - @memberjunction/ai@5.31.0
+  - @memberjunction/ai-core-plus@5.31.0
+  - @memberjunction/aiengine@5.31.0
+  - @memberjunction/ai-mcp-client@5.31.0
+  - @memberjunction/ai-prompts@5.31.0
+  - @memberjunction/ai-betty-bot@5.31.0
+  - @memberjunction/ai-vector-sync@5.31.0
+  - @memberjunction/actions-base@5.31.0
+  - @memberjunction/code-execution@5.31.0
+  - @memberjunction/actions@5.31.0
+  - @memberjunction/communication-types@5.31.0
+  - @memberjunction/communication-engine@5.31.0
+  - @memberjunction/external-change-detection@5.31.0
+  - @memberjunction/generic-database-provider@5.31.0
+  - @memberjunction/integration-engine@5.31.0
+  - @memberjunction/core@5.31.0
+  - @memberjunction/export-engine@5.31.0
+  - @memberjunction/global@5.31.0
+  - @memberjunction/storage@5.31.0
+  - @memberjunction/sqlserver-dataprovider@5.31.0
+  - @memberjunction/search-engine@5.31.0
+  - @memberjunction/geo-core@5.31.0
+
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ai-agent-manager@5.30.1
+- @memberjunction/ai-agents@5.30.1
+- @memberjunction/ai-engine-base@5.30.1
+- @memberjunction/ai@5.30.1
+- @memberjunction/ai-core-plus@5.30.1
+- @memberjunction/aiengine@5.30.1
+- @memberjunction/ai-mcp-client@5.30.1
+- @memberjunction/ai-prompts@5.30.1
+- @memberjunction/ai-betty-bot@5.30.1
+- @memberjunction/ai-vector-sync@5.30.1
+- @memberjunction/actions-base@5.30.1
+- @memberjunction/code-execution@5.30.1
+- @memberjunction/actions@5.30.1
+- @memberjunction/communication-types@5.30.1
+- @memberjunction/communication-engine@5.30.1
+- @memberjunction/content-autotagging@5.30.1
+- @memberjunction/external-change-detection@5.30.1
+- @memberjunction/generic-database-provider@5.30.1
+- @memberjunction/integration-engine@5.30.1
+- @memberjunction/core@5.30.1
+- @memberjunction/core-entities@5.30.1
+- @memberjunction/core-entities-server@5.30.1
+- @memberjunction/export-engine@5.30.1
+- @memberjunction/global@5.30.1
+- @memberjunction/storage@5.30.1
+- @memberjunction/sqlserver-dataprovider@5.30.1
+- @memberjunction/search-engine@5.30.1
+- @memberjunction/geo-core@5.30.1
+
+## 5.30.0
+
+### Minor Changes
+
+- 4729398: Runtime Actions — Phase 1 complete. Introduces `Action.Type='Runtime'`, a new action type where agents dynamically generate, test, and persist JavaScript actions that execute in MJ's isolated-vm sandbox with a permissioned bridge to metadata, views, queries, entity CRUD, other actions, agents, and AI prompts. Ships the v5.29.x migration (new `RuntimeActionConfiguration`, universal `MaxExecutionTimeMS`, and `CreatedByAgentID` columns on `Action`), the JSONType-authored config interface, the Zod validator with drift detection, the bidirectional IPC bridge in WorkerPool, the full `utilities.*` handler surface, the ActionSmith meta-agent with `Create Runtime Action` / `Test Runtime Action` helpers, Agent Manager wiring, the generic `Execute Agent` action, and Runtime-aware approval UI enhancements. Minor bumps across all touched packages because the schema migration + metadata records are coupled surface changes.
+
+### Patch Changes
+
+- 216ddc3: Wrap sequential Save/Delete looops in atomic transcatoins (TransactionGroup client-side BeginTransaction/Commit/Rollback server-side)
+- Updated dependencies [c2c5892]
+- Updated dependencies [68bf87f]
+- Updated dependencies [963f2df]
+- Updated dependencies [4729398]
+- Updated dependencies [9154ac7]
+- Updated dependencies [b1f32a4]
+- Updated dependencies [c199f3b]
+- Updated dependencies [216ddc3]
+  - @memberjunction/ai-agents@5.30.0
+  - @memberjunction/aiengine@5.30.0
+  - @memberjunction/core-entities@5.30.0
+  - @memberjunction/core-entities-server@5.30.0
+  - @memberjunction/core@5.30.0
+  - @memberjunction/actions-base@5.30.0
+  - @memberjunction/actions@5.30.0
+  - @memberjunction/code-execution@5.30.0
+  - @memberjunction/ai-core-plus@5.30.0
+  - @memberjunction/integration-engine@5.30.0
+  - @memberjunction/ai-engine-base@5.30.0
+  - @memberjunction/ai-agent-manager@5.30.0
+  - @memberjunction/ai-prompts@5.30.0
+  - @memberjunction/ai-vector-sync@5.30.0
+  - @memberjunction/content-autotagging@5.30.0
+  - @memberjunction/generic-database-provider@5.30.0
+  - @memberjunction/sqlserver-dataprovider@5.30.0
+  - @memberjunction/search-engine@5.30.0
+  - @memberjunction/ai-mcp-client@5.30.0
+  - @memberjunction/communication-types@5.30.0
+  - @memberjunction/communication-engine@5.30.0
+  - @memberjunction/external-change-detection@5.30.0
+  - @memberjunction/storage@5.30.0
+  - @memberjunction/geo-core@5.30.0
+  - @memberjunction/ai@5.30.0
+  - @memberjunction/ai-betty-bot@5.30.0
+  - @memberjunction/export-engine@5.30.0
+  - @memberjunction/global@5.30.0
+
 ## 5.29.0
 
 ### Patch Changes

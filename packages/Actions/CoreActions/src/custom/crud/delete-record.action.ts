@@ -72,7 +72,7 @@ export class DeleteRecordAction extends BaseRecordMutationAction {
             const primaryKey = primaryKeyResult.value!;
 
             // Get entity object and metadata
-            const entityResult = await this.getEntityObject(entityName, params.ContextUser);
+            const entityResult = await this.getEntityObject(entityName, params.ContextUser, params.Provider);
             if (entityResult.error) return entityResult.error;
             const { entity, entityInfo } = entityResult;
 

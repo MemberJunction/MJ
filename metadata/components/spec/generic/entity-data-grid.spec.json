@@ -226,12 +226,12 @@
     },
     {
       "name": "filterChanged",
-      "description": "Fired when column filters are applied or cleared. Receives the updated filter state.",
+      "description": "Fired when the text search filter value changes. Bubbled from DataGrid's onFilter event, which performs client-side text matching across visible columns.",
       "parameters": [
         {
           "name": "filterState",
-          "type": "{ filters: object, activeFilterCount: number }",
-          "description": "Current filter state including active filters and count"
+          "type": "{ filterValue: string, matchingData: Array<object> }",
+          "description": "The current filter text and the array of records matching the filter"
         }
       ]
     },
@@ -259,12 +259,12 @@
     },
     {
       "name": "sortChanged",
-      "description": "Fired when column sort order changes. Receives the new sort field and direction.",
+      "description": "Fired when column sort order changes. Bubbled from DataGrid's onSort event with a nested sortState object.",
       "parameters": [
         {
-          "name": "sortState",
-          "type": "{ field: string, direction: 'asc' | 'desc' }",
-          "description": "New sort field and direction"
+          "name": "sortEvent",
+          "type": "{ sortState: { column: string, direction: 'asc' | 'desc' } }",
+          "description": "Nested sort state containing the sorted column name and direction"
         }
       ]
     }

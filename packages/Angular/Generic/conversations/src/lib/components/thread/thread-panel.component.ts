@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { DataCacheService } from '../../services/data-cache.service';
@@ -15,7 +16,7 @@ import { takeUntil } from 'rxjs/operators';
   templateUrl: './thread-panel.component.html',
   styleUrls: ['./thread-panel.component.css']
 })
-export class ThreadPanelComponent implements OnInit, OnDestroy {
+export class ThreadPanelComponent extends BaseAngularComponent implements OnInit, OnDestroy  {
   @Input() parentMessageId!: string;
   @Input() conversationId!: string;
   @Input() currentUser!: UserInfo;
@@ -35,9 +36,11 @@ export class ThreadPanelComponent implements OnInit, OnDestroy {
   constructor(
     private dataCache: DataCacheService,
     private cdRef: ChangeDetectorRef
-  ) {}
+  ) {
+  super();}
 
   async ngOnInit() {
+    this.dataCache.Provider = this.ProviderToUse;
     await this.loadThreadData();
   }
 
@@ -81,7 +84,7 @@ export class ThreadPanelComponent implements OnInit, OnDestroy {
    */
   private async loadReplies(): Promise<void> {
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJConversationDetailEntity>(
         {
           EntityName: 'MJ: Conversation Details',

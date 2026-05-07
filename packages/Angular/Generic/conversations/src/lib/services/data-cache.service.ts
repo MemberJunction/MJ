@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { MJConversationEntity, MJConversationDetailEntity } from '@memberjunction/core-entities';
-import { Metadata, UserInfo, BaseEntity } from '@memberjunction/core';
+import { Metadata, UserInfo, BaseEntity, RunView, IMetadataProvider } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 
 /**
@@ -21,7 +21,20 @@ export class DataCacheService {
   private conversations: MJConversationEntity[] = [];
   private conversationDetails: MJConversationDetailEntity[] = [];
 
+  private _provider: IMetadataProvider | null = null;
+
   constructor() {}
+
+  /**
+   * Set the metadata provider this service should use. When unset, falls back to Metadata.Provider.
+   */
+  public set Provider(value: IMetadataProvider | null) {
+      this._provider = value;
+  }
+
+  public get Provider(): IMetadataProvider {
+      return this._provider ?? Metadata.Provider;
+  }
 
   // =============================================================================
   // MJConversationEntity Methods
@@ -41,7 +54,7 @@ export class DataCacheService {
     }
 
     // Not in cache - load from DB
-    const md = new Metadata();
+    const md = this.Provider;
     const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', currentUser);
     const loaded = await conversation.Load(id);
 
@@ -61,7 +74,7 @@ export class DataCacheService {
    * @returns New MJConversationEntity instance (already cached)
    */
   async createConversation(currentUser: UserInfo): Promise<MJConversationEntity> {
-    const md = new Metadata();
+    const md = this.Provider;
     const conversation = await md.GetEntityObject<MJConversationEntity>('MJ: Conversations', currentUser);
 
     // Automatically add to cache - user code doesn't need to do anything
@@ -106,7 +119,7 @@ export class DataCacheService {
     }
 
     // Not in cache - load from DB
-    const md = new Metadata();
+    const md = this.Provider;
     const detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', currentUser);
     const loaded = await detail.Load(id);
 
@@ -126,7 +139,7 @@ export class DataCacheService {
    * @returns New MJConversationDetailEntity instance (already cached)
    */
   async createConversationDetail(currentUser: UserInfo): Promise<MJConversationDetailEntity> {
-    const md = new Metadata();
+    const md = this.Provider;
     const detail = await md.GetEntityObject<MJConversationDetailEntity>('MJ: Conversation Details', currentUser);
 
     // Automatically add to cache - user code doesn't need to do anything
@@ -151,8 +164,7 @@ export class DataCacheService {
     const timestamp = new Date().toISOString();
     console.log(`[${timestamp}] 💾 DataCacheService.loadConversationDetails - Loading messages for conversation ${conversationId}`);
 
-    const md = new Metadata();
-    const rv = new (await import('@memberjunction/core')).RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
 
     console.log(`[${timestamp}] 💾 DataCacheService - Executing RunView for Conversation Details`);
     const result = await rv.RunView<MJConversationDetailEntity>(

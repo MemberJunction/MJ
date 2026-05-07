@@ -53,7 +53,7 @@ export class BufferGetChannelsAction extends BufferBaseAction {
     const { Params } = params;
 
     try {
-      const authError = await this.ensureAuthenticated(Params);
+      const authError = await this.ensureAuthenticated(params);
       if (authError) return authError;
 
       const organizationId = await this.resolveOrganizationId(Params);

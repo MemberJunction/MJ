@@ -13,7 +13,7 @@
  * `syncFeedbackRequestFromConversation()` and never reach this code path.
  */
 
-import { BaseEntity, EntitySaveOptions, LogError, LogStatus, Metadata } from '@memberjunction/core';
+import { BaseEntity, EntitySaveOptions, LogError, LogStatus, Metadata, IMetadataProvider } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { MJAIAgentRequestEntity, MJAIAgentRunEntity } from '@memberjunction/core-entities';
 import { AgentResponseForm, ConversationUtility, MJAIAgentEntityExtended, ExecuteAgentParams } from '@memberjunction/ai-core-plus';
@@ -66,7 +66,7 @@ export class MJAIAgentRequestEntityServer extends MJAIAgentRequestEntity {
         }
 
         // Load the originating agent run to get AgentID and ConversationID
-        const md = new Metadata();
+        const md = this.ProviderToUse as unknown as IMetadataProvider;
         const originatingRun = await md.GetEntityObject<MJAIAgentRunEntity>(
             'MJ: AI Agent Runs',
             contextUser

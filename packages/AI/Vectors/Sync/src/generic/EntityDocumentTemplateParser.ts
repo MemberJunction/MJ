@@ -1,4 +1,4 @@
-import { CompositeKey, LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
+import { CompositeKey, LogError, LogStatus, UserInfo } from "@memberjunction/core";
 import { MJGlobal, RegisterClass, UUIDsEqual } from "@memberjunction/global";
 import { EntityVectorSyncer } from "../models/entityVectorSync";
 import { EntityDocumentTemplateParserBase } from "./EntityDocumenTemplateParserBase";
@@ -26,7 +26,7 @@ export class EntityDocumentTemplateParser extends EntityDocumentTemplateParserBa
      */
     protected async Relationship(entityID: string, entityRecord: any, ContextUser: UserInfo, relationshipName: string, maxRows: number, entityDocumentName: string): Promise<string> {
         // super inefficient handling to start, we'll optimize this later to call the related stuff in batch
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const vectorSyncer: EntityVectorSyncer = new EntityVectorSyncer();
         vectorSyncer.CurrentUser = ContextUser;
 

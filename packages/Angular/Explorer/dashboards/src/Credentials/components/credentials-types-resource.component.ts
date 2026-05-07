@@ -42,7 +42,7 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
     public categories: string[] = [];
 
     // Permissions
-    private _metadata = new Metadata();
+    private _metadata = this.ProviderToUse;
     private _permissionCache = new Map<string, boolean>();
 
     @ViewChild('typeEditPanel') typeEditPanel!: CredentialTypeEditPanelComponent;
@@ -125,7 +125,7 @@ export class CredentialsTypesResourceComponent extends BaseResourceComponent imp
             this.isLoading = true;
             this.cdr.markForCheck();
 
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const [typeResult, credResult] = await rv.RunViews([
                 {
                     EntityName: 'MJ: Credential Types',

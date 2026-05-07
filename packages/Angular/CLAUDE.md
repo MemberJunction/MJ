@@ -1,5 +1,79 @@
 # Angular Development Guidelines
 
+## 🚨 CRITICAL: Multi-Provider Support — `@Input() Provider` Pattern 🚨
+
+The browser is **not inherently single-provider**. A single Angular app may connect to multiple MJ servers in parallel (different `IMetadataProvider` instances), and even within one app a component tree can be embedded under a non-default provider. **Every Angular component that touches metadata, RunView, RunQuery, RunReport, or BaseEntity MUST accept an optional `Provider` input and thread it through.**
+
+### The Convention
+
+Extend `BaseAngularComponent` from `@memberjunction/ng-base-types` — it provides the standard input + accessors:
+
+```typescript
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
+
+@Component({ ... })
+export class MyComponent extends BaseAngularComponent {
+    // Inherits:
+    //   @Input() Provider: IMetadataProvider | null = null;
+    //   public get ProviderToUse(): IMetadataProvider          // → Provider ?? Metadata.Provider
+    //   public get RunViewToUse(): IRunViewProvider
+    //   public get RunQueryToUse(): IRunQueryProvider
+    //   public get RunReportToUse(): IRunReportProvider
+}
+```
+
+When the input is omitted, `ProviderToUse` falls back to `Metadata.Provider` (the global default), so **single-provider apps see no behavior change**. Multi-provider apps pass a specific provider down the tree.
+
+### Threading the Provider Through MJ APIs
+
+Every MJ API call has a way to scope itself to a non-default provider. **Use the scoped form, never the unscoped form.**
+
+| Don't (assumes global) | Do (uses your provider) |
+|---|---|
+| `new RunView()` | `RunView.FromMetadataProvider(this.ProviderToUse)` |
+| `new Metadata().GetEntityObject(...)` | `this.ProviderToUse.GetEntityObject(name, this.ProviderToUse.CurrentUser)` |
+| `new Metadata().EntityByName(...)` | `this.ProviderToUse.EntityByName(name)` |
+| `Engine.Instance.SomeMethod(...)` (singleton) | `Engine.GetProviderInstance(this.ProviderToUse, Engine).SomeMethod(...)` |
+| Reading `Metadata.Provider.Roles` directly | Read `this.ProviderToUse.Roles` |
+
+When loading entities for save/edit, pass the provider's `CurrentUser` so server-side audit/security uses the right session:
+
+```typescript
+const p = this.ProviderToUse;
+const entity = await p.GetEntityObject<MyEntity>('My Entity', p.CurrentUser);
+```
+
+### Passing the Provider to Child Components
+
+Always forward the input to children that also need it:
+
+```html
+<mj-data-context [Provider]="Provider"></mj-data-context>
+<mj-resource-permissions [Provider]="Provider"></mj-resource-permissions>
+```
+
+Don't assume children will fall back to the global — they might, but you'd be silently splitting the tree across two providers, which causes hard-to-diagnose data inconsistencies.
+
+### Reference Implementations (Correct Pattern)
+
+- [BaseAngularComponent](Generic/base-types/src/base-angular-component.ts) — the base class itself
+- [DataContextComponent](Generic/data-context/src/lib/ng-data-context.component.ts) — declares `Provider` input + `ProviderToUse` getter, uses `RunView.FromMetadataProvider(p)` for queries
+- [DataContextDialogComponent](Generic/data-context/src/lib/ng-data-context-dialog.component.ts) — wrapper that forwards `[Provider]` to its child via template binding
+- [ResourcePermissionsComponent](Generic/resource-permissions/src/lib/resource-permissions.component.ts) — extends `BaseAngularComponent`, threads `ProviderToUse` to `RunView.FromMetadataProvider`, `p.GetEntityObject(...)`, and `Engine.GetProviderInstance(...)`
+
+### When `new Metadata()` IS Acceptable in Angular Code
+
+- **Bootstrap** (e.g. `app.module.ts`, app initializers) where there genuinely is one global provider being set up.
+- **Static utility helpers** that don't have a component context. Even then, prefer accepting the provider as a parameter.
+
+### Migration Status
+
+There is a known multi-provider migration in flight — many existing Angular components in `packages/Angular/**` still call `new Metadata()` / `new RunView()` blindly and inherit the global provider. These are documented in [/plans/multi-provider-threading.md](/plans/multi-provider-threading.md) and will be migrated together as part of phase 6 of that effort.
+
+**For new components and any component you touch:** apply the pattern above. Don't add to the migration debt.
+
+---
+
 ## 🚨 CRITICAL: Routing Rules 🚨
 
 ### Generic Components MUST NOT Import Router
@@ -118,6 +192,36 @@ See the root [CLAUDE.md](../../CLAUDE.md) rule #4 for the full policy. Summary:
 - **Use `standalone: false` explicitly** for NgModule-declared components (Angular 21 defaults to standalone)
 - **Use `@if`/`@for`/`@switch`** block syntax for all new templates (not `*ngIf`/`*ngFor`)
 - **Use `inject()` function** for DI in new components (not constructor injection)
+
+## 🚨 Dialog Button Placement (MJ Convention) 🚨
+
+**Confirm/Submit buttons go on the LEFT, Cancel buttons go on the RIGHT.** This is the opposite of the Windows convention but matches MemberJunction's design system. Apply to all dialogs, modals, popovers, and action button groups.
+
+```html
+<!-- ✅ CORRECT — Save (primary) on the LEFT, Cancel on the RIGHT -->
+<div class="footer">
+  <button class="btn btn--primary">Save</button>
+  <button class="btn">Cancel</button>
+</div>
+
+<!-- ✅ CORRECT — destructive action far left, then primary, then cancel -->
+<div class="footer">
+  <button class="btn btn--danger">Sign out</button>
+  <span class="spacer"></span>
+  <button class="btn btn--primary">Save</button>
+  <button class="btn">Cancel</button>
+</div>
+
+<!-- ❌ WRONG — Cancel before Save (Windows convention) -->
+<div class="footer">
+  <button class="btn">Cancel</button>
+  <button class="btn btn--primary">Save</button>
+</div>
+```
+
+The same rule applies to `[Submit] [Cancel]`, `[Update] [Cancel]`, `[Apply] [Discard]`, etc. — the affirmative action is always leftmost (after any far-left destructive actions like Sign Out / Delete).
+
+---
 
 ## Icon Libraries
 - **PRIMARY ICON LIBRARY: Font Awesome** - Use Font Awesome icons throughout all Angular components

@@ -97,7 +97,7 @@ export async function DiscoverISADescendants(
   const entityInfo = record.EntityInfo;
   if (!entityInfo?.IsParentType) return [];
 
-  const md = new Metadata();
+  const md = new Metadata();  // global-provider-ok: utility — single-provider context
   const results: IsaDescendantInfo[] = [];
   const visited = new Set<string>([entityInfo.Name]);
 

@@ -1,25 +1,3 @@
--- ============================================================================
--- MemberJunction PostgreSQL Migration
--- Converted from SQL Server using TypeScript conversion pipeline
--- ============================================================================
-
--- Extensions
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- Schema
-CREATE SCHEMA IF NOT EXISTS __mj;
-SET search_path TO __mj, public;
-
--- Ensure backslashes in string literals are treated literally (not as escape sequences)
-SET standard_conforming_strings = on;
-
--- Implicit INTEGER -> BOOLEAN cast (SQL Server BIT columns accept 0/1 in INSERTs)
--- PostgreSQL has a built-in explicit-only INTEGER->bool cast. We upgrade it to implicit
--- so INSERT VALUES with 0/1 for BOOLEAN columns work like SQL Server BIT.
-UPDATE pg_cast SET castcontext = 'i'
-WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
-
 
 -- ===================== DDL: Tables, PKs, Indexes =====================
 
@@ -73,24 +51,24 @@ CREATE TABLE __mj."TestRunOutput" (
 );
 
 ALTER TABLE __mj."TestRunOutput"
- ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
-/* SQL text to add special date field __mj_UpdatedAt to entity __mj."TestRunOutput" */;
+/* SQL text to add special date field __mj_UpdatedAt to entity __mj."TestRunOutput" */
 
 ALTER TABLE __mj."TestRunOutput"
- ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
-/* SQL text to add special date field __mj_CreatedAt to entity __mj."TestRunOutputType" */;
-
-ALTER TABLE __mj."TestRunOutputType"
- ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
-
-/* SQL text to add special date field __mj_UpdatedAt to entity __mj."TestRunOutputType" */;
+/* SQL text to add special date field __mj_CreatedAt to entity __mj."TestRunOutputType" */
 
 ALTER TABLE __mj."TestRunOutputType"
- ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW()
+ ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
-/* SQL text to insert new entity field */;
+/* SQL text to add special date field __mj_UpdatedAt to entity __mj."TestRunOutputType" */
+
+ALTER TABLE __mj."TestRunOutputType"
+ ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW();
+
+/* SQL text to insert new entity field */
 
 CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_TestRunOutput_TestRunID" ON __mj."TestRunOutput" ("TestRunID");
 
@@ -101,21 +79,72 @@ CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_TestRunOutput_OutputTypeID" ON __mj
 
 DO $do$
 DECLARE
+  v_target_schema CONSTANT TEXT := '__mj';
+  v_target_name CONSTANT TEXT := 'vwTestRunOutputTypes';
   vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwTestRunOutputTypes"
 AS SELECT
     t.*
 FROM
     __mj."TestRunOutputType" AS t$vsql$;
+  v_target_oid OID;
+  v_dep RECORD;
+  v_captured JSONB[] := ARRAY[]::JSONB[];
+  v_n INTEGER;
 BEGIN
   EXECUTE vsql;
 EXCEPTION WHEN invalid_table_definition THEN
-  DROP VIEW IF EXISTS __mj."vwTestRunOutputTypes" CASCADE;
+  -- Column list changed; need CASCADE. Preserve dependent views first.
+  SELECT c.oid INTO v_target_oid
+  FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
+  WHERE n.nspname = v_target_schema AND c.relname = v_target_name AND c.relkind = 'v';
+  IF v_target_oid IS NOT NULL THEN
+    FOR v_dep IN
+      WITH RECURSIVE deps AS (
+        SELECT c.oid, c.relname AS name, n.nspname AS schema, 1 AS depth
+        FROM pg_rewrite r
+        JOIN pg_depend d ON d.objid = r.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE d.refobjid = v_target_oid AND d.deptype = 'n'
+          AND c.oid <> v_target_oid AND c.relkind = 'v'
+        UNION
+        SELECT c.oid, c.relname, n.nspname, p.depth + 1
+        FROM deps p
+        JOIN pg_rewrite r ON TRUE
+        JOIN pg_depend d ON d.objid = r.oid AND d.refobjid = p.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE c.relkind = 'v' AND c.oid <> p.oid
+      )
+      SELECT oid, name, schema, MAX(depth) AS max_depth,
+             pg_catalog.pg_get_viewdef(oid, true) AS viewdef
+      FROM deps GROUP BY oid, name, schema
+      ORDER BY MAX(depth) ASC
+    LOOP
+      v_captured := v_captured || jsonb_build_object(
+        'schema', v_dep.schema, 'name', v_dep.name, 'def', v_dep.viewdef);
+    END LOOP;
+  END IF;
+  EXECUTE format('DROP VIEW IF EXISTS %I.%I CASCADE', v_target_schema, v_target_name);
   EXECUTE vsql;
+  IF v_captured IS NOT NULL AND array_length(v_captured, 1) > 0 THEN
+    FOR v_n IN 1..array_length(v_captured, 1) LOOP
+      BEGIN
+        EXECUTE format('CREATE VIEW %I.%I AS %s',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', v_captured[v_n]->>'def');
+      EXCEPTION WHEN others THEN
+        RAISE WARNING 'Could not restore dependent view %.%: %',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', SQLERRM;
+      END;
+    END LOOP;
+  END IF;
 END;
 $do$;
 
 DO $do$
 DECLARE
+  v_target_schema CONSTANT TEXT := '__mj';
+  v_target_name CONSTANT TEXT := 'vwTestRunOutputs';
   vsql CONSTANT TEXT := $vsql$CREATE OR REPLACE VIEW __mj."vwTestRunOutputs"
 AS SELECT
     t.*,
@@ -131,11 +160,58 @@ INNER JOIN
     __mj."TestRunOutputType" AS "MJTestRunOutputType_OutputTypeID"
   ON
     t."OutputTypeID" = "MJTestRunOutputType_OutputTypeID"."ID"$vsql$;
+  v_target_oid OID;
+  v_dep RECORD;
+  v_captured JSONB[] := ARRAY[]::JSONB[];
+  v_n INTEGER;
 BEGIN
   EXECUTE vsql;
 EXCEPTION WHEN invalid_table_definition THEN
-  DROP VIEW IF EXISTS __mj."vwTestRunOutputs" CASCADE;
+  -- Column list changed; need CASCADE. Preserve dependent views first.
+  SELECT c.oid INTO v_target_oid
+  FROM pg_class c JOIN pg_namespace n ON c.relnamespace = n.oid
+  WHERE n.nspname = v_target_schema AND c.relname = v_target_name AND c.relkind = 'v';
+  IF v_target_oid IS NOT NULL THEN
+    FOR v_dep IN
+      WITH RECURSIVE deps AS (
+        SELECT c.oid, c.relname AS name, n.nspname AS schema, 1 AS depth
+        FROM pg_rewrite r
+        JOIN pg_depend d ON d.objid = r.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE d.refobjid = v_target_oid AND d.deptype = 'n'
+          AND c.oid <> v_target_oid AND c.relkind = 'v'
+        UNION
+        SELECT c.oid, c.relname, n.nspname, p.depth + 1
+        FROM deps p
+        JOIN pg_rewrite r ON TRUE
+        JOIN pg_depend d ON d.objid = r.oid AND d.refobjid = p.oid
+        JOIN pg_class c ON c.oid = r.ev_class
+        JOIN pg_namespace n ON c.relnamespace = n.oid
+        WHERE c.relkind = 'v' AND c.oid <> p.oid
+      )
+      SELECT oid, name, schema, MAX(depth) AS max_depth,
+             pg_catalog.pg_get_viewdef(oid, true) AS viewdef
+      FROM deps GROUP BY oid, name, schema
+      ORDER BY MAX(depth) ASC
+    LOOP
+      v_captured := v_captured || jsonb_build_object(
+        'schema', v_dep.schema, 'name', v_dep.name, 'def', v_dep.viewdef);
+    END LOOP;
+  END IF;
+  EXECUTE format('DROP VIEW IF EXISTS %I.%I CASCADE', v_target_schema, v_target_name);
   EXECUTE vsql;
+  IF v_captured IS NOT NULL AND array_length(v_captured, 1) > 0 THEN
+    FOR v_n IN 1..array_length(v_captured, 1) LOOP
+      BEGIN
+        EXECUTE format('CREATE VIEW %I.%I AS %s',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', v_captured[v_n]->>'def');
+      EXCEPTION WHEN others THEN
+        RAISE WARNING 'Could not restore dependent view %.%: %',
+          v_captured[v_n]->>'schema', v_captured[v_n]->>'name', SQLERRM;
+      END;
+    END LOOP;
+  END IF;
 END;
 $do$;
 
@@ -477,15 +553,15 @@ INSERT INTO "__mj"."Entity" (
          'TestRunOutputType',
          'vwTestRunOutputTypes',
          '__mj',
-         1,
-         0
-         , 1
-         , 0
-         , 0
-         , 0
-         , 1
-         , 1
-         , 1
+         TRUE,
+         FALSE
+         , TRUE
+         , FALSE
+         , FALSE
+         , FALSE
+         , TRUE
+         , TRUE
+         , TRUE
          , 1000
       );
 /* SQL generated to add new entity MJ: Test Run Output Types to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
@@ -497,17 +573,17 @@ INSERT INTO __mj."ApplicationEntity"
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
-                                                   ('ce3761bc-5ca6-44e1-9521-97c48f4d8bb6', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0);
+                                                   ('ce3761bc-5ca6-44e1-9521-97c48f4d8bb6', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, FALSE, FALSE, FALSE);
 /* SQL generated to add new permission for entity MJ: Test Run Output Types for role Developer */
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
-                                                   ('ce3761bc-5ca6-44e1-9521-97c48f4d8bb6', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0);
+                                                   ('ce3761bc-5ca6-44e1-9521-97c48f4d8bb6', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, FALSE);
 /* SQL generated to add new permission for entity MJ: Test Run Output Types for role Integration */
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
-                                                   ('ce3761bc-5ca6-44e1-9521-97c48f4d8bb6', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1);
+                                                   ('ce3761bc-5ca6-44e1-9521-97c48f4d8bb6', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, TRUE);
 /* SQL generated to create new entity MJ: Test Run Outputs */
 
 INSERT INTO "__mj"."Entity" (
@@ -539,15 +615,15 @@ INSERT INTO "__mj"."Entity" (
          'TestRunOutput',
          'vwTestRunOutputs',
          '__mj',
-         1,
-         0
-         , 1
-         , 0
-         , 0
-         , 0
-         , 1
-         , 1
-         , 1
+         TRUE,
+         FALSE
+         , TRUE
+         , FALSE
+         , FALSE
+         , FALSE
+         , TRUE
+         , TRUE
+         , TRUE
          , 1000
       );
 /* SQL generated to add new entity MJ: Test Run Outputs to application ID: 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E' */
@@ -559,18 +635,18 @@ INSERT INTO __mj."ApplicationEntity"
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
-                                                   ('51bc27f7-dc57-4372-8812-3f219fa762b4', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0);
+                                                   ('51bc27f7-dc57-4372-8812-3f219fa762b4', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, FALSE, FALSE, FALSE);
 /* SQL generated to add new permission for entity MJ: Test Run Outputs for role Developer */
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
-                                                   ('51bc27f7-dc57-4372-8812-3f219fa762b4', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0);
+                                                   ('51bc27f7-dc57-4372-8812-3f219fa762b4', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, FALSE);
 /* SQL generated to add new permission for entity MJ: Test Run Outputs for role Integration */
 
 INSERT INTO __mj."EntityPermission"
                                                    ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete") VALUES
-                                                   ('51bc27f7-dc57-4372-8812-3f219fa762b4', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1);
-/* SQL text to add special date field "__mj_CreatedAt" to entity __mj."TestRunOutput" */
+                                                   ('51bc27f7-dc57-4372-8812-3f219fa762b4', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, TRUE);
+/* SQL text to add special date field __mj_CreatedAt to entity __mj."TestRunOutput" */
 
 DO $$
 BEGIN
@@ -619,19 +695,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         'gen_random_uuid()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        1,
-        0,
-        0,
-        1,
-        1,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        TRUE,
+        TRUE,
         'Search'
         );
     END IF;
@@ -684,19 +760,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         '5DFD821D-E23E-43D3-8A41-60A7D36AE1BA',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -749,19 +825,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         'CE3761BC-5CA6-44E1-9521-97C48F4D8BB6',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -814,19 +890,19 @@ BEGIN
         4,
         10,
         0,
-        0,
+        FALSE,
         '(0)',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -879,19 +955,19 @@ BEGIN
         4,
         10,
         0,
-        1,
+        TRUE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -944,19 +1020,19 @@ BEGIN
         510,
         0,
         0,
-        1,
+        TRUE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        1,
-        1,
-        0,
-        1,
-        0,
-        0,
+        TRUE,
+        TRUE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -1009,19 +1085,19 @@ BEGIN
         -1,
         0,
         0,
-        1,
+        TRUE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -1074,19 +1150,19 @@ BEGIN
         200,
         0,
         0,
-        1,
+        TRUE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -1139,19 +1215,19 @@ BEGIN
         -1,
         0,
         0,
-        1,
+        TRUE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -1204,19 +1280,19 @@ BEGIN
         4,
         10,
         0,
-        1,
+        TRUE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -1269,19 +1345,19 @@ BEGIN
         4,
         10,
         0,
-        1,
+        TRUE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -1334,19 +1410,19 @@ BEGIN
         4,
         10,
         0,
-        1,
+        TRUE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -1399,19 +1475,19 @@ BEGIN
         9,
         10,
         3,
-        1,
+        TRUE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -1464,19 +1540,19 @@ BEGIN
         -1,
         0,
         0,
-        1,
+        TRUE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -1529,19 +1605,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -1594,19 +1670,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -1659,19 +1735,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         'gen_random_uuid()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        1,
-        0,
-        0,
-        1,
-        1,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        TRUE,
+        TRUE,
         'Search'
         );
     END IF;
@@ -1724,19 +1800,19 @@ BEGIN
         200,
         0,
         0,
-        0,
+        FALSE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        1,
-        1,
-        0,
-        1,
-        0,
-        1,
+        TRUE,
+        TRUE,
+        FALSE,
+        TRUE,
+        FALSE,
+        TRUE,
         'Search'
         );
     END IF;
@@ -1789,19 +1865,19 @@ BEGIN
         -1,
         0,
         0,
-        1,
+        TRUE,
         'null',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -1854,19 +1930,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -1919,19 +1995,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -1945,7 +2021,7 @@ BEGIN
         WHERE "ID" = 'aa16d9a0-5588-4b2e-872e-caf71b527b9c'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "DisplayName", "Sequence")
-        VALUES ('aa16d9a0-5588-4b2e-872e-caf71b527b9c', '5DFD821D-E23E-43D3-8A41-60A7D36AE1BA', '51BC27F7-DC57-4372-8812-3F219FA762B4', 'TestRunID', 'One To Many', 1, 1, 'MJ: Test Run Outputs', 1);
+        VALUES ('aa16d9a0-5588-4b2e-872e-caf71b527b9c', '5DFD821D-E23E-43D3-8A41-60A7D36AE1BA', '51BC27F7-DC57-4372-8812-3F219FA762B4', 'TestRunID', 'One To Many', TRUE, TRUE, 'MJ: Test Run Outputs', 1);
     END IF;
 END $$;
 
@@ -1957,7 +2033,7 @@ BEGIN
         WHERE "ID" = 'a2867775-023b-4fd5-97d5-0e85afd74bdc'
     ) THEN
         INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "DisplayName", "Sequence")
-        VALUES ('a2867775-023b-4fd5-97d5-0e85afd74bdc', 'CE3761BC-5CA6-44E1-9521-97C48F4D8BB6', '51BC27F7-DC57-4372-8812-3F219FA762B4', 'OutputTypeID', 'One To Many', 1, 1, 'MJ: Test Run Outputs', 2);
+        VALUES ('a2867775-023b-4fd5-97d5-0e85afd74bdc', 'CE3761BC-5CA6-44E1-9521-97C48F4D8BB6', '51BC27F7-DC57-4372-8812-3F219FA762B4', 'OutputTypeID', 'One To Many', TRUE, TRUE, 'MJ: Test Run Outputs', 2);
     END IF;
 END $$;
 
@@ -2008,19 +2084,19 @@ BEGIN
         510,
         0,
         0,
-        0,
+        FALSE,
         'null',
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
@@ -2073,104 +2149,104 @@ BEGIN
         200,
         0,
         0,
-        0,
+        FALSE,
         'null',
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search'
         );
     END IF;
 END $$;
 
 UPDATE "__mj"."EntityField"
-            SET "IsNameField" = 1
+            SET "IsNameField" = TRUE
             WHERE "ID" = 'E3440032-2077-44A9-AC17-051D04EA6F9D'
-            AND "AutoUpdateIsNameField" = 1;
+            AND "AutoUpdateIsNameField" = TRUE;
 
 UPDATE "__mj"."EntityField"
-            SET "DefaultInView" = 1
+            SET "DefaultInView" = TRUE
             WHERE "ID" = 'E3440032-2077-44A9-AC17-051D04EA6F9D'
-            AND "AutoUpdateDefaultInView" = 1;
+            AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE "__mj"."EntityField"
-            SET "DefaultInView" = 1
+            SET "DefaultInView" = TRUE
             WHERE "ID" = 'F58C6E89-6415-41A0-B577-D7645AE801B9'
-            AND "AutoUpdateDefaultInView" = 1;
+            AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE "__mj"."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = 'E3440032-2077-44A9-AC17-051D04EA6F9D'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 /* Set field properties for entity */
 
 UPDATE "__mj"."EntityField"
-            SET "IsNameField" = 1
+            SET "IsNameField" = TRUE
             WHERE "ID" = 'F30B5229-C80D-4C84-A9DD-327A6CE5E738'
-            AND "AutoUpdateIsNameField" = 1;
+            AND "AutoUpdateIsNameField" = TRUE;
 
 UPDATE "__mj"."EntityField"
-            SET "DefaultInView" = 1
+            SET "DefaultInView" = TRUE
             WHERE "ID" = 'F333C5AA-490F-437A-8799-27318AEE6995'
-            AND "AutoUpdateDefaultInView" = 1;
+            AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE "__mj"."EntityField"
-            SET "DefaultInView" = 1
+            SET "DefaultInView" = TRUE
             WHERE "ID" = 'F30B5229-C80D-4C84-A9DD-327A6CE5E738'
-            AND "AutoUpdateDefaultInView" = 1;
+            AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE "__mj"."EntityField"
-            SET "DefaultInView" = 1
+            SET "DefaultInView" = TRUE
             WHERE "ID" = '85BB9D46-27DF-4763-B832-7EE9259100A0'
-            AND "AutoUpdateDefaultInView" = 1;
+            AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE "__mj"."EntityField"
-            SET "DefaultInView" = 1
+            SET "DefaultInView" = TRUE
             WHERE "ID" = '3129F5B4-2F39-4991-A4B4-49821F6FDAF1'
-            AND "AutoUpdateDefaultInView" = 1;
+            AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE "__mj"."EntityField"
-            SET "DefaultInView" = 1
+            SET "DefaultInView" = TRUE
             WHERE "ID" = '032E8231-6926-414E-BED1-093B09C7EE93'
-            AND "AutoUpdateDefaultInView" = 1;
+            AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE "__mj"."EntityField"
-            SET "DefaultInView" = 1
+            SET "DefaultInView" = TRUE
             WHERE "ID" = '44B424A4-928A-4479-881B-CA8EAA53F130'
-            AND "AutoUpdateDefaultInView" = 1;
+            AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE "__mj"."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = 'F30B5229-C80D-4C84-A9DD-327A6CE5E738'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE "__mj"."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = 'B07389FA-3E06-4E15-A65B-EF4BE19CE648'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE "__mj"."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = '85BB9D46-27DF-4763-B832-7EE9259100A0'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE "__mj"."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = '032E8231-6926-414E-BED1-093B09C7EE93'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE "__mj"."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = '44B424A4-928A-4479-881B-CA8EAA53F130'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 /* Set categories for 5 fields */
 
 UPDATE "__mj"."EntityField"
@@ -2180,7 +2256,7 @@ UPDATE "__mj"."EntityField"
        "ExtendedType" = NULL,
        "CodeType" = NULL
    WHERE "ID" = '6F060635-7133-44CE-8B30-3CD01A268806'
-   AND "AutoUpdateCategory" = 1;
+   AND "AutoUpdateCategory" = TRUE;
 
 UPDATE "__mj"."EntityField"
    SET "Category" = 'Output Type Details',
@@ -2189,7 +2265,7 @@ UPDATE "__mj"."EntityField"
        "ExtendedType" = NULL,
        "CodeType" = NULL
    WHERE "ID" = 'E3440032-2077-44A9-AC17-051D04EA6F9D'
-   AND "AutoUpdateCategory" = 1;
+   AND "AutoUpdateCategory" = TRUE;
 
 UPDATE "__mj"."EntityField"
    SET "Category" = 'Output Type Details',
@@ -2198,7 +2274,7 @@ UPDATE "__mj"."EntityField"
        "ExtendedType" = NULL,
        "CodeType" = NULL
    WHERE "ID" = 'F58C6E89-6415-41A0-B577-D7645AE801B9'
-   AND "AutoUpdateCategory" = 1;
+   AND "AutoUpdateCategory" = TRUE;
 
 UPDATE "__mj"."EntityField"
    SET "Category" = 'System Metadata',
@@ -2207,7 +2283,7 @@ UPDATE "__mj"."EntityField"
        "ExtendedType" = NULL,
        "CodeType" = NULL
    WHERE "ID" = '5CB629CB-9021-4D1E-B11C-522E61933B65'
-   AND "AutoUpdateCategory" = 1;
+   AND "AutoUpdateCategory" = TRUE;
 
 UPDATE "__mj"."EntityField"
    SET "Category" = 'System Metadata',
@@ -2216,7 +2292,7 @@ UPDATE "__mj"."EntityField"
        "ExtendedType" = NULL,
        "CodeType" = NULL
    WHERE "ID" = '97AC25D1-088E-4FC5-A3FF-7C7355BE483E'
-   AND "AutoUpdateCategory" = 1;
+   AND "AutoUpdateCategory" = TRUE;
 /* Set entity icon to fa fa-file-code */
 
 UPDATE "__mj"."Entity"
@@ -2233,7 +2309,7 @@ INSERT INTO "__mj"."EntitySetting" ("ID", "EntityID", "Name", "Value", "__mj_Cre
 /* Set DefaultForNewUser=0 for NEW entity (category: reference, confidence: high) */
 
 UPDATE "__mj"."ApplicationEntity"
-         SET "DefaultForNewUser" = 0, "__mj_UpdatedAt" = NOW()
+         SET "DefaultForNewUser" = FALSE, "__mj_UpdatedAt" = NOW()
          WHERE "EntityID" = 'CE3761BC-5CA6-44E1-9521-97C48F4D8BB6';
 /* Set categories for 18 fields */
 
@@ -2244,7 +2320,7 @@ UPDATE "__mj"."EntityField"
        "ExtendedType" = NULL,
        "CodeType" = NULL
    WHERE "ID" = '09DF0F14-7259-40E3-B17A-AB54C5529BD1'
-   AND "AutoUpdateCategory" = 1;
+   AND "AutoUpdateCategory" = TRUE;
 
 UPDATE "__mj"."EntityField"
    SET "Category" = 'Test Context',
@@ -2253,7 +2329,7 @@ UPDATE "__mj"."EntityField"
        "ExtendedType" = NULL,
        "CodeType" = NULL
    WHERE "ID" = '72663DD0-11B3-43BF-9896-29BA131291FF'
-   AND "AutoUpdateCategory" = 1;
+   AND "AutoUpdateCategory" = TRUE;
 
 UPDATE "__mj"."EntityField"
    SET "Category" = 'Test Context',
@@ -2262,7 +2338,7 @@ UPDATE "__mj"."EntityField"
        "ExtendedType" = NULL,
        "CodeType" = NULL
    WHERE "ID" = '032E8231-6926-414E-BED1-093B09C7EE93'
-   AND "AutoUpdateCategory" = 1;
+   AND "AutoUpdateCategory" = TRUE;
 
 UPDATE "__mj"."EntityField"
    SET "Category" = 'Test Context',
@@ -2271,7 +2347,7 @@ UPDATE "__mj"."EntityField"
        "ExtendedType" = NULL,
        "CodeType" = NULL
    WHERE "ID" = 'F866BC1E-5D1B-48C8-8BA6-8E71B2E8D7CC'
-   AND "AutoUpdateCategory" = 1;
+   AND "AutoUpdateCategory" = TRUE;
 
 UPDATE "__mj"."EntityField"
    SET "Category" = 'Test Context',
@@ -2280,7 +2356,7 @@ UPDATE "__mj"."EntityField"
        "ExtendedType" = NULL,
        "CodeType" = NULL
    WHERE "ID" = 'F333C5AA-490F-437A-8799-27318AEE6995'
-   AND "AutoUpdateCategory" = 1;
+   AND "AutoUpdateCategory" = TRUE;
 
 UPDATE "__mj"."EntityField"
    SET "Category" = 'Output Information',
@@ -2289,7 +2365,7 @@ UPDATE "__mj"."EntityField"
        "ExtendedType" = NULL,
        "CodeType" = NULL
    WHERE "ID" = '660FE22C-F2D0-4372-A4AC-17C33B9BB829'
-   AND "AutoUpdateCategory" = 1;
+   AND "AutoUpdateCategory" = TRUE;
 
 UPDATE "__mj"."EntityField"
    SET "Category" = 'Output Information',
@@ -2298,7 +2374,7 @@ UPDATE "__mj"."EntityField"
        "ExtendedType" = NULL,
        "CodeType" = NULL
    WHERE "ID" = '44B424A4-928A-4479-881B-CA8EAA53F130'
-   AND "AutoUpdateCategory" = 1;
+   AND "AutoUpdateCategory" = TRUE;
 
 UPDATE "__mj"."EntityField"
    SET "Category" = 'Output Information',
@@ -2307,7 +2383,7 @@ UPDATE "__mj"."EntityField"
        "ExtendedType" = NULL,
        "CodeType" = NULL
    WHERE "ID" = 'F30B5229-C80D-4C84-A9DD-327A6CE5E738'
-   AND "AutoUpdateCategory" = 1;
+   AND "AutoUpdateCategory" = TRUE;
 
 UPDATE "__mj"."EntityField"
    SET "Category" = 'Output Information',
@@ -2316,7 +2392,7 @@ UPDATE "__mj"."EntityField"
        "ExtendedType" = NULL,
        "CodeType" = NULL
    WHERE "ID" = 'B07389FA-3E06-4E15-A65B-EF4BE19CE648'
-   AND "AutoUpdateCategory" = 1;
+   AND "AutoUpdateCategory" = TRUE;
 
 UPDATE "__mj"."EntityField"
    SET "Category" = 'Data and Media',
@@ -2325,7 +2401,7 @@ UPDATE "__mj"."EntityField"
        "ExtendedType" = NULL,
        "CodeType" = NULL
    WHERE "ID" = '85BB9D46-27DF-4763-B832-7EE9259100A0'
-   AND "AutoUpdateCategory" = 1;
+   AND "AutoUpdateCategory" = TRUE;
 
 UPDATE "__mj"."EntityField"
    SET "Category" = 'Data and Media',
@@ -2334,7 +2410,7 @@ UPDATE "__mj"."EntityField"
        "ExtendedType" = NULL,
        "CodeType" = NULL
    WHERE "ID" = '79A10F51-C0FF-40C1-AF59-E82F6CC67D04'
-   AND "AutoUpdateCategory" = 1;
+   AND "AutoUpdateCategory" = TRUE;
 
 UPDATE "__mj"."EntityField"
    SET "Category" = 'Data and Media',
@@ -2343,7 +2419,7 @@ UPDATE "__mj"."EntityField"
        "ExtendedType" = NULL,
        "CodeType" = NULL
    WHERE "ID" = '257B0084-EA5F-4325-9F92-60A6C0FFB947'
-   AND "AutoUpdateCategory" = 1;
+   AND "AutoUpdateCategory" = TRUE;
 
 UPDATE "__mj"."EntityField"
    SET "Category" = 'Data and Media',
@@ -2352,7 +2428,7 @@ UPDATE "__mj"."EntityField"
        "ExtendedType" = NULL,
        "CodeType" = NULL
    WHERE "ID" = '7D653D7B-985E-44B5-B220-9E93CC559D0D'
-   AND "AutoUpdateCategory" = 1;
+   AND "AutoUpdateCategory" = TRUE;
 
 UPDATE "__mj"."EntityField"
    SET "Category" = 'Data and Media',
@@ -2361,7 +2437,7 @@ UPDATE "__mj"."EntityField"
        "ExtendedType" = NULL,
        "CodeType" = NULL
    WHERE "ID" = 'DBBCD366-B3AB-4B03-8EE1-47429C0A65DF'
-   AND "AutoUpdateCategory" = 1;
+   AND "AutoUpdateCategory" = TRUE;
 
 UPDATE "__mj"."EntityField"
    SET "Category" = 'Data and Media',
@@ -2370,7 +2446,7 @@ UPDATE "__mj"."EntityField"
        "ExtendedType" = NULL,
        "CodeType" = NULL
    WHERE "ID" = '53FE9DEB-D1A9-4130-8233-15FE3B62DED0'
-   AND "AutoUpdateCategory" = 1;
+   AND "AutoUpdateCategory" = TRUE;
 
 UPDATE "__mj"."EntityField"
    SET "Category" = 'Data and Media',
@@ -2379,7 +2455,7 @@ UPDATE "__mj"."EntityField"
        "ExtendedType" = 'Code',
        "CodeType" = 'Other'
    WHERE "ID" = 'ACA5D96A-9C5F-4DCF-976E-1DD45C66461B'
-   AND "AutoUpdateCategory" = 1;
+   AND "AutoUpdateCategory" = TRUE;
 
 UPDATE "__mj"."EntityField"
    SET "Category" = 'System Metadata',
@@ -2388,7 +2464,7 @@ UPDATE "__mj"."EntityField"
        "ExtendedType" = NULL,
        "CodeType" = NULL
    WHERE "ID" = '3129F5B4-2F39-4991-A4B4-49821F6FDAF1'
-   AND "AutoUpdateCategory" = 1;
+   AND "AutoUpdateCategory" = TRUE;
 
 UPDATE "__mj"."EntityField"
    SET "Category" = 'System Metadata',
@@ -2397,7 +2473,7 @@ UPDATE "__mj"."EntityField"
        "ExtendedType" = NULL,
        "CodeType" = NULL
    WHERE "ID" = 'EAFB19AC-10B4-432D-8F35-46E0F75294C1'
-   AND "AutoUpdateCategory" = 1;
+   AND "AutoUpdateCategory" = TRUE;
 /* Set entity icon to fa fa-file-image */
 
 UPDATE "__mj"."Entity"
@@ -2414,15 +2490,13 @@ INSERT INTO "__mj"."EntitySetting" ("ID", "EntityID", "Name", "Value", "__mj_Cre
 /* Set DefaultForNewUser=0 for NEW entity (category: supporting, confidence: high) */
 
 UPDATE "__mj"."ApplicationEntity"
-         SET "DefaultForNewUser" = 0, "__mj_UpdatedAt" = NOW()
+         SET "DefaultForNewUser" = FALSE, "__mj_UpdatedAt" = NOW()
          WHERE "EntityID" = '51BC27F7-DC57-4372-8812-3F219FA762B4';
 
 
 -- ===================== Grants =====================
 
-GRANT SELECT ON __mj."vwTestRunOutputTypes" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-    
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwTestRunOutputTypes" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View Permissions SQL for MJ: Test Run Output Types */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -2433,8 +2507,7 @@ GRANT SELECT ON __mj."vwTestRunOutputTypes" TO "cdp_UI", "cdp_Developer", "cdp_I
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------;
 
-GRANT SELECT ON __mj."vwTestRunOutputTypes" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwTestRunOutputTypes" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate SQL for MJ: Test Run Output Types */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -2450,7 +2523,7 @@ GRANT SELECT ON __mj."vwTestRunOutputTypes" TO "cdp_UI", "cdp_Developer", "cdp_I
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTestRunOutputType" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Test Run Output Types */;
+/* spCreate Permissions for MJ: Test Run Output Types */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTestRunOutputType" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Test Run Output Types */
@@ -2484,7 +2557,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateTestRunOutputType" TO "cdp_D
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTestRunOutputType" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Test Run Output Types */;
+/* spDelete Permissions for MJ: Test Run Output Types */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTestRunOutputType" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Index for Foreign Keys for TestRunOutput */
@@ -2498,9 +2571,7 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTestRunOutputType" TO "cdp_I
 -----------------------------------------------------------------
 -- Index for foreign key TestRunID in table TestRunOutput;
 
-GRANT SELECT ON __mj."vwTestRunOutputs" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-    
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwTestRunOutputs" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* Base View Permissions SQL for MJ: Test Run Outputs */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -2511,8 +2582,7 @@ GRANT SELECT ON __mj."vwTestRunOutputs" TO "cdp_UI", "cdp_Developer", "cdp_Integ
 -- This file should NOT be edited by hand.
 -----------------------------------------------------------------;
 
-GRANT SELECT ON __mj."vwTestRunOutputs" TO "cdp_UI", "cdp_Developer", "cdp_Integration";
-
+DO $$ BEGIN GRANT SELECT ON __mj."vwTestRunOutputs" TO "cdp_UI", "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spCreate SQL for MJ: Test Run Outputs */
 -----------------------------------------------------------------
 -- SQL Code Generation
@@ -2528,7 +2598,7 @@ GRANT SELECT ON __mj."vwTestRunOutputs" TO "cdp_UI", "cdp_Developer", "cdp_Integ
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTestRunOutput" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spCreate Permissions for MJ: Test Run Outputs */;
+/* spCreate Permissions for MJ: Test Run Outputs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spCreateTestRunOutput" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 /* spUpdate SQL for MJ: Test Run Outputs */
@@ -2562,10 +2632,10 @@ DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spUpdateTestRunOutput" TO "cdp_Devel
 ------------------------------------------------------------;
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTestRunOutput" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* spDelete Permissions for MJ: Test Run Outputs */;
+/* spDelete Permissions for MJ: Test Run Outputs */
 
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION __mj."spDeleteTestRunOutput" TO "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
-/* SQL text to insert new entity field */;
+/* SQL text to insert new entity field */
 
 
 -- ===================== Comments =====================

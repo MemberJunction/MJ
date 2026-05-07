@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import { debounceTime } from 'rxjs/operators';
-import { Metadata } from '@memberjunction/core';
+import { Metadata, IMetadataProvider } from '@memberjunction/core';
 import { UserInfoEngine, MJWorkspaceEntity } from '@memberjunction/core-entities';
 import {
   WorkspaceConfiguration,
@@ -26,6 +26,21 @@ export class WorkspaceStateManager {
   private loading$ = new BehaviorSubject<boolean>(false);
   private tabBarVisible$ = new BehaviorSubject<boolean>(true);
   private initialized = false;
+
+  /**
+   * Optional explicit metadata provider. When set, used instead of falling back
+   * to `Metadata.Provider`. The shell calls `setProvider(this.ProviderToUse)`
+   * after acquiring this manager from DI.
+   */
+  private _provider: IMetadataProvider | null = null;
+
+  public set Provider(value: IMetadataProvider | null) {
+      this._provider = value;
+  }
+
+  public get Provider(): IMetadataProvider {
+      return this._provider ?? Metadata.Provider;
+  }
 
   constructor() {
     // Set up debounced saves
@@ -127,7 +142,7 @@ export class WorkspaceStateManager {
       this.workspace$.next(workspace);
 
       // Parse configuration or create default
-      const configJson = workspace.Get('Configuration') as string;
+      const configJson = workspace.Configuration;
 
       const config = configJson
         ? JSON.parse(configJson) as WorkspaceConfiguration
@@ -137,11 +152,11 @@ export class WorkspaceStateManager {
     }
     else {
       // Create new workspace for user
-      const md = new Metadata();
-      const workspace = await md.GetEntityObject<MJWorkspaceEntity>('MJ: Workspaces');
+      const md = this.Provider;
+      const workspace = await md.GetEntityObject<MJWorkspaceEntity>('MJ: Workspaces', md.CurrentUser);
       workspace.UserID = userId;
       workspace.Name = 'Default';
-      workspace.Set('Configuration', JSON.stringify(createDefaultWorkspaceConfiguration()));
+      workspace.Configuration = JSON.stringify(createDefaultWorkspaceConfiguration());
 
       const saveResult = await workspace.Save();
 
@@ -163,7 +178,7 @@ export class WorkspaceStateManager {
     const config = this.configuration$.value;
 
     if (workspace && config) {
-      workspace.Set('Configuration', JSON.stringify(config));
+      workspace.Configuration = JSON.stringify(config);
       await workspace.Save();
     }
   }

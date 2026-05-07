@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, from, combineLatest } from 'rxjs';
 import { switchMap, shareReplay, tap, map } from 'rxjs/operators';
-import { RunView } from '@memberjunction/core';
+import { RunView, Metadata, IMetadataProvider } from '@memberjunction/core';
 
 /**
  * Lightweight record types for dashboard aggregation.
@@ -125,6 +125,17 @@ interface DashboardRawData {
   providedIn: 'root'
 })
 export class AIInstrumentationService {
+  private _provider: IMetadataProvider | null = null;
+
+  /** Set the metadata provider this service should use. Components should call this after injection. */
+  public set Provider(value: IMetadataProvider | null) {
+      this._provider = value;
+  }
+
+  public get Provider(): IMetadataProvider {
+      return this._provider ?? Metadata.Provider;
+  }
+
   private readonly _dateRange$ = new BehaviorSubject<{ start: Date; end: Date }>({
     start: new Date(Date.now() - 24 * 60 * 60 * 1000), // Last 24 hours
     end: new Date()
@@ -187,7 +198,7 @@ export class AIInstrumentationService {
     const now = new Date();
     const recentTime = new Date(now.getTime() - 5 * 60 * 1000);
 
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     const [promptResults, agentResults, livePromptResults, liveAgentResults] = await rv.RunViews<PromptRunRecord | AgentRunRecord>([
       {
         EntityName: 'MJ: AI Prompt Runs',
@@ -548,7 +559,7 @@ export class AIInstrumentationService {
   }
 
   private async getPromptExecutionDetails(promptRunId: string): Promise<ExecutionDetails> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     const [result, childrenResult] = await rv.RunViews<PromptRunRecord>([
       {
         EntityName: 'MJ: AI Prompt Runs',
@@ -588,7 +599,7 @@ export class AIInstrumentationService {
   }
 
   private async getAgentExecutionDetails(agentRunId: string): Promise<ExecutionDetails> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     const [result, childrenResult] = await rv.RunViews<AgentRunRecord>([
       {
         EntityName: 'MJ: AI Agent Runs',

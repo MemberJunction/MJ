@@ -18,6 +18,7 @@ const { mockUserInfoEngineInstance } = vi.hoisted(() => ({
 
 vi.mock('@memberjunction/core', () => {
   const mockLoad = vi.fn().mockResolvedValue(undefined);
+  const mockProvider: Record<string, unknown> = {};
   class FakeBaseEngine {
     _loaded = false;
     Load = mockLoad;
@@ -30,7 +31,22 @@ vi.mock('@memberjunction/core', () => {
     static getInstance<T>(): T {
       return new (this as unknown as { new(): T })();
     }
+    get ProviderToUse() {
+      return mockProvider;
+    }
   }
+  mockProvider.GetEntityObject = vi.fn().mockResolvedValue({
+    UserID: '',
+    NotificationTypeID: '',
+    Title: '',
+    Message: '',
+    Unread: true,
+    ResourceTypeID: null,
+    ResourceRecordID: null,
+    ResourceConfiguration: null,
+    ID: 'notif-1',
+    Save: vi.fn().mockResolvedValue(true),
+  });
   return {
     BaseEngine: FakeBaseEngine,
     BaseEnginePropertyConfig: class {},

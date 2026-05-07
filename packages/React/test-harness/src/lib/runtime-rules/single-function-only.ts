@@ -1,11 +1,8 @@
-import _traverse, { NodePath } from '@babel/traverse';
-type TraverseModule = typeof _traverse & { default?: typeof _traverse };
-const traverse = (((_traverse as TraverseModule).default) ?? _traverse) as typeof _traverse;
 import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
-import { createViolation } from '../lint-utils';
+import { traverse, NodePath, createViolation } from '../lint-utils';
 
 /**
  * Rule: single-function-only

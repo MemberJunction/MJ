@@ -1,12 +1,9 @@
-import _traverse, { NodePath } from '@babel/traverse';
-type TraverseModule = typeof _traverse & { default?: typeof _traverse };
-const traverse = (((_traverse as TraverseModule).default) ?? _traverse) as typeof _traverse;
+import { traverse, NodePath, createViolation, truncateCode, findClosestMatch, findCaseMismatch, NUMERIC_COERCION_FUNCTIONS } from '../lint-utils';
 import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { TypeContext } from '../type-context';
-import { createViolation, truncateCode } from '../lint-utils';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 
 /**
@@ -29,72 +26,6 @@ import { ComponentSpec } from '@memberjunction/interactive-component-types';
 const ARRAY_METHODS = ['map', 'forEach', 'filter', 'find', 'some', 'every', 'reduce', 'sort', 'flatMap'];
 
 /**
- * Computes Levenshtein edit distance between two strings.
- */
-function levenshteinDistance(a: string, b: string): number {
-  if (typeof a !== 'string' || typeof b !== 'string') return Infinity;
-  const m = a.length;
-  const n = b.length;
-  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0) as number[]);
-
-  for (let i = 0; i <= m; i++) dp[i][0] = i;
-  for (let j = 0; j <= n; j++) dp[0][j] = j;
-
-  for (let i = 1; i <= m; i++) {
-    for (let j = 1; j <= n; j++) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      dp[i][j] = Math.min(
-        dp[i - 1][j] + 1,
-        dp[i][j - 1] + 1,
-        dp[i - 1][j - 1] + cost
-      );
-    }
-  }
-
-  return dp[m][n];
-}
-
-/**
- * Finds the closest matching field name from a set of valid fields.
- * Returns null if no reasonable match is found (distance > 3 or > 50% of name length).
- */
-function findClosestField(fieldName: string, validFields: Set<string>): string | null {
-  if (typeof fieldName !== 'string') return null;
-  let bestMatch: string | null = null;
-  let bestDistance = Infinity;
-
-  for (const valid of validFields) {
-    if (typeof valid !== 'string') continue;
-    const dist = levenshteinDistance(fieldName.toLowerCase(), valid.toLowerCase());
-    if (dist < bestDistance) {
-      bestDistance = dist;
-      bestMatch = valid;
-    }
-  }
-
-  const maxAllowed = Math.max(3, Math.floor(fieldName.length * 0.5));
-  if (bestMatch && bestDistance > 0 && bestDistance <= maxAllowed) {
-    return bestMatch;
-  }
-  return null;
-}
-
-/**
- * Checks whether a field name is a case mismatch against a valid field.
- * Returns the correct field name if it's a case-only mismatch, null otherwise.
- */
-function findCaseMismatch(fieldName: string, validFields: Set<string>): string | null {
-  if (typeof fieldName !== 'string') return null;
-  for (const valid of validFields) {
-    if (typeof valid !== 'string') continue;
-    if (valid.toLowerCase() === fieldName.toLowerCase() && valid !== fieldName) {
-      return valid;
-    }
-  }
-  return null;
-}
-
-/**
  * Resolves the identifier being accessed through optional chaining or regular member access.
  * Returns { objectName, propertyName } or null if the pattern doesn't match.
  */
@@ -113,10 +44,6 @@ function resolveMemberAccess(
   return null;
 }
 
-/** Numeric coercion functions that don't make sense on GUIDs. */
-const NUMERIC_COERCION_FUNCTIONS = new Set([
-  'parseInt', 'parseFloat', 'Number',
-]);
 
 /**
  * Extracts the callback parameter name(s) for array iteration methods.
@@ -256,7 +183,7 @@ export class QueryResultFieldAccessValidationRule extends BaseLintRule {
       }
 
       // Check for close typo via Levenshtein (high severity)
-      const closest = findClosestField(propertyName, validFields);
+      const closest = findClosestMatch(propertyName, validFields);
       const availableFields = Array.from(validFields).slice(0, 10);
       const moreText = validFields.size > 10 ? ` and ${validFields.size - 10} more` : '';
 

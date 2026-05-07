@@ -75,6 +75,32 @@
   text-overflow: ellipsis;
 }
 
+.shared-by-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, transparent);
+  color: var(--mj-brand-primary);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  flex-shrink: 0;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shared-by-badge i {
+  font-size: 10px;
+}
+
+.shared-by-badge span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .project-tag {
   display: flex;
   align-items: center;
@@ -416,6 +442,23 @@
   background: var(--mj-bg-surface-card);
   padding: 0 1.25rem 1.25rem 1.25rem;
   overflow: visible;
+}
+
+.read-only-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 1.25rem 0.5rem 1.25rem;
+  padding: 8px 12px;
+  background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
+  color: var(--mj-text-secondary);
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.read-only-banner i {
+  color: var(--mj-brand-primary);
+  font-size: 12px;
 }
 
 .loading-peripheral-placeholder {

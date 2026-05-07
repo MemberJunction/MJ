@@ -1,6 +1,4 @@
-import _traverse, { NodePath } from '@babel/traverse';
-type TraverseModule = typeof _traverse & { default?: typeof _traverse };
-const traverse = (((_traverse as TraverseModule).default) ?? _traverse) as typeof _traverse;
+import { traverse, NodePath, isNullOrUndefined, isStringLike, isNumberLike, isObjectLike } from '../lint-utils';
 import { RegisterClass } from '@memberjunction/global';
 import * as t from '@babel/types';
 import { BaseLintRule } from '../lint-rule';
@@ -33,7 +31,22 @@ const VALID_RUNQUERY_PROPS = new Set([
 ]);
 
 /** SQL keywords for injection detection */
-const SQL_KEYWORDS = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'FROM', 'WHERE', 'JOIN'];
+/**
+ * SQL structural patterns that indicate actual SQL statements, not query names.
+ * Requires multiple keywords in combination to avoid false positives on
+ * domain terms like "Join Year", "Update Status", "Revenue From Events".
+ */
+const SQL_PATTERNS = [
+  /\bSELECT\b.*\bFROM\b/i,         // SELECT ... FROM
+  /\bINSERT\b.*\bINTO\b/i,         // INSERT INTO
+  /\bUPDATE\b.*\bSET\b/i,          // UPDATE ... SET
+  /\bDELETE\b.*\bFROM\b/i,         // DELETE FROM
+  /\bDROP\b\s+\bTABLE\b/i,         // DROP TABLE
+  /\bALTER\b\s+\bTABLE\b/i,        // ALTER TABLE
+  /\bCREATE\b\s+\bTABLE\b/i,       // CREATE TABLE
+  /\bEXEC\b\s+/i,                   // EXEC sp_...
+  /[=;*]\s*$/,                       // SQL operators at end (WHERE x = 1; or SELECT *)
+];
 
 /** Scalar SQL types that do not accept array values */
 const SCALAR_SQL_TYPES = new Set([
@@ -77,54 +90,6 @@ await utilities.rq.RunQuery({
 // - QueryName (required)
 // - CategoryPath, CategoryID, Parameters (optional)`,
 };
-
-// ── Type-check helpers (same as RunView rule) ────────────────────────
-
-function isNullOrUndefined(node: t.Node): boolean {
-  return t.isNullLiteral(node) || (t.isIdentifier(node) && node.name === 'undefined');
-}
-
-function isStringLike(node: t.Node, depth: number = 0): boolean {
-  if (depth > 3) return false;
-  if (t.isConditionalExpression(node)) {
-    const consequentOk = isStringLike(node.consequent, depth + 1) || isNullOrUndefined(node.consequent);
-    const alternateOk = isStringLike(node.alternate, depth + 1) || isNullOrUndefined(node.alternate);
-    return consequentOk && alternateOk;
-  }
-  if (t.isObjectExpression(node) || t.isArrayExpression(node)) return false;
-  return (
-    t.isStringLiteral(node) ||
-    t.isTemplateLiteral(node) ||
-    t.isBinaryExpression(node) ||
-    t.isIdentifier(node) ||
-    t.isCallExpression(node) ||
-    t.isMemberExpression(node)
-  );
-}
-
-function isNumberLike(node: t.Node): boolean {
-  return (
-    t.isNumericLiteral(node) ||
-    t.isBinaryExpression(node) ||
-    t.isUnaryExpression(node) ||
-    t.isConditionalExpression(node) ||
-    t.isIdentifier(node) ||
-    t.isCallExpression(node) ||
-    t.isMemberExpression(node)
-  );
-}
-
-function isObjectLike(node: t.Node): boolean {
-  if (t.isArrayExpression(node)) return false;
-  return (
-    t.isObjectExpression(node) ||
-    t.isIdentifier(node) ||
-    t.isCallExpression(node) ||
-    t.isMemberExpression(node) ||
-    t.isConditionalExpression(node) ||
-    t.isSpreadElement(node)
-  );
-}
 
 // ── Callee matching ──────────────────────────────────────────────────
 
@@ -280,11 +245,17 @@ function detectSQLInjection(
   value: t.Node,
   path: NodePath<t.CallExpression>,
   violations: Violation[],
+  knownQueryNames?: Set<string>,
 ): void {
   if (t.isStringLiteral(value)) {
     const queryName = value.value;
-    const upperQuery = queryName.toUpperCase();
-    const looksLikeSQL = SQL_KEYWORDS.some((keyword) => upperQuery.includes(keyword));
+
+    // Skip SQL check if the query name is a known registered query from the spec
+    if (knownQueryNames?.has(queryName)) return;
+
+    // Check for structural SQL patterns (require multiple keywords in combination
+    // to avoid false positives on domain terms like "Join Year", "Revenue From Events")
+    const looksLikeSQL = SQL_PATTERNS.some((pattern) => pattern.test(queryName));
 
     if (looksLikeSQL) {
       violations.push({
@@ -945,14 +916,17 @@ Valid properties: QueryID, QueryName, CategoryID, CategoryPath, Parameters, MaxR
         }
 
         // C. Query existence + SQL injection detection
+        const knownQueryNames = new Set<string>(
+          componentSpec?.dataRequirements?.queries?.map(q => q.name).filter(Boolean) ?? []
+        );
         if (queryName) {
           validateQueryExistence(queryName, componentSpec, path, violations);
           if (queryNameProp) {
-            detectSQLInjection(queryNameProp.value, path, violations);
+            detectSQLInjection(queryNameProp.value, path, violations, knownQueryNames);
           }
         } else if (hasQueryName && queryNameProp) {
           // Dynamic query name — still check for SQL injection
-          detectSQLInjection(queryNameProp.value, path, violations);
+          detectSQLInjection(queryNameProp.value, path, violations, knownQueryNames);
         }
 
         // D. CategoryPath missing when spec requires it

@@ -14,7 +14,7 @@ export class ViewOperationsHandler {
     static async runView(params: RunViewParams, user: UserInfo): Promise<{ success: boolean, result?: RunViewResult, error?: string }> {
         try {
             // Validate entity exists
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
             const entity = md.Entities.find(e => e.Name === params.EntityName);
             if (!entity) {
                 return { 
@@ -52,7 +52,7 @@ export class ViewOperationsHandler {
     static async runViews(paramsArray: RunViewParams[], user: UserInfo): Promise<{ success: boolean, results?: RunViewResult[], error?: string }> {
         try {
             // Validate and sanitize each set of parameters
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
             for (const params of paramsArray) {
                 // Validate entity exists
                 const entity = md.Entities.find(e => e.Name === params.EntityName);
@@ -93,7 +93,7 @@ export class ViewOperationsHandler {
     static async listEntities(params: RunViewParams, user: UserInfo): Promise<RunViewResult> {
         try {
             // Check entity exists and user has permission
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
             const entity = md.Entities.find(e => e.Name === params.EntityName);
             if (!entity) {
                 throw new Error(`Entity '${params.EntityName}' not found`);
@@ -122,7 +122,7 @@ export class ViewOperationsHandler {
     static async getEntityViews(entityName: string, user: UserInfo): Promise<{ success: boolean, views?: any[], error?: string }> {
         try {
             // Validate entity exists
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
             const entity = md.Entities.find(e => e.Name === entityName);
             if (!entity) {
                 return { 

@@ -1,5 +1,5 @@
 import { Arg, Ctx, Field, InputType, ObjectType, Query, Mutation, Resolver } from 'type-graphql';
-import { UserInfo, Metadata, LogError, LogStatus } from '@memberjunction/core';
+import { UserInfo, IMetadataProvider, Metadata, LogError, LogStatus } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { MJComponentEntity, MJComponentRegistryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
@@ -16,6 +16,7 @@ import {
 } from '@memberjunction/component-registry-client-sdk';
 import { AppContext } from '../types.js';
 import { configInfo } from '../config.js';
+import { GetReadWriteProvider } from '../util.js';
 
 /**
  * GraphQL types for Component Registry operations
@@ -181,7 +182,7 @@ export class ComponentRegistryExtendedResolver {
         @Arg('registryName') registryName: string,
         @Arg('namespace') namespace: string,
         @Arg('name') name: string,
-        @Ctx() { userPayload }: AppContext,
+        @Ctx() { userPayload, providers }: AppContext,
         @Arg('version', { nullable: true }) version?: string,
         @Arg('hash', { nullable: true }) hash?: string
     ): Promise<ComponentSpecWithHashType> {
@@ -234,7 +235,8 @@ export class ComponentRegistryExtendedResolver {
             
             // Optional: Cache in database if configured
             if (this.shouldCache(registry)) {
-                await this.cacheComponent(component, registry.ID, user);
+                const writeProvider = GetReadWriteProvider(providers, { allowFallbackToReadOnly: true }) as unknown as IMetadataProvider;
+                await this.cacheComponent(component, registry.ID, user, writeProvider);
             }
             
             // Return the ComponentSpec as a JSON string
@@ -505,11 +507,12 @@ export class ComponentRegistryExtendedResolver {
     private async cacheComponent(
         component: ComponentSpec,
         registryId: string,
-        userInfo: UserInfo
+        userInfo: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<void> {
         try {
             // Find or create component entity
-            const md = new Metadata();
+            const md = provider ?? new Metadata();
             const componentEntity = await md.GetEntityObject<MJComponentEntity>('MJ: Components', userInfo);
             
             // Check if component already exists

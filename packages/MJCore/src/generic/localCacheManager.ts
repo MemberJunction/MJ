@@ -1,5 +1,5 @@
 import { BaseSingleton, MJGlobal, MJEventType } from "@memberjunction/global";
-import { AggregateResult, DatasetItemFilterType, DatasetResultType, ILocalStorageProvider } from "./interfaces";
+import { AggregateResult, DatasetItemFilterType, DatasetResultType, IMetadataProvider, ILocalStorageProvider } from "./interfaces";
 import { AggregateExpression, RunViewParams } from "../views/runView";
 import { LogError, LogStatusEx } from "./logging";
 import { BaseEntity, BaseEntityEvent } from "./baseEntity";
@@ -593,8 +593,12 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const entityName = entityEvent.entityName;
         if (!entityName) return;
 
-        // Short-circuit: if caching is disabled for this entity, skip processing
-        const md = new Metadata();
+        // Short-circuit: if caching is disabled for this entity, skip processing.
+        // Use the provider attached to the event (from the publisher — e.g. GraphQLDataProvider)
+        // so multi-provider client setups resolve metadata against the correct server. Fall back
+        // to a default Metadata instance when no provider is attached (single-provider apps);
+        // the Metadata helper itself proxies to the global provider with sensible fallbacks.
+        const md = entityEvent.provider ?? new Metadata();
         const entityInfo = md.EntityByName(entityName);
         if (entityInfo && !this.IsCachingEnabledForEntity(entityInfo)) return;
 
@@ -866,15 +870,18 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         if (!this._storageProvider || !this._config.enabled) return;
 
         const key = this.buildDatasetKey(name, itemFilters, keyPrefix);
-        const value = JSON.stringify(dataset);
-        const sizeBytes = this.estimateSize(value);
+        // Estimate size from a string representation (used only for cache eviction
+        // accounting; the actual stored value is the native object).
+        const sizeBytes = this.estimateSize(JSON.stringify(dataset));
 
         // Check if we need to evict entries
         await this.evictIfNeeded(sizeBytes);
 
         try {
-            await this._storageProvider.SetItem(key, value, CacheCategory.DatasetCache);
-            await this._storageProvider.SetItem(key + '_date', dataset.LatestUpdateDate.toISOString(), CacheCategory.DatasetCache);
+            // Store the dataset object natively — no JSON.stringify needed. IndexedDB uses
+            // structured clone; localStorage / Redis serialize internally.
+            await this._storageProvider.SetItem<DatasetResultType>(key, dataset, CacheCategory.DatasetCache);
+            await this._storageProvider.SetItem<string>(key + '_date', dataset.LatestUpdateDate.toISOString(), CacheCategory.DatasetCache);
 
             this.registerEntry({
                 key,
@@ -910,12 +917,13 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const key = this.buildDatasetKey(name, itemFilters, keyPrefix);
 
         try {
-            const value = await this._storageProvider.GetItem(key, CacheCategory.DatasetCache);
+            // Native object read — no JSON.parse needed.
+            const value = await this._storageProvider.GetItem<DatasetResultType>(key, CacheCategory.DatasetCache);
 
             if (value) {
                 this.recordAccess(key);
                 this._stats.hits++;
-                return JSON.parse(value);
+                return value;
             }
         } catch (e) {
             LogError(`LocalCacheManager.GetDataset failed: ${e}`);
@@ -943,7 +951,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const key = this.buildDatasetKey(name, itemFilters, keyPrefix);
 
         try {
-            const dateStr = await this._storageProvider.GetItem(key + '_date', CacheCategory.DatasetCache);
+            // The date is stored as an ISO string for forward-compatibility across providers
+            // (Redis can't natively round-trip Date; localStorage requires string).
+            const dateStr = await this._storageProvider.GetItem<string>(key + '_date', CacheCategory.DatasetCache);
             return dateStr ? new Date(dateStr) : null;
         } catch (e) {
             return null;
@@ -1113,6 +1123,11 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * @param results - The results to cache
      * @param maxUpdatedAt - The latest __mj_UpdatedAt from the results
      * @param aggregateResults - Optional aggregate results to cache alongside the row data
+     * @param totalRowCount - Optional total row count when paging
+     * @param provider - The IMetadataProvider that produced these results. Required for correct
+     *   AllowCaching gating in multi-provider scenarios (parallel client connections to multiple
+     *   servers). Falls back to `Metadata.Provider` (global default) when omitted, which is fine
+     *   for single-provider apps but wrong when AllowCaching differs across servers.
      */
     public async SetRunViewResult(
         fingerprint: string,
@@ -1120,9 +1135,42 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         results: unknown[],
         maxUpdatedAt: string,
         aggregateResults?: AggregateResult[],
-        totalRowCount?: number
+        totalRowCount?: number,
+        provider?: IMetadataProvider
     ): Promise<void> {
         if (!this._storageProvider || !this._config.enabled) return;
+
+        // Short-circuit: if the entity has AllowCaching = false, do not write to the cache.
+        // The invalidation path (HandleBaseEntityEvent line 552) already short-circuits for
+        // these entities, so any entry we write here would never be invalidated and would
+        // serve stale data on subsequent reads. This was causing the "newly created
+        // Channel Actions / Organization Actions don't show up in the UI" bug.
+        //
+        // Resolve metadata via the caller's provider when available — in multi-provider
+        // client scenarios, the global Metadata.Provider may belong to a different server
+        // and have different AllowCaching flags. Fall back to the global provider only when
+        // no provider was passed.
+        //
+        // EntityByName is case-insensitive, trims whitespace, and uses the O(1) entity-by-name
+        // map. During startup the provider may not be ready, in which case EntityByName
+        // returns undefined; we fall through and write to avoid blocking legitimate boot-time
+        // caching of system/metadata entities.
+        if (params.EntityName) {
+            try {
+                // Use the caller's provider when supplied (multi-provider correctness); fall back
+                // to a default Metadata instance (which proxies to the global provider) for
+                // single-provider apps and tests that mock Metadata.prototype.
+                const md = provider ?? new Metadata();
+                const entity = md.EntityByName(params.EntityName);
+                if (entity && !this.IsCachingEnabledForEntity(entity)) {
+                    LogStatusEx({ message: `[CACHE-WRITE-GATE] Skipping cache write for non-cacheable entity "${params.EntityName}" (AllowCaching=false)`, verboseOnly: true });
+                    return;
+                }
+            } catch (err) {
+                // fall through and write — fail-open is safer than fail-closed here
+                // (an unexpected exception shouldn't break caching for valid entities)
+            }
+        }
 
         // Persist results, maxUpdatedAt, aggregateResults, and totalRowCount
         const data: CachedRunViewData = { results, maxUpdatedAt };
@@ -1132,8 +1180,10 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         if (totalRowCount !== undefined) {
             data.totalRowCount = totalRowCount;
         }
-        const value = JSON.stringify(data);
-        const sizeBytes = this.estimateSize(value);
+        // Estimate size from a string serialization for eviction accounting only;
+        // the actual stored value is the native object (no JSON.stringify on the
+        // hot path).
+        const sizeBytes = this.estimateSize(JSON.stringify(data));
 
         // Per-entity memory limit: evict oldest entries for this entity if over budget
         const entityName = params.EntityName || 'Unknown';
@@ -1143,7 +1193,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         await this.evictIfNeeded(sizeBytes);
 
         try {
-            await this._storageProvider.SetItem(fingerprint, value, CacheCategory.RunViewCache);
+            // Native object storage — IDB structured-clones, localStorage / Redis serialize internally.
+            await this._storageProvider.SetItem<CachedRunViewData>(fingerprint, data, CacheCategory.RunViewCache);
 
             this.registerEntry({
                 key: fingerprint,
@@ -1186,31 +1237,88 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         if (!this._storageProvider || !this._config.enabled) return null;
 
         try {
-            const value = await this._storageProvider.GetItem(fingerprint, CacheCategory.RunViewCache);
-
-            if (value) {
-                this.recordAccess(fingerprint);
-                this._stats.hits++;
-                const parsed = JSON.parse(value) as CachedRunViewData;
-                const results = parsed.results || [];
-                const result: CachedRunViewResult = {
-                    results,
-                    maxUpdatedAt: parsed.maxUpdatedAt,
-                    rowCount: results.length,
-                    totalRowCount: parsed.totalRowCount
-                };
-                // Include aggregate results if they were cached
-                if (parsed.aggregateResults) {
-                    result.aggregateResults = parsed.aggregateResults;
-                }
-                return result;
-            }
+            // Native object read — IDB structured-clones the result back, no JSON.parse needed.
+            const parsed = await this._storageProvider.GetItem<CachedRunViewData>(fingerprint, CacheCategory.RunViewCache);
+            return this.materializeCachedRunViewResult(fingerprint, parsed);
         } catch (e) {
             LogError(`LocalCacheManager.GetRunViewResult failed: ${e}`);
+            this._stats.misses++;
+            return null;
+        }
+    }
+
+    /**
+     * Batched retrieval for many cached RunView results in a single underlying
+     * IndexedDB transaction (or Redis MGET, or one in-memory pass — depends on
+     * provider). N keys, one call.
+     *
+     * Returns a `Map` keyed by fingerprint. Missing entries map to `null`. The
+     * map preserves the order of the input array's first occurrence of each key.
+     *
+     * **Why this exists**: the smart-cache-check flow reads N cached entries in
+     * two passes — once to build the per-fingerprint cacheStatus payload, then
+     * again after the server response to materialize "current" entries. Per-key
+     * `GetItem` calls serialize across IDB transactions; one batched read trades
+     * ~N transactions of overhead for a single transaction's commit cost.
+     *
+     * Hits/misses are accounted per fingerprint just like {@link GetRunViewResult}.
+     *
+     * @param fingerprints - Cache fingerprints to look up. Duplicates are
+     *                       deduplicated; the returned map has one entry per unique key.
+     * @returns Map from fingerprint to {@link CachedRunViewResult} (or `null` if not cached).
+     *          Always returns a map (possibly empty); never throws.
+     */
+    public async GetRunViewResults(fingerprints: string[]): Promise<Map<string, CachedRunViewResult | null>> {
+        const out = new Map<string, CachedRunViewResult | null>();
+        if (!this._storageProvider || !this._config.enabled || fingerprints.length === 0) {
+            // Still preserve the contract: each requested key gets an entry.
+            for (const fp of new Set(fingerprints)) out.set(fp, null);
+            return out;
         }
 
-        this._stats.misses++;
-        return null;
+        try {
+            const raw = await this._storageProvider.GetItems<CachedRunViewData>(fingerprints, CacheCategory.RunViewCache);
+            for (const [fp, parsed] of raw) {
+                out.set(fp, this.materializeCachedRunViewResult(fp, parsed));
+            }
+            return out;
+        } catch (e) {
+            LogError(`LocalCacheManager.GetRunViewResults failed: ${e}`);
+            // Defensive: count every requested key as a miss and return null entries.
+            for (const fp of new Set(fingerprints)) {
+                this._stats.misses++;
+                out.set(fp, null);
+            }
+            return out;
+        }
+    }
+
+    /**
+     * Shared helper used by both `GetRunViewResult` and `GetRunViewResults` to
+     * unwrap the persisted shape into the consumer-facing `CachedRunViewResult`,
+     * recording the appropriate hit/miss + access-tracking side effects.
+     */
+    private materializeCachedRunViewResult(
+        fingerprint: string,
+        parsed: CachedRunViewData | null | undefined
+    ): CachedRunViewResult | null {
+        if (!parsed) {
+            this._stats.misses++;
+            return null;
+        }
+        this.recordAccess(fingerprint);
+        this._stats.hits++;
+        const results = parsed.results || [];
+        const result: CachedRunViewResult = {
+            results,
+            maxUpdatedAt: parsed.maxUpdatedAt,
+            rowCount: results.length,
+            totalRowCount: parsed.totalRowCount,
+        };
+        if (parsed.aggregateResults) {
+            result.aggregateResults = parsed.aggregateResults;
+        }
+        return result;
     }
 
     /**
@@ -1253,6 +1361,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
      * @param newMaxUpdatedAt - The new maxUpdatedAt timestamp after applying the delta
      * @param _serverRowCount - DEPRECATED: This parameter is ignored. rowCount is always derived from merged results.length.
      * @param aggregateResults - Optional fresh aggregate results (since aggregates can't be differentially computed)
+     * @param provider - The IMetadataProvider that produced these results (for AllowCaching gating
+     *   in multi-provider scenarios). Falls back to global Metadata.Provider when omitted.
      * @returns The merged results after applying the differential update, or null if cache not found
      */
     public async ApplyDifferentialUpdate(
@@ -1263,7 +1373,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         primaryKeyFieldName: string,
         newMaxUpdatedAt: string,
         _serverRowCount?: number,
-        aggregateResults?: AggregateResult[]
+        aggregateResults?: AggregateResult[],
+        provider?: IMetadataProvider
     ): Promise<CachedRunViewResult | null> {
         if (!this._storageProvider || !this._config.enabled) return null;
 
@@ -1313,7 +1424,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 mergedResults,
                 newMaxUpdatedAt,
                 aggregateResults,
-                mergedTotalRowCount
+                mergedTotalRowCount,
+                provider
             );
 
             // Return with rowCount derived from merged results and aggregates if provided
@@ -1474,10 +1586,11 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
             results: updatedResults,
             maxUpdatedAt: newMaxUpdatedAt
         };
-        const value = JSON.stringify(data);
-        const sizeBytes = this.estimateSize(value);
+        // Estimate size from a string serialization for eviction accounting only;
+        // the actual stored value is the native object.
+        const sizeBytes = this.estimateSize(JSON.stringify(data));
 
-        await this._storageProvider!.SetItem(fingerprint, value, CacheCategory.RunViewCache);
+        await this._storageProvider!.SetItem<CachedRunViewData>(fingerprint, data, CacheCategory.RunViewCache);
 
         const existingEntry = this._registry.get(fingerprint);
         if (existingEntry) {
@@ -1588,8 +1701,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         if (!this._storageProvider || !this._config.enabled) return;
 
         const actualRowCount = rowCount ?? results.length;
-        const value = JSON.stringify({ results, maxUpdatedAt, rowCount: actualRowCount, queryId });
-        const sizeBytes = this.estimateSize(value);
+        const data = { results, maxUpdatedAt, rowCount: actualRowCount, queryId };
+        // Estimate size from a string serialization for eviction accounting only.
+        const sizeBytes = this.estimateSize(JSON.stringify(data));
 
         // Check if we need to evict entries
         await this.evictIfNeeded(sizeBytes);
@@ -1598,7 +1712,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const expiresAt = ttlMs ? now + ttlMs : undefined;
 
         try {
-            await this._storageProvider.SetItem(fingerprint, value, CacheCategory.RunQueryCache);
+            // Native object storage — no JSON.stringify on the hot path.
+            await this._storageProvider.SetItem(fingerprint, data, CacheCategory.RunQueryCache);
 
             this.registerEntry({
                 key: fingerprint,
@@ -1642,12 +1757,17 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         }
 
         try {
-            const value = await this._storageProvider.GetItem(fingerprint, CacheCategory.RunQueryCache);
+            // Native object read — no JSON.parse needed.
+            const parsed = await this._storageProvider.GetItem<{
+                results: unknown[];
+                maxUpdatedAt: string;
+                rowCount?: number;
+                queryId?: string;
+            }>(fingerprint, CacheCategory.RunQueryCache);
 
-            if (value) {
+            if (parsed) {
                 this.recordAccess(fingerprint);
                 this._stats.hits++;
-                const parsed = JSON.parse(value);
                 // Handle legacy entries that may not have rowCount
                 return {
                     results: parsed.results,
@@ -1922,9 +2042,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         if (!this._storageProvider) return;
 
         try {
-            const stored = await this._storageProvider.GetItem(this.REGISTRY_KEY, CacheCategory.Metadata);
-            if (stored) {
-                const parsed = JSON.parse(stored) as CacheEntryInfo[];
+            // Native object read — registry is a plain CacheEntryInfo[] array.
+            const parsed = await this._storageProvider.GetItem<CacheEntryInfo[]>(this.REGISTRY_KEY, CacheCategory.Metadata);
+            if (parsed && Array.isArray(parsed)) {
                 this._registry = new Map(parsed.map(e => [e.key, e]));
 
                 // Rebuild entity→fingerprint reverse index from persisted registry
@@ -1961,8 +2081,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         if (!this._storageProvider) return;
 
         try {
-            const data = JSON.stringify(this.GetAllEntries());
-            await this._storageProvider.SetItem(this.REGISTRY_KEY, data, CacheCategory.Metadata);
+            // Native object storage — store the entries array directly.
+            await this._storageProvider.SetItem<CacheEntryInfo[]>(this.REGISTRY_KEY, this.GetAllEntries(), CacheCategory.Metadata);
         } catch (e) {
             // Ignore persistence errors - cache is still functional
         }

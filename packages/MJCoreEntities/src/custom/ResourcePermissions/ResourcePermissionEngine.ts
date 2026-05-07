@@ -1,4 +1,4 @@
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, IStartupSink, Metadata, RegisterForStartup, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, IStartupSink, RegisterForStartup, UserInfo } from "@memberjunction/core";
 import { UUIDsEqual } from "@memberjunction/global";
 import { MJResourcePermissionEntity, MJResourceTypeEntity } from "../../generated/entity_subclasses";
 
@@ -43,6 +43,19 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
 
     public get Permissions(): MJResourcePermissionEntity[] {
         return this._Permissions;
+    }
+
+    /**
+     * Case-insensitive name → ID lookup against the cached `MJ: Resource Types`
+     * catalog. Returns null when the catalog isn't loaded yet or no matching
+     * type exists. Used by `shareNotification.ts` and `shareNotificationHandler.ts`
+     * to resolve the `ResourceTypeID` for notification deep-links.
+     */
+    public ResourceTypeIdByName(name: string | null | undefined): string | null {
+        if (!name) return null;
+        const lower = name.trim().toLowerCase();
+        const match = this._ResourceTypes?.ResourceTypes?.find((rt) => rt.Name?.trim().toLowerCase() === lower);
+        return match?.ID ?? null;
     }
 
 
@@ -165,7 +178,7 @@ export class ResourcePermissionEngine extends BaseEngine<ResourcePermissionEngin
      * foreign key to the Users entity from the resource type's entity and looks for the field that is consider the "Name Field" for the entity and returns those values.
      */
     public GetResourceTypeInfoFields(ResourceTypeID: string): {OwnerIDFieldName: string, NameFieldName: string, PrimaryKeyFieldName: string} {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const rt = this.ResourceTypes.find((rt) => UUIDsEqual(rt.ID, ResourceTypeID));
         if (!rt)
             throw new Error(`Resource Type ${ResourceTypeID} not found`);

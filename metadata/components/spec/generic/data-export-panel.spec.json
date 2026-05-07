@@ -108,11 +108,6 @@
       "description": "Function that returns the HTML element to capture for PDF export (alternative to data array)"
     },
     {
-      "name": "getAiInsightsElement",
-      "type": "function",
-      "description": "Function that returns the AI insights element to include in PDF export (optional)"
-    },
-    {
       "name": "aiInsightsText",
       "type": "string",
       "description": "Raw markdown text of AI insights to render as text in PDF (preferred over element capture)"

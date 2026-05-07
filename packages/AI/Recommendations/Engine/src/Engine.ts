@@ -65,7 +65,7 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
     request.Recommendations = recommendations;
 
     // load the run
-    const recommendationRunEntity = await new Metadata().GetEntityObject<MJRecommendationRunEntity>('MJ: Recommendation Runs', request.CurrentUser);
+    const recommendationRunEntity = await this.ProviderToUse.GetEntityObject<MJRecommendationRunEntity>('MJ: Recommendation Runs', request.CurrentUser);
     recommendationRunEntity.NewRecord();
 
     // update status for current run
@@ -130,8 +130,8 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
   }
 
   private async GetRecommendationsByListID(listID: string, currentUser?: UserInfo): Promise<MJRecommendationEntity[]> {
-    const rv: RunView = new RunView();
-    const md: Metadata = new Metadata();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+    const md = this.ProviderToUse;
 
     const rvListDetailsResult = await rv.RunViews([
       { /* Getting the List to get the entity name */
@@ -198,8 +198,8 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
   }
 
   private async GetRecommendationsByRecordIDs(entityName: string, recordIDs: Array<string | number>, currentUser?: UserInfo): Promise<MJRecommendationEntity[]> {
-    const md: Metadata = new Metadata();
-    const rv: RunView = new RunView();
+    const md = this.ProviderToUse;
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
     const entity: EntityInfo = md.Entities.find((e) => e.Name.toLowerCase() == entityName.toLowerCase());
     if(!entity) {
@@ -231,7 +231,7 @@ export class RecommendationEngineBase extends BaseEngine<RecommendationEngineBas
   }
 
   private async CreateRecommendationErrorList(recommendationRunID: string, entityID: string, currentUser?: UserInfo): Promise<MJListEntity | null> {
-    const md: Metadata = new Metadata();
+    const md = this.ProviderToUse;
     const list: MJListEntity = await md.GetEntityObject<MJListEntity>('MJ: Lists', currentUser);
     list.Name = `Recommendation Run ${recommendationRunID} Errors`;
     list.EntityID = entityID;

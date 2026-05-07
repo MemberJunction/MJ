@@ -115,22 +115,27 @@ describe('PostgreSQLCodeGenProvider', () => {
     });
 
     describe('getCRUDRoutineName', () => {
-        it('should generate fn_create_ name', () => {
+        // PG codegen now emits sp{Verb}{TableCodeName} (PascalCase) to match the
+        // baseline-ported SP names (which are SQL Server names ported verbatim into
+        // PG) and the runtime PostgreSQLDataProvider, which calls procs by that
+        // exact convention. Earlier we emitted `fn_<verb>_<snake>` and the runtime
+        // could never find the function.
+        it('should generate spCreate name matching baseline convention', () => {
             const entity = createMockEntity();
             const name = provider.getCRUDRoutineName(entity, CRUDType.Create);
-            expect(name).toBe('fn_create_test_entity');
+            expect(name).toBe('spCreateTestEntity');
         });
 
-        it('should generate fn_update_ name', () => {
+        it('should generate spUpdate name matching baseline convention', () => {
             const entity = createMockEntity();
             const name = provider.getCRUDRoutineName(entity, CRUDType.Update);
-            expect(name).toBe('fn_update_test_entity');
+            expect(name).toBe('spUpdateTestEntity');
         });
 
-        it('should generate fn_delete_ name', () => {
+        it('should generate spDelete name matching baseline convention', () => {
             const entity = createMockEntity();
             const name = provider.getCRUDRoutineName(entity, CRUDType.Delete);
-            expect(name).toBe('fn_delete_test_entity');
+            expect(name).toBe('spDeleteTestEntity');
         });
 
         it('should use custom SP name when set on entity', () => {
@@ -192,6 +197,33 @@ describe('PostgreSQLCodeGenProvider', () => {
             expect(sql).toContain('r."CategoryName"');
             expect(sql).toContain('LEFT OUTER JOIN');
         });
+
+        it('should only emit DROP VIEW inside the 42P16 EXCEPTION recovery block', () => {
+            // The base view generator wraps CREATE OR REPLACE in a DO block that
+            // catches invalid_table_definition (42P16 — raised when the column
+            // list changes in a way OR REPLACE can't accept) and falls back to
+            // DROP VIEW IF EXISTS ... CASCADE; CREATE VIEW. The DROP is the
+            // recovery path, not the default. Regression guard: the only DROP
+            // VIEW in the output must live inside that EXCEPTION block.
+            const entity = createMockEntity();
+            const context: BaseViewGenerationContext = {
+                entity,
+                relatedFieldsSelect: '',
+                relatedFieldsJoins: '',
+                parentFieldsSelect: '',
+                parentJoins: '',
+                rootFieldsSelect: '',
+                rootJoins: '',
+            };
+
+            const sql = provider.generateBaseView(context);
+            // Recovery path is present
+            expect(sql).toMatch(/EXCEPTION\s+WHEN\s+invalid_table_definition/i);
+            expect(sql).toMatch(/\bDROP\s+VIEW\s+IF\s+EXISTS\b[^;]*\bCASCADE\b/i);
+            // No DROP VIEW outside the EXCEPTION block (i.e. before it)
+            const beforeException = sql.split(/EXCEPTION\s+WHEN\s+invalid_table_definition/i)[0];
+            expect(beforeException).not.toMatch(/\bDROP\s+VIEW\b/i);
+        });
     });
 
     describe('generateCRUDCreate', () => {
@@ -200,7 +232,7 @@ describe('PostgreSQLCodeGenProvider', () => {
             const sql = provider.generateCRUDCreate(entity);
 
             expect(sql).toContain('CREATE OR REPLACE FUNCTION');
-            expect(sql).toContain('fn_create_test_entity');
+            expect(sql).toContain('spCreateTestEntity');
             expect(sql).toContain('RETURNS SETOF');
             expect(sql).toContain('vwTestEntities');
             expect(sql).toContain('INSERT INTO');
@@ -233,7 +265,7 @@ describe('PostgreSQLCodeGenProvider', () => {
             const sql = provider.generateCRUDUpdate(entity);
 
             expect(sql).toContain('CREATE OR REPLACE FUNCTION');
-            expect(sql).toContain('fn_update_test_entity');
+            expect(sql).toContain('spUpdateTestEntity');
             expect(sql).toContain('RETURNS SETOF');
             expect(sql).toContain('UPDATE');
             expect(sql).toContain('SET');
@@ -262,7 +294,7 @@ describe('PostgreSQLCodeGenProvider', () => {
             const sql = provider.generateCRUDDelete(entity, '');
 
             expect(sql).toContain('CREATE OR REPLACE FUNCTION');
-            expect(sql).toContain('fn_delete_test_entity');
+            expect(sql).toContain('spDeleteTestEntity');
             expect(sql).toContain('DELETE FROM');
             expect(sql).toContain('RETURNS TABLE');
             expect(sql).toContain('#variable_conflict use_column');
@@ -308,7 +340,8 @@ describe('PostgreSQLCodeGenProvider', () => {
             expect(sql).toContain('CREATE OR REPLACE FUNCTION');
             expect(sql).toContain('fn_trg_update_test_entity');
             expect(sql).toContain('RETURNS TRIGGER');
-            expect(sql).toContain("NEW.__mj_UpdatedAt := NOW() AT TIME ZONE 'UTC'");
+            expect(sql).toContain('NEW."__mj_UpdatedAt" := NOW()');
+
             expect(sql).toContain('RETURN NEW');
             expect(sql).toContain('CREATE TRIGGER');
             expect(sql).toContain('BEFORE UPDATE');
@@ -470,17 +503,66 @@ describe('PostgreSQLCodeGenProvider', () => {
             const result = provider.generateCRUDParamString(entity.Fields, false);
             expect(result).not.toContain('virtual');
         });
+
+        // Tolerant-SP `_Clear` companion is emitted for nullable fields that have a
+        // non-NULL DB default. On SQL Server it's `bit DEFAULT 0` and `= 1` in CASE;
+        // on PostgreSQL it must be `boolean DEFAULT false` and `= true` — otherwise
+        // PG raises "operator does not exist: boolean = integer" at runtime.
+        it('should emit _Clear companion as `boolean DEFAULT false` (not `bit DEFAULT 0`)', () => {
+            const entity = createMockEntity({}, [
+                { ID: 'f1', Name: 'ID', IsPrimaryKey: true, Type: 'uniqueidentifier', Length: 16, AllowsNull: false, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: 'newsequentialid()' },
+                { ID: 'f2', Name: 'Status', IsPrimaryKey: false, Type: 'nvarchar', Length: 40, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: "'Active'" },
+            ]);
+            const result = provider.generateCRUDParamString(entity.Fields, true);
+            // PG-correct: boolean type + false default
+            // (ParameterRef lowercases the name in PG snake_case convention)
+            expect(result).toContain('p_status_clear boolean DEFAULT false');
+            // PG-incorrect: SS-style bit + 0 default
+            expect(result).not.toContain('p_status_clear bit DEFAULT 0');
+        });
     });
 
     describe('generateUpdateFieldString', () => {
-        it('should generate SET clause with quoted identifiers', () => {
-            const entity = createMockEntity();
+        it('should generate SET clause with quoted identifiers and tolerant merge semantics', () => {
+            // Use a field that qualifies under PG's narrow `_Clear` rule:
+            // nullable AND has a non-NULL DB default. PG's 100-arg ceiling
+            // forces `PostgreSQLCodeGenProvider.needsClearCompanion` to use
+            // the narrow rule (only fields with non-NULL defaults), so the
+            // `Email` mock above (DefaultValue: '') does NOT get a `_Clear`
+            // companion. We use `Status` with a `'Active'` default to verify
+            // the CASE/COALESCE pattern on a field that DOES qualify.
+            const entity = createMockEntity({}, [
+                { ID: 'f1', Name: 'ID', IsPrimaryKey: true, Type: 'uniqueidentifier', Length: 16, AllowsNull: false, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: 'newsequentialid()' },
+                { ID: 'f2', Name: 'Name', IsPrimaryKey: false, Type: 'nvarchar', Length: 200, AllowsNull: false, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                { ID: 'f3', Name: 'Status', IsPrimaryKey: false, Type: 'nvarchar', Length: 40, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: "'Active'" },
+            ]);
             const result = provider.generateUpdateFieldString(entity.Fields);
 
-            expect(result).toContain('"Name" = p_name');
-            expect(result).toContain('"Email" = p_email');
+            // Tolerant SP merge wrap: omitting a parameter preserves the existing value.
+            // PostgreSQL has no ISNULL keyword; it emits COALESCE.
+            // Non-nullable columns: plain COALESCE merge.
+            expect(result).toContain('"Name" = COALESCE(p_name, "Name")');
+            // Nullable column with a non-NULL default: CASE WHEN _Clear THEN NULL
+            // ELSE COALESCE(...) END so callers can explicitly set the column to
+            // NULL via the _Clear companion. PG comparison is `= true` (not `= 1`)
+            // to match the `boolean DEFAULT false` parameter type — see
+            // `dialect.BooleanLiteral(true)` in the codegen template.
+            expect(result).toContain('"Status" = CASE WHEN p_status_clear = true THEN NULL ELSE COALESCE(p_status, "Status") END');
             // Should NOT include PK
-            expect(result).not.toContain('"ID" = p_id');
+            expect(result).not.toContain('"ID" = ');
+        });
+
+        // _Clear companion CASE: on PG it must compare against `true`, not `1` —
+        // matches the `boolean DEFAULT false` parameter type and avoids
+        // "operator does not exist: boolean = integer" at runtime.
+        it('should emit `_Clear = true` in the CASE expression (not `_Clear = 1`)', () => {
+            const entity = createMockEntity({}, [
+                { ID: 'f1', Name: 'ID', IsPrimaryKey: true, Type: 'uniqueidentifier', Length: 16, AllowsNull: false, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: 'newsequentialid()' },
+                { ID: 'f2', Name: 'Status', IsPrimaryKey: false, Type: 'nvarchar', Length: 40, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: "'Active'" },
+            ]);
+            const result = provider.generateUpdateFieldString(entity.Fields);
+            expect(result).toContain('CASE WHEN p_status_clear = true THEN');
+            expect(result).not.toContain('CASE WHEN p_status_clear = 1 THEN');
         });
     });
 
@@ -559,7 +641,7 @@ describe('PostgreSQLCodeGenProvider', () => {
             });
 
             expect(sql).toContain('PERFORM');
-            expect(sql).toContain('fn_delete_child_entity');
+            expect(sql).toContain('spDeleteChildEntity');
         });
 
         it('should generate warning when entity disallows delete', () => {

@@ -144,11 +144,20 @@ export class ComponentPreviewComponent implements OnInit, OnDestroy {
         technicalDetails: event.payload?.errorInfo || event.payload
       };
       this.cdr.detectChanges();
-    } else if (event.type === 'loaded') {
-      const resolvedSpec = event.payload?.resolvedSpec as ComponentSpec | undefined;
-      if (resolvedSpec) {
-        this.State.UpdateWithResolvedSpec(resolvedSpec);
-      }
+    }
+  }
+
+  /**
+   * Fires once the React bridge has resolved the full component hierarchy from the
+   * registry. The bridge stores the resolved spec (with real dependency code, not
+   * registry-reference stubs) on its public `resolvedComponentSpec` field — pull it
+   * across so the code-editor tabs can render actual source instead of "No code available".
+   */
+  public OnReactInitialized(): void {
+    const resolvedSpec = this.ReactComponentRef?.resolvedComponentSpec;
+    if (resolvedSpec) {
+      this.State.UpdateWithResolvedSpec(resolvedSpec);
+      this.cdr.detectChanges();
     }
   }
 
@@ -180,7 +189,9 @@ export class ComponentPreviewComponent implements OnInit, OnDestroy {
 
   /**
    * Refresh the preview by nulling the spec, detecting changes,
-   * then restoring the spec after a short delay.
+   * then restoring the spec after a short delay. The bridge's own
+   * `initializeComponent` purges the runtime registry + manager fetch cache
+   * for the new spec's keys, so consumers don't need to clear anything here.
    */
   private refreshPreview(): void {
     if (!this.State.SelectedComponent) return;

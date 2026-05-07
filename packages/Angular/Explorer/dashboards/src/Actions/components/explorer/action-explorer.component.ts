@@ -295,7 +295,7 @@ export class ActionExplorerComponent extends BaseResourceComponent implements On
 
     try {
       // Load action params
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJActionParamEntity>({
         EntityName: 'MJ: Action Params',
         ExtraFilter: `ActionID='${action.ID}'`,

@@ -186,18 +186,21 @@ export class BaseAgent extends AgentActionHandler {
     private _promptRunner: AIPromptRunner = new AIPromptRunner();
 
     /**
-     * Metadata instance for creating entity objects.
-     * @private
-     */
-    private _metadata: Metadata = new Metadata();
-
-    /**
      * Active per-request metadata provider, set at the start of Execute().
      * Defaults to the global Metadata.Provider; overridden when a per-request
      * provider is passed through ExecuteAgentParams.provider for server isolation.
      * @private
      */
-    private _activeProvider: IMetadataProvider = Metadata.Provider;
+    private _activeProvider: IMetadataProvider = Metadata.Provider; // global-provider-ok: default until Execute() captures per-request provider
+
+    /**
+     * Returns the active metadata provider for this agent run. Subclasses MUST
+     * use this getter (rather than `new Metadata()` or `Metadata.Provider`) so
+     * that per-request provider isolation is preserved on the server.
+     */
+    protected get ProviderToUse(): IMetadataProvider {
+        return this._activeProvider ?? Metadata.Provider;
+    }
 
     /**
      * This is state information that is specific to the agent type. BaseAgent doesn't know what
@@ -1052,7 +1055,7 @@ export class BaseAgent extends AgentActionHandler {
     public async Execute<C = any, R = any>(params: ExecuteAgentParams<C>): Promise<ExecuteAgentResult<R>> {
         // Capture per-request provider for the duration of this execution so all entity
         // saves go through the isolated provider, never the global singleton's transaction.
-        this._activeProvider = params.provider || Metadata.Provider;
+        this._activeProvider = params.provider ?? Metadata.Provider;
 
         // =====================================================================================
         // UNIVERSAL WALL-CLOCK TIMEOUT
@@ -1271,7 +1274,7 @@ export class BaseAgent extends AgentActionHandler {
 
             let primaryScopeEntityId: string | undefined;
             if (primaryScopeEntityName) {
-                const primaryEntity = this._metadata.Entities.find(e => e.Name === primaryScopeEntityName);
+                const primaryEntity = this.ProviderToUse.EntityByName(primaryScopeEntityName);
                 if (primaryEntity) {
                     primaryScopeEntityId = primaryEntity.ID;
                 }
@@ -4713,9 +4716,7 @@ The context is now within limits. Please retry your request with the recovered c
 
             // Resolve primary entity ID from entity name
             if (primaryScopeEntityName) {
-                const primaryEntity = this._metadata.Entities.find(
-                    e => e.Name === primaryScopeEntityName
-                );
+                const primaryEntity = this.ProviderToUse.EntityByName(primaryScopeEntityName);
                 if (primaryEntity) {
                     this._agentRun.PrimaryScopeEntityID = primaryEntity.ID;
                 } else {

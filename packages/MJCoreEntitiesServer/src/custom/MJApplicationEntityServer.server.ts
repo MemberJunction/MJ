@@ -16,7 +16,7 @@ export class MJApplicationEntityServer extends MJApplicationEntity {
         super(Entity);
 
         // Verify this is running server-side only
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: constructor runs before entity provider is wired
         if (md.ProviderType !== 'Database')
             throw new Error('This class is only supported for server-side/database providers. Remove this package from your application.');
     }
@@ -27,7 +27,7 @@ export class MJApplicationEntityServer extends MJApplicationEntity {
      * 2. Automatic UserApplication creation for default apps
      */
     public override async Save(options?: EntitySaveOptions): Promise<boolean> {
-        const provider = Metadata.Provider as DatabaseProviderBase;
+        const provider = this.ProviderToUse as unknown as DatabaseProviderBase;
 
         // Auto-generate Path from Name if AutoUpdatePath is true
         await this.autoGeneratePath();
@@ -195,15 +195,24 @@ export class MJApplicationEntityServer extends MJApplicationEntity {
         try {
             LogStatus(`Creating UserApplication records for all users for application: ${this.Name}`);
 
-            // Use the entity's provider
-            const md = this.ProviderToUse as any as IMetadataProvider;
+            // Use the entity's provider for metadata + dialect operations.
+            // ProviderToUse is typed as IEntityDataProvider; the concrete
+            // DatabaseProviderBase also implements IMetadataProvider AND
+            // exposes the dialect via `.Dialect`, so we narrow through unknown.
+            const provider = this.ProviderToUse as unknown as DatabaseProviderBase;
+            const md = provider as unknown as IMetadataProvider;
             const rv = this.RunViewProviderToUse;
 
-            // Load all data in a single RunViews call
+            // Filter active users server-side using the dialect's boolean
+            // literal — emits `= 1` on SS, `= TRUE` on PG. Avoids loading
+            // every user just to drop the inactive ones.
+            type UserRow = { ID: string; Name: string };
+            type UserAppRow = { ID: string; UserID: string; ApplicationID: string; Sequence: number };
+            const trueLit = provider.Dialect.BooleanLiteral(true);
             const [usersResult, allUserAppsResult] = await rv.RunViews([
                 {
                     EntityName: 'MJ: Users',
-                    ExtraFilter: 'IsActive = 1',
+                    ExtraFilter: `IsActive = ${trueLit}`,
                     ResultType: 'simple'
                 },
                 {
@@ -221,15 +230,15 @@ export class MJApplicationEntityServer extends MJApplicationEntity {
                 throw new Error(`Failed to load user applications: ${allUserAppsResult.ErrorMessage}`);
             }
 
-            const users = usersResult.Results || [];
-            const allUserApps = allUserAppsResult.Results || [];
+            const users = (usersResult.Results ?? []) as UserRow[];
+            const allUserApps = (allUserAppsResult.Results ?? []) as UserAppRow[];
 
             LogStatus(`Found ${users.length} active users`);
 
             // For each user, create a UserApplication record
             for (const user of users) {
                 // Filter existing UserApplications for this user/app combination (client-side)
-                const existingForUserApp = allUserApps.filter((ua: any) =>
+                const existingForUserApp = allUserApps.filter(ua =>
                     UUIDsEqual(ua.UserID, user.ID) && UUIDsEqual(ua.ApplicationID, this.ID)
                 );
 

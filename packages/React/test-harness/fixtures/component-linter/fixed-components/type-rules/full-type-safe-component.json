@@ -9,23 +9,56 @@
       "name": "SummaryChart",
       "type": "child",
       "props": {
-        "data": { "type": "array", "required": true },
-        "title": { "type": "string", "required": true },
-        "chartType": { "type": "string", "required": true },
-        "height": { "type": "number", "required": true },
-        "showLegend": { "type": "boolean", "required": false },
-        "onClick": { "type": "function", "required": false }
+        "data": {
+          "type": "array",
+          "required": true
+        },
+        "title": {
+          "type": "string",
+          "required": true
+        },
+        "chartType": {
+          "type": "string",
+          "required": true
+        },
+        "height": {
+          "type": "number",
+          "required": true
+        },
+        "showLegend": {
+          "type": "boolean",
+          "required": false
+        },
+        "onClick": {
+          "type": "function",
+          "required": false
+        }
       }
     },
     {
       "name": "DataTable",
       "type": "child",
       "props": {
-        "data": { "type": "array", "required": true },
-        "columns": { "type": "array", "required": true },
-        "pageSize": { "type": "number", "required": true },
-        "sortable": { "type": "boolean", "required": false },
-        "onRowSelect": { "type": "function", "required": false }
+        "data": {
+          "type": "array",
+          "required": true
+        },
+        "columns": {
+          "type": "array",
+          "required": true
+        },
+        "pageSize": {
+          "type": "number",
+          "required": true
+        },
+        "sortable": {
+          "type": "boolean",
+          "required": false
+        },
+        "onRowSelect": {
+          "type": "function",
+          "required": false
+        }
       }
     }
   ],
@@ -34,20 +67,62 @@
     "entities": [
       {
         "name": "Accounts",
-        "fields": ["ID", "Name", "Industry", "Status", "Revenue"],
-        "sortFields": ["Name", "Industry", "Revenue"]
+        "fields": [
+          "ID",
+          "Name",
+          "Industry",
+          "Status",
+          "Revenue"
+        ],
+        "sortFields": [
+          "Name",
+          "Industry",
+          "Revenue"
+        ]
       }
     ],
     "queries": [
       {
         "name": "AnnualAccountReport",
         "categoryPath": "Reports/Accounts",
-        "fields": ["AccountName", "Revenue", "Quarter", "Year"],
-        "entityNames": ["Accounts", "Invoices"],
+        "fields": [
+          {
+            "name": "AccountName",
+            "type": "nvarchar"
+          },
+          {
+            "name": "Revenue",
+            "type": "decimal"
+          },
+          {
+            "name": "Quarter",
+            "type": "nvarchar"
+          },
+          {
+            "name": "Year",
+            "type": "nvarchar"
+          }
+        ],
+        "entityNames": [
+          "Accounts",
+          "Invoices"
+        ],
         "parameters": [
-          { "name": "year", "type": "number", "required": true },
-          { "name": "status", "type": "string", "required": true },
-          { "name": "includeInactive", "type": "boolean", "required": false }
+          {
+            "name": "year",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "status",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "includeInactive",
+            "type": "boolean",
+            "required": false
+          }
         ]
       }
     ]

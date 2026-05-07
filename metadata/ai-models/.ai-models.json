@@ -4511,7 +4511,7 @@
       "ID": "5066433E-F36B-1410-8DA9-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-04-22T21:07:56.315Z",
+      "lastModified": "2026-04-20T23:52:26.455Z",
       "checksum": "6e3d893652b0828d4fd55c77a2b469848a6ad4921817e40265162da546aa68d5"
     }
   },
@@ -4814,7 +4814,7 @@
       "ID": "E1A5CCEC-6A37-EF11-86D4-000D3A4E707E"
     },
     "sync": {
-      "lastModified": "2026-04-22T21:07:56.343Z",
+      "lastModified": "2026-04-20T23:52:26.471Z",
       "checksum": "ad22cf6d1ff6e13e30612dc05642a3f985d7903471ef5b054ef2c472855db61f"
     }
   },
@@ -7096,7 +7096,7 @@
       "ID": "89C5433E-F36B-1410-8DAB-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-04-22T21:07:56.757Z",
+      "lastModified": "2026-04-20T23:52:26.859Z",
       "checksum": "baae589d09ec53d4f67a3f683f1fc6dadf2c51def54244d81b34399bde2276a4"
     }
   },
@@ -7228,7 +7228,7 @@
       "ID": "83C5433E-F36B-1410-8DAB-00021F8B792E"
     },
     "sync": {
-      "lastModified": "2026-04-22T21:07:56.877Z",
+      "lastModified": "2026-04-20T23:52:27.064Z",
       "checksum": "0e861c55cd947336e0382e6310f7258e136f587ef84f0802faadd1f53e739745"
     }
   },
@@ -11639,7 +11639,7 @@
             "ID": "83BDF8D4-6C4A-493E-844D-7750050B3BC7"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:37.974Z",
+            "lastModified": "2026-04-20T23:52:33.911Z",
             "checksum": "855fe6d2f60967860a8183f7790fefe88ca5d1b5d8efb698e65b239d38b8f014"
           }
         },
@@ -11662,7 +11662,7 @@
             "ID": "D03FF541-1052-4F08-80D1-B6E2A76AAD98"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:37.987Z",
+            "lastModified": "2026-04-20T23:52:33.927Z",
             "checksum": "0f9c3fa7e17502b5b59df2220d0fee7b64854af823a4d736056f39939d734949"
           }
         },
@@ -11685,7 +11685,7 @@
             "ID": "815D7F5F-06D3-4B06-BADC-00A2F473D30C"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:38.000Z",
+            "lastModified": "2026-04-20T23:52:33.945Z",
             "checksum": "62ebfb82717b632fe6f0b563c5754cc431f63d74b02d3c2a68630afa87b3d404"
           }
         }
@@ -11709,7 +11709,7 @@
             "ID": "9A677E59-84B4-4933-9DB0-FCDA92DB3855"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:38.013Z",
+            "lastModified": "2026-04-20T23:52:33.960Z",
             "checksum": "84f1183f0ea1aa5a718ba2db85613842b836129b87d0baf404b434adb1794d24"
           }
         },
@@ -11731,7 +11731,7 @@
             "ID": "5965C2B3-098A-4FD1-84F2-2B8467A17BFC"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:38.025Z",
+            "lastModified": "2026-04-20T23:52:33.979Z",
             "checksum": "217697c02121a9e3b4bc648da7d66cac9f19fd9f73f42c1b657036e5322250d3"
           }
         }
@@ -11741,7 +11741,7 @@
       "ID": "1FD3D5CD-E771-4B66-AD09-01F61FEF6B20"
     },
     "sync": {
-      "lastModified": "2026-04-18T17:48:37.534Z",
+      "lastModified": "2026-04-20T23:52:33.311Z",
       "checksum": "67155d34b619e6bbc84053b06644331fbdb7689e79ff555e13467beb0a8e0e8e"
     }
   },
@@ -11774,7 +11774,7 @@
             "ID": "0CE51431-B27F-4836-81FC-49F5A6273E0B"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:37.550Z",
+            "lastModified": "2026-04-20T23:52:33.327Z",
             "checksum": "db9988b1fb179ac0486cdcb4e12b30449b84028f060dab24f6d2084074045fe3"
           }
         },
@@ -11797,7 +11797,7 @@
             "ID": "17BE09F8-EEB3-4046-9C4B-7D1340D39562"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:37.563Z",
+            "lastModified": "2026-04-20T23:52:33.342Z",
             "checksum": "07d18db4674e11580e90ac5f1faec17ec6cba1462bf73df1b59a27949c157ecc"
           }
         },
@@ -11820,7 +11820,7 @@
             "ID": "7FD21D71-8153-45DE-97F3-352D1774DB16"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:37.577Z",
+            "lastModified": "2026-04-20T23:52:33.357Z",
             "checksum": "e8b1ba846835f647bef2da479257a47931882dbc61b0b1ff052a5672c7fce9b4"
           }
         }
@@ -11844,7 +11844,7 @@
             "ID": "852C0799-1BF7-4F19-9AC9-58D2FEA4504C"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:37.589Z",
+            "lastModified": "2026-04-20T23:52:33.371Z",
             "checksum": "a0139eba2929d829d4e5e5624443f4f9aac06e15315b4b24d4f4efd534c7a87f"
           }
         },
@@ -11866,7 +11866,7 @@
             "ID": "90333D30-A33E-41D8-9620-2A5742140107"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:37.664Z",
+            "lastModified": "2026-04-20T23:52:33.474Z",
             "checksum": "f338b438893fb62d84f24eda6a27394799a48ec1123a832f9f44afda854ab8cd"
           }
         }
@@ -11876,7 +11876,7 @@
       "ID": "281C0713-90DF-4E62-9791-C4702E4D9BFE"
     },
     "sync": {
-      "lastModified": "2026-04-18T17:48:36.778Z",
+      "lastModified": "2026-04-20T23:52:32.398Z",
       "checksum": "ba58543f20ea0ed2d0c780c09a61604cb3272b9f770a105d424c0f1c1f7fc459"
     }
   },
@@ -11909,7 +11909,7 @@
             "ID": "885B6084-125D-45C0-9715-64E676025EB5"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:37.678Z",
+            "lastModified": "2026-04-20T23:52:33.491Z",
             "checksum": "db9988b1fb179ac0486cdcb4e12b30449b84028f060dab24f6d2084074045fe3"
           }
         },
@@ -11932,7 +11932,7 @@
             "ID": "6C9C87B2-DAED-4907-8C73-34E3506243B4"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:37.693Z",
+            "lastModified": "2026-04-20T23:52:33.506Z",
             "checksum": "9247488d6aa763ed4d13e1e86c008c48be16b8f260d99e36c9726026c822c942"
           }
         },
@@ -11955,7 +11955,7 @@
             "ID": "42EC2A8A-FE75-49BD-B0CF-CB980F398A98"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:37.708Z",
+            "lastModified": "2026-04-20T23:52:33.520Z",
             "checksum": "48bb245664922488c433f2d70686ed387c3292478d10cfdfc4ee9782d2988c3b"
           }
         }
@@ -11979,7 +11979,7 @@
             "ID": "F0766275-0DD3-4536-953E-620D04F0FE0C"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:37.721Z",
+            "lastModified": "2026-04-20T23:52:33.536Z",
             "checksum": "bd4972362c310a4bfcd6f4c9e76162be131677cceb7863de5ae8cca43ba9b535"
           }
         },
@@ -12001,7 +12001,7 @@
             "ID": "5B9068C9-915D-4AB2-B8D2-A0CCB4552EA6"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:37.734Z",
+            "lastModified": "2026-04-20T23:52:33.558Z",
             "checksum": "dc04dec6aba5d38e5d9fc63cdb8b2079299fd3c8fda3ea0ebee516c730d438c8"
           }
         }
@@ -12011,7 +12011,7 @@
       "ID": "77DC2681-7617-48FE-9898-1F7669914409"
     },
     "sync": {
-      "lastModified": "2026-04-18T17:48:36.791Z",
+      "lastModified": "2026-04-20T23:52:32.413Z",
       "checksum": "66a32838064ce0f56c11993b245ed8f566fc91b6109f0eee1bfa72d4a875cb24"
     }
   },
@@ -12044,7 +12044,7 @@
             "ID": "2B19D82C-1255-44F2-8112-A9C91CE77BC5"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:37.747Z",
+            "lastModified": "2026-04-20T23:52:33.574Z",
             "checksum": "aa7970023d655e03c422bfdbc8910b106fa41da0a3f93d2d51e598108e8a37bf"
           }
         },
@@ -12067,7 +12067,7 @@
             "ID": "3FB819E0-67BF-410A-8DAB-86B62C4AB7D1"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:37.760Z",
+            "lastModified": "2026-04-20T23:52:33.591Z",
             "checksum": "e11fd8d6618fde73ee7ae8eb66f431de0c83e334f616635891240708bef3db91"
           }
         }
@@ -12091,7 +12091,7 @@
             "ID": "5916320B-185C-4A30-B643-08AD1E2BCDB3"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:37.772Z",
+            "lastModified": "2026-04-20T23:52:33.605Z",
             "checksum": "67fe309919b10474190fe86dede017b03795ff14d23a7c1fe1026016ea15461d"
           }
         }
@@ -12101,7 +12101,7 @@
       "ID": "839968F1-9520-4C69-BE84-5F901D0123A6"
     },
     "sync": {
-      "lastModified": "2026-04-18T17:48:36.909Z",
+      "lastModified": "2026-04-20T23:52:32.553Z",
       "checksum": "6866e7e9e50f0bbd571c2a579b2de794ada24162f4a483b7818e447d94c0a66f"
     }
   },
@@ -12134,7 +12134,7 @@
             "ID": "C6C7FE31-BAD8-464F-ACC9-B86CE16B9FC0"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:37.787Z",
+            "lastModified": "2026-04-20T23:52:33.619Z",
             "checksum": "96e2e8d56c6156330d55bd96a6262f7d8bc4ff3d22a8988ada61a2537aea9a57"
           }
         },
@@ -12157,7 +12157,7 @@
             "ID": "13E94620-550F-4678-8FCE-48BA3A08A8C1"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:37.824Z",
+            "lastModified": "2026-04-20T23:52:33.695Z",
             "checksum": "6087a837f59488e7b1a1ea6e77cd8a1c0bdd13f1c9f59d5665e250a4fc774e27"
           }
         }
@@ -12181,7 +12181,7 @@
             "ID": "94E71422-1AA5-4ECB-9E00-DF0DC71A29D1"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:37.836Z",
+            "lastModified": "2026-04-20T23:52:33.711Z",
             "checksum": "7a789a3fe92febf9af82645ca6968ad0facea99e4a974ffc2d57e25b516f94c6"
           }
         }
@@ -12191,7 +12191,7 @@
       "ID": "5BE7C3BD-62CE-4186-8171-DDEC8536FD3E"
     },
     "sync": {
-      "lastModified": "2026-04-18T17:48:36.923Z",
+      "lastModified": "2026-04-20T23:52:32.569Z",
       "checksum": "f1b8d7d2220169e1f1f6d1a97911132b8c3b5ce7a350a443faeff7a6c20a5cbf"
     }
   },
@@ -12224,7 +12224,7 @@
             "ID": "7F4F14C3-5D33-4FF2-A0A1-536B762DA87F"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:36.948Z",
+            "lastModified": "2026-04-20T23:52:32.599Z",
             "checksum": "b2dda844c0d01e8186a3004dd69dc1851a98b32983b9b9122f3790118a339ab6"
           }
         },
@@ -12247,7 +12247,7 @@
             "ID": "4369D1CC-A0F1-4226-9A1F-C0A4543B6084"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:36.963Z",
+            "lastModified": "2026-04-20T23:52:32.615Z",
             "checksum": "ab9e2775dbc0c1bbad0fd354ce07b57d8774c1953454ffb13f7f9dc0160762cf"
           }
         },
@@ -12270,7 +12270,7 @@
             "ID": "0FD9DB30-7C70-4200-8565-A34522F52599"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:36.977Z",
+            "lastModified": "2026-04-20T23:52:32.630Z",
             "checksum": "aa6a23e350d86b3c9d866bf3d331a081f399c26e50fbf7d556f7c2c6a7ede310"
           }
         }
@@ -12294,7 +12294,7 @@
             "ID": "390D12A1-6FEE-4A96-8D05-3128413BC3D9"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:37.005Z",
+            "lastModified": "2026-04-20T23:52:32.667Z",
             "checksum": "7f92939048718c1b765ede324e639fe298ffb871f253898bb0d02fd43fe02c46"
           }
         },
@@ -12316,7 +12316,7 @@
             "ID": "0EB80DE1-DF09-42E4-B76A-4CDC150D71A8"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:37.020Z",
+            "lastModified": "2026-04-20T23:52:32.683Z",
             "checksum": "fe1a1df3963343122752b2447b2be6faaa27b1aaf4399d14a151d1aac1b26236"
           }
         }
@@ -12326,7 +12326,7 @@
       "ID": "B7CF86E7-F3AF-4A15-9A7D-D038D7D36EFB"
     },
     "sync": {
-      "lastModified": "2026-04-18T17:48:31.629Z",
+      "lastModified": "2026-04-20T23:52:27.407Z",
       "checksum": "d605a079a0d76bd88ca766b8c5a2a65cfe2cac6fc4d728df7f0421ff1e1bea9a"
     }
   },
@@ -12358,7 +12358,7 @@
             "ID": "7FCEAE81-B36F-452E-B09C-5EC7683ECF64"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:37.036Z",
+            "lastModified": "2026-04-20T23:52:32.698Z",
             "checksum": "98ce0a4e83ae6a9cb3f3b849a20a4cbef8e8d1deb8e82010c412576efe27537a"
           }
         },
@@ -12381,7 +12381,7 @@
             "ID": "EC34D422-74FC-486A-A913-F97557E9B521"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:37.052Z",
+            "lastModified": "2026-04-20T23:52:32.714Z",
             "checksum": "34747fd96d6208514f181ab77e2dce8def9b7d0468e95eac0e5b152374e83f1b"
           }
         }
@@ -12405,7 +12405,7 @@
             "ID": "37DF5C6A-4DAE-4401-8AC0-2C0506959EFF"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:37.067Z",
+            "lastModified": "2026-04-20T23:52:32.727Z",
             "checksum": "770112b8a6df4adf6f4672e0a6c74581e78141b7f05cc44a19c80827f17d22c2"
           }
         }
@@ -12415,7 +12415,7 @@
       "ID": "2DA42870-6763-4C8A-BD69-D4807DD0698C"
     },
     "sync": {
-      "lastModified": "2026-04-18T17:48:31.645Z",
+      "lastModified": "2026-04-20T23:52:27.420Z",
       "checksum": "a20ba2d519fd3965edd9ec396fa7c85d907daf81463024bdc3954546d21daef5"
     }
   },
@@ -12448,7 +12448,7 @@
             "ID": "888C43EA-2991-461C-BCC1-C8D368D87303"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:37.850Z",
+            "lastModified": "2026-04-20T23:52:33.726Z",
             "checksum": "59d7ff617908fec6cabae3bc50c34922cef5229894fee808c9abfb5795b8e526"
           }
         },
@@ -12471,7 +12471,7 @@
             "ID": "6F2BA169-046D-40D3-BFAF-F5446CD331A0"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:37.864Z",
+            "lastModified": "2026-04-20T23:52:33.740Z",
             "checksum": "fd625e19b381f72ecb439aafb0d4e1f04aa4cc7b6dc4f0b069f55d7c1a0785d9"
           }
         },
@@ -12494,7 +12494,7 @@
             "ID": "475E68EA-766C-4FA9-AC65-9660B111450D"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:37.878Z",
+            "lastModified": "2026-04-20T23:52:33.757Z",
             "checksum": "3c9d5c3d476d49cfcded58f0cc8932a706f41037bca4cfb50ed1c3ffee5ca584"
           }
         },
@@ -12517,7 +12517,7 @@
             "ID": "877CC8B3-6ED6-4C9A-996E-C6F746675F17"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:37.893Z",
+            "lastModified": "2026-04-20T23:52:33.773Z",
             "checksum": "4f30c92723ee601d0fd1e9c3112eddf73dabc734c5efb948bf5af3b310d480d9"
           }
         }
@@ -12541,7 +12541,7 @@
             "ID": "E74896EB-C363-4AD1-8E2C-D561D0174FC3"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:37.905Z",
+            "lastModified": "2026-04-20T23:52:33.789Z",
             "checksum": "1da959143a4324b9e35a799fe19a9cc1f83ad3de56491927963ba74d474b6e51"
           }
         },
@@ -12563,7 +12563,7 @@
             "ID": "025334E5-D504-4A06-89D0-943254237796"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:37.917Z",
+            "lastModified": "2026-04-20T23:52:33.805Z",
             "checksum": "b3ed99e5922c5d42525335451948759d060153d956e894e106125f1c8dfd02e8"
           }
         },
@@ -12585,7 +12585,7 @@
             "ID": "9FA1FE98-458A-4A2F-9028-B5BF020520D7"
           },
           "sync": {
-            "lastModified": "2026-04-18T17:48:37.930Z",
+            "lastModified": "2026-04-20T23:52:33.817Z",
             "checksum": "efd07b51233c9068a913c9660ceda359ef249d1a895bd4ecfbc4e6a35e8d5d05"
           }
         }
@@ -12595,7 +12595,7 @@
       "ID": "35091064-5CD4-41D8-A7E7-1F160F4AE540"
     },
     "sync": {
-      "lastModified": "2026-04-18T17:48:37.084Z",
+      "lastModified": "2026-04-20T23:52:32.862Z",
       "checksum": "7a655cf3f0a4f80b8beebaa28d3afd62f83700084820ddd36162a1f298caf263"
     }
   },
@@ -12625,10 +12625,10 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "1CAB0A32-3B85-425B-ABF5-E4DE124E579D"
+            "ID": "881D94C8-83AD-4FAD-8D5B-927D6E4BBD1F"
           },
           "sync": {
-            "lastModified": "2026-04-22T21:08:13.121Z",
+            "lastModified": "2026-04-27T18:50:01.892Z",
             "checksum": "579fd3b8c146054746c1a753ca0a35ccc313e73417014bb46aa8b2d1a1713452"
           }
         },
@@ -12648,10 +12648,10 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "B6ED4B6F-9968-48E6-949D-B0267C187F4F"
+            "ID": "D9BA098C-5D41-4226-8A98-9037851C1EFC"
           },
           "sync": {
-            "lastModified": "2026-04-22T21:08:13.140Z",
+            "lastModified": "2026-04-27T18:50:01.909Z",
             "checksum": "8dccacb2b28638fc10dd015d3ebff53264dd38727240780c5c38d9c1ad0159b5"
           }
         }
@@ -12672,20 +12672,20 @@
             "Comments": "GLM 5.1 pricing on Z.AI direct API as of April 2026. Cached input tokens ~$0.19/1M. Incremental refresh of GLM 5 with improved benchmarks. 744B total / 40B active MoE, 203K context, 66K output. Open-weights under MIT license."
           },
           "primaryKey": {
-            "ID": "91C1285E-8C96-491C-AC3E-949FF8451AE4"
+            "ID": "7550E9EF-3333-4EDD-8382-DFACF4C3B716"
           },
           "sync": {
-            "lastModified": "2026-04-22T21:08:13.155Z",
+            "lastModified": "2026-04-27T18:50:01.924Z",
             "checksum": "ae6ab97ad1e01c99132cf9f76b8e624acf2d9a345fb4a7dcb430f39c72f0761d"
           }
         }
       ]
     },
     "primaryKey": {
-      "ID": "836FA78C-612E-4913-945D-8FEA6F862DFB"
+      "ID": "669B84EE-0749-44DF-BE4F-C0390E25E484"
     },
     "sync": {
-      "lastModified": "2026-04-22T21:08:13.042Z",
+      "lastModified": "2026-04-27T18:50:01.816Z",
       "checksum": "f5434ef41056a6356ff52093bc6ab1172c766bee41555f6b0ff288203b818718"
     }
   },
@@ -12714,10 +12714,10 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "4F67F918-49CA-44E7-943E-9E473047D2D8"
+            "ID": "8531C06F-F407-4419-AF1B-962E5FE1E28F"
           },
           "sync": {
-            "lastModified": "2026-04-22T21:08:12.082Z",
+            "lastModified": "2026-04-27T18:50:00.822Z",
             "checksum": "b2dda844c0d01e8186a3004dd69dc1851a98b32983b9b9122f3790118a339ab6"
           }
         },
@@ -12737,10 +12737,10 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "AC35BB19-3CE7-47C2-B635-184BF1388750"
+            "ID": "50116063-42A7-48F6-9B5A-6ACF21FF22DF"
           },
           "sync": {
-            "lastModified": "2026-04-22T21:08:12.098Z",
+            "lastModified": "2026-04-27T18:50:00.843Z",
             "checksum": "37b2b59a598edf9dfdfc3e8d5699aded7e97964957da489ec4162d71af98735d"
           }
         }
@@ -12761,20 +12761,20 @@
             "Comments": "Gemma 4 31B Instruct pricing on Vertex AI as of April 2026. Dense 31B open-weights model under Gemma Terms of Use. 256K context, multilingual (140+), vision-in/text-out."
           },
           "primaryKey": {
-            "ID": "802CC7ED-C70F-492F-A37A-92B464B90DFB"
+            "ID": "9856C369-1129-4AC2-ADF9-61F067964D1D"
           },
           "sync": {
-            "lastModified": "2026-04-22T21:08:12.129Z",
+            "lastModified": "2026-04-27T18:50:00.860Z",
             "checksum": "c75c767b6155f602e72ebca4640d28db03e3cdd5c82a34358e5f74884e290484"
           }
         }
       ]
     },
     "primaryKey": {
-      "ID": "A0239704-1D04-4427-9FDE-CC0C670D5577"
+      "ID": "D4D993DA-764C-4037-B311-07BDE89056C6"
     },
     "sync": {
-      "lastModified": "2026-04-22T21:08:06.745Z",
+      "lastModified": "2026-04-27T18:49:55.304Z",
       "checksum": "581e521e2f53dd404428eccf2d1046f25ecdac61c81daafe42ae50ccc9ea747c"
     }
   },
@@ -12803,10 +12803,10 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
           },
           "primaryKey": {
-            "ID": "AF62B95A-6920-442F-A5E0-FE871D6F5BE5"
+            "ID": "3EE1D387-E3BF-4774-A503-DF9EBB287B00"
           },
           "sync": {
-            "lastModified": "2026-04-22T21:08:12.147Z",
+            "lastModified": "2026-04-27T18:50:00.877Z",
             "checksum": "b2dda844c0d01e8186a3004dd69dc1851a98b32983b9b9122f3790118a339ab6"
           }
         },
@@ -12826,10 +12826,10 @@
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
           },
           "primaryKey": {
-            "ID": "0D723CEF-5309-4554-A679-CD95DA74D122"
+            "ID": "FAE42244-18DB-43E1-81FB-74AE3D74939F"
           },
           "sync": {
-            "lastModified": "2026-04-22T21:08:12.164Z",
+            "lastModified": "2026-04-27T18:50:00.895Z",
             "checksum": "731d6de4f7c2e52e41fdad55bae093ce8e8cc4fa0329aa60b604478e9fdbd477"
           }
         }
@@ -12850,33 +12850,340 @@
             "Comments": "Gemma 4 26B A4B Instruct pricing on Vertex AI as of April 2026. 26B total / 4B active MoE, optimized for speed and cost. 256K context, multilingual (140+). Open-weights under Gemma Terms of Use."
           },
           "primaryKey": {
-            "ID": "F5DE36F5-9F8A-42D0-95A3-6A3B2E658093"
+            "ID": "17725E8D-B7A0-48CA-8D31-9A38FA3EE8C5"
           },
           "sync": {
-            "lastModified": "2026-04-22T21:08:12.179Z",
+            "lastModified": "2026-04-27T18:50:00.910Z",
             "checksum": "517c422391eb9f86dcc05780d61cf4104154c1d1dfff292b77934c2d7052506a"
           }
         }
       ]
     },
     "primaryKey": {
-      "ID": "EDBE22A5-AD7E-4B0C-A05D-11E8DEF9A06F"
+      "ID": "4E826B27-5A88-4320-8440-D15BB112A367"
     },
     "sync": {
-      "lastModified": "2026-04-22T21:08:06.765Z",
+      "lastModified": "2026-04-27T18:49:55.320Z",
       "checksum": "f17b8c46d3836739905ad42b6e5fdc706dfaaae84fd8a033e54e1ace2c43e18b"
     }
   },
   {
     "fields": {
-      "Name": "Kimi K2.6",
-      "PowerRank": 16,
-      "Description": "Moonshot AI's open-source native multimodal agentic model with 1T parameter Mixture-of-Experts architecture. Features 256K token context window with capabilities in long-horizon coding, coding-driven design, proactive autonomous execution, and swarm-based task orchestration. Released April 20, 2026.",
+      "Name": "Mercury 2",
+      "PowerRank": 15,
+      "Description": "Inception Labs' most powerful model, positioned as the fastest reasoning LLM. Uses a diffusion-based architecture to achieve 1000+ tokens per second on commercial NVIDIA GPUs while supporting reasoning, tool use, and structured output. Features a 128K token context window and is well-suited for rapid coding iteration, workflow subagents, customer support, realtime voice, and enterprise search. Released April 23, 2026.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 11,
+      "CostRank": 3,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Inception Labs",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "C049B48D-5F0E-4271-A8CF-2CB298F924BE"
+          },
+          "sync": {
+            "lastModified": "2026-04-27T18:50:00.949Z",
+            "checksum": "8e73f8253b30485054f7c298776ef475fff76b69d310c82491b59d0e9ca90b16"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Inception Labs",
+            "Priority": 0,
+            "Status": "Active",
+            "DriverClass": "InceptionLLM",
+            "APIName": "mercury-2",
+            "MaxInputTokens": 128000,
+            "MaxOutputTokens": 50000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "1C773E2B-47AC-410D-B889-198535CCE923"
+          },
+          "sync": {
+            "lastModified": "2026-04-27T18:50:00.965Z",
+            "checksum": "7badc87656cc011a7d6d4ffb9c819cad5b390eccd4ce063ead8b7f0c6b223286"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Inception Labs",
+            "StartedAt": "2026-04-23T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.25,
+            "OutputPricePerUnit": 0.75,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Mercury 2 pricing on Inception Labs as of April 2026. $0.25/M input, $0.75/M output. Cached input is $0.025/M (90% discount on cache hits)."
+          },
+          "primaryKey": {
+            "ID": "B396DAC0-5974-4FAB-A845-A11EF6D927FC"
+          },
+          "sync": {
+            "lastModified": "2026-04-27T18:50:00.979Z",
+            "checksum": "35e1b843c9f09f7f70d4c165439ca101465bf8b7f8237b1fef10559c61b4951b"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "2FB388D2-B5DD-4A0A-986C-F7F0152CFF3D"
+    },
+    "sync": {
+      "lastModified": "2026-04-27T18:49:55.335Z",
+      "checksum": "d1e6c49b7e3d401672126b704909bc62d0d3c0991e2d193998ddfaadd039029c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GPT 5.5",
+      "PowerRank": 12,
+      "Description": "OpenAI's flagship reasoning model, released April 24, 2026 (ChatGPT/Codex April 23, API April 24). Successor to GPT 5.4. Built for professional scenarios where precision, reliability, and persistence matter. 1,050,000 token context window (~1M) with 128K output capacity (Codex deployment uses a 400K context). Supports adjustable reasoning via reasoning_effort parameter (none, low, medium, high, xhigh). Available through Responses API and Chat Completions, also surfaced on Microsoft Foundry / Azure.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "IsActive": true,
       "SpeedRank": 7,
-      "CostRank": 7,
-      "InheritTypeModalities": true
+      "CostRank": 10,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GPT 5.4"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenAILLM",
+            "APIName": "gpt-5.5",
+            "MaxInputTokens": 1050000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "Priority": 5,
+            "Status": "Active",
+            "DriverClass": "AzureLLM",
+            "APIName": "gpt-5.5",
+            "MaxInputTokens": 1050000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-04-24T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 5.0,
+            "OutputPricePerUnit": 30.0,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT 5.5 standard pricing on OpenAI as of April 24, 2026 launch. $5.00/$30.00 per 1M tokens. Prompts >272K input tokens billed at 2x input and 1.5x output for the full session (standard, batch, and flex tiers). Batch and Flex APIs at 50% off; Priority at 2.5x standard. Regional data-residency endpoints carry a 10% uplift. Source: https://openai.com/index/introducing-gpt-5-5/"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Azure",
+            "StartedAt": "2026-04-24T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 5.0,
+            "OutputPricePerUnit": 30.0,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT 5.5 pricing on Azure OpenAI / Microsoft Foundry (Global Standard) as of April 24, 2026 launch. Source: https://azure.microsoft.com/en-us/blog/openais-gpt-5-5-in-microsoft-foundry-frontier-intelligence-on-an-enterprise-ready-platform/"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "GPT 5.5 Pro",
+      "PowerRank": 8,
+      "Description": "OpenAI's premium variant of GPT 5.5, released April 24, 2026. Extends reasoning depth and task complexity for the most demanding enterprise workloads. Same 1M input / 128K output token window as GPT 5.5. Available through the Responses API and Batch API. Pricing reflects deeper reasoning compute: 6x the input and 6x the output cost of standard GPT 5.5.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 5,
+      "CostRank": 10,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GPT 5.5"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenAILLM",
+            "APIName": "gpt-5.5-pro",
+            "MaxInputTokens": 1050000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-04-24T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 30.0,
+            "OutputPricePerUnit": 180.0,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT 5.5 Pro pricing on OpenAI as of April 24, 2026 launch. $30.00/$180.00 per 1M tokens. Available via Responses API and Batch API. Batch and Flex at 50% off. Source: https://openai.com/index/introducing-gpt-5-5/"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Grok 4.3",
+      "PowerRank": 16,
+      "Description": "xAI's new flagship reasoning model, released April 30, 2026 (beta to SuperGrok Heavy on April 17). Always-on reasoning - 'thinks' before responding for every query. 1M token context window. Built-in code execution environment, video upload support, and native generation of downloadable PDFs, fully populated spreadsheets, and PowerPoint decks. Scores 53 on the Artificial Analysis Intelligence Index at 207 t/s output speed. Aggressively priced at 40% lower than Grok 4.20.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 4,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Grok 4.20"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=x.ai",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=x.ai",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "xAILLM",
+            "APIName": "grok-4.3",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=x.ai",
+            "StartedAt": "2026-04-30T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.25,
+            "OutputPricePerUnit": 2.50,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Grok 4.3 pricing on xAI direct API as of April 30, 2026 launch. $1.25/$2.50 per 1M tokens for requests up to 200,000 tokens; requests above 200K input billed at higher rates per xAI doc. Sources: https://docs.x.ai/developers/models/grok-4.3 ; https://venturebeat.com/technology/xai-launches-grok-4-3-at-an-aggressively-low-price-and-a-new-fast-powerful-voice-cloning-suite"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "Kimi K2.6",
+      "PowerRank": 18,
+      "Description": "Moonshot AI's open-weight flagship coding and agent model, released April 20, 2026. 1-trillion-parameter Mixture-of-Experts with 32B active parameters per token, native INT4 quantization, Modified MIT License (open weights on Hugging Face). 256K (262,144) token context window with output ceiling matching the context. Multimodal (text/image/video in, text out). Top open-weights performer on the Artificial Analysis Intelligence Index (54). Provides OpenAI/Anthropic-compatible API at platform.moonshot.ai. Strong long-horizon coding and multi-agent orchestration with agent swarm scaling to hundreds of parallel sub-agents.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 3,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Kimi K2.5"
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -12887,39 +13194,25 @@
             "Priority": 0,
             "Status": "Active",
             "SupportedResponseFormats": "Any",
-            "SupportsEffortLevel": true,
+            "SupportsEffortLevel": false,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
-          },
-          "primaryKey": {
-            "ID": "A9366B9C-E5EB-47DE-91B3-07C12275DFB6"
-          },
-          "sync": {
-            "lastModified": "2026-04-22T21:08:12.198Z",
-            "checksum": "62a7006899577671c2699ec45f4d26be96261be35dfa4edd9a22216b174c723e"
           }
         },
         {
           "fields": {
             "ModelID": "@parent:ID",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=Fireworks.ai",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Moonshot AI",
             "Priority": 1,
             "Status": "Active",
-            "DriverClass": "FireworksLLM",
-            "APIName": "accounts/fireworks/models/kimi-k2p6",
+            "DriverClass": "MoonshotLLM",
+            "APIName": "kimi-k2.6",
             "MaxInputTokens": 262144,
-            "MaxOutputTokens": 16384,
+            "MaxOutputTokens": 262144,
             "SupportedResponseFormats": "Any, JSON",
-            "SupportsEffortLevel": true,
+            "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
-          },
-          "primaryKey": {
-            "ID": "1F4EFC23-7FA0-4302-93CB-6A00340BD545"
-          },
-          "sync": {
-            "lastModified": "2026-04-22T21:08:12.215Z",
-            "checksum": "2496906a18221d094000087ad4c9a31eed36516349fd1999d9568af2263a1466"
           }
         }
       ],
@@ -12927,33 +13220,141 @@
         {
           "fields": {
             "ModelID": "@parent:ID",
-            "VendorID": "@lookup:MJ: AI Vendors.Name=Fireworks.ai",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Moonshot AI",
             "StartedAt": "2026-04-20T00:00:00.000Z",
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
-            "InputPricePerUnit": 0.95,
-            "OutputPricePerUnit": 4,
+            "InputPricePerUnit": 0.60,
+            "OutputPricePerUnit": 2.50,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
-            "Comments": "Kimi K2.6 serverless pricing on Fireworks.ai as of April 2026. Cached input tokens available at $0.16/1M. 1T parameter Mixture-of-Experts architecture with 256K context window."
-          },
-          "primaryKey": {
-            "ID": "F9F0B109-8B29-4CB6-8E5E-61E1EDF28653"
-          },
-          "sync": {
-            "lastModified": "2026-04-22T21:08:12.234Z",
-            "checksum": "bb5be33f4d0362953d1d3efc62dbbd2dc6b10c86df476fd4d1e304fbdbc044d5"
+            "Comments": "Kimi K2.6 launch pricing on Moonshot direct API as of April 20, 2026: $0.60/$2.50 per 1M tokens. Some aggregator pages quote $0.74/$3.49 (likely a different SKU/tier or post-launch adjustment) - the official launch announcement quoted $0.60/$2.50. Verify on platform.moonshot.ai before relying on this price for billing. Sources: https://www.kimi.com/blog/kimi-k2-6 ; https://huggingface.co/moonshotai/Kimi-K2.6"
           }
         }
       ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "DeepSeek V4 Pro",
+      "PowerRank": 15,
+      "Description": "DeepSeek's flagship reasoning model, released as preview April 24, 2026. Mixture-of-Experts with 1.6T total / 49B active parameters. MIT licensed open weights. Supports both thinking and non-thinking modes. 1M token context window with up to 384K output tokens. OpenAI-compatible and Anthropic-compatible API formats. Recorded cost row uses list pricing; a 75% promotional discount runs through 2026-05-31 15:59 UTC (effective $0.435/$0.87 per 1M tokens during the promo).",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 4,
+      "InheritTypeModalities": true
     },
-    "primaryKey": {
-      "ID": "EE18AD1E-0224-4351-83D5-665FA5045E78"
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=DeepSeek",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=DeepSeek",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "DeepSeekLLM",
+            "APIName": "deepseek-v4-pro",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 384000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=DeepSeek",
+            "StartedAt": "2026-04-24T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.74,
+            "OutputPricePerUnit": 3.48,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "DeepSeek V4 Pro list pricing on DeepSeek direct API as of April 24, 2026 launch: $1.74/$3.48 per 1M tokens. A 75% promotional discount is in effect through 2026-05-31 15:59 UTC, bringing effective price to $0.435/$0.87 per 1M tokens. Cache-hit input pricing is 1/10 of launch price (effective from 2026-04-26). Sources: https://api-docs.deepseek.com/quick_start/pricing ; https://api-docs.deepseek.com/news/news260424"
+          }
+        }
+      ]
+    }
+  },
+  {
+    "fields": {
+      "Name": "DeepSeek V4 Flash",
+      "PowerRank": 30,
+      "Description": "DeepSeek's cost-efficient counterpart to V4 Pro, released as preview April 24, 2026. Mixture-of-Experts with 284B total / 13B active parameters. MIT licensed open weights. Supports both thinking and non-thinking modes. 1M token context window with up to 384K output tokens. Same OpenAI-compatible and Anthropic-compatible API surface as V4 Pro. Designed for high-throughput, latency-sensitive workloads where V4 Pro's reasoning depth is unnecessary.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 9,
+      "CostRank": 2,
+      "InheritTypeModalities": true
     },
-    "sync": {
-      "lastModified": "2026-04-22T21:08:06.780Z",
-      "checksum": "3fe9c86ae94c1556571ec936ce76517d137ac8cac250a8c73197716488d07a03"
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=DeepSeek",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=DeepSeek",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "DeepSeekLLM",
+            "APIName": "deepseek-v4-flash",
+            "MaxInputTokens": 1000000,
+            "MaxOutputTokens": 384000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=DeepSeek",
+            "StartedAt": "2026-04-24T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 0.14,
+            "OutputPricePerUnit": 0.28,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "DeepSeek V4 Flash pricing on DeepSeek direct API as of April 24, 2026 launch: $0.14/$0.28 per 1M tokens. Sources: https://api-docs.deepseek.com/quick_start/pricing ; https://api-docs.deepseek.com/news/news260424"
+          }
+        }
+      ]
     }
   }
 ]

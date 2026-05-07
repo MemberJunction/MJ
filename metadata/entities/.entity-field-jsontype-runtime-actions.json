@@ -21,7 +21,7 @@
             "ID": "@lookup:MJ: Entity Fields.EntityID=@lookup:MJ: Entities.Name=MJ: Actions&Name=RuntimeActionConfiguration"
           },
           "sync": {
-            "lastModified": "2026-04-23T13:10:37.310Z",
+            "lastModified": "2026-04-27T14:07:06.438Z",
             "checksum": "9d3219ba71edd0ec328f5c9ad12990c191e1f283b2ba7713475bf9978d9576df"
           }
         }

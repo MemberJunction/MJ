@@ -10,11 +10,30 @@
       {
         "name": "SalesReport",
         "categoryPath": "Reports/Sales",
-        "fields": ["ID", "Amount"],
-        "entityNames": ["Sales"],
+        "fields": [
+          {
+            "name": "ID",
+            "type": "uniqueidentifier"
+          },
+          {
+            "name": "Amount",
+            "type": "int"
+          }
+        ],
+        "entityNames": [
+          "Sales"
+        ],
         "parameters": [
-          { "name": "year", "type": "number", "required": true },
-          { "name": "quarter", "type": "string", "required": true }
+          {
+            "name": "year",
+            "type": "number",
+            "required": true
+          },
+          {
+            "name": "quarter",
+            "type": "string",
+            "required": true
+          }
         ]
       }
     ]

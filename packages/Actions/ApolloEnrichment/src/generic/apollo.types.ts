@@ -1,10 +1,10 @@
-import { Metadata, UserInfo } from "@memberjunction/core";
+import { IMetadataProvider, UserInfo } from "@memberjunction/core";
 
 export type ProcessPersonRecordGroupParams = {
     Records: Record<string, any>[];
     Startrow: number;
     GroupLength: number;
-    Md: Metadata;
+    Md: IMetadataProvider;
     CurrentUser: UserInfo;
     EntityName: string;
     EmailField: string;

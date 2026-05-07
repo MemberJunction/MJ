@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { Metadata, RunView, IRunViewProvider } from '@memberjunction/core';
+import { Metadata, RunView, IRunViewProvider, IMetadataProvider } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import {
   MJCompanyIntegrationEntityMapEntity,
@@ -253,6 +253,16 @@ export function IsImageIcon(icon: string | null | undefined): boolean {
   providedIn: 'root'
 })
 export class IntegrationDataService {
+  private _provider: IMetadataProvider | null = null;
+
+  /** Set the metadata provider this service should use. Components should call this after injection. */
+  public set Provider(value: IMetadataProvider | null) {
+      this._provider = value;
+  }
+
+  public get Provider(): IMetadataProvider {
+      return this._provider ?? Metadata.Provider;
+  }
 
   async LoadIntegrationSummaries(provider?: IRunViewProvider | null): Promise<IntegrationSummary[]> {
     const engine = IntegrationEngineBase.Instance;
@@ -455,7 +465,7 @@ export class IntegrationDataService {
     Priority?: number;
     DeleteBehavior?: 'SoftDelete' | 'DoNothing' | 'HardDelete';
   }): Promise<MJCompanyIntegrationEntityMapEntity | null> {
-    const md = new Metadata();
+    const md = this.Provider;
     const em = await md.GetEntityObject<MJCompanyIntegrationEntityMapEntity>('MJ: Company Integration Entity Maps');
     em.NewRecord();
     em.CompanyIntegrationID = params.CompanyIntegrationID;
@@ -478,14 +488,14 @@ export class IntegrationDataService {
   }
 
   async DeleteEntityMap(entityMapID: string): Promise<boolean> {
-    const md = new Metadata();
+    const md = this.Provider;
     const em = await md.GetEntityObject<MJCompanyIntegrationEntityMapEntity>('MJ: Company Integration Entity Maps');
     await em.Load(entityMapID);
     return em.Delete();
   }
 
   async ToggleEntityMapEnabled(entityMapID: string, enabled: boolean): Promise<boolean> {
-    const md = new Metadata();
+    const md = this.Provider;
     const em = await md.GetEntityObject<MJCompanyIntegrationEntityMapEntity>('MJ: Company Integration Entity Maps');
     await em.Load(entityMapID);
     em.SyncEnabled = enabled;
@@ -493,7 +503,7 @@ export class IntegrationDataService {
   }
 
   async UpdateSyncDirection(entityMapID: string, direction: 'Pull' | 'Push' | 'Bidirectional'): Promise<boolean> {
-    const md = new Metadata();
+    const md = this.Provider;
     const em = await md.GetEntityObject<MJCompanyIntegrationEntityMapEntity>('MJ: Company Integration Entity Maps');
     await em.Load(entityMapID);
     em.SyncDirection = direction;
@@ -514,7 +524,7 @@ export class IntegrationDataService {
     TransformPipeline?: string | null;
     Priority?: number;
   }): Promise<MJCompanyIntegrationFieldMapEntity | null> {
-    const md = new Metadata();
+    const md = this.Provider;
     const fm = await md.GetEntityObject<MJCompanyIntegrationFieldMapEntity>('MJ: Company Integration Field Maps');
     fm.NewRecord();
     fm.EntityMapID = params.EntityMapID;
@@ -538,7 +548,7 @@ export class IntegrationDataService {
   }
 
   async DeleteFieldMap(fieldMapID: string): Promise<boolean> {
-    const md = new Metadata();
+    const md = this.Provider;
     const fm = await md.GetEntityObject<MJCompanyIntegrationFieldMapEntity>('MJ: Company Integration Field Maps');
     await fm.Load(fieldMapID);
     return fm.Delete();
@@ -553,7 +563,7 @@ export class IntegrationDataService {
     Status?: 'Active' | 'Inactive';
     TransformPipeline?: string | null;
   }): Promise<boolean> {
-    const md = new Metadata();
+    const md = this.Provider;
     const fm = await md.GetEntityObject<MJCompanyIntegrationFieldMapEntity>('MJ: Company Integration Field Maps');
     await fm.Load(fieldMapID);
     if (updates.SourceFieldName !== undefined) fm.SourceFieldName = updates.SourceFieldName;
@@ -568,7 +578,7 @@ export class IntegrationDataService {
 
   /** Load available MJ entities for mapping target selection */
   async LoadMJEntities(_provider?: IRunViewProvider | null): Promise<Array<{ ID: string; Name: string }>> {
-    const md = new Metadata();
+    const md = this.Provider;
     return md.Entities
       .map(e => ({ ID: e.ID, Name: e.Name }))
       .sort((a, b) => a.Name.localeCompare(b.Name));
@@ -576,7 +586,7 @@ export class IntegrationDataService {
 
   /** Load entity fields for a given entity (for field mapping destination picker) */
   async LoadEntityFields(entityID: string, _provider?: IRunViewProvider | null): Promise<Array<{ ID: string; Name: string; Type: string; IsRequired: boolean }>> {
-    const md = new Metadata();
+    const md = this.Provider;
     const entity = md.Entities.find(e => UUIDsEqual(e.ID, entityID));
     if (!entity) return [];
     return entity.Fields
@@ -613,7 +623,7 @@ export class IntegrationDataService {
     companyIntegrationID: string,
     entityMap: EntityMapRow
   ): Promise<{ Success: boolean; Message?: string }> {
-    const md = new Metadata();
+    const md = this.Provider;
     const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityMap.EntityID));
     if (!entityInfo) {
       return { Success: false, Message: `Entity not found for ID ${entityMap.EntityID}` };
@@ -728,7 +738,7 @@ export class IntegrationDataService {
     limit: number = 5,
     provider?: IRunViewProvider | null
   ): Promise<Array<Record<string, string | number | boolean | null>>> {
-    const md = new Metadata();
+    const md = this.Provider;
     const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityID));
     if (!entityInfo) return [];
 
@@ -755,7 +765,7 @@ export class IntegrationDataService {
     entityID: string,
     provider?: IRunViewProvider | null
   ): Promise<number> {
-    const md = new Metadata();
+    const md = this.Provider;
     const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityID));
     if (!entityInfo) return 0;
 
@@ -821,7 +831,7 @@ export class IntegrationDataService {
     fullSync: boolean,
     syncDirection: 'Pull' | 'Push' | 'Bidirectional'
   ): Promise<{ Success: boolean; Message: string }> {
-    const provider = Metadata.Provider as GraphQLDataProvider;
+    const provider = this.Provider as unknown as GraphQLDataProvider;
     const client = new GraphQLIntegrationClient(provider);
     return client.StartSync(companyIntegrationID, undefined, fullSync, syncDirection);
   }
@@ -836,7 +846,7 @@ export class IntegrationDataService {
       };
     }
 
-    const provider = Metadata.Provider as GraphQLDataProvider;
+    const provider = this.Provider as unknown as GraphQLDataProvider;
     const actionClient = new GraphQLActionClient(provider);
     const params = [
       { Name: 'CompanyIntegrationID', Value: companyIntegrationID, Type: 'Input' as const },
@@ -873,7 +883,7 @@ export class IntegrationDataService {
     schemaName: string,
     direction: 'Pull' | 'Push' | 'Bidirectional' = 'Pull'
   ): Promise<{ EntityMapsCreated: number; FieldMapsCreated: number; Errors: string[] }> {
-    const md = new Metadata();
+    const md = this.Provider;
     const errors: string[] = [];
 
     // Get entities in the target schema
@@ -950,7 +960,7 @@ export class IntegrationDataService {
 
   /** Load available schemas (for auto-map schema picker) */
   LoadSchemas(): string[] {
-    const md = new Metadata();
+    const md = this.Provider;
     const schemas = new Set<string>();
     for (const entity of md.Entities) {
       if (entity.SchemaName) schemas.add(entity.SchemaName);
@@ -972,7 +982,7 @@ export class IntegrationDataService {
   }
 
   private async lookupActionID(actionName: string): Promise<string | null> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     const result = await rv.RunView<{ ID: string }>({
       EntityName: 'MJ: Actions',
       ExtraFilter: `Name='${actionName}'`,
@@ -984,12 +994,12 @@ export class IntegrationDataService {
   }
 
   private getIntegrationClient(): GraphQLIntegrationClient {
-    const provider = Metadata.Provider as GraphQLDataProvider;
+    const provider = this.Provider as unknown as GraphQLDataProvider;
     return new GraphQLIntegrationClient(provider);
   }
 
   private createRunView(provider?: IRunViewProvider | null): RunView {
-    return new RunView(provider ?? null);
+    return new RunView((provider ?? this.Provider) as IRunViewProvider);
   }
 
   private buildSummary(

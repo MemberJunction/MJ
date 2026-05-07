@@ -42,10 +42,10 @@
     {
       "name": "renderMode",
       "type": "string",
-      "description": "Map rendering mode: 'point' for individual markers with clustering, 'heatmap' for density circles via spatial clustering, 'choropleth' for GeoJSON country polygons loaded from MJ: Countries entity.",
+      "description": "Map rendering mode: 'point' for individual markers with clustering, 'heatmap' for density circles via spatial clustering, 'choropleth' for GeoJSON country polygons loaded from MJ: Countries entity, 'boundary' for rendering one GeoJSON polygon per record using the boundaryField prop.",
       "required": false,
       "defaultValue": "point",
-      "possibleValues": ["point", "choropleth", "heatmap"]
+      "possibleValues": ["point", "choropleth", "heatmap", "boundary"]
     },
     {
       "name": "clusterMarkers",
@@ -77,7 +77,7 @@
     {
       "name": "popupFields",
       "type": "array",
-      "description": "Field names to show in marker popup. Auto-detects from entity metadata if omitted.",
+      "description": "Field names to show in marker popup. Auto-detects from entity metadata if omitted. NOTE: Present in function signature but not yet implemented; currently has no effect.",
       "required": false
     },
     {
@@ -106,6 +106,12 @@
       "defaultValue": "Country"
     },
     {
+      "name": "boundaryField",
+      "type": "string",
+      "description": "Field name containing GeoJSON boundary data on each record. Used with renderMode='boundary' to render one polygon per record. If a record lacks boundary data, falls back to a centroid marker using lat/lng fields.",
+      "required": false
+    },
+    {
       "name": "maxPopupRecords",
       "type": "number",
       "description": "Maximum number of records to show as clickable links in cluster/region popups before showing 'and X more...' overflow text.",
@@ -115,19 +121,8 @@
   ],
   "events": [
     {
-      "name": "onMarkerClick",
-      "description": "Fired when a map marker or popup record link is clicked. In point mode, clicking a marker or its popup link triggers this. Calls callbacks.OpenEntityRecord when entityName and entityPrimaryKeys are provided.",
-      "parameters": [
-        { "name": "record", "type": "object", "description": "The data record associated with the marker" },
-        { "name": "lat", "type": "number", "description": "Latitude of the clicked marker" },
-        { "name": "lng", "type": "number", "description": "Longitude of the clicked marker" },
-        { "name": "entityName", "type": "string", "description": "Entity name if provided" },
-        { "name": "recordId", "type": "string", "description": "Composite primary key string (fields joined by ||)" }
-      ]
-    },
-    {
       "name": "onRegionClick",
-      "description": "Fired when a choropleth region polygon or heatmap density circle is clicked. Emits all records within that region/cluster.",
+      "description": "Fired when a choropleth region polygon or heatmap density circle is clicked. Emits all records within that region/cluster. Invoked via the callbacks object (callbacks.onRegionClick), not as a direct prop.",
       "parameters": [
         { "name": "region", "type": "string", "description": "Region or cluster name (country name or 'Cluster (N records)')" },
         { "name": "records", "type": "array", "description": "All records within the clicked region" },
@@ -137,7 +132,7 @@
     },
     {
       "name": "onMapRendered",
-      "description": "Fired after the map finishes rendering markers, heatmap circles, or choropleth polygons.",
+      "description": "Fired after the map finishes rendering markers, heatmap circles, or choropleth polygons. Invoked via the callbacks object (callbacks.onMapRendered), not as a direct prop.",
       "parameters": [
         { "name": "renderMode", "type": "string", "description": "Current render mode (point, heatmap, choropleth)" },
         { "name": "markerCount", "type": "number", "description": "Number of records with valid coordinates rendered" },
@@ -150,6 +145,11 @@
       "name": "leaflet",
       "version": "1.9.4",
       "globalVariable": "L"
+    },
+    {
+      "name": "geo-maps",
+      "version": "^5",
+      "globalVariable": "MapCore"
     }
   ],
   "code": "@file:../../code/generic/simple-map.js",

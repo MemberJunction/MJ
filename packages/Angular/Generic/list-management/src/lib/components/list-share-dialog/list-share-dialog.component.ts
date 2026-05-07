@@ -8,6 +8,7 @@ import {
   ChangeDetectorRef
 } from '@angular/core';
 import { Subject } from 'rxjs';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { Metadata } from '@memberjunction/core';
 import { ListSharingService } from '../../services/list-sharing.service';
@@ -35,7 +36,7 @@ import {
   templateUrl: './list-share-dialog.component.html',
   styleUrls: ['./list-share-dialog.component.css']
 })
-export class ListShareDialogComponent implements OnInit, OnDestroy {
+export class ListShareDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy  {
   /**
    * Configuration for the dialog
    */
@@ -98,7 +99,8 @@ export class ListShareDialogComponent implements OnInit, OnDestroy {
   constructor(
     private sharingService: ListSharingService,
     private cdr: ChangeDetectorRef
-  ) {}
+  ) {
+  super();}
 
   ngOnInit(): void {
     this.setupSearchDebounce();
@@ -259,7 +261,7 @@ export class ListShareDialogComponent implements OnInit, OnDestroy {
     this.saving = true;
 
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       let result;
 
       if (this.selectedRecipient.type === 'User') {

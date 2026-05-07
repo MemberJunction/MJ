@@ -1,7 +1,7 @@
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
 import * as Config from './config';
-import { BaseEntity, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo, CompositeKey } from "@memberjunction/core";
+import { BaseEntity, IMetadataProvider, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo, CompositeKey } from "@memberjunction/core";
 import axios, { AxiosResponse } from "axios";
 import { ApolloBulkPeopleRequest, ApolloBulkPeopleResponse, ProcessPersonRecordGroupParams, SearchPeopleResponsePerson } from "./generic/apollo.types";
 import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
@@ -149,7 +149,7 @@ export class ApolloEnrichmentContactsAction extends BaseAction {
             const { actionParams, historyMappings } = paramValidation.data!;
 
             // Process all contact records
-            return await this.processAllContactRecords(actionParams, historyMappings, params.ContextUser);
+            return await this.processAllContactRecords(actionParams, historyMappings, params.ContextUser, params.Provider);
         } catch (error) {
             LogError('Unexpected error in ApolloContactsEnrichmentAction', undefined, error);
             return {
@@ -316,13 +316,14 @@ export class ApolloEnrichmentContactsAction extends BaseAction {
      * @returns Promise indicating overall success/failure of the enrichment
      */
     private async processAllContactRecords(
-        actionParams: ContactEnrichmentParams, 
-        historyMappings: HistoryMappings, 
-        contextUser: UserInfo
+        actionParams: ContactEnrichmentParams,
+        historyMappings: HistoryMappings,
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<ActionResultSimple> {
         let pageNumber = 0;
         let hasMore = true;
-        const md = new Metadata();
+        const md: IMetadataProvider = provider ?? (new Metadata() as unknown as IMetadataProvider);
 
         while (hasMore) {
             LogStatus(`Fetching page ${pageNumber + 1} of records...`);
@@ -365,7 +366,7 @@ export class ApolloEnrichmentContactsAction extends BaseAction {
         actionParams: ContactEnrichmentParams,
         historyMappings: HistoryMappings,
         pageNumber: number,
-        md: Metadata,
+        md: IMetadataProvider,
         contextUser: UserInfo
     ): Promise<{ success: boolean; hasMore: boolean; error?: ActionResultSimple }> {
         const pageConfig = {
@@ -411,7 +412,7 @@ export class ApolloEnrichmentContactsAction extends BaseAction {
         results: Record<string, any>[],
         actionParams: ContactEnrichmentParams,
         historyMappings: HistoryMappings,
-        md: Metadata,
+        md: IMetadataProvider,
         contextUser: UserInfo
     ): Promise<void> {
         const tasks = [];
@@ -490,7 +491,7 @@ export class ApolloEnrichmentContactsAction extends BaseAction {
      */
     protected async ProcessPersonRecordGroup(params: ProcessPersonRecordGroupParams): Promise<boolean> {
         try {
-            const md: Metadata = params.Md;
+            const md: IMetadataProvider = params.Md;
 
             const ApolloParams: ApolloBulkPeopleRequest = {
                 api_key: Config.ApolloAPIKey,

@@ -84,9 +84,11 @@ export interface MJServerConfig {
 async function discoverAndLoadGeneratedPackages(configResult: { config: Record<string, unknown> }): Promise<void> {
   const codeGeneration = configResult.config?.codeGeneration as Record<string, Record<string, string>> | undefined;
   if (!codeGeneration?.packages) {
-    console.warn('No codeGeneration.packages configuration found - skipping auto-import of generated packages');
+    console.debug('No codeGeneration.packages configuration found - skipping auto-import of generated packages');
     return;
   }
+
+  console.log('Loading generated packages...');
 
   const packages = codeGeneration.packages;
 
@@ -113,6 +115,8 @@ async function discoverAndLoadGeneratedPackages(configResult: { config: Record<s
       }
     }
   }
+
+  console.log('');
 }
 
 /**
@@ -178,9 +182,7 @@ export async function createMJServer(options: MJServerConfig = {}): Promise<void
 
   // Discover and load generated packages automatically
   // This triggers their @RegisterClass decorators to register entities, actions, etc.
-  console.log('Loading generated packages...');
   await discoverAndLoadGeneratedPackages(configResult);
-  console.log('');
 
   // Build resolver paths - auto-discover standard locations if not provided
   // This enables truly minimal MJAPI files without needing to specify paths

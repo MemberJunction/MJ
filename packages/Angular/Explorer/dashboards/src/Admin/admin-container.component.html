@@ -1,0 +1,45 @@
+<div class="admin-container">
+    <header class="admin-container__header">
+        <div class="admin-container__header-icon"><i [class]="ContainerIcon"></i></div>
+        <div>
+            <h3 class="admin-container__header-title">{{ ContainerTitle }}</h3>
+            <div class="admin-container__header-sub">{{ ContainerSubtitle }}</div>
+        </div>
+    </header>
+
+    <div class="admin-container__body">
+        <aside class="admin-container__nav">
+            @for (section of Sections; track section.id) {
+                <button type="button"
+                        class="admin-container__nav-item"
+                        [class.admin-container__nav-item--active]="ActiveSection === section.id"
+                        (click)="OnSectionClick(section)">
+                    <i class="admin-container__nav-icon" [class]="section.icon"></i>
+                    <div class="admin-container__nav-text">
+                        <div class="admin-container__nav-label">{{ section.label }}</div>
+                        @if (section.description) {
+                            <div class="admin-container__nav-desc">{{ section.description }}</div>
+                        }
+                    </div>
+                </button>
+            }
+        </aside>
+
+        <main class="admin-container__content">
+            @if (LoadError) {
+                <div class="admin-container__error">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <span>{{ LoadError }}</span>
+                </div>
+            } @else if (IsLoading) {
+                <div class="admin-container__loading">
+                    <i class="fa-solid fa-spinner fa-spin"></i>
+                    <span>Loading…</span>
+                </div>
+            }
+            <div class="admin-container__host" [class.admin-container__host--hidden]="LoadError || IsLoading">
+                <ng-container #contentHost></ng-container>
+            </div>
+        </main>
+    </div>
+</div>

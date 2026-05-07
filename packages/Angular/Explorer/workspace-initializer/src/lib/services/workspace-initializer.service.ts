@@ -80,7 +80,10 @@ export class WorkspaceInitializerService {
       // 2. Load metadata and validate user
       await SharedService.RefreshData(true);
       await this.themeService.Initialize();
-      const md = new Metadata();
+      // This service runs the one-time app login flow and is wiring up the global
+      // Metadata.Provider via setupGraphQLClient above. There is no per-component
+      // provider scope here.
+      const md = new Metadata(); // global-provider-ok: bootstrap — wires the app's single global provider
 
       if (!md.CurrentUser) {
         return {

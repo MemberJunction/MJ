@@ -3,7 +3,7 @@ import { BaseEmbeddings, EmbedTextsResult, GetAIAPIKey } from '@memberjunction/a
 import { CredentialEngine } from '@memberjunction/credentials';
 import { BaseResponse, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
 import { PageRecordsParams, VectorBase } from '@memberjunction/ai-vectors';
-import { BaseEntity, EntityField, EntityFieldInfo, EntityInfo, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
+import { BaseEntity, EntityField, EntityFieldInfo, EntityInfo, IMetadataProvider, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
 import { MJAIModelEntity, MJEntityDocumentEntity, MJEntityDocumentTypeEntity, MJEntityRecordDocumentEntity, MJTemplateContentEntity,
   MJTemplateContentTypeEntity, MJTemplateEntity, MJTemplateEntityExtended, MJTemplateParamEntity, MJVectorDatabaseEntity, MJVectorIndexEntity } from '@memberjunction/core-entities';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
@@ -27,6 +27,16 @@ export class EntityVectorSyncer extends VectorBase {
   _endTime: Date;
   /** Accumulates render errors across batches so they can be reported through the progress callback */
   private _renderErrors: { RecordID: string; Message: string }[] = [];
+
+  /**
+   * Returns the active metadata provider — explicit override (via `this.Provider = ...`)
+   * if set, otherwise the global default. Provided as `ProviderToUse` for backward
+   * compatibility with code paths that referenced this name before the base class
+   * standardized on the `Provider` getter/setter.
+   */
+  protected get ProviderToUse(): IMetadataProvider {
+    return this.Provider;
+  }
 
   constructor() {
     super();
@@ -64,7 +74,7 @@ export class EntityVectorSyncer extends VectorBase {
     const pipelineConfig = docConfig.pipeline;
     const delayTimeMS: number = pipelineConfig?.delayBetweenCallsMs ?? 250;
 
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const entity: EntityInfo | undefined = md.Entities.find((e) => UUIDsEqual(e.ID, params.entityID));
     if (!entity) {
       throw new Error(`Entity with ID ${params.entityID} not found.`);
@@ -384,7 +394,7 @@ export class EntityVectorSyncer extends VectorBase {
     const metadataConfig = docConfig.metadata;
 
     // Get entity metadata for enriching vector metadata with display fields
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, entityDocument.EntityID));
     const displayFields = this.getDisplayFields(entityInfo, metadataConfig);
 
@@ -447,7 +457,7 @@ export class EntityVectorSyncer extends VectorBase {
   private startDataPaging(
     dataStream: PagedRecords,
     params: VectorizeEntityParams,
-    md: Metadata,
+    md: IMetadataProvider,
     entity: EntityInfo,
     template: MJTemplateEntityExtended,
     vectorIndexEntity: MJVectorIndexEntity,
@@ -523,7 +533,7 @@ export class EntityVectorSyncer extends VectorBase {
     VectorDatabase: MJVectorDatabaseEntity,
     AIModel: MJAIModelEntity
   ): Promise<MJEntityDocumentEntity> {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const entity = md.Entities.find((e) => UUIDsEqual(e.ID, EntityID));
     if (!entity) throw new Error(`Entity with ID ${EntityID} not found.`);
 

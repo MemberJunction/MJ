@@ -10,10 +10,25 @@
   "registry": "MJ",
   "status": "Active",
   "dataRequirements": {
-    "queries": [{
-      "name": "Sales By Region and Month",
-      "categoryPath": "Sales/Reports",
-      "fields": ["Month", "Region", "Revenue"]
-    }]
+    "queries": [
+      {
+        "name": "Sales By Region and Month",
+        "categoryPath": "Sales/Reports",
+        "fields": [
+          {
+            "name": "Month",
+            "type": "nvarchar"
+          },
+          {
+            "name": "Region",
+            "type": "nvarchar"
+          },
+          {
+            "name": "Revenue",
+            "type": "decimal"
+          }
+        ]
+      }
+    ]
   }
 }

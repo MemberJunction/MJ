@@ -130,9 +130,9 @@ export class MJUserViewEntityServer extends MJUserViewEntityExtended  {
      */
     protected BuildTemplateData(entityInfo: EntityInfo): SmartFilterTemplateData {
         const processedViews: string[] = [entityInfo.BaseView];
-        const md: IMetadataProvider = Metadata.Provider;
-        const listsEntity = md.Entities.find(e => e.Name === "MJ: Lists");
-        const listDetailsEntity = md.Entities.find(e => e.Name === "MJ: List Details");
+        const md: IMetadataProvider = this.ProviderToUse as unknown as IMetadataProvider;
+        const listsEntity = md.EntityByName("MJ: Lists");
+        const listDetailsEntity = md.EntityByName("MJ: List Details");
 
         // Build fields description
         const fieldsDescription = entityInfo.Fields.map(f => {

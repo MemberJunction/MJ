@@ -209,13 +209,45 @@ Creates a new provider and establishes a Redis connection. The connection is laz
 
 #### ILocalStorageProvider Methods
 
+The interface is **generic-typed** — `T` flows from caller through to retrieved value:
+
 | Method | Description |
 |--------|-------------|
-| `GetItem(key, category?)` | Retrieves a cached value. Returns `null` on miss or error. |
-| `SetItem(key, value, category?, ttlSeconds?)` | Stores a value with optional TTL. Uses pipeline for atomic set + category tracking. |
+| `GetItem<T>(key, category?)` | Retrieves a cached value. **JSON-deserializes internally** — returns the typed object. Returns `null` on miss, corrupt entry, or Redis unavailability. |
+| `GetItems<T>(keys, category?)` | **Batched read via Redis `MGET`** — one command, one network round-trip, N values. Returns `Map<string, T \| null>`. Missing/corrupt entries map to `null` per-key without failing the batch. ~N× faster than individual `GetItem` calls which each pay full RTT. |
+| `SetItem<T>(key, value, category?, ttlSeconds?)` | Stores a value with optional TTL. **JSON-serializes internally** — pass plain objects/arrays/primitives. Uses pipeline for atomic set + category tracking. |
 | `Remove(key, category?)` | Deletes a key and removes it from category tracking. |
 | `ClearCategory(category)` | Deletes all keys in a category using the tracking Set. |
 | `GetCategoryKeys(category)` | Returns all key names in a category. |
+
+**Internal serialization**: Redis stores strings, so `SetItem` calls `JSON.stringify(value)` and `GetItem` calls `JSON.parse(raw)` automatically. Callers see a typed object interface — no manual `JSON.parse`/`JSON.stringify` needed.
+
+**Type fidelity caveats** (JSON limitations apply):
+
+- `Date` instances become ISO strings on round-trip (caller must re-wrap with `new Date(value)` if a Date is needed)
+- `Map`/`Set` become plain objects/arrays
+- Functions are silently dropped
+- Circular references throw — the provider catches and logs; the failed `SetItem` call resolves without throwing, but the value is not stored
+
+For a richer storage model that preserves `Date`/`Map`/`Set`/typed arrays natively, use `BrowserIndexedDBStorageProvider` (browser-side) which leverages IndexedDB's structured clone algorithm.
+
+#### Example: typed round-trip
+
+```typescript
+interface CachedSession { userId: string; expiresAt: string; permissions: string[]; }
+
+await provider.SetItem<CachedSession>('session:abc', {
+  userId: 'u-1',
+  expiresAt: '2026-06-01T00:00:00Z',
+  permissions: ['read', 'write']
+}, 'Sessions', 3600);  // 1-hour TTL
+
+const session = await provider.GetItem<CachedSession>('session:abc', 'Sessions');
+//      ^^^^^^^ typed as CachedSession | null
+if (session) {
+  console.log(session.permissions);  // already typed
+}
+```
 
 #### Additional Methods
 

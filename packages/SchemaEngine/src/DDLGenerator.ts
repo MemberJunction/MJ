@@ -57,6 +57,15 @@ export class DDLGenerator {
       lines.push(this.renderColumnLine(this.capPKColumnType(col, pkFieldSet, d), d));
     }
 
+    if (def.PrimaryKeyColumns && def.PrimaryKeyColumns.length > 0) {
+      const pkColNames = def.PrimaryKeyColumns.map((f) => {
+        ValidateIdentifier(f, 'pk column');
+        return q(f);
+      }).join(', ');
+      const pkName = `PK_${def.TableName}`;
+      lines.push(`    CONSTRAINT ${q(pkName)} PRIMARY KEY (${pkColNames})`);
+    }
+
     if (def.SoftPrimaryKeys && def.SoftPrimaryKeys.length > 0) {
       const pkColNames = def.SoftPrimaryKeys.map((f) => {
         ValidateIdentifier(f, 'soft-pk column');

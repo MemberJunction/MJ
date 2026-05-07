@@ -19,7 +19,7 @@ export async function initializeMJProvider(): Promise<void> {
   }
 
   // Check if MJ provider is already initialized
-  if (Metadata.Provider) {
+  if (Metadata.Provider) { // global-provider-ok: CLI tool, single-provider context
     console.log('MJ Provider already initialized');
     isInitialized = true;
     return;
@@ -111,7 +111,7 @@ For security, use environment variables:
     await setupSQLServerClient(providerConfig);
 
     // Debug: Log entity counts
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: CLI tool, single-provider context
     console.log(`Total entities loaded: ${md.Entities.length}`);
     const testEntities = md.Entities.filter(e => e.Name.toLowerCase().includes('test'));
     console.log(`Test-related entities found: ${testEntities.length}`);

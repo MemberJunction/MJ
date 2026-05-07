@@ -79,8 +79,7 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
   public showMobileFilters = false;
 
   protected override destroy$ = new Subject<void>();
-  private metadata = new Metadata();
-
+  private get metadata() { return this.ProviderToUse; }
   constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {
     super();
   }
@@ -133,7 +132,7 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
   }
 
   private async loadEntities(): Promise<MJEntityEntity[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<MJEntityEntity>({
       EntityName: 'MJ: Entities',
       ResultType: 'entity_object',
@@ -144,7 +143,7 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
   }
   
   private async loadEntityPermissions(): Promise<MJEntityPermissionEntity[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<MJEntityPermissionEntity>({
       EntityName: 'MJ: Entity Permissions',
       ResultType: 'entity_object',
@@ -155,7 +154,7 @@ export class EntityPermissionsComponent extends BaseDashboard implements OnDestr
   }
   
   private async loadRoles(): Promise<MJRoleEntity[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const result = await rv.RunView<MJRoleEntity>({
       EntityName: 'MJ: Roles',
       ResultType: 'entity_object',

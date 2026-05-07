@@ -1,4 +1,4 @@
-import { BaseEntity, CompositeKey, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { BaseSingleton } from '@memberjunction/global';
 import { ArchiveProcessor } from './ArchiveProcessor';
 import { ArchiveRecovery } from './ArchiveRecovery';
@@ -28,6 +28,20 @@ export class ArchiveEngine extends BaseSingleton<ArchiveEngine> {
     }
 
     private _recovery: ArchiveRecovery = new ArchiveRecovery();
+
+    /** Optional metadata provider; falls back to Metadata.Provider when not explicitly set. */
+    private _provider: IMetadataProvider | undefined;
+
+    /** Set the metadata provider used by the archive engine and its subsystems. */
+    public set Provider(value: IMetadataProvider | undefined) {
+        this._provider = value;
+        this._recovery.Provider = value;
+    }
+
+    /** Get the metadata provider, falling back to the global default. */
+    public get Provider(): IMetadataProvider {
+        return this._provider ?? Metadata.Provider;
+    }
 
     /**
      * Provides access to the recovery subsystem for listing and restoring archived versions.
@@ -110,7 +124,7 @@ export class ArchiveEngine extends BaseSingleton<ArchiveEngine> {
      * Loads the ArchiveConfiguration record by ID.
      */
     private async LoadConfiguration(configId: string, contextUser: UserInfo): Promise<BaseEntity | null> {
-        const md = new Metadata();
+        const md = this.Provider;
         const config = await md.GetEntityObject('MJ: Archive Configurations', contextUser);
         const loaded = await config.InnerLoad(CompositeKey.FromKeyValuePair('ID', configId));
         return loaded ? config : null;
@@ -144,7 +158,7 @@ export class ArchiveEngine extends BaseSingleton<ArchiveEngine> {
      * Creates a new ArchiveRun record to track this execution.
      */
     private async CreateArchiveRun(config: BaseEntity, contextUser: UserInfo): Promise<BaseEntity> {
-        const md = new Metadata();
+        const md = this.Provider;
         const run = await md.GetEntityObject('MJ: Archive Runs', contextUser);
 
         run.Set('ArchiveConfigurationID', config.Get('ID'));

@@ -1,5 +1,135 @@
 # @memberjunction/ai-provider-bundle
 
+## 5.32.0
+
+### Patch Changes
+
+- @memberjunction/ai-recommendations-rex@5.32.0
+- @memberjunction/ai-vectors-pinecone@5.32.0
+- @memberjunction/ai-anthropic@5.32.0
+- @memberjunction/ai-azure@5.32.0
+- @memberjunction/ai-bedrock@5.32.0
+- @memberjunction/ai-betty-bot@5.32.0
+- @memberjunction/ai-blackforestlabs@5.32.0
+- @memberjunction/ai-cerebras@5.32.0
+- @memberjunction/ai-cohere@5.32.0
+- @memberjunction/ai-elevenlabs@5.32.0
+- @memberjunction/ai-fireworks@5.32.0
+- @memberjunction/ai-gemini@5.32.0
+- @memberjunction/ai-groq@5.32.0
+- @memberjunction/ai-heygen@5.32.0
+- @memberjunction/ai-inception@5.32.0
+- @memberjunction/ai-lmstudio@5.32.0
+- @memberjunction/ai-llamacpp@5.32.0
+- @memberjunction/ai-local-embeddings@5.32.0
+- @memberjunction/ai-minimax@5.32.0
+- @memberjunction/ai-mistral@5.32.0
+- @memberjunction/ai-ollama@5.32.0
+- @memberjunction/ai-openai@5.32.0
+- @memberjunction/ai-openrouter@5.32.0
+- @memberjunction/ai-vertex@5.32.0
+- @memberjunction/ai-zhipu@5.32.0
+- @memberjunction/ai-xai@5.32.0
+
+## 5.31.0
+
+### Patch Changes
+
+- 7ed7a4b: no metadata/migration changes
+- Updated dependencies [7ed7a4b]
+  - @memberjunction/ai-anthropic@5.31.0
+  - @memberjunction/ai-azure@5.31.0
+  - @memberjunction/ai-bedrock@5.31.0
+  - @memberjunction/ai-betty-bot@5.31.0
+  - @memberjunction/ai-blackforestlabs@5.31.0
+  - @memberjunction/ai-cerebras@5.31.0
+  - @memberjunction/ai-cohere@5.31.0
+  - @memberjunction/ai-elevenlabs@5.31.0
+  - @memberjunction/ai-fireworks@5.31.0
+  - @memberjunction/ai-gemini@5.31.0
+  - @memberjunction/ai-groq@5.31.0
+  - @memberjunction/ai-heygen@5.31.0
+  - @memberjunction/ai-inception@5.31.0
+  - @memberjunction/ai-lmstudio@5.31.0
+  - @memberjunction/ai-llamacpp@5.31.0
+  - @memberjunction/ai-local-embeddings@5.31.0
+  - @memberjunction/ai-minimax@5.31.0
+  - @memberjunction/ai-mistral@5.31.0
+  - @memberjunction/ai-ollama@5.31.0
+  - @memberjunction/ai-openai@5.31.0
+  - @memberjunction/ai-openrouter@5.31.0
+  - @memberjunction/ai-recommendations-rex@5.31.0
+  - @memberjunction/ai-vertex@5.31.0
+  - @memberjunction/ai-zhipu@5.31.0
+  - @memberjunction/ai-xai@5.31.0
+  - @memberjunction/ai-vectors-pinecone@5.31.0
+
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ai-anthropic@5.30.1
+- @memberjunction/ai-azure@5.30.1
+- @memberjunction/ai-bedrock@5.30.1
+- @memberjunction/ai-betty-bot@5.30.1
+- @memberjunction/ai-blackforestlabs@5.30.1
+- @memberjunction/ai-cerebras@5.30.1
+- @memberjunction/ai-cohere@5.30.1
+- @memberjunction/ai-elevenlabs@5.30.1
+- @memberjunction/ai-fireworks@5.30.1
+- @memberjunction/ai-gemini@5.30.1
+- @memberjunction/ai-groq@5.30.1
+- @memberjunction/ai-heygen@5.30.1
+- @memberjunction/ai-inception@5.30.1
+- @memberjunction/ai-lmstudio@5.30.1
+- @memberjunction/ai-llamacpp@5.30.1
+- @memberjunction/ai-local-embeddings@5.30.1
+- @memberjunction/ai-minimax@5.30.1
+- @memberjunction/ai-mistral@5.30.1
+- @memberjunction/ai-ollama@5.30.1
+- @memberjunction/ai-openai@5.30.1
+- @memberjunction/ai-openrouter@5.30.1
+- @memberjunction/ai-recommendations-rex@5.30.1
+- @memberjunction/ai-vertex@5.30.1
+- @memberjunction/ai-zhipu@5.30.1
+- @memberjunction/ai-xai@5.30.1
+- @memberjunction/ai-vectors-pinecone@5.30.1
+
+## 5.30.0
+
+### Patch Changes
+
+- 70c054d: Add `@memberjunction/ai-llamacpp` — a new AI provider that targets a local `llama-server` (llama.cpp) process via its OpenAI-compatible `/v1/chat/completions` endpoint. Implemented as a thin subclass of `OpenAILLM` following the same pattern as `xAILLM` and `OpenRouterLLM`. Defaults the base URL to `http://localhost:8080/v1` and supplies a placeholder API key since `llama-server` runs unauthenticated by default (callers can still pass a real key if `llama-server --api-key` is configured). Added to the provider bundle.
+- 4e2da93: Add new Inception AI provider package with InceptionLLM driver and Mercury Coder model support, included in the AI providers bundle.
+- Updated dependencies [70c054d]
+- Updated dependencies [4e2da93]
+  - @memberjunction/ai-llamacpp@5.30.0
+  - @memberjunction/ai-inception@5.30.0
+  - @memberjunction/ai-vectors-pinecone@5.30.0
+  - @memberjunction/ai-recommendations-rex@5.30.0
+  - @memberjunction/ai-anthropic@5.30.0
+  - @memberjunction/ai-azure@5.30.0
+  - @memberjunction/ai-bedrock@5.30.0
+  - @memberjunction/ai-betty-bot@5.30.0
+  - @memberjunction/ai-blackforestlabs@5.30.0
+  - @memberjunction/ai-cerebras@5.30.0
+  - @memberjunction/ai-cohere@5.30.0
+  - @memberjunction/ai-elevenlabs@5.30.0
+  - @memberjunction/ai-fireworks@5.30.0
+  - @memberjunction/ai-gemini@5.30.0
+  - @memberjunction/ai-groq@5.30.0
+  - @memberjunction/ai-heygen@5.30.0
+  - @memberjunction/ai-lmstudio@5.30.0
+  - @memberjunction/ai-local-embeddings@5.30.0
+  - @memberjunction/ai-minimax@5.30.0
+  - @memberjunction/ai-mistral@5.30.0
+  - @memberjunction/ai-ollama@5.30.0
+  - @memberjunction/ai-openai@5.30.0
+  - @memberjunction/ai-openrouter@5.30.0
+  - @memberjunction/ai-vertex@5.30.0
+  - @memberjunction/ai-zhipu@5.30.0
+  - @memberjunction/ai-xai@5.30.0
+
 ## 5.29.0
 
 ### Patch Changes

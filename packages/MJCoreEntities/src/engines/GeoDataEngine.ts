@@ -1,5 +1,4 @@
 import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo, LogStatus } from "@memberjunction/core";
-import { RegisterForStartup } from "@memberjunction/core";
 import { MJCountryEntity, MJStateProvinceEntity } from "../generated/entity_subclasses";
 
 /**
@@ -38,17 +37,28 @@ export interface GeoPointResolution {
 
 /**
  * GeoDataEngine provides cached, in-memory access to Country and StateProvince
- * reference data. Loaded once at startup via @RegisterForStartup, all lookups
- * are O(1) via pre-built Maps keyed by common lookup patterns.
+ * reference data, plus point-in-polygon resolution against country/state boundaries.
+ * All lookups are O(1) via pre-built Maps keyed by common lookup patterns.
+ *
+ * **Loaded on demand**, not at app startup. The dataset is large (~3,000+ rows
+ * with BoundaryGeoJSON blobs) and parsing the geometry takes ~3–4s synchronously,
+ * so we only pay that cost when geocoding or geo lookups are actually needed.
+ *
+ * **Caller contract**: `await GeoDataEngine.Instance.Config(...)` once before
+ * calling any sync lookup method. `Config()` is idempotent — concurrent calls
+ * dedup against a single in-flight load (see `BaseEngine.Load`), and repeated
+ * calls after load complete return immediately. If no entity in the tenant has
+ * `SupportsGeoCoding=1`, `Config()` returns early and lookups will return
+ * `undefined` — callers already handle the not-found case so the empty state
+ * is safe to leave in place.
  *
  * Usage:
  * ```typescript
- * const engine = GeoDataEngine.Instance;
- * const country = engine.GetCountryByISO2('US');
- * const state = engine.GetStateByCode('US-country-id', 'CO');
+ * await GeoDataEngine.Instance.Config(false, contextUser);
+ * const country = GeoDataEngine.Instance.GetCountryByISO2('US');
+ * const state = GeoDataEngine.Instance.GetStateByCode(country.ID, 'CO');
  * ```
  */
-@RegisterForStartup()
 export class GeoDataEngine extends BaseEngine<GeoDataEngine> {
     public static get Instance(): GeoDataEngine {
         return super.getInstance<GeoDataEngine>();
@@ -73,6 +83,16 @@ export class GeoDataEngine extends BaseEngine<GeoDataEngine> {
     private _stateGeometriesByCountry = new Map<string, CachedGeometry[]>();
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
+        // Skip the load entirely if no entity in this tenant has SupportsGeoCoding=1.
+        // The country/state-province dataset is large (~3,000+ rows with BoundaryGeoJSON
+        // blobs) and parsing the geometry for point-in-polygon takes ~3-4s synchronously.
+        // None of that work is useful unless at least one entity opts into geocoding.
+        const entities = (provider ?? this.ProviderToUse)?.Entities;
+        if (entities && !entities.some(e => e.SupportsGeoCoding)) {
+            LogStatus('GeoDataEngine: no entities have SupportsGeoCoding=1 — skipping country/state-province load and geometry parsing');
+            return;
+        }
+
         const configs: Partial<BaseEnginePropertyConfig>[] = [
             {
                 Type: 'entity',
@@ -92,7 +112,10 @@ export class GeoDataEngine extends BaseEngine<GeoDataEngine> {
 
     protected override async AdditionalLoading(_contextUser?: UserInfo): Promise<void> {
         this.buildLookupMaps();
-        this.buildGeometryCaches();
+        // Use synchronous main-thread parsing. The Web Worker approach was slower because
+        // postMessage structured-clone of 3,092 parsed polygons back to main thread took
+        // 11+ seconds, blocking all other engines' promise continuations.
+        this.buildGeometryCachesSync();
     }
 
     // ================================================================
@@ -328,22 +351,179 @@ export class GeoDataEngine extends BaseEngine<GeoDataEngine> {
     }
 
     // ================================================================
-    // Private — geometry cache building
+    // Private — geometry cache building (Web Worker accelerated)
     // ================================================================
 
     /**
-     * Parse all BoundaryGeoJSON data and build indexed geometry caches.
-     * Called once during AdditionalLoading after entities are loaded.
+     * The Web Worker source code for GeoJSON parsing. This is embedded as a string
+     * so we can create an inline Worker via Blob URL — no separate file needed.
+     * The worker receives raw BoundaryGeoJSON strings and returns parsed geometries.
      */
-    private buildGeometryCaches(): void {
+    private static readonly GEO_WORKER_SOURCE = `
+        function parsePolygonCoordinates(coordinates) {
+            if (!coordinates || coordinates.length === 0) return null;
+            let minLng = Infinity, minLat = Infinity, maxLng = -Infinity, maxLat = -Infinity;
+            for (const point of coordinates[0]) {
+                if (point[0] < minLng) minLng = point[0];
+                if (point[1] < minLat) minLat = point[1];
+                if (point[0] > maxLng) maxLng = point[0];
+                if (point[1] > maxLat) maxLat = point[1];
+            }
+            return { rings: coordinates, bbox: [minLng, minLat, maxLng, maxLat] };
+        }
+
+        function parseEntityBoundary(entityId, boundaryGeoJSON) {
+            if (!boundaryGeoJSON) return null;
+            try {
+                const raw = typeof boundaryGeoJSON === 'string' ? JSON.parse(boundaryGeoJSON) : boundaryGeoJSON;
+                const geometry = raw.type === 'Feature' ? raw.geometry : raw;
+                if (!geometry || !geometry.coordinates) return null;
+                const polygons = [];
+                if (geometry.type === 'Polygon') {
+                    const parsed = parsePolygonCoordinates(geometry.coordinates);
+                    if (parsed) polygons.push(parsed);
+                } else if (geometry.type === 'MultiPolygon') {
+                    for (const polyCoords of geometry.coordinates) {
+                        const parsed = parsePolygonCoordinates(polyCoords);
+                        if (parsed) polygons.push(parsed);
+                    }
+                }
+                if (polygons.length === 0) return null;
+                const overallBbox = [
+                    Math.min(...polygons.map(p => p.bbox[0])),
+                    Math.min(...polygons.map(p => p.bbox[1])),
+                    Math.max(...polygons.map(p => p.bbox[2])),
+                    Math.max(...polygons.map(p => p.bbox[3]))
+                ];
+                return { entityId: entityId.toLowerCase(), polygons, bbox: overallBbox };
+            } catch {
+                return null;
+            }
+        }
+
+        self.onmessage = function(e) {
+            const { countries, stateProvinces } = e.data;
+            const countryGeometries = [];
+            const stateGeometries = [];
+
+            for (const c of countries) {
+                const geom = parseEntityBoundary(c.id, c.boundaryGeoJSON);
+                if (geom) countryGeometries.push(geom);
+            }
+
+            for (const s of stateProvinces) {
+                const geom = parseEntityBoundary(s.id, s.boundaryGeoJSON);
+                if (geom) {
+                    geom._countryId = s.countryId.toLowerCase();
+                    stateGeometries.push(geom);
+                }
+            }
+
+            self.postMessage({ countryGeometries, stateGeometries });
+        };
+    `;
+
+    /**
+     * Parse all BoundaryGeoJSON data using a Web Worker (off main thread).
+     * Falls back to synchronous parsing if Workers are unavailable.
+     */
+    private async buildGeometryCachesAsync(): Promise<void> {
         this._countryGeometries = [];
         this._stateGeometries = [];
         this._stateGeometriesByCountry.clear();
 
+        // Try Web Worker first (browser environment)
+        if (typeof Worker !== 'undefined' && typeof Blob !== 'undefined') {
+            try {
+                const result = await this.parseInWorker();
+                this._countryGeometries = result.countryGeometries;
+                this.indexStateGeometries(result.stateGeometries);
+
+                LogStatus(`GeoDataEngine: parsed ${result.countryGeometries.length} country and ${result.stateGeometries.length} state/province boundaries for point-in-polygon (Web Worker)`);
+                return;
+            } catch (err) {
+                LogStatus(`GeoDataEngine: Web Worker failed (${err instanceof Error ? err.message : String(err)}), falling back to main thread`);
+            }
+        }
+
+        // Fallback: synchronous parsing on main thread
+        this.buildGeometryCachesSync();
+    }
+
+    /**
+     * Offload GeoJSON parsing to an inline Web Worker.
+     * Returns a promise that resolves with the parsed geometry arrays.
+     */
+    private parseInWorker(): Promise<{ countryGeometries: CachedGeometry[]; stateGeometries: (CachedGeometry & { _countryId?: string })[] }> {
+        return new Promise((resolve, reject) => {
+            const blob = new Blob([GeoDataEngine.GEO_WORKER_SOURCE], { type: 'application/javascript' });
+            const url = URL.createObjectURL(blob);
+            const worker = new Worker(url);
+
+            // Timeout — if the worker takes longer than 30s, fall back
+            const timeout = setTimeout(() => {
+                worker.terminate();
+                URL.revokeObjectURL(url);
+                reject(new Error('Worker timeout'));
+            }, 30000);
+
+            worker.onmessage = (e: MessageEvent) => {
+                clearTimeout(timeout);
+                worker.terminate();
+                URL.revokeObjectURL(url);
+                resolve(e.data);
+            };
+
+            worker.onerror = (e: ErrorEvent) => {
+                clearTimeout(timeout);
+                worker.terminate();
+                URL.revokeObjectURL(url);
+                reject(new Error(e.message));
+            };
+
+            // Send raw data to the worker — only the fields needed for parsing
+            const countries = this._countries.map(c => ({
+                id: c.ID,
+                boundaryGeoJSON: c.BoundaryGeoJSON
+            }));
+            const stateProvinces = this._stateProvinces.map(s => ({
+                id: s.ID,
+                countryId: s.CountryID,
+                boundaryGeoJSON: s.BoundaryGeoJSON
+            }));
+
+            worker.postMessage({ countries, stateProvinces });
+        });
+    }
+
+    /**
+     * Index state geometries by country for fast lookup.
+     * Used after both worker and sync parsing paths.
+     */
+    private indexStateGeometries(stateGeometries: (CachedGeometry & { _countryId?: string })[]): void {
+        this._stateGeometries = [];
+        this._stateGeometriesByCountry.clear();
+
+        for (const geom of stateGeometries) {
+            this._stateGeometries.push(geom);
+            const countryKey = geom._countryId || '';
+            let arr = this._stateGeometriesByCountry.get(countryKey);
+            if (!arr) {
+                arr = [];
+                this._stateGeometriesByCountry.set(countryKey, arr);
+            }
+            arr.push(geom);
+            delete geom._countryId; // Clean up the temporary field
+        }
+    }
+
+    /**
+     * Synchronous fallback for environments without Web Workers (e.g., Node.js, SSR).
+     */
+    private buildGeometryCachesSync(): void {
         let countryParsed = 0;
         let stateParsed = 0;
 
-        // Parse country boundaries
         for (const country of this._countries) {
             const geom = this.parseEntityBoundary(country.ID, country.BoundaryGeoJSON);
             if (geom) {
@@ -352,30 +532,25 @@ export class GeoDataEngine extends BaseEngine<GeoDataEngine> {
             }
         }
 
-        // Parse state/province boundaries, indexed by country
+        const stateGeoms: (CachedGeometry & { _countryId?: string })[] = [];
         for (const state of this._stateProvinces) {
             const geom = this.parseEntityBoundary(state.ID, state.BoundaryGeoJSON);
             if (geom) {
-                this._stateGeometries.push(geom);
+                (geom as any)._countryId = state.CountryID.toLowerCase();
+                stateGeoms.push(geom as CachedGeometry & { _countryId?: string });
                 stateParsed++;
-
-                const countryKey = state.CountryID.toLowerCase();
-                let arr = this._stateGeometriesByCountry.get(countryKey);
-                if (!arr) {
-                    arr = [];
-                    this._stateGeometriesByCountry.set(countryKey, arr);
-                }
-                arr.push(geom);
             }
         }
+        this.indexStateGeometries(stateGeoms);
 
-        LogStatus(`GeoDataEngine: parsed ${countryParsed} country and ${stateParsed} state/province boundaries for point-in-polygon`);
+        LogStatus(`GeoDataEngine: parsed ${countryParsed} country and ${stateParsed} state/province boundaries for point-in-polygon (main thread)`);
     }
 
     /**
      * Parse a BoundaryGeoJSON value into a CachedGeometry.
      * Supports GeoJSON Feature, Polygon, and MultiPolygon types.
      * Returns null if the boundary is missing or unparseable.
+     * Used by the synchronous fallback path.
      */
     private parseEntityBoundary(entityId: string, boundaryGeoJSON: string | null): CachedGeometry | null {
         if (!boundaryGeoJSON) return null;
@@ -400,7 +575,6 @@ export class GeoDataEngine extends BaseEngine<GeoDataEngine> {
 
             if (polygons.length === 0) return null;
 
-            // Compute overall bounding box across all polygons
             const overallBbox: [number, number, number, number] = [
                 Math.min(...polygons.map(p => p.bbox[0])),
                 Math.min(...polygons.map(p => p.bbox[1])),
@@ -418,6 +592,7 @@ export class GeoDataEngine extends BaseEngine<GeoDataEngine> {
      * Parse a single Polygon's coordinate rings and compute its bounding box.
      * GeoJSON Polygon coordinates: [ outerRing, ...holeRings ]
      * Each ring is an array of [lng, lat] pairs.
+     * Used by the synchronous fallback path.
      */
     private parsePolygonCoordinates(coordinates: number[][][]): ParsedPolygon | null {
         if (!coordinates || coordinates.length === 0) return null;

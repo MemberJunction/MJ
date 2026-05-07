@@ -1,0 +1,205 @@
+<div class="mj-inspector mj-inspector--solo">
+    <div class="mj-inspector__header">
+        <div class="mj-inspector__header-icon"><i class="fa-solid fa-bolt"></i></div>
+        <div>
+            <h3 class="mj-inspector__header-title">Event Monitor</h3>
+            <div class="mj-inspector__header-sub">Live tail of MJGlobal events with filter and pause</div>
+        </div>
+        <span class="mj-inspector__header-spacer"></span>
+        <div class="mj-inspector__header-actions">
+            <button class="mj-inspector__btn"
+                    [class.mj-inspector__btn--success]="!Paused"
+                    [class.em-paused]="Paused"
+                    type="button" (click)="TogglePause()"
+                    [title]="Paused ? 'Resume capture' : 'Pause capture'">
+                @if (Paused) {
+                    <i class="fa-solid fa-play"></i> Resume
+                } @else {
+                    <i class="fa-solid fa-pause"></i> Pause
+                }
+            </button>
+            <button class="mj-inspector__btn" type="button" (click)="Clear()" title="Clear all captured events">
+                <i class="fa-solid fa-broom"></i> Clear
+            </button>
+        </div>
+    </div>
+
+    <div class="em-stats">
+        <div class="em-stat">
+            <i class="em-pulse" [class.em-pulse--paused]="Paused"></i>
+            <div>
+                <div class="em-stat-value">{{ Paused ? 'PAUSED' : 'LIVE' }}</div>
+                <div class="em-stat-label">{{ Paused ? 'Capture suspended' : 'Capturing events' }}</div>
+            </div>
+        </div>
+        <div class="em-stat">
+            <div>
+                <div class="em-stat-value">{{ Stats.captured }}</div>
+                <div class="em-stat-label">Total captured</div>
+            </div>
+        </div>
+        <div class="em-stat">
+            <div>
+                <div class="em-stat-value">{{ Stats.kept }} / {{ MaxEvents }}</div>
+                <div class="em-stat-label">In buffer</div>
+            </div>
+        </div>
+        <div class="em-stat">
+            <div>
+                <div class="em-stat-value">{{ Stats.perSecond }}/s</div>
+                <div class="em-stat-label">Last second</div>
+            </div>
+        </div>
+        <div class="em-stat em-stat--right">
+            <div>
+                <div class="em-stat-value em-stat-value--small">{{ UptimeLabel }}</div>
+                <div class="em-stat-label">Watching for</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="em-toolbar">
+        <div class="em-search-wrap">
+            <i class="fa-solid fa-search em-search-icon"></i>
+            <input type="search"
+                   class="em-search"
+                   placeholder="Filter by type, component, payload…"
+                   [(ngModel)]="Filter"
+                   (ngModelChange)="PersistPrefs()" />
+            @if (Filter) {
+                <button class="em-search-clear" (click)="Filter = ''" title="Clear">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            }
+        </div>
+
+        <div class="em-select-wrap">
+            <label class="em-select-label">Type</label>
+            <select class="em-select" [(ngModel)]="TypeFilter" (ngModelChange)="PersistPrefs()">
+                <option value="">All types ({{ KnownTypes.length }})</option>
+                @for (t of KnownTypes; track t) {
+                    <option [value]="t">{{ t }}</option>
+                }
+            </select>
+        </div>
+
+        <div class="em-select-wrap">
+            <label class="em-select-label">Component</label>
+            <select class="em-select" [(ngModel)]="ComponentFilter" (ngModelChange)="PersistPrefs()">
+                <option value="">All components ({{ KnownComponents.length }})</option>
+                @for (c of KnownComponents; track c) {
+                    <option [value]="c">{{ c }}</option>
+                }
+            </select>
+        </div>
+
+        @if (KnownCodes.length > 0) {
+            <div class="em-select-wrap">
+                <label class="em-select-label">Code</label>
+                <select class="em-select" [(ngModel)]="CodeFilter" (ngModelChange)="PersistPrefs()">
+                    <option value="">All codes ({{ KnownCodes.length }})</option>
+                    @for (c of KnownCodes; track c) {
+                        <option [value]="c">{{ c }}</option>
+                    }
+                </select>
+            </div>
+        }
+
+        @if (HasActiveFilters) {
+            <button class="em-clear-filters" type="button" (click)="ClearFilters()" title="Clear all filters">
+                <i class="fa-solid fa-xmark"></i> Clear filters
+            </button>
+        }
+    </div>
+
+    <div class="em-list">
+        <div class="em-table-head">
+            <button type="button"
+                    class="em-th em-th--time"
+                    [class.em-th--sorted]="SortField === 'time'"
+                    (click)="OnSortClick('time')">
+                Time
+                @if (SortField === 'time') {
+                    <i class="fa-solid" [class.fa-arrow-down]="SortDir === 'desc'" [class.fa-arrow-up]="SortDir === 'asc'"></i>
+                }
+            </button>
+            <button type="button"
+                    class="em-th em-th--type"
+                    [class.em-th--sorted]="SortField === 'type'"
+                    (click)="OnSortClick('type')">
+                Type
+                @if (SortField === 'type') {
+                    <i class="fa-solid" [class.fa-arrow-down]="SortDir === 'desc'" [class.fa-arrow-up]="SortDir === 'asc'"></i>
+                }
+            </button>
+            <button type="button"
+                    class="em-th em-th--code"
+                    [class.em-th--sorted]="SortField === 'eventCode'"
+                    (click)="OnSortClick('eventCode')">
+                Code
+                @if (SortField === 'eventCode') {
+                    <i class="fa-solid" [class.fa-arrow-down]="SortDir === 'desc'" [class.fa-arrow-up]="SortDir === 'asc'"></i>
+                }
+            </button>
+            <button type="button"
+                    class="em-th em-th--component"
+                    [class.em-th--sorted]="SortField === 'component'"
+                    (click)="OnSortClick('component')">
+                Component
+                @if (SortField === 'component') {
+                    <i class="fa-solid" [class.fa-arrow-down]="SortDir === 'desc'" [class.fa-arrow-up]="SortDir === 'asc'"></i>
+                }
+            </button>
+            <span class="em-th em-th--summary">Summary</span>
+            <span class="em-th em-th--actions"></span>
+        </div>
+
+        @if (FilteredEvents.length === 0) {
+            <div class="em-empty">
+                @if (Stats.captured === 0) {
+                    <i class="fa-solid fa-radio em-empty-icon"></i>
+                    <div class="em-empty-title">Listening for events…</div>
+                    <div class="em-empty-sub">Trigger an action — saves, navigation, AI events all show up here.</div>
+                } @else if (Paused) {
+                    <i class="fa-solid fa-pause em-empty-icon"></i>
+                    <div class="em-empty-title">Capture is paused</div>
+                    <div class="em-empty-sub">{{ Stats.captured }} events fired since you paused. Click Resume to start collecting again.</div>
+                } @else {
+                    <i class="fa-solid fa-filter em-empty-icon"></i>
+                    <div class="em-empty-title">No events match your filter</div>
+                    <div class="em-empty-sub">{{ Stats.kept }} events in buffer · clear filters to see them.</div>
+                }
+            </div>
+        } @else {
+            @for (evt of FilteredEvents; track TrackBySeq($index, evt)) {
+                <div class="em-row" [class.em-row--expanded]="evt.expanded">
+                    <div class="em-row-head" (click)="ToggleRow(evt)">
+                        <i class="em-row-chev fa-solid fa-chevron-right"
+                           [class.em-row-chev--down]="evt.expanded"></i>
+                        <span class="em-row-time">{{ evt.timestamp | date:'HH:mm:ss.SSS' }}</span>
+                        <span class="em-row-type" [attr.data-type]="evt.type">{{ evt.type }}</span>
+                        <span class="em-row-code">{{ evt.eventCode || '—' }}</span>
+                        <span class="em-row-component" [title]="evt.componentName">{{ evt.componentName }}</span>
+                        <span class="em-row-summary" [class.em-row-summary--empty]="!evt.hasPayload">{{ evt.summary }}</span>
+                        <button class="em-row-copy"
+                                type="button"
+                                (click)="$event.stopPropagation(); OnCopyRow(evt)"
+                                title="Copy as JSON">
+                            <i class="fa-solid fa-clipboard"></i>
+                        </button>
+                    </div>
+                    @if (evt.expanded) {
+                        @if (evt.hasPayload) {
+                            <pre class="em-row-payload"><code>{{ evt.args | json }}</code></pre>
+                        } @else {
+                            <div class="em-row-no-payload">
+                                <i class="fa-regular fa-circle"></i>
+                                <span>This event has no payload.</span>
+                            </div>
+                        }
+                    }
+                </div>
+            }
+        }
+    </div>
+</div>

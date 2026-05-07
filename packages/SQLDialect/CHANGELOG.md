@@ -1,5 +1,21 @@
 # @memberjunction/sql-dialect
 
+## 5.32.0
+
+## 5.31.0
+
+### Minor Changes
+
+- 9457655: lift CRUD-routine generation to the base class via new SQLDialect abstractions (IsNull, ParameterRef, ParameterDefault, NullLiteral, EmptyUUIDLiteral) so SP generation logic lives once and dialects override only what's syntax-specific
+
+### Patch Changes
+
+- 7ed7a4b: no metadata/migration changes
+
+## 5.30.1
+
+## 5.30.0
+
 ## 5.29.0
 
 ### Patch Changes

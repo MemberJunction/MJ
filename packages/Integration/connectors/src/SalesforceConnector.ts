@@ -1,6 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { RegisterClass } from '@memberjunction/global';
-import { Metadata, type UserInfo } from '@memberjunction/core';
+import { Metadata, type IMetadataProvider, type UserInfo } from '@memberjunction/core';
 import type {
     MJCompanyIntegrationEntity,
     MJCredentialEntity,
@@ -1504,9 +1504,10 @@ export class SalesforceConnector extends BaseRESTIntegrationConnector {
 
     private async LoadFromCredentialEntity(
         credentialID: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<SalesforceCredentials | null> {
-        const md = new Metadata();
+        const md = provider ?? new Metadata();
         const credential = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
         const loaded = await credential.Load(credentialID);
         if (!loaded || !credential.Values) return null;
