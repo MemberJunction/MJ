@@ -7,20 +7,20 @@ import { Violation } from '../component-linter';
 /**
  * Rule: overflow-hidden-on-layout-container
  *
- * Detects `overflow: 'hidden'` on layout containers that also have `flex: 1`,
- * `height: '100%'`, or `height: '100vh'`. This combination creates an invisible
- * clipping boundary that blocks scrolling for child content (DataGrid, tables,
- * lists, etc.).
+ * Detects `overflow: 'hidden'` on flex content containers that also have
+ * `flex: 1`. This combination creates an invisible clipping boundary that
+ * blocks scrolling for child content (DataGrid, tables, lists, etc.).
  *
  * The Angular host (`mj-react-component`) already delegates scrolling to its
- * parent container which uses `overflow: auto`. Adding `overflow: hidden` on the
- * React component's root or content wrapper silently clips all descendant
- * scrollbars.
+ * parent container which uses `overflow: auto`. Adding `overflow: hidden` on
+ * a flex content wrapper silently clips all descendant scrollbars.
  *
  * Does NOT flag:
+ * - Root viewport containers (`height: '100vh'` + overflow hidden) — these
+ *   intentionally prevent page-level scrollbars
  * - Small/fixed-size containers (e.g., `width: '200px'` with overflow hidden)
  * - Text truncation (overflow hidden + textOverflow ellipsis)
- * - Containers without flex/full-height layout indicators
+ * - Containers without flex: 1
  *
  * Severity: medium — the component renders but scrollable content is unreachable.
  * Applies to: all components
@@ -217,8 +217,11 @@ function hasTextTruncation(props: StyleProps): boolean {
 }
 
 /**
- * A layout container is identified by having flex: 1 (or similar) or
- * height: '100%' / '100vh' — these are full-size containers that wrap content.
+ * A flex content container is identified by having flex: 1 (or similar).
+ * These are inner content wrappers where overflow: hidden blocks child scrolling.
+ *
+ * Root viewport containers (height: '100vh') intentionally use overflow: hidden
+ * to prevent page-level scrollbars — that pattern is NOT flagged.
  */
 function isLayoutContainer(props: StyleProps): boolean {
   // flex: 1 or flex: '1' or flex: '1 1 0%' etc.
@@ -229,23 +232,14 @@ function isLayoutContainer(props: StyleProps): boolean {
     }
   }
 
-  // height: '100%' or height: '100vh'
-  if (props.height === '100%' || props.height === '100vh') {
-    return true;
-  }
-
   return false;
 }
 
 function describeLayoutIndicator(props: StyleProps): string {
-  const indicators: string[] = [];
   if (props.flex !== null) {
-    indicators.push(`flex: ${typeof props.flex === 'string' ? `'${props.flex}'` : props.flex}`);
+    return `flex: ${typeof props.flex === 'string' ? `'${props.flex}'` : props.flex}`;
   }
-  if (props.height === '100%' || props.height === '100vh') {
-    indicators.push(`height: '${props.height}'`);
-  }
-  return indicators.join(' and ');
+  return 'flex layout';
 }
 
 function formatStyleSnippet(props: StyleProps): string {
