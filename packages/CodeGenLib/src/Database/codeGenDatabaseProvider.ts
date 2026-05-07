@@ -237,23 +237,34 @@ export abstract class CodeGenDatabaseProvider {
      * a virtual computed column (e.g. `vwRecordChanges` joining to itself for the
      * `RestoredFromID` virtual NameField lookup).
      *
-     * Default: `true`. In practice, both shipped providers override to `false`:
-     * - PostgreSQL: `CREATE OR REPLACE VIEW` resolves names against catalog state
-     *   at parse time, so a self-reference fails with `42P01 undefined_table`.
-     * - SQL Server: the emitter uses `DROP VIEW` then `CREATE VIEW`, and SQL
-     *   Server resolves view-body references at parse/bind time (no deferred
-     *   name resolution for views), so the post-DROP self-reference fails with
-     *   error 208 "Invalid object name".
+     * Default: `false`. No shipped provider currently supports this pattern:
+     * - PostgreSQL: `CREATE OR REPLACE VIEW` resolves view names against catalog
+     *   state at parse time, so a self-reference fails with `42P01
+     *   undefined_table`. A `CREATE OR REPLACE` retry against a NULL-typed stub
+     *   then fails with `cannot change data type of view column ... from text
+     *   to character varying(N)` because PG enforces strict column-type compat.
+     * - SQL Server: the base view emitter uses `DROP VIEW` then `CREATE VIEW`,
+     *   and SQL Server resolves view-body references at parse/bind time — there
+     *   is no deferred name resolution for view bodies the way there is for
+     *   stored procedures. After the DROP, the post-DROP self-reference fails
+     *   with error 208 "Invalid object name".
      *
-     * When `false`, `sql_codegen.ts` skips the self-virtual-NameField join
-     * entirely. The trade-off: the corresponding virtual lookup column is not
-     * emitted on the base view. The fix for the underlying conflation
-     * (computed columns marked `IsVirtual = 1` alongside view-only columns)
-     * would let the join target the base table instead, removing the need
-     * for this skip. Until then, returning `false` is the safe choice.
+     * With the default of `false`, `sql_codegen.ts` skips the self-virtual-
+     * NameField join entirely for self-FK + virtual-NameField cases. The trade-
+     * off: the corresponding virtual lookup column (e.g. `RestoredFrom` on
+     * `vwRecordChanges`, or `Parent` on a `vwTags`-style view if the Name Field
+     * were computed) is not emitted on the base view. Matches the baseline-
+     * shipped view shapes.
+     *
+     * Subclasses can override to return `true` if a future dialect (or a
+     * provider that switches to a different emit pattern, e.g. stub-then-alter)
+     * can support the self-reference. The fix for the underlying conflation
+     * between SQL Server computed columns and view-only columns under
+     * `IsVirtual = 1` would let the join target the base table instead,
+     * removing the need for this capability flag entirely.
      */
     canSelfJoinViewForVirtualNameField(): boolean {
-        return true;
+        return false;
     }
 
     // ─── DROP GUARDS ─────────────────────────────────────────────────────
