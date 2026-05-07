@@ -154,12 +154,18 @@ function makeEntity(opts: { ftx?: boolean; ftxFunction?: string; pkName?: string
     // touches FullTextSearchEnabled, FullTextSearchFunction, SchemaName,
     // FirstPrimaryKey?.Name, and Fields.
     const entity = Object.create(EntityInfo.prototype) as EntityInfo;
+    // Both `FirstPrimaryKey` and `Fields` are getters on EntityInfo (Fields → _Fields,
+    // FirstPrimaryKey → Fields.find(IsPrimaryKey)). We seed the private `_Fields` backing
+    // store with a synthetic PK plus the test fields, and the getters resolve naturally.
+    // IncludeInUserSearchAPI defaults to null (falsy), so the per-field search loop skips the PK.
+    const pkField = new EntityFieldInfo();
+    pkField.Name = opts.pkName ?? 'ID';
+    pkField.IsPrimaryKey = true;
     Object.assign(entity, {
         FullTextSearchEnabled: !!opts.ftx,
         FullTextSearchFunction: opts.ftxFunction ?? 'fnSearchTest',
         SchemaName: 'crm',
-        FirstPrimaryKey: { Name: opts.pkName ?? 'ID' },
-        Fields: opts.fields,
+        _Fields: [pkField, ...opts.fields],
     });
     return entity;
 }
@@ -170,37 +176,37 @@ describe('createViewUserSearchSQL — predicate routing', () => {
     it('Exact emits = N\'term\'', () => {
         const e = makeEntity({ fields: [makeField({ name: 'Code', predicate: 'Exact' })] });
         const sql = provider.buildSQL(e, 'ABC');
-        expect(sql).toBe(`([Code]  = N'ABC')`);
+        expect(sql).toBe(`(([Code]  = N'ABC'))`);
     });
 
     it('BeginsWith emits LIKE N\'term%\' with ESCAPE', () => {
         const e = makeEntity({ fields: [makeField({ name: 'Name', predicate: 'BeginsWith' })] });
         const sql = provider.buildSQL(e, 'foo');
-        expect(sql).toBe(`([Name]  LIKE N'foo%' ESCAPE '\\')`);
+        expect(sql).toBe(`(([Name]  LIKE N'foo%' ESCAPE '\\'))`);
     });
 
     it('EndsWith emits LIKE N\'%term\' with ESCAPE', () => {
         const e = makeEntity({ fields: [makeField({ name: 'Name', predicate: 'EndsWith' })] });
         const sql = provider.buildSQL(e, 'foo');
-        expect(sql).toBe(`([Name]  LIKE N'%foo' ESCAPE '\\')`);
+        expect(sql).toBe(`(([Name]  LIKE N'%foo' ESCAPE '\\'))`);
     });
 
     it('Contains emits LIKE N\'%term%\' with ESCAPE', () => {
         const e = makeEntity({ fields: [makeField({ name: 'Name', predicate: 'Contains' })] });
         const sql = provider.buildSQL(e, 'foo');
-        expect(sql).toBe(`([Name]  LIKE N'%foo%' ESCAPE '\\')`);
+        expect(sql).toBe(`(([Name]  LIKE N'%foo%' ESCAPE '\\'))`);
     });
 
     it('null predicate defaults to Contains', () => {
         const e = makeEntity({ fields: [makeField({ name: 'Name', predicate: null })] });
         const sql = provider.buildSQL(e, 'foo');
-        expect(sql).toBe(`([Name]  LIKE N'%foo%' ESCAPE '\\')`);
+        expect(sql).toBe(`(([Name]  LIKE N'%foo%' ESCAPE '\\'))`);
     });
 
     it('Unknown predicate value also defaults to Contains', () => {
         const e = makeEntity({ fields: [makeField({ name: 'Name', predicate: 'Bogus' })] });
         const sql = provider.buildSQL(e, 'foo');
-        expect(sql).toBe(`([Name]  LIKE N'%foo%' ESCAPE '\\')`);
+        expect(sql).toBe(`(([Name]  LIKE N'%foo%' ESCAPE '\\'))`);
     });
 });
 
@@ -208,26 +214,26 @@ describe('createViewUserSearchSQL — escaping', () => {
     it('Single-quote in input is doubled', () => {
         const e = makeEntity({ fields: [makeField({ name: 'Name', predicate: 'Contains' })] });
         const sql = provider.buildSQL(e, "O'Reilly");
-        expect(sql).toBe(`([Name]  LIKE N'%O''Reilly%' ESCAPE '\\')`);
+        expect(sql).toBe(`(([Name]  LIKE N'%O''Reilly%' ESCAPE '\\'))`);
     });
 
     it('LIKE metacharacters %, _, [, ], \\ are escaped on Contains', () => {
         const e = makeEntity({ fields: [makeField({ name: 'Name', predicate: 'Contains' })] });
         const sql = provider.buildSQL(e, '50%_off[2]\\done');
         // Each metacharacter prefixed with \, raw \ becomes \\
-        expect(sql).toBe(`([Name]  LIKE N'%50\\%\\_off\\[2\\]\\\\done%' ESCAPE '\\')`);
+        expect(sql).toBe(`(([Name]  LIKE N'%50\\%\\_off\\[2\\]\\\\done%' ESCAPE '\\'))`);
     });
 
     it('LIKE metacharacters are escaped on BeginsWith too', () => {
         const e = makeEntity({ fields: [makeField({ name: 'Name', predicate: 'BeginsWith' })] });
         const sql = provider.buildSQL(e, '50%');
-        expect(sql).toBe(`([Name]  LIKE N'50\\%%' ESCAPE '\\')`);
+        expect(sql).toBe(`(([Name]  LIKE N'50\\%%' ESCAPE '\\'))`);
     });
 
     it('Exact does NOT escape LIKE metacharacters (it does not use LIKE)', () => {
         const e = makeEntity({ fields: [makeField({ name: 'Code', predicate: 'Exact' })] });
         const sql = provider.buildSQL(e, '50%');
-        expect(sql).toBe(`([Code]  = N'50%')`);
+        expect(sql).toBe(`(([Code]  = N'50%'))`);
     });
 });
 
@@ -240,7 +246,7 @@ describe('createViewUserSearchSQL — UserSearchParamFormatAPI override', () => 
         })] });
         const sql = provider.buildSQL(e, '555 1212');
         // {0} is replaced with the single-quote-escaped raw term (no LIKE escaping)
-        expect(sql).toBe(`([Phone]  LIKE '+1' + REPLACE('555 1212', ' ', ''))`);
+        expect(sql).toBe(`(([Phone]  LIKE '+1' + REPLACE('555 1212', ' ', '')))`);
     });
 
     it('Custom format wins even on a non-text field that would otherwise be skipped', () => {
@@ -251,7 +257,7 @@ describe('createViewUserSearchSQL — UserSearchParamFormatAPI override', () => 
             paramFormat: ' = {0}',
         })] });
         const sql = provider.buildSQL(e, '2026');
-        expect(sql).toBe(`([Year]  = 2026)`);
+        expect(sql).toBe(`(([Year]  = 2026))`);
     });
 });
 
@@ -263,7 +269,7 @@ describe('createViewUserSearchSQL — type guards', () => {
             makeField({ name: 'Name', predicate: 'Contains' }),
         ] });
         const sql = provider.buildSQL(e, 'foo');
-        expect(sql).toBe(`([Name]  LIKE N'%foo%' ESCAPE '\\')`);
+        expect(sql).toBe(`(([Name]  LIKE N'%foo%' ESCAPE '\\'))`);
     });
 
     it('Unbounded text fields are skipped on non-FTX entity', () => {
@@ -274,7 +280,7 @@ describe('createViewUserSearchSQL — type guards', () => {
             makeField({ name: 'Name', predicate: 'Contains' }),
         ] });
         const sql = provider.buildSQL(e, 'foo');
-        expect(sql).toBe(`([Name]  LIKE N'%foo%' ESCAPE '\\')`);
+        expect(sql).toBe(`(([Name]  LIKE N'%foo%' ESCAPE '\\'))`);
     });
 
     it('Returns empty when no field is eligible', () => {
@@ -292,7 +298,7 @@ describe('createViewUserSearchSQL — type guards', () => {
             makeField({ name: 'Name', predicate: 'Contains' }),
         ] });
         const sql = provider.buildSQL(e, 'foo');
-        expect(sql).toBe(`([Name]  LIKE N'%foo%' ESCAPE '\\')`);
+        expect(sql).toBe(`(([Name]  LIKE N'%foo%' ESCAPE '\\'))`);
     });
 });
 
@@ -305,9 +311,9 @@ describe('createViewUserSearchSQL — multiple fields', () => {
         ] });
         const sql = provider.buildSQL(e, 'foo');
         expect(sql).toBe(
-            `([FirstName]  LIKE N'%foo%' ESCAPE '\\' OR ` +
-            `[LastName]  LIKE N'%foo%' ESCAPE '\\' OR ` +
-            `[Email]  LIKE N'foo%' ESCAPE '\\')`
+            `(([FirstName]  LIKE N'%foo%' ESCAPE '\\') OR ` +
+            `([LastName]  LIKE N'%foo%' ESCAPE '\\') OR ` +
+            `([Email]  LIKE N'foo%' ESCAPE '\\'))`
         );
     });
 });
