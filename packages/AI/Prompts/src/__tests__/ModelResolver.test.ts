@@ -17,11 +17,212 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AIErrorInfo } from '@memberjunction/ai';
+
+// =============================================================================
+// Module mocks (set BEFORE importing ModelResolver so the resolver picks them up)
+// =============================================================================
+//
+// `ResolveForPrompt` / `ResolveForRequirements` / `ResolveCredential` /
+// `HasCredentialsAvailable` read state off `AIEngine.Instance` and
+// `CredentialEngine.Instance` and call `GetAIAPIKey(driverClass, ...)` for
+// the legacy fallback tier. Replacing the modules with controllable doubles
+// lets each test seed exactly the metadata it needs without spinning up
+// the real DB-backed engines.
+
+// vi.mock factories are hoisted above all imports, so the state objects
+// they reference must be declared via `vi.hoisted()` to also hoist.
+const { mockAIEngineState, mockCredentialEngineState, mockGetAIAPIKey } = vi.hoisted(() => {
+    const aiEngineState = {
+        Models: [] as MJAIModelEntityExtendedLike[],
+        ModelVendors: [] as MJAIModelVendorEntityLike[],
+        PromptModels: [] as MJAIPromptModelEntityLike[],
+        Configurations: [] as MJAIConfigurationEntityLike[],
+        Vendors: [] as MJAIVendorEntityLike[],
+        ModelTypes: [] as { ID: string; Name: string }[],
+        VendorTypeDefinitions: [] as { ID: string; Name: string }[],
+        AgentActions: [] as unknown[],
+        Config: vi.fn(async () => undefined),
+        GetConfigurationChain: vi.fn((_id: string) => [] as { ID: string; Name: string }[]),
+        HasCredentialBindings: vi.fn((_type: string, _targetId: string) => false),
+        GetCredentialBindingsForTarget: vi.fn((_type: string, _targetId: string) => [] as MJAICredentialBindingEntityLike[]),
+        FindSimilarActions: vi.fn(async () => []),
+    };
+    const credentialEngineState = {
+        Credentials: [] as MJCredentialEntityLike[],
+        Config: vi.fn(async () => undefined),
+        getCredentialById: vi.fn((_id: string) => undefined as MJCredentialEntityLike | undefined),
+        getCredential: vi.fn(async (_name: string, _opts?: unknown) => ({ values: {} })),
+    };
+    const getAIAPIKey = vi.fn((_driverClass: string, _apiKeys?: unknown[], _verbose?: boolean) => '');
+    return {
+        mockAIEngineState: aiEngineState,
+        mockCredentialEngineState: credentialEngineState,
+        mockGetAIAPIKey: getAIAPIKey,
+    };
+});
+
+vi.mock('@memberjunction/aiengine', () => ({
+    AIEngine: { Instance: mockAIEngineState },
+}));
+
+vi.mock('@memberjunction/credentials', () => ({
+    CredentialEngine: { Instance: mockCredentialEngineState },
+}));
+
+// Partial mock for @memberjunction/ai — only override `GetAIAPIKey`. Use
+// importActual so `ErrorAnalyzer`, `AIErrorInfo` etc. keep working.
+vi.mock('@memberjunction/ai', async () => {
+    const actual = await vi.importActual<typeof import('@memberjunction/ai')>('@memberjunction/ai');
+    return {
+        ...actual,
+        GetAIAPIKey: mockGetAIAPIKey,
+    };
+});
+
 import {
     ModelResolver,
     ResolvedModelCandidate,
     FailoverAttempt,
 } from '../ModelResolver';
+
+// =============================================================================
+// Fixture types — minimal shapes the resolver actually reads. We avoid
+// constructing full BaseEntity subclasses (heavy to instantiate, irrelevant
+// to the algorithm under test).
+// =============================================================================
+
+interface MJAIModelEntityExtendedLike {
+    ID: string;
+    Name: string;
+    IsActive: boolean;
+    AIModelTypeID: string;
+    PowerRank: number;
+    DriverClass: string;
+    APIName: string;
+    SupportsEffortLevel: boolean;
+    ModelVendors?: Array<{ MaxInputTokens?: number }>;
+}
+
+interface MJAIModelVendorEntityLike {
+    ID: string;
+    ModelID: string;
+    VendorID: string;
+    Vendor?: string;
+    DriverClass?: string;
+    APIName?: string;
+    SupportsEffortLevel?: boolean;
+    Status: 'Active' | 'Preview' | 'Deprecated' | 'Inactive';
+    Priority: number;
+    TypeID: string;
+    MaxInputTokens?: number;
+}
+
+interface MJAIPromptModelEntityLike {
+    ID: string;
+    PromptID: string;
+    ModelID: string;
+    VendorID?: string;
+    ConfigurationID?: string | null;
+    Priority: number;
+    Status: 'Active' | 'Preview' | 'Deprecated' | 'Inactive';
+    EffortLevel?: number;
+}
+
+interface MJAIConfigurationEntityLike {
+    ID: string;
+    Name: string;
+}
+
+interface MJAIVendorEntityLike {
+    ID: string;
+    Name: string;
+    CredentialTypeID?: string;
+}
+
+interface MJAICredentialBindingEntityLike {
+    ID: string;
+    CredentialID: string;
+    Priority: number;
+}
+
+interface MJCredentialEntityLike {
+    ID: string;
+    Name: string;
+    CredentialTypeID: string;
+    IsActive: boolean;
+    IsDefault: boolean;
+    ExpiresAt?: Date | string | null;
+}
+
+// =============================================================================
+// Fixture constants + reset helper
+// =============================================================================
+
+/** TypeID that `IsInferenceProvider` matches against. */
+const INFERENCE_PROVIDER_TYPE_ID = 'inf-provider-type';
+/** TypeID that `IsInferenceProvider` rejects (model-developer rows). */
+const MODEL_DEVELOPER_TYPE_ID = 'model-dev-type';
+
+/**
+ * Resets mock engine state to empty defaults so each test starts clean.
+ * Always seeds the two `VendorTypeDefinitions` rows the resolver looks up
+ * by name (`Inference Provider` / `Model Developer`).
+ */
+function resetMocks(): void {
+    mockAIEngineState.Models = [];
+    mockAIEngineState.ModelVendors = [];
+    mockAIEngineState.PromptModels = [];
+    mockAIEngineState.Configurations = [];
+    mockAIEngineState.Vendors = [];
+    mockAIEngineState.ModelTypes = [];
+    mockAIEngineState.VendorTypeDefinitions = [
+        { ID: INFERENCE_PROVIDER_TYPE_ID, Name: 'Inference Provider' },
+        { ID: MODEL_DEVELOPER_TYPE_ID, Name: 'Model Developer' },
+    ];
+    mockAIEngineState.Config.mockClear();
+    mockAIEngineState.GetConfigurationChain.mockReset();
+    mockAIEngineState.GetConfigurationChain.mockReturnValue([]);
+    mockAIEngineState.HasCredentialBindings.mockReset();
+    mockAIEngineState.HasCredentialBindings.mockReturnValue(false);
+    mockAIEngineState.GetCredentialBindingsForTarget.mockReset();
+    mockAIEngineState.GetCredentialBindingsForTarget.mockReturnValue([]);
+
+    mockCredentialEngineState.Credentials = [];
+    mockCredentialEngineState.Config.mockClear();
+    mockCredentialEngineState.getCredentialById.mockReset();
+    mockCredentialEngineState.getCredentialById.mockReturnValue(undefined);
+    mockCredentialEngineState.getCredential.mockReset();
+    mockCredentialEngineState.getCredential.mockResolvedValue({ values: {} });
+
+    mockGetAIAPIKey.mockReset();
+    mockGetAIAPIKey.mockReturnValue('');
+}
+
+/** Builds a model fixture with sane defaults. */
+function makeModel(overrides: Partial<MJAIModelEntityExtendedLike> & { ID: string }): MJAIModelEntityExtendedLike {
+    return {
+        Name: `Model-${overrides.ID}`,
+        IsActive: true,
+        AIModelTypeID: 'llm-type',
+        PowerRank: 50,
+        DriverClass: 'TestLLM',
+        APIName: 'test-api',
+        SupportsEffortLevel: false,
+        ModelVendors: [],
+        ...overrides,
+    };
+}
+
+/** Builds an inference-provider model-vendor row by default. */
+function makeModelVendor(overrides: Partial<MJAIModelVendorEntityLike> & { ModelID: string; VendorID: string }): MJAIModelVendorEntityLike {
+    return {
+        ID: `mv-${overrides.ModelID}-${overrides.VendorID}`,
+        Status: 'Active',
+        Priority: 0,
+        TypeID: INFERENCE_PROVIDER_TYPE_ID,
+        ...overrides,
+    };
+}
 
 // ============================================================================
 // Test fixtures
@@ -406,40 +607,439 @@ describe('ModelResolver', () => {
     // the gap visible and reserve the test names.
     // ----------------------------------------------------------------
 
-    describe.skip('ResolveForPrompt — needs AIEngine fixtures (follow-up)', () => {
-        it('Phase 1: returns explicit override candidate first when overrides.modelId is set');
-        it('Phase 2: SelectionStrategy=Specific uses only configured AIPromptModel rows');
-        it('Phase 2: when RequireSpecificModels=false and all specifics lack creds, appends power-matched fallback');
-        it('Phase 2: when RequireSpecificModels=true and all specifics lack creds, returns primary=null (Skip-style at the resolution layer)');
-        it('Phase 3: SelectionStrategy=Default walks config chain (3000-500*depth priorities), then NULL-config (1000)');
-        it('Phase 3: SelectionStrategy=ByPower respects MinPowerRank and PowerPreference');
-        it('preferred vendor (overrides.vendorId) is marked isPreferredVendor=true and bumped to top within its model group');
-        it('returns primary=null when prompt.AIModelTypeID matches no models');
-        it('selectionReason describes Phase 1 vs Phase 2 vs power-match-fallback distinctly');
+    // ----------------------------------------------------------------
+    // ResolveCredential — exercises the 7-tier hierarchy
+    // ----------------------------------------------------------------
+
+    describe('ResolveCredential', () => {
+        beforeEach(() => {
+            resetMocks();
+        });
+
+        it('returns the explicit credential when credentialId override is supplied', async () => {
+            // Tier 1 (per-request override) — bypasses everything below.
+            mockCredentialEngineState.getCredentialById.mockReturnValue({
+                ID: 'cred-1',
+                Name: 'explicit-cred',
+                CredentialTypeID: 'ct-1',
+                IsActive: true,
+                IsDefault: false,
+            });
+            mockCredentialEngineState.getCredential.mockResolvedValue({ values: { apiKey: 'EXPLICIT' } });
+
+            const result = await ModelResolver.Instance.ResolveCredential(
+                'TestLLM',
+                {},
+                { credentialId: 'cred-1' },
+            );
+
+            expect(result).toBe(JSON.stringify({ apiKey: 'EXPLICIT' }));
+            expect(mockCredentialEngineState.getCredentialById).toHaveBeenCalledWith('cred-1');
+        });
+
+        it('throws when credentialId override points to a missing credential', async () => {
+            // Preserves `resolveCredentialById` pre-extraction behavior:
+            // explicit ID + missing row = hard fail (not silent fallback).
+            mockCredentialEngineState.getCredentialById.mockReturnValue(undefined);
+
+            await expect(
+                ModelResolver.Instance.ResolveCredential(
+                    'TestLLM',
+                    {},
+                    { credentialId: 'missing-cred' },
+                ),
+            ).rejects.toThrowError(/not found/i);
+        });
+
+        it("falls through to legacy `AI_VENDOR_API_KEY__<DRIVER>` env var when nothing else matches", async () => {
+            // Tier 7 (legacy env var via GetAIAPIKey) — no credentialId,
+            // no bindings configured, no type-default. The mock for
+            // GetAIAPIKey returns the value the env-var resolver would.
+            mockGetAIAPIKey.mockReturnValue('LEGACY-ENV-KEY');
+
+            const result = await ModelResolver.Instance.ResolveCredential('OpenAILLM', {});
+
+            expect(mockGetAIAPIKey).toHaveBeenCalledWith('OpenAILLM', undefined, expect.any(Boolean));
+            expect(result).toBe('LEGACY-ENV-KEY');
+        });
+
+        it('returns empty string when every tier is empty', async () => {
+            // GetAIAPIKey defaults to '' when nothing is configured. The
+            // resolver returns whatever GetAIAPIKey returns — preserves
+            // the runner's pre-extraction Promise<string> contract.
+            mockGetAIAPIKey.mockReturnValue('');
+
+            const result = await ModelResolver.Instance.ResolveCredential('UnconfiguredLLM', {});
+            expect(result).toBe('');
+        });
+
+        it('uses Vendor binding when only Vendor (not ModelVendor / PromptModel) has bindings', async () => {
+            // Tier 4 — vendor-level binding hits when no PromptModel or
+            // ModelVendor binding is configured.
+            mockAIEngineState.GetCredentialBindingsForTarget.mockImplementation(
+                (type: string, _targetId: string) => {
+                    if (type === 'Vendor') {
+                        return [{ ID: 'b-1', CredentialID: 'cred-vendor', Priority: 1 }];
+                    }
+                    return [];
+                },
+            );
+            mockCredentialEngineState.getCredentialById.mockReturnValue({
+                ID: 'cred-vendor',
+                Name: 'vendor-cred',
+                CredentialTypeID: 'ct-1',
+                IsActive: true,
+                IsDefault: false,
+            });
+            mockCredentialEngineState.getCredential.mockResolvedValue({ values: { apiKey: 'VENDOR-KEY' } });
+
+            const result = await ModelResolver.Instance.ResolveCredential(
+                'TestLLM',
+                { vendorId: 'v-1' },
+            );
+
+            expect(result).toBe(JSON.stringify({ apiKey: 'VENDOR-KEY' }));
+        });
+
+        it('skips inactive credentials and falls through to legacy fallback', async () => {
+            // Inactive `IsActive=false` rows must be skipped — the binding
+            // is treated as if it weren't there. Without a follow-on tier,
+            // we expect `GetAIAPIKey` to be invoked.
+            mockAIEngineState.GetCredentialBindingsForTarget.mockImplementation(
+                (type: string) => type === 'Vendor'
+                    ? [{ ID: 'b-1', CredentialID: 'cred-inactive', Priority: 1 }]
+                    : [],
+            );
+            mockCredentialEngineState.getCredentialById.mockReturnValue({
+                ID: 'cred-inactive',
+                Name: 'inactive-cred',
+                CredentialTypeID: 'ct-1',
+                IsActive: false,
+                IsDefault: false,
+            });
+            mockGetAIAPIKey.mockReturnValue('FALLBACK-KEY');
+
+            const result = await ModelResolver.Instance.ResolveCredential(
+                'TestLLM',
+                { vendorId: 'v-1' },
+            );
+
+            // Inactive credential resolved to null inside `tryResolveCredential`,
+            // hierarchy continues to the legacy env var.
+            expect(result).toBe('FALLBACK-KEY');
+            expect(mockGetAIAPIKey).toHaveBeenCalled();
+        });
+
+        it('skips expired credentials (ExpiresAt < now) and falls through', async () => {
+            mockAIEngineState.GetCredentialBindingsForTarget.mockImplementation(
+                (type: string) => type === 'Vendor'
+                    ? [{ ID: 'b-1', CredentialID: 'cred-expired', Priority: 1 }]
+                    : [],
+            );
+            mockCredentialEngineState.getCredentialById.mockReturnValue({
+                ID: 'cred-expired',
+                Name: 'expired-cred',
+                CredentialTypeID: 'ct-1',
+                IsActive: true,
+                IsDefault: false,
+                ExpiresAt: new Date(Date.now() - 86400000), // yesterday
+            });
+            mockGetAIAPIKey.mockReturnValue('FALLBACK-KEY');
+
+            const result = await ModelResolver.Instance.ResolveCredential(
+                'TestLLM',
+                { vendorId: 'v-1' },
+            );
+
+            expect(result).toBe('FALLBACK-KEY');
+        });
     });
 
-    describe.skip('ResolveForRequirements — needs AIEngine fixtures (follow-up)', () => {
-        it('returns the only candidate when one vendor is configured for the model');
-        it('orders candidates by Priority desc when multiple vendors share a model');
-        it('filters out vendors with Status != Active');
-        it('respects modelTypeName — excludes models of other types');
-        it('respects vendorName — resolves to vendorId via AIEngine.Vendors');
-        it('honors minPowerRank — excludes lower-PowerRank models');
-        it('honors powerPreference=Highest — sorts by PowerRank desc');
-        it('honors powerPreference=Lowest — sorts by PowerRank asc');
-        it('returns primary=null and selectionReason populated when no candidate has credentials');
+    // ----------------------------------------------------------------
+    // HasCredentialsAvailable — sync pre-flight check
+    // ----------------------------------------------------------------
+
+    describe('HasCredentialsAvailable', () => {
+        beforeEach(() => {
+            resetMocks();
+        });
+
+        it('returns true immediately when explicit credentialId is supplied', () => {
+            // Tier 1 trust-me: the actual credential lookup is deferred
+            // to execution time.
+            const result = ModelResolver.Instance.HasCredentialsAvailable(
+                'TestLLM',
+                {},
+                { credentialId: 'cred-1' },
+            );
+            expect(result).toBe(true);
+        });
+
+        it('returns true when Vendor has bindings', () => {
+            mockAIEngineState.HasCredentialBindings.mockImplementation(
+                (type: string, _targetId: string) => type === 'Vendor',
+            );
+
+            expect(
+                ModelResolver.Instance.HasCredentialsAvailable('TestLLM', { vendorId: 'v-1' }),
+            ).toBe(true);
+        });
+
+        it('returns true when only the legacy env var (apiKeys / GetAIAPIKey) is configured', () => {
+            mockGetAIAPIKey.mockReturnValue('SOME-LEGACY-KEY');
+
+            expect(
+                ModelResolver.Instance.HasCredentialsAvailable('TestLLM', {}),
+            ).toBe(true);
+        });
+
+        it('returns false when every tier is empty (whitespace-only legacy key counts as empty)', () => {
+            mockGetAIAPIKey.mockReturnValue('   \t  ');
+
+            expect(
+                ModelResolver.Instance.HasCredentialsAvailable('TestLLM', {}),
+            ).toBe(false);
+        });
     });
 
-    describe.skip('ResolveCredential — needs CredentialEngine fixtures (follow-up)', () => {
-        it('returns explicit credential when credentialId override is supplied');
-        it('throws when credentialId override points to a missing credential');
-        it('falls through to PromptModel binding when no override');
-        it('falls through to ModelVendor binding when PromptModel has no binding');
-        it('falls through to Vendor binding when ModelVendor has none');
-        it('falls through to type-based default credential');
-        it('falls through to legacy apiKeys[] carrier');
-        it('falls through to legacy AI_VENDOR_API_KEY__<DRIVER> env var');
-        it('skips inactive credentials and falls through to next binding');
-        it('skips expired credentials (ExpiresAt < now) and falls through');
+    // ----------------------------------------------------------------
+    // ResolveForRequirements — non-prompt resolution path
+    // ----------------------------------------------------------------
+
+    describe('ResolveForRequirements', () => {
+        beforeEach(() => {
+            resetMocks();
+        });
+
+        it('returns the only candidate when one vendor is configured for the model', async () => {
+            mockAIEngineState.Models = [makeModel({ ID: 'm1' })];
+            mockAIEngineState.ModelVendors = [makeModelVendor({ ModelID: 'm1', VendorID: 'v1' })];
+            mockGetAIAPIKey.mockReturnValue('KEY'); // legacy fallback so primary != null
+
+            const result = await ModelResolver.Instance.ResolveForRequirements({
+                modelId: 'm1',
+            });
+
+            expect(result.primary).not.toBeNull();
+            expect(result.primary!.model.ID).toBe('m1');
+            expect(result.primary!.vendorId).toBe('v1');
+            expect(result.candidates).toHaveLength(1);
+            expect(result.consideredAll).toHaveLength(1);
+        });
+
+        it('orders candidates by Priority desc when multiple vendors share a model', async () => {
+            mockAIEngineState.Models = [makeModel({ ID: 'm1' })];
+            mockAIEngineState.ModelVendors = [
+                makeModelVendor({ ModelID: 'm1', VendorID: 'low', Priority: 10 }),
+                makeModelVendor({ ModelID: 'm1', VendorID: 'high', Priority: 100 }),
+                makeModelVendor({ ModelID: 'm1', VendorID: 'mid', Priority: 50 }),
+            ];
+            mockGetAIAPIKey.mockReturnValue('KEY');
+
+            const result = await ModelResolver.Instance.ResolveForRequirements({ modelId: 'm1' });
+
+            expect(result.candidates.map(c => c.vendorId)).toEqual(['high', 'mid', 'low']);
+        });
+
+        it('filters out vendors with Status != Active', async () => {
+            mockAIEngineState.Models = [makeModel({ ID: 'm1' })];
+            mockAIEngineState.ModelVendors = [
+                makeModelVendor({ ModelID: 'm1', VendorID: 'active', Status: 'Active' }),
+                makeModelVendor({ ModelID: 'm1', VendorID: 'inactive', Status: 'Inactive' }),
+                makeModelVendor({ ModelID: 'm1', VendorID: 'deprecated', Status: 'Deprecated' }),
+            ];
+            mockGetAIAPIKey.mockReturnValue('KEY');
+
+            const result = await ModelResolver.Instance.ResolveForRequirements({ modelId: 'm1' });
+
+            expect(result.candidates.map(c => c.vendorId)).toEqual(['active']);
+        });
+
+        it('filters out non-inference-provider vendor rows (model-developer TypeID)', async () => {
+            mockAIEngineState.Models = [makeModel({ ID: 'm1' })];
+            mockAIEngineState.ModelVendors = [
+                makeModelVendor({ ModelID: 'm1', VendorID: 'inf', TypeID: INFERENCE_PROVIDER_TYPE_ID }),
+                makeModelVendor({ ModelID: 'm1', VendorID: 'dev', TypeID: MODEL_DEVELOPER_TYPE_ID }),
+            ];
+            mockGetAIAPIKey.mockReturnValue('KEY');
+
+            const result = await ModelResolver.Instance.ResolveForRequirements({ modelId: 'm1' });
+
+            expect(result.candidates.map(c => c.vendorId)).toEqual(['inf']);
+        });
+
+        it('returns primary=null and selectionReason populated when no candidate has credentials', async () => {
+            mockAIEngineState.Models = [makeModel({ ID: 'm1' })];
+            mockAIEngineState.ModelVendors = [makeModelVendor({ ModelID: 'm1', VendorID: 'v1' })];
+            mockGetAIAPIKey.mockReturnValue(''); // legacy fallback empty → no creds
+
+            const result = await ModelResolver.Instance.ResolveForRequirements({ modelId: 'm1' });
+
+            expect(result.primary).toBeNull();
+            expect(result.candidates).toEqual([]);
+            // consideredAll preserves the rejected candidate for diagnostics
+            expect(result.consideredAll).toHaveLength(1);
+            expect(result.consideredAll[0].credentialsAvailable).toBe(false);
+            expect(result.selectionReason).toMatch(/no api keys/i);
+        });
+    });
+
+    // ----------------------------------------------------------------
+    // ResolveForPrompt — prompt-aware resolution
+    // ----------------------------------------------------------------
+
+    describe('ResolveForPrompt', () => {
+        beforeEach(() => {
+            resetMocks();
+        });
+
+        it('Phase 1: explicit `overrides.modelId` returns the matching model first', async () => {
+            mockAIEngineState.Models = [
+                makeModel({ ID: 'm1' }),
+                makeModel({ ID: 'm2' }),
+            ];
+            mockAIEngineState.ModelVendors = [
+                makeModelVendor({ ModelID: 'm1', VendorID: 'v1' }),
+                makeModelVendor({ ModelID: 'm2', VendorID: 'v2' }),
+            ];
+            mockGetAIAPIKey.mockReturnValue('KEY');
+
+            const prompt = {
+                ID: 'p1',
+                Name: 'TestPrompt',
+                AIModelTypeID: null,
+                SelectionStrategy: 'Default',
+                MinPowerRank: null,
+                RequireSpecificModels: false,
+                PowerPreference: 'Highest',
+            } as unknown as Parameters<typeof ModelResolver.Instance.ResolveForPrompt>[0];
+
+            const result = await ModelResolver.Instance.ResolveForPrompt(prompt, { modelId: 'm2' });
+
+            expect(result.primary).not.toBeNull();
+            expect(result.primary!.model.ID).toBe('m2');
+            expect(result.primary!.source).toBe('explicit');
+        });
+
+        it('returns primary=null when no model matches `prompt.AIModelTypeID`', async () => {
+            mockAIEngineState.Models = [
+                makeModel({ ID: 'm1', AIModelTypeID: 'embeddings-type' }),
+            ];
+            mockAIEngineState.ModelVendors = [makeModelVendor({ ModelID: 'm1', VendorID: 'v1' })];
+            mockGetAIAPIKey.mockReturnValue('KEY');
+
+            const prompt = {
+                ID: 'p1',
+                Name: 'TestPrompt',
+                AIModelTypeID: 'llm-type', // doesn't match m1's embeddings-type
+                SelectionStrategy: 'Default',
+                MinPowerRank: null,
+                RequireSpecificModels: false,
+                PowerPreference: 'Highest',
+            } as unknown as Parameters<typeof ModelResolver.Instance.ResolveForPrompt>[0];
+
+            const result = await ModelResolver.Instance.ResolveForPrompt(prompt);
+
+            expect(result.primary).toBeNull();
+            expect(result.candidates).toEqual([]);
+        });
+
+        it('SelectionStrategy=Specific + RequireSpecificModels=true exhausts (Skip-style at the resolution layer) when configured prompt-models lack creds', async () => {
+            // The Skip use case at the resolution layer: if the only
+            // configured AIPromptModel rows have no credentials AND
+            // RequireSpecificModels is true, do NOT fall through to other
+            // models. Audit §3.5.8 / spec §6 acceptance criteria.
+            mockAIEngineState.Models = [
+                makeModel({ ID: 'm1' }),
+                makeModel({ ID: 'm2' }), // not in PromptModels — should NOT be picked
+            ];
+            mockAIEngineState.ModelVendors = [
+                makeModelVendor({ ModelID: 'm1', VendorID: 'v1' }),
+                makeModelVendor({ ModelID: 'm2', VendorID: 'v2' }),
+            ];
+            mockAIEngineState.PromptModels = [
+                {
+                    ID: 'pm1',
+                    PromptID: 'p1',
+                    ModelID: 'm1',
+                    Status: 'Active',
+                    Priority: 100,
+                    ConfigurationID: null,
+                },
+            ];
+            // m1 has no creds, m2 has creds (but should not be considered)
+            mockGetAIAPIKey.mockImplementation(() => '');
+
+            const prompt = {
+                ID: 'p1',
+                Name: 'TestPrompt',
+                AIModelTypeID: null,
+                SelectionStrategy: 'Specific',
+                MinPowerRank: null,
+                RequireSpecificModels: true,
+                PowerPreference: 'Highest',
+            } as unknown as Parameters<typeof ModelResolver.Instance.ResolveForPrompt>[0];
+
+            const result = await ModelResolver.Instance.ResolveForPrompt(prompt);
+
+            expect(result.primary).toBeNull();
+            // Only the configured m1 candidates were considered — m2 was NOT
+            // walked despite having creds.
+            expect(result.consideredAll.every(c => c.model.ID === 'm1')).toBe(true);
+        });
+
+        it('preferred vendor (overrides.vendorId) is marked isPreferredVendor=true and bumped to top within its model group', async () => {
+            mockAIEngineState.Models = [makeModel({ ID: 'm1' })];
+            mockAIEngineState.ModelVendors = [
+                makeModelVendor({ ModelID: 'm1', VendorID: 'low', Priority: 10 }),
+                makeModelVendor({ ModelID: 'm1', VendorID: 'high', Priority: 100 }),
+            ];
+            mockAIEngineState.Vendors = [
+                { ID: 'low', Name: 'LowVendor' },
+                { ID: 'high', Name: 'HighVendor' },
+            ];
+            mockGetAIAPIKey.mockReturnValue('KEY');
+
+            const prompt = {
+                ID: 'p1',
+                Name: 'TestPrompt',
+                AIModelTypeID: null,
+                SelectionStrategy: 'Default',
+                MinPowerRank: null,
+                RequireSpecificModels: false,
+                PowerPreference: 'Highest',
+            } as unknown as Parameters<typeof ModelResolver.Instance.ResolveForPrompt>[0];
+
+            // Force `low` to be preferred even though `high` has higher native Priority.
+            const result = await ModelResolver.Instance.ResolveForPrompt(prompt, {
+                modelId: 'm1',
+                vendorId: 'low',
+            });
+
+            expect(result.primary).not.toBeNull();
+            expect(result.primary!.vendorId).toBe('low');
+            expect(result.primary!.isPreferredVendor).toBe(true);
+        });
+
+        it('selectionReason narrative names the chosen source (explicit / prompt-model / model-type / power-rank / power-match-fallback)', async () => {
+            mockAIEngineState.Models = [makeModel({ ID: 'm1' })];
+            mockAIEngineState.ModelVendors = [makeModelVendor({ ModelID: 'm1', VendorID: 'v1' })];
+            mockGetAIAPIKey.mockReturnValue('KEY');
+
+            const prompt = {
+                ID: 'p1',
+                Name: 'TestPrompt',
+                AIModelTypeID: null,
+                SelectionStrategy: 'Default',
+                MinPowerRank: null,
+                RequireSpecificModels: false,
+                PowerPreference: 'Highest',
+            } as unknown as Parameters<typeof ModelResolver.Instance.ResolveForPrompt>[0];
+
+            const result = await ModelResolver.Instance.ResolveForPrompt(prompt, { modelId: 'm1' });
+
+            // Phase 1 (explicit override) selectionReason
+            expect(result.selectionReason).toMatch(/explicitly requested/i);
+        });
     });
 });
