@@ -237,12 +237,20 @@ export abstract class CodeGenDatabaseProvider {
      * a virtual computed column (e.g. `vwRecordChanges` joining to itself for the
      * `RestoredFromID` virtual NameField lookup).
      *
-     * Default: `true` — SQL Server's `CREATE VIEW` parser tolerates the self-
-     * reference because the view has already been declared by name when the body
-     * is checked. PostgreSQL's strict parser rejects with `42P01 undefined_table`
-     * because the view doesn't yet exist. PG override returns `false`, telling
-     * `sql_codegen.ts` to skip the self-virtual-NameField join entirely (matches
-     * the baseline-shipped view's shape — no `RestoredFrom` virtual column).
+     * Default: `true`. In practice, both shipped providers override to `false`:
+     * - PostgreSQL: `CREATE OR REPLACE VIEW` resolves names against catalog state
+     *   at parse time, so a self-reference fails with `42P01 undefined_table`.
+     * - SQL Server: the emitter uses `DROP VIEW` then `CREATE VIEW`, and SQL
+     *   Server resolves view-body references at parse/bind time (no deferred
+     *   name resolution for views), so the post-DROP self-reference fails with
+     *   error 208 "Invalid object name".
+     *
+     * When `false`, `sql_codegen.ts` skips the self-virtual-NameField join
+     * entirely. The trade-off: the corresponding virtual lookup column is not
+     * emitted on the base view. The fix for the underlying conflation
+     * (computed columns marked `IsVirtual = 1` alongside view-only columns)
+     * would let the join target the base table instead, removing the need
+     * for this skip. Until then, returning `false` is the safe choice.
      */
     canSelfJoinViewForVirtualNameField(): boolean {
         return true;

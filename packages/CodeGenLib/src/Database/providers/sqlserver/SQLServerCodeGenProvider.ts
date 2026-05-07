@@ -40,6 +40,28 @@ export class SQLServerCodeGenProvider extends CodeGenDatabaseProvider {
         return 'sqlserver';
     }
 
+    /**
+     * @inheritdoc
+     *
+     * SQL Server: NOT supported. The base view emitter uses a `DROP VIEW` /
+     * `CREATE VIEW` pattern (see `generateBaseView` below), and SQL Server
+     * resolves view-body object references at parse/bind time — there is no
+     * deferred name resolution for view bodies the way there is for stored
+     * procedures. After the DROP, the view no longer exists, so a body that
+     * LEFT-JOINs the view-being-created to itself (for a self-FK's virtual
+     * NameField, e.g. `Tag.ParentID` if `Tag.Name` were a computed column)
+     * fails with error 208 "Invalid object name".
+     *
+     * No emitted view in the migrations tree currently exercises this path —
+     * the only existing self-FK base view (`vwTags`) joins to the base table
+     * because `Tag.Name` is a regular column (`IsVirtual = 0`). Returning
+     * `false` matches reality: skip the self-join entirely if the related
+     * NameField is virtual on a self-FK, same as PostgreSQL.
+     */
+    override canSelfJoinViewForVirtualNameField(): boolean {
+        return false;
+    }
+
     // ─── DROP GUARDS ─────────────────────────────────────────────────────
 
     /**
