@@ -5449,114 +5449,378 @@ BEGIN
   LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
   END LOOP;
 END $$;
-CREATE OR REPLACE FUNCTION __mj."spCreateAIAgent"(p_data JSONB)
-RETURNS SETOF __mj."vwAIAgents"
-AS $$
-DECLARE
-    v_id uuid;
-    v_field_name TEXT;
-    v_cast_expr  TEXT;
-    v_col_list   TEXT;
-    v_val_list   TEXT;
-    v_sql        TEXT;
+CREATE OR REPLACE FUNCTION __mj."spCreateAIAgent"(
+    IN p_ID UUID DEFAULT NULL,
+    IN p_Name_Clear BOOLEAN DEFAULT FALSE,
+    IN p_Name VARCHAR(255) DEFAULT NULL,
+    IN p_Description_Clear BOOLEAN DEFAULT FALSE,
+    IN p_Description TEXT DEFAULT NULL,
+    IN p_LogoURL_Clear BOOLEAN DEFAULT FALSE,
+    IN p_LogoURL VARCHAR(255) DEFAULT NULL,
+    IN p_ParentID_Clear BOOLEAN DEFAULT FALSE,
+    IN p_ParentID UUID DEFAULT NULL,
+    IN p_ExposeAsAction BOOLEAN DEFAULT NULL,
+    IN p_ExecutionOrder INTEGER DEFAULT NULL,
+    IN p_ExecutionMode VARCHAR(20) DEFAULT NULL,
+    IN p_EnableContextCompression BOOLEAN DEFAULT NULL,
+    IN p_ContextCompressionMessageThreshold_Clear BOOLEAN DEFAULT FALSE,
+    IN p_ContextCompressionMessageThreshold INTEGER DEFAULT NULL,
+    IN p_ContextCompressionPromptID_Clear BOOLEAN DEFAULT FALSE,
+    IN p_ContextCompressionPromptID UUID DEFAULT NULL,
+    IN p_ContextCompressionMessageRetentionCount_Clear BOOLEAN DEFAULT FALSE,
+    IN p_ContextCompressionMessageRetentionCount INTEGER DEFAULT NULL,
+    IN p_TypeID_Clear BOOLEAN DEFAULT FALSE,
+    IN p_TypeID UUID DEFAULT NULL,
+    IN p_Status VARCHAR(20) DEFAULT NULL,
+    IN p_DriverClass_Clear BOOLEAN DEFAULT FALSE,
+    IN p_DriverClass VARCHAR(255) DEFAULT NULL,
+    IN p_IconClass_Clear BOOLEAN DEFAULT FALSE,
+    IN p_IconClass VARCHAR(100) DEFAULT NULL,
+    IN p_ModelSelectionMode VARCHAR(50) DEFAULT NULL,
+    IN p_PayloadDownstreamPaths TEXT DEFAULT NULL,
+    IN p_PayloadUpstreamPaths TEXT DEFAULT NULL,
+    IN p_PayloadSelfReadPaths_Clear BOOLEAN DEFAULT FALSE,
+    IN p_PayloadSelfReadPaths TEXT DEFAULT NULL,
+    IN p_PayloadSelfWritePaths_Clear BOOLEAN DEFAULT FALSE,
+    IN p_PayloadSelfWritePaths TEXT DEFAULT NULL,
+    IN p_PayloadScope_Clear BOOLEAN DEFAULT FALSE,
+    IN p_PayloadScope TEXT DEFAULT NULL,
+    IN p_FinalPayloadValidation_Clear BOOLEAN DEFAULT FALSE,
+    IN p_FinalPayloadValidation TEXT DEFAULT NULL,
+    IN p_FinalPayloadValidationMode VARCHAR(25) DEFAULT NULL,
+    IN p_FinalPayloadValidationMaxRetries INTEGER DEFAULT NULL,
+    IN p_MaxCostPerRun_Clear BOOLEAN DEFAULT FALSE,
+    IN p_MaxCostPerRun NUMERIC(10,4) DEFAULT NULL,
+    IN p_MaxTokensPerRun_Clear BOOLEAN DEFAULT FALSE,
+    IN p_MaxTokensPerRun INTEGER DEFAULT NULL,
+    IN p_MaxIterationsPerRun_Clear BOOLEAN DEFAULT FALSE,
+    IN p_MaxIterationsPerRun INTEGER DEFAULT NULL,
+    IN p_MaxTimePerRun_Clear BOOLEAN DEFAULT FALSE,
+    IN p_MaxTimePerRun INTEGER DEFAULT NULL,
+    IN p_MinExecutionsPerRun_Clear BOOLEAN DEFAULT FALSE,
+    IN p_MinExecutionsPerRun INTEGER DEFAULT NULL,
+    IN p_MaxExecutionsPerRun_Clear BOOLEAN DEFAULT FALSE,
+    IN p_MaxExecutionsPerRun INTEGER DEFAULT NULL,
+    IN p_StartingPayloadValidation_Clear BOOLEAN DEFAULT FALSE,
+    IN p_StartingPayloadValidation TEXT DEFAULT NULL,
+    IN p_StartingPayloadValidationMode VARCHAR(25) DEFAULT NULL,
+    IN p_DefaultPromptEffortLevel_Clear BOOLEAN DEFAULT FALSE,
+    IN p_DefaultPromptEffortLevel INTEGER DEFAULT NULL,
+    IN p_ChatHandlingOption_Clear BOOLEAN DEFAULT FALSE,
+    IN p_ChatHandlingOption VARCHAR(30) DEFAULT NULL,
+    IN p_DefaultArtifactTypeID_Clear BOOLEAN DEFAULT FALSE,
+    IN p_DefaultArtifactTypeID UUID DEFAULT NULL,
+    IN p_OwnerUserID UUID DEFAULT NULL,
+    IN p_InvocationMode VARCHAR(20) DEFAULT NULL,
+    IN p_ArtifactCreationMode VARCHAR(20) DEFAULT NULL,
+    IN p_FunctionalRequirements_Clear BOOLEAN DEFAULT FALSE,
+    IN p_FunctionalRequirements TEXT DEFAULT NULL,
+    IN p_TechnicalDesign_Clear BOOLEAN DEFAULT FALSE,
+    IN p_TechnicalDesign TEXT DEFAULT NULL,
+    IN p_InjectNotes BOOLEAN DEFAULT NULL,
+    IN p_MaxNotesToInject INTEGER DEFAULT NULL,
+    IN p_NoteInjectionStrategy VARCHAR(20) DEFAULT NULL,
+    IN p_InjectExamples BOOLEAN DEFAULT NULL,
+    IN p_MaxExamplesToInject INTEGER DEFAULT NULL,
+    IN p_ExampleInjectionStrategy VARCHAR(20) DEFAULT NULL,
+    IN p_IsRestricted BOOLEAN DEFAULT NULL,
+    IN p_MessageMode VARCHAR(50) DEFAULT NULL,
+    IN p_MaxMessages_Clear BOOLEAN DEFAULT FALSE,
+    IN p_MaxMessages INTEGER DEFAULT NULL,
+    IN p_AttachmentStorageProviderID_Clear BOOLEAN DEFAULT FALSE,
+    IN p_AttachmentStorageProviderID UUID DEFAULT NULL,
+    IN p_AttachmentRootPath_Clear BOOLEAN DEFAULT FALSE,
+    IN p_AttachmentRootPath VARCHAR(500) DEFAULT NULL,
+    IN p_InlineStorageThresholdBytes_Clear BOOLEAN DEFAULT FALSE,
+    IN p_InlineStorageThresholdBytes INTEGER DEFAULT NULL,
+    IN p_AgentTypePromptParams_Clear BOOLEAN DEFAULT FALSE,
+    IN p_AgentTypePromptParams TEXT DEFAULT NULL,
+    IN p_ScopeConfig_Clear BOOLEAN DEFAULT FALSE,
+    IN p_ScopeConfig TEXT DEFAULT NULL,
+    IN p_NoteRetentionDays_Clear BOOLEAN DEFAULT FALSE,
+    IN p_NoteRetentionDays INTEGER DEFAULT NULL,
+    IN p_ExampleRetentionDays_Clear BOOLEAN DEFAULT FALSE,
+    IN p_ExampleRetentionDays INTEGER DEFAULT NULL,
+    IN p_AutoArchiveEnabled BOOLEAN DEFAULT NULL,
+    IN p_RerankerConfiguration_Clear BOOLEAN DEFAULT FALSE,
+    IN p_RerankerConfiguration TEXT DEFAULT NULL,
+    IN p_CategoryID_Clear BOOLEAN DEFAULT FALSE,
+    IN p_CategoryID UUID DEFAULT NULL,
+    IN p_AllowEphemeralClientTools BOOLEAN DEFAULT NULL,
+    IN p_DefaultStorageAccountID_Clear BOOLEAN DEFAULT FALSE,
+    IN p_DefaultStorageAccountID UUID DEFAULT NULL
+)
+RETURNS SETOF __mj."vwAIAgents" AS
+$$
 BEGIN
-    IF p_data ? 'ID' THEN
-        v_id := (p_data->>'ID')::uuid;
+IF p_ID IS NOT NULL THEN
+        -- User provided a value, use it
+        INSERT INTO __mj."AIAgent"
+            (
+                "ID",
+                "Name",
+                "Description",
+                "LogoURL",
+                "ParentID",
+                "ExposeAsAction",
+                "ExecutionOrder",
+                "ExecutionMode",
+                "EnableContextCompression",
+                "ContextCompressionMessageThreshold",
+                "ContextCompressionPromptID",
+                "ContextCompressionMessageRetentionCount",
+                "TypeID",
+                "Status",
+                "DriverClass",
+                "IconClass",
+                "ModelSelectionMode",
+                "PayloadDownstreamPaths",
+                "PayloadUpstreamPaths",
+                "PayloadSelfReadPaths",
+                "PayloadSelfWritePaths",
+                "PayloadScope",
+                "FinalPayloadValidation",
+                "FinalPayloadValidationMode",
+                "FinalPayloadValidationMaxRetries",
+                "MaxCostPerRun",
+                "MaxTokensPerRun",
+                "MaxIterationsPerRun",
+                "MaxTimePerRun",
+                "MinExecutionsPerRun",
+                "MaxExecutionsPerRun",
+                "StartingPayloadValidation",
+                "StartingPayloadValidationMode",
+                "DefaultPromptEffortLevel",
+                "ChatHandlingOption",
+                "DefaultArtifactTypeID",
+                "OwnerUserID",
+                "InvocationMode",
+                "ArtifactCreationMode",
+                "FunctionalRequirements",
+                "TechnicalDesign",
+                "InjectNotes",
+                "MaxNotesToInject",
+                "NoteInjectionStrategy",
+                "InjectExamples",
+                "MaxExamplesToInject",
+                "ExampleInjectionStrategy",
+                "IsRestricted",
+                "MessageMode",
+                "MaxMessages",
+                "AttachmentStorageProviderID",
+                "AttachmentRootPath",
+                "InlineStorageThresholdBytes",
+                "AgentTypePromptParams",
+                "ScopeConfig",
+                "NoteRetentionDays",
+                "ExampleRetentionDays",
+                "AutoArchiveEnabled",
+                "RerankerConfiguration",
+                "CategoryID",
+                "AllowEphemeralClientTools",
+                "DefaultStorageAccountID"
+            )
+        VALUES
+            (
+                p_ID,
+                CASE WHEN p_Name_Clear = TRUE THEN NULL ELSE COALESCE(p_Name, NULL) END,
+                CASE WHEN p_Description_Clear = TRUE THEN NULL ELSE COALESCE(p_Description, NULL) END,
+                CASE WHEN p_LogoURL_Clear = TRUE THEN NULL ELSE COALESCE(p_LogoURL, NULL) END,
+                CASE WHEN p_ParentID_Clear = TRUE THEN NULL ELSE COALESCE(p_ParentID, NULL) END,
+                COALESCE(p_ExposeAsAction, FALSE),
+                COALESCE(p_ExecutionOrder, 0),
+                COALESCE(p_ExecutionMode, 'Sequential'),
+                COALESCE(p_EnableContextCompression, FALSE),
+                CASE WHEN p_ContextCompressionMessageThreshold_Clear = TRUE THEN NULL ELSE COALESCE(p_ContextCompressionMessageThreshold, NULL) END,
+                CASE WHEN p_ContextCompressionPromptID_Clear = TRUE THEN NULL ELSE COALESCE(p_ContextCompressionPromptID, NULL) END,
+                CASE WHEN p_ContextCompressionMessageRetentionCount_Clear = TRUE THEN NULL ELSE COALESCE(p_ContextCompressionMessageRetentionCount, NULL) END,
+                CASE WHEN p_TypeID_Clear = TRUE THEN NULL ELSE COALESCE(p_TypeID, NULL) END,
+                COALESCE(p_Status, 'Pending'),
+                CASE WHEN p_DriverClass_Clear = TRUE THEN NULL ELSE COALESCE(p_DriverClass, NULL) END,
+                CASE WHEN p_IconClass_Clear = TRUE THEN NULL ELSE COALESCE(p_IconClass, NULL) END,
+                COALESCE(p_ModelSelectionMode, 'Agent Type'),
+                COALESCE(p_PayloadDownstreamPaths, '["*"]'),
+                COALESCE(p_PayloadUpstreamPaths, '["*"]'),
+                CASE WHEN p_PayloadSelfReadPaths_Clear = TRUE THEN NULL ELSE COALESCE(p_PayloadSelfReadPaths, NULL) END,
+                CASE WHEN p_PayloadSelfWritePaths_Clear = TRUE THEN NULL ELSE COALESCE(p_PayloadSelfWritePaths, NULL) END,
+                CASE WHEN p_PayloadScope_Clear = TRUE THEN NULL ELSE COALESCE(p_PayloadScope, NULL) END,
+                CASE WHEN p_FinalPayloadValidation_Clear = TRUE THEN NULL ELSE COALESCE(p_FinalPayloadValidation, NULL) END,
+                COALESCE(p_FinalPayloadValidationMode, 'Retry'),
+                COALESCE(p_FinalPayloadValidationMaxRetries, 3),
+                CASE WHEN p_MaxCostPerRun_Clear = TRUE THEN NULL ELSE COALESCE(p_MaxCostPerRun, NULL) END,
+                CASE WHEN p_MaxTokensPerRun_Clear = TRUE THEN NULL ELSE COALESCE(p_MaxTokensPerRun, NULL) END,
+                CASE WHEN p_MaxIterationsPerRun_Clear = TRUE THEN NULL ELSE COALESCE(p_MaxIterationsPerRun, NULL) END,
+                CASE WHEN p_MaxTimePerRun_Clear = TRUE THEN NULL ELSE COALESCE(p_MaxTimePerRun, NULL) END,
+                CASE WHEN p_MinExecutionsPerRun_Clear = TRUE THEN NULL ELSE COALESCE(p_MinExecutionsPerRun, NULL) END,
+                CASE WHEN p_MaxExecutionsPerRun_Clear = TRUE THEN NULL ELSE COALESCE(p_MaxExecutionsPerRun, NULL) END,
+                CASE WHEN p_StartingPayloadValidation_Clear = TRUE THEN NULL ELSE COALESCE(p_StartingPayloadValidation, NULL) END,
+                COALESCE(p_StartingPayloadValidationMode, 'Fail'),
+                CASE WHEN p_DefaultPromptEffortLevel_Clear = TRUE THEN NULL ELSE COALESCE(p_DefaultPromptEffortLevel, NULL) END,
+                CASE WHEN p_ChatHandlingOption_Clear = TRUE THEN NULL ELSE COALESCE(p_ChatHandlingOption, NULL) END,
+                CASE WHEN p_DefaultArtifactTypeID_Clear = TRUE THEN NULL ELSE COALESCE(p_DefaultArtifactTypeID, NULL) END,
+                CASE WHEN p_OwnerUserID = '00000000-0000-0000-0000-000000000000' THEN 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E' ELSE COALESCE(p_OwnerUserID, 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E') END,
+                COALESCE(p_InvocationMode, 'Any'),
+                COALESCE(p_ArtifactCreationMode, 'Always'),
+                CASE WHEN p_FunctionalRequirements_Clear = TRUE THEN NULL ELSE COALESCE(p_FunctionalRequirements, NULL) END,
+                CASE WHEN p_TechnicalDesign_Clear = TRUE THEN NULL ELSE COALESCE(p_TechnicalDesign, NULL) END,
+                COALESCE(p_InjectNotes, TRUE),
+                COALESCE(p_MaxNotesToInject, 5),
+                COALESCE(p_NoteInjectionStrategy, 'Relevant'),
+                COALESCE(p_InjectExamples, FALSE),
+                COALESCE(p_MaxExamplesToInject, 3),
+                COALESCE(p_ExampleInjectionStrategy, 'Semantic'),
+                COALESCE(p_IsRestricted, FALSE),
+                COALESCE(p_MessageMode, 'None'),
+                CASE WHEN p_MaxMessages_Clear = TRUE THEN NULL ELSE COALESCE(p_MaxMessages, NULL) END,
+                CASE WHEN p_AttachmentStorageProviderID_Clear = TRUE THEN NULL ELSE COALESCE(p_AttachmentStorageProviderID, NULL) END,
+                CASE WHEN p_AttachmentRootPath_Clear = TRUE THEN NULL ELSE COALESCE(p_AttachmentRootPath, NULL) END,
+                CASE WHEN p_InlineStorageThresholdBytes_Clear = TRUE THEN NULL ELSE COALESCE(p_InlineStorageThresholdBytes, NULL) END,
+                CASE WHEN p_AgentTypePromptParams_Clear = TRUE THEN NULL ELSE COALESCE(p_AgentTypePromptParams, NULL) END,
+                CASE WHEN p_ScopeConfig_Clear = TRUE THEN NULL ELSE COALESCE(p_ScopeConfig, NULL) END,
+                CASE WHEN p_NoteRetentionDays_Clear = TRUE THEN NULL ELSE COALESCE(p_NoteRetentionDays, 90) END,
+                CASE WHEN p_ExampleRetentionDays_Clear = TRUE THEN NULL ELSE COALESCE(p_ExampleRetentionDays, 180) END,
+                COALESCE(p_AutoArchiveEnabled, TRUE),
+                CASE WHEN p_RerankerConfiguration_Clear = TRUE THEN NULL ELSE COALESCE(p_RerankerConfiguration, NULL) END,
+                CASE WHEN p_CategoryID_Clear = TRUE THEN NULL ELSE COALESCE(p_CategoryID, NULL) END,
+                COALESCE(p_AllowEphemeralClientTools, TRUE),
+                CASE WHEN p_DefaultStorageAccountID_Clear = TRUE THEN NULL ELSE COALESCE(p_DefaultStorageAccountID, NULL) END
+            );
     ELSE
-        v_id := gen_random_uuid();
+        -- No value provided, let database use its default (e.g., gen_random_uuid())
+        INSERT INTO __mj."AIAgent"
+            (
+                "Name",
+                "Description",
+                "LogoURL",
+                "ParentID",
+                "ExposeAsAction",
+                "ExecutionOrder",
+                "ExecutionMode",
+                "EnableContextCompression",
+                "ContextCompressionMessageThreshold",
+                "ContextCompressionPromptID",
+                "ContextCompressionMessageRetentionCount",
+                "TypeID",
+                "Status",
+                "DriverClass",
+                "IconClass",
+                "ModelSelectionMode",
+                "PayloadDownstreamPaths",
+                "PayloadUpstreamPaths",
+                "PayloadSelfReadPaths",
+                "PayloadSelfWritePaths",
+                "PayloadScope",
+                "FinalPayloadValidation",
+                "FinalPayloadValidationMode",
+                "FinalPayloadValidationMaxRetries",
+                "MaxCostPerRun",
+                "MaxTokensPerRun",
+                "MaxIterationsPerRun",
+                "MaxTimePerRun",
+                "MinExecutionsPerRun",
+                "MaxExecutionsPerRun",
+                "StartingPayloadValidation",
+                "StartingPayloadValidationMode",
+                "DefaultPromptEffortLevel",
+                "ChatHandlingOption",
+                "DefaultArtifactTypeID",
+                "OwnerUserID",
+                "InvocationMode",
+                "ArtifactCreationMode",
+                "FunctionalRequirements",
+                "TechnicalDesign",
+                "InjectNotes",
+                "MaxNotesToInject",
+                "NoteInjectionStrategy",
+                "InjectExamples",
+                "MaxExamplesToInject",
+                "ExampleInjectionStrategy",
+                "IsRestricted",
+                "MessageMode",
+                "MaxMessages",
+                "AttachmentStorageProviderID",
+                "AttachmentRootPath",
+                "InlineStorageThresholdBytes",
+                "AgentTypePromptParams",
+                "ScopeConfig",
+                "NoteRetentionDays",
+                "ExampleRetentionDays",
+                "AutoArchiveEnabled",
+                "RerankerConfiguration",
+                "CategoryID",
+                "AllowEphemeralClientTools",
+                "DefaultStorageAccountID"
+            )
+        VALUES
+            (
+                CASE WHEN p_Name_Clear = TRUE THEN NULL ELSE COALESCE(p_Name, NULL) END,
+                CASE WHEN p_Description_Clear = TRUE THEN NULL ELSE COALESCE(p_Description, NULL) END,
+                CASE WHEN p_LogoURL_Clear = TRUE THEN NULL ELSE COALESCE(p_LogoURL, NULL) END,
+                CASE WHEN p_ParentID_Clear = TRUE THEN NULL ELSE COALESCE(p_ParentID, NULL) END,
+                COALESCE(p_ExposeAsAction, FALSE),
+                COALESCE(p_ExecutionOrder, 0),
+                COALESCE(p_ExecutionMode, 'Sequential'),
+                COALESCE(p_EnableContextCompression, FALSE),
+                CASE WHEN p_ContextCompressionMessageThreshold_Clear = TRUE THEN NULL ELSE COALESCE(p_ContextCompressionMessageThreshold, NULL) END,
+                CASE WHEN p_ContextCompressionPromptID_Clear = TRUE THEN NULL ELSE COALESCE(p_ContextCompressionPromptID, NULL) END,
+                CASE WHEN p_ContextCompressionMessageRetentionCount_Clear = TRUE THEN NULL ELSE COALESCE(p_ContextCompressionMessageRetentionCount, NULL) END,
+                CASE WHEN p_TypeID_Clear = TRUE THEN NULL ELSE COALESCE(p_TypeID, NULL) END,
+                COALESCE(p_Status, 'Pending'),
+                CASE WHEN p_DriverClass_Clear = TRUE THEN NULL ELSE COALESCE(p_DriverClass, NULL) END,
+                CASE WHEN p_IconClass_Clear = TRUE THEN NULL ELSE COALESCE(p_IconClass, NULL) END,
+                COALESCE(p_ModelSelectionMode, 'Agent Type'),
+                COALESCE(p_PayloadDownstreamPaths, '["*"]'),
+                COALESCE(p_PayloadUpstreamPaths, '["*"]'),
+                CASE WHEN p_PayloadSelfReadPaths_Clear = TRUE THEN NULL ELSE COALESCE(p_PayloadSelfReadPaths, NULL) END,
+                CASE WHEN p_PayloadSelfWritePaths_Clear = TRUE THEN NULL ELSE COALESCE(p_PayloadSelfWritePaths, NULL) END,
+                CASE WHEN p_PayloadScope_Clear = TRUE THEN NULL ELSE COALESCE(p_PayloadScope, NULL) END,
+                CASE WHEN p_FinalPayloadValidation_Clear = TRUE THEN NULL ELSE COALESCE(p_FinalPayloadValidation, NULL) END,
+                COALESCE(p_FinalPayloadValidationMode, 'Retry'),
+                COALESCE(p_FinalPayloadValidationMaxRetries, 3),
+                CASE WHEN p_MaxCostPerRun_Clear = TRUE THEN NULL ELSE COALESCE(p_MaxCostPerRun, NULL) END,
+                CASE WHEN p_MaxTokensPerRun_Clear = TRUE THEN NULL ELSE COALESCE(p_MaxTokensPerRun, NULL) END,
+                CASE WHEN p_MaxIterationsPerRun_Clear = TRUE THEN NULL ELSE COALESCE(p_MaxIterationsPerRun, NULL) END,
+                CASE WHEN p_MaxTimePerRun_Clear = TRUE THEN NULL ELSE COALESCE(p_MaxTimePerRun, NULL) END,
+                CASE WHEN p_MinExecutionsPerRun_Clear = TRUE THEN NULL ELSE COALESCE(p_MinExecutionsPerRun, NULL) END,
+                CASE WHEN p_MaxExecutionsPerRun_Clear = TRUE THEN NULL ELSE COALESCE(p_MaxExecutionsPerRun, NULL) END,
+                CASE WHEN p_StartingPayloadValidation_Clear = TRUE THEN NULL ELSE COALESCE(p_StartingPayloadValidation, NULL) END,
+                COALESCE(p_StartingPayloadValidationMode, 'Fail'),
+                CASE WHEN p_DefaultPromptEffortLevel_Clear = TRUE THEN NULL ELSE COALESCE(p_DefaultPromptEffortLevel, NULL) END,
+                CASE WHEN p_ChatHandlingOption_Clear = TRUE THEN NULL ELSE COALESCE(p_ChatHandlingOption, NULL) END,
+                CASE WHEN p_DefaultArtifactTypeID_Clear = TRUE THEN NULL ELSE COALESCE(p_DefaultArtifactTypeID, NULL) END,
+                CASE WHEN p_OwnerUserID = '00000000-0000-0000-0000-000000000000' THEN 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E' ELSE COALESCE(p_OwnerUserID, 'ECAFCCEC-6A37-EF11-86D4-000D3A4E707E') END,
+                COALESCE(p_InvocationMode, 'Any'),
+                COALESCE(p_ArtifactCreationMode, 'Always'),
+                CASE WHEN p_FunctionalRequirements_Clear = TRUE THEN NULL ELSE COALESCE(p_FunctionalRequirements, NULL) END,
+                CASE WHEN p_TechnicalDesign_Clear = TRUE THEN NULL ELSE COALESCE(p_TechnicalDesign, NULL) END,
+                COALESCE(p_InjectNotes, TRUE),
+                COALESCE(p_MaxNotesToInject, 5),
+                COALESCE(p_NoteInjectionStrategy, 'Relevant'),
+                COALESCE(p_InjectExamples, FALSE),
+                COALESCE(p_MaxExamplesToInject, 3),
+                COALESCE(p_ExampleInjectionStrategy, 'Semantic'),
+                COALESCE(p_IsRestricted, FALSE),
+                COALESCE(p_MessageMode, 'None'),
+                CASE WHEN p_MaxMessages_Clear = TRUE THEN NULL ELSE COALESCE(p_MaxMessages, NULL) END,
+                CASE WHEN p_AttachmentStorageProviderID_Clear = TRUE THEN NULL ELSE COALESCE(p_AttachmentStorageProviderID, NULL) END,
+                CASE WHEN p_AttachmentRootPath_Clear = TRUE THEN NULL ELSE COALESCE(p_AttachmentRootPath, NULL) END,
+                CASE WHEN p_InlineStorageThresholdBytes_Clear = TRUE THEN NULL ELSE COALESCE(p_InlineStorageThresholdBytes, NULL) END,
+                CASE WHEN p_AgentTypePromptParams_Clear = TRUE THEN NULL ELSE COALESCE(p_AgentTypePromptParams, NULL) END,
+                CASE WHEN p_ScopeConfig_Clear = TRUE THEN NULL ELSE COALESCE(p_ScopeConfig, NULL) END,
+                CASE WHEN p_NoteRetentionDays_Clear = TRUE THEN NULL ELSE COALESCE(p_NoteRetentionDays, 90) END,
+                CASE WHEN p_ExampleRetentionDays_Clear = TRUE THEN NULL ELSE COALESCE(p_ExampleRetentionDays, 180) END,
+                COALESCE(p_AutoArchiveEnabled, TRUE),
+                CASE WHEN p_RerankerConfiguration_Clear = TRUE THEN NULL ELSE COALESCE(p_RerankerConfiguration, NULL) END,
+                CASE WHEN p_CategoryID_Clear = TRUE THEN NULL ELSE COALESCE(p_CategoryID, NULL) END,
+                COALESCE(p_AllowEphemeralClientTools, TRUE),
+                CASE WHEN p_DefaultStorageAccountID_Clear = TRUE THEN NULL ELSE COALESCE(p_DefaultStorageAccountID, NULL) END
+            );
     END IF;
-
-    v_col_list := quote_ident('ID');
-    v_val_list := quote_literal(v_id) || '::uuid';
-
-    -- Build column / value lists from keys present in p_data. Absent keys are
-    -- omitted entirely so the column's DEFAULT applies (matching the typed-arg
-    -- sproc's default-substitution semantics).
-    FOREACH v_field_name IN ARRAY ARRAY['DefaultStorageAccountID', 'AllowEphemeralClientTools', 'CategoryID', 'RerankerConfiguration', 'AutoArchiveEnabled', 'ExampleRetentionDays', 'NoteRetentionDays', 'ScopeConfig', 'AgentTypePromptParams', 'InlineStorageThresholdBytes', 'AttachmentRootPath', 'AttachmentStorageProviderID', 'MaxMessages', 'MessageMode', 'IsRestricted', 'ExampleInjectionStrategy', 'MaxExamplesToInject', 'InjectExamples', 'NoteInjectionStrategy', 'MaxNotesToInject', 'InjectNotes', 'TechnicalDesign', 'FunctionalRequirements', 'ArtifactCreationMode', 'InvocationMode', 'OwnerUserID', 'DefaultArtifactTypeID', 'ChatHandlingOption', 'DefaultPromptEffortLevel', 'StartingPayloadValidationMode', 'StartingPayloadValidation', 'MaxExecutionsPerRun', 'MinExecutionsPerRun', 'MaxTimePerRun', 'MaxIterationsPerRun', 'MaxTokensPerRun', 'MaxCostPerRun', 'FinalPayloadValidationMaxRetries', 'FinalPayloadValidationMode', 'FinalPayloadValidation', 'PayloadScope', 'PayloadSelfWritePaths', 'PayloadSelfReadPaths', 'PayloadUpstreamPaths', 'PayloadDownstreamPaths', 'ModelSelectionMode', 'IconClass', 'DriverClass', 'Status', 'TypeID', 'ContextCompressionMessageRetentionCount', 'ContextCompressionPromptID', 'ContextCompressionMessageThreshold', 'EnableContextCompression', 'ExecutionMode', 'ExecutionOrder', 'ExposeAsAction', 'ParentID', 'LogoURL', 'Description', 'Name']
-    LOOP
-        IF p_data ? v_field_name THEN
-            v_cast_expr := CASE v_field_name
-        WHEN 'DefaultStorageAccountID' THEN '($1->>''DefaultStorageAccountID'')::UUID'
-        WHEN 'AllowEphemeralClientTools' THEN '($1->>''AllowEphemeralClientTools'')::BOOL'
-        WHEN 'CategoryID' THEN '($1->>''CategoryID'')::UUID'
-        WHEN 'RerankerConfiguration' THEN '($1->>''RerankerConfiguration'')'
-        WHEN 'AutoArchiveEnabled' THEN '($1->>''AutoArchiveEnabled'')::BOOL'
-        WHEN 'ExampleRetentionDays' THEN '($1->>''ExampleRetentionDays'')::INT4'
-        WHEN 'NoteRetentionDays' THEN '($1->>''NoteRetentionDays'')::INT4'
-        WHEN 'ScopeConfig' THEN '($1->>''ScopeConfig'')'
-        WHEN 'AgentTypePromptParams' THEN '($1->>''AgentTypePromptParams'')'
-        WHEN 'InlineStorageThresholdBytes' THEN '($1->>''InlineStorageThresholdBytes'')::INT4'
-        WHEN 'AttachmentRootPath' THEN '($1->>''AttachmentRootPath'')'
-        WHEN 'AttachmentStorageProviderID' THEN '($1->>''AttachmentStorageProviderID'')::UUID'
-        WHEN 'MaxMessages' THEN '($1->>''MaxMessages'')::INT4'
-        WHEN 'MessageMode' THEN '($1->>''MessageMode'')'
-        WHEN 'IsRestricted' THEN '($1->>''IsRestricted'')::BOOL'
-        WHEN 'ExampleInjectionStrategy' THEN '($1->>''ExampleInjectionStrategy'')'
-        WHEN 'MaxExamplesToInject' THEN '($1->>''MaxExamplesToInject'')::INT4'
-        WHEN 'InjectExamples' THEN '($1->>''InjectExamples'')::BOOL'
-        WHEN 'NoteInjectionStrategy' THEN '($1->>''NoteInjectionStrategy'')'
-        WHEN 'MaxNotesToInject' THEN '($1->>''MaxNotesToInject'')::INT4'
-        WHEN 'InjectNotes' THEN '($1->>''InjectNotes'')::BOOL'
-        WHEN 'TechnicalDesign' THEN '($1->>''TechnicalDesign'')'
-        WHEN 'FunctionalRequirements' THEN '($1->>''FunctionalRequirements'')'
-        WHEN 'ArtifactCreationMode' THEN '($1->>''ArtifactCreationMode'')'
-        WHEN 'InvocationMode' THEN '($1->>''InvocationMode'')'
-        WHEN 'OwnerUserID' THEN '($1->>''OwnerUserID'')::UUID'
-        WHEN 'DefaultArtifactTypeID' THEN '($1->>''DefaultArtifactTypeID'')::UUID'
-        WHEN 'ChatHandlingOption' THEN '($1->>''ChatHandlingOption'')'
-        WHEN 'DefaultPromptEffortLevel' THEN '($1->>''DefaultPromptEffortLevel'')::INT4'
-        WHEN 'StartingPayloadValidationMode' THEN '($1->>''StartingPayloadValidationMode'')'
-        WHEN 'StartingPayloadValidation' THEN '($1->>''StartingPayloadValidation'')'
-        WHEN 'MaxExecutionsPerRun' THEN '($1->>''MaxExecutionsPerRun'')::INT4'
-        WHEN 'MinExecutionsPerRun' THEN '($1->>''MinExecutionsPerRun'')::INT4'
-        WHEN 'MaxTimePerRun' THEN '($1->>''MaxTimePerRun'')::INT4'
-        WHEN 'MaxIterationsPerRun' THEN '($1->>''MaxIterationsPerRun'')::INT4'
-        WHEN 'MaxTokensPerRun' THEN '($1->>''MaxTokensPerRun'')::INT4'
-        WHEN 'MaxCostPerRun' THEN '($1->>''MaxCostPerRun'')::NUMERIC(10, 4)'
-        WHEN 'FinalPayloadValidationMaxRetries' THEN '($1->>''FinalPayloadValidationMaxRetries'')::INT4'
-        WHEN 'FinalPayloadValidationMode' THEN '($1->>''FinalPayloadValidationMode'')'
-        WHEN 'FinalPayloadValidation' THEN '($1->>''FinalPayloadValidation'')'
-        WHEN 'PayloadScope' THEN '($1->>''PayloadScope'')'
-        WHEN 'PayloadSelfWritePaths' THEN '($1->>''PayloadSelfWritePaths'')'
-        WHEN 'PayloadSelfReadPaths' THEN '($1->>''PayloadSelfReadPaths'')'
-        WHEN 'PayloadUpstreamPaths' THEN '($1->>''PayloadUpstreamPaths'')'
-        WHEN 'PayloadDownstreamPaths' THEN '($1->>''PayloadDownstreamPaths'')'
-        WHEN 'ModelSelectionMode' THEN '($1->>''ModelSelectionMode'')'
-        WHEN 'IconClass' THEN '($1->>''IconClass'')'
-        WHEN 'DriverClass' THEN '($1->>''DriverClass'')'
-        WHEN 'Status' THEN '($1->>''Status'')'
-        WHEN 'TypeID' THEN '($1->>''TypeID'')::UUID'
-        WHEN 'ContextCompressionMessageRetentionCount' THEN '($1->>''ContextCompressionMessageRetentionCount'')::INT4'
-        WHEN 'ContextCompressionPromptID' THEN '($1->>''ContextCompressionPromptID'')::UUID'
-        WHEN 'ContextCompressionMessageThreshold' THEN '($1->>''ContextCompressionMessageThreshold'')::INT4'
-        WHEN 'EnableContextCompression' THEN '($1->>''EnableContextCompression'')::BOOL'
-        WHEN 'ExecutionMode' THEN '($1->>''ExecutionMode'')'
-        WHEN 'ExecutionOrder' THEN '($1->>''ExecutionOrder'')::INT4'
-        WHEN 'ExposeAsAction' THEN '($1->>''ExposeAsAction'')::BOOL'
-        WHEN 'ParentID' THEN '($1->>''ParentID'')::UUID'
-        WHEN 'LogoURL' THEN '($1->>''LogoURL'')'
-        WHEN 'Description' THEN '($1->>''Description'')'
-        WHEN 'Name' THEN '($1->>''Name'')'
-            END;
-            v_col_list := v_col_list || ', ' || quote_ident(v_field_name);
-            v_val_list := v_val_list || ', ' || v_cast_expr;
-        END IF;
-    END LOOP;
-
-    v_sql := format(
-        'INSERT INTO __mj."AIAgent" (%s) VALUES (%s)',
-        v_col_list,
-        v_val_list
-    );
-    -- Pass p_data as a positional parameter so the cast expressions inside
-    -- v_val_list (which reference $1) can read the JSONB payload.
-    EXECUTE v_sql USING p_data;
-
-    RETURN QUERY
-    SELECT * FROM __mj."vwAIAgents"
-    WHERE "ID" = v_id;
+    -- return the new record from the base view, which might have some calculated fields
+    RETURN QUERY SELECT * FROM __mj."vwAIAgents" WHERE "ID" = p_ID;
 END;
 $$ LANGUAGE plpgsql;
+
 DO $$ DECLARE r record;
 BEGIN
   FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
@@ -5565,97 +5829,189 @@ BEGIN
   LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
   END LOOP;
 END $$;
-CREATE OR REPLACE FUNCTION __mj."spUpdateAIAgent"(p_data JSONB)
-RETURNS SETOF __mj."vwAIAgents"
-AS $$
+CREATE OR REPLACE FUNCTION __mj."spUpdateAIAgent"(
+    IN p_ID UUID,
+    IN p_Name_Clear BOOLEAN DEFAULT FALSE,
+    IN p_Name VARCHAR(255) DEFAULT NULL,
+    IN p_Description_Clear BOOLEAN DEFAULT FALSE,
+    IN p_Description TEXT DEFAULT NULL,
+    IN p_LogoURL_Clear BOOLEAN DEFAULT FALSE,
+    IN p_LogoURL VARCHAR(255) DEFAULT NULL,
+    IN p_ParentID_Clear BOOLEAN DEFAULT FALSE,
+    IN p_ParentID UUID DEFAULT NULL,
+    IN p_ExposeAsAction BOOLEAN DEFAULT NULL,
+    IN p_ExecutionOrder INTEGER DEFAULT NULL,
+    IN p_ExecutionMode VARCHAR(20) DEFAULT NULL,
+    IN p_EnableContextCompression BOOLEAN DEFAULT NULL,
+    IN p_ContextCompressionMessageThreshold_Clear BOOLEAN DEFAULT FALSE,
+    IN p_ContextCompressionMessageThreshold INTEGER DEFAULT NULL,
+    IN p_ContextCompressionPromptID_Clear BOOLEAN DEFAULT FALSE,
+    IN p_ContextCompressionPromptID UUID DEFAULT NULL,
+    IN p_ContextCompressionMessageRetentionCount_Clear BOOLEAN DEFAULT FALSE,
+    IN p_ContextCompressionMessageRetentionCount INTEGER DEFAULT NULL,
+    IN p_TypeID_Clear BOOLEAN DEFAULT FALSE,
+    IN p_TypeID UUID DEFAULT NULL,
+    IN p_Status VARCHAR(20) DEFAULT NULL,
+    IN p_DriverClass_Clear BOOLEAN DEFAULT FALSE,
+    IN p_DriverClass VARCHAR(255) DEFAULT NULL,
+    IN p_IconClass_Clear BOOLEAN DEFAULT FALSE,
+    IN p_IconClass VARCHAR(100) DEFAULT NULL,
+    IN p_ModelSelectionMode VARCHAR(50) DEFAULT NULL,
+    IN p_PayloadDownstreamPaths TEXT DEFAULT NULL,
+    IN p_PayloadUpstreamPaths TEXT DEFAULT NULL,
+    IN p_PayloadSelfReadPaths_Clear BOOLEAN DEFAULT FALSE,
+    IN p_PayloadSelfReadPaths TEXT DEFAULT NULL,
+    IN p_PayloadSelfWritePaths_Clear BOOLEAN DEFAULT FALSE,
+    IN p_PayloadSelfWritePaths TEXT DEFAULT NULL,
+    IN p_PayloadScope_Clear BOOLEAN DEFAULT FALSE,
+    IN p_PayloadScope TEXT DEFAULT NULL,
+    IN p_FinalPayloadValidation_Clear BOOLEAN DEFAULT FALSE,
+    IN p_FinalPayloadValidation TEXT DEFAULT NULL,
+    IN p_FinalPayloadValidationMode VARCHAR(25) DEFAULT NULL,
+    IN p_FinalPayloadValidationMaxRetries INTEGER DEFAULT NULL,
+    IN p_MaxCostPerRun_Clear BOOLEAN DEFAULT FALSE,
+    IN p_MaxCostPerRun NUMERIC(10,4) DEFAULT NULL,
+    IN p_MaxTokensPerRun_Clear BOOLEAN DEFAULT FALSE,
+    IN p_MaxTokensPerRun INTEGER DEFAULT NULL,
+    IN p_MaxIterationsPerRun_Clear BOOLEAN DEFAULT FALSE,
+    IN p_MaxIterationsPerRun INTEGER DEFAULT NULL,
+    IN p_MaxTimePerRun_Clear BOOLEAN DEFAULT FALSE,
+    IN p_MaxTimePerRun INTEGER DEFAULT NULL,
+    IN p_MinExecutionsPerRun_Clear BOOLEAN DEFAULT FALSE,
+    IN p_MinExecutionsPerRun INTEGER DEFAULT NULL,
+    IN p_MaxExecutionsPerRun_Clear BOOLEAN DEFAULT FALSE,
+    IN p_MaxExecutionsPerRun INTEGER DEFAULT NULL,
+    IN p_StartingPayloadValidation_Clear BOOLEAN DEFAULT FALSE,
+    IN p_StartingPayloadValidation TEXT DEFAULT NULL,
+    IN p_StartingPayloadValidationMode VARCHAR(25) DEFAULT NULL,
+    IN p_DefaultPromptEffortLevel_Clear BOOLEAN DEFAULT FALSE,
+    IN p_DefaultPromptEffortLevel INTEGER DEFAULT NULL,
+    IN p_ChatHandlingOption_Clear BOOLEAN DEFAULT FALSE,
+    IN p_ChatHandlingOption VARCHAR(30) DEFAULT NULL,
+    IN p_DefaultArtifactTypeID_Clear BOOLEAN DEFAULT FALSE,
+    IN p_DefaultArtifactTypeID UUID DEFAULT NULL,
+    IN p_OwnerUserID UUID DEFAULT NULL,
+    IN p_InvocationMode VARCHAR(20) DEFAULT NULL,
+    IN p_ArtifactCreationMode VARCHAR(20) DEFAULT NULL,
+    IN p_FunctionalRequirements_Clear BOOLEAN DEFAULT FALSE,
+    IN p_FunctionalRequirements TEXT DEFAULT NULL,
+    IN p_TechnicalDesign_Clear BOOLEAN DEFAULT FALSE,
+    IN p_TechnicalDesign TEXT DEFAULT NULL,
+    IN p_InjectNotes BOOLEAN DEFAULT NULL,
+    IN p_MaxNotesToInject INTEGER DEFAULT NULL,
+    IN p_NoteInjectionStrategy VARCHAR(20) DEFAULT NULL,
+    IN p_InjectExamples BOOLEAN DEFAULT NULL,
+    IN p_MaxExamplesToInject INTEGER DEFAULT NULL,
+    IN p_ExampleInjectionStrategy VARCHAR(20) DEFAULT NULL,
+    IN p_IsRestricted BOOLEAN DEFAULT NULL,
+    IN p_MessageMode VARCHAR(50) DEFAULT NULL,
+    IN p_MaxMessages_Clear BOOLEAN DEFAULT FALSE,
+    IN p_MaxMessages INTEGER DEFAULT NULL,
+    IN p_AttachmentStorageProviderID_Clear BOOLEAN DEFAULT FALSE,
+    IN p_AttachmentStorageProviderID UUID DEFAULT NULL,
+    IN p_AttachmentRootPath_Clear BOOLEAN DEFAULT FALSE,
+    IN p_AttachmentRootPath VARCHAR(500) DEFAULT NULL,
+    IN p_InlineStorageThresholdBytes_Clear BOOLEAN DEFAULT FALSE,
+    IN p_InlineStorageThresholdBytes INTEGER DEFAULT NULL,
+    IN p_AgentTypePromptParams_Clear BOOLEAN DEFAULT FALSE,
+    IN p_AgentTypePromptParams TEXT DEFAULT NULL,
+    IN p_ScopeConfig_Clear BOOLEAN DEFAULT FALSE,
+    IN p_ScopeConfig TEXT DEFAULT NULL,
+    IN p_NoteRetentionDays_Clear BOOLEAN DEFAULT FALSE,
+    IN p_NoteRetentionDays INTEGER DEFAULT NULL,
+    IN p_ExampleRetentionDays_Clear BOOLEAN DEFAULT FALSE,
+    IN p_ExampleRetentionDays INTEGER DEFAULT NULL,
+    IN p_AutoArchiveEnabled BOOLEAN DEFAULT NULL,
+    IN p_RerankerConfiguration_Clear BOOLEAN DEFAULT FALSE,
+    IN p_RerankerConfiguration TEXT DEFAULT NULL,
+    IN p_CategoryID_Clear BOOLEAN DEFAULT FALSE,
+    IN p_CategoryID UUID DEFAULT NULL,
+    IN p_AllowEphemeralClientTools BOOLEAN DEFAULT NULL,
+    IN p_DefaultStorageAccountID_Clear BOOLEAN DEFAULT FALSE,
+    IN p_DefaultStorageAccountID UUID DEFAULT NULL
+)
+RETURNS SETOF __mj."vwAIAgents" AS
+$$
 DECLARE
-    v_id uuid := (p_data->>'ID')::uuid;
-    v_updated_count INTEGER;
+    _v_row_count INTEGER;
 BEGIN
-    IF p_data IS NULL OR NOT (p_data ? 'ID') THEN
-        RAISE EXCEPTION 'spUpdateAIAgent: p_data must include "ID"';
-    END IF;
-
-    UPDATE __mj."AIAgent"
+UPDATE
+        __mj."AIAgent"
     SET
-        "DefaultStorageAccountID" = CASE WHEN p_data ? 'DefaultStorageAccountID' THEN (p_data->>'DefaultStorageAccountID')::UUID ELSE "DefaultStorageAccountID" END,
-        "AllowEphemeralClientTools" = CASE WHEN p_data ? 'AllowEphemeralClientTools' THEN (p_data->>'AllowEphemeralClientTools')::BOOL ELSE "AllowEphemeralClientTools" END,
-        "CategoryID" = CASE WHEN p_data ? 'CategoryID' THEN (p_data->>'CategoryID')::UUID ELSE "CategoryID" END,
-        "RerankerConfiguration" = CASE WHEN p_data ? 'RerankerConfiguration' THEN (p_data->>'RerankerConfiguration') ELSE "RerankerConfiguration" END,
-        "AutoArchiveEnabled" = CASE WHEN p_data ? 'AutoArchiveEnabled' THEN (p_data->>'AutoArchiveEnabled')::BOOL ELSE "AutoArchiveEnabled" END,
-        "ExampleRetentionDays" = CASE WHEN p_data ? 'ExampleRetentionDays' THEN (p_data->>'ExampleRetentionDays')::INT4 ELSE "ExampleRetentionDays" END,
-        "NoteRetentionDays" = CASE WHEN p_data ? 'NoteRetentionDays' THEN (p_data->>'NoteRetentionDays')::INT4 ELSE "NoteRetentionDays" END,
-        "ScopeConfig" = CASE WHEN p_data ? 'ScopeConfig' THEN (p_data->>'ScopeConfig') ELSE "ScopeConfig" END,
-        "AgentTypePromptParams" = CASE WHEN p_data ? 'AgentTypePromptParams' THEN (p_data->>'AgentTypePromptParams') ELSE "AgentTypePromptParams" END,
-        "InlineStorageThresholdBytes" = CASE WHEN p_data ? 'InlineStorageThresholdBytes' THEN (p_data->>'InlineStorageThresholdBytes')::INT4 ELSE "InlineStorageThresholdBytes" END,
-        "AttachmentRootPath" = CASE WHEN p_data ? 'AttachmentRootPath' THEN (p_data->>'AttachmentRootPath') ELSE "AttachmentRootPath" END,
-        "AttachmentStorageProviderID" = CASE WHEN p_data ? 'AttachmentStorageProviderID' THEN (p_data->>'AttachmentStorageProviderID')::UUID ELSE "AttachmentStorageProviderID" END,
-        "MaxMessages" = CASE WHEN p_data ? 'MaxMessages' THEN (p_data->>'MaxMessages')::INT4 ELSE "MaxMessages" END,
-        "MessageMode" = CASE WHEN p_data ? 'MessageMode' THEN (p_data->>'MessageMode') ELSE "MessageMode" END,
-        "IsRestricted" = CASE WHEN p_data ? 'IsRestricted' THEN (p_data->>'IsRestricted')::BOOL ELSE "IsRestricted" END,
-        "ExampleInjectionStrategy" = CASE WHEN p_data ? 'ExampleInjectionStrategy' THEN (p_data->>'ExampleInjectionStrategy') ELSE "ExampleInjectionStrategy" END,
-        "MaxExamplesToInject" = CASE WHEN p_data ? 'MaxExamplesToInject' THEN (p_data->>'MaxExamplesToInject')::INT4 ELSE "MaxExamplesToInject" END,
-        "InjectExamples" = CASE WHEN p_data ? 'InjectExamples' THEN (p_data->>'InjectExamples')::BOOL ELSE "InjectExamples" END,
-        "NoteInjectionStrategy" = CASE WHEN p_data ? 'NoteInjectionStrategy' THEN (p_data->>'NoteInjectionStrategy') ELSE "NoteInjectionStrategy" END,
-        "MaxNotesToInject" = CASE WHEN p_data ? 'MaxNotesToInject' THEN (p_data->>'MaxNotesToInject')::INT4 ELSE "MaxNotesToInject" END,
-        "InjectNotes" = CASE WHEN p_data ? 'InjectNotes' THEN (p_data->>'InjectNotes')::BOOL ELSE "InjectNotes" END,
-        "TechnicalDesign" = CASE WHEN p_data ? 'TechnicalDesign' THEN (p_data->>'TechnicalDesign') ELSE "TechnicalDesign" END,
-        "FunctionalRequirements" = CASE WHEN p_data ? 'FunctionalRequirements' THEN (p_data->>'FunctionalRequirements') ELSE "FunctionalRequirements" END,
-        "ArtifactCreationMode" = CASE WHEN p_data ? 'ArtifactCreationMode' THEN (p_data->>'ArtifactCreationMode') ELSE "ArtifactCreationMode" END,
-        "InvocationMode" = CASE WHEN p_data ? 'InvocationMode' THEN (p_data->>'InvocationMode') ELSE "InvocationMode" END,
-        "OwnerUserID" = CASE WHEN p_data ? 'OwnerUserID' THEN (p_data->>'OwnerUserID')::UUID ELSE "OwnerUserID" END,
-        "DefaultArtifactTypeID" = CASE WHEN p_data ? 'DefaultArtifactTypeID' THEN (p_data->>'DefaultArtifactTypeID')::UUID ELSE "DefaultArtifactTypeID" END,
-        "ChatHandlingOption" = CASE WHEN p_data ? 'ChatHandlingOption' THEN (p_data->>'ChatHandlingOption') ELSE "ChatHandlingOption" END,
-        "DefaultPromptEffortLevel" = CASE WHEN p_data ? 'DefaultPromptEffortLevel' THEN (p_data->>'DefaultPromptEffortLevel')::INT4 ELSE "DefaultPromptEffortLevel" END,
-        "StartingPayloadValidationMode" = CASE WHEN p_data ? 'StartingPayloadValidationMode' THEN (p_data->>'StartingPayloadValidationMode') ELSE "StartingPayloadValidationMode" END,
-        "StartingPayloadValidation" = CASE WHEN p_data ? 'StartingPayloadValidation' THEN (p_data->>'StartingPayloadValidation') ELSE "StartingPayloadValidation" END,
-        "MaxExecutionsPerRun" = CASE WHEN p_data ? 'MaxExecutionsPerRun' THEN (p_data->>'MaxExecutionsPerRun')::INT4 ELSE "MaxExecutionsPerRun" END,
-        "MinExecutionsPerRun" = CASE WHEN p_data ? 'MinExecutionsPerRun' THEN (p_data->>'MinExecutionsPerRun')::INT4 ELSE "MinExecutionsPerRun" END,
-        "MaxTimePerRun" = CASE WHEN p_data ? 'MaxTimePerRun' THEN (p_data->>'MaxTimePerRun')::INT4 ELSE "MaxTimePerRun" END,
-        "MaxIterationsPerRun" = CASE WHEN p_data ? 'MaxIterationsPerRun' THEN (p_data->>'MaxIterationsPerRun')::INT4 ELSE "MaxIterationsPerRun" END,
-        "MaxTokensPerRun" = CASE WHEN p_data ? 'MaxTokensPerRun' THEN (p_data->>'MaxTokensPerRun')::INT4 ELSE "MaxTokensPerRun" END,
-        "MaxCostPerRun" = CASE WHEN p_data ? 'MaxCostPerRun' THEN (p_data->>'MaxCostPerRun')::NUMERIC(10, 4) ELSE "MaxCostPerRun" END,
-        "FinalPayloadValidationMaxRetries" = CASE WHEN p_data ? 'FinalPayloadValidationMaxRetries' THEN (p_data->>'FinalPayloadValidationMaxRetries')::INT4 ELSE "FinalPayloadValidationMaxRetries" END,
-        "FinalPayloadValidationMode" = CASE WHEN p_data ? 'FinalPayloadValidationMode' THEN (p_data->>'FinalPayloadValidationMode') ELSE "FinalPayloadValidationMode" END,
-        "FinalPayloadValidation" = CASE WHEN p_data ? 'FinalPayloadValidation' THEN (p_data->>'FinalPayloadValidation') ELSE "FinalPayloadValidation" END,
-        "PayloadScope" = CASE WHEN p_data ? 'PayloadScope' THEN (p_data->>'PayloadScope') ELSE "PayloadScope" END,
-        "PayloadSelfWritePaths" = CASE WHEN p_data ? 'PayloadSelfWritePaths' THEN (p_data->>'PayloadSelfWritePaths') ELSE "PayloadSelfWritePaths" END,
-        "PayloadSelfReadPaths" = CASE WHEN p_data ? 'PayloadSelfReadPaths' THEN (p_data->>'PayloadSelfReadPaths') ELSE "PayloadSelfReadPaths" END,
-        "PayloadUpstreamPaths" = CASE WHEN p_data ? 'PayloadUpstreamPaths' THEN (p_data->>'PayloadUpstreamPaths') ELSE "PayloadUpstreamPaths" END,
-        "PayloadDownstreamPaths" = CASE WHEN p_data ? 'PayloadDownstreamPaths' THEN (p_data->>'PayloadDownstreamPaths') ELSE "PayloadDownstreamPaths" END,
-        "ModelSelectionMode" = CASE WHEN p_data ? 'ModelSelectionMode' THEN (p_data->>'ModelSelectionMode') ELSE "ModelSelectionMode" END,
-        "IconClass" = CASE WHEN p_data ? 'IconClass' THEN (p_data->>'IconClass') ELSE "IconClass" END,
-        "DriverClass" = CASE WHEN p_data ? 'DriverClass' THEN (p_data->>'DriverClass') ELSE "DriverClass" END,
-        "Status" = CASE WHEN p_data ? 'Status' THEN (p_data->>'Status') ELSE "Status" END,
-        "TypeID" = CASE WHEN p_data ? 'TypeID' THEN (p_data->>'TypeID')::UUID ELSE "TypeID" END,
-        "ContextCompressionMessageRetentionCount" = CASE WHEN p_data ? 'ContextCompressionMessageRetentionCount' THEN (p_data->>'ContextCompressionMessageRetentionCount')::INT4 ELSE "ContextCompressionMessageRetentionCount" END,
-        "ContextCompressionPromptID" = CASE WHEN p_data ? 'ContextCompressionPromptID' THEN (p_data->>'ContextCompressionPromptID')::UUID ELSE "ContextCompressionPromptID" END,
-        "ContextCompressionMessageThreshold" = CASE WHEN p_data ? 'ContextCompressionMessageThreshold' THEN (p_data->>'ContextCompressionMessageThreshold')::INT4 ELSE "ContextCompressionMessageThreshold" END,
-        "EnableContextCompression" = CASE WHEN p_data ? 'EnableContextCompression' THEN (p_data->>'EnableContextCompression')::BOOL ELSE "EnableContextCompression" END,
-        "ExecutionMode" = CASE WHEN p_data ? 'ExecutionMode' THEN (p_data->>'ExecutionMode') ELSE "ExecutionMode" END,
-        "ExecutionOrder" = CASE WHEN p_data ? 'ExecutionOrder' THEN (p_data->>'ExecutionOrder')::INT4 ELSE "ExecutionOrder" END,
-        "ExposeAsAction" = CASE WHEN p_data ? 'ExposeAsAction' THEN (p_data->>'ExposeAsAction')::BOOL ELSE "ExposeAsAction" END,
-        "ParentID" = CASE WHEN p_data ? 'ParentID' THEN (p_data->>'ParentID')::UUID ELSE "ParentID" END,
-        "LogoURL" = CASE WHEN p_data ? 'LogoURL' THEN (p_data->>'LogoURL') ELSE "LogoURL" END,
-        "Description" = CASE WHEN p_data ? 'Description' THEN (p_data->>'Description') ELSE "Description" END,
-        "Name" = CASE WHEN p_data ? 'Name' THEN (p_data->>'Name') ELSE "Name" END,
-        "__mj_UpdatedAt" = NOW()
+        "Name" = CASE WHEN p_Name_Clear = TRUE THEN NULL ELSE COALESCE(p_Name, "Name") END,
+        "Description" = CASE WHEN p_Description_Clear = TRUE THEN NULL ELSE COALESCE(p_Description, "Description") END,
+        "LogoURL" = CASE WHEN p_LogoURL_Clear = TRUE THEN NULL ELSE COALESCE(p_LogoURL, "LogoURL") END,
+        "ParentID" = CASE WHEN p_ParentID_Clear = TRUE THEN NULL ELSE COALESCE(p_ParentID, "ParentID") END,
+        "ExposeAsAction" = COALESCE(p_ExposeAsAction, "ExposeAsAction"),
+        "ExecutionOrder" = COALESCE(p_ExecutionOrder, "ExecutionOrder"),
+        "ExecutionMode" = COALESCE(p_ExecutionMode, "ExecutionMode"),
+        "EnableContextCompression" = COALESCE(p_EnableContextCompression, "EnableContextCompression"),
+        "ContextCompressionMessageThreshold" = CASE WHEN p_ContextCompressionMessageThreshold_Clear = TRUE THEN NULL ELSE COALESCE(p_ContextCompressionMessageThreshold, "ContextCompressionMessageThreshold") END,
+        "ContextCompressionPromptID" = CASE WHEN p_ContextCompressionPromptID_Clear = TRUE THEN NULL ELSE COALESCE(p_ContextCompressionPromptID, "ContextCompressionPromptID") END,
+        "ContextCompressionMessageRetentionCount" = CASE WHEN p_ContextCompressionMessageRetentionCount_Clear = TRUE THEN NULL ELSE COALESCE(p_ContextCompressionMessageRetentionCount, "ContextCompressionMessageRetentionCount") END,
+        "TypeID" = CASE WHEN p_TypeID_Clear = TRUE THEN NULL ELSE COALESCE(p_TypeID, "TypeID") END,
+        "Status" = COALESCE(p_Status, "Status"),
+        "DriverClass" = CASE WHEN p_DriverClass_Clear = TRUE THEN NULL ELSE COALESCE(p_DriverClass, "DriverClass") END,
+        "IconClass" = CASE WHEN p_IconClass_Clear = TRUE THEN NULL ELSE COALESCE(p_IconClass, "IconClass") END,
+        "ModelSelectionMode" = COALESCE(p_ModelSelectionMode, "ModelSelectionMode"),
+        "PayloadDownstreamPaths" = COALESCE(p_PayloadDownstreamPaths, "PayloadDownstreamPaths"),
+        "PayloadUpstreamPaths" = COALESCE(p_PayloadUpstreamPaths, "PayloadUpstreamPaths"),
+        "PayloadSelfReadPaths" = CASE WHEN p_PayloadSelfReadPaths_Clear = TRUE THEN NULL ELSE COALESCE(p_PayloadSelfReadPaths, "PayloadSelfReadPaths") END,
+        "PayloadSelfWritePaths" = CASE WHEN p_PayloadSelfWritePaths_Clear = TRUE THEN NULL ELSE COALESCE(p_PayloadSelfWritePaths, "PayloadSelfWritePaths") END,
+        "PayloadScope" = CASE WHEN p_PayloadScope_Clear = TRUE THEN NULL ELSE COALESCE(p_PayloadScope, "PayloadScope") END,
+        "FinalPayloadValidation" = CASE WHEN p_FinalPayloadValidation_Clear = TRUE THEN NULL ELSE COALESCE(p_FinalPayloadValidation, "FinalPayloadValidation") END,
+        "FinalPayloadValidationMode" = COALESCE(p_FinalPayloadValidationMode, "FinalPayloadValidationMode"),
+        "FinalPayloadValidationMaxRetries" = COALESCE(p_FinalPayloadValidationMaxRetries, "FinalPayloadValidationMaxRetries"),
+        "MaxCostPerRun" = CASE WHEN p_MaxCostPerRun_Clear = TRUE THEN NULL ELSE COALESCE(p_MaxCostPerRun, "MaxCostPerRun") END,
+        "MaxTokensPerRun" = CASE WHEN p_MaxTokensPerRun_Clear = TRUE THEN NULL ELSE COALESCE(p_MaxTokensPerRun, "MaxTokensPerRun") END,
+        "MaxIterationsPerRun" = CASE WHEN p_MaxIterationsPerRun_Clear = TRUE THEN NULL ELSE COALESCE(p_MaxIterationsPerRun, "MaxIterationsPerRun") END,
+        "MaxTimePerRun" = CASE WHEN p_MaxTimePerRun_Clear = TRUE THEN NULL ELSE COALESCE(p_MaxTimePerRun, "MaxTimePerRun") END,
+        "MinExecutionsPerRun" = CASE WHEN p_MinExecutionsPerRun_Clear = TRUE THEN NULL ELSE COALESCE(p_MinExecutionsPerRun, "MinExecutionsPerRun") END,
+        "MaxExecutionsPerRun" = CASE WHEN p_MaxExecutionsPerRun_Clear = TRUE THEN NULL ELSE COALESCE(p_MaxExecutionsPerRun, "MaxExecutionsPerRun") END,
+        "StartingPayloadValidation" = CASE WHEN p_StartingPayloadValidation_Clear = TRUE THEN NULL ELSE COALESCE(p_StartingPayloadValidation, "StartingPayloadValidation") END,
+        "StartingPayloadValidationMode" = COALESCE(p_StartingPayloadValidationMode, "StartingPayloadValidationMode"),
+        "DefaultPromptEffortLevel" = CASE WHEN p_DefaultPromptEffortLevel_Clear = TRUE THEN NULL ELSE COALESCE(p_DefaultPromptEffortLevel, "DefaultPromptEffortLevel") END,
+        "ChatHandlingOption" = CASE WHEN p_ChatHandlingOption_Clear = TRUE THEN NULL ELSE COALESCE(p_ChatHandlingOption, "ChatHandlingOption") END,
+        "DefaultArtifactTypeID" = CASE WHEN p_DefaultArtifactTypeID_Clear = TRUE THEN NULL ELSE COALESCE(p_DefaultArtifactTypeID, "DefaultArtifactTypeID") END,
+        "OwnerUserID" = COALESCE(p_OwnerUserID, "OwnerUserID"),
+        "InvocationMode" = COALESCE(p_InvocationMode, "InvocationMode"),
+        "ArtifactCreationMode" = COALESCE(p_ArtifactCreationMode, "ArtifactCreationMode"),
+        "FunctionalRequirements" = CASE WHEN p_FunctionalRequirements_Clear = TRUE THEN NULL ELSE COALESCE(p_FunctionalRequirements, "FunctionalRequirements") END,
+        "TechnicalDesign" = CASE WHEN p_TechnicalDesign_Clear = TRUE THEN NULL ELSE COALESCE(p_TechnicalDesign, "TechnicalDesign") END,
+        "InjectNotes" = COALESCE(p_InjectNotes, "InjectNotes"),
+        "MaxNotesToInject" = COALESCE(p_MaxNotesToInject, "MaxNotesToInject"),
+        "NoteInjectionStrategy" = COALESCE(p_NoteInjectionStrategy, "NoteInjectionStrategy"),
+        "InjectExamples" = COALESCE(p_InjectExamples, "InjectExamples"),
+        "MaxExamplesToInject" = COALESCE(p_MaxExamplesToInject, "MaxExamplesToInject"),
+        "ExampleInjectionStrategy" = COALESCE(p_ExampleInjectionStrategy, "ExampleInjectionStrategy"),
+        "IsRestricted" = COALESCE(p_IsRestricted, "IsRestricted"),
+        "MessageMode" = COALESCE(p_MessageMode, "MessageMode"),
+        "MaxMessages" = CASE WHEN p_MaxMessages_Clear = TRUE THEN NULL ELSE COALESCE(p_MaxMessages, "MaxMessages") END,
+        "AttachmentStorageProviderID" = CASE WHEN p_AttachmentStorageProviderID_Clear = TRUE THEN NULL ELSE COALESCE(p_AttachmentStorageProviderID, "AttachmentStorageProviderID") END,
+        "AttachmentRootPath" = CASE WHEN p_AttachmentRootPath_Clear = TRUE THEN NULL ELSE COALESCE(p_AttachmentRootPath, "AttachmentRootPath") END,
+        "InlineStorageThresholdBytes" = CASE WHEN p_InlineStorageThresholdBytes_Clear = TRUE THEN NULL ELSE COALESCE(p_InlineStorageThresholdBytes, "InlineStorageThresholdBytes") END,
+        "AgentTypePromptParams" = CASE WHEN p_AgentTypePromptParams_Clear = TRUE THEN NULL ELSE COALESCE(p_AgentTypePromptParams, "AgentTypePromptParams") END,
+        "ScopeConfig" = CASE WHEN p_ScopeConfig_Clear = TRUE THEN NULL ELSE COALESCE(p_ScopeConfig, "ScopeConfig") END,
+        "NoteRetentionDays" = CASE WHEN p_NoteRetentionDays_Clear = TRUE THEN NULL ELSE COALESCE(p_NoteRetentionDays, "NoteRetentionDays") END,
+        "ExampleRetentionDays" = CASE WHEN p_ExampleRetentionDays_Clear = TRUE THEN NULL ELSE COALESCE(p_ExampleRetentionDays, "ExampleRetentionDays") END,
+        "AutoArchiveEnabled" = COALESCE(p_AutoArchiveEnabled, "AutoArchiveEnabled"),
+        "RerankerConfiguration" = CASE WHEN p_RerankerConfiguration_Clear = TRUE THEN NULL ELSE COALESCE(p_RerankerConfiguration, "RerankerConfiguration") END,
+        "CategoryID" = CASE WHEN p_CategoryID_Clear = TRUE THEN NULL ELSE COALESCE(p_CategoryID, "CategoryID") END,
+        "AllowEphemeralClientTools" = COALESCE(p_AllowEphemeralClientTools, "AllowEphemeralClientTools"),
+        "DefaultStorageAccountID" = CASE WHEN p_DefaultStorageAccountID_Clear = TRUE THEN NULL ELSE COALESCE(p_DefaultStorageAccountID, "DefaultStorageAccountID") END
     WHERE
-        "ID" = v_id;
+        "ID" = p_ID;
 
-    GET DIAGNOSTICS v_updated_count = ROW_COUNT;
+    GET DIAGNOSTICS _v_row_count = ROW_COUNT;
 
-    IF v_updated_count = 0 THEN
-        -- Nothing was updated, return empty result set
-        RETURN;
+    IF _v_row_count = 0 THEN
+        RETURN QUERY SELECT * FROM __mj."vwAIAgents" WHERE 1=0;
+    ELSE
+        RETURN QUERY SELECT * FROM __mj."vwAIAgents" WHERE "ID" = p_ID;
     END IF;
-
-    -- Return the updated record from the base view
-    RETURN QUERY
-    SELECT * FROM __mj."vwAIAgents"
-    WHERE "ID" = v_id;
 END;
 $$ LANGUAGE plpgsql;
+
 DO $$ DECLARE r record;
 BEGIN
   FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
