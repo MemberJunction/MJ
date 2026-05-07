@@ -4,12 +4,31 @@ Tracks GitHub issue [#2552](https://github.com/MemberJunction/MJ/issues/2552). P
 
 ## Goal
 
-Retire `_Clear` companion BOOLEAN parameters across every `spCreate*`/`spUpdate*`/`spDelete*` sproc on both PostgreSQL and SQL Server. Replace each multi-arg sproc signature with a single JSON-object argument:
+Resolve the conflict between PostgreSQL's 100-argument function limit and the broad `_Clear` companion rule that's required for correct `BaseEntity.Save()` semantics on nullable-no-default columns (notably `ScheduledJob`'s lock fields).
 
-- PG: `JSONB`
-- SS: `NVARCHAR(MAX)` (parsed via `JSON_VALUE` / `OPENJSON`)
+## Approach (per issue 2552 consensus)
 
-Tri-state semantics carried by JSON key presence:
+Threshold-based branching on PG only. SQL Server is unchanged.
+
+| Provider | Entity param count | Sproc shape |
+|---|---|---|
+| SQL Server | any | typed-arg + `_Clear` companions (today's shape) |
+| PostgreSQL | under `ProcedureParamLimit` | typed-arg + `_Clear` companions (today's shape) |
+| PostgreSQL | at or over `ProcedureParamLimit` | single `JSONB` arg, key-presence semantics |
+
+Once the JSON-arg shape exists for wide entities, the PG-side narrow `_Clear` rule (`pgNeedsClearCompanion`) is no longer needed: typed-arg PG sprocs can use the broad rule (`AllowsNull`) without busting the arg limit, because the entities that would have busted it are now on the JSON-arg shape.
+
+This restores correct `Save()` semantics for nullable-no-default columns on the typed-arg PG entities (fixing the `ScheduledJob` regression) without forcing every entity onto JSON.
+
+### Why threshold branching, not universal JSON
+
+- **SS has 2100-arg headroom and no functional problem.** Forcing SS onto JSON pays migration cost and dev-UX cost (loss of typed-arg type safety, harder SQL tooling, opaque audit logs) for symmetry alone. Issue 2552 thread (Amith, Rob, Craig) explicitly preferred not hamstringing SS for PG's limitation.
+- **Most entities don't hit the limit.** Only AIPromptRun (180 args under broad rule) and AIAgent (116) actually exceed 100 in v5.33. Forcing every entity onto JSON pays JSON.stringify/parse overhead on every `Save()` to solve a problem that affects two entities.
+- **JSON is an extended-support workaround for edge cases.** Wide entities are not the norm — tables that wide are usually questionable on their own merits. Treating JSON-arg as the exception, not the rule, keeps typed-arg as the privileged path.
+
+### Tri-state semantics for the JSON-arg case
+
+When an entity is over the limit and emits JSON-arg shape, key presence drives clear-vs-set-vs-leave:
 
 | Wire shape | Effect on column |
 |---|---|
@@ -17,113 +36,176 @@ Tri-state semantics carried by JSON key presence:
 | `"Field": <value>` | Set to value |
 | `"Field": null` | Set to SQL NULL |
 
-This eliminates:
-- Postgres 100-arg function limit problems on wide entities (AIPromptRun, AIAgent, EntityField, Entity, AIPrompt, AIAgentRun)
-- The PG/SS rule divergence (`pgNeedsClearCompanion` vs. `EntityFieldInfo.NeedsClearCompanion`)
-- The ScheduledJob stale-lock-clear regression introduced by the PG-side narrowing
-- Per-field `_Clear` boolean params from every CRUD sproc, both providers
+No `_Clear` companion params on JSON-arg sprocs.
+
+## Architecture
+
+### `ProcedureParamLimit` abstraction
+
+Add an abstract getter on `GenericDatabaseProvider`:
+
+```typescript
+public abstract get ProcedureParamLimit(): number;
+```
+
+Implementations:
+
+```typescript
+// PostgreSQLDataProvider
+public get ProcedureParamLimit(): number { return 90; }  // PG hard limit is 100; 90 leaves headroom
+
+// SQLServerDataProvider
+public get ProcedureParamLimit(): number { return Infinity; }
+```
+
+The same getter exists on the corresponding CodeGen subclass (`PostgreSQLCodeGenProvider`, `SQLServerCodeGenProvider`) — or the providers expose it to CodeGen via shared metadata, depending on which package owns the limit value. Decision: **keep the value on the data provider**, have CodeGen read it through a shared accessor.
+
+### Param count projection (the pre-check)
+
+The branch decision is a **projection** computed before any sproc DDL is emitted. CodeGen knows the entity's full field set; it computes what the typed-arg sproc *would* take under broad rule, then decides which shape to emit.
+
+The predicate is **per-sproc**, not per-entity, and applied uniformly to all three CRUD verbs:
+
+```typescript
+function projectedParamCount(entity: EntityInfo, sprocType: 'create' | 'update' | 'delete'): number {
+    const fields = entity.Fields.filter(f => shouldIncludeFieldInParams(f, sprocType));
+    const clearCompanions = sprocType === 'delete'
+        ? 0
+        : fields.filter(f => needsClearCompanion(f)).length;  // broad rule
+    return fields.length + clearCompanions;
+}
+
+function useJsonArgShape(entity: EntityInfo, sprocType: 'create' | 'update' | 'delete', provider: IMetadataProvider): boolean {
+    return projectedParamCount(entity, sprocType) >= provider.ProcedureParamLimit;
+}
+```
+
+Order is: **decide shape → emit accordingly.** Never "emit typed-arg, then notice we busted the limit."
+
+**`spCreate` and `spUpdate` track each other in practice.** In MJ's schema today, the field-inclusion rules (`shouldIncludeFieldInParams`) produce identical column sets for create and update, because:
+- PKs are UUID with DEFAULT `gen_random_uuid()` / `NEWSEQUENTIALID()`, not auto-increment — so they're included in both.
+- Non-PK inclusion is gated on `AllowUpdateAPI`, which is the same flag for both.
+
+So if `spCreate` busts the limit, `spUpdate` does too, by the same amount. The predicate still computes them independently for defensive correctness — if MJ ever adds an auto-increment column or a create-only / update-only field, the predicate handles it without code changes.
+
+**`spDelete` never busts the limit.** It takes only PK params (1 for single-UUID PK entities, ~2-3 for composite-PK entities), no nullable fields, no `_Clear` companions. The predicate runs the same math on it as create/update; for any realistic schema, the result is far below the limit and `spDelete` stays on typed-arg. No special case needed in code — the predicate is honest about what each sproc actually needs.
+
+**Outcome for wide entities:** mixed shape per entity. For AIPromptRun and AIAgent, `spCreate` and `spUpdate` emit as JSON-arg; `spDelete` emits as typed-arg. The data provider already dispatches differently per CRUD verb (separate `GetSaveSQL` and `GetDeleteSQL` paths), so caller-side ergonomics are unaffected.
+
+### Synchronization between CodeGen and provider call-site
+
+CodeGen and the data provider must agree on which shape every entity uses, every time, or every save fails. Two-arg call vs. one-JSON-arg call against the wrong sproc shape = runtime error.
+
+**Approach:** the same predicate (`useJsonArgShape`) lives in shared code (likely on `EntityInfo` or as a static helper), and both sides call it with the same provider's `ProcedureParamLimit`. No metadata column needed; the decision is recomputed from field info every time.
+
+This avoids a metadata round-trip but requires that CodeGen and provider use the same predicate implementation. If the predicate ever changes (e.g., headroom adjusted), both regenerate sprocs and update provider call construction in lockstep — same migration boundary.
+
+### Per-sproc, not per-entity
+
+The branch decision is computed independently for each CRUD verb on each entity. The same predicate runs against `spCreate`, `spUpdate`, and `spDelete`; whichever one would bust the limit gets the JSON-arg shape, others stay typed-arg.
+
+In practice this produces uniform shape on most entities and **mixed shape on wide entities only**:
+- Narrow entities: all three sprocs typed-arg (predicate returns false for all).
+- Wide entities: `spCreate` and `spUpdate` JSON-arg, `spDelete` typed-arg (predicate returns true only for create/update, since `spDelete`'s PK-only param list can't bust the limit).
+
+The data provider already dispatches differently per CRUD verb (separate `GetSaveSQL` and `GetDeleteSQL` paths), so caller-side ergonomics are unaffected by mixed shape on wide entities.
+
+## What this kills
+
+- `pgNeedsClearCompanion` on `PostgreSQLDataProvider` — narrow rule disappears entirely. PG returns to using the broad `EntityFieldInfo.NeedsClearCompanion` for typed-arg sprocs. Wide entities don't go through the typed-arg path at all.
+- The `ScheduledJob` lock-cleanup regression — `ScheduledJob` (31 cols, ~45 projected args) stays on typed-arg sprocs with broad rule applied. `LockToken`/`LockedAt`/`LockedByInstance`/`ExpectedCompletionAt` all get `_Clear` companions emitted again; `releaseLock()` works.
+- The 100-arg ceiling as a runtime concern — wide entities use JSON-arg, no arg count.
+
+## What stays
+
+- `_Clear` companions on every entity under the threshold, on both providers. The `_Clear` plumbing is **not** retired; it's still the design for the typed-arg path.
+- `EntityFieldInfo.NeedsClearCompanion` (broad rule) remains on the abstract base.
+- SS sproc shape — no changes.
 
 ## Phasing
 
-The work is broken into discrete phases that ship as their own commits and reviews. Each phase is self-contained — earlier phases should not depend on later phases shipping.
-
 ### Phase 0 — Alignment (this commit)
-- Open draft PR linked to #2552 with this plan.
-- Capture open design questions inline (see issue for the canonical list).
-- Get team sign-off on phasing and on the open questions before code lands.
+- Plan committed reflecting issue 2552 consensus.
+- Open questions for review captured below.
 
-### Phase 1 — POC: ScheduledJob on PostgreSQL only
-- Hand-write the JSON-arg version of `spUpdateScheduledJob` and `spDeleteScheduledJob` (PG).
-- Update `PostgreSQLDataProvider.GetSaveSQL()` (or equivalent path) on a `BypassFor: ['ScheduledJob']` switch to construct JSON instead of N args, just for ScheduledJob.
-- Round-trip test: `releaseLock()` actually nulls the four lock fields on PG.
-- Validates the design end-to-end on the smallest realistic surface before generalizing.
+### Phase 1 — `ProcedureParamLimit` abstraction
+- Add abstract `ProcedureParamLimit` getter to `GenericDatabaseProvider`.
+- Implement on `PostgreSQLDataProvider` (return 90) and `SQLServerDataProvider` (return `Infinity`).
+- Add `useJsonArgShape(entity, provider)` shared predicate.
+- No sproc generation changes yet — just the abstraction in place.
 
-### Phase 2 — Codegen template change (PG only)
-- New sproc generator path in `PostgreSQLCodeGenProvider`. Old per-field-arg path stays available for fallback during the rollout.
+### Phase 2 — Restore broad rule on PG typed-arg path
+- Delete `pgNeedsClearCompanion` from `PostgreSQLDataProvider`.
+- PG provider's save-path uses `EntityFieldInfo.NeedsClearCompanion` (broad rule) for entities under the limit.
+- PG provider's save-path **gates the broad rule** behind `useJsonArgShape(entity) === false` — entities at/over the limit don't go through typed-arg path.
+- Without Phase 3 yet, sprocs for wide entities are still in their current narrow-rule state, so wide entities are temporarily incorrect. Phase 3 closes that gap.
+
+### Phase 3 — JSON-arg sproc generation for wide entities (PG)
+- New code path in `PostgreSQLCodeGenProvider` that emits JSON-arg sprocs for entities where `useJsonArgShape` returns true.
 - Output shape:
   ```sql
   CREATE OR REPLACE FUNCTION __mj.spUpdate<Entity>(p_data JSONB)
-  RETURNS __mj."<View>" AS $$ ... $$ LANGUAGE plpgsql;
+  RETURNS SETOF __mj."<View>" AS $$ ... $$ LANGUAGE plpgsql;
   ```
-- Generation rules:
+- Generation rules for the JSON-arg case:
   - One arg per sproc: `p_data JSONB`.
   - Body uses `p_data ? 'Field'` to detect key presence.
-  - Per-column casting: `CASE WHEN p_data ? 'Field' THEN (p_data->>'Field')::<TargetType> ELSE "Field" END`.
+  - Per-column casting: `CASE WHEN p_data ? 'Field' THEN (p_data->>'Field')::<TargetType> ELSE "Field" END` (UPDATE) / direct cast (INSERT/DELETE).
   - Special handling for: `UNIQUEIDENTIFIER`/`UUID`, `NUMERIC` precision (string in JSON), `BYTEA` (base64), `TIMESTAMPTZ` parsing.
-- All entities regenerate. Migration outputs a single drop+create cycle for every CRUD sproc on PG.
-- Delete `pgNeedsClearCompanion` and the call site that uses it.
+- Old typed-arg sprocs for wide entities are dropped via the migration (Phase 5).
 
-### Phase 3 — Data provider rewrite (PG)
-- `PostgreSQLDataProvider` `GetSaveSQL` / `GetDeleteSQL` paths switch to building a JSONB payload.
-- Construction uses dirty-field tracking + explicit-clear tracking from `BaseEntity`, identical inputs to today's flow — only the serialization changes.
-- Cast helpers for non-JSON-native types (binary, NUMERIC, dates) live in one place.
+### Phase 4 — PG data provider call-site branching
+- `PostgreSQLDataProvider.GetSaveSQL` / `GetDeleteSQL` paths inspect `useJsonArgShape(entity)` and either:
+  - Build typed-arg `EXEC` with broad-rule `_Clear` companions (existing path); or
+  - Build a JSONB payload and call the JSON-arg sproc.
+- Cast helpers for non-JSON-native types (binary, NUMERIC, dates) live in one place on the provider.
 
-### Phase 4 — Codegen template change (SS)
-- Mirror Phase 2 on SQL Server side.
-- Output shape:
-  ```sql
-  CREATE OR ALTER PROCEDURE __mj.spUpdate<Entity> @data NVARCHAR(MAX)
-  AS BEGIN ... END
-  ```
-- Use `JSON_PATH_EXISTS` (SS 2022+) or `OPENJSON` (SS 2019 compat). Pick based on min-supported-version target — see open question 4 in the issue.
+### Phase 5 — Migration
+- CodeGen-driven migration that drops the wide-entity old typed-arg sprocs and creates the JSON-arg replacements.
+- Narrow-entity sprocs are also regenerated under broad rule (so the `_Clear` companions emitted for `ScheduledJob`'s nullable-no-default fields actually exist on disk).
+- View-dependency capture/replay (`viewFallback.ts`) handles drop-cascade ordering.
 
-### Phase 5 — Data provider rewrite (SS)
-- `SQLServerDataProvider` matches the PG path. Both providers stringify to JSON; only dialect differs.
+### Phase 6 — Tests
+- `ScheduledJob` lock-release round-trip on PG (regression test for the v5.33 bug).
+- Round-trip null-clear for sample of nullable-no-default fields on the *narrow* entities under broad rule.
+- Round-trip for wide-entity JSON-arg sprocs:
+  - `AIPromptRun` save with mix of set/clear/leave fields.
+  - `AIAgent` same.
+- Cast error path on JSON-arg sprocs: invalid UUID, invalid NUMERIC, invalid base64.
+- Precision tests for `NUMERIC(38,10)` on a wide entity.
+- Binary round-trip (`BYTEA`) on a wide entity, if any wide entity has a binary column. (None currently — flag for future work if added.)
 
-### Phase 6 — Migration
-- One CodeGen-driven migration on each side: drop every existing typed-arg sproc, create every JSON-arg sproc.
-- PG side: take care that drop-and-create order respects view dependencies (the `viewFallback.ts` capture/replay path already handles this).
-- SS side: standard CREATE OR ALTER pattern, no view dependency drama.
-
-### Phase 7 — SQLConverter / pg-migrate simplification
-- Provider-aware sproc-shape rewriting in the converter is removed.
-- Converter now sees uniform JSON-arg sproc DDL on the SS side and emits dialect-translated equivalent on PG. No reshaping.
-- This eliminates the kind of failure modes that produced the 136k-line `V202605032310__…__Self_Heal.pg-only.sql` artifact in PR #2541.
-
-### Phase 8 — Tests
-- Round-trip null-clear for every nullable-no-default field on the wide entities (AIPromptRun, AIAgent, EntityField, Entity, AIPrompt, AIAgentRun).
-- ScheduledJob lock-release round-trip on both providers.
-- Cast error path: invalid UUID, invalid NUMERIC, invalid base64.
-- Precision tests for NUMERIC(38,10) and similar wide-decimal columns.
-- Binary round-trip (`BYTEA` / `VARBINARY(MAX)`).
-- TIMESTAMPTZ with non-UTC offset.
-
-### Phase 9 — Cleanup
-- Delete `EntityFieldInfo.NeedsClearCompanion` and `pgNeedsClearCompanion`.
-- Audit any other `_Clear` references — all should be gone.
-- Release notes + migration guidance for direct-sproc callers (see issue for the breaking-change disclosure).
+### Phase 7 — Cleanup
+- Audit any other `_Clear` references — narrow-rule callers should all be gone on PG.
+- Release notes for the wide-entity sproc shape change (breaking change for anyone calling those specific sprocs directly).
 
 ## Open Design Questions
 
-Carried from the issue — these should be resolved before Phase 2 lands. **The team needs to agree on these before significant code is written.**
+These should be resolved before Phase 3 lands.
 
-1. **Empty-string-vs-null for TEXT.** Recommended: `""` is empty string, `null` is null.
-2. **NUMERIC precision through JSON.** Recommended: send NUMERIC as JSON string, cast inside sproc.
-3. **Binary encoding.** Recommended: base64 string, decode in sproc.
-4. **SS JSON dialect target version.** Recommended: support SS 2019 floor → emit `OPENJSON`-compatible shape always; revisit when min-version bumps to SS 2022.
-5. **Direct-sproc-caller migration helper.** Recommended: defer; release notes only for v1, helper utility as a fast-follow if customer feedback warrants.
-6. **Per-field cast error localization.** Recommended: Phase 1 ships with raw cast errors; Phase 9 cleanup adds field-name wrapping if the loss of localization is hurting debug experience.
-7. **Audit-log readability.** Recommended: accept the regression for v1; revisit after observing real audit-log usage.
-8. **Generated TypeScript Save-shape interfaces.** Recommended: defer; entity classes already document the field set, redundant codegen.
+1. **Empty-string-vs-null for TEXT in JSON-arg sprocs.** Recommended: `""` is empty string, `null` is null. JSON-arg sprocs only — typed-arg path is unchanged.
+2. **NUMERIC precision through JSON.** Recommended: send NUMERIC as JSON string, cast inside sproc. Avoids IEEE-754 round-trip issues on wide-decimal columns.
+3. **Binary encoding (BYTEA).** Recommended: base64 string, decode in sproc. Only wide entities need this; no current wide entity has binary columns, but the codegen template should support it.
+4. **Headroom in `ProcedureParamLimit`.** Recommended: 90. Leaves room for column adds without flipping shape unexpectedly. Worth team review — could go higher if column-add churn on wide entities is rare.
+5. **Per-field cast error localization on JSON-arg sprocs.** Recommended: ship without field-name wrapping initially; revisit if the loss of localization hurts debug experience.
+6. **Audit-log readability for wide-entity saves.** Recommended: accept that wide-entity `pg_stat_statements` entries show JSON blobs instead of typed args. Wide-entity saves are rare; not worth audit-tooling investment up front.
 
 ## Risk Profile
 
 This is **CodeGen-driven**, not hand-written surgery. Risk is bounded by:
-- The codegen template change is one path that produces every sproc.
-- If Phase 1 POC works on ScheduledJob, the template change in Phase 2 either works for everything or nothing — there's no per-entity risk that escapes test coverage.
-- The data provider rewrite in Phase 3 / Phase 5 is one chokepoint serving every `BaseEntity.Save()` and `Delete()` — uniform coverage from existing entity tests.
+- The `useJsonArgShape` predicate is computed identically by CodeGen and provider; if it diverges, every save on the affected entity fails loudly.
+- The typed-arg path is unchanged for entities under the limit — no regression risk for narrow entities.
+- The JSON-arg path is new code, but applied to a small set of wide entities with comprehensive round-trip tests.
 
-The breaking-change surface is **direct sproc callers outside MJ** — customer admin scripts, SQL Agent jobs, third-party tools that bypass the data provider abstraction. Inside MJ everything routes through the data provider and migrates atomically.
+The breaking-change surface is **direct sproc callers of wide entities** — anyone calling `EXEC __mj.spUpdateAIPromptRun @ID=...` directly outside the framework. This is a much narrower break than universal JSON would have been (which would've broken every entity). For narrow entities, there's no breaking change at all.
 
 ## Status
 
-- [x] Phase 0 — Plan committed, draft PR opened
-- [ ] Phase 1 — ScheduledJob POC on PG
-- [ ] Phase 2 — PG CodeGen template
-- [ ] Phase 3 — PG data provider rewrite
-- [ ] Phase 4 — SS CodeGen template
-- [ ] Phase 5 — SS data provider rewrite
-- [ ] Phase 6 — Migration generation
-- [ ] Phase 7 — SQLConverter / pg-migrate simplification
-- [ ] Phase 8 — Tests
-- [ ] Phase 9 — Cleanup + release notes
+- [ ] Phase 0 — Plan reflects issue 2552 consensus
+- [ ] Phase 1 — `ProcedureParamLimit` abstraction
+- [ ] Phase 2 — Restore broad rule on PG typed-arg path
+- [ ] Phase 3 — JSON-arg sproc generation for wide entities (PG)
+- [ ] Phase 4 — PG data provider call-site branching
+- [ ] Phase 5 — Migration
+- [ ] Phase 6 — Tests
+- [ ] Phase 7 — Cleanup + release notes
