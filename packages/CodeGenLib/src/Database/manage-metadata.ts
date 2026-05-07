@@ -252,9 +252,14 @@ export class ManageMetadataBase {
       if (!this._dbProvider) {
          const platform = dbPlatform();
          if (platform === 'postgresql') {
+            // Lookup key is the platform string (matches the @RegisterClass key
+            // in PostgreSQLCodeGenProvider — `'postgresql'`). Mismatched keys
+            // silently fall back to the abstract base class via
+            // ClassFactory.CreateInstance, leaving dialect-specific methods
+            // unimplemented at runtime.
             const pgProvider = MJGlobal.Instance.ClassFactory.CreateInstance<CodeGenDatabaseProvider>(
                CodeGenDatabaseProvider,
-               'PostgreSQLCodeGenProvider'
+               platform
             );
             if (pgProvider) {
                this._dbProvider = pgProvider;

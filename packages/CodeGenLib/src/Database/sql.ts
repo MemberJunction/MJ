@@ -28,8 +28,11 @@ protected get dbProvider(): CodeGenDatabaseProvider {
    if (!this._dbProvider) {
       const platform = configInfo.dbPlatform;
       if (platform === 'postgresql') {
+         // Lookup key is the platform string (matches the @RegisterClass key
+         // in PostgreSQLCodeGenProvider). Mismatched keys silently fall back
+         // to the abstract base class via ClassFactory.CreateInstance.
          const pgProvider = MJGlobal.Instance.ClassFactory.CreateInstance<CodeGenDatabaseProvider>(
-            CodeGenDatabaseProvider, 'PostgreSQLCodeGenProvider'
+            CodeGenDatabaseProvider, platform
          );
          if (pgProvider) {
             this._dbProvider = pgProvider;
