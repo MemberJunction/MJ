@@ -38,28 +38,6 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
         return 'postgresql';
     }
 
-    /**
-     * @inheritdoc
-     *
-     * PostgreSQL: NOT supported. PG's strict `CREATE OR REPLACE VIEW` parser
-     * resolves view names against the existing catalog state at parse time, so
-     * a body that LEFT-JOINs the view-being-created to itself (e.g. for a
-     * self-FK's virtual NameField) raises `42P01 undefined_table` on first
-     * creation. A `CREATE OR REPLACE` retry against a NULL-typed stub then
-     * fails with `cannot change data type of view column ... from text to
-     * character varying(N)` because PG enforces strict column-type compat in
-     * `CREATE OR REPLACE`.
-     *
-     * Returning `false` tells `sql_codegen.ts` to skip the self-join entirely
-     * for self-FK + virtual-NameField cases. The trade-off: the corresponding
-     * virtual column (e.g. `RestoredFrom` on `vwRecordChanges`) is not emitted.
-     * Matches the baseline-shipped vwRecordChanges shape, which never had this
-     * column either.
-     */
-    override canSelfJoinViewForVirtualNameField(): boolean {
-        return false;
-    }
-
     // ─── DROP GUARDS ─────────────────────────────────────────────────────
 
     /**
