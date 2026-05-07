@@ -544,285 +544,135 @@ BEGIN
 END
 $$;
 
-CREATE OR REPLACE FUNCTION ${flyway:defaultSchema}."spCreateAIPromptRun"(
-    p_assistantprefill text DEFAULT NULL,
-    p_testrunid uuid DEFAULT NULL,
-    p_comments text DEFAULT NULL,
-    p_runname varchar(255) DEFAULT NULL,
-    p_effortlevel int4 DEFAULT NULL,
-    p_modelspecificresponsedetails text DEFAULT NULL,
-    p_completiontime int4 DEFAULT NULL,
-    p_prompttime int4 DEFAULT NULL,
-    p_queuetime int4 DEFAULT NULL,
-    p_childpromptid uuid DEFAULT NULL,
-    p_errordetails text DEFAULT NULL,
-    p_firsttokentime int4 DEFAULT NULL,
-    p_streamingenabled_clear boolean DEFAULT false,
-    p_streamingenabled bool DEFAULT NULL,
-    p_wasselectedresult_clear boolean DEFAULT false,
-    p_wasselectedresult bool DEFAULT NULL,
-    p_judgescore float8 DEFAULT NULL,
-    p_judgeid uuid DEFAULT NULL,
-    p_cachekey varchar(500) DEFAULT NULL,
-    p_cachehit_clear boolean DEFAULT false,
-    p_cachehit bool DEFAULT NULL,
-    p_selectionstrategy varchar(50) DEFAULT NULL,
-    p_modelpowerrank int4 DEFAULT NULL,
-    p_cancellationreason text DEFAULT NULL,
-    p_cancelled_clear boolean DEFAULT false,
-    p_cancelled bool DEFAULT NULL,
-    p_status_clear boolean DEFAULT false,
-    p_status varchar(50) DEFAULT NULL,
-    p_modelselection text DEFAULT NULL,
-    p_rerunfrompromptrunid uuid DEFAULT NULL,
-    p_totalfailoverduration int4 DEFAULT NULL,
-    p_originalrequeststarttime timestamptz DEFAULT NULL,
-    p_originalmodelid uuid DEFAULT NULL,
-    p_failoverdurations text DEFAULT NULL,
-    p_failovererrors text DEFAULT NULL,
-    p_failoverattempts_clear boolean DEFAULT false,
-    p_failoverattempts int4 DEFAULT NULL,
-    p_validationsummary text DEFAULT NULL,
-    p_validationattempts text DEFAULT NULL,
-    p_totalretrydurationms int4 DEFAULT NULL,
-    p_lastattemptat timestamptz DEFAULT NULL,
-    p_firstattemptat timestamptz DEFAULT NULL,
-    p_commonvalidationerror varchar(255) DEFAULT NULL,
-    p_validationerrorcount int4 DEFAULT NULL,
-    p_finalvalidationerror varchar(500) DEFAULT NULL,
-    p_maxretriesconfigured int4 DEFAULT NULL,
-    p_retrystrategy varchar(50) DEFAULT NULL,
-    p_validationbehavior varchar(50) DEFAULT NULL,
-    p_finalvalidationpassed bool DEFAULT NULL,
-    p_successfulvalidationcount int4 DEFAULT NULL,
-    p_validationattemptcount int4 DEFAULT NULL,
-    p_descendantcost numeric(18, 6) DEFAULT NULL,
-    p_toplogprobs int4 DEFAULT NULL,
-    p_logprobs bool DEFAULT NULL,
-    p_responseformat varchar(50) DEFAULT NULL,
-    p_stopsequences text DEFAULT NULL,
-    p_seed int4 DEFAULT NULL,
-    p_presencepenalty numeric(3, 2) DEFAULT NULL,
-    p_frequencypenalty numeric(3, 2) DEFAULT NULL,
-    p_minp numeric(3, 2) DEFAULT NULL,
-    p_topk int4 DEFAULT NULL,
-    p_topp numeric(3, 2) DEFAULT NULL,
-    p_temperature numeric(3, 2) DEFAULT NULL,
-    p_tokenscompletionrollup int4 DEFAULT NULL,
-    p_tokenspromptrollup int4 DEFAULT NULL,
-    p_tokensusedrollup int4 DEFAULT NULL,
-    p_costcurrency varchar(10) DEFAULT NULL,
-    p_cost numeric(19, 8) DEFAULT NULL,
-    p_agentrunid uuid DEFAULT NULL,
-    p_executionorder int4 DEFAULT NULL,
-    p_runtype_clear boolean DEFAULT false,
-    p_runtype varchar(20) DEFAULT NULL,
-    p_parentid uuid DEFAULT NULL,
-    p_errormessage text DEFAULT NULL,
-    p_success_clear boolean DEFAULT false,
-    p_success bool DEFAULT NULL,
-    p_totalcost numeric(18, 6) DEFAULT NULL,
-    p_tokenscompletion int4 DEFAULT NULL,
-    p_tokensprompt int4 DEFAULT NULL,
-    p_tokensused int4 DEFAULT NULL,
-    p_result text DEFAULT NULL,
-    p_messages text DEFAULT NULL,
-    p_executiontimems int4 DEFAULT NULL,
-    p_completedat timestamptz DEFAULT NULL,
-    p_runat_clear boolean DEFAULT false,
-    p_runat timestamptz DEFAULT NULL,
-    p_configurationid uuid DEFAULT NULL,
-    p_agentid uuid DEFAULT NULL,
-    p_vendorid uuid DEFAULT NULL,
-    p_modelid uuid DEFAULT NULL,
-    p_promptid uuid DEFAULT NULL,
-    p_id uuid DEFAULT NULL
-) RETURNS SETOF ${flyway:defaultSchema}."AIPromptRun" AS $$
+CREATE OR REPLACE FUNCTION ${flyway:defaultSchema}."spCreateAIPromptRun"(p_data JSONB)
+RETURNS SETOF ${flyway:defaultSchema}."vwAIPromptRuns"
+AS $$
 DECLARE
-    v_new_id uuid;
+    v_id uuid;
+    v_field_name TEXT;
+    v_cast_expr  TEXT;
+    v_col_list   TEXT;
+    v_val_list   TEXT;
+    v_sql        TEXT;
 BEGIN
-    v_new_id := COALESCE(p_id, gen_random_uuid());
-    INSERT INTO ${flyway:defaultSchema}."AIPromptRun"
-        (
-            "ID",
-            "AssistantPrefill",
-                "TestRunID",
-                "Comments",
-                "RunName",
-                "EffortLevel",
-                "ModelSpecificResponseDetails",
-                "CompletionTime",
-                "PromptTime",
-                "QueueTime",
-                "ChildPromptID",
-                "ErrorDetails",
-                "FirstTokenTime",
-                "StreamingEnabled",
-                "WasSelectedResult",
-                "JudgeScore",
-                "JudgeID",
-                "CacheKey",
-                "CacheHit",
-                "SelectionStrategy",
-                "ModelPowerRank",
-                "CancellationReason",
-                "Cancelled",
-                "Status",
-                "ModelSelection",
-                "RerunFromPromptRunID",
-                "TotalFailoverDuration",
-                "OriginalRequestStartTime",
-                "OriginalModelID",
-                "FailoverDurations",
-                "FailoverErrors",
-                "FailoverAttempts",
-                "ValidationSummary",
-                "ValidationAttempts",
-                "TotalRetryDurationMS",
-                "LastAttemptAt",
-                "FirstAttemptAt",
-                "CommonValidationError",
-                "ValidationErrorCount",
-                "FinalValidationError",
-                "MaxRetriesConfigured",
-                "RetryStrategy",
-                "ValidationBehavior",
-                "FinalValidationPassed",
-                "SuccessfulValidationCount",
-                "ValidationAttemptCount",
-                "DescendantCost",
-                "TopLogProbs",
-                "LogProbs",
-                "ResponseFormat",
-                "StopSequences",
-                "Seed",
-                "PresencePenalty",
-                "FrequencyPenalty",
-                "MinP",
-                "TopK",
-                "TopP",
-                "Temperature",
-                "TokensCompletionRollup",
-                "TokensPromptRollup",
-                "TokensUsedRollup",
-                "CostCurrency",
-                "Cost",
-                "AgentRunID",
-                "ExecutionOrder",
-                "RunType",
-                "ParentID",
-                "ErrorMessage",
-                "Success",
-                "TotalCost",
-                "TokensCompletion",
-                "TokensPrompt",
-                "TokensUsed",
-                "Result",
-                "Messages",
-                "ExecutionTimeMS",
-                "CompletedAt",
-                "RunAt",
-                "ConfigurationID",
-                "AgentID",
-                "VendorID",
-                "ModelID",
-                "PromptID"
-        )
-    VALUES
-        (
-            v_new_id,
-            p_assistantprefill,
-                p_testrunid,
-                p_comments,
-                p_runname,
-                p_effortlevel,
-                p_modelspecificresponsedetails,
-                p_completiontime,
-                p_prompttime,
-                p_queuetime,
-                p_childpromptid,
-                p_errordetails,
-                p_firsttokentime,
-                CASE WHEN p_streamingenabled_clear = true THEN NULL ELSE COALESCE(p_streamingenabled, false) END,
-                CASE WHEN p_wasselectedresult_clear = true THEN NULL ELSE COALESCE(p_wasselectedresult, false) END,
-                p_judgescore,
-                p_judgeid,
-                p_cachekey,
-                CASE WHEN p_cachehit_clear = true THEN NULL ELSE COALESCE(p_cachehit, false) END,
-                p_selectionstrategy,
-                p_modelpowerrank,
-                p_cancellationreason,
-                CASE WHEN p_cancelled_clear = true THEN NULL ELSE COALESCE(p_cancelled, false) END,
-                CASE WHEN p_status_clear = true THEN NULL ELSE COALESCE(p_status, '''Pending''::character varying') END,
-                p_modelselection,
-                p_rerunfrompromptrunid,
-                p_totalfailoverduration,
-                p_originalrequeststarttime,
-                p_originalmodelid,
-                p_failoverdurations,
-                p_failovererrors,
-                CASE WHEN p_failoverattempts_clear = true THEN NULL ELSE COALESCE(p_failoverattempts, 0) END,
-                p_validationsummary,
-                p_validationattempts,
-                p_totalretrydurationms,
-                p_lastattemptat,
-                p_firstattemptat,
-                p_commonvalidationerror,
-                p_validationerrorcount,
-                p_finalvalidationerror,
-                p_maxretriesconfigured,
-                p_retrystrategy,
-                p_validationbehavior,
-                p_finalvalidationpassed,
-                p_successfulvalidationcount,
-                p_validationattemptcount,
-                p_descendantcost,
-                p_toplogprobs,
-                p_logprobs,
-                p_responseformat,
-                p_stopsequences,
-                p_seed,
-                p_presencepenalty,
-                p_frequencypenalty,
-                p_minp,
-                p_topk,
-                p_topp,
-                p_temperature,
-                p_tokenscompletionrollup,
-                p_tokenspromptrollup,
-                p_tokensusedrollup,
-                p_costcurrency,
-                p_cost,
-                p_agentrunid,
-                p_executionorder,
-                CASE WHEN p_runtype_clear = true THEN NULL ELSE COALESCE(p_runtype, '''Single''::character varying') END,
-                p_parentid,
-                p_errormessage,
-                CASE WHEN p_success_clear = true THEN NULL ELSE COALESCE(p_success, false) END,
-                p_totalcost,
-                p_tokenscompletion,
-                p_tokensprompt,
-                p_tokensused,
-                p_result,
-                p_messages,
-                p_executiontimems,
-                p_completedat,
-                CASE WHEN p_runat_clear = true THEN NULL ELSE COALESCE(p_runat, NOW()) END,
-                p_configurationid,
-                p_agentid,
-                p_vendorid,
-                p_modelid,
-                p_promptid
-        )
-    ;
+    IF p_data ? 'ID' THEN
+        v_id := (p_data->>'ID')::uuid;
+    ELSE
+        v_id := gen_random_uuid();
+    END IF;
+
+    v_col_list := quote_ident('ID');
+    v_val_list := quote_literal(v_id) || '::uuid';
+
+    -- Build column / value lists from keys present in p_data. Absent keys are
+    -- omitted entirely so the column's DEFAULT applies (matching the typed-arg
+    -- sproc's default-substitution semantics).
+    FOREACH v_field_name IN ARRAY ARRAY['AssistantPrefill', 'TestRunID', 'Comments', 'RunName', 'EffortLevel', 'ModelSpecificResponseDetails', 'CompletionTime', 'PromptTime', 'QueueTime', 'ChildPromptID', 'ErrorDetails', 'FirstTokenTime', 'StreamingEnabled', 'WasSelectedResult', 'JudgeScore', 'JudgeID', 'CacheKey', 'CacheHit', 'SelectionStrategy', 'ModelPowerRank', 'CancellationReason', 'Cancelled', 'Status', 'ModelSelection', 'RerunFromPromptRunID', 'TotalFailoverDuration', 'OriginalRequestStartTime', 'OriginalModelID', 'FailoverDurations', 'FailoverErrors', 'FailoverAttempts', 'ValidationSummary', 'ValidationAttempts', 'TotalRetryDurationMS', 'LastAttemptAt', 'FirstAttemptAt', 'CommonValidationError', 'ValidationErrorCount', 'FinalValidationError', 'MaxRetriesConfigured', 'RetryStrategy', 'ValidationBehavior', 'FinalValidationPassed', 'SuccessfulValidationCount', 'ValidationAttemptCount', 'DescendantCost', 'TopLogProbs', 'LogProbs', 'ResponseFormat', 'StopSequences', 'Seed', 'PresencePenalty', 'FrequencyPenalty', 'MinP', 'TopK', 'TopP', 'Temperature', 'TokensCompletionRollup', 'TokensPromptRollup', 'TokensUsedRollup', 'CostCurrency', 'Cost', 'AgentRunID', 'ExecutionOrder', 'RunType', 'ParentID', 'ErrorMessage', 'Success', 'TotalCost', 'TokensCompletion', 'TokensPrompt', 'TokensUsed', 'Result', 'Messages', 'ExecutionTimeMS', 'CompletedAt', 'RunAt', 'ConfigurationID', 'AgentID', 'VendorID', 'ModelID', 'PromptID']
+    LOOP
+        IF p_data ? v_field_name THEN
+            v_cast_expr := CASE v_field_name
+        WHEN 'AssistantPrefill' THEN '($1->>''AssistantPrefill'')'
+        WHEN 'TestRunID' THEN '($1->>''TestRunID'')::UUID'
+        WHEN 'Comments' THEN '($1->>''Comments'')'
+        WHEN 'RunName' THEN '($1->>''RunName'')'
+        WHEN 'EffortLevel' THEN '($1->>''EffortLevel'')::INT4'
+        WHEN 'ModelSpecificResponseDetails' THEN '($1->>''ModelSpecificResponseDetails'')'
+        WHEN 'CompletionTime' THEN '($1->>''CompletionTime'')::INT4'
+        WHEN 'PromptTime' THEN '($1->>''PromptTime'')::INT4'
+        WHEN 'QueueTime' THEN '($1->>''QueueTime'')::INT4'
+        WHEN 'ChildPromptID' THEN '($1->>''ChildPromptID'')::UUID'
+        WHEN 'ErrorDetails' THEN '($1->>''ErrorDetails'')'
+        WHEN 'FirstTokenTime' THEN '($1->>''FirstTokenTime'')::INT4'
+        WHEN 'StreamingEnabled' THEN '($1->>''StreamingEnabled'')::BOOL'
+        WHEN 'WasSelectedResult' THEN '($1->>''WasSelectedResult'')::BOOL'
+        WHEN 'JudgeScore' THEN '($1->>''JudgeScore'')::FLOAT8'
+        WHEN 'JudgeID' THEN '($1->>''JudgeID'')::UUID'
+        WHEN 'CacheKey' THEN '($1->>''CacheKey'')'
+        WHEN 'CacheHit' THEN '($1->>''CacheHit'')::BOOL'
+        WHEN 'SelectionStrategy' THEN '($1->>''SelectionStrategy'')'
+        WHEN 'ModelPowerRank' THEN '($1->>''ModelPowerRank'')::INT4'
+        WHEN 'CancellationReason' THEN '($1->>''CancellationReason'')'
+        WHEN 'Cancelled' THEN '($1->>''Cancelled'')::BOOL'
+        WHEN 'Status' THEN '($1->>''Status'')'
+        WHEN 'ModelSelection' THEN '($1->>''ModelSelection'')'
+        WHEN 'RerunFromPromptRunID' THEN '($1->>''RerunFromPromptRunID'')::UUID'
+        WHEN 'TotalFailoverDuration' THEN '($1->>''TotalFailoverDuration'')::INT4'
+        WHEN 'OriginalRequestStartTime' THEN '($1->>''OriginalRequestStartTime'')::TIMESTAMPTZ'
+        WHEN 'OriginalModelID' THEN '($1->>''OriginalModelID'')::UUID'
+        WHEN 'FailoverDurations' THEN '($1->>''FailoverDurations'')'
+        WHEN 'FailoverErrors' THEN '($1->>''FailoverErrors'')'
+        WHEN 'FailoverAttempts' THEN '($1->>''FailoverAttempts'')::INT4'
+        WHEN 'ValidationSummary' THEN '($1->>''ValidationSummary'')'
+        WHEN 'ValidationAttempts' THEN '($1->>''ValidationAttempts'')'
+        WHEN 'TotalRetryDurationMS' THEN '($1->>''TotalRetryDurationMS'')::INT4'
+        WHEN 'LastAttemptAt' THEN '($1->>''LastAttemptAt'')::TIMESTAMPTZ'
+        WHEN 'FirstAttemptAt' THEN '($1->>''FirstAttemptAt'')::TIMESTAMPTZ'
+        WHEN 'CommonValidationError' THEN '($1->>''CommonValidationError'')'
+        WHEN 'ValidationErrorCount' THEN '($1->>''ValidationErrorCount'')::INT4'
+        WHEN 'FinalValidationError' THEN '($1->>''FinalValidationError'')'
+        WHEN 'MaxRetriesConfigured' THEN '($1->>''MaxRetriesConfigured'')::INT4'
+        WHEN 'RetryStrategy' THEN '($1->>''RetryStrategy'')'
+        WHEN 'ValidationBehavior' THEN '($1->>''ValidationBehavior'')'
+        WHEN 'FinalValidationPassed' THEN '($1->>''FinalValidationPassed'')::BOOL'
+        WHEN 'SuccessfulValidationCount' THEN '($1->>''SuccessfulValidationCount'')::INT4'
+        WHEN 'ValidationAttemptCount' THEN '($1->>''ValidationAttemptCount'')::INT4'
+        WHEN 'DescendantCost' THEN '($1->>''DescendantCost'')::NUMERIC(18, 6)'
+        WHEN 'TopLogProbs' THEN '($1->>''TopLogProbs'')::INT4'
+        WHEN 'LogProbs' THEN '($1->>''LogProbs'')::BOOL'
+        WHEN 'ResponseFormat' THEN '($1->>''ResponseFormat'')'
+        WHEN 'StopSequences' THEN '($1->>''StopSequences'')'
+        WHEN 'Seed' THEN '($1->>''Seed'')::INT4'
+        WHEN 'PresencePenalty' THEN '($1->>''PresencePenalty'')::NUMERIC(3, 2)'
+        WHEN 'FrequencyPenalty' THEN '($1->>''FrequencyPenalty'')::NUMERIC(3, 2)'
+        WHEN 'MinP' THEN '($1->>''MinP'')::NUMERIC(3, 2)'
+        WHEN 'TopK' THEN '($1->>''TopK'')::INT4'
+        WHEN 'TopP' THEN '($1->>''TopP'')::NUMERIC(3, 2)'
+        WHEN 'Temperature' THEN '($1->>''Temperature'')::NUMERIC(3, 2)'
+        WHEN 'TokensCompletionRollup' THEN '($1->>''TokensCompletionRollup'')::INT4'
+        WHEN 'TokensPromptRollup' THEN '($1->>''TokensPromptRollup'')::INT4'
+        WHEN 'TokensUsedRollup' THEN '($1->>''TokensUsedRollup'')::INT4'
+        WHEN 'CostCurrency' THEN '($1->>''CostCurrency'')'
+        WHEN 'Cost' THEN '($1->>''Cost'')::NUMERIC(19, 8)'
+        WHEN 'AgentRunID' THEN '($1->>''AgentRunID'')::UUID'
+        WHEN 'ExecutionOrder' THEN '($1->>''ExecutionOrder'')::INT4'
+        WHEN 'RunType' THEN '($1->>''RunType'')'
+        WHEN 'ParentID' THEN '($1->>''ParentID'')::UUID'
+        WHEN 'ErrorMessage' THEN '($1->>''ErrorMessage'')'
+        WHEN 'Success' THEN '($1->>''Success'')::BOOL'
+        WHEN 'TotalCost' THEN '($1->>''TotalCost'')::NUMERIC(18, 6)'
+        WHEN 'TokensCompletion' THEN '($1->>''TokensCompletion'')::INT4'
+        WHEN 'TokensPrompt' THEN '($1->>''TokensPrompt'')::INT4'
+        WHEN 'TokensUsed' THEN '($1->>''TokensUsed'')::INT4'
+        WHEN 'Result' THEN '($1->>''Result'')'
+        WHEN 'Messages' THEN '($1->>''Messages'')'
+        WHEN 'ExecutionTimeMS' THEN '($1->>''ExecutionTimeMS'')::INT4'
+        WHEN 'CompletedAt' THEN '($1->>''CompletedAt'')::TIMESTAMPTZ'
+        WHEN 'RunAt' THEN '($1->>''RunAt'')::TIMESTAMPTZ'
+        WHEN 'ConfigurationID' THEN '($1->>''ConfigurationID'')::UUID'
+        WHEN 'AgentID' THEN '($1->>''AgentID'')::UUID'
+        WHEN 'VendorID' THEN '($1->>''VendorID'')::UUID'
+        WHEN 'ModelID' THEN '($1->>''ModelID'')::UUID'
+        WHEN 'PromptID' THEN '($1->>''PromptID'')::UUID'
+            END;
+            v_col_list := v_col_list || ', ' || quote_ident(v_field_name);
+            v_val_list := v_val_list || ', ' || v_cast_expr;
+        END IF;
+    END LOOP;
+
+    v_sql := format(
+        'INSERT INTO ${flyway:defaultSchema}."AIPromptRun" (%s) VALUES (%s)',
+        v_col_list,
+        v_val_list
+    );
+    -- Pass p_data as a positional parameter so the cast expressions inside
+    -- v_val_list (which reference $1) can read the JSONB payload.
+    EXECUTE v_sql USING p_data;
 
     RETURN QUERY
     SELECT * FROM ${flyway:defaultSchema}."vwAIPromptRuns"
-    WHERE "ID" = v_new_id;
+    WHERE "ID" = v_id;
 END;
 $$ LANGUAGE plpgsql;
-
-
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION ${flyway:defaultSchema}."spCreateAIPromptRun" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 
 
@@ -842,189 +692,104 @@ BEGIN
 END
 $$;
 
-CREATE OR REPLACE FUNCTION ${flyway:defaultSchema}."spUpdateAIPromptRun"(
-    p_assistantprefill text DEFAULT NULL,
-    p_testrunid uuid DEFAULT NULL,
-    p_comments text DEFAULT NULL,
-    p_runname varchar(255) DEFAULT NULL,
-    p_effortlevel int4 DEFAULT NULL,
-    p_modelspecificresponsedetails text DEFAULT NULL,
-    p_completiontime int4 DEFAULT NULL,
-    p_prompttime int4 DEFAULT NULL,
-    p_queuetime int4 DEFAULT NULL,
-    p_childpromptid uuid DEFAULT NULL,
-    p_errordetails text DEFAULT NULL,
-    p_firsttokentime int4 DEFAULT NULL,
-    p_streamingenabled_clear boolean DEFAULT false,
-    p_streamingenabled bool DEFAULT NULL,
-    p_wasselectedresult_clear boolean DEFAULT false,
-    p_wasselectedresult bool DEFAULT NULL,
-    p_judgescore float8 DEFAULT NULL,
-    p_judgeid uuid DEFAULT NULL,
-    p_cachekey varchar(500) DEFAULT NULL,
-    p_cachehit_clear boolean DEFAULT false,
-    p_cachehit bool DEFAULT NULL,
-    p_selectionstrategy varchar(50) DEFAULT NULL,
-    p_modelpowerrank int4 DEFAULT NULL,
-    p_cancellationreason text DEFAULT NULL,
-    p_cancelled_clear boolean DEFAULT false,
-    p_cancelled bool DEFAULT NULL,
-    p_status_clear boolean DEFAULT false,
-    p_status varchar(50) DEFAULT NULL,
-    p_modelselection text DEFAULT NULL,
-    p_rerunfrompromptrunid uuid DEFAULT NULL,
-    p_totalfailoverduration int4 DEFAULT NULL,
-    p_originalrequeststarttime timestamptz DEFAULT NULL,
-    p_originalmodelid uuid DEFAULT NULL,
-    p_failoverdurations text DEFAULT NULL,
-    p_failovererrors text DEFAULT NULL,
-    p_failoverattempts_clear boolean DEFAULT false,
-    p_failoverattempts int4 DEFAULT NULL,
-    p_validationsummary text DEFAULT NULL,
-    p_validationattempts text DEFAULT NULL,
-    p_totalretrydurationms int4 DEFAULT NULL,
-    p_lastattemptat timestamptz DEFAULT NULL,
-    p_firstattemptat timestamptz DEFAULT NULL,
-    p_commonvalidationerror varchar(255) DEFAULT NULL,
-    p_validationerrorcount int4 DEFAULT NULL,
-    p_finalvalidationerror varchar(500) DEFAULT NULL,
-    p_maxretriesconfigured int4 DEFAULT NULL,
-    p_retrystrategy varchar(50) DEFAULT NULL,
-    p_validationbehavior varchar(50) DEFAULT NULL,
-    p_finalvalidationpassed bool DEFAULT NULL,
-    p_successfulvalidationcount int4 DEFAULT NULL,
-    p_validationattemptcount int4 DEFAULT NULL,
-    p_descendantcost numeric(18, 6) DEFAULT NULL,
-    p_toplogprobs int4 DEFAULT NULL,
-    p_logprobs bool DEFAULT NULL,
-    p_responseformat varchar(50) DEFAULT NULL,
-    p_stopsequences text DEFAULT NULL,
-    p_seed int4 DEFAULT NULL,
-    p_presencepenalty numeric(3, 2) DEFAULT NULL,
-    p_frequencypenalty numeric(3, 2) DEFAULT NULL,
-    p_minp numeric(3, 2) DEFAULT NULL,
-    p_topk int4 DEFAULT NULL,
-    p_topp numeric(3, 2) DEFAULT NULL,
-    p_temperature numeric(3, 2) DEFAULT NULL,
-    p_tokenscompletionrollup int4 DEFAULT NULL,
-    p_tokenspromptrollup int4 DEFAULT NULL,
-    p_tokensusedrollup int4 DEFAULT NULL,
-    p_costcurrency varchar(10) DEFAULT NULL,
-    p_cost numeric(19, 8) DEFAULT NULL,
-    p_agentrunid uuid DEFAULT NULL,
-    p_executionorder int4 DEFAULT NULL,
-    p_runtype_clear boolean DEFAULT false,
-    p_runtype varchar(20) DEFAULT NULL,
-    p_parentid uuid DEFAULT NULL,
-    p_errormessage text DEFAULT NULL,
-    p_success_clear boolean DEFAULT false,
-    p_success bool DEFAULT NULL,
-    p_totalcost numeric(18, 6) DEFAULT NULL,
-    p_tokenscompletion int4 DEFAULT NULL,
-    p_tokensprompt int4 DEFAULT NULL,
-    p_tokensused int4 DEFAULT NULL,
-    p_result text DEFAULT NULL,
-    p_messages text DEFAULT NULL,
-    p_executiontimems int4 DEFAULT NULL,
-    p_completedat timestamptz DEFAULT NULL,
-    p_runat_clear boolean DEFAULT false,
-    p_runat timestamptz DEFAULT NULL,
-    p_configurationid uuid DEFAULT NULL,
-    p_agentid uuid DEFAULT NULL,
-    p_vendorid uuid DEFAULT NULL,
-    p_modelid uuid DEFAULT NULL,
-    p_promptid uuid DEFAULT NULL,
-    p_id uuid DEFAULT NULL
-) RETURNS SETOF ${flyway:defaultSchema}."AIPromptRun" AS $$
+CREATE OR REPLACE FUNCTION ${flyway:defaultSchema}."spUpdateAIPromptRun"(p_data JSONB)
+RETURNS SETOF ${flyway:defaultSchema}."vwAIPromptRuns"
+AS $$
 DECLARE
+    v_id uuid := (p_data->>'ID')::uuid;
     v_updated_count INTEGER;
 BEGIN
+    IF p_data IS NULL OR NOT (p_data ? 'ID') THEN
+        RAISE EXCEPTION 'spUpdateAIPromptRun: p_data must include "ID"';
+    END IF;
+
     UPDATE ${flyway:defaultSchema}."AIPromptRun"
     SET
-        "AssistantPrefill" = COALESCE(p_assistantprefill, "AssistantPrefill"),
-        "TestRunID" = COALESCE(p_testrunid, "TestRunID"),
-        "Comments" = COALESCE(p_comments, "Comments"),
-        "RunName" = COALESCE(p_runname, "RunName"),
-        "EffortLevel" = COALESCE(p_effortlevel, "EffortLevel"),
-        "ModelSpecificResponseDetails" = COALESCE(p_modelspecificresponsedetails, "ModelSpecificResponseDetails"),
-        "CompletionTime" = COALESCE(p_completiontime, "CompletionTime"),
-        "PromptTime" = COALESCE(p_prompttime, "PromptTime"),
-        "QueueTime" = COALESCE(p_queuetime, "QueueTime"),
-        "ChildPromptID" = COALESCE(p_childpromptid, "ChildPromptID"),
-        "ErrorDetails" = COALESCE(p_errordetails, "ErrorDetails"),
-        "FirstTokenTime" = COALESCE(p_firsttokentime, "FirstTokenTime"),
-        "StreamingEnabled" = CASE WHEN p_streamingenabled_clear = true THEN NULL ELSE COALESCE(p_streamingenabled, "StreamingEnabled") END,
-        "WasSelectedResult" = CASE WHEN p_wasselectedresult_clear = true THEN NULL ELSE COALESCE(p_wasselectedresult, "WasSelectedResult") END,
-        "JudgeScore" = COALESCE(p_judgescore, "JudgeScore"),
-        "JudgeID" = COALESCE(p_judgeid, "JudgeID"),
-        "CacheKey" = COALESCE(p_cachekey, "CacheKey"),
-        "CacheHit" = CASE WHEN p_cachehit_clear = true THEN NULL ELSE COALESCE(p_cachehit, "CacheHit") END,
-        "SelectionStrategy" = COALESCE(p_selectionstrategy, "SelectionStrategy"),
-        "ModelPowerRank" = COALESCE(p_modelpowerrank, "ModelPowerRank"),
-        "CancellationReason" = COALESCE(p_cancellationreason, "CancellationReason"),
-        "Cancelled" = CASE WHEN p_cancelled_clear = true THEN NULL ELSE COALESCE(p_cancelled, "Cancelled") END,
-        "Status" = CASE WHEN p_status_clear = true THEN NULL ELSE COALESCE(p_status, "Status") END,
-        "ModelSelection" = COALESCE(p_modelselection, "ModelSelection"),
-        "RerunFromPromptRunID" = COALESCE(p_rerunfrompromptrunid, "RerunFromPromptRunID"),
-        "TotalFailoverDuration" = COALESCE(p_totalfailoverduration, "TotalFailoverDuration"),
-        "OriginalRequestStartTime" = COALESCE(p_originalrequeststarttime, "OriginalRequestStartTime"),
-        "OriginalModelID" = COALESCE(p_originalmodelid, "OriginalModelID"),
-        "FailoverDurations" = COALESCE(p_failoverdurations, "FailoverDurations"),
-        "FailoverErrors" = COALESCE(p_failovererrors, "FailoverErrors"),
-        "FailoverAttempts" = CASE WHEN p_failoverattempts_clear = true THEN NULL ELSE COALESCE(p_failoverattempts, "FailoverAttempts") END,
-        "ValidationSummary" = COALESCE(p_validationsummary, "ValidationSummary"),
-        "ValidationAttempts" = COALESCE(p_validationattempts, "ValidationAttempts"),
-        "TotalRetryDurationMS" = COALESCE(p_totalretrydurationms, "TotalRetryDurationMS"),
-        "LastAttemptAt" = COALESCE(p_lastattemptat, "LastAttemptAt"),
-        "FirstAttemptAt" = COALESCE(p_firstattemptat, "FirstAttemptAt"),
-        "CommonValidationError" = COALESCE(p_commonvalidationerror, "CommonValidationError"),
-        "ValidationErrorCount" = COALESCE(p_validationerrorcount, "ValidationErrorCount"),
-        "FinalValidationError" = COALESCE(p_finalvalidationerror, "FinalValidationError"),
-        "MaxRetriesConfigured" = COALESCE(p_maxretriesconfigured, "MaxRetriesConfigured"),
-        "RetryStrategy" = COALESCE(p_retrystrategy, "RetryStrategy"),
-        "ValidationBehavior" = COALESCE(p_validationbehavior, "ValidationBehavior"),
-        "FinalValidationPassed" = COALESCE(p_finalvalidationpassed, "FinalValidationPassed"),
-        "SuccessfulValidationCount" = COALESCE(p_successfulvalidationcount, "SuccessfulValidationCount"),
-        "ValidationAttemptCount" = COALESCE(p_validationattemptcount, "ValidationAttemptCount"),
-        "DescendantCost" = COALESCE(p_descendantcost, "DescendantCost"),
-        "TopLogProbs" = COALESCE(p_toplogprobs, "TopLogProbs"),
-        "LogProbs" = COALESCE(p_logprobs, "LogProbs"),
-        "ResponseFormat" = COALESCE(p_responseformat, "ResponseFormat"),
-        "StopSequences" = COALESCE(p_stopsequences, "StopSequences"),
-        "Seed" = COALESCE(p_seed, "Seed"),
-        "PresencePenalty" = COALESCE(p_presencepenalty, "PresencePenalty"),
-        "FrequencyPenalty" = COALESCE(p_frequencypenalty, "FrequencyPenalty"),
-        "MinP" = COALESCE(p_minp, "MinP"),
-        "TopK" = COALESCE(p_topk, "TopK"),
-        "TopP" = COALESCE(p_topp, "TopP"),
-        "Temperature" = COALESCE(p_temperature, "Temperature"),
-        "TokensCompletionRollup" = COALESCE(p_tokenscompletionrollup, "TokensCompletionRollup"),
-        "TokensPromptRollup" = COALESCE(p_tokenspromptrollup, "TokensPromptRollup"),
-        "TokensUsedRollup" = COALESCE(p_tokensusedrollup, "TokensUsedRollup"),
-        "CostCurrency" = COALESCE(p_costcurrency, "CostCurrency"),
-        "Cost" = COALESCE(p_cost, "Cost"),
-        "AgentRunID" = COALESCE(p_agentrunid, "AgentRunID"),
-        "ExecutionOrder" = COALESCE(p_executionorder, "ExecutionOrder"),
-        "RunType" = CASE WHEN p_runtype_clear = true THEN NULL ELSE COALESCE(p_runtype, "RunType") END,
-        "ParentID" = COALESCE(p_parentid, "ParentID"),
-        "ErrorMessage" = COALESCE(p_errormessage, "ErrorMessage"),
-        "Success" = CASE WHEN p_success_clear = true THEN NULL ELSE COALESCE(p_success, "Success") END,
-        "TotalCost" = COALESCE(p_totalcost, "TotalCost"),
-        "TokensCompletion" = COALESCE(p_tokenscompletion, "TokensCompletion"),
-        "TokensPrompt" = COALESCE(p_tokensprompt, "TokensPrompt"),
-        "TokensUsed" = COALESCE(p_tokensused, "TokensUsed"),
-        "Result" = COALESCE(p_result, "Result"),
-        "Messages" = COALESCE(p_messages, "Messages"),
-        "ExecutionTimeMS" = COALESCE(p_executiontimems, "ExecutionTimeMS"),
-        "CompletedAt" = COALESCE(p_completedat, "CompletedAt"),
-        "RunAt" = CASE WHEN p_runat_clear = true THEN NULL ELSE COALESCE(p_runat, "RunAt") END,
-        "ConfigurationID" = COALESCE(p_configurationid, "ConfigurationID"),
-        "AgentID" = COALESCE(p_agentid, "AgentID"),
-        "VendorID" = COALESCE(p_vendorid, "VendorID"),
-        "ModelID" = COALESCE(p_modelid, "ModelID"),
-        "PromptID" = COALESCE(p_promptid, "PromptID")
+        "AssistantPrefill" = CASE WHEN p_data ? 'AssistantPrefill' THEN (p_data->>'AssistantPrefill') ELSE "AssistantPrefill" END,
+        "TestRunID" = CASE WHEN p_data ? 'TestRunID' THEN (p_data->>'TestRunID')::UUID ELSE "TestRunID" END,
+        "Comments" = CASE WHEN p_data ? 'Comments' THEN (p_data->>'Comments') ELSE "Comments" END,
+        "RunName" = CASE WHEN p_data ? 'RunName' THEN (p_data->>'RunName') ELSE "RunName" END,
+        "EffortLevel" = CASE WHEN p_data ? 'EffortLevel' THEN (p_data->>'EffortLevel')::INT4 ELSE "EffortLevel" END,
+        "ModelSpecificResponseDetails" = CASE WHEN p_data ? 'ModelSpecificResponseDetails' THEN (p_data->>'ModelSpecificResponseDetails') ELSE "ModelSpecificResponseDetails" END,
+        "CompletionTime" = CASE WHEN p_data ? 'CompletionTime' THEN (p_data->>'CompletionTime')::INT4 ELSE "CompletionTime" END,
+        "PromptTime" = CASE WHEN p_data ? 'PromptTime' THEN (p_data->>'PromptTime')::INT4 ELSE "PromptTime" END,
+        "QueueTime" = CASE WHEN p_data ? 'QueueTime' THEN (p_data->>'QueueTime')::INT4 ELSE "QueueTime" END,
+        "ChildPromptID" = CASE WHEN p_data ? 'ChildPromptID' THEN (p_data->>'ChildPromptID')::UUID ELSE "ChildPromptID" END,
+        "ErrorDetails" = CASE WHEN p_data ? 'ErrorDetails' THEN (p_data->>'ErrorDetails') ELSE "ErrorDetails" END,
+        "FirstTokenTime" = CASE WHEN p_data ? 'FirstTokenTime' THEN (p_data->>'FirstTokenTime')::INT4 ELSE "FirstTokenTime" END,
+        "StreamingEnabled" = CASE WHEN p_data ? 'StreamingEnabled' THEN (p_data->>'StreamingEnabled')::BOOL ELSE "StreamingEnabled" END,
+        "WasSelectedResult" = CASE WHEN p_data ? 'WasSelectedResult' THEN (p_data->>'WasSelectedResult')::BOOL ELSE "WasSelectedResult" END,
+        "JudgeScore" = CASE WHEN p_data ? 'JudgeScore' THEN (p_data->>'JudgeScore')::FLOAT8 ELSE "JudgeScore" END,
+        "JudgeID" = CASE WHEN p_data ? 'JudgeID' THEN (p_data->>'JudgeID')::UUID ELSE "JudgeID" END,
+        "CacheKey" = CASE WHEN p_data ? 'CacheKey' THEN (p_data->>'CacheKey') ELSE "CacheKey" END,
+        "CacheHit" = CASE WHEN p_data ? 'CacheHit' THEN (p_data->>'CacheHit')::BOOL ELSE "CacheHit" END,
+        "SelectionStrategy" = CASE WHEN p_data ? 'SelectionStrategy' THEN (p_data->>'SelectionStrategy') ELSE "SelectionStrategy" END,
+        "ModelPowerRank" = CASE WHEN p_data ? 'ModelPowerRank' THEN (p_data->>'ModelPowerRank')::INT4 ELSE "ModelPowerRank" END,
+        "CancellationReason" = CASE WHEN p_data ? 'CancellationReason' THEN (p_data->>'CancellationReason') ELSE "CancellationReason" END,
+        "Cancelled" = CASE WHEN p_data ? 'Cancelled' THEN (p_data->>'Cancelled')::BOOL ELSE "Cancelled" END,
+        "Status" = CASE WHEN p_data ? 'Status' THEN (p_data->>'Status') ELSE "Status" END,
+        "ModelSelection" = CASE WHEN p_data ? 'ModelSelection' THEN (p_data->>'ModelSelection') ELSE "ModelSelection" END,
+        "RerunFromPromptRunID" = CASE WHEN p_data ? 'RerunFromPromptRunID' THEN (p_data->>'RerunFromPromptRunID')::UUID ELSE "RerunFromPromptRunID" END,
+        "TotalFailoverDuration" = CASE WHEN p_data ? 'TotalFailoverDuration' THEN (p_data->>'TotalFailoverDuration')::INT4 ELSE "TotalFailoverDuration" END,
+        "OriginalRequestStartTime" = CASE WHEN p_data ? 'OriginalRequestStartTime' THEN (p_data->>'OriginalRequestStartTime')::TIMESTAMPTZ ELSE "OriginalRequestStartTime" END,
+        "OriginalModelID" = CASE WHEN p_data ? 'OriginalModelID' THEN (p_data->>'OriginalModelID')::UUID ELSE "OriginalModelID" END,
+        "FailoverDurations" = CASE WHEN p_data ? 'FailoverDurations' THEN (p_data->>'FailoverDurations') ELSE "FailoverDurations" END,
+        "FailoverErrors" = CASE WHEN p_data ? 'FailoverErrors' THEN (p_data->>'FailoverErrors') ELSE "FailoverErrors" END,
+        "FailoverAttempts" = CASE WHEN p_data ? 'FailoverAttempts' THEN (p_data->>'FailoverAttempts')::INT4 ELSE "FailoverAttempts" END,
+        "ValidationSummary" = CASE WHEN p_data ? 'ValidationSummary' THEN (p_data->>'ValidationSummary') ELSE "ValidationSummary" END,
+        "ValidationAttempts" = CASE WHEN p_data ? 'ValidationAttempts' THEN (p_data->>'ValidationAttempts') ELSE "ValidationAttempts" END,
+        "TotalRetryDurationMS" = CASE WHEN p_data ? 'TotalRetryDurationMS' THEN (p_data->>'TotalRetryDurationMS')::INT4 ELSE "TotalRetryDurationMS" END,
+        "LastAttemptAt" = CASE WHEN p_data ? 'LastAttemptAt' THEN (p_data->>'LastAttemptAt')::TIMESTAMPTZ ELSE "LastAttemptAt" END,
+        "FirstAttemptAt" = CASE WHEN p_data ? 'FirstAttemptAt' THEN (p_data->>'FirstAttemptAt')::TIMESTAMPTZ ELSE "FirstAttemptAt" END,
+        "CommonValidationError" = CASE WHEN p_data ? 'CommonValidationError' THEN (p_data->>'CommonValidationError') ELSE "CommonValidationError" END,
+        "ValidationErrorCount" = CASE WHEN p_data ? 'ValidationErrorCount' THEN (p_data->>'ValidationErrorCount')::INT4 ELSE "ValidationErrorCount" END,
+        "FinalValidationError" = CASE WHEN p_data ? 'FinalValidationError' THEN (p_data->>'FinalValidationError') ELSE "FinalValidationError" END,
+        "MaxRetriesConfigured" = CASE WHEN p_data ? 'MaxRetriesConfigured' THEN (p_data->>'MaxRetriesConfigured')::INT4 ELSE "MaxRetriesConfigured" END,
+        "RetryStrategy" = CASE WHEN p_data ? 'RetryStrategy' THEN (p_data->>'RetryStrategy') ELSE "RetryStrategy" END,
+        "ValidationBehavior" = CASE WHEN p_data ? 'ValidationBehavior' THEN (p_data->>'ValidationBehavior') ELSE "ValidationBehavior" END,
+        "FinalValidationPassed" = CASE WHEN p_data ? 'FinalValidationPassed' THEN (p_data->>'FinalValidationPassed')::BOOL ELSE "FinalValidationPassed" END,
+        "SuccessfulValidationCount" = CASE WHEN p_data ? 'SuccessfulValidationCount' THEN (p_data->>'SuccessfulValidationCount')::INT4 ELSE "SuccessfulValidationCount" END,
+        "ValidationAttemptCount" = CASE WHEN p_data ? 'ValidationAttemptCount' THEN (p_data->>'ValidationAttemptCount')::INT4 ELSE "ValidationAttemptCount" END,
+        "DescendantCost" = CASE WHEN p_data ? 'DescendantCost' THEN (p_data->>'DescendantCost')::NUMERIC(18, 6) ELSE "DescendantCost" END,
+        "TopLogProbs" = CASE WHEN p_data ? 'TopLogProbs' THEN (p_data->>'TopLogProbs')::INT4 ELSE "TopLogProbs" END,
+        "LogProbs" = CASE WHEN p_data ? 'LogProbs' THEN (p_data->>'LogProbs')::BOOL ELSE "LogProbs" END,
+        "ResponseFormat" = CASE WHEN p_data ? 'ResponseFormat' THEN (p_data->>'ResponseFormat') ELSE "ResponseFormat" END,
+        "StopSequences" = CASE WHEN p_data ? 'StopSequences' THEN (p_data->>'StopSequences') ELSE "StopSequences" END,
+        "Seed" = CASE WHEN p_data ? 'Seed' THEN (p_data->>'Seed')::INT4 ELSE "Seed" END,
+        "PresencePenalty" = CASE WHEN p_data ? 'PresencePenalty' THEN (p_data->>'PresencePenalty')::NUMERIC(3, 2) ELSE "PresencePenalty" END,
+        "FrequencyPenalty" = CASE WHEN p_data ? 'FrequencyPenalty' THEN (p_data->>'FrequencyPenalty')::NUMERIC(3, 2) ELSE "FrequencyPenalty" END,
+        "MinP" = CASE WHEN p_data ? 'MinP' THEN (p_data->>'MinP')::NUMERIC(3, 2) ELSE "MinP" END,
+        "TopK" = CASE WHEN p_data ? 'TopK' THEN (p_data->>'TopK')::INT4 ELSE "TopK" END,
+        "TopP" = CASE WHEN p_data ? 'TopP' THEN (p_data->>'TopP')::NUMERIC(3, 2) ELSE "TopP" END,
+        "Temperature" = CASE WHEN p_data ? 'Temperature' THEN (p_data->>'Temperature')::NUMERIC(3, 2) ELSE "Temperature" END,
+        "TokensCompletionRollup" = CASE WHEN p_data ? 'TokensCompletionRollup' THEN (p_data->>'TokensCompletionRollup')::INT4 ELSE "TokensCompletionRollup" END,
+        "TokensPromptRollup" = CASE WHEN p_data ? 'TokensPromptRollup' THEN (p_data->>'TokensPromptRollup')::INT4 ELSE "TokensPromptRollup" END,
+        "TokensUsedRollup" = CASE WHEN p_data ? 'TokensUsedRollup' THEN (p_data->>'TokensUsedRollup')::INT4 ELSE "TokensUsedRollup" END,
+        "CostCurrency" = CASE WHEN p_data ? 'CostCurrency' THEN (p_data->>'CostCurrency') ELSE "CostCurrency" END,
+        "Cost" = CASE WHEN p_data ? 'Cost' THEN (p_data->>'Cost')::NUMERIC(19, 8) ELSE "Cost" END,
+        "AgentRunID" = CASE WHEN p_data ? 'AgentRunID' THEN (p_data->>'AgentRunID')::UUID ELSE "AgentRunID" END,
+        "ExecutionOrder" = CASE WHEN p_data ? 'ExecutionOrder' THEN (p_data->>'ExecutionOrder')::INT4 ELSE "ExecutionOrder" END,
+        "RunType" = CASE WHEN p_data ? 'RunType' THEN (p_data->>'RunType') ELSE "RunType" END,
+        "ParentID" = CASE WHEN p_data ? 'ParentID' THEN (p_data->>'ParentID')::UUID ELSE "ParentID" END,
+        "ErrorMessage" = CASE WHEN p_data ? 'ErrorMessage' THEN (p_data->>'ErrorMessage') ELSE "ErrorMessage" END,
+        "Success" = CASE WHEN p_data ? 'Success' THEN (p_data->>'Success')::BOOL ELSE "Success" END,
+        "TotalCost" = CASE WHEN p_data ? 'TotalCost' THEN (p_data->>'TotalCost')::NUMERIC(18, 6) ELSE "TotalCost" END,
+        "TokensCompletion" = CASE WHEN p_data ? 'TokensCompletion' THEN (p_data->>'TokensCompletion')::INT4 ELSE "TokensCompletion" END,
+        "TokensPrompt" = CASE WHEN p_data ? 'TokensPrompt' THEN (p_data->>'TokensPrompt')::INT4 ELSE "TokensPrompt" END,
+        "TokensUsed" = CASE WHEN p_data ? 'TokensUsed' THEN (p_data->>'TokensUsed')::INT4 ELSE "TokensUsed" END,
+        "Result" = CASE WHEN p_data ? 'Result' THEN (p_data->>'Result') ELSE "Result" END,
+        "Messages" = CASE WHEN p_data ? 'Messages' THEN (p_data->>'Messages') ELSE "Messages" END,
+        "ExecutionTimeMS" = CASE WHEN p_data ? 'ExecutionTimeMS' THEN (p_data->>'ExecutionTimeMS')::INT4 ELSE "ExecutionTimeMS" END,
+        "CompletedAt" = CASE WHEN p_data ? 'CompletedAt' THEN (p_data->>'CompletedAt')::TIMESTAMPTZ ELSE "CompletedAt" END,
+        "RunAt" = CASE WHEN p_data ? 'RunAt' THEN (p_data->>'RunAt')::TIMESTAMPTZ ELSE "RunAt" END,
+        "ConfigurationID" = CASE WHEN p_data ? 'ConfigurationID' THEN (p_data->>'ConfigurationID')::UUID ELSE "ConfigurationID" END,
+        "AgentID" = CASE WHEN p_data ? 'AgentID' THEN (p_data->>'AgentID')::UUID ELSE "AgentID" END,
+        "VendorID" = CASE WHEN p_data ? 'VendorID' THEN (p_data->>'VendorID')::UUID ELSE "VendorID" END,
+        "ModelID" = CASE WHEN p_data ? 'ModelID' THEN (p_data->>'ModelID')::UUID ELSE "ModelID" END,
+        "PromptID" = CASE WHEN p_data ? 'PromptID' THEN (p_data->>'PromptID')::UUID ELSE "PromptID" END,
+        "__mj_UpdatedAt" = NOW()
     WHERE
-        "ID" = p_id;
+        "ID" = v_id;
 
     GET DIAGNOSTICS v_updated_count = ROW_COUNT;
 
@@ -1036,11 +801,9 @@ BEGIN
     -- Return the updated record from the base view
     RETURN QUERY
     SELECT * FROM ${flyway:defaultSchema}."vwAIPromptRuns"
-    WHERE "ID" = p_id;
+    WHERE "ID" = v_id;
 END;
 $$ LANGUAGE plpgsql;
-
-
 DO $$ BEGIN GRANT EXECUTE ON FUNCTION ${flyway:defaultSchema}."spUpdateAIPromptRun" TO "cdp_Developer", "cdp_Integration"; EXCEPTION WHEN others THEN NULL; END $$;
 
 
