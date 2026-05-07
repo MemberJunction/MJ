@@ -1,7 +1,6 @@
 export { GenericDatabaseProvider, ExecuteSQLBatchOptions } from './GenericDatabaseProvider.js';
 export {
     CRUDSprocType,
-    POSTGRESQL_PROCEDURE_PARAM_LIMIT,
     shouldIncludeFieldInParams,
     needsClearCompanionBroadRule,
     projectedParamCount,

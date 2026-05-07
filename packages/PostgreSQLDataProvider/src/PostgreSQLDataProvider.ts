@@ -22,7 +22,7 @@ import {
 } from '@memberjunction/core';
 
 
-import { GenericDatabaseProvider, POSTGRESQL_PROCEDURE_PARAM_LIMIT } from '@memberjunction/generic-database-provider';
+import { GenericDatabaseProvider } from '@memberjunction/generic-database-provider';
 import { PostgreSQLDialect } from '@memberjunction/sql-dialect';
 import { PGConnectionManager } from './pgConnectionManager.js';
 import { PGQueryParameterProcessor } from './queryParameterProcessor.js';
@@ -30,6 +30,23 @@ import { PostgreSQLProviderConfigData } from './types.js';
 import { PostgreSQLTransactionGroup } from './PostgreSQLTransactionGroup.js';
 
 const pgDialect = new PostgreSQLDialect();
+
+/**
+ * Soft ceiling on PostgreSQL CRUD sproc parameter counts. PG's hard
+ * `FUNC_MAX_ARGS` is 100 (compiled into the server, not adjustable on managed
+ * services). 90 leaves 10 args of headroom so adding a column to an entity
+ * near the limit doesn't unexpectedly flip its sproc shape between releases.
+ *
+ * Single source of truth for both runtime (`PostgreSQLDataProvider.ProcedureParamLimit`)
+ * and CodeGen (which doesn't have a live provider instance to query at codegen
+ * time). Bumping this value should regenerate sprocs for any entity newly
+ * crossing the threshold.
+ *
+ * Lives in the PG provider package because it's a PG-specific platform
+ * constant; consumers in other packages (CodeGenLib's PG provider, the rules
+ * module via callers passing it as a `paramLimit` arg) import it from here.
+ */
+export const POSTGRESQL_PROCEDURE_PARAM_LIMIT = 90;
 
 /**
  * PostgreSQL data provider for MemberJunction.
@@ -67,9 +84,9 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
      * services like RDS/Aurora/Cloud SQL). When a CRUD sproc would exceed this, CodeGen emits a
      * JSON-arg shape instead of typed args.
      *
-     * The actual value lives as `POSTGRESQL_PROCEDURE_PARAM_LIMIT` in the shared rules module so
-     * runtime and codegen-time both reference one number — drift between them silently breaks
-     * CRUD calls.
+     * The actual value lives as the exported `POSTGRESQL_PROCEDURE_PARAM_LIMIT` constant at the
+     * top of this file, so runtime and codegen-time both reference one number — drift between
+     * them silently breaks CRUD calls.
      *
      * See [plans/json-arg-crud-sprocs.md](../../../../plans/json-arg-crud-sprocs.md) and
      * GitHub issue #2552.

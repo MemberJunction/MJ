@@ -3,7 +3,11 @@ import fs from 'fs';
 import path from 'path';
 import { EntityInfo, Metadata } from "@memberjunction/core";
 import { CodeGenDatabaseProvider, CodeGenConnection } from './codeGenDatabaseProvider';
-import { SQLServerCodeGenProvider } from './providers/sqlserver/SQLServerCodeGenProvider';
+// Side-effect import — registers `SQLServerCodeGenProvider` with `MJGlobal.ClassFactory`
+// under the `'sqlserver'` key via its `@RegisterClass` decorator. Without this import,
+// `ClassFactory.CreateInstance(CodeGenDatabaseProvider, 'sqlserver')` returns nothing
+// and the SS code path silently fails.
+import './providers/sqlserver/SQLServerCodeGenProvider';
 import { configInfo, outputDir } from "../Config/config";
 import { ManageMetadataBase } from "../Database/manage-metadata";
 import { MJGlobal } from "@memberjunction/global";
@@ -23,28 +27,28 @@ private _dbProvider: CodeGenDatabaseProvider | null = null;
 /**
  * Lazy-initialized database provider. Uses the same factory pattern as ManageMetadataBase
  * and SQLCodeGenBase to resolve the correct provider for the configured database platform.
+ *
+ * Lookup goes through `MJGlobal.ClassFactory` keyed by the platform string,
+ * which matches the `@RegisterClass(CodeGenDatabaseProvider, '<platform>')`
+ * decorators on the concrete providers (`'sqlserver'`, `'postgresql'`).
+ * Mismatched keys silently fall back to the abstract base class — fail loud
+ * with an explicit error so a misconfigured platform doesn't ship as a
+ * runtime breakage in dialect-specific methods.
  */
 protected get dbProvider(): CodeGenDatabaseProvider {
    if (!this._dbProvider) {
       const platform = configInfo.dbPlatform;
-      if (platform === 'postgresql') {
-         // Lookup key is the platform string (matches the @RegisterClass key
-         // in PostgreSQLCodeGenProvider). Mismatched keys silently fall back
-         // to the abstract base class via ClassFactory.CreateInstance.
-         const pgProvider = MJGlobal.Instance.ClassFactory.CreateInstance<CodeGenDatabaseProvider>(
-            CodeGenDatabaseProvider, platform
+      const provider = MJGlobal.Instance.ClassFactory.CreateInstance<CodeGenDatabaseProvider>(
+         CodeGenDatabaseProvider,
+         platform
+      );
+      if (!provider || provider.constructor === CodeGenDatabaseProvider) {
+         throw new Error(
+            `CodeGen provider for dbPlatform='${platform}' not found. Ensure the corresponding ` +
+            `provider package is installed and registered via @RegisterClass(CodeGenDatabaseProvider, '${platform}').`
          );
-         if (pgProvider) {
-            this._dbProvider = pgProvider;
-         } else {
-            throw new Error(
-               'PostgreSQL CodeGen provider not found. Ensure @memberjunction/postgresql-dataprovider ' +
-               'is installed and its CodeGen provider is registered before running CodeGen.'
-            );
-         }
-      } else {
-         this._dbProvider = new SQLServerCodeGenProvider();
       }
+      this._dbProvider = provider;
    }
    return this._dbProvider;
 }

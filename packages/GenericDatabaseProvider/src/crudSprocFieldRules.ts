@@ -27,19 +27,6 @@ import { EntityInfo, EntityFieldInfo } from '@memberjunction/core';
 export type CRUDSprocType = 'create' | 'update' | 'delete';
 
 /**
- * Soft ceiling on PostgreSQL CRUD sproc parameter counts. PG's hard
- * `FUNC_MAX_ARGS` is 100 (compiled into the server, not adjustable on managed
- * services). 90 leaves 10 args of headroom so adding a column to an entity
- * near the limit doesn't unexpectedly flip its sproc shape between releases.
- *
- * Single source of truth for both runtime (`PostgreSQLDataProvider.ProcedureParamLimit`)
- * and CodeGen (which doesn't have a live provider instance to query at codegen
- * time). Bumping this value should regenerate sprocs for any entity newly
- * crossing the threshold.
- */
-export const POSTGRESQL_PROCEDURE_PARAM_LIMIT = 90;
-
-/**
  * Returns true when this field should appear in the parameter list of the
  * named CRUD sproc. Pure decision logic — same rules used by CodeGen at
  * generation time and by the data provider at call-construction time.
