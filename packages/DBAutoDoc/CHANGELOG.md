@@ -1,5 +1,19 @@
 # @memberjunction/db-auto-doc
 
+## 5.33.0
+
+### Patch Changes
+
+- 8836d2d: Add enum/value-list detection for databases without CHECK constraints — deterministic pre-filter gates identify candidate columns, LLM verdicts are emitted in additionalSchemaInfo Fields[], and CodeGen consumes them to populate EntityFieldValue rows (patch)
+- Updated dependencies [95eb27e]
+- Updated dependencies [74b0be0]
+- Updated dependencies [5cc5326]
+- Updated dependencies [7e4957d]
+  - @memberjunction/core@5.33.0
+  - @memberjunction/global@5.33.0
+  - @memberjunction/server-bootstrap@5.33.0
+  - @memberjunction/ai@5.33.0
+
 ## 5.32.0
 
 ### Patch Changes

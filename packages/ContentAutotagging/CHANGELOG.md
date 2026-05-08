@@ -1,5 +1,30 @@
 # Change Log - @memberjunction/content-autotagging
 
+## 5.33.0
+
+### Patch Changes
+
+- Updated dependencies [95eb27e]
+- Updated dependencies [74b0be0]
+- Updated dependencies [5cc5326]
+- Updated dependencies [7e4957d]
+- Updated dependencies [7716c98]
+  - @memberjunction/core@5.33.0
+  - @memberjunction/global@5.33.0
+  - @memberjunction/ai-prompts@5.33.0
+  - @memberjunction/ai-core-plus@5.33.0
+  - @memberjunction/aiengine@5.33.0
+  - @memberjunction/tag-engine@5.33.0
+  - @memberjunction/tag-engine-base@5.33.0
+  - @memberjunction/ai-vectors@5.33.0
+  - @memberjunction/ai-vectordb@5.33.0
+  - @memberjunction/ai-vector-sync@5.33.0
+  - @memberjunction/core-entities@5.33.0
+  - @memberjunction/storage@5.33.0
+  - @memberjunction/templates@5.33.0
+  - @memberjunction/ai@5.33.0
+  - @memberjunction/ai-provider-bundle@5.33.0
+
 ## 5.32.0
 
 ### Patch Changes
