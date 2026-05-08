@@ -397,8 +397,32 @@ export class EntityField {
                 }
             }
             else {
-                // for strings we're good to just set the value
-                this.Value = fieldInfo.DefaultValue;
+                // For strings: strip PostgreSQL's typed-literal wrapper.
+                //
+                // PG's pg_get_expr() (used by vwSQLColumnsAndEntityFields →
+                // EntityField.DefaultValue) renders a string default like:
+                //   'Single'::character varying
+                //   'pending'::text
+                // SQL Server stores the same default as just `'Single'` or
+                // `'pending'`. If we set the field value to the raw PG form,
+                // the value is `'Single'::character varying` (27 chars), and
+                // a MaxLength=20 constraint immediately fails validation —
+                // even though the actual content is `Single` (6 chars).
+                //
+                // Unwrap a leading single-quoted string followed by a `::type`
+                // suffix. Function-call defaults (`nextval('...')`,
+                // `now() AT TIME ZONE 'UTC'`) deliberately don't match this
+                // shape and are left untouched — the database evaluates them
+                // server-side at INSERT time.
+                const dv = fieldInfo.DefaultValue.trim();
+                const pgTypedLiteral = /^'((?:[^']|'')*)'::[A-Za-z][\w "()\[\],]*$/;
+                const m = dv.match(pgTypedLiteral);
+                if (m) {
+                    // Replace the SQL-escaped doubled quotes back to a single quote.
+                    this.Value = m[1].replace(/''/g, "'");
+                } else {
+                    this.Value = fieldInfo.DefaultValue;
+                }
             }
             this._NeverSet = true; // set this back to true because we are setting the default value and we want to be able to set this ONCE from BaseEntity when we load
         }

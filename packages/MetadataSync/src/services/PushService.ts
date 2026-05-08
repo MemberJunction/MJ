@@ -2,6 +2,8 @@ import fs from 'fs-extra';
 import path from 'path';
 import fastGlob from 'fast-glob';
 import { BaseEntity, Metadata, UserInfo, EntitySaveOptions } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
+import { IsStringSQLType } from '@memberjunction/sql-dialect';
 import { SyncEngine, RecordData, DeferrableLookupError, SyncResolutionCollector, BatchContext } from '../lib/sync-engine';
 import { BatchContextIndex, BatchContextStub } from '../lib/batch-context-index';
 import { loadEntityConfig, loadSyncConfig, EntityConfig, SyncConfig } from '../config';
@@ -144,6 +146,22 @@ export class PushService {
     }
     // Fall back to root config, default to false
     return this.syncConfig?.emitSyncNotes ?? false;
+  }
+
+  /**
+   * Whether a SQL column type is string-shaped (text/varchar/nvarchar/char/etc).
+   * Used to decide if an `@file:` resolved JSON object should be JSON.stringify'd
+   * before going to entity.Set — naked objects on string columns become
+   * `[object Object]` via toString().
+   *
+   * Delegates to `@memberjunction/sql-dialect`'s `IsStringSQLType` so the list
+   * of string-shaped type names is single-sourced. Also accepts the synthetic
+   * value `'string'` because EntityField.Type can carry the TS-side type label
+   * for virtual fields rather than a real SQL type.
+   */
+  private isTextLikeColumn(sqlType: string): boolean {
+    const t = (sqlType ?? '').trim().toLowerCase();
+    return t === 'string' || IsStringSQLType(t);
   }
 
   async push(options: PushOptions, callbacks?: PushCallbacks): Promise<PushResult> {
@@ -969,7 +987,52 @@ export class PushService {
           resolutionCollector,
           fieldName
         );
-        entity.Set(fieldName, processedValue);
+        const fieldInfo = entity.GetFieldByName(fieldName);
+        const fieldType = (fieldInfo?.EntityFieldInfo?.Type || '').trim().toLowerCase();
+        const isUuidField = fieldType === 'uniqueidentifier' || fieldType === 'uuid';
+        const currentValue = fieldInfo ? entity.Get(fieldName) : undefined;
+
+        // `@file:` references that point at a `.json` file return the parsed
+        // object (sync-engine.ts:304 — "Let BaseEntity handle serialization").
+        // BaseEntity does NOT auto-stringify: passing a plain object straight
+        // through to a text/varchar column lands in PG (and SQL Server's pg
+        // driver wraps `obj.toString()` → the literal string
+        // `[object Object]`. This poisoned 89 AI-prompt OutputExample +
+        // ComponentLibrary LintRules rows on every "idempotent" push because
+        // the metadata file held real JSON but the DB held the toString
+        // garbage, so the diff was perpetual. Stringify here for any non-PK
+        // field whose target type is a string-shaped column.
+        let valueToSet: unknown = processedValue;
+        if (
+          processedValue !== null
+          && typeof processedValue === 'object'
+          && !Array.isArray(processedValue)
+          && fieldInfo
+          && this.isTextLikeColumn(fieldType)
+        ) {
+          valueToSet = JSON.stringify(processedValue);
+        }
+
+        // Skip the Set when an existing record's UUID-typed field already
+        // equals the new value modulo case. PG returns UUIDs lowercase by
+        // default; metadata files authored against SQL Server use uppercase.
+        // A naive Set() trips BaseEntity dirty tracking via string equality
+        // and re-issues spUpdate every push — turning every "idempotent"
+        // sync run into hundreds of no-op updates that immediately drift
+        // back. UUIDsEqual handles the canonical-equality semantics that
+        // CLAUDE.md mandates for any UUID comparison.
+        if (
+          !isNew
+          && isUuidField
+          && typeof valueToSet === 'string'
+          && typeof currentValue === 'string'
+          && UUIDsEqual(currentValue, valueToSet)
+        ) {
+          // Same UUID, different case — leave the field alone so Dirty
+          // stays false and this record stays in the Unchanged bucket.
+        } else {
+          entity.Set(fieldName, valueToSet);
+        }
       } catch (fieldError: unknown) {
         // Check if this is a deferrable lookup error first
         if (fieldError instanceof DeferrableLookupError) {

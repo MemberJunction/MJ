@@ -18,6 +18,7 @@ import { DatabaseProviderBase } from '@memberjunction/core';
 import { SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { Metadata } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
+import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { GetAPIKeyEngine } from '@memberjunction/api-keys';
 
 /**
@@ -374,8 +375,7 @@ async function createPerRequestProviders(
   dataSource: sql.ConnectionPool,
   dataSources: DataSourceInfo[]
 ): Promise<Array<{ provider: DatabaseProviderBase; type: 'Read-Write' | 'Read-Only' }>> {
-  const dbType = process.env.DB_TYPE?.toLowerCase();
-  const isPostgres = dbType === 'postgresql' || dbType === 'postgres' || dbType === 'pg';
+  const isPostgres = resolveDbPlatformFromEnv() === 'postgresql';
 
   let p: DatabaseProviderBase;
   if (isPostgres) {

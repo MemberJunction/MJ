@@ -10,7 +10,7 @@ import {
   convertIdentifiers, convertDateFunctions, convertCharIndex,
   convertStringConcat, convertTopToLimit, convertCastTypes,
   convertIIF, convertConvertFunction, removeNPrefix, removeCollate,
-  convertCommonFunctions, convertStuff,
+  convertCommonFunctions, convertStuff, emitDropOverloadsBlock,
 } from './ExpressionHelpers.js';
 import { resolveType } from './TypeResolver.js';
 
@@ -55,7 +55,16 @@ export class ProcedureToFunctionRule implements IConversionRule {
       return returnsClause;
     }
 
-    let result = `CREATE OR REPLACE FUNCTION __mj."${procName}"(${pgParams})\n`;
+    // Drop any existing overloads of this function before recreating. PG
+    // dispatches functions by (name, ordered-arg-type-list) — `CREATE OR
+    // REPLACE FUNCTION` only replaces the body when the new signature
+    // matches the prior signature exactly. Adding a parameter (even with
+    // DEFAULT) creates a NEW overload alongside the old one, leading to
+    // "function ... is not unique" errors at call time. Shared helper
+    // emits the canonical pg_proc-iteration DROP block; FunctionRule uses
+    // the same helper so reviewers see one pattern across the converter.
+    let result = emitDropOverloadsBlock(procName);
+    result += `CREATE OR REPLACE FUNCTION __mj."${procName}"(${pgParams})\n`;
     result += `${returnsClause}\n$$\n`;
     result += pgBody;
     result += '\n$$ LANGUAGE plpgsql;\n';
@@ -288,6 +297,7 @@ export class ProcedureToFunctionRule implements IConversionRule {
     if (allBoolVars.size > 0) {
       for (const boolVar of allBoolVars) {
         const escaped = boolVar.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        // COALESCE(<bool>, 0|1) → COALESCE(<bool>, FALSE|TRUE)
         sql = sql.replace(
           new RegExp(`COALESCE\\(${escaped},\\s*0\\)`, 'gi'),
           `COALESCE(${boolVar}, FALSE)`
@@ -296,6 +306,20 @@ export class ProcedureToFunctionRule implements IConversionRule {
           new RegExp(`COALESCE\\(${escaped},\\s*1\\)`, 'gi'),
           `COALESCE(${boolVar}, TRUE)`
         );
+        // T-SQL bodies routinely test boolean params/vars with `= 1` / `= 0`
+        // / `<> 1` / `!= 0` etc. After converting the param type bit→boolean,
+        // those comparisons become `boolean = integer` and PG rejects them at
+        // call time. Coerce the integer literal to TRUE/FALSE here so the
+        // function body type-checks against the now-boolean parameter.
+        // Order matters: handle multi-char operators (<>, !=) before the
+        // single-char `=` so `\\b<bool>\\s*=` doesn't fire on the trailing
+        // `=` of `!=`.
+        sql = sql.replace(new RegExp(`\\b${escaped}\\s*<>\\s*1\\b`, 'gi'), `${boolVar} <> TRUE`);
+        sql = sql.replace(new RegExp(`\\b${escaped}\\s*<>\\s*0\\b`, 'gi'), `${boolVar} <> FALSE`);
+        sql = sql.replace(new RegExp(`\\b${escaped}\\s*!=\\s*1\\b`, 'gi'), `${boolVar} != TRUE`);
+        sql = sql.replace(new RegExp(`\\b${escaped}\\s*!=\\s*0\\b`, 'gi'), `${boolVar} != FALSE`);
+        sql = sql.replace(new RegExp(`\\b${escaped}\\s*=\\s*1\\b`, 'gi'),  `${boolVar} = TRUE`);
+        sql = sql.replace(new RegExp(`\\b${escaped}\\s*=\\s*0\\b`, 'gi'),  `${boolVar} = FALSE`);
       }
     }
 
@@ -833,7 +857,17 @@ function convertExecCalls(sql: string): string {
   // EXEC @sql → EXECUTE p_sql
   sql = sql.replace(/\bEXEC\s+(p_\w+)\s*;/gi, 'EXECUTE $1;');
 
-  // EXEC __mj."spProc" @param = value → PERFORM __mj."spProc"(value1, value2...)
+  // EXEC __mj."spProc" @param = value → PERFORM __mj."spProc"(p_param => value, ...)
+  //
+  // Use NAMED-arg PG syntax (`p_x => value`) rather than positional. T-SQL
+  // EXEC always uses named-arg syntax (`@X = value`); PG positional PERFORM
+  // would silently bind to the wrong parameter slots if the called function's
+  // signature changes (e.g. when a `_Clear` companion gets inserted between
+  // existing params). Named-arg PERFORM survives signature insertion because
+  // PG matches by parameter name. The `@var` → `p_var` rename has already
+  // happened earlier in the body conversion (line ~211), so the EXEC param
+  // names here already use the `p_` prefix that matches the target function's
+  // parameter declarations.
   sql = sql.replace(
     /\bEXEC\s+(__mj\."sp\w+")\s*(.*?)(?:;|$)/gim,
     (_match: string, procRef: string, paramsStr: string) => {
@@ -842,16 +876,20 @@ function convertExecCalls(sql: string): string {
         return `PERFORM ${procRef}();`;
       }
       const paramParts = trimmedParams.split(/,\s*/);
-      const values: string[] = [];
+      const args: string[] = [];
       for (const p of paramParts) {
-        const eqMatch = p.trim().match(/^p_\w+\s*=\s*(.+)/);
+        // Capture both the parameter name and the value so we can emit
+        // PG's named-arg call syntax `name => value`.
+        const eqMatch = p.trim().match(/^(p_\w+)\s*=\s*(.+)/);
         if (eqMatch) {
-          values.push(eqMatch[1].trim());
+          args.push(`${eqMatch[1]} => ${eqMatch[2].trim()}`);
         } else {
-          values.push(p.trim());
+          // Fallback: positional argument (no `param = value` form). Rare
+          // for MJ-generated SS sprocs, but preserved for robustness.
+          args.push(p.trim());
         }
       }
-      return `PERFORM ${procRef}(${values.join(', ')});`;
+      return `PERFORM ${procRef}(${args.join(', ')});`;
     }
   );
 

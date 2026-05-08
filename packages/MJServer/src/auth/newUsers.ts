@@ -110,9 +110,16 @@ export class NewUserBase {
                         LogStatus(`Created User Application ${application.Name} for new user ${user.Name}`);
 
                         const rv: RunView = new RunView();
+                        // Boolean literal goes through the active provider's dialect:
+                        //   SQL Server emits `= 1`, PostgreSQL emits `= TRUE`.
+                        // This keeps the filter server-side (no client-side `.filter()`
+                        // pass) and uses the single source-of-truth helper instead of
+                        // hardcoded SQL that is correct on one dialect but breaks on
+                        // the other.
+                        const trueLit = provider.Dialect.BooleanLiteral(true);
                         const rvResult: RunViewResult<MJApplicationEntityEntityType> = await rv.RunView({
                             EntityName: 'MJ: Application Entities',
-                            ExtraFilter: `ApplicationID = '${application.ID}' and DefaultForNewUser = 1`,
+                            ExtraFilter: `ApplicationID = '${application.ID}' AND DefaultForNewUser = ${trueLit}`,
                         }, contextUser);
 
                         if(!rvResult.Success){
@@ -120,9 +127,11 @@ export class NewUserBase {
                             continue;
                         }
 
-                        LogStatus(`Creating ${rvResult.Results.length} User Application Entities for User Application ${application.Name} for new user ${user.Name}`);
+                        const defaultForNewUserEntities = rvResult.Results;
 
-                        for(const [index, appEntity] of rvResult.Results.entries()){
+                        LogStatus(`Creating ${defaultForNewUserEntities.length} User Application Entities for User Application ${application.Name} for new user ${user.Name}`);
+
+                        for(const [index, appEntity] of defaultForNewUserEntities.entries()){
                             const userAppEntity: MJUserApplicationEntityEntity = await md.GetEntityObject<MJUserApplicationEntityEntity>('MJ: User Application Entities', contextUser);
                             userAppEntity.NewRecord();
                             userAppEntity.UserApplicationID = userApplication.ID;

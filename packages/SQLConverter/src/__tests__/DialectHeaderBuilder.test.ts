@@ -33,10 +33,17 @@ describe('PostgreSQLHeaderBuilder', () => {
     expect(header).toContain('SET search_path TO my_schema, public');
   });
 
-  it('should include implicit integer->boolean cast', () => {
+  it('should NOT emit pg_cast UPDATE (managed-PG safety)', () => {
+    // Earlier converter versions emitted an UPDATE pg_cast statement to make
+    // INTEGER to BOOLEAN implicit so SS-style INSERT INTO bool_col VALUES (1)
+    // would work. That UPDATE requires pg_catalog modify privileges, which
+    // managed PG (RDS, Aurora, Cloud SQL, Azure) does not grant. As of v5.30
+    // all bulk INSERTs use TRUE/FALSE directly, so the pg_cast modification
+    // is no longer needed and was removed to support managed-PG installs.
     const header = builder.BuildHeader('__mj');
-    expect(header).toContain("castsource = 'integer'::regtype");
-    expect(header).toContain("casttarget = 'boolean'::regtype");
+    expect(header).not.toContain('UPDATE pg_cast');
+    expect(header).not.toContain("castsource = 'integer'::regtype");
+    expect(header).not.toContain("casttarget = 'boolean'::regtype");
   });
 
   it('should use the schema parameter (not hardcoded __mj)', () => {

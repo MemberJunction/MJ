@@ -319,6 +319,30 @@ All configuration is validated at startup using Zod schemas, with clear error me
 | `excludeSchemas` / `excludeTables` | Filter schemas and tables from metadata discovery |
 | `entityNaming` | Controls ALL CAPS normalization and compound word splitting for entity/field names |
 | `additionalSchemaInfo` | Path to JSON file with soft PK/FK definitions and schema prefix rules |
+| `dbPlatform` | Database backend selector. See **Database Platform Selection** below. |
+
+### Database Platform Selection (`dbPlatform`)
+
+CodeGenLib accepts a single canonical `dbPlatform` field with two values:
+
+```javascript
+// mj.config.cjs
+module.exports = {
+    dbPlatform: 'sqlserver',     // or 'postgresql'
+    // …
+};
+```
+
+| Value | Backend |
+|---|---|
+| `'sqlserver'` (default) | Microsoft SQL Server |
+| `'postgresql'` | PostgreSQL 14+ |
+
+The same vocabulary is used by `@memberjunction/cli`, `@memberjunction/server`, and every other MJ package that needs to branch on platform. There is **one** name (`dbPlatform`) and **one** pair of values (`'sqlserver'`, `'postgresql'`) — no aliases (`'mssql'`, `'postgres'`, `'pg'`) are recognized in config or env vars.
+
+If `dbPlatform` is not set in `mj.config.cjs`, CodeGen reads `DB_PLATFORM` from the environment (restricted to the canonical pair) and falls back to `'sqlserver'`. An unrecognized non-empty `DB_PLATFORM` value throws — silent fallback is the bug we don't want, because it routes the wrong provider at the wrong dialect against a real database.
+
+> **Migration note (was `dbType` / `DB_TYPE`):** Earlier dev builds of the PG support exposed both `dbType` (config key) and `DB_TYPE` (env var). Both have been replaced by `dbPlatform` / `DB_PLATFORM` with strict canonical values. Rename `dbType: 'mssql'` to `dbPlatform: 'sqlserver'` (and `dbType: 'postgresql'` to `dbPlatform: 'postgresql'`) in your `mj.config.cjs`. Same for `DB_TYPE=...` in `.env` → `DB_PLATFORM=...`. Legacy aliases (`mssql`, `postgres`, `pg`) are no longer accepted in either.
 
 ### Entity Naming Normalization
 

@@ -1,7 +1,11 @@
 import { SQLDialect } from '@memberjunction/sql-dialect';
 import { CodeGenConnection, CodeGenTransaction, CodeGenQueryResult, CodeGenDatabaseProvider } from './codeGenDatabaseProvider';
-import { SQLServerCodeGenProvider } from './providers/sqlserver/SQLServerCodeGenProvider';
-import { configInfo, currentWorkingDirectory, dbType, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
+// Side-effect import — registers `SQLServerCodeGenProvider` with `MJGlobal.ClassFactory`
+// under the `'sqlserver'` key via its `@RegisterClass` decorator. Without this import,
+// `ClassFactory.CreateInstance(CodeGenDatabaseProvider, 'sqlserver')` returns nothing
+// and the SS code path silently fails.
+import './providers/sqlserver/SQLServerCodeGenProvider';
+import { configInfo, currentWorkingDirectory, dbPlatform, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
 import { ApplicationInfo, CodeNameFromString, EntityFieldExtendedType, EntityFieldInfo, EntityInfo, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
 import { MJApplicationEntity, MJEntityFieldSchema } from "@memberjunction/core-entities";
 import { logError, logMessage, logStatus, startSpinner, updateSpinner, succeedSpinner } from "../Misc/status_logging";
@@ -240,33 +244,39 @@ export class ManageMetadataBase {
 
    // ─── Database Provider Infrastructure ─────────────────────────────
    // All platform-specific SQL generation is delegated to the CodeGenDatabaseProvider.
-   // The provider is lazily initialized from the dbType() config on first access.
+   // The provider is lazily initialized from the dbPlatform() config on first access.
 
    private _dbProvider: CodeGenDatabaseProvider | null = null;
 
    /**
     * Returns the CodeGenDatabaseProvider for the current database platform.
-    * Lazily initialized from dbType() configuration.
+    * Lazily initialized from dbPlatform() configuration.
+    *
+    * Lookup goes through `MJGlobal.ClassFactory` keyed by the platform string,
+    * which matches the `@RegisterClass(CodeGenDatabaseProvider, '<platform>')`
+    * decorators on the concrete providers (`'sqlserver'`, `'postgresql'`).
+    * Mismatched keys silently fall back to the abstract base class — fail loud
+    * with an explicit error so a misconfigured platform doesn't ship as a
+    * runtime breakage in dialect-specific methods.
     */
    protected get dbProvider(): CodeGenDatabaseProvider {
       if (!this._dbProvider) {
-         const platform = dbType();
-         if (platform === 'postgresql') {
-            const pgProvider = MJGlobal.Instance.ClassFactory.CreateInstance<CodeGenDatabaseProvider>(
-               CodeGenDatabaseProvider,
-               'PostgreSQLCodeGenProvider'
+         const platform = dbPlatform();
+         const provider = MJGlobal.Instance.ClassFactory.CreateInstance<CodeGenDatabaseProvider>(
+            CodeGenDatabaseProvider,
+            platform
+         );
+         // CreateInstance returns the abstract base class on a missed key (it
+         // doesn't throw), so disambiguate by constructor identity: anything
+         // that's still the bare base means lookup didn't resolve to a real
+         // dialect provider for this platform.
+         if (!provider || provider.constructor === CodeGenDatabaseProvider) {
+            throw new Error(
+               `CodeGen provider for dbPlatform='${platform}' not found. Ensure the corresponding ` +
+               `provider package is installed and registered via @RegisterClass(CodeGenDatabaseProvider, '${platform}').`
             );
-            if (pgProvider) {
-               this._dbProvider = pgProvider;
-            } else {
-               throw new Error(
-                  'PostgreSQL CodeGen provider not found. Ensure @memberjunction/postgresql-dataprovider ' +
-                  'is installed and its CodeGen provider is registered before running CodeGen.'
-               );
-            }
-         } else {
-            this._dbProvider = new SQLServerCodeGenProvider();
          }
+         this._dbProvider = provider;
       }
       return this._dbProvider;
    }
