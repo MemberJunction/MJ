@@ -268,22 +268,27 @@ export class ComponentStudioStateService {
 
     this._favoriteComponents.clear();
 
-    const favoritePromises = this._dbComponents.map(component =>
-      this.metadata.GetRecordFavoriteStatus(
-        currentUserId,
-        'MJ: Components',
-        CompositeKey.FromID(component.ID)
-      )
-        .then(isFavorite => ({ componentId: component.ID, isFavorite }))
-        .catch(() => ({ componentId: component.ID, isFavorite: false }))
-    );
+    try {
+      // Batch-load all favorites for this user + entity in a single query
+      // instead of one GetRecordFavoriteStatus call per component.
+      const rv = RunView.FromMetadataProvider(this.Provider);
+      const safeUserId = currentUserId.replace(/'/g, "''");
+      const result = await rv.RunView<{RecordID: string}>({
+        EntityName: 'MJ: User Favorites',
+        ExtraFilter: `UserID='${safeUserId}' AND Entity='MJ: Components'`,
+        Fields: ['RecordID'],
+        ResultType: 'simple'
+      });
 
-    const results = await Promise.all(favoritePromises);
-    for (const result of results) {
-      if (result.isFavorite) {
-        this._favoriteComponents.add(result.componentId);
+      if (result.Success) {
+        for (const row of result.Results) {
+          this._favoriteComponents.add(row.RecordID);
+        }
       }
+    } catch (error) {
+      console.error('Error loading favorites:', error);
     }
+
     this.StateChanged.emit();
   }
 
