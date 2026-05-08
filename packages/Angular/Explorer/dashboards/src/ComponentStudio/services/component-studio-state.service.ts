@@ -1,9 +1,27 @@
 import { Injectable, EventEmitter } from '@angular/core';
 import { RunView, CompositeKey, Metadata, IMetadataProvider } from '@memberjunction/core';
-import { MJComponentEntityExtended } from '@memberjunction/core-entities';
+import { ComponentMetadataEngine } from '@memberjunction/core-entities';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { ParseJSONRecursive, ParseJSONOptions } from '@memberjunction/global';
 import { BehaviorSubject, Subject } from 'rxjs';
+
+/**
+ * Lightweight summary of a database component for the browser list.
+ * Only contains fields needed for display — Specification and other heavy
+ * columns are fetched on demand when a component is selected.
+ */
+export interface DbComponentSummary {
+  ID: string;
+  Name: string;
+  Namespace: string | null;
+  Version: string | null;
+  Type: string | null;
+  Status: string | null;
+  Description: string | null;
+  HasRequiredCustomProps: boolean;
+  __mj_UpdatedAt: Date | null;
+  isFileLoaded?: false;
+}
 
 /**
  * Interface for components loaded from files, text, or artifacts (not from database)
@@ -25,7 +43,7 @@ export interface FileLoadedComponent {
 /**
  * Union type for both database and file-loaded components
  */
-export type DisplayComponent = (MJComponentEntityExtended & { isFileLoaded?: false }) | FileLoadedComponent;
+export type DisplayComponent = DbComponentSummary | FileLoadedComponent;
 
 /**
  * Category for filtering
@@ -64,10 +82,10 @@ export interface CodeSection {
 export class ComponentStudioStateService {
 
   // --- Component Data ---
-  private _dbComponents: MJComponentEntityExtended[] = [];
+  private _dbComponents: DbComponentSummary[] = [];
   private _fileLoadedComponents: FileLoadedComponent[] = [];
 
-  get DbComponents(): MJComponentEntityExtended[] { return this._dbComponents; }
+  get DbComponents(): DbComponentSummary[] { return this._dbComponents; }
   get FileLoadedComponents(): FileLoadedComponent[] { return this._fileLoadedComponents; }
 
   /** Combined list of all components (file-loaded first, then DB) */
@@ -215,12 +233,13 @@ export class ComponentStudioStateService {
 
     try {
       const rv = RunView.FromMetadataProvider(this.Provider);
-      const result = await rv.RunView<MJComponentEntityExtended>({
+      const result = await rv.RunView<DbComponentSummary>({
         EntityName: 'MJ: Components',
         ExtraFilter: 'HasRequiredCustomProps = 0',
         OrderBy: 'Name',
+        Fields: ['ID', 'Name', 'Namespace', 'Version', 'Type', 'Status', 'Description', 'HasRequiredCustomProps', '__mj_UpdatedAt'],
         MaxRows: 1000,
-        ResultType: 'entity_object'
+        ResultType: 'simple'
       });
 
       if (result.Success) {
@@ -472,8 +491,21 @@ export class ComponentStudioStateService {
     return component.isFileLoaded ? '1.0.0' : (component.Version || '1.0.0');
   }
 
-  GetComponentSpec(component: DisplayComponent): ComponentSpec {
-    return component.isFileLoaded ? component.specification : JSON.parse(component.Specification);
+  /**
+   * Fetches the full component specification. For file-loaded components, returns
+   * the in-memory spec. For database components, loads the full entity record
+   * on demand via ComponentMetadataEngine.FindComponentByID() — the lightweight
+   * summary loaded at startup does not include the Specification column.
+   */
+  async GetComponentSpec(component: DisplayComponent): Promise<ComponentSpec> {
+    if (component.isFileLoaded) {
+      return component.specification;
+    }
+    const fullEntity = await ComponentMetadataEngine.Instance.FindComponentByID(component.ID);
+    if (!fullEntity || !fullEntity.Specification) {
+      throw new Error(`Component specification not found for: ${component.Name}`);
+    }
+    return JSON.parse(fullEntity.Specification);
   }
 
   GetComponentId(component: DisplayComponent): string {
@@ -484,7 +516,7 @@ export class ComponentStudioStateService {
     if (component.isFileLoaded) {
       return component.specification.namespace;
     }
-    return (component as MJComponentEntityExtended).Namespace || undefined;
+    return component.Namespace || undefined;
   }
 
   GetComponentFilename(component: DisplayComponent): string | undefined {
@@ -503,9 +535,9 @@ export class ComponentStudioStateService {
   // COMPONENT RUNNING
   // ============================================================
 
-  StartComponent(component: DisplayComponent): void {
+  async StartComponent(component: DisplayComponent): Promise<void> {
     this._selectedComponent = component;
-    this._componentSpec = this.GetComponentSpec(component);
+    this._componentSpec = await this.GetComponentSpec(component);
     this._isRunning = true;
     this._currentError = null;
     this._isDetailsPaneCollapsed = false;
@@ -525,14 +557,14 @@ export class ComponentStudioStateService {
     this.StateChanged.emit();
   }
 
-  RunComponent(component: DisplayComponent): void {
+  async RunComponent(component: DisplayComponent): Promise<void> {
     const componentId = this.GetComponentId(component);
     const selectedId = this._selectedComponent ? this.GetComponentId(this._selectedComponent) : null;
 
     if (this._isRunning && selectedId !== componentId) {
       this.StopComponent();
     }
-    this.StartComponent(component);
+    await this.StartComponent(component);
   }
 
   // ============================================================
@@ -540,9 +572,9 @@ export class ComponentStudioStateService {
   // ============================================================
 
   InitializeEditors(): void {
-    if (!this._selectedComponent) return;
+    if (!this._selectedComponent || !this._componentSpec) return;
 
-    const spec = this.GetComponentSpec(this._selectedComponent);
+    const spec = this._componentSpec;
     const parseOptions: ParseJSONOptions = {
       extractInlineJson: true,
       maxDepth: 100,
@@ -564,8 +596,8 @@ export class ComponentStudioStateService {
     }
 
     // Use the in-memory spec (which may be the resolved version from the React bridge)
-    // rather than re-parsing from the entity's raw Specification field.
-    const spec = this._componentSpec || this.GetComponentSpec(this._selectedComponent);
+    if (!this._componentSpec) return;
+    const spec = this._componentSpec;
     const sections: CodeSection[] = [];
 
     const mainCode = spec.code || '// No code available';
@@ -602,8 +634,6 @@ export class ComponentStudioStateService {
       if (this._selectedComponent) {
         if (this.IsFileLoadedComponent(this._selectedComponent)) {
           this._selectedComponent.specification = parsed;
-        } else {
-          (this._selectedComponent as MJComponentEntityExtended).Specification = JSON.stringify(parsed);
         }
 
         this._componentSpec = parsed;
@@ -653,8 +683,6 @@ export class ComponentStudioStateService {
 
       if (this.IsFileLoadedComponent(this._selectedComponent)) {
         this._selectedComponent.specification = spec;
-      } else {
-        (this._selectedComponent as MJComponentEntityExtended).Specification = JSON.stringify(spec);
       }
 
       this._componentSpec = spec;
@@ -715,8 +743,6 @@ export class ComponentStudioStateService {
 
     if (this.IsFileLoadedComponent(this._selectedComponent)) {
       this._selectedComponent.specification = newSpec;
-    } else {
-      (this._selectedComponent as MJComponentEntityExtended).Specification = JSON.stringify(newSpec);
     }
 
     this._componentSpec = newSpec;
