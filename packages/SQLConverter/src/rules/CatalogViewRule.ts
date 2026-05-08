@@ -176,23 +176,12 @@ SELECT
     CASE WHEN COALESCE(bt_a.attidentity, '') IN ('a','d') THEN 1 ELSE 0 END
                                                AS "AutoIncrement",
     a.attnum                                   AS column_id,
-    -- IsVirtual is set when the column is either (a) view-only — not present in the
-    -- base table, or (b) a generated column. Same conflation as SQL Server. Use the
-    -- IsComputed flag below to disambiguate.
-    CASE WHEN bt_a.attnum IS NULL OR COALESCE(bt_a.attgenerated, '') <> '' THEN 1 ELSE 0 END
+    CASE WHEN bt_a.attnum IS NULL THEN 1 ELSE 0 END
                                                AS "IsVirtual",
-    -- IsComputed is set ONLY for PostgreSQL generated columns (attgenerated = 's' for
-    -- stored, 'v' for virtual). These are physically present in the base table but
-    -- read-only at the SQL layer.
-    CASE WHEN COALESCE(bt_a.attgenerated, '') <> '' THEN 1 ELSE 0 END
-                                               AS "IsComputed",
     src_cls.oid                                AS object_id,
     NULL::text                                 AS "DefaultConstraintName",
     pg_get_expr(ad.adbin, ad.adrelid)          AS "DefaultValue",
-    -- Generated columns store their definition in pg_attrdef alongside default values.
-    -- Surface it as ComputedColumnDefinition for parity with SQL Server.
-    CASE WHEN COALESCE(bt_a.attgenerated, '') <> '' THEN pg_get_expr(ad.adbin, ad.adrelid) ELSE NULL END
-                                               AS "ComputedColumnDefinition",
+    NULL::text                                 AS "ComputedColumnDefinition",
     COALESCE(
         col_description(src_cls.oid, a.attnum),
         col_description(bt_cls.oid, bt_a.attnum)
