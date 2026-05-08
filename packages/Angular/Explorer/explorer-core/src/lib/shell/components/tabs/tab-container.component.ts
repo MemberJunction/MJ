@@ -7,6 +7,7 @@ import {
   ElementRef,
   ApplicationRef,
   EnvironmentInjector,
+  runInInjectionContext,
   createComponent,
   ComponentRef,
   ViewEncapsulation,
@@ -873,8 +874,13 @@ export class TabContainerComponent extends BaseAngularComponent implements OnIni
         return;
       }
 
-      // Create a lightweight instance just to call GetResourceDisplayName
-      const tempInstance = new resourceReg.SubClass() as BaseResourceComponent;
+      // Create a lightweight instance just to call GetResourceDisplayName.
+      // Must run inside an injection context because BaseResourceComponent
+      // uses inject() field initializers (e.g. NavigationService).
+      const tempInstance = runInInjectionContext(
+        this.environmentInjector,
+        () => new resourceReg.SubClass() as BaseResourceComponent
+      );
       const displayName = await tempInstance.GetResourceDisplayName(resourceData);
 
       if (displayName && displayName !== tab.title) {
