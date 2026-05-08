@@ -211,56 +211,56 @@ CREATE TABLE __mj."AIAgentSearchScope" (
 -- ALTER AIAgent: add SearchScopeAccess column
 -- =============================================================================
 ALTER TABLE __mj."AIAgent"
- ADD COLUMN "SearchScopeAccess" VARCHAR(20) NOT NULL
+ ADD COLUMN IF NOT EXISTS "SearchScopeAccess" VARCHAR(20) NOT NULL
         CONSTRAINT DF_AIAgent_SearchScopeAccess DEFAULT 'None'
         CONSTRAINT CK_AIAgent_SearchScopeAccess CHECK ("SearchScopeAccess" IN ('All', 'Assigned', 'None'));
 
 ALTER TABLE __mj."SearchScopeProvider"
- ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NULL;
+ ADD COLUMN IF NOT EXISTS "__mj_CreatedAt" TIMESTAMPTZ NULL;
 
 /* SQL text to add special date field __mj_UpdatedAt to entity __mj."SearchScopeProvider" */
 ALTER TABLE __mj."SearchScopeProvider"
- ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NULL;
+ ADD COLUMN IF NOT EXISTS "__mj_UpdatedAt" TIMESTAMPTZ NULL;
 
 /* SQL text to add special date field __mj_CreatedAt to entity __mj."AIAgentSearchScope" */
 ALTER TABLE __mj."AIAgentSearchScope"
- ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NULL;
+ ADD COLUMN IF NOT EXISTS "__mj_CreatedAt" TIMESTAMPTZ NULL;
 
 /* SQL text to add special date field __mj_UpdatedAt to entity __mj."AIAgentSearchScope" */
 ALTER TABLE __mj."AIAgentSearchScope"
- ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NULL;
+ ADD COLUMN IF NOT EXISTS "__mj_UpdatedAt" TIMESTAMPTZ NULL;
 
 /* SQL text to add special date field __mj_CreatedAt to entity __mj."SearchScopeExternalIndex" */
 ALTER TABLE __mj."SearchScopeExternalIndex"
- ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NULL;
+ ADD COLUMN IF NOT EXISTS "__mj_CreatedAt" TIMESTAMPTZ NULL;
 
 /* SQL text to add special date field __mj_UpdatedAt to entity __mj."SearchScopeExternalIndex" */
 ALTER TABLE __mj."SearchScopeExternalIndex"
- ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NULL;
+ ADD COLUMN IF NOT EXISTS "__mj_UpdatedAt" TIMESTAMPTZ NULL;
 
 /* SQL text to add special date field __mj_CreatedAt to entity __mj."SearchScopeEntity" */
 ALTER TABLE __mj."SearchScopeEntity"
- ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NULL;
+ ADD COLUMN IF NOT EXISTS "__mj_CreatedAt" TIMESTAMPTZ NULL;
 
 /* SQL text to add special date field __mj_UpdatedAt to entity __mj."SearchScopeEntity" */
 ALTER TABLE __mj."SearchScopeEntity"
- ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NULL;
+ ADD COLUMN IF NOT EXISTS "__mj_UpdatedAt" TIMESTAMPTZ NULL;
 
 /* SQL text to add special date field __mj_CreatedAt to entity __mj."SearchScopeStorageAccount" */
 ALTER TABLE __mj."SearchScopeStorageAccount"
- ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NULL;
+ ADD COLUMN IF NOT EXISTS "__mj_CreatedAt" TIMESTAMPTZ NULL;
 
 /* SQL text to add special date field __mj_UpdatedAt to entity __mj."SearchScopeStorageAccount" */
 ALTER TABLE __mj."SearchScopeStorageAccount"
- ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NULL;
+ ADD COLUMN IF NOT EXISTS "__mj_UpdatedAt" TIMESTAMPTZ NULL;
 
 /* SQL text to add special date field __mj_CreatedAt to entity __mj."SearchScope" */
 ALTER TABLE __mj."SearchScope"
- ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NULL;
+ ADD COLUMN IF NOT EXISTS "__mj_CreatedAt" TIMESTAMPTZ NULL;
 
 /* SQL text to add special date field __mj_UpdatedAt to entity __mj."SearchScope" */
 ALTER TABLE __mj."SearchScope"
- ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NULL;
+ ADD COLUMN IF NOT EXISTS "__mj_UpdatedAt" TIMESTAMPTZ NULL;
 
 CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_AIAgentSearchScope_AgentID" ON __mj."AIAgentSearchScope" ("AgentID");
 
@@ -329,7 +329,7 @@ CREATE TABLE __mj."SearchScopePermission" (
 );
 
 ALTER TABLE __mj."SearchScope"
- ADD COLUMN "RerankerBudgetCents" INTEGER NULL;
+ ADD COLUMN IF NOT EXISTS "RerankerBudgetCents" INTEGER NULL;
 
 -- =====================================================================================================================
 -- Section 4: Phase 3.1 — SearchExecutionLog
@@ -414,9 +414,14 @@ CREATE TABLE __mj."SearchScopeTestQuery" (
  REFERENCES __mj."SearchScope"("ID")
 );
 
-ALTER TABLE __mj."SearchScopePermission";
+-- Hand-fixed: the converter dropped the `DROP CONSTRAINT <name>` clauses from
+-- the source T-SQL "ALTER TABLE … DROP CONSTRAINT UQ_SearchScopePermission_…"
+-- pair on lines 12814-12818 and emitted bare `ALTER TABLE …;` (a syntax error).
+-- IF EXISTS makes this idempotent and tolerant of installs that never had the
+-- old constraints.
+ALTER TABLE __mj."SearchScopePermission" DROP CONSTRAINT IF EXISTS "UQ_SearchScopePermission_User";
 
-ALTER TABLE __mj."SearchScopePermission";
+ALTER TABLE __mj."SearchScopePermission" DROP CONSTRAINT IF EXISTS "UQ_SearchScopePermission_Role";
 
 CREATE UNIQUE INDEX IF NOT EXISTS UQ_SearchScopePermission_User
     ON __mj."SearchScopePermission" ("SearchScopeID", "UserID")
@@ -680,11 +685,11 @@ CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_AIAgent_CategoryID" ON __mj."AIAgen
 CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_AIAgent_DefaultStorageAccountID" ON __mj."AIAgent" ("DefaultStorageAccountID");
 
 ALTER TABLE __mj."SearchScopePermission"
- ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NULL;
+ ADD COLUMN IF NOT EXISTS "__mj_CreatedAt" TIMESTAMPTZ NULL;
 
 /* SQL text to add special date field __mj_UpdatedAt to entity __mj."SearchScopePermission" */
 ALTER TABLE __mj."SearchScopePermission"
- ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NULL;
+ ADD COLUMN IF NOT EXISTS "__mj_UpdatedAt" TIMESTAMPTZ NULL;
 
 CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_SearchScopePermission_SearchScopeID" ON __mj."SearchScopePermission" ("SearchScopeID");
 
@@ -695,11 +700,11 @@ CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_SearchScopePermission_RoleID" ON __
 CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_SearchScope_OwnerUserID" ON __mj."SearchScope" ("OwnerUserID");
 
 ALTER TABLE __mj."SearchExecutionLog"
- ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NULL;
+ ADD COLUMN IF NOT EXISTS "__mj_CreatedAt" TIMESTAMPTZ NULL;
 
 /* SQL text to add special date field __mj_UpdatedAt to entity __mj."SearchExecutionLog" */
 ALTER TABLE __mj."SearchExecutionLog"
- ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NULL;
+ ADD COLUMN IF NOT EXISTS "__mj_UpdatedAt" TIMESTAMPTZ NULL;
 
 CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_SearchExecutionLog_SearchScopeID" ON __mj."SearchExecutionLog" ("SearchScopeID");
 
@@ -708,17 +713,25 @@ CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_SearchExecutionLog_UserID" ON __mj.
 CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_SearchExecutionLog_AIAgentID" ON __mj."SearchExecutionLog" ("AIAgentID");
 
 ALTER TABLE __mj."SearchScopeTestQuery"
- ADD COLUMN "__mj_CreatedAt" TIMESTAMPTZ NULL;
+ ADD COLUMN IF NOT EXISTS "__mj_CreatedAt" TIMESTAMPTZ NULL;
 
 /* SQL text to add special date field __mj_UpdatedAt to entity __mj."SearchScopeTestQuery" */
 ALTER TABLE __mj."SearchScopeTestQuery"
- ADD COLUMN "__mj_UpdatedAt" TIMESTAMPTZ NULL;
+ ADD COLUMN IF NOT EXISTS "__mj_UpdatedAt" TIMESTAMPTZ NULL;
 
 CREATE INDEX IF NOT EXISTS "IDX_AUTO_MJ_FKEY_SearchScopeTestQuery_SearchScopeID" ON __mj."SearchScopeTestQuery" ("SearchScopeID");
 
 
 -- ===================== Helper Functions (fn*) =====================
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'fnAIAgentParentID_GetRootID'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."fnAIAgentParentID_GetRootID"(
     p_RecordID UUID,
     p_ParentID UUID
@@ -760,6 +773,14 @@ WITH RECURSIVE CTE_RootParent AS (
 LIMIT 1
 $$ LANGUAGE sql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'fnAIAgentCategoryParentID_GetRootID'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."fnAIAgentCategoryParentID_GetRootID"(
     p_RecordID UUID,
     p_ParentID UUID
@@ -801,6 +822,14 @@ WITH RECURSIVE CTE_RootParent AS (
 LIMIT 1
 $$ LANGUAGE sql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'fnArtifactTypeParentID_GetRootID'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."fnArtifactTypeParentID_GetRootID"(
     p_RecordID UUID,
     p_ParentID UUID
@@ -842,6 +871,14 @@ WITH RECURSIVE CTE_RootParent AS (
 LIMIT 1
 $$ LANGUAGE sql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'fnRecordChangeRestoredFromID_GetRootID'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."fnRecordChangeRestoredFromID_GetRootID"(
     p_RecordID UUID,
     p_ParentID UUID
@@ -883,6 +920,14 @@ WITH RECURSIVE CTE_RootParent AS (
 LIMIT 1
 $$ LANGUAGE sql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'fnTagParentID_GetRootID'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."fnTagParentID_GetRootID"(
     p_RecordID UUID,
     p_ParentID UUID
@@ -924,6 +969,14 @@ WITH RECURSIVE CTE_RootParent AS (
 LIMIT 1
 $$ LANGUAGE sql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'fnTagMergedIntoTagID_GetRootID'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."fnTagMergedIntoTagID_GetRootID"(
     p_RecordID UUID,
     p_ParentID UUID
@@ -965,6 +1018,14 @@ WITH RECURSIVE CTE_RootParent AS (
 LIMIT 1
 $$ LANGUAGE sql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'fnAIAgentParentID_GetRootID'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."fnAIAgentParentID_GetRootID"(
     p_RecordID UUID,
     p_ParentID UUID
@@ -5292,6 +5353,14 @@ $do$;
 
 -- ===================== Stored Procedures (sp*) =====================
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateAIAgentSearchScope'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateAIAgentSearchScope"(
     IN p_ID UUID DEFAULT NULL,
     IN p_AgentID UUID DEFAULT NULL,
@@ -5382,6 +5451,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateAIAgentSearchScope'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateAIAgentSearchScope"(
     IN p_ID UUID,
     IN p_AgentID UUID,
@@ -5430,6 +5507,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteAIAgentSearchScope'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteAIAgentSearchScope"(
     IN p_ID UUID
 )
@@ -5453,6 +5538,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateSearchScopeEntity'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateSearchScopeEntity"(
     IN p_ID UUID DEFAULT NULL,
     IN p_SearchScopeID UUID DEFAULT NULL,
@@ -5503,6 +5596,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateSearchScopeEntity'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateSearchScopeEntity"(
     IN p_ID UUID,
     IN p_SearchScopeID UUID,
@@ -5535,6 +5636,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteSearchScopeEntity'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteSearchScopeEntity"(
     IN p_ID UUID
 )
@@ -5558,6 +5667,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateSearchScope'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateSearchScope"(
     IN p_ID UUID DEFAULT NULL,
     IN p_Name VARCHAR(200) DEFAULT NULL,
@@ -5643,6 +5760,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateSearchScope'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateSearchScope"(
     IN p_ID UUID,
     IN p_Name VARCHAR(200),
@@ -5689,6 +5814,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteSearchScope'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteSearchScope"(
     IN p_ID UUID
 )
@@ -5712,6 +5845,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateSearchScopeStorageAccount'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateSearchScopeStorageAccount"(
     IN p_ID UUID DEFAULT NULL,
     IN p_SearchScopeID UUID DEFAULT NULL,
@@ -5757,6 +5898,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateSearchScopeStorageAccount'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateSearchScopeStorageAccount"(
     IN p_ID UUID,
     IN p_SearchScopeID UUID,
@@ -5787,6 +5936,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteSearchScopeStorageAccount'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteSearchScopeStorageAccount"(
     IN p_ID UUID
 )
@@ -5810,6 +5967,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateSearchScopeExternalIndex'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateSearchScopeExternalIndex"(
     IN p_ID UUID DEFAULT NULL,
     IN p_SearchScopeID UUID DEFAULT NULL,
@@ -5870,6 +6035,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateSearchScopeExternalIndex'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateSearchScopeExternalIndex"(
     IN p_ID UUID,
     IN p_SearchScopeID UUID,
@@ -5906,6 +6079,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteSearchScopeExternalIndex'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteSearchScopeExternalIndex"(
     IN p_ID UUID
 )
@@ -5929,6 +6110,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateSearchScopeProvider'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateSearchScopeProvider"(
     IN p_ID UUID DEFAULT NULL,
     IN p_SearchScopeID UUID DEFAULT NULL,
@@ -5989,6 +6178,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateSearchScopeProvider'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateSearchScopeProvider"(
     IN p_ID UUID,
     IN p_SearchScopeID UUID,
@@ -6025,6 +6222,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteSearchScopeProvider'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteSearchScopeProvider"(
     IN p_ID UUID
 )
@@ -6048,6 +6253,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateAIAgent'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateAIAgent"(
     IN p_ID UUID DEFAULT NULL,
     IN p_Name VARCHAR(255) DEFAULT NULL,
@@ -6388,6 +6601,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateAIAgent'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateAIAgent"(
     IN p_ID UUID,
     IN p_Name VARCHAR(255),
@@ -6536,6 +6757,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteAIAgent'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteAIAgent"(
     IN p_ID UUID
 )
@@ -6836,7 +7065,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIAgentActions_AgentID_AgentID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentAction"(p_MJAIAgentActions_AgentIDID, p_MJAIAgentActions_AgentID_AgentID, p_MJAIAgentActions_AgentID_ActionID, p_MJAIAgentActions_AgentID_Status, p_MJAIAgentActions_AgentID_MinExecutionsPerRun, p_MJAIAgentActions_AgentID_MaxExecutionsPerRun, p_MJAIAgentActions_AgentID_ResultExpirationTurns, p_MJAIAgentActions_AgentID_ResultExpirationMode, p_MJAIAgentActions_AgentID_CompactMode, p_MJAIAgentActions_AgentID_CompactLength, p_MJAIAgentActions_AgentID_CompactPromptID);
+        PERFORM __mj."spUpdateAIAgentAction"(p_ID => p_MJAIAgentActions_AgentIDID, p_AgentID => p_MJAIAgentActions_AgentID_AgentID, p_ActionID => p_MJAIAgentActions_AgentID_ActionID, p_Status => p_MJAIAgentActions_AgentID_Status, p_MinExecutionsPerRun => p_MJAIAgentActions_AgentID_MinExecutionsPerRun, p_MaxExecutionsPerRun => p_MJAIAgentActions_AgentID_MaxExecutionsPerRun, p_ResultExpirationTurns => p_MJAIAgentActions_AgentID_ResultExpirationTurns, p_ResultExpirationMode => p_MJAIAgentActions_AgentID_ResultExpirationMode, p_CompactMode => p_MJAIAgentActions_AgentID_CompactMode, p_CompactLength => p_MJAIAgentActions_AgentID_CompactLength, p_CompactPromptID => p_MJAIAgentActions_AgentID_CompactPromptID);
 
     END LOOP;
 
@@ -6846,7 +7075,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentArtifactType" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentArtifactTypes_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentArtifactType"(p_MJAIAgentArtifactTypes_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentArtifactType"(p_ID => p_MJAIAgentArtifactTypes_AgentIDID);
         
     END LOOP;
     
@@ -6856,7 +7085,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentClientTool" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentClientTools_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentClientTool"(p_MJAIAgentClientTools_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentClientTool"(p_ID => p_MJAIAgentClientTools_AgentIDID);
         
     END LOOP;
     
@@ -6866,7 +7095,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentConfiguration" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentConfigurations_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentConfiguration"(p_MJAIAgentConfigurations_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentConfiguration"(p_ID => p_MJAIAgentConfigurations_AgentIDID);
         
     END LOOP;
     
@@ -6876,7 +7105,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentDataSource" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentDataSources_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentDataSource"(p_MJAIAgentDataSources_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentDataSource"(p_ID => p_MJAIAgentDataSources_AgentIDID);
         
     END LOOP;
     
@@ -6886,7 +7115,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentExample" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentExamples_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentExample"(p_MJAIAgentExamples_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentExample"(p_ID => p_MJAIAgentExamples_AgentIDID);
         
     END LOOP;
     
@@ -6896,7 +7125,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentLearningCycle" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentLearningCycles_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentLearningCycle"(p_MJAIAgentLearningCycles_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentLearningCycle"(p_ID => p_MJAIAgentLearningCycles_AgentIDID);
         
     END LOOP;
     
@@ -6906,7 +7135,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentModality" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentModalities_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentModality"(p_MJAIAgentModalities_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentModality"(p_ID => p_MJAIAgentModalities_AgentIDID);
         
     END LOOP;
     
@@ -6924,7 +7153,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIAgentModels_AgentID_AgentID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentModel"(p_MJAIAgentModels_AgentIDID, p_MJAIAgentModels_AgentID_AgentID, p_MJAIAgentModels_AgentID_ModelID, p_MJAIAgentModels_AgentID_Active, p_MJAIAgentModels_AgentID_Priority);
+        PERFORM __mj."spUpdateAIAgentModel"(p_ID => p_MJAIAgentModels_AgentIDID, p_AgentID => p_MJAIAgentModels_AgentID_AgentID, p_ModelID => p_MJAIAgentModels_AgentID_ModelID, p_Active => p_MJAIAgentModels_AgentID_Active, p_Priority => p_MJAIAgentModels_AgentID_Priority);
 
     END LOOP;
 
@@ -6958,7 +7187,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIAgentNotes_AgentID_AgentID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentNote"(p_MJAIAgentNotes_AgentIDID, p_MJAIAgentNotes_AgentID_AgentID, p_MJAIAgentNotes_AgentID_AgentNoteTypeID, p_MJAIAgentNotes_AgentID_Note, p_MJAIAgentNotes_AgentID_UserID, p_MJAIAgentNotes_AgentID_Type, p_MJAIAgentNotes_AgentID_IsAutoGenerated, p_MJAIAgentNotes_AgentID_Comments, p_MJAIAgentNotes_AgentID_Status, p_MJAIAgentNotes_AgentID_SourceConversationID, p_MJAIAgentNotes_AgentID_SourceConversationDetailID, p_MJAIAgentNotes_AgentID_SourceAIAgentRunID, p_MJAIAgentNotes_AgentID_CompanyID, p_MJAIAgentNotes_AgentID_EmbeddingVector, p_MJAIAgentNotes_AgentID_EmbeddingModelID, p_MJAIAgentNotes_AgentID_PrimaryScopeEntityID, p_MJAIAgentNotes_AgentID_PrimaryScopeRecordID, p_MJAIAgentNotes_AgentID_SecondaryScopes, p_MJAIAgentNotes_AgentID_LastAccessedAt, p_MJAIAgentNotes_AgentID_AccessCount, p_MJAIAgentNotes_AgentID_ExpiresAt);
+        PERFORM __mj."spUpdateAIAgentNote"(p_ID => p_MJAIAgentNotes_AgentIDID, p_AgentID => p_MJAIAgentNotes_AgentID_AgentID, p_AgentNoteTypeID => p_MJAIAgentNotes_AgentID_AgentNoteTypeID, p_Note => p_MJAIAgentNotes_AgentID_Note, p_UserID => p_MJAIAgentNotes_AgentID_UserID, p_Type => p_MJAIAgentNotes_AgentID_Type, p_IsAutoGenerated => p_MJAIAgentNotes_AgentID_IsAutoGenerated, p_Comments => p_MJAIAgentNotes_AgentID_Comments, p_Status => p_MJAIAgentNotes_AgentID_Status, p_SourceConversationID => p_MJAIAgentNotes_AgentID_SourceConversationID, p_SourceConversationDetailID => p_MJAIAgentNotes_AgentID_SourceConversationDetailID, p_SourceAIAgentRunID => p_MJAIAgentNotes_AgentID_SourceAIAgentRunID, p_CompanyID => p_MJAIAgentNotes_AgentID_CompanyID, p_EmbeddingVector => p_MJAIAgentNotes_AgentID_EmbeddingVector, p_EmbeddingModelID => p_MJAIAgentNotes_AgentID_EmbeddingModelID, p_PrimaryScopeEntityID => p_MJAIAgentNotes_AgentID_PrimaryScopeEntityID, p_PrimaryScopeRecordID => p_MJAIAgentNotes_AgentID_PrimaryScopeRecordID, p_SecondaryScopes => p_MJAIAgentNotes_AgentID_SecondaryScopes, p_LastAccessedAt => p_MJAIAgentNotes_AgentID_LastAccessedAt, p_AccessCount => p_MJAIAgentNotes_AgentID_AccessCount, p_ExpiresAt => p_MJAIAgentNotes_AgentID_ExpiresAt);
 
     END LOOP;
 
@@ -6968,7 +7197,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentPermission" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentPermissions_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentPermission"(p_MJAIAgentPermissions_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentPermission"(p_ID => p_MJAIAgentPermissions_AgentIDID);
         
     END LOOP;
     
@@ -6978,7 +7207,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentPrompt" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentPrompts_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentPrompt"(p_MJAIAgentPrompts_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentPrompt"(p_ID => p_MJAIAgentPrompts_AgentIDID);
         
     END LOOP;
     
@@ -6988,7 +7217,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentRelationship" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentRelationships_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentRelationship"(p_MJAIAgentRelationships_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentRelationship"(p_ID => p_MJAIAgentRelationships_AgentIDID);
         
     END LOOP;
     
@@ -6998,7 +7227,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentRelationship" WHERE "SubAgentID" = p_ID
     LOOP
         p_MJAIAgentRelationships_SubAgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentRelationship"(p_MJAIAgentRelationships_SubAgentIDID);
+        PERFORM __mj."spDeleteAIAgentRelationship"(p_ID => p_MJAIAgentRelationships_SubAgentIDID);
         
     END LOOP;
     
@@ -7008,7 +7237,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentRequest" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentRequests_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentRequest"(p_MJAIAgentRequests_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentRequest"(p_ID => p_MJAIAgentRequests_AgentIDID);
         
     END LOOP;
     
@@ -7018,7 +7247,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentRun" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentRuns_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentRun"(p_MJAIAgentRuns_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentRun"(p_ID => p_MJAIAgentRuns_AgentIDID);
         
     END LOOP;
     
@@ -7028,7 +7257,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentSearchScope" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentSearchScopes_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentSearchScope"(p_MJAIAgentSearchScopes_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentSearchScope"(p_ID => p_MJAIAgentSearchScopes_AgentIDID);
         
     END LOOP;
     
@@ -7038,7 +7267,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentStep" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentSteps_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentStep"(p_MJAIAgentSteps_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentStep"(p_ID => p_MJAIAgentSteps_AgentIDID);
         
     END LOOP;
     
@@ -7072,7 +7301,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIAgentSteps_SubAgentID_SubAgentID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentStep"(p_MJAIAgentSteps_SubAgentIDID, p_MJAIAgentSteps_SubAgentID_AgentID, p_MJAIAgentSteps_SubAgentID_Name, p_MJAIAgentSteps_SubAgentID_Description, p_MJAIAgentSteps_SubAgentID_StepType, p_MJAIAgentSteps_SubAgentID_StartingStep, p_MJAIAgentSteps_SubAgentID_TimeoutSeconds, p_MJAIAgentSteps_SubAgentID_RetryCount, p_MJAIAgentSteps_SubAgentID_OnErrorBehavior, p_MJAIAgentSteps_SubAgentID_ActionID, p_MJAIAgentSteps_SubAgentID_SubAgentID, p_MJAIAgentSteps_SubAgentID_PromptID, p_MJAIAgentSteps_SubAgentID_ActionOutputMapping, p_MJAIAgentSteps_SubAgentID_PositionX, p_MJAIAgentSteps_SubAgentID_PositionY, p_MJAIAgentSteps_SubAgentID_Width, p_MJAIAgentSteps_SubAgentID_Height, p_MJAIAgentSteps_SubAgentID_Status, p_MJAIAgentSteps_SubAgentID_ActionInputMapping, p_MJAIAgentSteps_SubAgentID_LoopBodyType, p_MJAIAgentSteps_SubAgentID_Configuration);
+        PERFORM __mj."spUpdateAIAgentStep"(p_ID => p_MJAIAgentSteps_SubAgentIDID, p_AgentID => p_MJAIAgentSteps_SubAgentID_AgentID, p_Name => p_MJAIAgentSteps_SubAgentID_Name, p_Description => p_MJAIAgentSteps_SubAgentID_Description, p_StepType => p_MJAIAgentSteps_SubAgentID_StepType, p_StartingStep => p_MJAIAgentSteps_SubAgentID_StartingStep, p_TimeoutSeconds => p_MJAIAgentSteps_SubAgentID_TimeoutSeconds, p_RetryCount => p_MJAIAgentSteps_SubAgentID_RetryCount, p_OnErrorBehavior => p_MJAIAgentSteps_SubAgentID_OnErrorBehavior, p_ActionID => p_MJAIAgentSteps_SubAgentID_ActionID, p_SubAgentID => p_MJAIAgentSteps_SubAgentID_SubAgentID, p_PromptID => p_MJAIAgentSteps_SubAgentID_PromptID, p_ActionOutputMapping => p_MJAIAgentSteps_SubAgentID_ActionOutputMapping, p_PositionX => p_MJAIAgentSteps_SubAgentID_PositionX, p_PositionY => p_MJAIAgentSteps_SubAgentID_PositionY, p_Width => p_MJAIAgentSteps_SubAgentID_Width, p_Height => p_MJAIAgentSteps_SubAgentID_Height, p_Status => p_MJAIAgentSteps_SubAgentID_Status, p_ActionInputMapping => p_MJAIAgentSteps_SubAgentID_ActionInputMapping, p_LoopBodyType => p_MJAIAgentSteps_SubAgentID_LoopBodyType, p_Configuration => p_MJAIAgentSteps_SubAgentID_Configuration);
 
     END LOOP;
 
@@ -7148,7 +7377,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIAgents_ParentID_ParentID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgent"(p_MJAIAgents_ParentIDID, p_MJAIAgents_ParentID_Name, p_MJAIAgents_ParentID_Description, p_MJAIAgents_ParentID_LogoURL, p_MJAIAgents_ParentID_ParentID, p_MJAIAgents_ParentID_ExposeAsAction, p_MJAIAgents_ParentID_ExecutionOrder, p_MJAIAgents_ParentID_ExecutionMode, p_MJAIAgents_ParentID_EnableContextCompression, p_MJAIAgents_ParentID_ContextCompressionMessageThreshold, p_MJAIAgents_ParentID_ContextCompressionPromptID, p_MJAIAgents_ParentID_ContextCompressionMessageRetentionCount, p_MJAIAgents_ParentID_TypeID, p_MJAIAgents_ParentID_Status, p_MJAIAgents_ParentID_DriverClass, p_MJAIAgents_ParentID_IconClass, p_MJAIAgents_ParentID_ModelSelectionMode, p_MJAIAgents_ParentID_PayloadDownstreamPaths, p_MJAIAgents_ParentID_PayloadUpstreamPaths, p_MJAIAgents_ParentID_PayloadSelfReadPaths, p_MJAIAgents_ParentID_PayloadSelfWritePaths, p_MJAIAgents_ParentID_PayloadScope, p_MJAIAgents_ParentID_FinalPayloadValidation, p_MJAIAgents_ParentID_FinalPayloadValidationMode, p_MJAIAgents_ParentID_FinalPayloadValidationMaxRetries, p_MJAIAgents_ParentID_MaxCostPerRun, p_MJAIAgents_ParentID_MaxTokensPerRun, p_MJAIAgents_ParentID_MaxIterationsPerRun, p_MJAIAgents_ParentID_MaxTimePerRun, p_MJAIAgents_ParentID_MinExecutionsPerRun, p_MJAIAgents_ParentID_MaxExecutionsPerRun, p_MJAIAgents_ParentID_StartingPayloadValidation, p_MJAIAgents_ParentID_StartingPayloadValidationMode, p_MJAIAgents_ParentID_DefaultPromptEffortLevel, p_MJAIAgents_ParentID_ChatHandlingOption, p_MJAIAgents_ParentID_DefaultArtifactTypeID, p_MJAIAgents_ParentID_OwnerUserID, p_MJAIAgents_ParentID_InvocationMode, p_MJAIAgents_ParentID_ArtifactCreationMode, p_MJAIAgents_ParentID_FunctionalRequirements, p_MJAIAgents_ParentID_TechnicalDesign, p_MJAIAgents_ParentID_InjectNotes, p_MJAIAgents_ParentID_MaxNotesToInject, p_MJAIAgents_ParentID_NoteInjectionStrategy, p_MJAIAgents_ParentID_InjectExamples, p_MJAIAgents_ParentID_MaxExamplesToInject, p_MJAIAgents_ParentID_ExampleInjectionStrategy, p_MJAIAgents_ParentID_IsRestricted, p_MJAIAgents_ParentID_MessageMode, p_MJAIAgents_ParentID_MaxMessages, p_MJAIAgents_ParentID_AttachmentStorageProviderID, p_MJAIAgents_ParentID_AttachmentRootPath, p_MJAIAgents_ParentID_InlineStorageThresholdBytes, p_MJAIAgents_ParentID_AgentTypePromptParams, p_MJAIAgents_ParentID_ScopeConfig, p_MJAIAgents_ParentID_NoteRetentionDays, p_MJAIAgents_ParentID_ExampleRetentionDays, p_MJAIAgents_ParentID_AutoArchiveEnabled, p_MJAIAgents_ParentID_RerankerConfiguration, p_MJAIAgents_ParentID_CategoryID, p_MJAIAgents_ParentID_AllowEphemeralClientTools, p_MJAIAgents_ParentID_DefaultStorageAccountID, p_MJAIAgents_ParentID_SearchScopeAccess);
+        PERFORM __mj."spUpdateAIAgent"(p_ID => p_MJAIAgents_ParentIDID, p_Name => p_MJAIAgents_ParentID_Name, p_Description => p_MJAIAgents_ParentID_Description, p_LogoURL => p_MJAIAgents_ParentID_LogoURL, p_ParentID => p_MJAIAgents_ParentID_ParentID, p_ExposeAsAction => p_MJAIAgents_ParentID_ExposeAsAction, p_ExecutionOrder => p_MJAIAgents_ParentID_ExecutionOrder, p_ExecutionMode => p_MJAIAgents_ParentID_ExecutionMode, p_EnableContextCompression => p_MJAIAgents_ParentID_EnableContextCompression, p_ContextCompressionMessageThreshold => p_MJAIAgents_ParentID_ContextCompressionMessageThreshold, p_ContextCompressionPromptID => p_MJAIAgents_ParentID_ContextCompressionPromptID, p_ContextCompressionMessageRetentionCount => p_MJAIAgents_ParentID_ContextCompressionMessageRetentionCount, p_TypeID => p_MJAIAgents_ParentID_TypeID, p_Status => p_MJAIAgents_ParentID_Status, p_DriverClass => p_MJAIAgents_ParentID_DriverClass, p_IconClass => p_MJAIAgents_ParentID_IconClass, p_ModelSelectionMode => p_MJAIAgents_ParentID_ModelSelectionMode, p_PayloadDownstreamPaths => p_MJAIAgents_ParentID_PayloadDownstreamPaths, p_PayloadUpstreamPaths => p_MJAIAgents_ParentID_PayloadUpstreamPaths, p_PayloadSelfReadPaths => p_MJAIAgents_ParentID_PayloadSelfReadPaths, p_PayloadSelfWritePaths => p_MJAIAgents_ParentID_PayloadSelfWritePaths, p_PayloadScope => p_MJAIAgents_ParentID_PayloadScope, p_FinalPayloadValidation => p_MJAIAgents_ParentID_FinalPayloadValidation, p_FinalPayloadValidationMode => p_MJAIAgents_ParentID_FinalPayloadValidationMode, p_FinalPayloadValidationMaxRetries => p_MJAIAgents_ParentID_FinalPayloadValidationMaxRetries, p_MaxCostPerRun => p_MJAIAgents_ParentID_MaxCostPerRun, p_MaxTokensPerRun => p_MJAIAgents_ParentID_MaxTokensPerRun, p_MaxIterationsPerRun => p_MJAIAgents_ParentID_MaxIterationsPerRun, p_MaxTimePerRun => p_MJAIAgents_ParentID_MaxTimePerRun, p_MinExecutionsPerRun => p_MJAIAgents_ParentID_MinExecutionsPerRun, p_MaxExecutionsPerRun => p_MJAIAgents_ParentID_MaxExecutionsPerRun, p_StartingPayloadValidation => p_MJAIAgents_ParentID_StartingPayloadValidation, p_StartingPayloadValidationMode => p_MJAIAgents_ParentID_StartingPayloadValidationMode, p_DefaultPromptEffortLevel => p_MJAIAgents_ParentID_DefaultPromptEffortLevel, p_ChatHandlingOption => p_MJAIAgents_ParentID_ChatHandlingOption, p_DefaultArtifactTypeID => p_MJAIAgents_ParentID_DefaultArtifactTypeID, p_OwnerUserID => p_MJAIAgents_ParentID_OwnerUserID, p_InvocationMode => p_MJAIAgents_ParentID_InvocationMode, p_ArtifactCreationMode => p_MJAIAgents_ParentID_ArtifactCreationMode, p_FunctionalRequirements => p_MJAIAgents_ParentID_FunctionalRequirements, p_TechnicalDesign => p_MJAIAgents_ParentID_TechnicalDesign, p_InjectNotes => p_MJAIAgents_ParentID_InjectNotes, p_MaxNotesToInject => p_MJAIAgents_ParentID_MaxNotesToInject, p_NoteInjectionStrategy => p_MJAIAgents_ParentID_NoteInjectionStrategy, p_InjectExamples => p_MJAIAgents_ParentID_InjectExamples, p_MaxExamplesToInject => p_MJAIAgents_ParentID_MaxExamplesToInject, p_ExampleInjectionStrategy => p_MJAIAgents_ParentID_ExampleInjectionStrategy, p_IsRestricted => p_MJAIAgents_ParentID_IsRestricted, p_MessageMode => p_MJAIAgents_ParentID_MessageMode, p_MaxMessages => p_MJAIAgents_ParentID_MaxMessages, p_AttachmentStorageProviderID => p_MJAIAgents_ParentID_AttachmentStorageProviderID, p_AttachmentRootPath => p_MJAIAgents_ParentID_AttachmentRootPath, p_InlineStorageThresholdBytes => p_MJAIAgents_ParentID_InlineStorageThresholdBytes, p_AgentTypePromptParams => p_MJAIAgents_ParentID_AgentTypePromptParams, p_ScopeConfig => p_MJAIAgents_ParentID_ScopeConfig, p_NoteRetentionDays => p_MJAIAgents_ParentID_NoteRetentionDays, p_ExampleRetentionDays => p_MJAIAgents_ParentID_ExampleRetentionDays, p_AutoArchiveEnabled => p_MJAIAgents_ParentID_AutoArchiveEnabled, p_RerankerConfiguration => p_MJAIAgents_ParentID_RerankerConfiguration, p_CategoryID => p_MJAIAgents_ParentID_CategoryID, p_AllowEphemeralClientTools => p_MJAIAgents_ParentID_AllowEphemeralClientTools, p_DefaultStorageAccountID => p_MJAIAgents_ParentID_DefaultStorageAccountID, p_SearchScopeAccess => p_MJAIAgents_ParentID_SearchScopeAccess);
 
     END LOOP;
 
@@ -7244,7 +7473,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIPromptRuns_AgentID_AgentID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIPromptRun"(p_MJAIPromptRuns_AgentIDID, p_MJAIPromptRuns_AgentID_PromptID, p_MJAIPromptRuns_AgentID_ModelID, p_MJAIPromptRuns_AgentID_VendorID, p_MJAIPromptRuns_AgentID_AgentID, p_MJAIPromptRuns_AgentID_ConfigurationID, p_MJAIPromptRuns_AgentID_RunAt, p_MJAIPromptRuns_AgentID_CompletedAt, p_MJAIPromptRuns_AgentID_ExecutionTimeMS, p_MJAIPromptRuns_AgentID_Messages, p_MJAIPromptRuns_AgentID_Result, p_MJAIPromptRuns_AgentID_TokensUsed, p_MJAIPromptRuns_AgentID_TokensPrompt, p_MJAIPromptRuns_AgentID_TokensCompletion, p_MJAIPromptRuns_AgentID_TotalCost, p_MJAIPromptRuns_AgentID_Success, p_MJAIPromptRuns_AgentID_ErrorMessage, p_MJAIPromptRuns_AgentID_ParentID, p_MJAIPromptRuns_AgentID_RunType, p_MJAIPromptRuns_AgentID_ExecutionOrder, p_MJAIPromptRuns_AgentID_AgentRunID, p_MJAIPromptRuns_AgentID_Cost, p_MJAIPromptRuns_AgentID_CostCurrency, p_MJAIPromptRuns_AgentID_TokensUsedRollup, p_MJAIPromptRuns_AgentID_TokensPromptRollup, p_MJAIPromptRuns_AgentID_TokensCompletionRollup, p_MJAIPromptRuns_AgentID_Temperature, p_MJAIPromptRuns_AgentID_TopP, p_MJAIPromptRuns_AgentID_TopK, p_MJAIPromptRuns_AgentID_MinP, p_MJAIPromptRuns_AgentID_FrequencyPenalty, p_MJAIPromptRuns_AgentID_PresencePenalty, p_MJAIPromptRuns_AgentID_Seed, p_MJAIPromptRuns_AgentID_StopSequences, p_MJAIPromptRuns_AgentID_ResponseFormat, p_MJAIPromptRuns_AgentID_LogProbs, p_MJAIPromptRuns_AgentID_TopLogProbs, p_MJAIPromptRuns_AgentID_DescendantCost, p_MJAIPromptRuns_AgentID_ValidationAttemptCount, p_MJAIPromptRuns_AgentID_SuccessfulValidationCount, p_MJAIPromptRuns_AgentID_FinalValidationPassed, p_MJAIPromptRuns_AgentID_ValidationBehavior, p_MJAIPromptRuns_AgentID_RetryStrategy, p_MJAIPromptRuns_AgentID_MaxRetriesConfigured, p_MJAIPromptRuns_AgentID_FinalValidationError, p_MJAIPromptRuns_AgentID_ValidationErrorCount, p_MJAIPromptRuns_AgentID_CommonValidationError, p_MJAIPromptRuns_AgentID_FirstAttemptAt, p_MJAIPromptRuns_AgentID_LastAttemptAt, p_MJAIPromptRuns_AgentID_TotalRetryDurationMS, p_MJAIPromptRuns_AgentID_ValidationAttempts, p_MJAIPromptRuns_AgentID_ValidationSummary, p_MJAIPromptRuns_AgentID_FailoverAttempts, p_MJAIPromptRuns_AgentID_FailoverErrors, p_MJAIPromptRuns_AgentID_FailoverDurations, p_MJAIPromptRuns_AgentID_OriginalModelID, p_MJAIPromptRuns_AgentID_OriginalRequestStartTime, p_MJAIPromptRuns_AgentID_TotalFailoverDuration, p_MJAIPromptRuns_AgentID_RerunFromPromptRunID, p_MJAIPromptRuns_AgentID_ModelSelection, p_MJAIPromptRuns_AgentID_Status, p_MJAIPromptRuns_AgentID_Cancelled, p_MJAIPromptRuns_AgentID_CancellationReason, p_MJAIPromptRuns_AgentID_ModelPowerRank, p_MJAIPromptRuns_AgentID_SelectionStrategy, p_MJAIPromptRuns_AgentID_CacheHit, p_MJAIPromptRuns_AgentID_CacheKey, p_MJAIPromptRuns_AgentID_JudgeID, p_MJAIPromptRuns_AgentID_JudgeScore, p_MJAIPromptRuns_AgentID_WasSelectedResult, p_MJAIPromptRuns_AgentID_StreamingEnabled, p_MJAIPromptRuns_AgentID_FirstTokenTime, p_MJAIPromptRuns_AgentID_ErrorDetails, p_MJAIPromptRuns_AgentID_ChildPromptID, p_MJAIPromptRuns_AgentID_QueueTime, p_MJAIPromptRuns_AgentID_PromptTime, p_MJAIPromptRuns_AgentID_CompletionTime, p_MJAIPromptRuns_AgentID_ModelSpecificResponseDetails, p_MJAIPromptRuns_AgentID_EffortLevel, p_MJAIPromptRuns_AgentID_RunName, p_MJAIPromptRuns_AgentID_Comments, p_MJAIPromptRuns_AgentID_TestRunID, p_MJAIPromptRuns_AgentID_AssistantPrefill);
+        PERFORM __mj."spUpdateAIPromptRun"(p_ID => p_MJAIPromptRuns_AgentIDID, p_PromptID => p_MJAIPromptRuns_AgentID_PromptID, p_ModelID => p_MJAIPromptRuns_AgentID_ModelID, p_VendorID => p_MJAIPromptRuns_AgentID_VendorID, p_AgentID => p_MJAIPromptRuns_AgentID_AgentID, p_ConfigurationID => p_MJAIPromptRuns_AgentID_ConfigurationID, p_RunAt => p_MJAIPromptRuns_AgentID_RunAt, p_CompletedAt => p_MJAIPromptRuns_AgentID_CompletedAt, p_ExecutionTimeMS => p_MJAIPromptRuns_AgentID_ExecutionTimeMS, p_Messages => p_MJAIPromptRuns_AgentID_Messages, p_Result => p_MJAIPromptRuns_AgentID_Result, p_TokensUsed => p_MJAIPromptRuns_AgentID_TokensUsed, p_TokensPrompt => p_MJAIPromptRuns_AgentID_TokensPrompt, p_TokensCompletion => p_MJAIPromptRuns_AgentID_TokensCompletion, p_TotalCost => p_MJAIPromptRuns_AgentID_TotalCost, p_Success => p_MJAIPromptRuns_AgentID_Success, p_ErrorMessage => p_MJAIPromptRuns_AgentID_ErrorMessage, p_ParentID => p_MJAIPromptRuns_AgentID_ParentID, p_RunType => p_MJAIPromptRuns_AgentID_RunType, p_ExecutionOrder => p_MJAIPromptRuns_AgentID_ExecutionOrder, p_AgentRunID => p_MJAIPromptRuns_AgentID_AgentRunID, p_Cost => p_MJAIPromptRuns_AgentID_Cost, p_CostCurrency => p_MJAIPromptRuns_AgentID_CostCurrency, p_TokensUsedRollup => p_MJAIPromptRuns_AgentID_TokensUsedRollup, p_TokensPromptRollup => p_MJAIPromptRuns_AgentID_TokensPromptRollup, p_TokensCompletionRollup => p_MJAIPromptRuns_AgentID_TokensCompletionRollup, p_Temperature => p_MJAIPromptRuns_AgentID_Temperature, p_TopP => p_MJAIPromptRuns_AgentID_TopP, p_TopK => p_MJAIPromptRuns_AgentID_TopK, p_MinP => p_MJAIPromptRuns_AgentID_MinP, p_FrequencyPenalty => p_MJAIPromptRuns_AgentID_FrequencyPenalty, p_PresencePenalty => p_MJAIPromptRuns_AgentID_PresencePenalty, p_Seed => p_MJAIPromptRuns_AgentID_Seed, p_StopSequences => p_MJAIPromptRuns_AgentID_StopSequences, p_ResponseFormat => p_MJAIPromptRuns_AgentID_ResponseFormat, p_LogProbs => p_MJAIPromptRuns_AgentID_LogProbs, p_TopLogProbs => p_MJAIPromptRuns_AgentID_TopLogProbs, p_DescendantCost => p_MJAIPromptRuns_AgentID_DescendantCost, p_ValidationAttemptCount => p_MJAIPromptRuns_AgentID_ValidationAttemptCount, p_SuccessfulValidationCount => p_MJAIPromptRuns_AgentID_SuccessfulValidationCount, p_FinalValidationPassed => p_MJAIPromptRuns_AgentID_FinalValidationPassed, p_ValidationBehavior => p_MJAIPromptRuns_AgentID_ValidationBehavior, p_RetryStrategy => p_MJAIPromptRuns_AgentID_RetryStrategy, p_MaxRetriesConfigured => p_MJAIPromptRuns_AgentID_MaxRetriesConfigured, p_FinalValidationError => p_MJAIPromptRuns_AgentID_FinalValidationError, p_ValidationErrorCount => p_MJAIPromptRuns_AgentID_ValidationErrorCount, p_CommonValidationError => p_MJAIPromptRuns_AgentID_CommonValidationError, p_FirstAttemptAt => p_MJAIPromptRuns_AgentID_FirstAttemptAt, p_LastAttemptAt => p_MJAIPromptRuns_AgentID_LastAttemptAt, p_TotalRetryDurationMS => p_MJAIPromptRuns_AgentID_TotalRetryDurationMS, p_ValidationAttempts => p_MJAIPromptRuns_AgentID_ValidationAttempts, p_ValidationSummary => p_MJAIPromptRuns_AgentID_ValidationSummary, p_FailoverAttempts => p_MJAIPromptRuns_AgentID_FailoverAttempts, p_FailoverErrors => p_MJAIPromptRuns_AgentID_FailoverErrors, p_FailoverDurations => p_MJAIPromptRuns_AgentID_FailoverDurations, p_OriginalModelID => p_MJAIPromptRuns_AgentID_OriginalModelID, p_OriginalRequestStartTime => p_MJAIPromptRuns_AgentID_OriginalRequestStartTime, p_TotalFailoverDuration => p_MJAIPromptRuns_AgentID_TotalFailoverDuration, p_RerunFromPromptRunID => p_MJAIPromptRuns_AgentID_RerunFromPromptRunID, p_ModelSelection => p_MJAIPromptRuns_AgentID_ModelSelection, p_Status => p_MJAIPromptRuns_AgentID_Status, p_Cancelled => p_MJAIPromptRuns_AgentID_Cancelled, p_CancellationReason => p_MJAIPromptRuns_AgentID_CancellationReason, p_ModelPowerRank => p_MJAIPromptRuns_AgentID_ModelPowerRank, p_SelectionStrategy => p_MJAIPromptRuns_AgentID_SelectionStrategy, p_CacheHit => p_MJAIPromptRuns_AgentID_CacheHit, p_CacheKey => p_MJAIPromptRuns_AgentID_CacheKey, p_JudgeID => p_MJAIPromptRuns_AgentID_JudgeID, p_JudgeScore => p_MJAIPromptRuns_AgentID_JudgeScore, p_WasSelectedResult => p_MJAIPromptRuns_AgentID_WasSelectedResult, p_StreamingEnabled => p_MJAIPromptRuns_AgentID_StreamingEnabled, p_FirstTokenTime => p_MJAIPromptRuns_AgentID_FirstTokenTime, p_ErrorDetails => p_MJAIPromptRuns_AgentID_ErrorDetails, p_ChildPromptID => p_MJAIPromptRuns_AgentID_ChildPromptID, p_QueueTime => p_MJAIPromptRuns_AgentID_QueueTime, p_PromptTime => p_MJAIPromptRuns_AgentID_PromptTime, p_CompletionTime => p_MJAIPromptRuns_AgentID_CompletionTime, p_ModelSpecificResponseDetails => p_MJAIPromptRuns_AgentID_ModelSpecificResponseDetails, p_EffortLevel => p_MJAIPromptRuns_AgentID_EffortLevel, p_RunName => p_MJAIPromptRuns_AgentID_RunName, p_Comments => p_MJAIPromptRuns_AgentID_Comments, p_TestRunID => p_MJAIPromptRuns_AgentID_TestRunID, p_AssistantPrefill => p_MJAIPromptRuns_AgentID_AssistantPrefill);
 
     END LOOP;
 
@@ -7270,7 +7499,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIResultCache_AgentID_AgentID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIResultCache"(p_MJAIResultCache_AgentIDID, p_MJAIResultCache_AgentID_AIPromptID, p_MJAIResultCache_AgentID_AIModelID, p_MJAIResultCache_AgentID_RunAt, p_MJAIResultCache_AgentID_PromptText, p_MJAIResultCache_AgentID_ResultText, p_MJAIResultCache_AgentID_Status, p_MJAIResultCache_AgentID_ExpiredOn, p_MJAIResultCache_AgentID_VendorID, p_MJAIResultCache_AgentID_AgentID, p_MJAIResultCache_AgentID_ConfigurationID, p_MJAIResultCache_AgentID_PromptEmbedding, p_MJAIResultCache_AgentID_PromptRunID);
+        PERFORM __mj."spUpdateAIResultCache"(p_ID => p_MJAIResultCache_AgentIDID, p_AIPromptID => p_MJAIResultCache_AgentID_AIPromptID, p_AIModelID => p_MJAIResultCache_AgentID_AIModelID, p_RunAt => p_MJAIResultCache_AgentID_RunAt, p_PromptText => p_MJAIResultCache_AgentID_PromptText, p_ResultText => p_MJAIResultCache_AgentID_ResultText, p_Status => p_MJAIResultCache_AgentID_Status, p_ExpiredOn => p_MJAIResultCache_AgentID_ExpiredOn, p_VendorID => p_MJAIResultCache_AgentID_VendorID, p_AgentID => p_MJAIResultCache_AgentID_AgentID, p_ConfigurationID => p_MJAIResultCache_AgentID_ConfigurationID, p_PromptEmbedding => p_MJAIResultCache_AgentID_PromptEmbedding, p_PromptRunID => p_MJAIResultCache_AgentID_PromptRunID);
 
     END LOOP;
 
@@ -7308,7 +7537,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJConversationDetails_AgentID_AgentID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateConversationDetail"(p_MJConversationDetails_AgentIDID, p_MJConversationDetails_AgentID_ConversationID, p_MJConversationDetails_AgentID_ExternalID, p_MJConversationDetails_AgentID_Role, p_MJConversationDetails_AgentID_Message, p_MJConversationDetails_AgentID_Error, p_MJConversationDetails_AgentID_HiddenToUser, p_MJConversationDetails_AgentID_UserRating, p_MJConversationDetails_AgentID_UserFeedback, p_MJConversationDetails_AgentID_ReflectionInsights, p_MJConversationDetails_AgentID_SummaryOfEarlierConversation, p_MJConversationDetails_AgentID_UserID, p_MJConversationDetails_AgentID_ArtifactID, p_MJConversationDetails_AgentID_ArtifactVersionID, p_MJConversationDetails_AgentID_CompletionTime, p_MJConversationDetails_AgentID_IsPinned, p_MJConversationDetails_AgentID_ParentID, p_MJConversationDetails_AgentID_AgentID, p_MJConversationDetails_AgentID_Status, p_MJConversationDetails_AgentID_SuggestedResponses, p_MJConversationDetails_AgentID_TestRunID, p_MJConversationDetails_AgentID_ResponseForm, p_MJConversationDetails_AgentID_ActionableCommands, p_MJConversationDetails_AgentID_AutomaticCommands, p_MJConversationDetails_AgentID_OriginalMessageChanged);
+        PERFORM __mj."spUpdateConversationDetail"(p_ID => p_MJConversationDetails_AgentIDID, p_ConversationID => p_MJConversationDetails_AgentID_ConversationID, p_ExternalID => p_MJConversationDetails_AgentID_ExternalID, p_Role => p_MJConversationDetails_AgentID_Role, p_Message => p_MJConversationDetails_AgentID_Message, p_Error => p_MJConversationDetails_AgentID_Error, p_HiddenToUser => p_MJConversationDetails_AgentID_HiddenToUser, p_UserRating => p_MJConversationDetails_AgentID_UserRating, p_UserFeedback => p_MJConversationDetails_AgentID_UserFeedback, p_ReflectionInsights => p_MJConversationDetails_AgentID_ReflectionInsights, p_SummaryOfEarlierConversation => p_MJConversationDetails_AgentID_SummaryOfEarlierConversation, p_UserID => p_MJConversationDetails_AgentID_UserID, p_ArtifactID => p_MJConversationDetails_AgentID_ArtifactID, p_ArtifactVersionID => p_MJConversationDetails_AgentID_ArtifactVersionID, p_CompletionTime => p_MJConversationDetails_AgentID_CompletionTime, p_IsPinned => p_MJConversationDetails_AgentID_IsPinned, p_ParentID => p_MJConversationDetails_AgentID_ParentID, p_AgentID => p_MJConversationDetails_AgentID_AgentID, p_Status => p_MJConversationDetails_AgentID_Status, p_SuggestedResponses => p_MJConversationDetails_AgentID_SuggestedResponses, p_TestRunID => p_MJConversationDetails_AgentID_TestRunID, p_ResponseForm => p_MJConversationDetails_AgentID_ResponseForm, p_ActionableCommands => p_MJConversationDetails_AgentID_ActionableCommands, p_AutomaticCommands => p_MJConversationDetails_AgentID_AutomaticCommands, p_OriginalMessageChanged => p_MJConversationDetails_AgentID_OriginalMessageChanged);
 
     END LOOP;
 
@@ -7336,7 +7565,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJTasks_AgentID_AgentID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateTask"(p_MJTasks_AgentIDID, p_MJTasks_AgentID_ParentID, p_MJTasks_AgentID_Name, p_MJTasks_AgentID_Description, p_MJTasks_AgentID_TypeID, p_MJTasks_AgentID_EnvironmentID, p_MJTasks_AgentID_ProjectID, p_MJTasks_AgentID_ConversationDetailID, p_MJTasks_AgentID_UserID, p_MJTasks_AgentID_AgentID, p_MJTasks_AgentID_Status, p_MJTasks_AgentID_PercentComplete, p_MJTasks_AgentID_DueAt, p_MJTasks_AgentID_StartedAt, p_MJTasks_AgentID_CompletedAt);
+        PERFORM __mj."spUpdateTask"(p_ID => p_MJTasks_AgentIDID, p_ParentID => p_MJTasks_AgentID_ParentID, p_Name => p_MJTasks_AgentID_Name, p_Description => p_MJTasks_AgentID_Description, p_TypeID => p_MJTasks_AgentID_TypeID, p_EnvironmentID => p_MJTasks_AgentID_EnvironmentID, p_ProjectID => p_MJTasks_AgentID_ProjectID, p_ConversationDetailID => p_MJTasks_AgentID_ConversationDetailID, p_UserID => p_MJTasks_AgentID_UserID, p_AgentID => p_MJTasks_AgentID_AgentID, p_Status => p_MJTasks_AgentID_Status, p_PercentComplete => p_MJTasks_AgentID_PercentComplete, p_DueAt => p_MJTasks_AgentID_DueAt, p_StartedAt => p_MJTasks_AgentID_StartedAt, p_CompletedAt => p_MJTasks_AgentID_CompletedAt);
 
     END LOOP;
 
@@ -7357,6 +7586,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteAIPrompt'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteAIPrompt"(
     IN p_ID UUID
 )
@@ -7768,7 +8005,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJActions_DefaultCompactPromptID_DefaultCompactPromptID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAction"(p_MJActions_DefaultCompactPromptIDID, p_MJActions_DefaultCompactPromptID_CategoryID, p_MJActions_DefaultCompactPromptID_Name, p_MJActions_DefaultCompactPromptID_Description, p_MJActions_DefaultCompactPromptID_Type, p_MJActions_DefaultCompactPromptID_UserPrompt, p_MJActions_DefaultCompactPromptID_UserComments, p_MJActions_DefaultCompactPromptID_Code, p_MJActions_DefaultCompactPromptID_CodeComments, p_MJActions_DefaultCompactPromptID_CodeApprovalStatus, p_MJActions_DefaultCompactPromptID_CodeApprovalComments, p_MJActions_DefaultCompactPromptID_CodeApprovedByUserID, p_MJActions_DefaultCompactPromptID_CodeApprovedAt, p_MJActions_DefaultCompactPromptID_CodeLocked, p_MJActions_DefaultCompactPromptID_ForceCodeGeneration, p_MJActions_DefaultCompactPromptID_RetentionPeriod, p_MJActions_DefaultCompactPromptID_Status, p_MJActions_DefaultCompactPromptID_DriverClass, p_MJActions_DefaultCompactPromptID_ParentID, p_MJActions_DefaultCompactPromptID_IconClass, p_MJActions_DefaultCompactPromptID_DefaultCompactPromptID, p_MJActions_DefaultCompactPromptID_Config);
+        PERFORM __mj."spUpdateAction"(p_ID => p_MJActions_DefaultCompactPromptIDID, p_CategoryID => p_MJActions_DefaultCompactPromptID_CategoryID, p_Name => p_MJActions_DefaultCompactPromptID_Name, p_Description => p_MJActions_DefaultCompactPromptID_Description, p_Type => p_MJActions_DefaultCompactPromptID_Type, p_UserPrompt => p_MJActions_DefaultCompactPromptID_UserPrompt, p_UserComments => p_MJActions_DefaultCompactPromptID_UserComments, p_Code => p_MJActions_DefaultCompactPromptID_Code, p_CodeComments => p_MJActions_DefaultCompactPromptID_CodeComments, p_CodeApprovalStatus => p_MJActions_DefaultCompactPromptID_CodeApprovalStatus, p_CodeApprovalComments => p_MJActions_DefaultCompactPromptID_CodeApprovalComments, p_CodeApprovedByUserID => p_MJActions_DefaultCompactPromptID_CodeApprovedByUserID, p_CodeApprovedAt => p_MJActions_DefaultCompactPromptID_CodeApprovedAt, p_CodeLocked => p_MJActions_DefaultCompactPromptID_CodeLocked, p_ForceCodeGeneration => p_MJActions_DefaultCompactPromptID_ForceCodeGeneration, p_RetentionPeriod => p_MJActions_DefaultCompactPromptID_RetentionPeriod, p_Status => p_MJActions_DefaultCompactPromptID_Status, p_DriverClass => p_MJActions_DefaultCompactPromptID_DriverClass, p_ParentID => p_MJActions_DefaultCompactPromptID_ParentID, p_IconClass => p_MJActions_DefaultCompactPromptID_IconClass, p_DefaultCompactPromptID => p_MJActions_DefaultCompactPromptID_DefaultCompactPromptID, p_Config => p_MJActions_DefaultCompactPromptID_Config);
 
     END LOOP;
 
@@ -7792,7 +8029,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIAgentActions_CompactPromptID_CompactPromptID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentAction"(p_MJAIAgentActions_CompactPromptIDID, p_MJAIAgentActions_CompactPromptID_AgentID, p_MJAIAgentActions_CompactPromptID_ActionID, p_MJAIAgentActions_CompactPromptID_Status, p_MJAIAgentActions_CompactPromptID_MinExecutionsPerRun, p_MJAIAgentActions_CompactPromptID_MaxExecutionsPerRun, p_MJAIAgentActions_CompactPromptID_ResultExpirationTurns, p_MJAIAgentActions_CompactPromptID_ResultExpirationMode, p_MJAIAgentActions_CompactPromptID_CompactMode, p_MJAIAgentActions_CompactPromptID_CompactLength, p_MJAIAgentActions_CompactPromptID_CompactPromptID);
+        PERFORM __mj."spUpdateAIAgentAction"(p_ID => p_MJAIAgentActions_CompactPromptIDID, p_AgentID => p_MJAIAgentActions_CompactPromptID_AgentID, p_ActionID => p_MJAIAgentActions_CompactPromptID_ActionID, p_Status => p_MJAIAgentActions_CompactPromptID_Status, p_MinExecutionsPerRun => p_MJAIAgentActions_CompactPromptID_MinExecutionsPerRun, p_MaxExecutionsPerRun => p_MJAIAgentActions_CompactPromptID_MaxExecutionsPerRun, p_ResultExpirationTurns => p_MJAIAgentActions_CompactPromptID_ResultExpirationTurns, p_ResultExpirationMode => p_MJAIAgentActions_CompactPromptID_ResultExpirationMode, p_CompactMode => p_MJAIAgentActions_CompactPromptID_CompactMode, p_CompactLength => p_MJAIAgentActions_CompactPromptID_CompactLength, p_CompactPromptID => p_MJAIAgentActions_CompactPromptID_CompactPromptID);
 
     END LOOP;
 
@@ -7802,7 +8039,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentPrompt" WHERE "PromptID" = p_ID
     LOOP
         p_MJAIAgentPrompts_PromptIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentPrompt"(p_MJAIAgentPrompts_PromptIDID);
+        PERFORM __mj."spDeleteAIAgentPrompt"(p_ID => p_MJAIAgentPrompts_PromptIDID);
         
     END LOOP;
     
@@ -7836,7 +8073,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIAgentSteps_PromptID_PromptID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentStep"(p_MJAIAgentSteps_PromptIDID, p_MJAIAgentSteps_PromptID_AgentID, p_MJAIAgentSteps_PromptID_Name, p_MJAIAgentSteps_PromptID_Description, p_MJAIAgentSteps_PromptID_StepType, p_MJAIAgentSteps_PromptID_StartingStep, p_MJAIAgentSteps_PromptID_TimeoutSeconds, p_MJAIAgentSteps_PromptID_RetryCount, p_MJAIAgentSteps_PromptID_OnErrorBehavior, p_MJAIAgentSteps_PromptID_ActionID, p_MJAIAgentSteps_PromptID_SubAgentID, p_MJAIAgentSteps_PromptID_PromptID, p_MJAIAgentSteps_PromptID_ActionOutputMapping, p_MJAIAgentSteps_PromptID_PositionX, p_MJAIAgentSteps_PromptID_PositionY, p_MJAIAgentSteps_PromptID_Width, p_MJAIAgentSteps_PromptID_Height, p_MJAIAgentSteps_PromptID_Status, p_MJAIAgentSteps_PromptID_ActionInputMapping, p_MJAIAgentSteps_PromptID_LoopBodyType, p_MJAIAgentSteps_PromptID_Configuration);
+        PERFORM __mj."spUpdateAIAgentStep"(p_ID => p_MJAIAgentSteps_PromptIDID, p_AgentID => p_MJAIAgentSteps_PromptID_AgentID, p_Name => p_MJAIAgentSteps_PromptID_Name, p_Description => p_MJAIAgentSteps_PromptID_Description, p_StepType => p_MJAIAgentSteps_PromptID_StepType, p_StartingStep => p_MJAIAgentSteps_PromptID_StartingStep, p_TimeoutSeconds => p_MJAIAgentSteps_PromptID_TimeoutSeconds, p_RetryCount => p_MJAIAgentSteps_PromptID_RetryCount, p_OnErrorBehavior => p_MJAIAgentSteps_PromptID_OnErrorBehavior, p_ActionID => p_MJAIAgentSteps_PromptID_ActionID, p_SubAgentID => p_MJAIAgentSteps_PromptID_SubAgentID, p_PromptID => p_MJAIAgentSteps_PromptID_PromptID, p_ActionOutputMapping => p_MJAIAgentSteps_PromptID_ActionOutputMapping, p_PositionX => p_MJAIAgentSteps_PromptID_PositionX, p_PositionY => p_MJAIAgentSteps_PromptID_PositionY, p_Width => p_MJAIAgentSteps_PromptID_Width, p_Height => p_MJAIAgentSteps_PromptID_Height, p_Status => p_MJAIAgentSteps_PromptID_Status, p_ActionInputMapping => p_MJAIAgentSteps_PromptID_ActionInputMapping, p_LoopBodyType => p_MJAIAgentSteps_PromptID_LoopBodyType, p_Configuration => p_MJAIAgentSteps_PromptID_Configuration);
 
     END LOOP;
 
@@ -7862,7 +8099,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIAgentTypes_SystemPromptID_SystemPromptID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentType"(p_MJAIAgentTypes_SystemPromptIDID, p_MJAIAgentTypes_SystemPromptID_Name, p_MJAIAgentTypes_SystemPromptID_Description, p_MJAIAgentTypes_SystemPromptID_SystemPromptID, p_MJAIAgentTypes_SystemPromptID_IsActive, p_MJAIAgentTypes_SystemPromptID_AgentPromptPlaceholder, p_MJAIAgentTypes_SystemPromptID_DriverClass, p_MJAIAgentTypes_SystemPromptID_UIFormSectionKey, p_MJAIAgentTypes_SystemPromptID_UIFormKey, p_MJAIAgentTypes_SystemPromptID_UIFormSectionExpandedByDefault, p_MJAIAgentTypes_SystemPromptID_PromptParamsSchema, p_MJAIAgentTypes_SystemPromptID_AssignmentStrategy, p_MJAIAgentTypes_SystemPromptID_DefaultStorageAccountID);
+        PERFORM __mj."spUpdateAIAgentType"(p_ID => p_MJAIAgentTypes_SystemPromptIDID, p_Name => p_MJAIAgentTypes_SystemPromptID_Name, p_Description => p_MJAIAgentTypes_SystemPromptID_Description, p_SystemPromptID => p_MJAIAgentTypes_SystemPromptID_SystemPromptID, p_IsActive => p_MJAIAgentTypes_SystemPromptID_IsActive, p_AgentPromptPlaceholder => p_MJAIAgentTypes_SystemPromptID_AgentPromptPlaceholder, p_DriverClass => p_MJAIAgentTypes_SystemPromptID_DriverClass, p_UIFormSectionKey => p_MJAIAgentTypes_SystemPromptID_UIFormSectionKey, p_UIFormKey => p_MJAIAgentTypes_SystemPromptID_UIFormKey, p_UIFormSectionExpandedByDefault => p_MJAIAgentTypes_SystemPromptID_UIFormSectionExpandedByDefault, p_PromptParamsSchema => p_MJAIAgentTypes_SystemPromptID_PromptParamsSchema, p_AssignmentStrategy => p_MJAIAgentTypes_SystemPromptID_AssignmentStrategy, p_DefaultStorageAccountID => p_MJAIAgentTypes_SystemPromptID_DefaultStorageAccountID);
 
     END LOOP;
 
@@ -7938,7 +8175,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIAgents_ContextCompressionPromptID_ContextCompressio_a2467d := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgent"(p_MJAIAgents_ContextCompressionPromptIDID, p_MJAIAgents_ContextCompressionPromptID_Name, p_MJAIAgents_ContextCompressionPromptID_Description, p_MJAIAgents_ContextCompressionPromptID_LogoURL, p_MJAIAgents_ContextCompressionPromptID_ParentID, p_MJAIAgents_ContextCompressionPromptID_ExposeAsAction, p_MJAIAgents_ContextCompressionPromptID_ExecutionOrder, p_MJAIAgents_ContextCompressionPromptID_ExecutionMode, p_MJAIAgents_ContextCompressionPromptID_EnableContextComp_017508, p_MJAIAgents_ContextCompressionPromptID_ContextCompressio_09124d, p_MJAIAgents_ContextCompressionPromptID_ContextCompressio_a2467d, p_MJAIAgents_ContextCompressionPromptID_ContextCompressio_6c27f1, p_MJAIAgents_ContextCompressionPromptID_TypeID, p_MJAIAgents_ContextCompressionPromptID_Status, p_MJAIAgents_ContextCompressionPromptID_DriverClass, p_MJAIAgents_ContextCompressionPromptID_IconClass, p_MJAIAgents_ContextCompressionPromptID_ModelSelectionMode, p_MJAIAgents_ContextCompressionPromptID_PayloadDownstreamPaths, p_MJAIAgents_ContextCompressionPromptID_PayloadUpstreamPaths, p_MJAIAgents_ContextCompressionPromptID_PayloadSelfReadPaths, p_MJAIAgents_ContextCompressionPromptID_PayloadSelfWritePaths, p_MJAIAgents_ContextCompressionPromptID_PayloadScope, p_MJAIAgents_ContextCompressionPromptID_FinalPayloadValidation, p_MJAIAgents_ContextCompressionPromptID_FinalPayloadValid_a7a211, p_MJAIAgents_ContextCompressionPromptID_FinalPayloadValid_a47251, p_MJAIAgents_ContextCompressionPromptID_MaxCostPerRun, p_MJAIAgents_ContextCompressionPromptID_MaxTokensPerRun, p_MJAIAgents_ContextCompressionPromptID_MaxIterationsPerRun, p_MJAIAgents_ContextCompressionPromptID_MaxTimePerRun, p_MJAIAgents_ContextCompressionPromptID_MinExecutionsPerRun, p_MJAIAgents_ContextCompressionPromptID_MaxExecutionsPerRun, p_MJAIAgents_ContextCompressionPromptID_StartingPayloadVa_df2a60, p_MJAIAgents_ContextCompressionPromptID_StartingPayloadVa_df2a60Mode, p_MJAIAgents_ContextCompressionPromptID_DefaultPromptEffo_322203, p_MJAIAgents_ContextCompressionPromptID_ChatHandlingOption, p_MJAIAgents_ContextCompressionPromptID_DefaultArtifactTypeID, p_MJAIAgents_ContextCompressionPromptID_OwnerUserID, p_MJAIAgents_ContextCompressionPromptID_InvocationMode, p_MJAIAgents_ContextCompressionPromptID_ArtifactCreationMode, p_MJAIAgents_ContextCompressionPromptID_FunctionalRequirements, p_MJAIAgents_ContextCompressionPromptID_TechnicalDesign, p_MJAIAgents_ContextCompressionPromptID_InjectNotes, p_MJAIAgents_ContextCompressionPromptID_MaxNotesToInject, p_MJAIAgents_ContextCompressionPromptID_NoteInjectionStrategy, p_MJAIAgents_ContextCompressionPromptID_InjectExamples, p_MJAIAgents_ContextCompressionPromptID_MaxExamplesToInject, p_MJAIAgents_ContextCompressionPromptID_ExampleInjectionS_27b212, p_MJAIAgents_ContextCompressionPromptID_IsRestricted, p_MJAIAgents_ContextCompressionPromptID_MessageMode, p_MJAIAgents_ContextCompressionPromptID_MaxMessages, p_MJAIAgents_ContextCompressionPromptID_AttachmentStorage_81bfaf, p_MJAIAgents_ContextCompressionPromptID_AttachmentRootPath, p_MJAIAgents_ContextCompressionPromptID_InlineStorageThre_804eef, p_MJAIAgents_ContextCompressionPromptID_AgentTypePromptParams, p_MJAIAgents_ContextCompressionPromptID_ScopeConfig, p_MJAIAgents_ContextCompressionPromptID_NoteRetentionDays, p_MJAIAgents_ContextCompressionPromptID_ExampleRetentionDays, p_MJAIAgents_ContextCompressionPromptID_AutoArchiveEnabled, p_MJAIAgents_ContextCompressionPromptID_RerankerConfiguration, p_MJAIAgents_ContextCompressionPromptID_CategoryID, p_MJAIAgents_ContextCompressionPromptID_AllowEphemeralCli_be674b, p_MJAIAgents_ContextCompressionPromptID_DefaultStorageAccountID, p_MJAIAgents_ContextCompressionPromptID_SearchScopeAccess);
+        PERFORM __mj."spUpdateAIAgent"(p_ID => p_MJAIAgents_ContextCompressionPromptIDID, p_Name => p_MJAIAgents_ContextCompressionPromptID_Name, p_Description => p_MJAIAgents_ContextCompressionPromptID_Description, p_LogoURL => p_MJAIAgents_ContextCompressionPromptID_LogoURL, p_ParentID => p_MJAIAgents_ContextCompressionPromptID_ParentID, p_ExposeAsAction => p_MJAIAgents_ContextCompressionPromptID_ExposeAsAction, p_ExecutionOrder => p_MJAIAgents_ContextCompressionPromptID_ExecutionOrder, p_ExecutionMode => p_MJAIAgents_ContextCompressionPromptID_ExecutionMode, p_EnableContextCompression => p_MJAIAgents_ContextCompressionPromptID_EnableContextComp_017508, p_ContextCompressionMessageThreshold => p_MJAIAgents_ContextCompressionPromptID_ContextCompressio_09124d, p_ContextCompressionPromptID => p_MJAIAgents_ContextCompressionPromptID_ContextCompressio_a2467d, p_ContextCompressionMessageRetentionCount => p_MJAIAgents_ContextCompressionPromptID_ContextCompressio_6c27f1, p_TypeID => p_MJAIAgents_ContextCompressionPromptID_TypeID, p_Status => p_MJAIAgents_ContextCompressionPromptID_Status, p_DriverClass => p_MJAIAgents_ContextCompressionPromptID_DriverClass, p_IconClass => p_MJAIAgents_ContextCompressionPromptID_IconClass, p_ModelSelectionMode => p_MJAIAgents_ContextCompressionPromptID_ModelSelectionMode, p_PayloadDownstreamPaths => p_MJAIAgents_ContextCompressionPromptID_PayloadDownstreamPaths, p_PayloadUpstreamPaths => p_MJAIAgents_ContextCompressionPromptID_PayloadUpstreamPaths, p_PayloadSelfReadPaths => p_MJAIAgents_ContextCompressionPromptID_PayloadSelfReadPaths, p_PayloadSelfWritePaths => p_MJAIAgents_ContextCompressionPromptID_PayloadSelfWritePaths, p_PayloadScope => p_MJAIAgents_ContextCompressionPromptID_PayloadScope, p_FinalPayloadValidation => p_MJAIAgents_ContextCompressionPromptID_FinalPayloadValidation, p_FinalPayloadValidationMode => p_MJAIAgents_ContextCompressionPromptID_FinalPayloadValid_a7a211, p_FinalPayloadValidationMaxRetries => p_MJAIAgents_ContextCompressionPromptID_FinalPayloadValid_a47251, p_MaxCostPerRun => p_MJAIAgents_ContextCompressionPromptID_MaxCostPerRun, p_MaxTokensPerRun => p_MJAIAgents_ContextCompressionPromptID_MaxTokensPerRun, p_MaxIterationsPerRun => p_MJAIAgents_ContextCompressionPromptID_MaxIterationsPerRun, p_MaxTimePerRun => p_MJAIAgents_ContextCompressionPromptID_MaxTimePerRun, p_MinExecutionsPerRun => p_MJAIAgents_ContextCompressionPromptID_MinExecutionsPerRun, p_MaxExecutionsPerRun => p_MJAIAgents_ContextCompressionPromptID_MaxExecutionsPerRun, p_StartingPayloadValidation => p_MJAIAgents_ContextCompressionPromptID_StartingPayloadVa_df2a60, p_StartingPayloadValidationMode => p_MJAIAgents_ContextCompressionPromptID_StartingPayloadVa_df2a60Mode, p_DefaultPromptEffortLevel => p_MJAIAgents_ContextCompressionPromptID_DefaultPromptEffo_322203, p_ChatHandlingOption => p_MJAIAgents_ContextCompressionPromptID_ChatHandlingOption, p_DefaultArtifactTypeID => p_MJAIAgents_ContextCompressionPromptID_DefaultArtifactTypeID, p_OwnerUserID => p_MJAIAgents_ContextCompressionPromptID_OwnerUserID, p_InvocationMode => p_MJAIAgents_ContextCompressionPromptID_InvocationMode, p_ArtifactCreationMode => p_MJAIAgents_ContextCompressionPromptID_ArtifactCreationMode, p_FunctionalRequirements => p_MJAIAgents_ContextCompressionPromptID_FunctionalRequirements, p_TechnicalDesign => p_MJAIAgents_ContextCompressionPromptID_TechnicalDesign, p_InjectNotes => p_MJAIAgents_ContextCompressionPromptID_InjectNotes, p_MaxNotesToInject => p_MJAIAgents_ContextCompressionPromptID_MaxNotesToInject, p_NoteInjectionStrategy => p_MJAIAgents_ContextCompressionPromptID_NoteInjectionStrategy, p_InjectExamples => p_MJAIAgents_ContextCompressionPromptID_InjectExamples, p_MaxExamplesToInject => p_MJAIAgents_ContextCompressionPromptID_MaxExamplesToInject, p_ExampleInjectionStrategy => p_MJAIAgents_ContextCompressionPromptID_ExampleInjectionS_27b212, p_IsRestricted => p_MJAIAgents_ContextCompressionPromptID_IsRestricted, p_MessageMode => p_MJAIAgents_ContextCompressionPromptID_MessageMode, p_MaxMessages => p_MJAIAgents_ContextCompressionPromptID_MaxMessages, p_AttachmentStorageProviderID => p_MJAIAgents_ContextCompressionPromptID_AttachmentStorage_81bfaf, p_AttachmentRootPath => p_MJAIAgents_ContextCompressionPromptID_AttachmentRootPath, p_InlineStorageThresholdBytes => p_MJAIAgents_ContextCompressionPromptID_InlineStorageThre_804eef, p_AgentTypePromptParams => p_MJAIAgents_ContextCompressionPromptID_AgentTypePromptParams, p_ScopeConfig => p_MJAIAgents_ContextCompressionPromptID_ScopeConfig, p_NoteRetentionDays => p_MJAIAgents_ContextCompressionPromptID_NoteRetentionDays, p_ExampleRetentionDays => p_MJAIAgents_ContextCompressionPromptID_ExampleRetentionDays, p_AutoArchiveEnabled => p_MJAIAgents_ContextCompressionPromptID_AutoArchiveEnabled, p_RerankerConfiguration => p_MJAIAgents_ContextCompressionPromptID_RerankerConfiguration, p_CategoryID => p_MJAIAgents_ContextCompressionPromptID_CategoryID, p_AllowEphemeralClientTools => p_MJAIAgents_ContextCompressionPromptID_AllowEphemeralCli_be674b, p_DefaultStorageAccountID => p_MJAIAgents_ContextCompressionPromptID_DefaultStorageAccountID, p_SearchScopeAccess => p_MJAIAgents_ContextCompressionPromptID_SearchScopeAccess);
 
     END LOOP;
 
@@ -7961,7 +8198,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIConfigurations_DefaultPromptForContextCompressionID_62528c := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIConfiguration"(p_MJAIConfigurations_DefaultPromptForContextCompressionIDID, p_MJAIConfigurations_DefaultPromptForContextCompressionID_Name, p_MJAIConfigurations_DefaultPromptForContextCompressionID_da9038, p_MJAIConfigurations_DefaultPromptForContextCompressionID_6adeb7, p_MJAIConfigurations_DefaultPromptForContextCompressionID_d74408, p_MJAIConfigurations_DefaultPromptForContextCompressionID_62528c, p_MJAIConfigurations_DefaultPromptForContextCompressionID_dbdd4d, p_MJAIConfigurations_DefaultPromptForContextCompressionID_30722a, p_MJAIConfigurations_DefaultPromptForContextCompressionID_70e3ed, p_MJAIConfigurations_DefaultPromptForContextCompressionID_0dd4a4);
+        PERFORM __mj."spUpdateAIConfiguration"(p_ID => p_MJAIConfigurations_DefaultPromptForContextCompressionIDID, p_Name => p_MJAIConfigurations_DefaultPromptForContextCompressionID_Name, p_Description => p_MJAIConfigurations_DefaultPromptForContextCompressionID_da9038, p_IsDefault => p_MJAIConfigurations_DefaultPromptForContextCompressionID_6adeb7, p_Status => p_MJAIConfigurations_DefaultPromptForContextCompressionID_d74408, p_DefaultPromptForContextCompressionID => p_MJAIConfigurations_DefaultPromptForContextCompressionID_62528c, p_DefaultPromptForContextSummarizationID => p_MJAIConfigurations_DefaultPromptForContextCompressionID_dbdd4d, p_DefaultStorageProviderID => p_MJAIConfigurations_DefaultPromptForContextCompressionID_30722a, p_DefaultStorageRootPath => p_MJAIConfigurations_DefaultPromptForContextCompressionID_70e3ed, p_ParentID => p_MJAIConfigurations_DefaultPromptForContextCompressionID_0dd4a4);
 
     END LOOP;
 
@@ -7984,7 +8221,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIConfigurations_DefaultPromptForContextSummarization_931872 := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIConfiguration"(p_MJAIConfigurations_DefaultPromptForContextSummarizationIDID, p_MJAIConfigurations_DefaultPromptForContextSummarization_c5c467, p_MJAIConfigurations_DefaultPromptForContextSummarization_6a1d29, p_MJAIConfigurations_DefaultPromptForContextSummarization_bf32c6, p_MJAIConfigurations_DefaultPromptForContextSummarization_6fd740, p_MJAIConfigurations_DefaultPromptForContextSummarization_ac095a, p_MJAIConfigurations_DefaultPromptForContextSummarization_931872, p_MJAIConfigurations_DefaultPromptForContextSummarization_991e80, p_MJAIConfigurations_DefaultPromptForContextSummarization_b4211c, p_MJAIConfigurations_DefaultPromptForContextSummarization_ce7c84);
+        PERFORM __mj."spUpdateAIConfiguration"(p_ID => p_MJAIConfigurations_DefaultPromptForContextSummarizationIDID, p_Name => p_MJAIConfigurations_DefaultPromptForContextSummarization_c5c467, p_Description => p_MJAIConfigurations_DefaultPromptForContextSummarization_6a1d29, p_IsDefault => p_MJAIConfigurations_DefaultPromptForContextSummarization_bf32c6, p_Status => p_MJAIConfigurations_DefaultPromptForContextSummarization_6fd740, p_DefaultPromptForContextCompressionID => p_MJAIConfigurations_DefaultPromptForContextSummarization_ac095a, p_DefaultPromptForContextSummarizationID => p_MJAIConfigurations_DefaultPromptForContextSummarization_931872, p_DefaultStorageProviderID => p_MJAIConfigurations_DefaultPromptForContextSummarization_991e80, p_DefaultStorageRootPath => p_MJAIConfigurations_DefaultPromptForContextSummarization_b4211c, p_ParentID => p_MJAIConfigurations_DefaultPromptForContextSummarization_ce7c84);
 
     END LOOP;
 
@@ -7994,7 +8231,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIPromptModel" WHERE "PromptID" = p_ID
     LOOP
         p_MJAIPromptModels_PromptIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIPromptModel"(p_MJAIPromptModels_PromptIDID);
+        PERFORM __mj."spDeleteAIPromptModel"(p_ID => p_MJAIPromptModels_PromptIDID);
         
     END LOOP;
     
@@ -8004,7 +8241,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIPromptRun" WHERE "PromptID" = p_ID
     LOOP
         p_MJAIPromptRuns_PromptIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIPromptRun"(p_MJAIPromptRuns_PromptIDID);
+        PERFORM __mj."spDeleteAIPromptRun"(p_ID => p_MJAIPromptRuns_PromptIDID);
         
     END LOOP;
     
@@ -8100,7 +8337,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIPromptRuns_JudgeID_JudgeID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIPromptRun"(p_MJAIPromptRuns_JudgeIDID, p_MJAIPromptRuns_JudgeID_PromptID, p_MJAIPromptRuns_JudgeID_ModelID, p_MJAIPromptRuns_JudgeID_VendorID, p_MJAIPromptRuns_JudgeID_AgentID, p_MJAIPromptRuns_JudgeID_ConfigurationID, p_MJAIPromptRuns_JudgeID_RunAt, p_MJAIPromptRuns_JudgeID_CompletedAt, p_MJAIPromptRuns_JudgeID_ExecutionTimeMS, p_MJAIPromptRuns_JudgeID_Messages, p_MJAIPromptRuns_JudgeID_Result, p_MJAIPromptRuns_JudgeID_TokensUsed, p_MJAIPromptRuns_JudgeID_TokensPrompt, p_MJAIPromptRuns_JudgeID_TokensCompletion, p_MJAIPromptRuns_JudgeID_TotalCost, p_MJAIPromptRuns_JudgeID_Success, p_MJAIPromptRuns_JudgeID_ErrorMessage, p_MJAIPromptRuns_JudgeID_ParentID, p_MJAIPromptRuns_JudgeID_RunType, p_MJAIPromptRuns_JudgeID_ExecutionOrder, p_MJAIPromptRuns_JudgeID_AgentRunID, p_MJAIPromptRuns_JudgeID_Cost, p_MJAIPromptRuns_JudgeID_CostCurrency, p_MJAIPromptRuns_JudgeID_TokensUsedRollup, p_MJAIPromptRuns_JudgeID_TokensPromptRollup, p_MJAIPromptRuns_JudgeID_TokensCompletionRollup, p_MJAIPromptRuns_JudgeID_Temperature, p_MJAIPromptRuns_JudgeID_TopP, p_MJAIPromptRuns_JudgeID_TopK, p_MJAIPromptRuns_JudgeID_MinP, p_MJAIPromptRuns_JudgeID_FrequencyPenalty, p_MJAIPromptRuns_JudgeID_PresencePenalty, p_MJAIPromptRuns_JudgeID_Seed, p_MJAIPromptRuns_JudgeID_StopSequences, p_MJAIPromptRuns_JudgeID_ResponseFormat, p_MJAIPromptRuns_JudgeID_LogProbs, p_MJAIPromptRuns_JudgeID_TopLogProbs, p_MJAIPromptRuns_JudgeID_DescendantCost, p_MJAIPromptRuns_JudgeID_ValidationAttemptCount, p_MJAIPromptRuns_JudgeID_SuccessfulValidationCount, p_MJAIPromptRuns_JudgeID_FinalValidationPassed, p_MJAIPromptRuns_JudgeID_ValidationBehavior, p_MJAIPromptRuns_JudgeID_RetryStrategy, p_MJAIPromptRuns_JudgeID_MaxRetriesConfigured, p_MJAIPromptRuns_JudgeID_FinalValidationError, p_MJAIPromptRuns_JudgeID_ValidationErrorCount, p_MJAIPromptRuns_JudgeID_CommonValidationError, p_MJAIPromptRuns_JudgeID_FirstAttemptAt, p_MJAIPromptRuns_JudgeID_LastAttemptAt, p_MJAIPromptRuns_JudgeID_TotalRetryDurationMS, p_MJAIPromptRuns_JudgeID_ValidationAttempts, p_MJAIPromptRuns_JudgeID_ValidationSummary, p_MJAIPromptRuns_JudgeID_FailoverAttempts, p_MJAIPromptRuns_JudgeID_FailoverErrors, p_MJAIPromptRuns_JudgeID_FailoverDurations, p_MJAIPromptRuns_JudgeID_OriginalModelID, p_MJAIPromptRuns_JudgeID_OriginalRequestStartTime, p_MJAIPromptRuns_JudgeID_TotalFailoverDuration, p_MJAIPromptRuns_JudgeID_RerunFromPromptRunID, p_MJAIPromptRuns_JudgeID_ModelSelection, p_MJAIPromptRuns_JudgeID_Status, p_MJAIPromptRuns_JudgeID_Cancelled, p_MJAIPromptRuns_JudgeID_CancellationReason, p_MJAIPromptRuns_JudgeID_ModelPowerRank, p_MJAIPromptRuns_JudgeID_SelectionStrategy, p_MJAIPromptRuns_JudgeID_CacheHit, p_MJAIPromptRuns_JudgeID_CacheKey, p_MJAIPromptRuns_JudgeID_JudgeID, p_MJAIPromptRuns_JudgeID_JudgeScore, p_MJAIPromptRuns_JudgeID_WasSelectedResult, p_MJAIPromptRuns_JudgeID_StreamingEnabled, p_MJAIPromptRuns_JudgeID_FirstTokenTime, p_MJAIPromptRuns_JudgeID_ErrorDetails, p_MJAIPromptRuns_JudgeID_ChildPromptID, p_MJAIPromptRuns_JudgeID_QueueTime, p_MJAIPromptRuns_JudgeID_PromptTime, p_MJAIPromptRuns_JudgeID_CompletionTime, p_MJAIPromptRuns_JudgeID_ModelSpecificResponseDetails, p_MJAIPromptRuns_JudgeID_EffortLevel, p_MJAIPromptRuns_JudgeID_RunName, p_MJAIPromptRuns_JudgeID_Comments, p_MJAIPromptRuns_JudgeID_TestRunID, p_MJAIPromptRuns_JudgeID_AssistantPrefill);
+        PERFORM __mj."spUpdateAIPromptRun"(p_ID => p_MJAIPromptRuns_JudgeIDID, p_PromptID => p_MJAIPromptRuns_JudgeID_PromptID, p_ModelID => p_MJAIPromptRuns_JudgeID_ModelID, p_VendorID => p_MJAIPromptRuns_JudgeID_VendorID, p_AgentID => p_MJAIPromptRuns_JudgeID_AgentID, p_ConfigurationID => p_MJAIPromptRuns_JudgeID_ConfigurationID, p_RunAt => p_MJAIPromptRuns_JudgeID_RunAt, p_CompletedAt => p_MJAIPromptRuns_JudgeID_CompletedAt, p_ExecutionTimeMS => p_MJAIPromptRuns_JudgeID_ExecutionTimeMS, p_Messages => p_MJAIPromptRuns_JudgeID_Messages, p_Result => p_MJAIPromptRuns_JudgeID_Result, p_TokensUsed => p_MJAIPromptRuns_JudgeID_TokensUsed, p_TokensPrompt => p_MJAIPromptRuns_JudgeID_TokensPrompt, p_TokensCompletion => p_MJAIPromptRuns_JudgeID_TokensCompletion, p_TotalCost => p_MJAIPromptRuns_JudgeID_TotalCost, p_Success => p_MJAIPromptRuns_JudgeID_Success, p_ErrorMessage => p_MJAIPromptRuns_JudgeID_ErrorMessage, p_ParentID => p_MJAIPromptRuns_JudgeID_ParentID, p_RunType => p_MJAIPromptRuns_JudgeID_RunType, p_ExecutionOrder => p_MJAIPromptRuns_JudgeID_ExecutionOrder, p_AgentRunID => p_MJAIPromptRuns_JudgeID_AgentRunID, p_Cost => p_MJAIPromptRuns_JudgeID_Cost, p_CostCurrency => p_MJAIPromptRuns_JudgeID_CostCurrency, p_TokensUsedRollup => p_MJAIPromptRuns_JudgeID_TokensUsedRollup, p_TokensPromptRollup => p_MJAIPromptRuns_JudgeID_TokensPromptRollup, p_TokensCompletionRollup => p_MJAIPromptRuns_JudgeID_TokensCompletionRollup, p_Temperature => p_MJAIPromptRuns_JudgeID_Temperature, p_TopP => p_MJAIPromptRuns_JudgeID_TopP, p_TopK => p_MJAIPromptRuns_JudgeID_TopK, p_MinP => p_MJAIPromptRuns_JudgeID_MinP, p_FrequencyPenalty => p_MJAIPromptRuns_JudgeID_FrequencyPenalty, p_PresencePenalty => p_MJAIPromptRuns_JudgeID_PresencePenalty, p_Seed => p_MJAIPromptRuns_JudgeID_Seed, p_StopSequences => p_MJAIPromptRuns_JudgeID_StopSequences, p_ResponseFormat => p_MJAIPromptRuns_JudgeID_ResponseFormat, p_LogProbs => p_MJAIPromptRuns_JudgeID_LogProbs, p_TopLogProbs => p_MJAIPromptRuns_JudgeID_TopLogProbs, p_DescendantCost => p_MJAIPromptRuns_JudgeID_DescendantCost, p_ValidationAttemptCount => p_MJAIPromptRuns_JudgeID_ValidationAttemptCount, p_SuccessfulValidationCount => p_MJAIPromptRuns_JudgeID_SuccessfulValidationCount, p_FinalValidationPassed => p_MJAIPromptRuns_JudgeID_FinalValidationPassed, p_ValidationBehavior => p_MJAIPromptRuns_JudgeID_ValidationBehavior, p_RetryStrategy => p_MJAIPromptRuns_JudgeID_RetryStrategy, p_MaxRetriesConfigured => p_MJAIPromptRuns_JudgeID_MaxRetriesConfigured, p_FinalValidationError => p_MJAIPromptRuns_JudgeID_FinalValidationError, p_ValidationErrorCount => p_MJAIPromptRuns_JudgeID_ValidationErrorCount, p_CommonValidationError => p_MJAIPromptRuns_JudgeID_CommonValidationError, p_FirstAttemptAt => p_MJAIPromptRuns_JudgeID_FirstAttemptAt, p_LastAttemptAt => p_MJAIPromptRuns_JudgeID_LastAttemptAt, p_TotalRetryDurationMS => p_MJAIPromptRuns_JudgeID_TotalRetryDurationMS, p_ValidationAttempts => p_MJAIPromptRuns_JudgeID_ValidationAttempts, p_ValidationSummary => p_MJAIPromptRuns_JudgeID_ValidationSummary, p_FailoverAttempts => p_MJAIPromptRuns_JudgeID_FailoverAttempts, p_FailoverErrors => p_MJAIPromptRuns_JudgeID_FailoverErrors, p_FailoverDurations => p_MJAIPromptRuns_JudgeID_FailoverDurations, p_OriginalModelID => p_MJAIPromptRuns_JudgeID_OriginalModelID, p_OriginalRequestStartTime => p_MJAIPromptRuns_JudgeID_OriginalRequestStartTime, p_TotalFailoverDuration => p_MJAIPromptRuns_JudgeID_TotalFailoverDuration, p_RerunFromPromptRunID => p_MJAIPromptRuns_JudgeID_RerunFromPromptRunID, p_ModelSelection => p_MJAIPromptRuns_JudgeID_ModelSelection, p_Status => p_MJAIPromptRuns_JudgeID_Status, p_Cancelled => p_MJAIPromptRuns_JudgeID_Cancelled, p_CancellationReason => p_MJAIPromptRuns_JudgeID_CancellationReason, p_ModelPowerRank => p_MJAIPromptRuns_JudgeID_ModelPowerRank, p_SelectionStrategy => p_MJAIPromptRuns_JudgeID_SelectionStrategy, p_CacheHit => p_MJAIPromptRuns_JudgeID_CacheHit, p_CacheKey => p_MJAIPromptRuns_JudgeID_CacheKey, p_JudgeID => p_MJAIPromptRuns_JudgeID_JudgeID, p_JudgeScore => p_MJAIPromptRuns_JudgeID_JudgeScore, p_WasSelectedResult => p_MJAIPromptRuns_JudgeID_WasSelectedResult, p_StreamingEnabled => p_MJAIPromptRuns_JudgeID_StreamingEnabled, p_FirstTokenTime => p_MJAIPromptRuns_JudgeID_FirstTokenTime, p_ErrorDetails => p_MJAIPromptRuns_JudgeID_ErrorDetails, p_ChildPromptID => p_MJAIPromptRuns_JudgeID_ChildPromptID, p_QueueTime => p_MJAIPromptRuns_JudgeID_QueueTime, p_PromptTime => p_MJAIPromptRuns_JudgeID_PromptTime, p_CompletionTime => p_MJAIPromptRuns_JudgeID_CompletionTime, p_ModelSpecificResponseDetails => p_MJAIPromptRuns_JudgeID_ModelSpecificResponseDetails, p_EffortLevel => p_MJAIPromptRuns_JudgeID_EffortLevel, p_RunName => p_MJAIPromptRuns_JudgeID_RunName, p_Comments => p_MJAIPromptRuns_JudgeID_Comments, p_TestRunID => p_MJAIPromptRuns_JudgeID_TestRunID, p_AssistantPrefill => p_MJAIPromptRuns_JudgeID_AssistantPrefill);
 
     END LOOP;
 
@@ -8196,7 +8433,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIPromptRuns_ChildPromptID_ChildPromptID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIPromptRun"(p_MJAIPromptRuns_ChildPromptIDID, p_MJAIPromptRuns_ChildPromptID_PromptID, p_MJAIPromptRuns_ChildPromptID_ModelID, p_MJAIPromptRuns_ChildPromptID_VendorID, p_MJAIPromptRuns_ChildPromptID_AgentID, p_MJAIPromptRuns_ChildPromptID_ConfigurationID, p_MJAIPromptRuns_ChildPromptID_RunAt, p_MJAIPromptRuns_ChildPromptID_CompletedAt, p_MJAIPromptRuns_ChildPromptID_ExecutionTimeMS, p_MJAIPromptRuns_ChildPromptID_Messages, p_MJAIPromptRuns_ChildPromptID_Result, p_MJAIPromptRuns_ChildPromptID_TokensUsed, p_MJAIPromptRuns_ChildPromptID_TokensPrompt, p_MJAIPromptRuns_ChildPromptID_TokensCompletion, p_MJAIPromptRuns_ChildPromptID_TotalCost, p_MJAIPromptRuns_ChildPromptID_Success, p_MJAIPromptRuns_ChildPromptID_ErrorMessage, p_MJAIPromptRuns_ChildPromptID_ParentID, p_MJAIPromptRuns_ChildPromptID_RunType, p_MJAIPromptRuns_ChildPromptID_ExecutionOrder, p_MJAIPromptRuns_ChildPromptID_AgentRunID, p_MJAIPromptRuns_ChildPromptID_Cost, p_MJAIPromptRuns_ChildPromptID_CostCurrency, p_MJAIPromptRuns_ChildPromptID_TokensUsedRollup, p_MJAIPromptRuns_ChildPromptID_TokensPromptRollup, p_MJAIPromptRuns_ChildPromptID_TokensCompletionRollup, p_MJAIPromptRuns_ChildPromptID_Temperature, p_MJAIPromptRuns_ChildPromptID_TopP, p_MJAIPromptRuns_ChildPromptID_TopK, p_MJAIPromptRuns_ChildPromptID_MinP, p_MJAIPromptRuns_ChildPromptID_FrequencyPenalty, p_MJAIPromptRuns_ChildPromptID_PresencePenalty, p_MJAIPromptRuns_ChildPromptID_Seed, p_MJAIPromptRuns_ChildPromptID_StopSequences, p_MJAIPromptRuns_ChildPromptID_ResponseFormat, p_MJAIPromptRuns_ChildPromptID_LogProbs, p_MJAIPromptRuns_ChildPromptID_TopLogProbs, p_MJAIPromptRuns_ChildPromptID_DescendantCost, p_MJAIPromptRuns_ChildPromptID_ValidationAttemptCount, p_MJAIPromptRuns_ChildPromptID_SuccessfulValidationCount, p_MJAIPromptRuns_ChildPromptID_FinalValidationPassed, p_MJAIPromptRuns_ChildPromptID_ValidationBehavior, p_MJAIPromptRuns_ChildPromptID_RetryStrategy, p_MJAIPromptRuns_ChildPromptID_MaxRetriesConfigured, p_MJAIPromptRuns_ChildPromptID_FinalValidationError, p_MJAIPromptRuns_ChildPromptID_ValidationErrorCount, p_MJAIPromptRuns_ChildPromptID_CommonValidationError, p_MJAIPromptRuns_ChildPromptID_FirstAttemptAt, p_MJAIPromptRuns_ChildPromptID_LastAttemptAt, p_MJAIPromptRuns_ChildPromptID_TotalRetryDurationMS, p_MJAIPromptRuns_ChildPromptID_ValidationAttempts, p_MJAIPromptRuns_ChildPromptID_ValidationSummary, p_MJAIPromptRuns_ChildPromptID_FailoverAttempts, p_MJAIPromptRuns_ChildPromptID_FailoverErrors, p_MJAIPromptRuns_ChildPromptID_FailoverDurations, p_MJAIPromptRuns_ChildPromptID_OriginalModelID, p_MJAIPromptRuns_ChildPromptID_OriginalRequestStartTime, p_MJAIPromptRuns_ChildPromptID_TotalFailoverDuration, p_MJAIPromptRuns_ChildPromptID_RerunFromPromptRunID, p_MJAIPromptRuns_ChildPromptID_ModelSelection, p_MJAIPromptRuns_ChildPromptID_Status, p_MJAIPromptRuns_ChildPromptID_Cancelled, p_MJAIPromptRuns_ChildPromptID_CancellationReason, p_MJAIPromptRuns_ChildPromptID_ModelPowerRank, p_MJAIPromptRuns_ChildPromptID_SelectionStrategy, p_MJAIPromptRuns_ChildPromptID_CacheHit, p_MJAIPromptRuns_ChildPromptID_CacheKey, p_MJAIPromptRuns_ChildPromptID_JudgeID, p_MJAIPromptRuns_ChildPromptID_JudgeScore, p_MJAIPromptRuns_ChildPromptID_WasSelectedResult, p_MJAIPromptRuns_ChildPromptID_StreamingEnabled, p_MJAIPromptRuns_ChildPromptID_FirstTokenTime, p_MJAIPromptRuns_ChildPromptID_ErrorDetails, p_MJAIPromptRuns_ChildPromptID_ChildPromptID, p_MJAIPromptRuns_ChildPromptID_QueueTime, p_MJAIPromptRuns_ChildPromptID_PromptTime, p_MJAIPromptRuns_ChildPromptID_CompletionTime, p_MJAIPromptRuns_ChildPromptID_ModelSpecificResponseDetails, p_MJAIPromptRuns_ChildPromptID_EffortLevel, p_MJAIPromptRuns_ChildPromptID_RunName, p_MJAIPromptRuns_ChildPromptID_Comments, p_MJAIPromptRuns_ChildPromptID_TestRunID, p_MJAIPromptRuns_ChildPromptID_AssistantPrefill);
+        PERFORM __mj."spUpdateAIPromptRun"(p_ID => p_MJAIPromptRuns_ChildPromptIDID, p_PromptID => p_MJAIPromptRuns_ChildPromptID_PromptID, p_ModelID => p_MJAIPromptRuns_ChildPromptID_ModelID, p_VendorID => p_MJAIPromptRuns_ChildPromptID_VendorID, p_AgentID => p_MJAIPromptRuns_ChildPromptID_AgentID, p_ConfigurationID => p_MJAIPromptRuns_ChildPromptID_ConfigurationID, p_RunAt => p_MJAIPromptRuns_ChildPromptID_RunAt, p_CompletedAt => p_MJAIPromptRuns_ChildPromptID_CompletedAt, p_ExecutionTimeMS => p_MJAIPromptRuns_ChildPromptID_ExecutionTimeMS, p_Messages => p_MJAIPromptRuns_ChildPromptID_Messages, p_Result => p_MJAIPromptRuns_ChildPromptID_Result, p_TokensUsed => p_MJAIPromptRuns_ChildPromptID_TokensUsed, p_TokensPrompt => p_MJAIPromptRuns_ChildPromptID_TokensPrompt, p_TokensCompletion => p_MJAIPromptRuns_ChildPromptID_TokensCompletion, p_TotalCost => p_MJAIPromptRuns_ChildPromptID_TotalCost, p_Success => p_MJAIPromptRuns_ChildPromptID_Success, p_ErrorMessage => p_MJAIPromptRuns_ChildPromptID_ErrorMessage, p_ParentID => p_MJAIPromptRuns_ChildPromptID_ParentID, p_RunType => p_MJAIPromptRuns_ChildPromptID_RunType, p_ExecutionOrder => p_MJAIPromptRuns_ChildPromptID_ExecutionOrder, p_AgentRunID => p_MJAIPromptRuns_ChildPromptID_AgentRunID, p_Cost => p_MJAIPromptRuns_ChildPromptID_Cost, p_CostCurrency => p_MJAIPromptRuns_ChildPromptID_CostCurrency, p_TokensUsedRollup => p_MJAIPromptRuns_ChildPromptID_TokensUsedRollup, p_TokensPromptRollup => p_MJAIPromptRuns_ChildPromptID_TokensPromptRollup, p_TokensCompletionRollup => p_MJAIPromptRuns_ChildPromptID_TokensCompletionRollup, p_Temperature => p_MJAIPromptRuns_ChildPromptID_Temperature, p_TopP => p_MJAIPromptRuns_ChildPromptID_TopP, p_TopK => p_MJAIPromptRuns_ChildPromptID_TopK, p_MinP => p_MJAIPromptRuns_ChildPromptID_MinP, p_FrequencyPenalty => p_MJAIPromptRuns_ChildPromptID_FrequencyPenalty, p_PresencePenalty => p_MJAIPromptRuns_ChildPromptID_PresencePenalty, p_Seed => p_MJAIPromptRuns_ChildPromptID_Seed, p_StopSequences => p_MJAIPromptRuns_ChildPromptID_StopSequences, p_ResponseFormat => p_MJAIPromptRuns_ChildPromptID_ResponseFormat, p_LogProbs => p_MJAIPromptRuns_ChildPromptID_LogProbs, p_TopLogProbs => p_MJAIPromptRuns_ChildPromptID_TopLogProbs, p_DescendantCost => p_MJAIPromptRuns_ChildPromptID_DescendantCost, p_ValidationAttemptCount => p_MJAIPromptRuns_ChildPromptID_ValidationAttemptCount, p_SuccessfulValidationCount => p_MJAIPromptRuns_ChildPromptID_SuccessfulValidationCount, p_FinalValidationPassed => p_MJAIPromptRuns_ChildPromptID_FinalValidationPassed, p_ValidationBehavior => p_MJAIPromptRuns_ChildPromptID_ValidationBehavior, p_RetryStrategy => p_MJAIPromptRuns_ChildPromptID_RetryStrategy, p_MaxRetriesConfigured => p_MJAIPromptRuns_ChildPromptID_MaxRetriesConfigured, p_FinalValidationError => p_MJAIPromptRuns_ChildPromptID_FinalValidationError, p_ValidationErrorCount => p_MJAIPromptRuns_ChildPromptID_ValidationErrorCount, p_CommonValidationError => p_MJAIPromptRuns_ChildPromptID_CommonValidationError, p_FirstAttemptAt => p_MJAIPromptRuns_ChildPromptID_FirstAttemptAt, p_LastAttemptAt => p_MJAIPromptRuns_ChildPromptID_LastAttemptAt, p_TotalRetryDurationMS => p_MJAIPromptRuns_ChildPromptID_TotalRetryDurationMS, p_ValidationAttempts => p_MJAIPromptRuns_ChildPromptID_ValidationAttempts, p_ValidationSummary => p_MJAIPromptRuns_ChildPromptID_ValidationSummary, p_FailoverAttempts => p_MJAIPromptRuns_ChildPromptID_FailoverAttempts, p_FailoverErrors => p_MJAIPromptRuns_ChildPromptID_FailoverErrors, p_FailoverDurations => p_MJAIPromptRuns_ChildPromptID_FailoverDurations, p_OriginalModelID => p_MJAIPromptRuns_ChildPromptID_OriginalModelID, p_OriginalRequestStartTime => p_MJAIPromptRuns_ChildPromptID_OriginalRequestStartTime, p_TotalFailoverDuration => p_MJAIPromptRuns_ChildPromptID_TotalFailoverDuration, p_RerunFromPromptRunID => p_MJAIPromptRuns_ChildPromptID_RerunFromPromptRunID, p_ModelSelection => p_MJAIPromptRuns_ChildPromptID_ModelSelection, p_Status => p_MJAIPromptRuns_ChildPromptID_Status, p_Cancelled => p_MJAIPromptRuns_ChildPromptID_Cancelled, p_CancellationReason => p_MJAIPromptRuns_ChildPromptID_CancellationReason, p_ModelPowerRank => p_MJAIPromptRuns_ChildPromptID_ModelPowerRank, p_SelectionStrategy => p_MJAIPromptRuns_ChildPromptID_SelectionStrategy, p_CacheHit => p_MJAIPromptRuns_ChildPromptID_CacheHit, p_CacheKey => p_MJAIPromptRuns_ChildPromptID_CacheKey, p_JudgeID => p_MJAIPromptRuns_ChildPromptID_JudgeID, p_JudgeScore => p_MJAIPromptRuns_ChildPromptID_JudgeScore, p_WasSelectedResult => p_MJAIPromptRuns_ChildPromptID_WasSelectedResult, p_StreamingEnabled => p_MJAIPromptRuns_ChildPromptID_StreamingEnabled, p_FirstTokenTime => p_MJAIPromptRuns_ChildPromptID_FirstTokenTime, p_ErrorDetails => p_MJAIPromptRuns_ChildPromptID_ErrorDetails, p_ChildPromptID => p_MJAIPromptRuns_ChildPromptID_ChildPromptID, p_QueueTime => p_MJAIPromptRuns_ChildPromptID_QueueTime, p_PromptTime => p_MJAIPromptRuns_ChildPromptID_PromptTime, p_CompletionTime => p_MJAIPromptRuns_ChildPromptID_CompletionTime, p_ModelSpecificResponseDetails => p_MJAIPromptRuns_ChildPromptID_ModelSpecificResponseDetails, p_EffortLevel => p_MJAIPromptRuns_ChildPromptID_EffortLevel, p_RunName => p_MJAIPromptRuns_ChildPromptID_RunName, p_Comments => p_MJAIPromptRuns_ChildPromptID_Comments, p_TestRunID => p_MJAIPromptRuns_ChildPromptID_TestRunID, p_AssistantPrefill => p_MJAIPromptRuns_ChildPromptID_AssistantPrefill);
 
     END LOOP;
 
@@ -8261,7 +8498,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIPrompts_ResultSelectorPromptID_ResultSelectorPromptID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIPrompt"(p_MJAIPrompts_ResultSelectorPromptIDID, p_MJAIPrompts_ResultSelectorPromptID_Name, p_MJAIPrompts_ResultSelectorPromptID_Description, p_MJAIPrompts_ResultSelectorPromptID_TemplateID, p_MJAIPrompts_ResultSelectorPromptID_CategoryID, p_MJAIPrompts_ResultSelectorPromptID_TypeID, p_MJAIPrompts_ResultSelectorPromptID_Status, p_MJAIPrompts_ResultSelectorPromptID_ResponseFormat, p_MJAIPrompts_ResultSelectorPromptID_ModelSpecificRespons_905abd, p_MJAIPrompts_ResultSelectorPromptID_AIModelTypeID, p_MJAIPrompts_ResultSelectorPromptID_MinPowerRank, p_MJAIPrompts_ResultSelectorPromptID_SelectionStrategy, p_MJAIPrompts_ResultSelectorPromptID_PowerPreference, p_MJAIPrompts_ResultSelectorPromptID_ParallelizationMode, p_MJAIPrompts_ResultSelectorPromptID_ParallelCount, p_MJAIPrompts_ResultSelectorPromptID_ParallelConfigParam, p_MJAIPrompts_ResultSelectorPromptID_OutputType, p_MJAIPrompts_ResultSelectorPromptID_OutputExample, p_MJAIPrompts_ResultSelectorPromptID_ValidationBehavior, p_MJAIPrompts_ResultSelectorPromptID_MaxRetries, p_MJAIPrompts_ResultSelectorPromptID_RetryDelayMS, p_MJAIPrompts_ResultSelectorPromptID_RetryStrategy, p_MJAIPrompts_ResultSelectorPromptID_ResultSelectorPromptID, p_MJAIPrompts_ResultSelectorPromptID_EnableCaching, p_MJAIPrompts_ResultSelectorPromptID_CacheTTLSeconds, p_MJAIPrompts_ResultSelectorPromptID_CacheMatchType, p_MJAIPrompts_ResultSelectorPromptID_CacheSimilarityThreshold, p_MJAIPrompts_ResultSelectorPromptID_CacheMustMatchModel, p_MJAIPrompts_ResultSelectorPromptID_CacheMustMatchVendor, p_MJAIPrompts_ResultSelectorPromptID_CacheMustMatchAgent, p_MJAIPrompts_ResultSelectorPromptID_CacheMustMatchConfig, p_MJAIPrompts_ResultSelectorPromptID_PromptRole, p_MJAIPrompts_ResultSelectorPromptID_PromptPosition, p_MJAIPrompts_ResultSelectorPromptID_Temperature, p_MJAIPrompts_ResultSelectorPromptID_TopP, p_MJAIPrompts_ResultSelectorPromptID_TopK, p_MJAIPrompts_ResultSelectorPromptID_MinP, p_MJAIPrompts_ResultSelectorPromptID_FrequencyPenalty, p_MJAIPrompts_ResultSelectorPromptID_PresencePenalty, p_MJAIPrompts_ResultSelectorPromptID_Seed, p_MJAIPrompts_ResultSelectorPromptID_StopSequences, p_MJAIPrompts_ResultSelectorPromptID_IncludeLogProbs, p_MJAIPrompts_ResultSelectorPromptID_TopLogProbs, p_MJAIPrompts_ResultSelectorPromptID_FailoverStrategy, p_MJAIPrompts_ResultSelectorPromptID_FailoverMaxAttempts, p_MJAIPrompts_ResultSelectorPromptID_FailoverDelaySeconds, p_MJAIPrompts_ResultSelectorPromptID_FailoverModelStrategy, p_MJAIPrompts_ResultSelectorPromptID_FailoverErrorScope, p_MJAIPrompts_ResultSelectorPromptID_EffortLevel, p_MJAIPrompts_ResultSelectorPromptID_AssistantPrefill, p_MJAIPrompts_ResultSelectorPromptID_PrefillFallbackMode, p_MJAIPrompts_ResultSelectorPromptID_RequireSpecificModels);
+        PERFORM __mj."spUpdateAIPrompt"(p_ID => p_MJAIPrompts_ResultSelectorPromptIDID, p_Name => p_MJAIPrompts_ResultSelectorPromptID_Name, p_Description => p_MJAIPrompts_ResultSelectorPromptID_Description, p_TemplateID => p_MJAIPrompts_ResultSelectorPromptID_TemplateID, p_CategoryID => p_MJAIPrompts_ResultSelectorPromptID_CategoryID, p_TypeID => p_MJAIPrompts_ResultSelectorPromptID_TypeID, p_Status => p_MJAIPrompts_ResultSelectorPromptID_Status, p_ResponseFormat => p_MJAIPrompts_ResultSelectorPromptID_ResponseFormat, p_ModelSpecificResponseFormat => p_MJAIPrompts_ResultSelectorPromptID_ModelSpecificRespons_905abd, p_AIModelTypeID => p_MJAIPrompts_ResultSelectorPromptID_AIModelTypeID, p_MinPowerRank => p_MJAIPrompts_ResultSelectorPromptID_MinPowerRank, p_SelectionStrategy => p_MJAIPrompts_ResultSelectorPromptID_SelectionStrategy, p_PowerPreference => p_MJAIPrompts_ResultSelectorPromptID_PowerPreference, p_ParallelizationMode => p_MJAIPrompts_ResultSelectorPromptID_ParallelizationMode, p_ParallelCount => p_MJAIPrompts_ResultSelectorPromptID_ParallelCount, p_ParallelConfigParam => p_MJAIPrompts_ResultSelectorPromptID_ParallelConfigParam, p_OutputType => p_MJAIPrompts_ResultSelectorPromptID_OutputType, p_OutputExample => p_MJAIPrompts_ResultSelectorPromptID_OutputExample, p_ValidationBehavior => p_MJAIPrompts_ResultSelectorPromptID_ValidationBehavior, p_MaxRetries => p_MJAIPrompts_ResultSelectorPromptID_MaxRetries, p_RetryDelayMS => p_MJAIPrompts_ResultSelectorPromptID_RetryDelayMS, p_RetryStrategy => p_MJAIPrompts_ResultSelectorPromptID_RetryStrategy, p_ResultSelectorPromptID => p_MJAIPrompts_ResultSelectorPromptID_ResultSelectorPromptID, p_EnableCaching => p_MJAIPrompts_ResultSelectorPromptID_EnableCaching, p_CacheTTLSeconds => p_MJAIPrompts_ResultSelectorPromptID_CacheTTLSeconds, p_CacheMatchType => p_MJAIPrompts_ResultSelectorPromptID_CacheMatchType, p_CacheSimilarityThreshold => p_MJAIPrompts_ResultSelectorPromptID_CacheSimilarityThreshold, p_CacheMustMatchModel => p_MJAIPrompts_ResultSelectorPromptID_CacheMustMatchModel, p_CacheMustMatchVendor => p_MJAIPrompts_ResultSelectorPromptID_CacheMustMatchVendor, p_CacheMustMatchAgent => p_MJAIPrompts_ResultSelectorPromptID_CacheMustMatchAgent, p_CacheMustMatchConfig => p_MJAIPrompts_ResultSelectorPromptID_CacheMustMatchConfig, p_PromptRole => p_MJAIPrompts_ResultSelectorPromptID_PromptRole, p_PromptPosition => p_MJAIPrompts_ResultSelectorPromptID_PromptPosition, p_Temperature => p_MJAIPrompts_ResultSelectorPromptID_Temperature, p_TopP => p_MJAIPrompts_ResultSelectorPromptID_TopP, p_TopK => p_MJAIPrompts_ResultSelectorPromptID_TopK, p_MinP => p_MJAIPrompts_ResultSelectorPromptID_MinP, p_FrequencyPenalty => p_MJAIPrompts_ResultSelectorPromptID_FrequencyPenalty, p_PresencePenalty => p_MJAIPrompts_ResultSelectorPromptID_PresencePenalty, p_Seed => p_MJAIPrompts_ResultSelectorPromptID_Seed, p_StopSequences => p_MJAIPrompts_ResultSelectorPromptID_StopSequences, p_IncludeLogProbs => p_MJAIPrompts_ResultSelectorPromptID_IncludeLogProbs, p_TopLogProbs => p_MJAIPrompts_ResultSelectorPromptID_TopLogProbs, p_FailoverStrategy => p_MJAIPrompts_ResultSelectorPromptID_FailoverStrategy, p_FailoverMaxAttempts => p_MJAIPrompts_ResultSelectorPromptID_FailoverMaxAttempts, p_FailoverDelaySeconds => p_MJAIPrompts_ResultSelectorPromptID_FailoverDelaySeconds, p_FailoverModelStrategy => p_MJAIPrompts_ResultSelectorPromptID_FailoverModelStrategy, p_FailoverErrorScope => p_MJAIPrompts_ResultSelectorPromptID_FailoverErrorScope, p_EffortLevel => p_MJAIPrompts_ResultSelectorPromptID_EffortLevel, p_AssistantPrefill => p_MJAIPrompts_ResultSelectorPromptID_AssistantPrefill, p_PrefillFallbackMode => p_MJAIPrompts_ResultSelectorPromptID_PrefillFallbackMode, p_RequireSpecificModels => p_MJAIPrompts_ResultSelectorPromptID_RequireSpecificModels);
 
     END LOOP;
 
@@ -8271,7 +8508,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIResultCache" WHERE "AIPromptID" = p_ID
     LOOP
         p_MJAIResultCache_AIPromptIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIResultCache"(p_MJAIResultCache_AIPromptIDID);
+        PERFORM __mj."spDeleteAIResultCache"(p_ID => p_MJAIResultCache_AIPromptIDID);
         
     END LOOP;
     
@@ -8292,6 +8529,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateAIAgentCategory'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateAIAgentCategory"(
     IN p_ID UUID DEFAULT NULL,
     IN p_Name VARCHAR(200) DEFAULT NULL,
@@ -8352,6 +8597,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateAIAgentCategory'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateAIAgentCategory"(
     IN p_ID UUID,
     IN p_Name VARCHAR(200),
@@ -8388,6 +8641,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteAIAgentCategory'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteAIAgentCategory"(
     IN p_ID UUID
 )
@@ -8411,6 +8672,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateAIAgentSearchScope'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateAIAgentSearchScope"(
     IN p_ID UUID DEFAULT NULL,
     IN p_AgentID UUID DEFAULT NULL,
@@ -8501,6 +8770,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateAIAgentSearchScope'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateAIAgentSearchScope"(
     IN p_ID UUID,
     IN p_AgentID UUID,
@@ -8549,6 +8826,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteAIAgentSearchScope'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteAIAgentSearchScope"(
     IN p_ID UUID
 )
@@ -8572,6 +8857,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateAIAgentType'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateAIAgentType"(
     IN p_ID UUID DEFAULT NULL,
     IN p_Name VARCHAR(100) DEFAULT NULL,
@@ -8662,6 +8955,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateAIAgentType'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateAIAgentType"(
     IN p_ID UUID,
     IN p_Name VARCHAR(100),
@@ -8710,6 +9011,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteAIAgentType'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteAIAgentType"(
     IN p_ID UUID
 )
@@ -8733,6 +9042,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateApplicationRole'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateApplicationRole"(
     IN p_ID UUID DEFAULT NULL,
     IN p_ApplicationID UUID DEFAULT NULL,
@@ -8783,6 +9100,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateApplicationRole'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateApplicationRole"(
     IN p_ID UUID,
     IN p_ApplicationID UUID,
@@ -8815,6 +9140,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteApplicationRole'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteApplicationRole"(
     IN p_ID UUID
 )
@@ -8838,6 +9171,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateArchiveConfigurationEntity'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateArchiveConfigurationEntity"(
     IN p_ID UUID DEFAULT NULL,
     IN p_ArchiveConfigurationID UUID DEFAULT NULL,
@@ -8928,6 +9269,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateArchiveConfigurationEntity'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateArchiveConfigurationEntity"(
     IN p_ID UUID,
     IN p_ArchiveConfigurationID UUID,
@@ -8976,6 +9325,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateArchiveConfiguration'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateArchiveConfiguration"(
     IN p_ID UUID DEFAULT NULL,
     IN p_Name VARCHAR(255) DEFAULT NULL,
@@ -9066,6 +9423,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateArchiveConfiguration'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateArchiveConfiguration"(
     IN p_ID UUID,
     IN p_Name VARCHAR(255),
@@ -9114,6 +9479,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateArchiveRun'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateArchiveRun"(
     IN p_ID UUID DEFAULT NULL,
     IN p_ArchiveConfigurationID UUID DEFAULT NULL,
@@ -9199,6 +9572,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateArchiveRun'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateArchiveRun"(
     IN p_ID UUID,
     IN p_ArchiveConfigurationID UUID,
@@ -9245,6 +9626,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteArchiveConfigurationEntity'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteArchiveConfigurationEntity"(
     IN p_ID UUID
 )
@@ -9268,6 +9657,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteArchiveConfiguration'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteArchiveConfiguration"(
     IN p_ID UUID
 )
@@ -9291,6 +9688,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteArchiveRun'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteArchiveRun"(
     IN p_ID UUID
 )
@@ -9314,6 +9719,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateArchiveRunDetail'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateArchiveRunDetail"(
     IN p_ID UUID DEFAULT NULL,
     IN p_ArchiveRunID UUID DEFAULT NULL,
@@ -9394,6 +9807,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateArchiveRunDetail'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateArchiveRunDetail"(
     IN p_ID UUID,
     IN p_ArchiveRunID UUID,
@@ -9438,6 +9859,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteArchiveRunDetail'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteArchiveRunDetail"(
     IN p_ID UUID
 )
@@ -9461,6 +9890,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateArtifactType'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateArtifactType"(
     IN p_ID UUID DEFAULT NULL,
     IN p_Name VARCHAR(100) DEFAULT NULL,
@@ -9513,6 +9950,14 @@ INSERT INTO
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateArtifactType'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateArtifactType"(
     IN p_ID UUID,
     IN p_Name VARCHAR(100),
@@ -9557,6 +10002,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateArtifactVersion'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateArtifactVersion"(
     IN p_ID UUID DEFAULT NULL,
     IN p_ArtifactID UUID DEFAULT NULL,
@@ -9657,6 +10110,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateArtifactVersion'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateArtifactVersion"(
     IN p_ID UUID,
     IN p_ArtifactID UUID,
@@ -9709,6 +10170,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteArtifactType'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteArtifactType"(
     IN p_ID UUID
 )
@@ -9732,6 +10201,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteArtifactVersion'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteArtifactVersion"(
     IN p_ID UUID
 )
@@ -9755,6 +10232,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateContentItemDuplicate'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateContentItemDuplicate"(
     IN p_ID UUID DEFAULT NULL,
     IN p_ContentItemAID UUID DEFAULT NULL,
@@ -9825,6 +10310,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateContentItemDuplicate'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateContentItemDuplicate"(
     IN p_ID UUID,
     IN p_ContentItemAID UUID,
@@ -9865,6 +10358,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateContentItemTag'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateContentItemTag"(
     IN p_ID UUID DEFAULT NULL,
     IN p_ItemID UUID DEFAULT NULL,
@@ -9915,6 +10416,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateContentItemTag'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateContentItemTag"(
     IN p_ID UUID,
     IN p_ItemID UUID,
@@ -9947,6 +10456,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteContentItemDuplicate'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteContentItemDuplicate"(
     IN p_ID UUID
 )
@@ -9970,6 +10487,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteContentItemTag'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteContentItemTag"(
     IN p_ID UUID
 )
@@ -9993,6 +10518,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateContentItem'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateContentItem"(
     IN p_ID UUID DEFAULT NULL,
     IN p_ContentSourceID UUID DEFAULT NULL,
@@ -10098,6 +10631,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateContentItem'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateContentItem"(
     IN p_ID UUID,
     IN p_ContentSourceID UUID,
@@ -10152,6 +10693,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateContentProcessRunDetail'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateContentProcessRunDetail"(
     IN p_ID UUID DEFAULT NULL,
     IN p_ContentProcessRunID UUID DEFAULT NULL,
@@ -10247,6 +10796,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateContentProcessRunDetail'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateContentProcessRunDetail"(
     IN p_ID UUID,
     IN p_ContentProcessRunID UUID,
@@ -10297,6 +10854,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateContentProcessRunPromptRun'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateContentProcessRunPromptRun"(
     IN p_ID UUID DEFAULT NULL,
     IN p_ContentProcessRunDetailID UUID DEFAULT NULL,
@@ -10342,6 +10907,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateContentProcessRunPromptRun'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateContentProcessRunPromptRun"(
     IN p_ID UUID,
     IN p_ContentProcessRunDetailID UUID,
@@ -10372,6 +10945,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateContentProcessRun'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateContentProcessRun"(
     IN p_ID UUID DEFAULT NULL,
     IN p_SourceID UUID DEFAULT NULL,
@@ -10467,6 +11048,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateContentProcessRun'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateContentProcessRun"(
     IN p_ID UUID,
     IN p_SourceID UUID,
@@ -10517,6 +11106,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteContentItem'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteContentItem"(
     IN p_ID UUID
 )
@@ -10540,6 +11137,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteContentProcessRunDetail'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteContentProcessRunDetail"(
     IN p_ID UUID
 )
@@ -10563,6 +11168,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteContentProcessRunPromptRun'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteContentProcessRunPromptRun"(
     IN p_ID UUID
 )
@@ -10586,6 +11199,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteContentProcessRun'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteContentProcessRun"(
     IN p_ID UUID
 )
@@ -10609,6 +11230,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateContentSourceType'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateContentSourceType"(
     IN p_ID UUID DEFAULT NULL,
     IN p_Name VARCHAR(255) DEFAULT NULL,
@@ -10659,6 +11288,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateContentSourceType'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateContentSourceType"(
     IN p_ID UUID,
     IN p_Name VARCHAR(255),
@@ -10691,6 +11328,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateContentSource'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateContentSource"(
     IN p_ID UUID DEFAULT NULL,
     IN p_Name VARCHAR(255) DEFAULT NULL,
@@ -10776,6 +11421,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateContentSource'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateContentSource"(
     IN p_ID UUID,
     IN p_Name VARCHAR(255),
@@ -10822,6 +11475,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateContentType'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateContentType"(
     IN p_ID UUID DEFAULT NULL,
     IN p_Name VARCHAR(255) DEFAULT NULL,
@@ -10892,6 +11553,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateContentType'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateContentType"(
     IN p_ID UUID,
     IN p_Name VARCHAR(255),
@@ -10932,6 +11601,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteContentSourceType'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteContentSourceType"(
     IN p_ID UUID
 )
@@ -10955,6 +11632,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteContentSource'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteContentSource"(
     IN p_ID UUID
 )
@@ -10978,6 +11663,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteContentType'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteContentType"(
     IN p_ID UUID
 )
@@ -11001,6 +11694,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateCountry'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateCountry"(
     IN p_ID UUID DEFAULT NULL,
     IN p_Name VARCHAR(200) DEFAULT NULL,
@@ -11071,6 +11772,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateCountry'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateCountry"(
     IN p_ID UUID,
     IN p_Name VARCHAR(200),
@@ -11111,6 +11820,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteCountry'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteCountry"(
     IN p_ID UUID
 )
@@ -11134,6 +11851,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateDuplicateRunDetail'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateDuplicateRunDetail"(
     IN p_ID UUID DEFAULT NULL,
     IN p_DuplicateRunID UUID DEFAULT NULL,
@@ -11214,6 +11939,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateDuplicateRunDetail'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateDuplicateRunDetail"(
     IN p_ID UUID,
     IN p_DuplicateRunID UUID,
@@ -11258,6 +11991,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateDuplicateRun'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateDuplicateRun"(
     IN p_ID UUID DEFAULT NULL,
     IN p_EntityID UUID DEFAULT NULL,
@@ -11363,6 +12104,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateDuplicateRun'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateDuplicateRun"(
     IN p_ID UUID,
     IN p_EntityID UUID,
@@ -11417,6 +12166,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteDuplicateRunDetail'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteDuplicateRunDetail"(
     IN p_ID UUID
 )
@@ -11440,6 +12197,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteDuplicateRun'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteDuplicateRun"(
     IN p_ID UUID
 )
@@ -11463,6 +12228,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateEntity'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateEntity"(
     IN p_ID UUID DEFAULT NULL,
     IN p_ParentID UUID DEFAULT NULL,
@@ -11793,6 +12566,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateEntity'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateEntity"(
     IN p_ID UUID,
     IN p_ParentID UUID,
@@ -11937,6 +12718,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteEntity'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteEntity"(
     IN p_ID UUID
 )
@@ -11960,6 +12749,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateEntityField'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateEntityField"(
     IN p_ID UUID DEFAULT NULL,
     IN p_DisplayName VARCHAR(255) DEFAULT NULL,
@@ -12235,6 +13032,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateEntityField'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateEntityField"(
     IN p_ID UUID,
     IN p_DisplayName VARCHAR(255),
@@ -12357,6 +13162,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteEntityField'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteEntityField"(
     IN p_ID UUID
 )
@@ -12380,6 +13193,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateFileStorageAccountPermission'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateFileStorageAccountPermission"(
     IN p_ID UUID DEFAULT NULL,
     IN p_FileStorageAccountID UUID DEFAULT NULL,
@@ -12440,6 +13261,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateFileStorageAccountPermission'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateFileStorageAccountPermission"(
     IN p_ID UUID,
     IN p_FileStorageAccountID UUID,
@@ -12476,6 +13305,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateFileStorageAccount'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateFileStorageAccount"(
     IN p_ID UUID DEFAULT NULL,
     IN p_Name VARCHAR(200) DEFAULT NULL,
@@ -12531,6 +13368,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateFileStorageAccount'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateFileStorageAccount"(
     IN p_ID UUID,
     IN p_Name VARCHAR(200),
@@ -12565,6 +13410,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteFileStorageAccountPermission'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteFileStorageAccountPermission"(
     IN p_ID UUID
 )
@@ -12588,6 +13441,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteFileStorageAccount'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteFileStorageAccount"(
     IN p_ID UUID
 )
@@ -12611,6 +13472,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateInstanceConfiguration'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateInstanceConfiguration"(
     IN p_ID UUID DEFAULT NULL,
     IN p_FeatureKey VARCHAR(200) DEFAULT NULL,
@@ -12676,6 +13545,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateInstanceConfiguration'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateInstanceConfiguration"(
     IN p_ID UUID,
     IN p_FeatureKey VARCHAR(200),
@@ -12714,6 +13591,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateIntegrationObjectField'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateIntegrationObjectField"(
     IN p_ID UUID DEFAULT NULL,
     IN p_IntegrationObjectID UUID DEFAULT NULL,
@@ -12849,6 +13734,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateIntegrationObjectField'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateIntegrationObjectField"(
     IN p_ID UUID,
     IN p_IntegrationObjectID UUID,
@@ -12915,6 +13808,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateIntegrationObject'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateIntegrationObject"(
     IN p_ID UUID DEFAULT NULL,
     IN p_IntegrationID UUID DEFAULT NULL,
@@ -13045,6 +13946,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateIntegrationObject'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateIntegrationObject"(
     IN p_ID UUID,
     IN p_IntegrationID UUID,
@@ -13109,6 +14018,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteInstanceConfiguration'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteInstanceConfiguration"(
     IN p_ID UUID
 )
@@ -13132,6 +14049,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteIntegrationObjectField'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteIntegrationObjectField"(
     IN p_ID UUID
 )
@@ -13155,6 +14080,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteIntegrationObject'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteIntegrationObject"(
     IN p_ID UUID
 )
@@ -13178,6 +14111,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateKnowledgeHubSavedSearch'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateKnowledgeHubSavedSearch"(
     IN p_ID UUID DEFAULT NULL,
     IN p_UserID UUID DEFAULT NULL,
@@ -13243,6 +14184,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateKnowledgeHubSavedSearch'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateKnowledgeHubSavedSearch"(
     IN p_ID UUID,
     IN p_UserID UUID,
@@ -13281,6 +14230,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteKnowledgeHubSavedSearch'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteKnowledgeHubSavedSearch"(
     IN p_ID UUID
 )
@@ -13304,6 +14261,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateMCPToolFavorite'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateMCPToolFavorite"(
     IN p_ID UUID DEFAULT NULL,
     IN p_UserID UUID DEFAULT NULL,
@@ -13344,6 +14309,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateMCPToolFavorite'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateMCPToolFavorite"(
     IN p_ID UUID,
     IN p_UserID UUID,
@@ -13372,6 +14345,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteMCPToolFavorite'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteMCPToolFavorite"(
     IN p_ID UUID
 )
@@ -13395,6 +14376,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateRecordChange'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateRecordChange"(
     IN p_ID UUID DEFAULT NULL,
     IN p_EntityID UUID DEFAULT NULL,
@@ -13505,6 +14494,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateRecordChange'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateRecordChange"(
     IN p_ID UUID,
     IN p_EntityID UUID,
@@ -13561,6 +14558,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateRecordGeoCode'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateRecordGeoCode"(
     IN p_ID UUID DEFAULT NULL,
     IN p_EntityID UUID DEFAULT NULL,
@@ -13661,6 +14666,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateRecordGeoCode'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateRecordGeoCode"(
     IN p_ID UUID,
     IN p_EntityID UUID,
@@ -13713,6 +14726,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteRecordChange'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteRecordChange"(
     IN p_ID UUID
 )
@@ -13736,6 +14757,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteRecordGeoCode'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteRecordGeoCode"(
     IN p_ID UUID
 )
@@ -13759,6 +14788,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateSearchProvider'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateSearchProvider"(
     IN p_ID UUID DEFAULT NULL,
     IN p_Name VARCHAR(200) DEFAULT NULL,
@@ -13849,6 +14886,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateSearchProvider'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateSearchProvider"(
     IN p_ID UUID,
     IN p_Name VARCHAR(200),
@@ -13897,6 +14942,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateSearchScopeEntity'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateSearchScopeEntity"(
     IN p_ID UUID DEFAULT NULL,
     IN p_SearchScopeID UUID DEFAULT NULL,
@@ -13947,6 +15000,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateSearchScopeEntity'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateSearchScopeEntity"(
     IN p_ID UUID,
     IN p_SearchScopeID UUID,
@@ -13979,6 +15040,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateSearchScopeExternalIndex'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateSearchScopeExternalIndex"(
     IN p_ID UUID DEFAULT NULL,
     IN p_SearchScopeID UUID DEFAULT NULL,
@@ -14039,6 +15108,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateSearchScopeExternalIndex'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateSearchScopeExternalIndex"(
     IN p_ID UUID,
     IN p_SearchScopeID UUID,
@@ -14075,6 +15152,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteSearchProvider'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteSearchProvider"(
     IN p_ID UUID
 )
@@ -14098,6 +15183,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteSearchScopeEntity'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteSearchScopeEntity"(
     IN p_ID UUID
 )
@@ -14121,6 +15214,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteSearchScopeExternalIndex'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteSearchScopeExternalIndex"(
     IN p_ID UUID
 )
@@ -14144,6 +15245,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateSearchScopeProvider'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateSearchScopeProvider"(
     IN p_ID UUID DEFAULT NULL,
     IN p_SearchScopeID UUID DEFAULT NULL,
@@ -14204,6 +15313,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateSearchScopeProvider'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateSearchScopeProvider"(
     IN p_ID UUID,
     IN p_SearchScopeID UUID,
@@ -14240,6 +15357,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateSearchScopeStorageAccount'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateSearchScopeStorageAccount"(
     IN p_ID UUID DEFAULT NULL,
     IN p_SearchScopeID UUID DEFAULT NULL,
@@ -14285,6 +15410,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateSearchScopeStorageAccount'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateSearchScopeStorageAccount"(
     IN p_ID UUID,
     IN p_SearchScopeID UUID,
@@ -14315,6 +15448,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateSearchScope'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateSearchScope"(
     IN p_ID UUID DEFAULT NULL,
     IN p_Name VARCHAR(200) DEFAULT NULL,
@@ -14400,6 +15541,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateSearchScope'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateSearchScope"(
     IN p_ID UUID,
     IN p_Name VARCHAR(200),
@@ -14446,6 +15595,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteSearchScopeProvider'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteSearchScopeProvider"(
     IN p_ID UUID
 )
@@ -14469,6 +15626,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteSearchScopeStorageAccount'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteSearchScopeStorageAccount"(
     IN p_ID UUID
 )
@@ -14492,6 +15657,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteSearchScope'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteSearchScope"(
     IN p_ID UUID
 )
@@ -14515,6 +15688,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateStateProvince'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateStateProvince"(
     IN p_ID UUID DEFAULT NULL,
     IN p_CountryID UUID DEFAULT NULL,
@@ -14585,6 +15766,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateStateProvince'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateStateProvince"(
     IN p_ID UUID,
     IN p_CountryID UUID,
@@ -14625,6 +15814,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateTagAuditLog'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateTagAuditLog"(
     IN p_ID UUID DEFAULT NULL,
     IN p_TagID UUID DEFAULT NULL,
@@ -14680,6 +15877,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateTagAuditLog'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateTagAuditLog"(
     IN p_ID UUID,
     IN p_TagID UUID,
@@ -14714,6 +15919,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateTagCoOccurrence'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateTagCoOccurrence"(
     IN p_ID UUID DEFAULT NULL,
     IN p_TagAID UUID DEFAULT NULL,
@@ -14764,6 +15977,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateTagCoOccurrence'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateTagCoOccurrence"(
     IN p_ID UUID,
     IN p_TagAID UUID,
@@ -14796,6 +16017,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateTaggedItem'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateTaggedItem"(
     IN p_ID UUID DEFAULT NULL,
     IN p_TagID UUID DEFAULT NULL,
@@ -14846,6 +16075,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateTaggedItem'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateTaggedItem"(
     IN p_ID UUID,
     IN p_TagID UUID,
@@ -14878,6 +16115,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateTag'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateTag"(
     IN p_ID UUID DEFAULT NULL,
     IN p_Name VARCHAR(255) DEFAULT NULL,
@@ -14938,6 +16183,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateTag'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateTag"(
     IN p_ID UUID,
     IN p_Name VARCHAR(255),
@@ -14974,6 +16227,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteStateProvince'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteStateProvince"(
     IN p_ID UUID
 )
@@ -14997,6 +16258,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteTagAuditLog'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteTagAuditLog"(
     IN p_ID UUID
 )
@@ -15020,6 +16289,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteTagCoOccurrence'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteTagCoOccurrence"(
     IN p_ID UUID
 )
@@ -15043,6 +16320,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteTaggedItem'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteTaggedItem"(
     IN p_ID UUID
 )
@@ -15066,6 +16351,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteTag'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteTag"(
     IN p_ID UUID
 )
@@ -15089,6 +16382,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateVectorDatabase'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateVectorDatabase"(
     IN p_ID UUID DEFAULT NULL,
     IN p_Name VARCHAR(100) DEFAULT NULL,
@@ -15149,6 +16450,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateVectorDatabase'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateVectorDatabase"(
     IN p_ID UUID,
     IN p_Name VARCHAR(100),
@@ -15185,6 +16494,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteVectorDatabase'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteVectorDatabase"(
     IN p_ID UUID
 )
@@ -15208,6 +16525,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateVersionLabelItem'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateVersionLabelItem"(
     IN p_ID UUID DEFAULT NULL,
     IN p_VersionLabelID UUID DEFAULT NULL,
@@ -15258,6 +16583,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateVersionLabelItem'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateVersionLabelItem"(
     IN p_ID UUID,
     IN p_VersionLabelID UUID,
@@ -15290,6 +16623,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteVersionLabelItem'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteVersionLabelItem"(
     IN p_ID UUID
 )
@@ -15313,6 +16654,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteAIPromptRun'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteAIPromptRun"(
     IN p_ID UUID
 )
@@ -15508,7 +16857,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIPromptRunMedia" WHERE "PromptRunID" = p_ID
     LOOP
         p_MJAIPromptRunMedias_PromptRunIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIPromptRunMedia"(p_MJAIPromptRunMedias_PromptRunIDID);
+        PERFORM __mj."spDeleteAIPromptRunMedia"(p_ID => p_MJAIPromptRunMedias_PromptRunIDID);
         
     END LOOP;
     
@@ -15604,7 +16953,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIPromptRuns_ParentID_ParentID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIPromptRun"(p_MJAIPromptRuns_ParentIDID, p_MJAIPromptRuns_ParentID_PromptID, p_MJAIPromptRuns_ParentID_ModelID, p_MJAIPromptRuns_ParentID_VendorID, p_MJAIPromptRuns_ParentID_AgentID, p_MJAIPromptRuns_ParentID_ConfigurationID, p_MJAIPromptRuns_ParentID_RunAt, p_MJAIPromptRuns_ParentID_CompletedAt, p_MJAIPromptRuns_ParentID_ExecutionTimeMS, p_MJAIPromptRuns_ParentID_Messages, p_MJAIPromptRuns_ParentID_Result, p_MJAIPromptRuns_ParentID_TokensUsed, p_MJAIPromptRuns_ParentID_TokensPrompt, p_MJAIPromptRuns_ParentID_TokensCompletion, p_MJAIPromptRuns_ParentID_TotalCost, p_MJAIPromptRuns_ParentID_Success, p_MJAIPromptRuns_ParentID_ErrorMessage, p_MJAIPromptRuns_ParentID_ParentID, p_MJAIPromptRuns_ParentID_RunType, p_MJAIPromptRuns_ParentID_ExecutionOrder, p_MJAIPromptRuns_ParentID_AgentRunID, p_MJAIPromptRuns_ParentID_Cost, p_MJAIPromptRuns_ParentID_CostCurrency, p_MJAIPromptRuns_ParentID_TokensUsedRollup, p_MJAIPromptRuns_ParentID_TokensPromptRollup, p_MJAIPromptRuns_ParentID_TokensCompletionRollup, p_MJAIPromptRuns_ParentID_Temperature, p_MJAIPromptRuns_ParentID_TopP, p_MJAIPromptRuns_ParentID_TopK, p_MJAIPromptRuns_ParentID_MinP, p_MJAIPromptRuns_ParentID_FrequencyPenalty, p_MJAIPromptRuns_ParentID_PresencePenalty, p_MJAIPromptRuns_ParentID_Seed, p_MJAIPromptRuns_ParentID_StopSequences, p_MJAIPromptRuns_ParentID_ResponseFormat, p_MJAIPromptRuns_ParentID_LogProbs, p_MJAIPromptRuns_ParentID_TopLogProbs, p_MJAIPromptRuns_ParentID_DescendantCost, p_MJAIPromptRuns_ParentID_ValidationAttemptCount, p_MJAIPromptRuns_ParentID_SuccessfulValidationCount, p_MJAIPromptRuns_ParentID_FinalValidationPassed, p_MJAIPromptRuns_ParentID_ValidationBehavior, p_MJAIPromptRuns_ParentID_RetryStrategy, p_MJAIPromptRuns_ParentID_MaxRetriesConfigured, p_MJAIPromptRuns_ParentID_FinalValidationError, p_MJAIPromptRuns_ParentID_ValidationErrorCount, p_MJAIPromptRuns_ParentID_CommonValidationError, p_MJAIPromptRuns_ParentID_FirstAttemptAt, p_MJAIPromptRuns_ParentID_LastAttemptAt, p_MJAIPromptRuns_ParentID_TotalRetryDurationMS, p_MJAIPromptRuns_ParentID_ValidationAttempts, p_MJAIPromptRuns_ParentID_ValidationSummary, p_MJAIPromptRuns_ParentID_FailoverAttempts, p_MJAIPromptRuns_ParentID_FailoverErrors, p_MJAIPromptRuns_ParentID_FailoverDurations, p_MJAIPromptRuns_ParentID_OriginalModelID, p_MJAIPromptRuns_ParentID_OriginalRequestStartTime, p_MJAIPromptRuns_ParentID_TotalFailoverDuration, p_MJAIPromptRuns_ParentID_RerunFromPromptRunID, p_MJAIPromptRuns_ParentID_ModelSelection, p_MJAIPromptRuns_ParentID_Status, p_MJAIPromptRuns_ParentID_Cancelled, p_MJAIPromptRuns_ParentID_CancellationReason, p_MJAIPromptRuns_ParentID_ModelPowerRank, p_MJAIPromptRuns_ParentID_SelectionStrategy, p_MJAIPromptRuns_ParentID_CacheHit, p_MJAIPromptRuns_ParentID_CacheKey, p_MJAIPromptRuns_ParentID_JudgeID, p_MJAIPromptRuns_ParentID_JudgeScore, p_MJAIPromptRuns_ParentID_WasSelectedResult, p_MJAIPromptRuns_ParentID_StreamingEnabled, p_MJAIPromptRuns_ParentID_FirstTokenTime, p_MJAIPromptRuns_ParentID_ErrorDetails, p_MJAIPromptRuns_ParentID_ChildPromptID, p_MJAIPromptRuns_ParentID_QueueTime, p_MJAIPromptRuns_ParentID_PromptTime, p_MJAIPromptRuns_ParentID_CompletionTime, p_MJAIPromptRuns_ParentID_ModelSpecificResponseDetails, p_MJAIPromptRuns_ParentID_EffortLevel, p_MJAIPromptRuns_ParentID_RunName, p_MJAIPromptRuns_ParentID_Comments, p_MJAIPromptRuns_ParentID_TestRunID, p_MJAIPromptRuns_ParentID_AssistantPrefill);
+        PERFORM __mj."spUpdateAIPromptRun"(p_ID => p_MJAIPromptRuns_ParentIDID, p_PromptID => p_MJAIPromptRuns_ParentID_PromptID, p_ModelID => p_MJAIPromptRuns_ParentID_ModelID, p_VendorID => p_MJAIPromptRuns_ParentID_VendorID, p_AgentID => p_MJAIPromptRuns_ParentID_AgentID, p_ConfigurationID => p_MJAIPromptRuns_ParentID_ConfigurationID, p_RunAt => p_MJAIPromptRuns_ParentID_RunAt, p_CompletedAt => p_MJAIPromptRuns_ParentID_CompletedAt, p_ExecutionTimeMS => p_MJAIPromptRuns_ParentID_ExecutionTimeMS, p_Messages => p_MJAIPromptRuns_ParentID_Messages, p_Result => p_MJAIPromptRuns_ParentID_Result, p_TokensUsed => p_MJAIPromptRuns_ParentID_TokensUsed, p_TokensPrompt => p_MJAIPromptRuns_ParentID_TokensPrompt, p_TokensCompletion => p_MJAIPromptRuns_ParentID_TokensCompletion, p_TotalCost => p_MJAIPromptRuns_ParentID_TotalCost, p_Success => p_MJAIPromptRuns_ParentID_Success, p_ErrorMessage => p_MJAIPromptRuns_ParentID_ErrorMessage, p_ParentID => p_MJAIPromptRuns_ParentID_ParentID, p_RunType => p_MJAIPromptRuns_ParentID_RunType, p_ExecutionOrder => p_MJAIPromptRuns_ParentID_ExecutionOrder, p_AgentRunID => p_MJAIPromptRuns_ParentID_AgentRunID, p_Cost => p_MJAIPromptRuns_ParentID_Cost, p_CostCurrency => p_MJAIPromptRuns_ParentID_CostCurrency, p_TokensUsedRollup => p_MJAIPromptRuns_ParentID_TokensUsedRollup, p_TokensPromptRollup => p_MJAIPromptRuns_ParentID_TokensPromptRollup, p_TokensCompletionRollup => p_MJAIPromptRuns_ParentID_TokensCompletionRollup, p_Temperature => p_MJAIPromptRuns_ParentID_Temperature, p_TopP => p_MJAIPromptRuns_ParentID_TopP, p_TopK => p_MJAIPromptRuns_ParentID_TopK, p_MinP => p_MJAIPromptRuns_ParentID_MinP, p_FrequencyPenalty => p_MJAIPromptRuns_ParentID_FrequencyPenalty, p_PresencePenalty => p_MJAIPromptRuns_ParentID_PresencePenalty, p_Seed => p_MJAIPromptRuns_ParentID_Seed, p_StopSequences => p_MJAIPromptRuns_ParentID_StopSequences, p_ResponseFormat => p_MJAIPromptRuns_ParentID_ResponseFormat, p_LogProbs => p_MJAIPromptRuns_ParentID_LogProbs, p_TopLogProbs => p_MJAIPromptRuns_ParentID_TopLogProbs, p_DescendantCost => p_MJAIPromptRuns_ParentID_DescendantCost, p_ValidationAttemptCount => p_MJAIPromptRuns_ParentID_ValidationAttemptCount, p_SuccessfulValidationCount => p_MJAIPromptRuns_ParentID_SuccessfulValidationCount, p_FinalValidationPassed => p_MJAIPromptRuns_ParentID_FinalValidationPassed, p_ValidationBehavior => p_MJAIPromptRuns_ParentID_ValidationBehavior, p_RetryStrategy => p_MJAIPromptRuns_ParentID_RetryStrategy, p_MaxRetriesConfigured => p_MJAIPromptRuns_ParentID_MaxRetriesConfigured, p_FinalValidationError => p_MJAIPromptRuns_ParentID_FinalValidationError, p_ValidationErrorCount => p_MJAIPromptRuns_ParentID_ValidationErrorCount, p_CommonValidationError => p_MJAIPromptRuns_ParentID_CommonValidationError, p_FirstAttemptAt => p_MJAIPromptRuns_ParentID_FirstAttemptAt, p_LastAttemptAt => p_MJAIPromptRuns_ParentID_LastAttemptAt, p_TotalRetryDurationMS => p_MJAIPromptRuns_ParentID_TotalRetryDurationMS, p_ValidationAttempts => p_MJAIPromptRuns_ParentID_ValidationAttempts, p_ValidationSummary => p_MJAIPromptRuns_ParentID_ValidationSummary, p_FailoverAttempts => p_MJAIPromptRuns_ParentID_FailoverAttempts, p_FailoverErrors => p_MJAIPromptRuns_ParentID_FailoverErrors, p_FailoverDurations => p_MJAIPromptRuns_ParentID_FailoverDurations, p_OriginalModelID => p_MJAIPromptRuns_ParentID_OriginalModelID, p_OriginalRequestStartTime => p_MJAIPromptRuns_ParentID_OriginalRequestStartTime, p_TotalFailoverDuration => p_MJAIPromptRuns_ParentID_TotalFailoverDuration, p_RerunFromPromptRunID => p_MJAIPromptRuns_ParentID_RerunFromPromptRunID, p_ModelSelection => p_MJAIPromptRuns_ParentID_ModelSelection, p_Status => p_MJAIPromptRuns_ParentID_Status, p_Cancelled => p_MJAIPromptRuns_ParentID_Cancelled, p_CancellationReason => p_MJAIPromptRuns_ParentID_CancellationReason, p_ModelPowerRank => p_MJAIPromptRuns_ParentID_ModelPowerRank, p_SelectionStrategy => p_MJAIPromptRuns_ParentID_SelectionStrategy, p_CacheHit => p_MJAIPromptRuns_ParentID_CacheHit, p_CacheKey => p_MJAIPromptRuns_ParentID_CacheKey, p_JudgeID => p_MJAIPromptRuns_ParentID_JudgeID, p_JudgeScore => p_MJAIPromptRuns_ParentID_JudgeScore, p_WasSelectedResult => p_MJAIPromptRuns_ParentID_WasSelectedResult, p_StreamingEnabled => p_MJAIPromptRuns_ParentID_StreamingEnabled, p_FirstTokenTime => p_MJAIPromptRuns_ParentID_FirstTokenTime, p_ErrorDetails => p_MJAIPromptRuns_ParentID_ErrorDetails, p_ChildPromptID => p_MJAIPromptRuns_ParentID_ChildPromptID, p_QueueTime => p_MJAIPromptRuns_ParentID_QueueTime, p_PromptTime => p_MJAIPromptRuns_ParentID_PromptTime, p_CompletionTime => p_MJAIPromptRuns_ParentID_CompletionTime, p_ModelSpecificResponseDetails => p_MJAIPromptRuns_ParentID_ModelSpecificResponseDetails, p_EffortLevel => p_MJAIPromptRuns_ParentID_EffortLevel, p_RunName => p_MJAIPromptRuns_ParentID_RunName, p_Comments => p_MJAIPromptRuns_ParentID_Comments, p_TestRunID => p_MJAIPromptRuns_ParentID_TestRunID, p_AssistantPrefill => p_MJAIPromptRuns_ParentID_AssistantPrefill);
 
     END LOOP;
 
@@ -15700,7 +17049,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIPromptRuns_RerunFromPromptRunID_RerunFromPromptRunID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIPromptRun"(p_MJAIPromptRuns_RerunFromPromptRunIDID, p_MJAIPromptRuns_RerunFromPromptRunID_PromptID, p_MJAIPromptRuns_RerunFromPromptRunID_ModelID, p_MJAIPromptRuns_RerunFromPromptRunID_VendorID, p_MJAIPromptRuns_RerunFromPromptRunID_AgentID, p_MJAIPromptRuns_RerunFromPromptRunID_ConfigurationID, p_MJAIPromptRuns_RerunFromPromptRunID_RunAt, p_MJAIPromptRuns_RerunFromPromptRunID_CompletedAt, p_MJAIPromptRuns_RerunFromPromptRunID_ExecutionTimeMS, p_MJAIPromptRuns_RerunFromPromptRunID_Messages, p_MJAIPromptRuns_RerunFromPromptRunID_Result, p_MJAIPromptRuns_RerunFromPromptRunID_TokensUsed, p_MJAIPromptRuns_RerunFromPromptRunID_TokensPrompt, p_MJAIPromptRuns_RerunFromPromptRunID_TokensCompletion, p_MJAIPromptRuns_RerunFromPromptRunID_TotalCost, p_MJAIPromptRuns_RerunFromPromptRunID_Success, p_MJAIPromptRuns_RerunFromPromptRunID_ErrorMessage, p_MJAIPromptRuns_RerunFromPromptRunID_ParentID, p_MJAIPromptRuns_RerunFromPromptRunID_RunType, p_MJAIPromptRuns_RerunFromPromptRunID_ExecutionOrder, p_MJAIPromptRuns_RerunFromPromptRunID_AgentRunID, p_MJAIPromptRuns_RerunFromPromptRunID_Cost, p_MJAIPromptRuns_RerunFromPromptRunID_CostCurrency, p_MJAIPromptRuns_RerunFromPromptRunID_TokensUsedRollup, p_MJAIPromptRuns_RerunFromPromptRunID_TokensPromptRollup, p_MJAIPromptRuns_RerunFromPromptRunID_TokensCompletionRollup, p_MJAIPromptRuns_RerunFromPromptRunID_Temperature, p_MJAIPromptRuns_RerunFromPromptRunID_TopP, p_MJAIPromptRuns_RerunFromPromptRunID_TopK, p_MJAIPromptRuns_RerunFromPromptRunID_MinP, p_MJAIPromptRuns_RerunFromPromptRunID_FrequencyPenalty, p_MJAIPromptRuns_RerunFromPromptRunID_PresencePenalty, p_MJAIPromptRuns_RerunFromPromptRunID_Seed, p_MJAIPromptRuns_RerunFromPromptRunID_StopSequences, p_MJAIPromptRuns_RerunFromPromptRunID_ResponseFormat, p_MJAIPromptRuns_RerunFromPromptRunID_LogProbs, p_MJAIPromptRuns_RerunFromPromptRunID_TopLogProbs, p_MJAIPromptRuns_RerunFromPromptRunID_DescendantCost, p_MJAIPromptRuns_RerunFromPromptRunID_ValidationAttemptCount, p_MJAIPromptRuns_RerunFromPromptRunID_SuccessfulValidationCount, p_MJAIPromptRuns_RerunFromPromptRunID_FinalValidationPassed, p_MJAIPromptRuns_RerunFromPromptRunID_ValidationBehavior, p_MJAIPromptRuns_RerunFromPromptRunID_RetryStrategy, p_MJAIPromptRuns_RerunFromPromptRunID_MaxRetriesConfigured, p_MJAIPromptRuns_RerunFromPromptRunID_FinalValidationError, p_MJAIPromptRuns_RerunFromPromptRunID_ValidationErrorCount, p_MJAIPromptRuns_RerunFromPromptRunID_CommonValidationError, p_MJAIPromptRuns_RerunFromPromptRunID_FirstAttemptAt, p_MJAIPromptRuns_RerunFromPromptRunID_LastAttemptAt, p_MJAIPromptRuns_RerunFromPromptRunID_TotalRetryDurationMS, p_MJAIPromptRuns_RerunFromPromptRunID_ValidationAttempts, p_MJAIPromptRuns_RerunFromPromptRunID_ValidationSummary, p_MJAIPromptRuns_RerunFromPromptRunID_FailoverAttempts, p_MJAIPromptRuns_RerunFromPromptRunID_FailoverErrors, p_MJAIPromptRuns_RerunFromPromptRunID_FailoverDurations, p_MJAIPromptRuns_RerunFromPromptRunID_OriginalModelID, p_MJAIPromptRuns_RerunFromPromptRunID_OriginalRequestStartTime, p_MJAIPromptRuns_RerunFromPromptRunID_TotalFailoverDuration, p_MJAIPromptRuns_RerunFromPromptRunID_RerunFromPromptRunID, p_MJAIPromptRuns_RerunFromPromptRunID_ModelSelection, p_MJAIPromptRuns_RerunFromPromptRunID_Status, p_MJAIPromptRuns_RerunFromPromptRunID_Cancelled, p_MJAIPromptRuns_RerunFromPromptRunID_CancellationReason, p_MJAIPromptRuns_RerunFromPromptRunID_ModelPowerRank, p_MJAIPromptRuns_RerunFromPromptRunID_SelectionStrategy, p_MJAIPromptRuns_RerunFromPromptRunID_CacheHit, p_MJAIPromptRuns_RerunFromPromptRunID_CacheKey, p_MJAIPromptRuns_RerunFromPromptRunID_JudgeID, p_MJAIPromptRuns_RerunFromPromptRunID_JudgeScore, p_MJAIPromptRuns_RerunFromPromptRunID_WasSelectedResult, p_MJAIPromptRuns_RerunFromPromptRunID_StreamingEnabled, p_MJAIPromptRuns_RerunFromPromptRunID_FirstTokenTime, p_MJAIPromptRuns_RerunFromPromptRunID_ErrorDetails, p_MJAIPromptRuns_RerunFromPromptRunID_ChildPromptID, p_MJAIPromptRuns_RerunFromPromptRunID_QueueTime, p_MJAIPromptRuns_RerunFromPromptRunID_PromptTime, p_MJAIPromptRuns_RerunFromPromptRunID_CompletionTime, p_MJAIPromptRuns_RerunFromPromptRunID_ModelSpecificRespon_874f7c, p_MJAIPromptRuns_RerunFromPromptRunID_EffortLevel, p_MJAIPromptRuns_RerunFromPromptRunID_RunName, p_MJAIPromptRuns_RerunFromPromptRunID_Comments, p_MJAIPromptRuns_RerunFromPromptRunID_TestRunID, p_MJAIPromptRuns_RerunFromPromptRunID_AssistantPrefill);
+        PERFORM __mj."spUpdateAIPromptRun"(p_ID => p_MJAIPromptRuns_RerunFromPromptRunIDID, p_PromptID => p_MJAIPromptRuns_RerunFromPromptRunID_PromptID, p_ModelID => p_MJAIPromptRuns_RerunFromPromptRunID_ModelID, p_VendorID => p_MJAIPromptRuns_RerunFromPromptRunID_VendorID, p_AgentID => p_MJAIPromptRuns_RerunFromPromptRunID_AgentID, p_ConfigurationID => p_MJAIPromptRuns_RerunFromPromptRunID_ConfigurationID, p_RunAt => p_MJAIPromptRuns_RerunFromPromptRunID_RunAt, p_CompletedAt => p_MJAIPromptRuns_RerunFromPromptRunID_CompletedAt, p_ExecutionTimeMS => p_MJAIPromptRuns_RerunFromPromptRunID_ExecutionTimeMS, p_Messages => p_MJAIPromptRuns_RerunFromPromptRunID_Messages, p_Result => p_MJAIPromptRuns_RerunFromPromptRunID_Result, p_TokensUsed => p_MJAIPromptRuns_RerunFromPromptRunID_TokensUsed, p_TokensPrompt => p_MJAIPromptRuns_RerunFromPromptRunID_TokensPrompt, p_TokensCompletion => p_MJAIPromptRuns_RerunFromPromptRunID_TokensCompletion, p_TotalCost => p_MJAIPromptRuns_RerunFromPromptRunID_TotalCost, p_Success => p_MJAIPromptRuns_RerunFromPromptRunID_Success, p_ErrorMessage => p_MJAIPromptRuns_RerunFromPromptRunID_ErrorMessage, p_ParentID => p_MJAIPromptRuns_RerunFromPromptRunID_ParentID, p_RunType => p_MJAIPromptRuns_RerunFromPromptRunID_RunType, p_ExecutionOrder => p_MJAIPromptRuns_RerunFromPromptRunID_ExecutionOrder, p_AgentRunID => p_MJAIPromptRuns_RerunFromPromptRunID_AgentRunID, p_Cost => p_MJAIPromptRuns_RerunFromPromptRunID_Cost, p_CostCurrency => p_MJAIPromptRuns_RerunFromPromptRunID_CostCurrency, p_TokensUsedRollup => p_MJAIPromptRuns_RerunFromPromptRunID_TokensUsedRollup, p_TokensPromptRollup => p_MJAIPromptRuns_RerunFromPromptRunID_TokensPromptRollup, p_TokensCompletionRollup => p_MJAIPromptRuns_RerunFromPromptRunID_TokensCompletionRollup, p_Temperature => p_MJAIPromptRuns_RerunFromPromptRunID_Temperature, p_TopP => p_MJAIPromptRuns_RerunFromPromptRunID_TopP, p_TopK => p_MJAIPromptRuns_RerunFromPromptRunID_TopK, p_MinP => p_MJAIPromptRuns_RerunFromPromptRunID_MinP, p_FrequencyPenalty => p_MJAIPromptRuns_RerunFromPromptRunID_FrequencyPenalty, p_PresencePenalty => p_MJAIPromptRuns_RerunFromPromptRunID_PresencePenalty, p_Seed => p_MJAIPromptRuns_RerunFromPromptRunID_Seed, p_StopSequences => p_MJAIPromptRuns_RerunFromPromptRunID_StopSequences, p_ResponseFormat => p_MJAIPromptRuns_RerunFromPromptRunID_ResponseFormat, p_LogProbs => p_MJAIPromptRuns_RerunFromPromptRunID_LogProbs, p_TopLogProbs => p_MJAIPromptRuns_RerunFromPromptRunID_TopLogProbs, p_DescendantCost => p_MJAIPromptRuns_RerunFromPromptRunID_DescendantCost, p_ValidationAttemptCount => p_MJAIPromptRuns_RerunFromPromptRunID_ValidationAttemptCount, p_SuccessfulValidationCount => p_MJAIPromptRuns_RerunFromPromptRunID_SuccessfulValidationCount, p_FinalValidationPassed => p_MJAIPromptRuns_RerunFromPromptRunID_FinalValidationPassed, p_ValidationBehavior => p_MJAIPromptRuns_RerunFromPromptRunID_ValidationBehavior, p_RetryStrategy => p_MJAIPromptRuns_RerunFromPromptRunID_RetryStrategy, p_MaxRetriesConfigured => p_MJAIPromptRuns_RerunFromPromptRunID_MaxRetriesConfigured, p_FinalValidationError => p_MJAIPromptRuns_RerunFromPromptRunID_FinalValidationError, p_ValidationErrorCount => p_MJAIPromptRuns_RerunFromPromptRunID_ValidationErrorCount, p_CommonValidationError => p_MJAIPromptRuns_RerunFromPromptRunID_CommonValidationError, p_FirstAttemptAt => p_MJAIPromptRuns_RerunFromPromptRunID_FirstAttemptAt, p_LastAttemptAt => p_MJAIPromptRuns_RerunFromPromptRunID_LastAttemptAt, p_TotalRetryDurationMS => p_MJAIPromptRuns_RerunFromPromptRunID_TotalRetryDurationMS, p_ValidationAttempts => p_MJAIPromptRuns_RerunFromPromptRunID_ValidationAttempts, p_ValidationSummary => p_MJAIPromptRuns_RerunFromPromptRunID_ValidationSummary, p_FailoverAttempts => p_MJAIPromptRuns_RerunFromPromptRunID_FailoverAttempts, p_FailoverErrors => p_MJAIPromptRuns_RerunFromPromptRunID_FailoverErrors, p_FailoverDurations => p_MJAIPromptRuns_RerunFromPromptRunID_FailoverDurations, p_OriginalModelID => p_MJAIPromptRuns_RerunFromPromptRunID_OriginalModelID, p_OriginalRequestStartTime => p_MJAIPromptRuns_RerunFromPromptRunID_OriginalRequestStartTime, p_TotalFailoverDuration => p_MJAIPromptRuns_RerunFromPromptRunID_TotalFailoverDuration, p_RerunFromPromptRunID => p_MJAIPromptRuns_RerunFromPromptRunID_RerunFromPromptRunID, p_ModelSelection => p_MJAIPromptRuns_RerunFromPromptRunID_ModelSelection, p_Status => p_MJAIPromptRuns_RerunFromPromptRunID_Status, p_Cancelled => p_MJAIPromptRuns_RerunFromPromptRunID_Cancelled, p_CancellationReason => p_MJAIPromptRuns_RerunFromPromptRunID_CancellationReason, p_ModelPowerRank => p_MJAIPromptRuns_RerunFromPromptRunID_ModelPowerRank, p_SelectionStrategy => p_MJAIPromptRuns_RerunFromPromptRunID_SelectionStrategy, p_CacheHit => p_MJAIPromptRuns_RerunFromPromptRunID_CacheHit, p_CacheKey => p_MJAIPromptRuns_RerunFromPromptRunID_CacheKey, p_JudgeID => p_MJAIPromptRuns_RerunFromPromptRunID_JudgeID, p_JudgeScore => p_MJAIPromptRuns_RerunFromPromptRunID_JudgeScore, p_WasSelectedResult => p_MJAIPromptRuns_RerunFromPromptRunID_WasSelectedResult, p_StreamingEnabled => p_MJAIPromptRuns_RerunFromPromptRunID_StreamingEnabled, p_FirstTokenTime => p_MJAIPromptRuns_RerunFromPromptRunID_FirstTokenTime, p_ErrorDetails => p_MJAIPromptRuns_RerunFromPromptRunID_ErrorDetails, p_ChildPromptID => p_MJAIPromptRuns_RerunFromPromptRunID_ChildPromptID, p_QueueTime => p_MJAIPromptRuns_RerunFromPromptRunID_QueueTime, p_PromptTime => p_MJAIPromptRuns_RerunFromPromptRunID_PromptTime, p_CompletionTime => p_MJAIPromptRuns_RerunFromPromptRunID_CompletionTime, p_ModelSpecificResponseDetails => p_MJAIPromptRuns_RerunFromPromptRunID_ModelSpecificRespon_874f7c, p_EffortLevel => p_MJAIPromptRuns_RerunFromPromptRunID_EffortLevel, p_RunName => p_MJAIPromptRuns_RerunFromPromptRunID_RunName, p_Comments => p_MJAIPromptRuns_RerunFromPromptRunID_Comments, p_TestRunID => p_MJAIPromptRuns_RerunFromPromptRunID_TestRunID, p_AssistantPrefill => p_MJAIPromptRuns_RerunFromPromptRunID_AssistantPrefill);
 
     END LOOP;
 
@@ -15726,7 +17075,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIResultCache_PromptRunID_PromptRunID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIResultCache"(p_MJAIResultCache_PromptRunIDID, p_MJAIResultCache_PromptRunID_AIPromptID, p_MJAIResultCache_PromptRunID_AIModelID, p_MJAIResultCache_PromptRunID_RunAt, p_MJAIResultCache_PromptRunID_PromptText, p_MJAIResultCache_PromptRunID_ResultText, p_MJAIResultCache_PromptRunID_Status, p_MJAIResultCache_PromptRunID_ExpiredOn, p_MJAIResultCache_PromptRunID_VendorID, p_MJAIResultCache_PromptRunID_AgentID, p_MJAIResultCache_PromptRunID_ConfigurationID, p_MJAIResultCache_PromptRunID_PromptEmbedding, p_MJAIResultCache_PromptRunID_PromptRunID);
+        PERFORM __mj."spUpdateAIResultCache"(p_ID => p_MJAIResultCache_PromptRunIDID, p_AIPromptID => p_MJAIResultCache_PromptRunID_AIPromptID, p_AIModelID => p_MJAIResultCache_PromptRunID_AIModelID, p_RunAt => p_MJAIResultCache_PromptRunID_RunAt, p_PromptText => p_MJAIResultCache_PromptRunID_PromptText, p_ResultText => p_MJAIResultCache_PromptRunID_ResultText, p_Status => p_MJAIResultCache_PromptRunID_Status, p_ExpiredOn => p_MJAIResultCache_PromptRunID_ExpiredOn, p_VendorID => p_MJAIResultCache_PromptRunID_VendorID, p_AgentID => p_MJAIResultCache_PromptRunID_AgentID, p_ConfigurationID => p_MJAIResultCache_PromptRunID_ConfigurationID, p_PromptEmbedding => p_MJAIResultCache_PromptRunID_PromptEmbedding, p_PromptRunID => p_MJAIResultCache_PromptRunID_PromptRunID);
 
     END LOOP;
 
@@ -15736,7 +17085,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."ContentProcessRunPromptRun" WHERE "AIPromptRunID" = p_ID
     LOOP
         p_MJContentProcessRunPromptRuns_AIPromptRunIDID := _rec."ID";
-        PERFORM __mj."spDeleteContentProcessRunPromptRun"(p_MJContentProcessRunPromptRuns_AIPromptRunIDID);
+        PERFORM __mj."spDeleteContentProcessRunPromptRun"(p_ID => p_MJContentProcessRunPromptRuns_AIPromptRunIDID);
         
     END LOOP;
     
@@ -15757,6 +17106,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateAIAgent'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateAIAgent"(
     IN p_ID UUID DEFAULT NULL,
     IN p_Name VARCHAR(255) DEFAULT NULL,
@@ -16097,6 +17454,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateAIAgent'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateAIAgent"(
     IN p_ID UUID,
     IN p_Name VARCHAR(255),
@@ -16245,6 +17610,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteAIAgent'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteAIAgent"(
     IN p_ID UUID
 )
@@ -16545,7 +17918,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIAgentActions_AgentID_AgentID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentAction"(p_MJAIAgentActions_AgentIDID, p_MJAIAgentActions_AgentID_AgentID, p_MJAIAgentActions_AgentID_ActionID, p_MJAIAgentActions_AgentID_Status, p_MJAIAgentActions_AgentID_MinExecutionsPerRun, p_MJAIAgentActions_AgentID_MaxExecutionsPerRun, p_MJAIAgentActions_AgentID_ResultExpirationTurns, p_MJAIAgentActions_AgentID_ResultExpirationMode, p_MJAIAgentActions_AgentID_CompactMode, p_MJAIAgentActions_AgentID_CompactLength, p_MJAIAgentActions_AgentID_CompactPromptID);
+        PERFORM __mj."spUpdateAIAgentAction"(p_ID => p_MJAIAgentActions_AgentIDID, p_AgentID => p_MJAIAgentActions_AgentID_AgentID, p_ActionID => p_MJAIAgentActions_AgentID_ActionID, p_Status => p_MJAIAgentActions_AgentID_Status, p_MinExecutionsPerRun => p_MJAIAgentActions_AgentID_MinExecutionsPerRun, p_MaxExecutionsPerRun => p_MJAIAgentActions_AgentID_MaxExecutionsPerRun, p_ResultExpirationTurns => p_MJAIAgentActions_AgentID_ResultExpirationTurns, p_ResultExpirationMode => p_MJAIAgentActions_AgentID_ResultExpirationMode, p_CompactMode => p_MJAIAgentActions_AgentID_CompactMode, p_CompactLength => p_MJAIAgentActions_AgentID_CompactLength, p_CompactPromptID => p_MJAIAgentActions_AgentID_CompactPromptID);
 
     END LOOP;
 
@@ -16555,7 +17928,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentArtifactType" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentArtifactTypes_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentArtifactType"(p_MJAIAgentArtifactTypes_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentArtifactType"(p_ID => p_MJAIAgentArtifactTypes_AgentIDID);
         
     END LOOP;
     
@@ -16565,7 +17938,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentClientTool" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentClientTools_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentClientTool"(p_MJAIAgentClientTools_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentClientTool"(p_ID => p_MJAIAgentClientTools_AgentIDID);
         
     END LOOP;
     
@@ -16575,7 +17948,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentConfiguration" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentConfigurations_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentConfiguration"(p_MJAIAgentConfigurations_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentConfiguration"(p_ID => p_MJAIAgentConfigurations_AgentIDID);
         
     END LOOP;
     
@@ -16585,7 +17958,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentDataSource" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentDataSources_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentDataSource"(p_MJAIAgentDataSources_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentDataSource"(p_ID => p_MJAIAgentDataSources_AgentIDID);
         
     END LOOP;
     
@@ -16595,7 +17968,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentExample" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentExamples_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentExample"(p_MJAIAgentExamples_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentExample"(p_ID => p_MJAIAgentExamples_AgentIDID);
         
     END LOOP;
     
@@ -16605,7 +17978,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentLearningCycle" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentLearningCycles_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentLearningCycle"(p_MJAIAgentLearningCycles_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentLearningCycle"(p_ID => p_MJAIAgentLearningCycles_AgentIDID);
         
     END LOOP;
     
@@ -16615,7 +17988,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentModality" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentModalities_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentModality"(p_MJAIAgentModalities_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentModality"(p_ID => p_MJAIAgentModalities_AgentIDID);
         
     END LOOP;
     
@@ -16633,7 +18006,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIAgentModels_AgentID_AgentID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentModel"(p_MJAIAgentModels_AgentIDID, p_MJAIAgentModels_AgentID_AgentID, p_MJAIAgentModels_AgentID_ModelID, p_MJAIAgentModels_AgentID_Active, p_MJAIAgentModels_AgentID_Priority);
+        PERFORM __mj."spUpdateAIAgentModel"(p_ID => p_MJAIAgentModels_AgentIDID, p_AgentID => p_MJAIAgentModels_AgentID_AgentID, p_ModelID => p_MJAIAgentModels_AgentID_ModelID, p_Active => p_MJAIAgentModels_AgentID_Active, p_Priority => p_MJAIAgentModels_AgentID_Priority);
 
     END LOOP;
 
@@ -16667,7 +18040,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIAgentNotes_AgentID_AgentID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentNote"(p_MJAIAgentNotes_AgentIDID, p_MJAIAgentNotes_AgentID_AgentID, p_MJAIAgentNotes_AgentID_AgentNoteTypeID, p_MJAIAgentNotes_AgentID_Note, p_MJAIAgentNotes_AgentID_UserID, p_MJAIAgentNotes_AgentID_Type, p_MJAIAgentNotes_AgentID_IsAutoGenerated, p_MJAIAgentNotes_AgentID_Comments, p_MJAIAgentNotes_AgentID_Status, p_MJAIAgentNotes_AgentID_SourceConversationID, p_MJAIAgentNotes_AgentID_SourceConversationDetailID, p_MJAIAgentNotes_AgentID_SourceAIAgentRunID, p_MJAIAgentNotes_AgentID_CompanyID, p_MJAIAgentNotes_AgentID_EmbeddingVector, p_MJAIAgentNotes_AgentID_EmbeddingModelID, p_MJAIAgentNotes_AgentID_PrimaryScopeEntityID, p_MJAIAgentNotes_AgentID_PrimaryScopeRecordID, p_MJAIAgentNotes_AgentID_SecondaryScopes, p_MJAIAgentNotes_AgentID_LastAccessedAt, p_MJAIAgentNotes_AgentID_AccessCount, p_MJAIAgentNotes_AgentID_ExpiresAt);
+        PERFORM __mj."spUpdateAIAgentNote"(p_ID => p_MJAIAgentNotes_AgentIDID, p_AgentID => p_MJAIAgentNotes_AgentID_AgentID, p_AgentNoteTypeID => p_MJAIAgentNotes_AgentID_AgentNoteTypeID, p_Note => p_MJAIAgentNotes_AgentID_Note, p_UserID => p_MJAIAgentNotes_AgentID_UserID, p_Type => p_MJAIAgentNotes_AgentID_Type, p_IsAutoGenerated => p_MJAIAgentNotes_AgentID_IsAutoGenerated, p_Comments => p_MJAIAgentNotes_AgentID_Comments, p_Status => p_MJAIAgentNotes_AgentID_Status, p_SourceConversationID => p_MJAIAgentNotes_AgentID_SourceConversationID, p_SourceConversationDetailID => p_MJAIAgentNotes_AgentID_SourceConversationDetailID, p_SourceAIAgentRunID => p_MJAIAgentNotes_AgentID_SourceAIAgentRunID, p_CompanyID => p_MJAIAgentNotes_AgentID_CompanyID, p_EmbeddingVector => p_MJAIAgentNotes_AgentID_EmbeddingVector, p_EmbeddingModelID => p_MJAIAgentNotes_AgentID_EmbeddingModelID, p_PrimaryScopeEntityID => p_MJAIAgentNotes_AgentID_PrimaryScopeEntityID, p_PrimaryScopeRecordID => p_MJAIAgentNotes_AgentID_PrimaryScopeRecordID, p_SecondaryScopes => p_MJAIAgentNotes_AgentID_SecondaryScopes, p_LastAccessedAt => p_MJAIAgentNotes_AgentID_LastAccessedAt, p_AccessCount => p_MJAIAgentNotes_AgentID_AccessCount, p_ExpiresAt => p_MJAIAgentNotes_AgentID_ExpiresAt);
 
     END LOOP;
 
@@ -16677,7 +18050,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentPermission" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentPermissions_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentPermission"(p_MJAIAgentPermissions_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentPermission"(p_ID => p_MJAIAgentPermissions_AgentIDID);
         
     END LOOP;
     
@@ -16687,7 +18060,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentPrompt" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentPrompts_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentPrompt"(p_MJAIAgentPrompts_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentPrompt"(p_ID => p_MJAIAgentPrompts_AgentIDID);
         
     END LOOP;
     
@@ -16697,7 +18070,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentRelationship" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentRelationships_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentRelationship"(p_MJAIAgentRelationships_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentRelationship"(p_ID => p_MJAIAgentRelationships_AgentIDID);
         
     END LOOP;
     
@@ -16707,7 +18080,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentRelationship" WHERE "SubAgentID" = p_ID
     LOOP
         p_MJAIAgentRelationships_SubAgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentRelationship"(p_MJAIAgentRelationships_SubAgentIDID);
+        PERFORM __mj."spDeleteAIAgentRelationship"(p_ID => p_MJAIAgentRelationships_SubAgentIDID);
         
     END LOOP;
     
@@ -16717,7 +18090,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentRequest" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentRequests_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentRequest"(p_MJAIAgentRequests_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentRequest"(p_ID => p_MJAIAgentRequests_AgentIDID);
         
     END LOOP;
     
@@ -16727,7 +18100,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentRun" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentRuns_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentRun"(p_MJAIAgentRuns_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentRun"(p_ID => p_MJAIAgentRuns_AgentIDID);
         
     END LOOP;
     
@@ -16737,7 +18110,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentSearchScope" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentSearchScopes_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentSearchScope"(p_MJAIAgentSearchScopes_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentSearchScope"(p_ID => p_MJAIAgentSearchScopes_AgentIDID);
         
     END LOOP;
     
@@ -16747,7 +18120,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentStep" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentSteps_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentStep"(p_MJAIAgentSteps_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentStep"(p_ID => p_MJAIAgentSteps_AgentIDID);
         
     END LOOP;
     
@@ -16781,7 +18154,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIAgentSteps_SubAgentID_SubAgentID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentStep"(p_MJAIAgentSteps_SubAgentIDID, p_MJAIAgentSteps_SubAgentID_AgentID, p_MJAIAgentSteps_SubAgentID_Name, p_MJAIAgentSteps_SubAgentID_Description, p_MJAIAgentSteps_SubAgentID_StepType, p_MJAIAgentSteps_SubAgentID_StartingStep, p_MJAIAgentSteps_SubAgentID_TimeoutSeconds, p_MJAIAgentSteps_SubAgentID_RetryCount, p_MJAIAgentSteps_SubAgentID_OnErrorBehavior, p_MJAIAgentSteps_SubAgentID_ActionID, p_MJAIAgentSteps_SubAgentID_SubAgentID, p_MJAIAgentSteps_SubAgentID_PromptID, p_MJAIAgentSteps_SubAgentID_ActionOutputMapping, p_MJAIAgentSteps_SubAgentID_PositionX, p_MJAIAgentSteps_SubAgentID_PositionY, p_MJAIAgentSteps_SubAgentID_Width, p_MJAIAgentSteps_SubAgentID_Height, p_MJAIAgentSteps_SubAgentID_Status, p_MJAIAgentSteps_SubAgentID_ActionInputMapping, p_MJAIAgentSteps_SubAgentID_LoopBodyType, p_MJAIAgentSteps_SubAgentID_Configuration);
+        PERFORM __mj."spUpdateAIAgentStep"(p_ID => p_MJAIAgentSteps_SubAgentIDID, p_AgentID => p_MJAIAgentSteps_SubAgentID_AgentID, p_Name => p_MJAIAgentSteps_SubAgentID_Name, p_Description => p_MJAIAgentSteps_SubAgentID_Description, p_StepType => p_MJAIAgentSteps_SubAgentID_StepType, p_StartingStep => p_MJAIAgentSteps_SubAgentID_StartingStep, p_TimeoutSeconds => p_MJAIAgentSteps_SubAgentID_TimeoutSeconds, p_RetryCount => p_MJAIAgentSteps_SubAgentID_RetryCount, p_OnErrorBehavior => p_MJAIAgentSteps_SubAgentID_OnErrorBehavior, p_ActionID => p_MJAIAgentSteps_SubAgentID_ActionID, p_SubAgentID => p_MJAIAgentSteps_SubAgentID_SubAgentID, p_PromptID => p_MJAIAgentSteps_SubAgentID_PromptID, p_ActionOutputMapping => p_MJAIAgentSteps_SubAgentID_ActionOutputMapping, p_PositionX => p_MJAIAgentSteps_SubAgentID_PositionX, p_PositionY => p_MJAIAgentSteps_SubAgentID_PositionY, p_Width => p_MJAIAgentSteps_SubAgentID_Width, p_Height => p_MJAIAgentSteps_SubAgentID_Height, p_Status => p_MJAIAgentSteps_SubAgentID_Status, p_ActionInputMapping => p_MJAIAgentSteps_SubAgentID_ActionInputMapping, p_LoopBodyType => p_MJAIAgentSteps_SubAgentID_LoopBodyType, p_Configuration => p_MJAIAgentSteps_SubAgentID_Configuration);
 
     END LOOP;
 
@@ -16857,7 +18230,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIAgents_ParentID_ParentID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgent"(p_MJAIAgents_ParentIDID, p_MJAIAgents_ParentID_Name, p_MJAIAgents_ParentID_Description, p_MJAIAgents_ParentID_LogoURL, p_MJAIAgents_ParentID_ParentID, p_MJAIAgents_ParentID_ExposeAsAction, p_MJAIAgents_ParentID_ExecutionOrder, p_MJAIAgents_ParentID_ExecutionMode, p_MJAIAgents_ParentID_EnableContextCompression, p_MJAIAgents_ParentID_ContextCompressionMessageThreshold, p_MJAIAgents_ParentID_ContextCompressionPromptID, p_MJAIAgents_ParentID_ContextCompressionMessageRetentionCount, p_MJAIAgents_ParentID_TypeID, p_MJAIAgents_ParentID_Status, p_MJAIAgents_ParentID_DriverClass, p_MJAIAgents_ParentID_IconClass, p_MJAIAgents_ParentID_ModelSelectionMode, p_MJAIAgents_ParentID_PayloadDownstreamPaths, p_MJAIAgents_ParentID_PayloadUpstreamPaths, p_MJAIAgents_ParentID_PayloadSelfReadPaths, p_MJAIAgents_ParentID_PayloadSelfWritePaths, p_MJAIAgents_ParentID_PayloadScope, p_MJAIAgents_ParentID_FinalPayloadValidation, p_MJAIAgents_ParentID_FinalPayloadValidationMode, p_MJAIAgents_ParentID_FinalPayloadValidationMaxRetries, p_MJAIAgents_ParentID_MaxCostPerRun, p_MJAIAgents_ParentID_MaxTokensPerRun, p_MJAIAgents_ParentID_MaxIterationsPerRun, p_MJAIAgents_ParentID_MaxTimePerRun, p_MJAIAgents_ParentID_MinExecutionsPerRun, p_MJAIAgents_ParentID_MaxExecutionsPerRun, p_MJAIAgents_ParentID_StartingPayloadValidation, p_MJAIAgents_ParentID_StartingPayloadValidationMode, p_MJAIAgents_ParentID_DefaultPromptEffortLevel, p_MJAIAgents_ParentID_ChatHandlingOption, p_MJAIAgents_ParentID_DefaultArtifactTypeID, p_MJAIAgents_ParentID_OwnerUserID, p_MJAIAgents_ParentID_InvocationMode, p_MJAIAgents_ParentID_ArtifactCreationMode, p_MJAIAgents_ParentID_FunctionalRequirements, p_MJAIAgents_ParentID_TechnicalDesign, p_MJAIAgents_ParentID_InjectNotes, p_MJAIAgents_ParentID_MaxNotesToInject, p_MJAIAgents_ParentID_NoteInjectionStrategy, p_MJAIAgents_ParentID_InjectExamples, p_MJAIAgents_ParentID_MaxExamplesToInject, p_MJAIAgents_ParentID_ExampleInjectionStrategy, p_MJAIAgents_ParentID_IsRestricted, p_MJAIAgents_ParentID_MessageMode, p_MJAIAgents_ParentID_MaxMessages, p_MJAIAgents_ParentID_AttachmentStorageProviderID, p_MJAIAgents_ParentID_AttachmentRootPath, p_MJAIAgents_ParentID_InlineStorageThresholdBytes, p_MJAIAgents_ParentID_AgentTypePromptParams, p_MJAIAgents_ParentID_ScopeConfig, p_MJAIAgents_ParentID_NoteRetentionDays, p_MJAIAgents_ParentID_ExampleRetentionDays, p_MJAIAgents_ParentID_AutoArchiveEnabled, p_MJAIAgents_ParentID_RerankerConfiguration, p_MJAIAgents_ParentID_CategoryID, p_MJAIAgents_ParentID_AllowEphemeralClientTools, p_MJAIAgents_ParentID_DefaultStorageAccountID, p_MJAIAgents_ParentID_SearchScopeAccess);
+        PERFORM __mj."spUpdateAIAgent"(p_ID => p_MJAIAgents_ParentIDID, p_Name => p_MJAIAgents_ParentID_Name, p_Description => p_MJAIAgents_ParentID_Description, p_LogoURL => p_MJAIAgents_ParentID_LogoURL, p_ParentID => p_MJAIAgents_ParentID_ParentID, p_ExposeAsAction => p_MJAIAgents_ParentID_ExposeAsAction, p_ExecutionOrder => p_MJAIAgents_ParentID_ExecutionOrder, p_ExecutionMode => p_MJAIAgents_ParentID_ExecutionMode, p_EnableContextCompression => p_MJAIAgents_ParentID_EnableContextCompression, p_ContextCompressionMessageThreshold => p_MJAIAgents_ParentID_ContextCompressionMessageThreshold, p_ContextCompressionPromptID => p_MJAIAgents_ParentID_ContextCompressionPromptID, p_ContextCompressionMessageRetentionCount => p_MJAIAgents_ParentID_ContextCompressionMessageRetentionCount, p_TypeID => p_MJAIAgents_ParentID_TypeID, p_Status => p_MJAIAgents_ParentID_Status, p_DriverClass => p_MJAIAgents_ParentID_DriverClass, p_IconClass => p_MJAIAgents_ParentID_IconClass, p_ModelSelectionMode => p_MJAIAgents_ParentID_ModelSelectionMode, p_PayloadDownstreamPaths => p_MJAIAgents_ParentID_PayloadDownstreamPaths, p_PayloadUpstreamPaths => p_MJAIAgents_ParentID_PayloadUpstreamPaths, p_PayloadSelfReadPaths => p_MJAIAgents_ParentID_PayloadSelfReadPaths, p_PayloadSelfWritePaths => p_MJAIAgents_ParentID_PayloadSelfWritePaths, p_PayloadScope => p_MJAIAgents_ParentID_PayloadScope, p_FinalPayloadValidation => p_MJAIAgents_ParentID_FinalPayloadValidation, p_FinalPayloadValidationMode => p_MJAIAgents_ParentID_FinalPayloadValidationMode, p_FinalPayloadValidationMaxRetries => p_MJAIAgents_ParentID_FinalPayloadValidationMaxRetries, p_MaxCostPerRun => p_MJAIAgents_ParentID_MaxCostPerRun, p_MaxTokensPerRun => p_MJAIAgents_ParentID_MaxTokensPerRun, p_MaxIterationsPerRun => p_MJAIAgents_ParentID_MaxIterationsPerRun, p_MaxTimePerRun => p_MJAIAgents_ParentID_MaxTimePerRun, p_MinExecutionsPerRun => p_MJAIAgents_ParentID_MinExecutionsPerRun, p_MaxExecutionsPerRun => p_MJAIAgents_ParentID_MaxExecutionsPerRun, p_StartingPayloadValidation => p_MJAIAgents_ParentID_StartingPayloadValidation, p_StartingPayloadValidationMode => p_MJAIAgents_ParentID_StartingPayloadValidationMode, p_DefaultPromptEffortLevel => p_MJAIAgents_ParentID_DefaultPromptEffortLevel, p_ChatHandlingOption => p_MJAIAgents_ParentID_ChatHandlingOption, p_DefaultArtifactTypeID => p_MJAIAgents_ParentID_DefaultArtifactTypeID, p_OwnerUserID => p_MJAIAgents_ParentID_OwnerUserID, p_InvocationMode => p_MJAIAgents_ParentID_InvocationMode, p_ArtifactCreationMode => p_MJAIAgents_ParentID_ArtifactCreationMode, p_FunctionalRequirements => p_MJAIAgents_ParentID_FunctionalRequirements, p_TechnicalDesign => p_MJAIAgents_ParentID_TechnicalDesign, p_InjectNotes => p_MJAIAgents_ParentID_InjectNotes, p_MaxNotesToInject => p_MJAIAgents_ParentID_MaxNotesToInject, p_NoteInjectionStrategy => p_MJAIAgents_ParentID_NoteInjectionStrategy, p_InjectExamples => p_MJAIAgents_ParentID_InjectExamples, p_MaxExamplesToInject => p_MJAIAgents_ParentID_MaxExamplesToInject, p_ExampleInjectionStrategy => p_MJAIAgents_ParentID_ExampleInjectionStrategy, p_IsRestricted => p_MJAIAgents_ParentID_IsRestricted, p_MessageMode => p_MJAIAgents_ParentID_MessageMode, p_MaxMessages => p_MJAIAgents_ParentID_MaxMessages, p_AttachmentStorageProviderID => p_MJAIAgents_ParentID_AttachmentStorageProviderID, p_AttachmentRootPath => p_MJAIAgents_ParentID_AttachmentRootPath, p_InlineStorageThresholdBytes => p_MJAIAgents_ParentID_InlineStorageThresholdBytes, p_AgentTypePromptParams => p_MJAIAgents_ParentID_AgentTypePromptParams, p_ScopeConfig => p_MJAIAgents_ParentID_ScopeConfig, p_NoteRetentionDays => p_MJAIAgents_ParentID_NoteRetentionDays, p_ExampleRetentionDays => p_MJAIAgents_ParentID_ExampleRetentionDays, p_AutoArchiveEnabled => p_MJAIAgents_ParentID_AutoArchiveEnabled, p_RerankerConfiguration => p_MJAIAgents_ParentID_RerankerConfiguration, p_CategoryID => p_MJAIAgents_ParentID_CategoryID, p_AllowEphemeralClientTools => p_MJAIAgents_ParentID_AllowEphemeralClientTools, p_DefaultStorageAccountID => p_MJAIAgents_ParentID_DefaultStorageAccountID, p_SearchScopeAccess => p_MJAIAgents_ParentID_SearchScopeAccess);
 
     END LOOP;
 
@@ -16953,7 +18326,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIPromptRuns_AgentID_AgentID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIPromptRun"(p_MJAIPromptRuns_AgentIDID, p_MJAIPromptRuns_AgentID_PromptID, p_MJAIPromptRuns_AgentID_ModelID, p_MJAIPromptRuns_AgentID_VendorID, p_MJAIPromptRuns_AgentID_AgentID, p_MJAIPromptRuns_AgentID_ConfigurationID, p_MJAIPromptRuns_AgentID_RunAt, p_MJAIPromptRuns_AgentID_CompletedAt, p_MJAIPromptRuns_AgentID_ExecutionTimeMS, p_MJAIPromptRuns_AgentID_Messages, p_MJAIPromptRuns_AgentID_Result, p_MJAIPromptRuns_AgentID_TokensUsed, p_MJAIPromptRuns_AgentID_TokensPrompt, p_MJAIPromptRuns_AgentID_TokensCompletion, p_MJAIPromptRuns_AgentID_TotalCost, p_MJAIPromptRuns_AgentID_Success, p_MJAIPromptRuns_AgentID_ErrorMessage, p_MJAIPromptRuns_AgentID_ParentID, p_MJAIPromptRuns_AgentID_RunType, p_MJAIPromptRuns_AgentID_ExecutionOrder, p_MJAIPromptRuns_AgentID_AgentRunID, p_MJAIPromptRuns_AgentID_Cost, p_MJAIPromptRuns_AgentID_CostCurrency, p_MJAIPromptRuns_AgentID_TokensUsedRollup, p_MJAIPromptRuns_AgentID_TokensPromptRollup, p_MJAIPromptRuns_AgentID_TokensCompletionRollup, p_MJAIPromptRuns_AgentID_Temperature, p_MJAIPromptRuns_AgentID_TopP, p_MJAIPromptRuns_AgentID_TopK, p_MJAIPromptRuns_AgentID_MinP, p_MJAIPromptRuns_AgentID_FrequencyPenalty, p_MJAIPromptRuns_AgentID_PresencePenalty, p_MJAIPromptRuns_AgentID_Seed, p_MJAIPromptRuns_AgentID_StopSequences, p_MJAIPromptRuns_AgentID_ResponseFormat, p_MJAIPromptRuns_AgentID_LogProbs, p_MJAIPromptRuns_AgentID_TopLogProbs, p_MJAIPromptRuns_AgentID_DescendantCost, p_MJAIPromptRuns_AgentID_ValidationAttemptCount, p_MJAIPromptRuns_AgentID_SuccessfulValidationCount, p_MJAIPromptRuns_AgentID_FinalValidationPassed, p_MJAIPromptRuns_AgentID_ValidationBehavior, p_MJAIPromptRuns_AgentID_RetryStrategy, p_MJAIPromptRuns_AgentID_MaxRetriesConfigured, p_MJAIPromptRuns_AgentID_FinalValidationError, p_MJAIPromptRuns_AgentID_ValidationErrorCount, p_MJAIPromptRuns_AgentID_CommonValidationError, p_MJAIPromptRuns_AgentID_FirstAttemptAt, p_MJAIPromptRuns_AgentID_LastAttemptAt, p_MJAIPromptRuns_AgentID_TotalRetryDurationMS, p_MJAIPromptRuns_AgentID_ValidationAttempts, p_MJAIPromptRuns_AgentID_ValidationSummary, p_MJAIPromptRuns_AgentID_FailoverAttempts, p_MJAIPromptRuns_AgentID_FailoverErrors, p_MJAIPromptRuns_AgentID_FailoverDurations, p_MJAIPromptRuns_AgentID_OriginalModelID, p_MJAIPromptRuns_AgentID_OriginalRequestStartTime, p_MJAIPromptRuns_AgentID_TotalFailoverDuration, p_MJAIPromptRuns_AgentID_RerunFromPromptRunID, p_MJAIPromptRuns_AgentID_ModelSelection, p_MJAIPromptRuns_AgentID_Status, p_MJAIPromptRuns_AgentID_Cancelled, p_MJAIPromptRuns_AgentID_CancellationReason, p_MJAIPromptRuns_AgentID_ModelPowerRank, p_MJAIPromptRuns_AgentID_SelectionStrategy, p_MJAIPromptRuns_AgentID_CacheHit, p_MJAIPromptRuns_AgentID_CacheKey, p_MJAIPromptRuns_AgentID_JudgeID, p_MJAIPromptRuns_AgentID_JudgeScore, p_MJAIPromptRuns_AgentID_WasSelectedResult, p_MJAIPromptRuns_AgentID_StreamingEnabled, p_MJAIPromptRuns_AgentID_FirstTokenTime, p_MJAIPromptRuns_AgentID_ErrorDetails, p_MJAIPromptRuns_AgentID_ChildPromptID, p_MJAIPromptRuns_AgentID_QueueTime, p_MJAIPromptRuns_AgentID_PromptTime, p_MJAIPromptRuns_AgentID_CompletionTime, p_MJAIPromptRuns_AgentID_ModelSpecificResponseDetails, p_MJAIPromptRuns_AgentID_EffortLevel, p_MJAIPromptRuns_AgentID_RunName, p_MJAIPromptRuns_AgentID_Comments, p_MJAIPromptRuns_AgentID_TestRunID, p_MJAIPromptRuns_AgentID_AssistantPrefill);
+        PERFORM __mj."spUpdateAIPromptRun"(p_ID => p_MJAIPromptRuns_AgentIDID, p_PromptID => p_MJAIPromptRuns_AgentID_PromptID, p_ModelID => p_MJAIPromptRuns_AgentID_ModelID, p_VendorID => p_MJAIPromptRuns_AgentID_VendorID, p_AgentID => p_MJAIPromptRuns_AgentID_AgentID, p_ConfigurationID => p_MJAIPromptRuns_AgentID_ConfigurationID, p_RunAt => p_MJAIPromptRuns_AgentID_RunAt, p_CompletedAt => p_MJAIPromptRuns_AgentID_CompletedAt, p_ExecutionTimeMS => p_MJAIPromptRuns_AgentID_ExecutionTimeMS, p_Messages => p_MJAIPromptRuns_AgentID_Messages, p_Result => p_MJAIPromptRuns_AgentID_Result, p_TokensUsed => p_MJAIPromptRuns_AgentID_TokensUsed, p_TokensPrompt => p_MJAIPromptRuns_AgentID_TokensPrompt, p_TokensCompletion => p_MJAIPromptRuns_AgentID_TokensCompletion, p_TotalCost => p_MJAIPromptRuns_AgentID_TotalCost, p_Success => p_MJAIPromptRuns_AgentID_Success, p_ErrorMessage => p_MJAIPromptRuns_AgentID_ErrorMessage, p_ParentID => p_MJAIPromptRuns_AgentID_ParentID, p_RunType => p_MJAIPromptRuns_AgentID_RunType, p_ExecutionOrder => p_MJAIPromptRuns_AgentID_ExecutionOrder, p_AgentRunID => p_MJAIPromptRuns_AgentID_AgentRunID, p_Cost => p_MJAIPromptRuns_AgentID_Cost, p_CostCurrency => p_MJAIPromptRuns_AgentID_CostCurrency, p_TokensUsedRollup => p_MJAIPromptRuns_AgentID_TokensUsedRollup, p_TokensPromptRollup => p_MJAIPromptRuns_AgentID_TokensPromptRollup, p_TokensCompletionRollup => p_MJAIPromptRuns_AgentID_TokensCompletionRollup, p_Temperature => p_MJAIPromptRuns_AgentID_Temperature, p_TopP => p_MJAIPromptRuns_AgentID_TopP, p_TopK => p_MJAIPromptRuns_AgentID_TopK, p_MinP => p_MJAIPromptRuns_AgentID_MinP, p_FrequencyPenalty => p_MJAIPromptRuns_AgentID_FrequencyPenalty, p_PresencePenalty => p_MJAIPromptRuns_AgentID_PresencePenalty, p_Seed => p_MJAIPromptRuns_AgentID_Seed, p_StopSequences => p_MJAIPromptRuns_AgentID_StopSequences, p_ResponseFormat => p_MJAIPromptRuns_AgentID_ResponseFormat, p_LogProbs => p_MJAIPromptRuns_AgentID_LogProbs, p_TopLogProbs => p_MJAIPromptRuns_AgentID_TopLogProbs, p_DescendantCost => p_MJAIPromptRuns_AgentID_DescendantCost, p_ValidationAttemptCount => p_MJAIPromptRuns_AgentID_ValidationAttemptCount, p_SuccessfulValidationCount => p_MJAIPromptRuns_AgentID_SuccessfulValidationCount, p_FinalValidationPassed => p_MJAIPromptRuns_AgentID_FinalValidationPassed, p_ValidationBehavior => p_MJAIPromptRuns_AgentID_ValidationBehavior, p_RetryStrategy => p_MJAIPromptRuns_AgentID_RetryStrategy, p_MaxRetriesConfigured => p_MJAIPromptRuns_AgentID_MaxRetriesConfigured, p_FinalValidationError => p_MJAIPromptRuns_AgentID_FinalValidationError, p_ValidationErrorCount => p_MJAIPromptRuns_AgentID_ValidationErrorCount, p_CommonValidationError => p_MJAIPromptRuns_AgentID_CommonValidationError, p_FirstAttemptAt => p_MJAIPromptRuns_AgentID_FirstAttemptAt, p_LastAttemptAt => p_MJAIPromptRuns_AgentID_LastAttemptAt, p_TotalRetryDurationMS => p_MJAIPromptRuns_AgentID_TotalRetryDurationMS, p_ValidationAttempts => p_MJAIPromptRuns_AgentID_ValidationAttempts, p_ValidationSummary => p_MJAIPromptRuns_AgentID_ValidationSummary, p_FailoverAttempts => p_MJAIPromptRuns_AgentID_FailoverAttempts, p_FailoverErrors => p_MJAIPromptRuns_AgentID_FailoverErrors, p_FailoverDurations => p_MJAIPromptRuns_AgentID_FailoverDurations, p_OriginalModelID => p_MJAIPromptRuns_AgentID_OriginalModelID, p_OriginalRequestStartTime => p_MJAIPromptRuns_AgentID_OriginalRequestStartTime, p_TotalFailoverDuration => p_MJAIPromptRuns_AgentID_TotalFailoverDuration, p_RerunFromPromptRunID => p_MJAIPromptRuns_AgentID_RerunFromPromptRunID, p_ModelSelection => p_MJAIPromptRuns_AgentID_ModelSelection, p_Status => p_MJAIPromptRuns_AgentID_Status, p_Cancelled => p_MJAIPromptRuns_AgentID_Cancelled, p_CancellationReason => p_MJAIPromptRuns_AgentID_CancellationReason, p_ModelPowerRank => p_MJAIPromptRuns_AgentID_ModelPowerRank, p_SelectionStrategy => p_MJAIPromptRuns_AgentID_SelectionStrategy, p_CacheHit => p_MJAIPromptRuns_AgentID_CacheHit, p_CacheKey => p_MJAIPromptRuns_AgentID_CacheKey, p_JudgeID => p_MJAIPromptRuns_AgentID_JudgeID, p_JudgeScore => p_MJAIPromptRuns_AgentID_JudgeScore, p_WasSelectedResult => p_MJAIPromptRuns_AgentID_WasSelectedResult, p_StreamingEnabled => p_MJAIPromptRuns_AgentID_StreamingEnabled, p_FirstTokenTime => p_MJAIPromptRuns_AgentID_FirstTokenTime, p_ErrorDetails => p_MJAIPromptRuns_AgentID_ErrorDetails, p_ChildPromptID => p_MJAIPromptRuns_AgentID_ChildPromptID, p_QueueTime => p_MJAIPromptRuns_AgentID_QueueTime, p_PromptTime => p_MJAIPromptRuns_AgentID_PromptTime, p_CompletionTime => p_MJAIPromptRuns_AgentID_CompletionTime, p_ModelSpecificResponseDetails => p_MJAIPromptRuns_AgentID_ModelSpecificResponseDetails, p_EffortLevel => p_MJAIPromptRuns_AgentID_EffortLevel, p_RunName => p_MJAIPromptRuns_AgentID_RunName, p_Comments => p_MJAIPromptRuns_AgentID_Comments, p_TestRunID => p_MJAIPromptRuns_AgentID_TestRunID, p_AssistantPrefill => p_MJAIPromptRuns_AgentID_AssistantPrefill);
 
     END LOOP;
 
@@ -16979,7 +18352,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIResultCache_AgentID_AgentID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIResultCache"(p_MJAIResultCache_AgentIDID, p_MJAIResultCache_AgentID_AIPromptID, p_MJAIResultCache_AgentID_AIModelID, p_MJAIResultCache_AgentID_RunAt, p_MJAIResultCache_AgentID_PromptText, p_MJAIResultCache_AgentID_ResultText, p_MJAIResultCache_AgentID_Status, p_MJAIResultCache_AgentID_ExpiredOn, p_MJAIResultCache_AgentID_VendorID, p_MJAIResultCache_AgentID_AgentID, p_MJAIResultCache_AgentID_ConfigurationID, p_MJAIResultCache_AgentID_PromptEmbedding, p_MJAIResultCache_AgentID_PromptRunID);
+        PERFORM __mj."spUpdateAIResultCache"(p_ID => p_MJAIResultCache_AgentIDID, p_AIPromptID => p_MJAIResultCache_AgentID_AIPromptID, p_AIModelID => p_MJAIResultCache_AgentID_AIModelID, p_RunAt => p_MJAIResultCache_AgentID_RunAt, p_PromptText => p_MJAIResultCache_AgentID_PromptText, p_ResultText => p_MJAIResultCache_AgentID_ResultText, p_Status => p_MJAIResultCache_AgentID_Status, p_ExpiredOn => p_MJAIResultCache_AgentID_ExpiredOn, p_VendorID => p_MJAIResultCache_AgentID_VendorID, p_AgentID => p_MJAIResultCache_AgentID_AgentID, p_ConfigurationID => p_MJAIResultCache_AgentID_ConfigurationID, p_PromptEmbedding => p_MJAIResultCache_AgentID_PromptEmbedding, p_PromptRunID => p_MJAIResultCache_AgentID_PromptRunID);
 
     END LOOP;
 
@@ -17017,7 +18390,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJConversationDetails_AgentID_AgentID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateConversationDetail"(p_MJConversationDetails_AgentIDID, p_MJConversationDetails_AgentID_ConversationID, p_MJConversationDetails_AgentID_ExternalID, p_MJConversationDetails_AgentID_Role, p_MJConversationDetails_AgentID_Message, p_MJConversationDetails_AgentID_Error, p_MJConversationDetails_AgentID_HiddenToUser, p_MJConversationDetails_AgentID_UserRating, p_MJConversationDetails_AgentID_UserFeedback, p_MJConversationDetails_AgentID_ReflectionInsights, p_MJConversationDetails_AgentID_SummaryOfEarlierConversation, p_MJConversationDetails_AgentID_UserID, p_MJConversationDetails_AgentID_ArtifactID, p_MJConversationDetails_AgentID_ArtifactVersionID, p_MJConversationDetails_AgentID_CompletionTime, p_MJConversationDetails_AgentID_IsPinned, p_MJConversationDetails_AgentID_ParentID, p_MJConversationDetails_AgentID_AgentID, p_MJConversationDetails_AgentID_Status, p_MJConversationDetails_AgentID_SuggestedResponses, p_MJConversationDetails_AgentID_TestRunID, p_MJConversationDetails_AgentID_ResponseForm, p_MJConversationDetails_AgentID_ActionableCommands, p_MJConversationDetails_AgentID_AutomaticCommands, p_MJConversationDetails_AgentID_OriginalMessageChanged);
+        PERFORM __mj."spUpdateConversationDetail"(p_ID => p_MJConversationDetails_AgentIDID, p_ConversationID => p_MJConversationDetails_AgentID_ConversationID, p_ExternalID => p_MJConversationDetails_AgentID_ExternalID, p_Role => p_MJConversationDetails_AgentID_Role, p_Message => p_MJConversationDetails_AgentID_Message, p_Error => p_MJConversationDetails_AgentID_Error, p_HiddenToUser => p_MJConversationDetails_AgentID_HiddenToUser, p_UserRating => p_MJConversationDetails_AgentID_UserRating, p_UserFeedback => p_MJConversationDetails_AgentID_UserFeedback, p_ReflectionInsights => p_MJConversationDetails_AgentID_ReflectionInsights, p_SummaryOfEarlierConversation => p_MJConversationDetails_AgentID_SummaryOfEarlierConversation, p_UserID => p_MJConversationDetails_AgentID_UserID, p_ArtifactID => p_MJConversationDetails_AgentID_ArtifactID, p_ArtifactVersionID => p_MJConversationDetails_AgentID_ArtifactVersionID, p_CompletionTime => p_MJConversationDetails_AgentID_CompletionTime, p_IsPinned => p_MJConversationDetails_AgentID_IsPinned, p_ParentID => p_MJConversationDetails_AgentID_ParentID, p_AgentID => p_MJConversationDetails_AgentID_AgentID, p_Status => p_MJConversationDetails_AgentID_Status, p_SuggestedResponses => p_MJConversationDetails_AgentID_SuggestedResponses, p_TestRunID => p_MJConversationDetails_AgentID_TestRunID, p_ResponseForm => p_MJConversationDetails_AgentID_ResponseForm, p_ActionableCommands => p_MJConversationDetails_AgentID_ActionableCommands, p_AutomaticCommands => p_MJConversationDetails_AgentID_AutomaticCommands, p_OriginalMessageChanged => p_MJConversationDetails_AgentID_OriginalMessageChanged);
 
     END LOOP;
 
@@ -17045,7 +18418,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJTasks_AgentID_AgentID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateTask"(p_MJTasks_AgentIDID, p_MJTasks_AgentID_ParentID, p_MJTasks_AgentID_Name, p_MJTasks_AgentID_Description, p_MJTasks_AgentID_TypeID, p_MJTasks_AgentID_EnvironmentID, p_MJTasks_AgentID_ProjectID, p_MJTasks_AgentID_ConversationDetailID, p_MJTasks_AgentID_UserID, p_MJTasks_AgentID_AgentID, p_MJTasks_AgentID_Status, p_MJTasks_AgentID_PercentComplete, p_MJTasks_AgentID_DueAt, p_MJTasks_AgentID_StartedAt, p_MJTasks_AgentID_CompletedAt);
+        PERFORM __mj."spUpdateTask"(p_ID => p_MJTasks_AgentIDID, p_ParentID => p_MJTasks_AgentID_ParentID, p_Name => p_MJTasks_AgentID_Name, p_Description => p_MJTasks_AgentID_Description, p_TypeID => p_MJTasks_AgentID_TypeID, p_EnvironmentID => p_MJTasks_AgentID_EnvironmentID, p_ProjectID => p_MJTasks_AgentID_ProjectID, p_ConversationDetailID => p_MJTasks_AgentID_ConversationDetailID, p_UserID => p_MJTasks_AgentID_UserID, p_AgentID => p_MJTasks_AgentID_AgentID, p_Status => p_MJTasks_AgentID_Status, p_PercentComplete => p_MJTasks_AgentID_PercentComplete, p_DueAt => p_MJTasks_AgentID_DueAt, p_StartedAt => p_MJTasks_AgentID_StartedAt, p_CompletedAt => p_MJTasks_AgentID_CompletedAt);
 
     END LOOP;
 
@@ -17066,6 +18439,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteAIPrompt'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteAIPrompt"(
     IN p_ID UUID
 )
@@ -17477,7 +18858,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJActions_DefaultCompactPromptID_DefaultCompactPromptID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAction"(p_MJActions_DefaultCompactPromptIDID, p_MJActions_DefaultCompactPromptID_CategoryID, p_MJActions_DefaultCompactPromptID_Name, p_MJActions_DefaultCompactPromptID_Description, p_MJActions_DefaultCompactPromptID_Type, p_MJActions_DefaultCompactPromptID_UserPrompt, p_MJActions_DefaultCompactPromptID_UserComments, p_MJActions_DefaultCompactPromptID_Code, p_MJActions_DefaultCompactPromptID_CodeComments, p_MJActions_DefaultCompactPromptID_CodeApprovalStatus, p_MJActions_DefaultCompactPromptID_CodeApprovalComments, p_MJActions_DefaultCompactPromptID_CodeApprovedByUserID, p_MJActions_DefaultCompactPromptID_CodeApprovedAt, p_MJActions_DefaultCompactPromptID_CodeLocked, p_MJActions_DefaultCompactPromptID_ForceCodeGeneration, p_MJActions_DefaultCompactPromptID_RetentionPeriod, p_MJActions_DefaultCompactPromptID_Status, p_MJActions_DefaultCompactPromptID_DriverClass, p_MJActions_DefaultCompactPromptID_ParentID, p_MJActions_DefaultCompactPromptID_IconClass, p_MJActions_DefaultCompactPromptID_DefaultCompactPromptID, p_MJActions_DefaultCompactPromptID_Config);
+        PERFORM __mj."spUpdateAction"(p_ID => p_MJActions_DefaultCompactPromptIDID, p_CategoryID => p_MJActions_DefaultCompactPromptID_CategoryID, p_Name => p_MJActions_DefaultCompactPromptID_Name, p_Description => p_MJActions_DefaultCompactPromptID_Description, p_Type => p_MJActions_DefaultCompactPromptID_Type, p_UserPrompt => p_MJActions_DefaultCompactPromptID_UserPrompt, p_UserComments => p_MJActions_DefaultCompactPromptID_UserComments, p_Code => p_MJActions_DefaultCompactPromptID_Code, p_CodeComments => p_MJActions_DefaultCompactPromptID_CodeComments, p_CodeApprovalStatus => p_MJActions_DefaultCompactPromptID_CodeApprovalStatus, p_CodeApprovalComments => p_MJActions_DefaultCompactPromptID_CodeApprovalComments, p_CodeApprovedByUserID => p_MJActions_DefaultCompactPromptID_CodeApprovedByUserID, p_CodeApprovedAt => p_MJActions_DefaultCompactPromptID_CodeApprovedAt, p_CodeLocked => p_MJActions_DefaultCompactPromptID_CodeLocked, p_ForceCodeGeneration => p_MJActions_DefaultCompactPromptID_ForceCodeGeneration, p_RetentionPeriod => p_MJActions_DefaultCompactPromptID_RetentionPeriod, p_Status => p_MJActions_DefaultCompactPromptID_Status, p_DriverClass => p_MJActions_DefaultCompactPromptID_DriverClass, p_ParentID => p_MJActions_DefaultCompactPromptID_ParentID, p_IconClass => p_MJActions_DefaultCompactPromptID_IconClass, p_DefaultCompactPromptID => p_MJActions_DefaultCompactPromptID_DefaultCompactPromptID, p_Config => p_MJActions_DefaultCompactPromptID_Config);
 
     END LOOP;
 
@@ -17501,7 +18882,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIAgentActions_CompactPromptID_CompactPromptID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentAction"(p_MJAIAgentActions_CompactPromptIDID, p_MJAIAgentActions_CompactPromptID_AgentID, p_MJAIAgentActions_CompactPromptID_ActionID, p_MJAIAgentActions_CompactPromptID_Status, p_MJAIAgentActions_CompactPromptID_MinExecutionsPerRun, p_MJAIAgentActions_CompactPromptID_MaxExecutionsPerRun, p_MJAIAgentActions_CompactPromptID_ResultExpirationTurns, p_MJAIAgentActions_CompactPromptID_ResultExpirationMode, p_MJAIAgentActions_CompactPromptID_CompactMode, p_MJAIAgentActions_CompactPromptID_CompactLength, p_MJAIAgentActions_CompactPromptID_CompactPromptID);
+        PERFORM __mj."spUpdateAIAgentAction"(p_ID => p_MJAIAgentActions_CompactPromptIDID, p_AgentID => p_MJAIAgentActions_CompactPromptID_AgentID, p_ActionID => p_MJAIAgentActions_CompactPromptID_ActionID, p_Status => p_MJAIAgentActions_CompactPromptID_Status, p_MinExecutionsPerRun => p_MJAIAgentActions_CompactPromptID_MinExecutionsPerRun, p_MaxExecutionsPerRun => p_MJAIAgentActions_CompactPromptID_MaxExecutionsPerRun, p_ResultExpirationTurns => p_MJAIAgentActions_CompactPromptID_ResultExpirationTurns, p_ResultExpirationMode => p_MJAIAgentActions_CompactPromptID_ResultExpirationMode, p_CompactMode => p_MJAIAgentActions_CompactPromptID_CompactMode, p_CompactLength => p_MJAIAgentActions_CompactPromptID_CompactLength, p_CompactPromptID => p_MJAIAgentActions_CompactPromptID_CompactPromptID);
 
     END LOOP;
 
@@ -17511,7 +18892,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentPrompt" WHERE "PromptID" = p_ID
     LOOP
         p_MJAIAgentPrompts_PromptIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentPrompt"(p_MJAIAgentPrompts_PromptIDID);
+        PERFORM __mj."spDeleteAIAgentPrompt"(p_ID => p_MJAIAgentPrompts_PromptIDID);
         
     END LOOP;
     
@@ -17545,7 +18926,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIAgentSteps_PromptID_PromptID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentStep"(p_MJAIAgentSteps_PromptIDID, p_MJAIAgentSteps_PromptID_AgentID, p_MJAIAgentSteps_PromptID_Name, p_MJAIAgentSteps_PromptID_Description, p_MJAIAgentSteps_PromptID_StepType, p_MJAIAgentSteps_PromptID_StartingStep, p_MJAIAgentSteps_PromptID_TimeoutSeconds, p_MJAIAgentSteps_PromptID_RetryCount, p_MJAIAgentSteps_PromptID_OnErrorBehavior, p_MJAIAgentSteps_PromptID_ActionID, p_MJAIAgentSteps_PromptID_SubAgentID, p_MJAIAgentSteps_PromptID_PromptID, p_MJAIAgentSteps_PromptID_ActionOutputMapping, p_MJAIAgentSteps_PromptID_PositionX, p_MJAIAgentSteps_PromptID_PositionY, p_MJAIAgentSteps_PromptID_Width, p_MJAIAgentSteps_PromptID_Height, p_MJAIAgentSteps_PromptID_Status, p_MJAIAgentSteps_PromptID_ActionInputMapping, p_MJAIAgentSteps_PromptID_LoopBodyType, p_MJAIAgentSteps_PromptID_Configuration);
+        PERFORM __mj."spUpdateAIAgentStep"(p_ID => p_MJAIAgentSteps_PromptIDID, p_AgentID => p_MJAIAgentSteps_PromptID_AgentID, p_Name => p_MJAIAgentSteps_PromptID_Name, p_Description => p_MJAIAgentSteps_PromptID_Description, p_StepType => p_MJAIAgentSteps_PromptID_StepType, p_StartingStep => p_MJAIAgentSteps_PromptID_StartingStep, p_TimeoutSeconds => p_MJAIAgentSteps_PromptID_TimeoutSeconds, p_RetryCount => p_MJAIAgentSteps_PromptID_RetryCount, p_OnErrorBehavior => p_MJAIAgentSteps_PromptID_OnErrorBehavior, p_ActionID => p_MJAIAgentSteps_PromptID_ActionID, p_SubAgentID => p_MJAIAgentSteps_PromptID_SubAgentID, p_PromptID => p_MJAIAgentSteps_PromptID_PromptID, p_ActionOutputMapping => p_MJAIAgentSteps_PromptID_ActionOutputMapping, p_PositionX => p_MJAIAgentSteps_PromptID_PositionX, p_PositionY => p_MJAIAgentSteps_PromptID_PositionY, p_Width => p_MJAIAgentSteps_PromptID_Width, p_Height => p_MJAIAgentSteps_PromptID_Height, p_Status => p_MJAIAgentSteps_PromptID_Status, p_ActionInputMapping => p_MJAIAgentSteps_PromptID_ActionInputMapping, p_LoopBodyType => p_MJAIAgentSteps_PromptID_LoopBodyType, p_Configuration => p_MJAIAgentSteps_PromptID_Configuration);
 
     END LOOP;
 
@@ -17571,7 +18952,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIAgentTypes_SystemPromptID_SystemPromptID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentType"(p_MJAIAgentTypes_SystemPromptIDID, p_MJAIAgentTypes_SystemPromptID_Name, p_MJAIAgentTypes_SystemPromptID_Description, p_MJAIAgentTypes_SystemPromptID_SystemPromptID, p_MJAIAgentTypes_SystemPromptID_IsActive, p_MJAIAgentTypes_SystemPromptID_AgentPromptPlaceholder, p_MJAIAgentTypes_SystemPromptID_DriverClass, p_MJAIAgentTypes_SystemPromptID_UIFormSectionKey, p_MJAIAgentTypes_SystemPromptID_UIFormKey, p_MJAIAgentTypes_SystemPromptID_UIFormSectionExpandedByDefault, p_MJAIAgentTypes_SystemPromptID_PromptParamsSchema, p_MJAIAgentTypes_SystemPromptID_AssignmentStrategy, p_MJAIAgentTypes_SystemPromptID_DefaultStorageAccountID);
+        PERFORM __mj."spUpdateAIAgentType"(p_ID => p_MJAIAgentTypes_SystemPromptIDID, p_Name => p_MJAIAgentTypes_SystemPromptID_Name, p_Description => p_MJAIAgentTypes_SystemPromptID_Description, p_SystemPromptID => p_MJAIAgentTypes_SystemPromptID_SystemPromptID, p_IsActive => p_MJAIAgentTypes_SystemPromptID_IsActive, p_AgentPromptPlaceholder => p_MJAIAgentTypes_SystemPromptID_AgentPromptPlaceholder, p_DriverClass => p_MJAIAgentTypes_SystemPromptID_DriverClass, p_UIFormSectionKey => p_MJAIAgentTypes_SystemPromptID_UIFormSectionKey, p_UIFormKey => p_MJAIAgentTypes_SystemPromptID_UIFormKey, p_UIFormSectionExpandedByDefault => p_MJAIAgentTypes_SystemPromptID_UIFormSectionExpandedByDefault, p_PromptParamsSchema => p_MJAIAgentTypes_SystemPromptID_PromptParamsSchema, p_AssignmentStrategy => p_MJAIAgentTypes_SystemPromptID_AssignmentStrategy, p_DefaultStorageAccountID => p_MJAIAgentTypes_SystemPromptID_DefaultStorageAccountID);
 
     END LOOP;
 
@@ -17647,7 +19028,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIAgents_ContextCompressionPromptID_ContextCompressio_a2467d := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgent"(p_MJAIAgents_ContextCompressionPromptIDID, p_MJAIAgents_ContextCompressionPromptID_Name, p_MJAIAgents_ContextCompressionPromptID_Description, p_MJAIAgents_ContextCompressionPromptID_LogoURL, p_MJAIAgents_ContextCompressionPromptID_ParentID, p_MJAIAgents_ContextCompressionPromptID_ExposeAsAction, p_MJAIAgents_ContextCompressionPromptID_ExecutionOrder, p_MJAIAgents_ContextCompressionPromptID_ExecutionMode, p_MJAIAgents_ContextCompressionPromptID_EnableContextComp_017508, p_MJAIAgents_ContextCompressionPromptID_ContextCompressio_09124d, p_MJAIAgents_ContextCompressionPromptID_ContextCompressio_a2467d, p_MJAIAgents_ContextCompressionPromptID_ContextCompressio_6c27f1, p_MJAIAgents_ContextCompressionPromptID_TypeID, p_MJAIAgents_ContextCompressionPromptID_Status, p_MJAIAgents_ContextCompressionPromptID_DriverClass, p_MJAIAgents_ContextCompressionPromptID_IconClass, p_MJAIAgents_ContextCompressionPromptID_ModelSelectionMode, p_MJAIAgents_ContextCompressionPromptID_PayloadDownstreamPaths, p_MJAIAgents_ContextCompressionPromptID_PayloadUpstreamPaths, p_MJAIAgents_ContextCompressionPromptID_PayloadSelfReadPaths, p_MJAIAgents_ContextCompressionPromptID_PayloadSelfWritePaths, p_MJAIAgents_ContextCompressionPromptID_PayloadScope, p_MJAIAgents_ContextCompressionPromptID_FinalPayloadValidation, p_MJAIAgents_ContextCompressionPromptID_FinalPayloadValid_a7a211, p_MJAIAgents_ContextCompressionPromptID_FinalPayloadValid_a47251, p_MJAIAgents_ContextCompressionPromptID_MaxCostPerRun, p_MJAIAgents_ContextCompressionPromptID_MaxTokensPerRun, p_MJAIAgents_ContextCompressionPromptID_MaxIterationsPerRun, p_MJAIAgents_ContextCompressionPromptID_MaxTimePerRun, p_MJAIAgents_ContextCompressionPromptID_MinExecutionsPerRun, p_MJAIAgents_ContextCompressionPromptID_MaxExecutionsPerRun, p_MJAIAgents_ContextCompressionPromptID_StartingPayloadVa_df2a60, p_MJAIAgents_ContextCompressionPromptID_StartingPayloadVa_df2a60Mode, p_MJAIAgents_ContextCompressionPromptID_DefaultPromptEffo_322203, p_MJAIAgents_ContextCompressionPromptID_ChatHandlingOption, p_MJAIAgents_ContextCompressionPromptID_DefaultArtifactTypeID, p_MJAIAgents_ContextCompressionPromptID_OwnerUserID, p_MJAIAgents_ContextCompressionPromptID_InvocationMode, p_MJAIAgents_ContextCompressionPromptID_ArtifactCreationMode, p_MJAIAgents_ContextCompressionPromptID_FunctionalRequirements, p_MJAIAgents_ContextCompressionPromptID_TechnicalDesign, p_MJAIAgents_ContextCompressionPromptID_InjectNotes, p_MJAIAgents_ContextCompressionPromptID_MaxNotesToInject, p_MJAIAgents_ContextCompressionPromptID_NoteInjectionStrategy, p_MJAIAgents_ContextCompressionPromptID_InjectExamples, p_MJAIAgents_ContextCompressionPromptID_MaxExamplesToInject, p_MJAIAgents_ContextCompressionPromptID_ExampleInjectionS_27b212, p_MJAIAgents_ContextCompressionPromptID_IsRestricted, p_MJAIAgents_ContextCompressionPromptID_MessageMode, p_MJAIAgents_ContextCompressionPromptID_MaxMessages, p_MJAIAgents_ContextCompressionPromptID_AttachmentStorage_81bfaf, p_MJAIAgents_ContextCompressionPromptID_AttachmentRootPath, p_MJAIAgents_ContextCompressionPromptID_InlineStorageThre_804eef, p_MJAIAgents_ContextCompressionPromptID_AgentTypePromptParams, p_MJAIAgents_ContextCompressionPromptID_ScopeConfig, p_MJAIAgents_ContextCompressionPromptID_NoteRetentionDays, p_MJAIAgents_ContextCompressionPromptID_ExampleRetentionDays, p_MJAIAgents_ContextCompressionPromptID_AutoArchiveEnabled, p_MJAIAgents_ContextCompressionPromptID_RerankerConfiguration, p_MJAIAgents_ContextCompressionPromptID_CategoryID, p_MJAIAgents_ContextCompressionPromptID_AllowEphemeralCli_be674b, p_MJAIAgents_ContextCompressionPromptID_DefaultStorageAccountID, p_MJAIAgents_ContextCompressionPromptID_SearchScopeAccess);
+        PERFORM __mj."spUpdateAIAgent"(p_ID => p_MJAIAgents_ContextCompressionPromptIDID, p_Name => p_MJAIAgents_ContextCompressionPromptID_Name, p_Description => p_MJAIAgents_ContextCompressionPromptID_Description, p_LogoURL => p_MJAIAgents_ContextCompressionPromptID_LogoURL, p_ParentID => p_MJAIAgents_ContextCompressionPromptID_ParentID, p_ExposeAsAction => p_MJAIAgents_ContextCompressionPromptID_ExposeAsAction, p_ExecutionOrder => p_MJAIAgents_ContextCompressionPromptID_ExecutionOrder, p_ExecutionMode => p_MJAIAgents_ContextCompressionPromptID_ExecutionMode, p_EnableContextCompression => p_MJAIAgents_ContextCompressionPromptID_EnableContextComp_017508, p_ContextCompressionMessageThreshold => p_MJAIAgents_ContextCompressionPromptID_ContextCompressio_09124d, p_ContextCompressionPromptID => p_MJAIAgents_ContextCompressionPromptID_ContextCompressio_a2467d, p_ContextCompressionMessageRetentionCount => p_MJAIAgents_ContextCompressionPromptID_ContextCompressio_6c27f1, p_TypeID => p_MJAIAgents_ContextCompressionPromptID_TypeID, p_Status => p_MJAIAgents_ContextCompressionPromptID_Status, p_DriverClass => p_MJAIAgents_ContextCompressionPromptID_DriverClass, p_IconClass => p_MJAIAgents_ContextCompressionPromptID_IconClass, p_ModelSelectionMode => p_MJAIAgents_ContextCompressionPromptID_ModelSelectionMode, p_PayloadDownstreamPaths => p_MJAIAgents_ContextCompressionPromptID_PayloadDownstreamPaths, p_PayloadUpstreamPaths => p_MJAIAgents_ContextCompressionPromptID_PayloadUpstreamPaths, p_PayloadSelfReadPaths => p_MJAIAgents_ContextCompressionPromptID_PayloadSelfReadPaths, p_PayloadSelfWritePaths => p_MJAIAgents_ContextCompressionPromptID_PayloadSelfWritePaths, p_PayloadScope => p_MJAIAgents_ContextCompressionPromptID_PayloadScope, p_FinalPayloadValidation => p_MJAIAgents_ContextCompressionPromptID_FinalPayloadValidation, p_FinalPayloadValidationMode => p_MJAIAgents_ContextCompressionPromptID_FinalPayloadValid_a7a211, p_FinalPayloadValidationMaxRetries => p_MJAIAgents_ContextCompressionPromptID_FinalPayloadValid_a47251, p_MaxCostPerRun => p_MJAIAgents_ContextCompressionPromptID_MaxCostPerRun, p_MaxTokensPerRun => p_MJAIAgents_ContextCompressionPromptID_MaxTokensPerRun, p_MaxIterationsPerRun => p_MJAIAgents_ContextCompressionPromptID_MaxIterationsPerRun, p_MaxTimePerRun => p_MJAIAgents_ContextCompressionPromptID_MaxTimePerRun, p_MinExecutionsPerRun => p_MJAIAgents_ContextCompressionPromptID_MinExecutionsPerRun, p_MaxExecutionsPerRun => p_MJAIAgents_ContextCompressionPromptID_MaxExecutionsPerRun, p_StartingPayloadValidation => p_MJAIAgents_ContextCompressionPromptID_StartingPayloadVa_df2a60, p_StartingPayloadValidationMode => p_MJAIAgents_ContextCompressionPromptID_StartingPayloadVa_df2a60Mode, p_DefaultPromptEffortLevel => p_MJAIAgents_ContextCompressionPromptID_DefaultPromptEffo_322203, p_ChatHandlingOption => p_MJAIAgents_ContextCompressionPromptID_ChatHandlingOption, p_DefaultArtifactTypeID => p_MJAIAgents_ContextCompressionPromptID_DefaultArtifactTypeID, p_OwnerUserID => p_MJAIAgents_ContextCompressionPromptID_OwnerUserID, p_InvocationMode => p_MJAIAgents_ContextCompressionPromptID_InvocationMode, p_ArtifactCreationMode => p_MJAIAgents_ContextCompressionPromptID_ArtifactCreationMode, p_FunctionalRequirements => p_MJAIAgents_ContextCompressionPromptID_FunctionalRequirements, p_TechnicalDesign => p_MJAIAgents_ContextCompressionPromptID_TechnicalDesign, p_InjectNotes => p_MJAIAgents_ContextCompressionPromptID_InjectNotes, p_MaxNotesToInject => p_MJAIAgents_ContextCompressionPromptID_MaxNotesToInject, p_NoteInjectionStrategy => p_MJAIAgents_ContextCompressionPromptID_NoteInjectionStrategy, p_InjectExamples => p_MJAIAgents_ContextCompressionPromptID_InjectExamples, p_MaxExamplesToInject => p_MJAIAgents_ContextCompressionPromptID_MaxExamplesToInject, p_ExampleInjectionStrategy => p_MJAIAgents_ContextCompressionPromptID_ExampleInjectionS_27b212, p_IsRestricted => p_MJAIAgents_ContextCompressionPromptID_IsRestricted, p_MessageMode => p_MJAIAgents_ContextCompressionPromptID_MessageMode, p_MaxMessages => p_MJAIAgents_ContextCompressionPromptID_MaxMessages, p_AttachmentStorageProviderID => p_MJAIAgents_ContextCompressionPromptID_AttachmentStorage_81bfaf, p_AttachmentRootPath => p_MJAIAgents_ContextCompressionPromptID_AttachmentRootPath, p_InlineStorageThresholdBytes => p_MJAIAgents_ContextCompressionPromptID_InlineStorageThre_804eef, p_AgentTypePromptParams => p_MJAIAgents_ContextCompressionPromptID_AgentTypePromptParams, p_ScopeConfig => p_MJAIAgents_ContextCompressionPromptID_ScopeConfig, p_NoteRetentionDays => p_MJAIAgents_ContextCompressionPromptID_NoteRetentionDays, p_ExampleRetentionDays => p_MJAIAgents_ContextCompressionPromptID_ExampleRetentionDays, p_AutoArchiveEnabled => p_MJAIAgents_ContextCompressionPromptID_AutoArchiveEnabled, p_RerankerConfiguration => p_MJAIAgents_ContextCompressionPromptID_RerankerConfiguration, p_CategoryID => p_MJAIAgents_ContextCompressionPromptID_CategoryID, p_AllowEphemeralClientTools => p_MJAIAgents_ContextCompressionPromptID_AllowEphemeralCli_be674b, p_DefaultStorageAccountID => p_MJAIAgents_ContextCompressionPromptID_DefaultStorageAccountID, p_SearchScopeAccess => p_MJAIAgents_ContextCompressionPromptID_SearchScopeAccess);
 
     END LOOP;
 
@@ -17670,7 +19051,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIConfigurations_DefaultPromptForContextCompressionID_62528c := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIConfiguration"(p_MJAIConfigurations_DefaultPromptForContextCompressionIDID, p_MJAIConfigurations_DefaultPromptForContextCompressionID_Name, p_MJAIConfigurations_DefaultPromptForContextCompressionID_da9038, p_MJAIConfigurations_DefaultPromptForContextCompressionID_6adeb7, p_MJAIConfigurations_DefaultPromptForContextCompressionID_d74408, p_MJAIConfigurations_DefaultPromptForContextCompressionID_62528c, p_MJAIConfigurations_DefaultPromptForContextCompressionID_dbdd4d, p_MJAIConfigurations_DefaultPromptForContextCompressionID_30722a, p_MJAIConfigurations_DefaultPromptForContextCompressionID_70e3ed, p_MJAIConfigurations_DefaultPromptForContextCompressionID_0dd4a4);
+        PERFORM __mj."spUpdateAIConfiguration"(p_ID => p_MJAIConfigurations_DefaultPromptForContextCompressionIDID, p_Name => p_MJAIConfigurations_DefaultPromptForContextCompressionID_Name, p_Description => p_MJAIConfigurations_DefaultPromptForContextCompressionID_da9038, p_IsDefault => p_MJAIConfigurations_DefaultPromptForContextCompressionID_6adeb7, p_Status => p_MJAIConfigurations_DefaultPromptForContextCompressionID_d74408, p_DefaultPromptForContextCompressionID => p_MJAIConfigurations_DefaultPromptForContextCompressionID_62528c, p_DefaultPromptForContextSummarizationID => p_MJAIConfigurations_DefaultPromptForContextCompressionID_dbdd4d, p_DefaultStorageProviderID => p_MJAIConfigurations_DefaultPromptForContextCompressionID_30722a, p_DefaultStorageRootPath => p_MJAIConfigurations_DefaultPromptForContextCompressionID_70e3ed, p_ParentID => p_MJAIConfigurations_DefaultPromptForContextCompressionID_0dd4a4);
 
     END LOOP;
 
@@ -17693,7 +19074,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIConfigurations_DefaultPromptForContextSummarization_931872 := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIConfiguration"(p_MJAIConfigurations_DefaultPromptForContextSummarizationIDID, p_MJAIConfigurations_DefaultPromptForContextSummarization_c5c467, p_MJAIConfigurations_DefaultPromptForContextSummarization_6a1d29, p_MJAIConfigurations_DefaultPromptForContextSummarization_bf32c6, p_MJAIConfigurations_DefaultPromptForContextSummarization_6fd740, p_MJAIConfigurations_DefaultPromptForContextSummarization_ac095a, p_MJAIConfigurations_DefaultPromptForContextSummarization_931872, p_MJAIConfigurations_DefaultPromptForContextSummarization_991e80, p_MJAIConfigurations_DefaultPromptForContextSummarization_b4211c, p_MJAIConfigurations_DefaultPromptForContextSummarization_ce7c84);
+        PERFORM __mj."spUpdateAIConfiguration"(p_ID => p_MJAIConfigurations_DefaultPromptForContextSummarizationIDID, p_Name => p_MJAIConfigurations_DefaultPromptForContextSummarization_c5c467, p_Description => p_MJAIConfigurations_DefaultPromptForContextSummarization_6a1d29, p_IsDefault => p_MJAIConfigurations_DefaultPromptForContextSummarization_bf32c6, p_Status => p_MJAIConfigurations_DefaultPromptForContextSummarization_6fd740, p_DefaultPromptForContextCompressionID => p_MJAIConfigurations_DefaultPromptForContextSummarization_ac095a, p_DefaultPromptForContextSummarizationID => p_MJAIConfigurations_DefaultPromptForContextSummarization_931872, p_DefaultStorageProviderID => p_MJAIConfigurations_DefaultPromptForContextSummarization_991e80, p_DefaultStorageRootPath => p_MJAIConfigurations_DefaultPromptForContextSummarization_b4211c, p_ParentID => p_MJAIConfigurations_DefaultPromptForContextSummarization_ce7c84);
 
     END LOOP;
 
@@ -17703,7 +19084,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIPromptModel" WHERE "PromptID" = p_ID
     LOOP
         p_MJAIPromptModels_PromptIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIPromptModel"(p_MJAIPromptModels_PromptIDID);
+        PERFORM __mj."spDeleteAIPromptModel"(p_ID => p_MJAIPromptModels_PromptIDID);
         
     END LOOP;
     
@@ -17713,7 +19094,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIPromptRun" WHERE "PromptID" = p_ID
     LOOP
         p_MJAIPromptRuns_PromptIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIPromptRun"(p_MJAIPromptRuns_PromptIDID);
+        PERFORM __mj."spDeleteAIPromptRun"(p_ID => p_MJAIPromptRuns_PromptIDID);
         
     END LOOP;
     
@@ -17809,7 +19190,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIPromptRuns_JudgeID_JudgeID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIPromptRun"(p_MJAIPromptRuns_JudgeIDID, p_MJAIPromptRuns_JudgeID_PromptID, p_MJAIPromptRuns_JudgeID_ModelID, p_MJAIPromptRuns_JudgeID_VendorID, p_MJAIPromptRuns_JudgeID_AgentID, p_MJAIPromptRuns_JudgeID_ConfigurationID, p_MJAIPromptRuns_JudgeID_RunAt, p_MJAIPromptRuns_JudgeID_CompletedAt, p_MJAIPromptRuns_JudgeID_ExecutionTimeMS, p_MJAIPromptRuns_JudgeID_Messages, p_MJAIPromptRuns_JudgeID_Result, p_MJAIPromptRuns_JudgeID_TokensUsed, p_MJAIPromptRuns_JudgeID_TokensPrompt, p_MJAIPromptRuns_JudgeID_TokensCompletion, p_MJAIPromptRuns_JudgeID_TotalCost, p_MJAIPromptRuns_JudgeID_Success, p_MJAIPromptRuns_JudgeID_ErrorMessage, p_MJAIPromptRuns_JudgeID_ParentID, p_MJAIPromptRuns_JudgeID_RunType, p_MJAIPromptRuns_JudgeID_ExecutionOrder, p_MJAIPromptRuns_JudgeID_AgentRunID, p_MJAIPromptRuns_JudgeID_Cost, p_MJAIPromptRuns_JudgeID_CostCurrency, p_MJAIPromptRuns_JudgeID_TokensUsedRollup, p_MJAIPromptRuns_JudgeID_TokensPromptRollup, p_MJAIPromptRuns_JudgeID_TokensCompletionRollup, p_MJAIPromptRuns_JudgeID_Temperature, p_MJAIPromptRuns_JudgeID_TopP, p_MJAIPromptRuns_JudgeID_TopK, p_MJAIPromptRuns_JudgeID_MinP, p_MJAIPromptRuns_JudgeID_FrequencyPenalty, p_MJAIPromptRuns_JudgeID_PresencePenalty, p_MJAIPromptRuns_JudgeID_Seed, p_MJAIPromptRuns_JudgeID_StopSequences, p_MJAIPromptRuns_JudgeID_ResponseFormat, p_MJAIPromptRuns_JudgeID_LogProbs, p_MJAIPromptRuns_JudgeID_TopLogProbs, p_MJAIPromptRuns_JudgeID_DescendantCost, p_MJAIPromptRuns_JudgeID_ValidationAttemptCount, p_MJAIPromptRuns_JudgeID_SuccessfulValidationCount, p_MJAIPromptRuns_JudgeID_FinalValidationPassed, p_MJAIPromptRuns_JudgeID_ValidationBehavior, p_MJAIPromptRuns_JudgeID_RetryStrategy, p_MJAIPromptRuns_JudgeID_MaxRetriesConfigured, p_MJAIPromptRuns_JudgeID_FinalValidationError, p_MJAIPromptRuns_JudgeID_ValidationErrorCount, p_MJAIPromptRuns_JudgeID_CommonValidationError, p_MJAIPromptRuns_JudgeID_FirstAttemptAt, p_MJAIPromptRuns_JudgeID_LastAttemptAt, p_MJAIPromptRuns_JudgeID_TotalRetryDurationMS, p_MJAIPromptRuns_JudgeID_ValidationAttempts, p_MJAIPromptRuns_JudgeID_ValidationSummary, p_MJAIPromptRuns_JudgeID_FailoverAttempts, p_MJAIPromptRuns_JudgeID_FailoverErrors, p_MJAIPromptRuns_JudgeID_FailoverDurations, p_MJAIPromptRuns_JudgeID_OriginalModelID, p_MJAIPromptRuns_JudgeID_OriginalRequestStartTime, p_MJAIPromptRuns_JudgeID_TotalFailoverDuration, p_MJAIPromptRuns_JudgeID_RerunFromPromptRunID, p_MJAIPromptRuns_JudgeID_ModelSelection, p_MJAIPromptRuns_JudgeID_Status, p_MJAIPromptRuns_JudgeID_Cancelled, p_MJAIPromptRuns_JudgeID_CancellationReason, p_MJAIPromptRuns_JudgeID_ModelPowerRank, p_MJAIPromptRuns_JudgeID_SelectionStrategy, p_MJAIPromptRuns_JudgeID_CacheHit, p_MJAIPromptRuns_JudgeID_CacheKey, p_MJAIPromptRuns_JudgeID_JudgeID, p_MJAIPromptRuns_JudgeID_JudgeScore, p_MJAIPromptRuns_JudgeID_WasSelectedResult, p_MJAIPromptRuns_JudgeID_StreamingEnabled, p_MJAIPromptRuns_JudgeID_FirstTokenTime, p_MJAIPromptRuns_JudgeID_ErrorDetails, p_MJAIPromptRuns_JudgeID_ChildPromptID, p_MJAIPromptRuns_JudgeID_QueueTime, p_MJAIPromptRuns_JudgeID_PromptTime, p_MJAIPromptRuns_JudgeID_CompletionTime, p_MJAIPromptRuns_JudgeID_ModelSpecificResponseDetails, p_MJAIPromptRuns_JudgeID_EffortLevel, p_MJAIPromptRuns_JudgeID_RunName, p_MJAIPromptRuns_JudgeID_Comments, p_MJAIPromptRuns_JudgeID_TestRunID, p_MJAIPromptRuns_JudgeID_AssistantPrefill);
+        PERFORM __mj."spUpdateAIPromptRun"(p_ID => p_MJAIPromptRuns_JudgeIDID, p_PromptID => p_MJAIPromptRuns_JudgeID_PromptID, p_ModelID => p_MJAIPromptRuns_JudgeID_ModelID, p_VendorID => p_MJAIPromptRuns_JudgeID_VendorID, p_AgentID => p_MJAIPromptRuns_JudgeID_AgentID, p_ConfigurationID => p_MJAIPromptRuns_JudgeID_ConfigurationID, p_RunAt => p_MJAIPromptRuns_JudgeID_RunAt, p_CompletedAt => p_MJAIPromptRuns_JudgeID_CompletedAt, p_ExecutionTimeMS => p_MJAIPromptRuns_JudgeID_ExecutionTimeMS, p_Messages => p_MJAIPromptRuns_JudgeID_Messages, p_Result => p_MJAIPromptRuns_JudgeID_Result, p_TokensUsed => p_MJAIPromptRuns_JudgeID_TokensUsed, p_TokensPrompt => p_MJAIPromptRuns_JudgeID_TokensPrompt, p_TokensCompletion => p_MJAIPromptRuns_JudgeID_TokensCompletion, p_TotalCost => p_MJAIPromptRuns_JudgeID_TotalCost, p_Success => p_MJAIPromptRuns_JudgeID_Success, p_ErrorMessage => p_MJAIPromptRuns_JudgeID_ErrorMessage, p_ParentID => p_MJAIPromptRuns_JudgeID_ParentID, p_RunType => p_MJAIPromptRuns_JudgeID_RunType, p_ExecutionOrder => p_MJAIPromptRuns_JudgeID_ExecutionOrder, p_AgentRunID => p_MJAIPromptRuns_JudgeID_AgentRunID, p_Cost => p_MJAIPromptRuns_JudgeID_Cost, p_CostCurrency => p_MJAIPromptRuns_JudgeID_CostCurrency, p_TokensUsedRollup => p_MJAIPromptRuns_JudgeID_TokensUsedRollup, p_TokensPromptRollup => p_MJAIPromptRuns_JudgeID_TokensPromptRollup, p_TokensCompletionRollup => p_MJAIPromptRuns_JudgeID_TokensCompletionRollup, p_Temperature => p_MJAIPromptRuns_JudgeID_Temperature, p_TopP => p_MJAIPromptRuns_JudgeID_TopP, p_TopK => p_MJAIPromptRuns_JudgeID_TopK, p_MinP => p_MJAIPromptRuns_JudgeID_MinP, p_FrequencyPenalty => p_MJAIPromptRuns_JudgeID_FrequencyPenalty, p_PresencePenalty => p_MJAIPromptRuns_JudgeID_PresencePenalty, p_Seed => p_MJAIPromptRuns_JudgeID_Seed, p_StopSequences => p_MJAIPromptRuns_JudgeID_StopSequences, p_ResponseFormat => p_MJAIPromptRuns_JudgeID_ResponseFormat, p_LogProbs => p_MJAIPromptRuns_JudgeID_LogProbs, p_TopLogProbs => p_MJAIPromptRuns_JudgeID_TopLogProbs, p_DescendantCost => p_MJAIPromptRuns_JudgeID_DescendantCost, p_ValidationAttemptCount => p_MJAIPromptRuns_JudgeID_ValidationAttemptCount, p_SuccessfulValidationCount => p_MJAIPromptRuns_JudgeID_SuccessfulValidationCount, p_FinalValidationPassed => p_MJAIPromptRuns_JudgeID_FinalValidationPassed, p_ValidationBehavior => p_MJAIPromptRuns_JudgeID_ValidationBehavior, p_RetryStrategy => p_MJAIPromptRuns_JudgeID_RetryStrategy, p_MaxRetriesConfigured => p_MJAIPromptRuns_JudgeID_MaxRetriesConfigured, p_FinalValidationError => p_MJAIPromptRuns_JudgeID_FinalValidationError, p_ValidationErrorCount => p_MJAIPromptRuns_JudgeID_ValidationErrorCount, p_CommonValidationError => p_MJAIPromptRuns_JudgeID_CommonValidationError, p_FirstAttemptAt => p_MJAIPromptRuns_JudgeID_FirstAttemptAt, p_LastAttemptAt => p_MJAIPromptRuns_JudgeID_LastAttemptAt, p_TotalRetryDurationMS => p_MJAIPromptRuns_JudgeID_TotalRetryDurationMS, p_ValidationAttempts => p_MJAIPromptRuns_JudgeID_ValidationAttempts, p_ValidationSummary => p_MJAIPromptRuns_JudgeID_ValidationSummary, p_FailoverAttempts => p_MJAIPromptRuns_JudgeID_FailoverAttempts, p_FailoverErrors => p_MJAIPromptRuns_JudgeID_FailoverErrors, p_FailoverDurations => p_MJAIPromptRuns_JudgeID_FailoverDurations, p_OriginalModelID => p_MJAIPromptRuns_JudgeID_OriginalModelID, p_OriginalRequestStartTime => p_MJAIPromptRuns_JudgeID_OriginalRequestStartTime, p_TotalFailoverDuration => p_MJAIPromptRuns_JudgeID_TotalFailoverDuration, p_RerunFromPromptRunID => p_MJAIPromptRuns_JudgeID_RerunFromPromptRunID, p_ModelSelection => p_MJAIPromptRuns_JudgeID_ModelSelection, p_Status => p_MJAIPromptRuns_JudgeID_Status, p_Cancelled => p_MJAIPromptRuns_JudgeID_Cancelled, p_CancellationReason => p_MJAIPromptRuns_JudgeID_CancellationReason, p_ModelPowerRank => p_MJAIPromptRuns_JudgeID_ModelPowerRank, p_SelectionStrategy => p_MJAIPromptRuns_JudgeID_SelectionStrategy, p_CacheHit => p_MJAIPromptRuns_JudgeID_CacheHit, p_CacheKey => p_MJAIPromptRuns_JudgeID_CacheKey, p_JudgeID => p_MJAIPromptRuns_JudgeID_JudgeID, p_JudgeScore => p_MJAIPromptRuns_JudgeID_JudgeScore, p_WasSelectedResult => p_MJAIPromptRuns_JudgeID_WasSelectedResult, p_StreamingEnabled => p_MJAIPromptRuns_JudgeID_StreamingEnabled, p_FirstTokenTime => p_MJAIPromptRuns_JudgeID_FirstTokenTime, p_ErrorDetails => p_MJAIPromptRuns_JudgeID_ErrorDetails, p_ChildPromptID => p_MJAIPromptRuns_JudgeID_ChildPromptID, p_QueueTime => p_MJAIPromptRuns_JudgeID_QueueTime, p_PromptTime => p_MJAIPromptRuns_JudgeID_PromptTime, p_CompletionTime => p_MJAIPromptRuns_JudgeID_CompletionTime, p_ModelSpecificResponseDetails => p_MJAIPromptRuns_JudgeID_ModelSpecificResponseDetails, p_EffortLevel => p_MJAIPromptRuns_JudgeID_EffortLevel, p_RunName => p_MJAIPromptRuns_JudgeID_RunName, p_Comments => p_MJAIPromptRuns_JudgeID_Comments, p_TestRunID => p_MJAIPromptRuns_JudgeID_TestRunID, p_AssistantPrefill => p_MJAIPromptRuns_JudgeID_AssistantPrefill);
 
     END LOOP;
 
@@ -17905,7 +19286,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIPromptRuns_ChildPromptID_ChildPromptID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIPromptRun"(p_MJAIPromptRuns_ChildPromptIDID, p_MJAIPromptRuns_ChildPromptID_PromptID, p_MJAIPromptRuns_ChildPromptID_ModelID, p_MJAIPromptRuns_ChildPromptID_VendorID, p_MJAIPromptRuns_ChildPromptID_AgentID, p_MJAIPromptRuns_ChildPromptID_ConfigurationID, p_MJAIPromptRuns_ChildPromptID_RunAt, p_MJAIPromptRuns_ChildPromptID_CompletedAt, p_MJAIPromptRuns_ChildPromptID_ExecutionTimeMS, p_MJAIPromptRuns_ChildPromptID_Messages, p_MJAIPromptRuns_ChildPromptID_Result, p_MJAIPromptRuns_ChildPromptID_TokensUsed, p_MJAIPromptRuns_ChildPromptID_TokensPrompt, p_MJAIPromptRuns_ChildPromptID_TokensCompletion, p_MJAIPromptRuns_ChildPromptID_TotalCost, p_MJAIPromptRuns_ChildPromptID_Success, p_MJAIPromptRuns_ChildPromptID_ErrorMessage, p_MJAIPromptRuns_ChildPromptID_ParentID, p_MJAIPromptRuns_ChildPromptID_RunType, p_MJAIPromptRuns_ChildPromptID_ExecutionOrder, p_MJAIPromptRuns_ChildPromptID_AgentRunID, p_MJAIPromptRuns_ChildPromptID_Cost, p_MJAIPromptRuns_ChildPromptID_CostCurrency, p_MJAIPromptRuns_ChildPromptID_TokensUsedRollup, p_MJAIPromptRuns_ChildPromptID_TokensPromptRollup, p_MJAIPromptRuns_ChildPromptID_TokensCompletionRollup, p_MJAIPromptRuns_ChildPromptID_Temperature, p_MJAIPromptRuns_ChildPromptID_TopP, p_MJAIPromptRuns_ChildPromptID_TopK, p_MJAIPromptRuns_ChildPromptID_MinP, p_MJAIPromptRuns_ChildPromptID_FrequencyPenalty, p_MJAIPromptRuns_ChildPromptID_PresencePenalty, p_MJAIPromptRuns_ChildPromptID_Seed, p_MJAIPromptRuns_ChildPromptID_StopSequences, p_MJAIPromptRuns_ChildPromptID_ResponseFormat, p_MJAIPromptRuns_ChildPromptID_LogProbs, p_MJAIPromptRuns_ChildPromptID_TopLogProbs, p_MJAIPromptRuns_ChildPromptID_DescendantCost, p_MJAIPromptRuns_ChildPromptID_ValidationAttemptCount, p_MJAIPromptRuns_ChildPromptID_SuccessfulValidationCount, p_MJAIPromptRuns_ChildPromptID_FinalValidationPassed, p_MJAIPromptRuns_ChildPromptID_ValidationBehavior, p_MJAIPromptRuns_ChildPromptID_RetryStrategy, p_MJAIPromptRuns_ChildPromptID_MaxRetriesConfigured, p_MJAIPromptRuns_ChildPromptID_FinalValidationError, p_MJAIPromptRuns_ChildPromptID_ValidationErrorCount, p_MJAIPromptRuns_ChildPromptID_CommonValidationError, p_MJAIPromptRuns_ChildPromptID_FirstAttemptAt, p_MJAIPromptRuns_ChildPromptID_LastAttemptAt, p_MJAIPromptRuns_ChildPromptID_TotalRetryDurationMS, p_MJAIPromptRuns_ChildPromptID_ValidationAttempts, p_MJAIPromptRuns_ChildPromptID_ValidationSummary, p_MJAIPromptRuns_ChildPromptID_FailoverAttempts, p_MJAIPromptRuns_ChildPromptID_FailoverErrors, p_MJAIPromptRuns_ChildPromptID_FailoverDurations, p_MJAIPromptRuns_ChildPromptID_OriginalModelID, p_MJAIPromptRuns_ChildPromptID_OriginalRequestStartTime, p_MJAIPromptRuns_ChildPromptID_TotalFailoverDuration, p_MJAIPromptRuns_ChildPromptID_RerunFromPromptRunID, p_MJAIPromptRuns_ChildPromptID_ModelSelection, p_MJAIPromptRuns_ChildPromptID_Status, p_MJAIPromptRuns_ChildPromptID_Cancelled, p_MJAIPromptRuns_ChildPromptID_CancellationReason, p_MJAIPromptRuns_ChildPromptID_ModelPowerRank, p_MJAIPromptRuns_ChildPromptID_SelectionStrategy, p_MJAIPromptRuns_ChildPromptID_CacheHit, p_MJAIPromptRuns_ChildPromptID_CacheKey, p_MJAIPromptRuns_ChildPromptID_JudgeID, p_MJAIPromptRuns_ChildPromptID_JudgeScore, p_MJAIPromptRuns_ChildPromptID_WasSelectedResult, p_MJAIPromptRuns_ChildPromptID_StreamingEnabled, p_MJAIPromptRuns_ChildPromptID_FirstTokenTime, p_MJAIPromptRuns_ChildPromptID_ErrorDetails, p_MJAIPromptRuns_ChildPromptID_ChildPromptID, p_MJAIPromptRuns_ChildPromptID_QueueTime, p_MJAIPromptRuns_ChildPromptID_PromptTime, p_MJAIPromptRuns_ChildPromptID_CompletionTime, p_MJAIPromptRuns_ChildPromptID_ModelSpecificResponseDetails, p_MJAIPromptRuns_ChildPromptID_EffortLevel, p_MJAIPromptRuns_ChildPromptID_RunName, p_MJAIPromptRuns_ChildPromptID_Comments, p_MJAIPromptRuns_ChildPromptID_TestRunID, p_MJAIPromptRuns_ChildPromptID_AssistantPrefill);
+        PERFORM __mj."spUpdateAIPromptRun"(p_ID => p_MJAIPromptRuns_ChildPromptIDID, p_PromptID => p_MJAIPromptRuns_ChildPromptID_PromptID, p_ModelID => p_MJAIPromptRuns_ChildPromptID_ModelID, p_VendorID => p_MJAIPromptRuns_ChildPromptID_VendorID, p_AgentID => p_MJAIPromptRuns_ChildPromptID_AgentID, p_ConfigurationID => p_MJAIPromptRuns_ChildPromptID_ConfigurationID, p_RunAt => p_MJAIPromptRuns_ChildPromptID_RunAt, p_CompletedAt => p_MJAIPromptRuns_ChildPromptID_CompletedAt, p_ExecutionTimeMS => p_MJAIPromptRuns_ChildPromptID_ExecutionTimeMS, p_Messages => p_MJAIPromptRuns_ChildPromptID_Messages, p_Result => p_MJAIPromptRuns_ChildPromptID_Result, p_TokensUsed => p_MJAIPromptRuns_ChildPromptID_TokensUsed, p_TokensPrompt => p_MJAIPromptRuns_ChildPromptID_TokensPrompt, p_TokensCompletion => p_MJAIPromptRuns_ChildPromptID_TokensCompletion, p_TotalCost => p_MJAIPromptRuns_ChildPromptID_TotalCost, p_Success => p_MJAIPromptRuns_ChildPromptID_Success, p_ErrorMessage => p_MJAIPromptRuns_ChildPromptID_ErrorMessage, p_ParentID => p_MJAIPromptRuns_ChildPromptID_ParentID, p_RunType => p_MJAIPromptRuns_ChildPromptID_RunType, p_ExecutionOrder => p_MJAIPromptRuns_ChildPromptID_ExecutionOrder, p_AgentRunID => p_MJAIPromptRuns_ChildPromptID_AgentRunID, p_Cost => p_MJAIPromptRuns_ChildPromptID_Cost, p_CostCurrency => p_MJAIPromptRuns_ChildPromptID_CostCurrency, p_TokensUsedRollup => p_MJAIPromptRuns_ChildPromptID_TokensUsedRollup, p_TokensPromptRollup => p_MJAIPromptRuns_ChildPromptID_TokensPromptRollup, p_TokensCompletionRollup => p_MJAIPromptRuns_ChildPromptID_TokensCompletionRollup, p_Temperature => p_MJAIPromptRuns_ChildPromptID_Temperature, p_TopP => p_MJAIPromptRuns_ChildPromptID_TopP, p_TopK => p_MJAIPromptRuns_ChildPromptID_TopK, p_MinP => p_MJAIPromptRuns_ChildPromptID_MinP, p_FrequencyPenalty => p_MJAIPromptRuns_ChildPromptID_FrequencyPenalty, p_PresencePenalty => p_MJAIPromptRuns_ChildPromptID_PresencePenalty, p_Seed => p_MJAIPromptRuns_ChildPromptID_Seed, p_StopSequences => p_MJAIPromptRuns_ChildPromptID_StopSequences, p_ResponseFormat => p_MJAIPromptRuns_ChildPromptID_ResponseFormat, p_LogProbs => p_MJAIPromptRuns_ChildPromptID_LogProbs, p_TopLogProbs => p_MJAIPromptRuns_ChildPromptID_TopLogProbs, p_DescendantCost => p_MJAIPromptRuns_ChildPromptID_DescendantCost, p_ValidationAttemptCount => p_MJAIPromptRuns_ChildPromptID_ValidationAttemptCount, p_SuccessfulValidationCount => p_MJAIPromptRuns_ChildPromptID_SuccessfulValidationCount, p_FinalValidationPassed => p_MJAIPromptRuns_ChildPromptID_FinalValidationPassed, p_ValidationBehavior => p_MJAIPromptRuns_ChildPromptID_ValidationBehavior, p_RetryStrategy => p_MJAIPromptRuns_ChildPromptID_RetryStrategy, p_MaxRetriesConfigured => p_MJAIPromptRuns_ChildPromptID_MaxRetriesConfigured, p_FinalValidationError => p_MJAIPromptRuns_ChildPromptID_FinalValidationError, p_ValidationErrorCount => p_MJAIPromptRuns_ChildPromptID_ValidationErrorCount, p_CommonValidationError => p_MJAIPromptRuns_ChildPromptID_CommonValidationError, p_FirstAttemptAt => p_MJAIPromptRuns_ChildPromptID_FirstAttemptAt, p_LastAttemptAt => p_MJAIPromptRuns_ChildPromptID_LastAttemptAt, p_TotalRetryDurationMS => p_MJAIPromptRuns_ChildPromptID_TotalRetryDurationMS, p_ValidationAttempts => p_MJAIPromptRuns_ChildPromptID_ValidationAttempts, p_ValidationSummary => p_MJAIPromptRuns_ChildPromptID_ValidationSummary, p_FailoverAttempts => p_MJAIPromptRuns_ChildPromptID_FailoverAttempts, p_FailoverErrors => p_MJAIPromptRuns_ChildPromptID_FailoverErrors, p_FailoverDurations => p_MJAIPromptRuns_ChildPromptID_FailoverDurations, p_OriginalModelID => p_MJAIPromptRuns_ChildPromptID_OriginalModelID, p_OriginalRequestStartTime => p_MJAIPromptRuns_ChildPromptID_OriginalRequestStartTime, p_TotalFailoverDuration => p_MJAIPromptRuns_ChildPromptID_TotalFailoverDuration, p_RerunFromPromptRunID => p_MJAIPromptRuns_ChildPromptID_RerunFromPromptRunID, p_ModelSelection => p_MJAIPromptRuns_ChildPromptID_ModelSelection, p_Status => p_MJAIPromptRuns_ChildPromptID_Status, p_Cancelled => p_MJAIPromptRuns_ChildPromptID_Cancelled, p_CancellationReason => p_MJAIPromptRuns_ChildPromptID_CancellationReason, p_ModelPowerRank => p_MJAIPromptRuns_ChildPromptID_ModelPowerRank, p_SelectionStrategy => p_MJAIPromptRuns_ChildPromptID_SelectionStrategy, p_CacheHit => p_MJAIPromptRuns_ChildPromptID_CacheHit, p_CacheKey => p_MJAIPromptRuns_ChildPromptID_CacheKey, p_JudgeID => p_MJAIPromptRuns_ChildPromptID_JudgeID, p_JudgeScore => p_MJAIPromptRuns_ChildPromptID_JudgeScore, p_WasSelectedResult => p_MJAIPromptRuns_ChildPromptID_WasSelectedResult, p_StreamingEnabled => p_MJAIPromptRuns_ChildPromptID_StreamingEnabled, p_FirstTokenTime => p_MJAIPromptRuns_ChildPromptID_FirstTokenTime, p_ErrorDetails => p_MJAIPromptRuns_ChildPromptID_ErrorDetails, p_ChildPromptID => p_MJAIPromptRuns_ChildPromptID_ChildPromptID, p_QueueTime => p_MJAIPromptRuns_ChildPromptID_QueueTime, p_PromptTime => p_MJAIPromptRuns_ChildPromptID_PromptTime, p_CompletionTime => p_MJAIPromptRuns_ChildPromptID_CompletionTime, p_ModelSpecificResponseDetails => p_MJAIPromptRuns_ChildPromptID_ModelSpecificResponseDetails, p_EffortLevel => p_MJAIPromptRuns_ChildPromptID_EffortLevel, p_RunName => p_MJAIPromptRuns_ChildPromptID_RunName, p_Comments => p_MJAIPromptRuns_ChildPromptID_Comments, p_TestRunID => p_MJAIPromptRuns_ChildPromptID_TestRunID, p_AssistantPrefill => p_MJAIPromptRuns_ChildPromptID_AssistantPrefill);
 
     END LOOP;
 
@@ -17970,7 +19351,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIPrompts_ResultSelectorPromptID_ResultSelectorPromptID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIPrompt"(p_MJAIPrompts_ResultSelectorPromptIDID, p_MJAIPrompts_ResultSelectorPromptID_Name, p_MJAIPrompts_ResultSelectorPromptID_Description, p_MJAIPrompts_ResultSelectorPromptID_TemplateID, p_MJAIPrompts_ResultSelectorPromptID_CategoryID, p_MJAIPrompts_ResultSelectorPromptID_TypeID, p_MJAIPrompts_ResultSelectorPromptID_Status, p_MJAIPrompts_ResultSelectorPromptID_ResponseFormat, p_MJAIPrompts_ResultSelectorPromptID_ModelSpecificRespons_905abd, p_MJAIPrompts_ResultSelectorPromptID_AIModelTypeID, p_MJAIPrompts_ResultSelectorPromptID_MinPowerRank, p_MJAIPrompts_ResultSelectorPromptID_SelectionStrategy, p_MJAIPrompts_ResultSelectorPromptID_PowerPreference, p_MJAIPrompts_ResultSelectorPromptID_ParallelizationMode, p_MJAIPrompts_ResultSelectorPromptID_ParallelCount, p_MJAIPrompts_ResultSelectorPromptID_ParallelConfigParam, p_MJAIPrompts_ResultSelectorPromptID_OutputType, p_MJAIPrompts_ResultSelectorPromptID_OutputExample, p_MJAIPrompts_ResultSelectorPromptID_ValidationBehavior, p_MJAIPrompts_ResultSelectorPromptID_MaxRetries, p_MJAIPrompts_ResultSelectorPromptID_RetryDelayMS, p_MJAIPrompts_ResultSelectorPromptID_RetryStrategy, p_MJAIPrompts_ResultSelectorPromptID_ResultSelectorPromptID, p_MJAIPrompts_ResultSelectorPromptID_EnableCaching, p_MJAIPrompts_ResultSelectorPromptID_CacheTTLSeconds, p_MJAIPrompts_ResultSelectorPromptID_CacheMatchType, p_MJAIPrompts_ResultSelectorPromptID_CacheSimilarityThreshold, p_MJAIPrompts_ResultSelectorPromptID_CacheMustMatchModel, p_MJAIPrompts_ResultSelectorPromptID_CacheMustMatchVendor, p_MJAIPrompts_ResultSelectorPromptID_CacheMustMatchAgent, p_MJAIPrompts_ResultSelectorPromptID_CacheMustMatchConfig, p_MJAIPrompts_ResultSelectorPromptID_PromptRole, p_MJAIPrompts_ResultSelectorPromptID_PromptPosition, p_MJAIPrompts_ResultSelectorPromptID_Temperature, p_MJAIPrompts_ResultSelectorPromptID_TopP, p_MJAIPrompts_ResultSelectorPromptID_TopK, p_MJAIPrompts_ResultSelectorPromptID_MinP, p_MJAIPrompts_ResultSelectorPromptID_FrequencyPenalty, p_MJAIPrompts_ResultSelectorPromptID_PresencePenalty, p_MJAIPrompts_ResultSelectorPromptID_Seed, p_MJAIPrompts_ResultSelectorPromptID_StopSequences, p_MJAIPrompts_ResultSelectorPromptID_IncludeLogProbs, p_MJAIPrompts_ResultSelectorPromptID_TopLogProbs, p_MJAIPrompts_ResultSelectorPromptID_FailoverStrategy, p_MJAIPrompts_ResultSelectorPromptID_FailoverMaxAttempts, p_MJAIPrompts_ResultSelectorPromptID_FailoverDelaySeconds, p_MJAIPrompts_ResultSelectorPromptID_FailoverModelStrategy, p_MJAIPrompts_ResultSelectorPromptID_FailoverErrorScope, p_MJAIPrompts_ResultSelectorPromptID_EffortLevel, p_MJAIPrompts_ResultSelectorPromptID_AssistantPrefill, p_MJAIPrompts_ResultSelectorPromptID_PrefillFallbackMode, p_MJAIPrompts_ResultSelectorPromptID_RequireSpecificModels);
+        PERFORM __mj."spUpdateAIPrompt"(p_ID => p_MJAIPrompts_ResultSelectorPromptIDID, p_Name => p_MJAIPrompts_ResultSelectorPromptID_Name, p_Description => p_MJAIPrompts_ResultSelectorPromptID_Description, p_TemplateID => p_MJAIPrompts_ResultSelectorPromptID_TemplateID, p_CategoryID => p_MJAIPrompts_ResultSelectorPromptID_CategoryID, p_TypeID => p_MJAIPrompts_ResultSelectorPromptID_TypeID, p_Status => p_MJAIPrompts_ResultSelectorPromptID_Status, p_ResponseFormat => p_MJAIPrompts_ResultSelectorPromptID_ResponseFormat, p_ModelSpecificResponseFormat => p_MJAIPrompts_ResultSelectorPromptID_ModelSpecificRespons_905abd, p_AIModelTypeID => p_MJAIPrompts_ResultSelectorPromptID_AIModelTypeID, p_MinPowerRank => p_MJAIPrompts_ResultSelectorPromptID_MinPowerRank, p_SelectionStrategy => p_MJAIPrompts_ResultSelectorPromptID_SelectionStrategy, p_PowerPreference => p_MJAIPrompts_ResultSelectorPromptID_PowerPreference, p_ParallelizationMode => p_MJAIPrompts_ResultSelectorPromptID_ParallelizationMode, p_ParallelCount => p_MJAIPrompts_ResultSelectorPromptID_ParallelCount, p_ParallelConfigParam => p_MJAIPrompts_ResultSelectorPromptID_ParallelConfigParam, p_OutputType => p_MJAIPrompts_ResultSelectorPromptID_OutputType, p_OutputExample => p_MJAIPrompts_ResultSelectorPromptID_OutputExample, p_ValidationBehavior => p_MJAIPrompts_ResultSelectorPromptID_ValidationBehavior, p_MaxRetries => p_MJAIPrompts_ResultSelectorPromptID_MaxRetries, p_RetryDelayMS => p_MJAIPrompts_ResultSelectorPromptID_RetryDelayMS, p_RetryStrategy => p_MJAIPrompts_ResultSelectorPromptID_RetryStrategy, p_ResultSelectorPromptID => p_MJAIPrompts_ResultSelectorPromptID_ResultSelectorPromptID, p_EnableCaching => p_MJAIPrompts_ResultSelectorPromptID_EnableCaching, p_CacheTTLSeconds => p_MJAIPrompts_ResultSelectorPromptID_CacheTTLSeconds, p_CacheMatchType => p_MJAIPrompts_ResultSelectorPromptID_CacheMatchType, p_CacheSimilarityThreshold => p_MJAIPrompts_ResultSelectorPromptID_CacheSimilarityThreshold, p_CacheMustMatchModel => p_MJAIPrompts_ResultSelectorPromptID_CacheMustMatchModel, p_CacheMustMatchVendor => p_MJAIPrompts_ResultSelectorPromptID_CacheMustMatchVendor, p_CacheMustMatchAgent => p_MJAIPrompts_ResultSelectorPromptID_CacheMustMatchAgent, p_CacheMustMatchConfig => p_MJAIPrompts_ResultSelectorPromptID_CacheMustMatchConfig, p_PromptRole => p_MJAIPrompts_ResultSelectorPromptID_PromptRole, p_PromptPosition => p_MJAIPrompts_ResultSelectorPromptID_PromptPosition, p_Temperature => p_MJAIPrompts_ResultSelectorPromptID_Temperature, p_TopP => p_MJAIPrompts_ResultSelectorPromptID_TopP, p_TopK => p_MJAIPrompts_ResultSelectorPromptID_TopK, p_MinP => p_MJAIPrompts_ResultSelectorPromptID_MinP, p_FrequencyPenalty => p_MJAIPrompts_ResultSelectorPromptID_FrequencyPenalty, p_PresencePenalty => p_MJAIPrompts_ResultSelectorPromptID_PresencePenalty, p_Seed => p_MJAIPrompts_ResultSelectorPromptID_Seed, p_StopSequences => p_MJAIPrompts_ResultSelectorPromptID_StopSequences, p_IncludeLogProbs => p_MJAIPrompts_ResultSelectorPromptID_IncludeLogProbs, p_TopLogProbs => p_MJAIPrompts_ResultSelectorPromptID_TopLogProbs, p_FailoverStrategy => p_MJAIPrompts_ResultSelectorPromptID_FailoverStrategy, p_FailoverMaxAttempts => p_MJAIPrompts_ResultSelectorPromptID_FailoverMaxAttempts, p_FailoverDelaySeconds => p_MJAIPrompts_ResultSelectorPromptID_FailoverDelaySeconds, p_FailoverModelStrategy => p_MJAIPrompts_ResultSelectorPromptID_FailoverModelStrategy, p_FailoverErrorScope => p_MJAIPrompts_ResultSelectorPromptID_FailoverErrorScope, p_EffortLevel => p_MJAIPrompts_ResultSelectorPromptID_EffortLevel, p_AssistantPrefill => p_MJAIPrompts_ResultSelectorPromptID_AssistantPrefill, p_PrefillFallbackMode => p_MJAIPrompts_ResultSelectorPromptID_PrefillFallbackMode, p_RequireSpecificModels => p_MJAIPrompts_ResultSelectorPromptID_RequireSpecificModels);
 
     END LOOP;
 
@@ -17980,7 +19361,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIResultCache" WHERE "AIPromptID" = p_ID
     LOOP
         p_MJAIResultCache_AIPromptIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIResultCache"(p_MJAIResultCache_AIPromptIDID);
+        PERFORM __mj."spDeleteAIResultCache"(p_ID => p_MJAIResultCache_AIPromptIDID);
         
     END LOOP;
     
@@ -18001,6 +19382,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateSearchScopePermission'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateSearchScopePermission"(
     IN p_ID UUID DEFAULT NULL,
     IN p_SearchScopeID UUID DEFAULT NULL,
@@ -18051,6 +19440,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateSearchScopePermission'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateSearchScopePermission"(
     IN p_ID UUID,
     IN p_SearchScopeID UUID,
@@ -18083,6 +19480,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteSearchScopePermission'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteSearchScopePermission"(
     IN p_ID UUID
 )
@@ -18106,6 +19511,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateSearchScope'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateSearchScope"(
     IN p_ID UUID DEFAULT NULL,
     IN p_Name VARCHAR(200) DEFAULT NULL,
@@ -18196,6 +19609,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateSearchScope'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateSearchScope"(
     IN p_ID UUID,
     IN p_Name VARCHAR(200),
@@ -18244,6 +19665,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteSearchScope'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteSearchScope"(
     IN p_ID UUID
 )
@@ -18267,6 +19696,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateSearchExecutionLog'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateSearchExecutionLog"(
     IN p_ID UUID DEFAULT NULL,
     IN p_SearchScopeID UUID DEFAULT NULL,
@@ -18352,6 +19789,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateSearchExecutionLog'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateSearchExecutionLog"(
     IN p_ID UUID,
     IN p_SearchScopeID UUID,
@@ -18398,6 +19843,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteSearchExecutionLog'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteSearchExecutionLog"(
     IN p_ID UUID
 )
@@ -18421,6 +19874,14 @@ DELETE FROM
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteAIAgent'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteAIAgent"(
     IN p_ID UUID
 )
@@ -18777,7 +20238,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJActions_CreatedByAgentID_CreatedByAgentID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAction"(p_MJActions_CreatedByAgentIDID, p_MJActions_CreatedByAgentID_CategoryID, p_MJActions_CreatedByAgentID_Name, p_MJActions_CreatedByAgentID_Description, p_MJActions_CreatedByAgentID_Type, p_MJActions_CreatedByAgentID_UserPrompt, p_MJActions_CreatedByAgentID_UserComments, p_MJActions_CreatedByAgentID_Code, p_MJActions_CreatedByAgentID_CodeComments, p_MJActions_CreatedByAgentID_CodeApprovalStatus, p_MJActions_CreatedByAgentID_CodeApprovalComments, p_MJActions_CreatedByAgentID_CodeApprovedByUserID, p_MJActions_CreatedByAgentID_CodeApprovedAt, p_MJActions_CreatedByAgentID_CodeLocked, p_MJActions_CreatedByAgentID_ForceCodeGeneration, p_MJActions_CreatedByAgentID_RetentionPeriod, p_MJActions_CreatedByAgentID_Status, p_MJActions_CreatedByAgentID_DriverClass, p_MJActions_CreatedByAgentID_ParentID, p_MJActions_CreatedByAgentID_IconClass, p_MJActions_CreatedByAgentID_DefaultCompactPromptID, p_MJActions_CreatedByAgentID_Config, p_MJActions_CreatedByAgentID_RuntimeActionConfiguration, p_MJActions_CreatedByAgentID_MaxExecutionTimeMS, p_MJActions_CreatedByAgentID_CreatedByAgentID);
+        PERFORM __mj."spUpdateAction"(p_ID => p_MJActions_CreatedByAgentIDID, p_CategoryID => p_MJActions_CreatedByAgentID_CategoryID, p_Name => p_MJActions_CreatedByAgentID_Name, p_Description => p_MJActions_CreatedByAgentID_Description, p_Type => p_MJActions_CreatedByAgentID_Type, p_UserPrompt => p_MJActions_CreatedByAgentID_UserPrompt, p_UserComments => p_MJActions_CreatedByAgentID_UserComments, p_Code => p_MJActions_CreatedByAgentID_Code, p_CodeComments => p_MJActions_CreatedByAgentID_CodeComments, p_CodeApprovalStatus => p_MJActions_CreatedByAgentID_CodeApprovalStatus, p_CodeApprovalComments => p_MJActions_CreatedByAgentID_CodeApprovalComments, p_CodeApprovedByUserID => p_MJActions_CreatedByAgentID_CodeApprovedByUserID, p_CodeApprovedAt => p_MJActions_CreatedByAgentID_CodeApprovedAt, p_CodeLocked => p_MJActions_CreatedByAgentID_CodeLocked, p_ForceCodeGeneration => p_MJActions_CreatedByAgentID_ForceCodeGeneration, p_RetentionPeriod => p_MJActions_CreatedByAgentID_RetentionPeriod, p_Status => p_MJActions_CreatedByAgentID_Status, p_DriverClass => p_MJActions_CreatedByAgentID_DriverClass, p_ParentID => p_MJActions_CreatedByAgentID_ParentID, p_IconClass => p_MJActions_CreatedByAgentID_IconClass, p_DefaultCompactPromptID => p_MJActions_CreatedByAgentID_DefaultCompactPromptID, p_Config => p_MJActions_CreatedByAgentID_Config, p_RuntimeActionConfiguration => p_MJActions_CreatedByAgentID_RuntimeActionConfiguration, p_MaxExecutionTimeMS => p_MJActions_CreatedByAgentID_MaxExecutionTimeMS, p_CreatedByAgentID => p_MJActions_CreatedByAgentID_CreatedByAgentID);
 
     END LOOP;
 
@@ -18801,7 +20262,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIAgentActions_AgentID_AgentID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentAction"(p_MJAIAgentActions_AgentIDID, p_MJAIAgentActions_AgentID_AgentID, p_MJAIAgentActions_AgentID_ActionID, p_MJAIAgentActions_AgentID_Status, p_MJAIAgentActions_AgentID_MinExecutionsPerRun, p_MJAIAgentActions_AgentID_MaxExecutionsPerRun, p_MJAIAgentActions_AgentID_ResultExpirationTurns, p_MJAIAgentActions_AgentID_ResultExpirationMode, p_MJAIAgentActions_AgentID_CompactMode, p_MJAIAgentActions_AgentID_CompactLength, p_MJAIAgentActions_AgentID_CompactPromptID);
+        PERFORM __mj."spUpdateAIAgentAction"(p_ID => p_MJAIAgentActions_AgentIDID, p_AgentID => p_MJAIAgentActions_AgentID_AgentID, p_ActionID => p_MJAIAgentActions_AgentID_ActionID, p_Status => p_MJAIAgentActions_AgentID_Status, p_MinExecutionsPerRun => p_MJAIAgentActions_AgentID_MinExecutionsPerRun, p_MaxExecutionsPerRun => p_MJAIAgentActions_AgentID_MaxExecutionsPerRun, p_ResultExpirationTurns => p_MJAIAgentActions_AgentID_ResultExpirationTurns, p_ResultExpirationMode => p_MJAIAgentActions_AgentID_ResultExpirationMode, p_CompactMode => p_MJAIAgentActions_AgentID_CompactMode, p_CompactLength => p_MJAIAgentActions_AgentID_CompactLength, p_CompactPromptID => p_MJAIAgentActions_AgentID_CompactPromptID);
 
     END LOOP;
 
@@ -18811,7 +20272,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentArtifactType" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentArtifactTypes_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentArtifactType"(p_MJAIAgentArtifactTypes_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentArtifactType"(p_ID => p_MJAIAgentArtifactTypes_AgentIDID);
         
     END LOOP;
     
@@ -18821,7 +20282,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentClientTool" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentClientTools_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentClientTool"(p_MJAIAgentClientTools_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentClientTool"(p_ID => p_MJAIAgentClientTools_AgentIDID);
         
     END LOOP;
     
@@ -18831,7 +20292,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentConfiguration" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentConfigurations_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentConfiguration"(p_MJAIAgentConfigurations_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentConfiguration"(p_ID => p_MJAIAgentConfigurations_AgentIDID);
         
     END LOOP;
     
@@ -18841,7 +20302,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentDataSource" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentDataSources_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentDataSource"(p_MJAIAgentDataSources_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentDataSource"(p_ID => p_MJAIAgentDataSources_AgentIDID);
         
     END LOOP;
     
@@ -18851,7 +20312,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentExample" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentExamples_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentExample"(p_MJAIAgentExamples_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentExample"(p_ID => p_MJAIAgentExamples_AgentIDID);
         
     END LOOP;
     
@@ -18861,7 +20322,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentLearningCycle" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentLearningCycles_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentLearningCycle"(p_MJAIAgentLearningCycles_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentLearningCycle"(p_ID => p_MJAIAgentLearningCycles_AgentIDID);
         
     END LOOP;
     
@@ -18871,7 +20332,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentModality" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentModalities_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentModality"(p_MJAIAgentModalities_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentModality"(p_ID => p_MJAIAgentModalities_AgentIDID);
         
     END LOOP;
     
@@ -18889,7 +20350,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIAgentModels_AgentID_AgentID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentModel"(p_MJAIAgentModels_AgentIDID, p_MJAIAgentModels_AgentID_AgentID, p_MJAIAgentModels_AgentID_ModelID, p_MJAIAgentModels_AgentID_Active, p_MJAIAgentModels_AgentID_Priority);
+        PERFORM __mj."spUpdateAIAgentModel"(p_ID => p_MJAIAgentModels_AgentIDID, p_AgentID => p_MJAIAgentModels_AgentID_AgentID, p_ModelID => p_MJAIAgentModels_AgentID_ModelID, p_Active => p_MJAIAgentModels_AgentID_Active, p_Priority => p_MJAIAgentModels_AgentID_Priority);
 
     END LOOP;
 
@@ -18928,7 +20389,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIAgentNotes_AgentID_AgentID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentNote"(p_MJAIAgentNotes_AgentIDID, p_MJAIAgentNotes_AgentID_AgentID, p_MJAIAgentNotes_AgentID_AgentNoteTypeID, p_MJAIAgentNotes_AgentID_Note, p_MJAIAgentNotes_AgentID_UserID, p_MJAIAgentNotes_AgentID_Type, p_MJAIAgentNotes_AgentID_IsAutoGenerated, p_MJAIAgentNotes_AgentID_Comments, p_MJAIAgentNotes_AgentID_Status, p_MJAIAgentNotes_AgentID_SourceConversationID, p_MJAIAgentNotes_AgentID_SourceConversationDetailID, p_MJAIAgentNotes_AgentID_SourceAIAgentRunID, p_MJAIAgentNotes_AgentID_CompanyID, p_MJAIAgentNotes_AgentID_EmbeddingVector, p_MJAIAgentNotes_AgentID_EmbeddingModelID, p_MJAIAgentNotes_AgentID_PrimaryScopeEntityID, p_MJAIAgentNotes_AgentID_PrimaryScopeRecordID, p_MJAIAgentNotes_AgentID_SecondaryScopes, p_MJAIAgentNotes_AgentID_LastAccessedAt, p_MJAIAgentNotes_AgentID_AccessCount, p_MJAIAgentNotes_AgentID_ExpiresAt, p_MJAIAgentNotes_AgentID_ConsolidatedIntoNoteID, p_MJAIAgentNotes_AgentID_ConsolidationCount, p_MJAIAgentNotes_AgentID_DerivedFromNoteIDs, p_MJAIAgentNotes_AgentID_ProtectionTier, p_MJAIAgentNotes_AgentID_ImportanceScore);
+        PERFORM __mj."spUpdateAIAgentNote"(p_ID => p_MJAIAgentNotes_AgentIDID, p_AgentID => p_MJAIAgentNotes_AgentID_AgentID, p_AgentNoteTypeID => p_MJAIAgentNotes_AgentID_AgentNoteTypeID, p_Note => p_MJAIAgentNotes_AgentID_Note, p_UserID => p_MJAIAgentNotes_AgentID_UserID, p_Type => p_MJAIAgentNotes_AgentID_Type, p_IsAutoGenerated => p_MJAIAgentNotes_AgentID_IsAutoGenerated, p_Comments => p_MJAIAgentNotes_AgentID_Comments, p_Status => p_MJAIAgentNotes_AgentID_Status, p_SourceConversationID => p_MJAIAgentNotes_AgentID_SourceConversationID, p_SourceConversationDetailID => p_MJAIAgentNotes_AgentID_SourceConversationDetailID, p_SourceAIAgentRunID => p_MJAIAgentNotes_AgentID_SourceAIAgentRunID, p_CompanyID => p_MJAIAgentNotes_AgentID_CompanyID, p_EmbeddingVector => p_MJAIAgentNotes_AgentID_EmbeddingVector, p_EmbeddingModelID => p_MJAIAgentNotes_AgentID_EmbeddingModelID, p_PrimaryScopeEntityID => p_MJAIAgentNotes_AgentID_PrimaryScopeEntityID, p_PrimaryScopeRecordID => p_MJAIAgentNotes_AgentID_PrimaryScopeRecordID, p_SecondaryScopes => p_MJAIAgentNotes_AgentID_SecondaryScopes, p_LastAccessedAt => p_MJAIAgentNotes_AgentID_LastAccessedAt, p_AccessCount => p_MJAIAgentNotes_AgentID_AccessCount, p_ExpiresAt => p_MJAIAgentNotes_AgentID_ExpiresAt, p_ConsolidatedIntoNoteID => p_MJAIAgentNotes_AgentID_ConsolidatedIntoNoteID, p_ConsolidationCount => p_MJAIAgentNotes_AgentID_ConsolidationCount, p_DerivedFromNoteIDs => p_MJAIAgentNotes_AgentID_DerivedFromNoteIDs, p_ProtectionTier => p_MJAIAgentNotes_AgentID_ProtectionTier, p_ImportanceScore => p_MJAIAgentNotes_AgentID_ImportanceScore);
 
     END LOOP;
 
@@ -18938,7 +20399,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentPermission" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentPermissions_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentPermission"(p_MJAIAgentPermissions_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentPermission"(p_ID => p_MJAIAgentPermissions_AgentIDID);
         
     END LOOP;
     
@@ -18948,7 +20409,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentPrompt" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentPrompts_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentPrompt"(p_MJAIAgentPrompts_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentPrompt"(p_ID => p_MJAIAgentPrompts_AgentIDID);
         
     END LOOP;
     
@@ -18958,7 +20419,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentRelationship" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentRelationships_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentRelationship"(p_MJAIAgentRelationships_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentRelationship"(p_ID => p_MJAIAgentRelationships_AgentIDID);
         
     END LOOP;
     
@@ -18968,7 +20429,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentRelationship" WHERE "SubAgentID" = p_ID
     LOOP
         p_MJAIAgentRelationships_SubAgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentRelationship"(p_MJAIAgentRelationships_SubAgentIDID);
+        PERFORM __mj."spDeleteAIAgentRelationship"(p_ID => p_MJAIAgentRelationships_SubAgentIDID);
         
     END LOOP;
     
@@ -18978,7 +20439,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentRequest" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentRequests_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentRequest"(p_MJAIAgentRequests_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentRequest"(p_ID => p_MJAIAgentRequests_AgentIDID);
         
     END LOOP;
     
@@ -18988,7 +20449,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentRun" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentRuns_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentRun"(p_MJAIAgentRuns_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentRun"(p_ID => p_MJAIAgentRuns_AgentIDID);
         
     END LOOP;
     
@@ -18998,7 +20459,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentSearchScope" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentSearchScopes_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentSearchScope"(p_MJAIAgentSearchScopes_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentSearchScope"(p_ID => p_MJAIAgentSearchScopes_AgentIDID);
         
     END LOOP;
     
@@ -19008,7 +20469,7 @@ BEGIN
     FOR _rec IN SELECT "ID" FROM __mj."AIAgentStep" WHERE "AgentID" = p_ID
     LOOP
         p_MJAIAgentSteps_AgentIDID := _rec."ID";
-        PERFORM __mj."spDeleteAIAgentStep"(p_MJAIAgentSteps_AgentIDID);
+        PERFORM __mj."spDeleteAIAgentStep"(p_ID => p_MJAIAgentSteps_AgentIDID);
         
     END LOOP;
     
@@ -19042,7 +20503,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIAgentSteps_SubAgentID_SubAgentID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgentStep"(p_MJAIAgentSteps_SubAgentIDID, p_MJAIAgentSteps_SubAgentID_AgentID, p_MJAIAgentSteps_SubAgentID_Name, p_MJAIAgentSteps_SubAgentID_Description, p_MJAIAgentSteps_SubAgentID_StepType, p_MJAIAgentSteps_SubAgentID_StartingStep, p_MJAIAgentSteps_SubAgentID_TimeoutSeconds, p_MJAIAgentSteps_SubAgentID_RetryCount, p_MJAIAgentSteps_SubAgentID_OnErrorBehavior, p_MJAIAgentSteps_SubAgentID_ActionID, p_MJAIAgentSteps_SubAgentID_SubAgentID, p_MJAIAgentSteps_SubAgentID_PromptID, p_MJAIAgentSteps_SubAgentID_ActionOutputMapping, p_MJAIAgentSteps_SubAgentID_PositionX, p_MJAIAgentSteps_SubAgentID_PositionY, p_MJAIAgentSteps_SubAgentID_Width, p_MJAIAgentSteps_SubAgentID_Height, p_MJAIAgentSteps_SubAgentID_Status, p_MJAIAgentSteps_SubAgentID_ActionInputMapping, p_MJAIAgentSteps_SubAgentID_LoopBodyType, p_MJAIAgentSteps_SubAgentID_Configuration);
+        PERFORM __mj."spUpdateAIAgentStep"(p_ID => p_MJAIAgentSteps_SubAgentIDID, p_AgentID => p_MJAIAgentSteps_SubAgentID_AgentID, p_Name => p_MJAIAgentSteps_SubAgentID_Name, p_Description => p_MJAIAgentSteps_SubAgentID_Description, p_StepType => p_MJAIAgentSteps_SubAgentID_StepType, p_StartingStep => p_MJAIAgentSteps_SubAgentID_StartingStep, p_TimeoutSeconds => p_MJAIAgentSteps_SubAgentID_TimeoutSeconds, p_RetryCount => p_MJAIAgentSteps_SubAgentID_RetryCount, p_OnErrorBehavior => p_MJAIAgentSteps_SubAgentID_OnErrorBehavior, p_ActionID => p_MJAIAgentSteps_SubAgentID_ActionID, p_SubAgentID => p_MJAIAgentSteps_SubAgentID_SubAgentID, p_PromptID => p_MJAIAgentSteps_SubAgentID_PromptID, p_ActionOutputMapping => p_MJAIAgentSteps_SubAgentID_ActionOutputMapping, p_PositionX => p_MJAIAgentSteps_SubAgentID_PositionX, p_PositionY => p_MJAIAgentSteps_SubAgentID_PositionY, p_Width => p_MJAIAgentSteps_SubAgentID_Width, p_Height => p_MJAIAgentSteps_SubAgentID_Height, p_Status => p_MJAIAgentSteps_SubAgentID_Status, p_ActionInputMapping => p_MJAIAgentSteps_SubAgentID_ActionInputMapping, p_LoopBodyType => p_MJAIAgentSteps_SubAgentID_LoopBodyType, p_Configuration => p_MJAIAgentSteps_SubAgentID_Configuration);
 
     END LOOP;
 
@@ -19118,7 +20579,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIAgents_ParentID_ParentID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIAgent"(p_MJAIAgents_ParentIDID, p_MJAIAgents_ParentID_Name, p_MJAIAgents_ParentID_Description, p_MJAIAgents_ParentID_LogoURL, p_MJAIAgents_ParentID_ParentID, p_MJAIAgents_ParentID_ExposeAsAction, p_MJAIAgents_ParentID_ExecutionOrder, p_MJAIAgents_ParentID_ExecutionMode, p_MJAIAgents_ParentID_EnableContextCompression, p_MJAIAgents_ParentID_ContextCompressionMessageThreshold, p_MJAIAgents_ParentID_ContextCompressionPromptID, p_MJAIAgents_ParentID_ContextCompressionMessageRetentionCount, p_MJAIAgents_ParentID_TypeID, p_MJAIAgents_ParentID_Status, p_MJAIAgents_ParentID_DriverClass, p_MJAIAgents_ParentID_IconClass, p_MJAIAgents_ParentID_ModelSelectionMode, p_MJAIAgents_ParentID_PayloadDownstreamPaths, p_MJAIAgents_ParentID_PayloadUpstreamPaths, p_MJAIAgents_ParentID_PayloadSelfReadPaths, p_MJAIAgents_ParentID_PayloadSelfWritePaths, p_MJAIAgents_ParentID_PayloadScope, p_MJAIAgents_ParentID_FinalPayloadValidation, p_MJAIAgents_ParentID_FinalPayloadValidationMode, p_MJAIAgents_ParentID_FinalPayloadValidationMaxRetries, p_MJAIAgents_ParentID_MaxCostPerRun, p_MJAIAgents_ParentID_MaxTokensPerRun, p_MJAIAgents_ParentID_MaxIterationsPerRun, p_MJAIAgents_ParentID_MaxTimePerRun, p_MJAIAgents_ParentID_MinExecutionsPerRun, p_MJAIAgents_ParentID_MaxExecutionsPerRun, p_MJAIAgents_ParentID_StartingPayloadValidation, p_MJAIAgents_ParentID_StartingPayloadValidationMode, p_MJAIAgents_ParentID_DefaultPromptEffortLevel, p_MJAIAgents_ParentID_ChatHandlingOption, p_MJAIAgents_ParentID_DefaultArtifactTypeID, p_MJAIAgents_ParentID_OwnerUserID, p_MJAIAgents_ParentID_InvocationMode, p_MJAIAgents_ParentID_ArtifactCreationMode, p_MJAIAgents_ParentID_FunctionalRequirements, p_MJAIAgents_ParentID_TechnicalDesign, p_MJAIAgents_ParentID_InjectNotes, p_MJAIAgents_ParentID_MaxNotesToInject, p_MJAIAgents_ParentID_NoteInjectionStrategy, p_MJAIAgents_ParentID_InjectExamples, p_MJAIAgents_ParentID_MaxExamplesToInject, p_MJAIAgents_ParentID_ExampleInjectionStrategy, p_MJAIAgents_ParentID_IsRestricted, p_MJAIAgents_ParentID_MessageMode, p_MJAIAgents_ParentID_MaxMessages, p_MJAIAgents_ParentID_AttachmentStorageProviderID, p_MJAIAgents_ParentID_AttachmentRootPath, p_MJAIAgents_ParentID_InlineStorageThresholdBytes, p_MJAIAgents_ParentID_AgentTypePromptParams, p_MJAIAgents_ParentID_ScopeConfig, p_MJAIAgents_ParentID_NoteRetentionDays, p_MJAIAgents_ParentID_ExampleRetentionDays, p_MJAIAgents_ParentID_AutoArchiveEnabled, p_MJAIAgents_ParentID_RerankerConfiguration, p_MJAIAgents_ParentID_CategoryID, p_MJAIAgents_ParentID_AllowEphemeralClientTools, p_MJAIAgents_ParentID_DefaultStorageAccountID, p_MJAIAgents_ParentID_SearchScopeAccess);
+        PERFORM __mj."spUpdateAIAgent"(p_ID => p_MJAIAgents_ParentIDID, p_Name => p_MJAIAgents_ParentID_Name, p_Description => p_MJAIAgents_ParentID_Description, p_LogoURL => p_MJAIAgents_ParentID_LogoURL, p_ParentID => p_MJAIAgents_ParentID_ParentID, p_ExposeAsAction => p_MJAIAgents_ParentID_ExposeAsAction, p_ExecutionOrder => p_MJAIAgents_ParentID_ExecutionOrder, p_ExecutionMode => p_MJAIAgents_ParentID_ExecutionMode, p_EnableContextCompression => p_MJAIAgents_ParentID_EnableContextCompression, p_ContextCompressionMessageThreshold => p_MJAIAgents_ParentID_ContextCompressionMessageThreshold, p_ContextCompressionPromptID => p_MJAIAgents_ParentID_ContextCompressionPromptID, p_ContextCompressionMessageRetentionCount => p_MJAIAgents_ParentID_ContextCompressionMessageRetentionCount, p_TypeID => p_MJAIAgents_ParentID_TypeID, p_Status => p_MJAIAgents_ParentID_Status, p_DriverClass => p_MJAIAgents_ParentID_DriverClass, p_IconClass => p_MJAIAgents_ParentID_IconClass, p_ModelSelectionMode => p_MJAIAgents_ParentID_ModelSelectionMode, p_PayloadDownstreamPaths => p_MJAIAgents_ParentID_PayloadDownstreamPaths, p_PayloadUpstreamPaths => p_MJAIAgents_ParentID_PayloadUpstreamPaths, p_PayloadSelfReadPaths => p_MJAIAgents_ParentID_PayloadSelfReadPaths, p_PayloadSelfWritePaths => p_MJAIAgents_ParentID_PayloadSelfWritePaths, p_PayloadScope => p_MJAIAgents_ParentID_PayloadScope, p_FinalPayloadValidation => p_MJAIAgents_ParentID_FinalPayloadValidation, p_FinalPayloadValidationMode => p_MJAIAgents_ParentID_FinalPayloadValidationMode, p_FinalPayloadValidationMaxRetries => p_MJAIAgents_ParentID_FinalPayloadValidationMaxRetries, p_MaxCostPerRun => p_MJAIAgents_ParentID_MaxCostPerRun, p_MaxTokensPerRun => p_MJAIAgents_ParentID_MaxTokensPerRun, p_MaxIterationsPerRun => p_MJAIAgents_ParentID_MaxIterationsPerRun, p_MaxTimePerRun => p_MJAIAgents_ParentID_MaxTimePerRun, p_MinExecutionsPerRun => p_MJAIAgents_ParentID_MinExecutionsPerRun, p_MaxExecutionsPerRun => p_MJAIAgents_ParentID_MaxExecutionsPerRun, p_StartingPayloadValidation => p_MJAIAgents_ParentID_StartingPayloadValidation, p_StartingPayloadValidationMode => p_MJAIAgents_ParentID_StartingPayloadValidationMode, p_DefaultPromptEffortLevel => p_MJAIAgents_ParentID_DefaultPromptEffortLevel, p_ChatHandlingOption => p_MJAIAgents_ParentID_ChatHandlingOption, p_DefaultArtifactTypeID => p_MJAIAgents_ParentID_DefaultArtifactTypeID, p_OwnerUserID => p_MJAIAgents_ParentID_OwnerUserID, p_InvocationMode => p_MJAIAgents_ParentID_InvocationMode, p_ArtifactCreationMode => p_MJAIAgents_ParentID_ArtifactCreationMode, p_FunctionalRequirements => p_MJAIAgents_ParentID_FunctionalRequirements, p_TechnicalDesign => p_MJAIAgents_ParentID_TechnicalDesign, p_InjectNotes => p_MJAIAgents_ParentID_InjectNotes, p_MaxNotesToInject => p_MJAIAgents_ParentID_MaxNotesToInject, p_NoteInjectionStrategy => p_MJAIAgents_ParentID_NoteInjectionStrategy, p_InjectExamples => p_MJAIAgents_ParentID_InjectExamples, p_MaxExamplesToInject => p_MJAIAgents_ParentID_MaxExamplesToInject, p_ExampleInjectionStrategy => p_MJAIAgents_ParentID_ExampleInjectionStrategy, p_IsRestricted => p_MJAIAgents_ParentID_IsRestricted, p_MessageMode => p_MJAIAgents_ParentID_MessageMode, p_MaxMessages => p_MJAIAgents_ParentID_MaxMessages, p_AttachmentStorageProviderID => p_MJAIAgents_ParentID_AttachmentStorageProviderID, p_AttachmentRootPath => p_MJAIAgents_ParentID_AttachmentRootPath, p_InlineStorageThresholdBytes => p_MJAIAgents_ParentID_InlineStorageThresholdBytes, p_AgentTypePromptParams => p_MJAIAgents_ParentID_AgentTypePromptParams, p_ScopeConfig => p_MJAIAgents_ParentID_ScopeConfig, p_NoteRetentionDays => p_MJAIAgents_ParentID_NoteRetentionDays, p_ExampleRetentionDays => p_MJAIAgents_ParentID_ExampleRetentionDays, p_AutoArchiveEnabled => p_MJAIAgents_ParentID_AutoArchiveEnabled, p_RerankerConfiguration => p_MJAIAgents_ParentID_RerankerConfiguration, p_CategoryID => p_MJAIAgents_ParentID_CategoryID, p_AllowEphemeralClientTools => p_MJAIAgents_ParentID_AllowEphemeralClientTools, p_DefaultStorageAccountID => p_MJAIAgents_ParentID_DefaultStorageAccountID, p_SearchScopeAccess => p_MJAIAgents_ParentID_SearchScopeAccess);
 
     END LOOP;
 
@@ -19214,7 +20675,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIPromptRuns_AgentID_AgentID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIPromptRun"(p_MJAIPromptRuns_AgentIDID, p_MJAIPromptRuns_AgentID_PromptID, p_MJAIPromptRuns_AgentID_ModelID, p_MJAIPromptRuns_AgentID_VendorID, p_MJAIPromptRuns_AgentID_AgentID, p_MJAIPromptRuns_AgentID_ConfigurationID, p_MJAIPromptRuns_AgentID_RunAt, p_MJAIPromptRuns_AgentID_CompletedAt, p_MJAIPromptRuns_AgentID_ExecutionTimeMS, p_MJAIPromptRuns_AgentID_Messages, p_MJAIPromptRuns_AgentID_Result, p_MJAIPromptRuns_AgentID_TokensUsed, p_MJAIPromptRuns_AgentID_TokensPrompt, p_MJAIPromptRuns_AgentID_TokensCompletion, p_MJAIPromptRuns_AgentID_TotalCost, p_MJAIPromptRuns_AgentID_Success, p_MJAIPromptRuns_AgentID_ErrorMessage, p_MJAIPromptRuns_AgentID_ParentID, p_MJAIPromptRuns_AgentID_RunType, p_MJAIPromptRuns_AgentID_ExecutionOrder, p_MJAIPromptRuns_AgentID_AgentRunID, p_MJAIPromptRuns_AgentID_Cost, p_MJAIPromptRuns_AgentID_CostCurrency, p_MJAIPromptRuns_AgentID_TokensUsedRollup, p_MJAIPromptRuns_AgentID_TokensPromptRollup, p_MJAIPromptRuns_AgentID_TokensCompletionRollup, p_MJAIPromptRuns_AgentID_Temperature, p_MJAIPromptRuns_AgentID_TopP, p_MJAIPromptRuns_AgentID_TopK, p_MJAIPromptRuns_AgentID_MinP, p_MJAIPromptRuns_AgentID_FrequencyPenalty, p_MJAIPromptRuns_AgentID_PresencePenalty, p_MJAIPromptRuns_AgentID_Seed, p_MJAIPromptRuns_AgentID_StopSequences, p_MJAIPromptRuns_AgentID_ResponseFormat, p_MJAIPromptRuns_AgentID_LogProbs, p_MJAIPromptRuns_AgentID_TopLogProbs, p_MJAIPromptRuns_AgentID_DescendantCost, p_MJAIPromptRuns_AgentID_ValidationAttemptCount, p_MJAIPromptRuns_AgentID_SuccessfulValidationCount, p_MJAIPromptRuns_AgentID_FinalValidationPassed, p_MJAIPromptRuns_AgentID_ValidationBehavior, p_MJAIPromptRuns_AgentID_RetryStrategy, p_MJAIPromptRuns_AgentID_MaxRetriesConfigured, p_MJAIPromptRuns_AgentID_FinalValidationError, p_MJAIPromptRuns_AgentID_ValidationErrorCount, p_MJAIPromptRuns_AgentID_CommonValidationError, p_MJAIPromptRuns_AgentID_FirstAttemptAt, p_MJAIPromptRuns_AgentID_LastAttemptAt, p_MJAIPromptRuns_AgentID_TotalRetryDurationMS, p_MJAIPromptRuns_AgentID_ValidationAttempts, p_MJAIPromptRuns_AgentID_ValidationSummary, p_MJAIPromptRuns_AgentID_FailoverAttempts, p_MJAIPromptRuns_AgentID_FailoverErrors, p_MJAIPromptRuns_AgentID_FailoverDurations, p_MJAIPromptRuns_AgentID_OriginalModelID, p_MJAIPromptRuns_AgentID_OriginalRequestStartTime, p_MJAIPromptRuns_AgentID_TotalFailoverDuration, p_MJAIPromptRuns_AgentID_RerunFromPromptRunID, p_MJAIPromptRuns_AgentID_ModelSelection, p_MJAIPromptRuns_AgentID_Status, p_MJAIPromptRuns_AgentID_Cancelled, p_MJAIPromptRuns_AgentID_CancellationReason, p_MJAIPromptRuns_AgentID_ModelPowerRank, p_MJAIPromptRuns_AgentID_SelectionStrategy, p_MJAIPromptRuns_AgentID_CacheHit, p_MJAIPromptRuns_AgentID_CacheKey, p_MJAIPromptRuns_AgentID_JudgeID, p_MJAIPromptRuns_AgentID_JudgeScore, p_MJAIPromptRuns_AgentID_WasSelectedResult, p_MJAIPromptRuns_AgentID_StreamingEnabled, p_MJAIPromptRuns_AgentID_FirstTokenTime, p_MJAIPromptRuns_AgentID_ErrorDetails, p_MJAIPromptRuns_AgentID_ChildPromptID, p_MJAIPromptRuns_AgentID_QueueTime, p_MJAIPromptRuns_AgentID_PromptTime, p_MJAIPromptRuns_AgentID_CompletionTime, p_MJAIPromptRuns_AgentID_ModelSpecificResponseDetails, p_MJAIPromptRuns_AgentID_EffortLevel, p_MJAIPromptRuns_AgentID_RunName, p_MJAIPromptRuns_AgentID_Comments, p_MJAIPromptRuns_AgentID_TestRunID, p_MJAIPromptRuns_AgentID_AssistantPrefill);
+        PERFORM __mj."spUpdateAIPromptRun"(p_ID => p_MJAIPromptRuns_AgentIDID, p_PromptID => p_MJAIPromptRuns_AgentID_PromptID, p_ModelID => p_MJAIPromptRuns_AgentID_ModelID, p_VendorID => p_MJAIPromptRuns_AgentID_VendorID, p_AgentID => p_MJAIPromptRuns_AgentID_AgentID, p_ConfigurationID => p_MJAIPromptRuns_AgentID_ConfigurationID, p_RunAt => p_MJAIPromptRuns_AgentID_RunAt, p_CompletedAt => p_MJAIPromptRuns_AgentID_CompletedAt, p_ExecutionTimeMS => p_MJAIPromptRuns_AgentID_ExecutionTimeMS, p_Messages => p_MJAIPromptRuns_AgentID_Messages, p_Result => p_MJAIPromptRuns_AgentID_Result, p_TokensUsed => p_MJAIPromptRuns_AgentID_TokensUsed, p_TokensPrompt => p_MJAIPromptRuns_AgentID_TokensPrompt, p_TokensCompletion => p_MJAIPromptRuns_AgentID_TokensCompletion, p_TotalCost => p_MJAIPromptRuns_AgentID_TotalCost, p_Success => p_MJAIPromptRuns_AgentID_Success, p_ErrorMessage => p_MJAIPromptRuns_AgentID_ErrorMessage, p_ParentID => p_MJAIPromptRuns_AgentID_ParentID, p_RunType => p_MJAIPromptRuns_AgentID_RunType, p_ExecutionOrder => p_MJAIPromptRuns_AgentID_ExecutionOrder, p_AgentRunID => p_MJAIPromptRuns_AgentID_AgentRunID, p_Cost => p_MJAIPromptRuns_AgentID_Cost, p_CostCurrency => p_MJAIPromptRuns_AgentID_CostCurrency, p_TokensUsedRollup => p_MJAIPromptRuns_AgentID_TokensUsedRollup, p_TokensPromptRollup => p_MJAIPromptRuns_AgentID_TokensPromptRollup, p_TokensCompletionRollup => p_MJAIPromptRuns_AgentID_TokensCompletionRollup, p_Temperature => p_MJAIPromptRuns_AgentID_Temperature, p_TopP => p_MJAIPromptRuns_AgentID_TopP, p_TopK => p_MJAIPromptRuns_AgentID_TopK, p_MinP => p_MJAIPromptRuns_AgentID_MinP, p_FrequencyPenalty => p_MJAIPromptRuns_AgentID_FrequencyPenalty, p_PresencePenalty => p_MJAIPromptRuns_AgentID_PresencePenalty, p_Seed => p_MJAIPromptRuns_AgentID_Seed, p_StopSequences => p_MJAIPromptRuns_AgentID_StopSequences, p_ResponseFormat => p_MJAIPromptRuns_AgentID_ResponseFormat, p_LogProbs => p_MJAIPromptRuns_AgentID_LogProbs, p_TopLogProbs => p_MJAIPromptRuns_AgentID_TopLogProbs, p_DescendantCost => p_MJAIPromptRuns_AgentID_DescendantCost, p_ValidationAttemptCount => p_MJAIPromptRuns_AgentID_ValidationAttemptCount, p_SuccessfulValidationCount => p_MJAIPromptRuns_AgentID_SuccessfulValidationCount, p_FinalValidationPassed => p_MJAIPromptRuns_AgentID_FinalValidationPassed, p_ValidationBehavior => p_MJAIPromptRuns_AgentID_ValidationBehavior, p_RetryStrategy => p_MJAIPromptRuns_AgentID_RetryStrategy, p_MaxRetriesConfigured => p_MJAIPromptRuns_AgentID_MaxRetriesConfigured, p_FinalValidationError => p_MJAIPromptRuns_AgentID_FinalValidationError, p_ValidationErrorCount => p_MJAIPromptRuns_AgentID_ValidationErrorCount, p_CommonValidationError => p_MJAIPromptRuns_AgentID_CommonValidationError, p_FirstAttemptAt => p_MJAIPromptRuns_AgentID_FirstAttemptAt, p_LastAttemptAt => p_MJAIPromptRuns_AgentID_LastAttemptAt, p_TotalRetryDurationMS => p_MJAIPromptRuns_AgentID_TotalRetryDurationMS, p_ValidationAttempts => p_MJAIPromptRuns_AgentID_ValidationAttempts, p_ValidationSummary => p_MJAIPromptRuns_AgentID_ValidationSummary, p_FailoverAttempts => p_MJAIPromptRuns_AgentID_FailoverAttempts, p_FailoverErrors => p_MJAIPromptRuns_AgentID_FailoverErrors, p_FailoverDurations => p_MJAIPromptRuns_AgentID_FailoverDurations, p_OriginalModelID => p_MJAIPromptRuns_AgentID_OriginalModelID, p_OriginalRequestStartTime => p_MJAIPromptRuns_AgentID_OriginalRequestStartTime, p_TotalFailoverDuration => p_MJAIPromptRuns_AgentID_TotalFailoverDuration, p_RerunFromPromptRunID => p_MJAIPromptRuns_AgentID_RerunFromPromptRunID, p_ModelSelection => p_MJAIPromptRuns_AgentID_ModelSelection, p_Status => p_MJAIPromptRuns_AgentID_Status, p_Cancelled => p_MJAIPromptRuns_AgentID_Cancelled, p_CancellationReason => p_MJAIPromptRuns_AgentID_CancellationReason, p_ModelPowerRank => p_MJAIPromptRuns_AgentID_ModelPowerRank, p_SelectionStrategy => p_MJAIPromptRuns_AgentID_SelectionStrategy, p_CacheHit => p_MJAIPromptRuns_AgentID_CacheHit, p_CacheKey => p_MJAIPromptRuns_AgentID_CacheKey, p_JudgeID => p_MJAIPromptRuns_AgentID_JudgeID, p_JudgeScore => p_MJAIPromptRuns_AgentID_JudgeScore, p_WasSelectedResult => p_MJAIPromptRuns_AgentID_WasSelectedResult, p_StreamingEnabled => p_MJAIPromptRuns_AgentID_StreamingEnabled, p_FirstTokenTime => p_MJAIPromptRuns_AgentID_FirstTokenTime, p_ErrorDetails => p_MJAIPromptRuns_AgentID_ErrorDetails, p_ChildPromptID => p_MJAIPromptRuns_AgentID_ChildPromptID, p_QueueTime => p_MJAIPromptRuns_AgentID_QueueTime, p_PromptTime => p_MJAIPromptRuns_AgentID_PromptTime, p_CompletionTime => p_MJAIPromptRuns_AgentID_CompletionTime, p_ModelSpecificResponseDetails => p_MJAIPromptRuns_AgentID_ModelSpecificResponseDetails, p_EffortLevel => p_MJAIPromptRuns_AgentID_EffortLevel, p_RunName => p_MJAIPromptRuns_AgentID_RunName, p_Comments => p_MJAIPromptRuns_AgentID_Comments, p_TestRunID => p_MJAIPromptRuns_AgentID_TestRunID, p_AssistantPrefill => p_MJAIPromptRuns_AgentID_AssistantPrefill);
 
     END LOOP;
 
@@ -19240,7 +20701,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJAIResultCache_AgentID_AgentID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateAIResultCache"(p_MJAIResultCache_AgentIDID, p_MJAIResultCache_AgentID_AIPromptID, p_MJAIResultCache_AgentID_AIModelID, p_MJAIResultCache_AgentID_RunAt, p_MJAIResultCache_AgentID_PromptText, p_MJAIResultCache_AgentID_ResultText, p_MJAIResultCache_AgentID_Status, p_MJAIResultCache_AgentID_ExpiredOn, p_MJAIResultCache_AgentID_VendorID, p_MJAIResultCache_AgentID_AgentID, p_MJAIResultCache_AgentID_ConfigurationID, p_MJAIResultCache_AgentID_PromptEmbedding, p_MJAIResultCache_AgentID_PromptRunID);
+        PERFORM __mj."spUpdateAIResultCache"(p_ID => p_MJAIResultCache_AgentIDID, p_AIPromptID => p_MJAIResultCache_AgentID_AIPromptID, p_AIModelID => p_MJAIResultCache_AgentID_AIModelID, p_RunAt => p_MJAIResultCache_AgentID_RunAt, p_PromptText => p_MJAIResultCache_AgentID_PromptText, p_ResultText => p_MJAIResultCache_AgentID_ResultText, p_Status => p_MJAIResultCache_AgentID_Status, p_ExpiredOn => p_MJAIResultCache_AgentID_ExpiredOn, p_VendorID => p_MJAIResultCache_AgentID_VendorID, p_AgentID => p_MJAIResultCache_AgentID_AgentID, p_ConfigurationID => p_MJAIResultCache_AgentID_ConfigurationID, p_PromptEmbedding => p_MJAIResultCache_AgentID_PromptEmbedding, p_PromptRunID => p_MJAIResultCache_AgentID_PromptRunID);
 
     END LOOP;
 
@@ -19278,7 +20739,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJConversationDetails_AgentID_AgentID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateConversationDetail"(p_MJConversationDetails_AgentIDID, p_MJConversationDetails_AgentID_ConversationID, p_MJConversationDetails_AgentID_ExternalID, p_MJConversationDetails_AgentID_Role, p_MJConversationDetails_AgentID_Message, p_MJConversationDetails_AgentID_Error, p_MJConversationDetails_AgentID_HiddenToUser, p_MJConversationDetails_AgentID_UserRating, p_MJConversationDetails_AgentID_UserFeedback, p_MJConversationDetails_AgentID_ReflectionInsights, p_MJConversationDetails_AgentID_SummaryOfEarlierConversation, p_MJConversationDetails_AgentID_UserID, p_MJConversationDetails_AgentID_ArtifactID, p_MJConversationDetails_AgentID_ArtifactVersionID, p_MJConversationDetails_AgentID_CompletionTime, p_MJConversationDetails_AgentID_IsPinned, p_MJConversationDetails_AgentID_ParentID, p_MJConversationDetails_AgentID_AgentID, p_MJConversationDetails_AgentID_Status, p_MJConversationDetails_AgentID_SuggestedResponses, p_MJConversationDetails_AgentID_TestRunID, p_MJConversationDetails_AgentID_ResponseForm, p_MJConversationDetails_AgentID_ActionableCommands, p_MJConversationDetails_AgentID_AutomaticCommands, p_MJConversationDetails_AgentID_OriginalMessageChanged);
+        PERFORM __mj."spUpdateConversationDetail"(p_ID => p_MJConversationDetails_AgentIDID, p_ConversationID => p_MJConversationDetails_AgentID_ConversationID, p_ExternalID => p_MJConversationDetails_AgentID_ExternalID, p_Role => p_MJConversationDetails_AgentID_Role, p_Message => p_MJConversationDetails_AgentID_Message, p_Error => p_MJConversationDetails_AgentID_Error, p_HiddenToUser => p_MJConversationDetails_AgentID_HiddenToUser, p_UserRating => p_MJConversationDetails_AgentID_UserRating, p_UserFeedback => p_MJConversationDetails_AgentID_UserFeedback, p_ReflectionInsights => p_MJConversationDetails_AgentID_ReflectionInsights, p_SummaryOfEarlierConversation => p_MJConversationDetails_AgentID_SummaryOfEarlierConversation, p_UserID => p_MJConversationDetails_AgentID_UserID, p_ArtifactID => p_MJConversationDetails_AgentID_ArtifactID, p_ArtifactVersionID => p_MJConversationDetails_AgentID_ArtifactVersionID, p_CompletionTime => p_MJConversationDetails_AgentID_CompletionTime, p_IsPinned => p_MJConversationDetails_AgentID_IsPinned, p_ParentID => p_MJConversationDetails_AgentID_ParentID, p_AgentID => p_MJConversationDetails_AgentID_AgentID, p_Status => p_MJConversationDetails_AgentID_Status, p_SuggestedResponses => p_MJConversationDetails_AgentID_SuggestedResponses, p_TestRunID => p_MJConversationDetails_AgentID_TestRunID, p_ResponseForm => p_MJConversationDetails_AgentID_ResponseForm, p_ActionableCommands => p_MJConversationDetails_AgentID_ActionableCommands, p_AutomaticCommands => p_MJConversationDetails_AgentID_AutomaticCommands, p_OriginalMessageChanged => p_MJConversationDetails_AgentID_OriginalMessageChanged);
 
     END LOOP;
 
@@ -19303,7 +20764,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJSearchExecutionLogs_AIAgentID_AIAgentID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateSearchExecutionLog"(p_MJSearchExecutionLogs_AIAgentIDID, p_MJSearchExecutionLogs_AIAgentID_SearchScopeID, p_MJSearchExecutionLogs_AIAgentID_UserID, p_MJSearchExecutionLogs_AIAgentID_AIAgentID, p_MJSearchExecutionLogs_AIAgentID_Query, p_MJSearchExecutionLogs_AIAgentID_TotalDurationMs, p_MJSearchExecutionLogs_AIAgentID_ResultCount, p_MJSearchExecutionLogs_AIAgentID_RerankerName, p_MJSearchExecutionLogs_AIAgentID_RerankerCostCents, p_MJSearchExecutionLogs_AIAgentID_Status, p_MJSearchExecutionLogs_AIAgentID_FailureReason, p_MJSearchExecutionLogs_AIAgentID_ProvidersJSON);
+        PERFORM __mj."spUpdateSearchExecutionLog"(p_ID => p_MJSearchExecutionLogs_AIAgentIDID, p_SearchScopeID => p_MJSearchExecutionLogs_AIAgentID_SearchScopeID, p_UserID => p_MJSearchExecutionLogs_AIAgentID_UserID, p_AIAgentID => p_MJSearchExecutionLogs_AIAgentID_AIAgentID, p_Query => p_MJSearchExecutionLogs_AIAgentID_Query, p_TotalDurationMs => p_MJSearchExecutionLogs_AIAgentID_TotalDurationMs, p_ResultCount => p_MJSearchExecutionLogs_AIAgentID_ResultCount, p_RerankerName => p_MJSearchExecutionLogs_AIAgentID_RerankerName, p_RerankerCostCents => p_MJSearchExecutionLogs_AIAgentID_RerankerCostCents, p_Status => p_MJSearchExecutionLogs_AIAgentID_Status, p_FailureReason => p_MJSearchExecutionLogs_AIAgentID_FailureReason, p_ProvidersJSON => p_MJSearchExecutionLogs_AIAgentID_ProvidersJSON);
 
     END LOOP;
 
@@ -19331,7 +20792,7 @@ BEGIN
         -- Set the FK field to NULL
         p_MJTasks_AgentID_AgentID := NULL;
         -- Call the update SP for the related entity
-        PERFORM __mj."spUpdateTask"(p_MJTasks_AgentIDID, p_MJTasks_AgentID_ParentID, p_MJTasks_AgentID_Name, p_MJTasks_AgentID_Description, p_MJTasks_AgentID_TypeID, p_MJTasks_AgentID_EnvironmentID, p_MJTasks_AgentID_ProjectID, p_MJTasks_AgentID_ConversationDetailID, p_MJTasks_AgentID_UserID, p_MJTasks_AgentID_AgentID, p_MJTasks_AgentID_Status, p_MJTasks_AgentID_PercentComplete, p_MJTasks_AgentID_DueAt, p_MJTasks_AgentID_StartedAt, p_MJTasks_AgentID_CompletedAt);
+        PERFORM __mj."spUpdateTask"(p_ID => p_MJTasks_AgentIDID, p_ParentID => p_MJTasks_AgentID_ParentID, p_Name => p_MJTasks_AgentID_Name, p_Description => p_MJTasks_AgentID_Description, p_TypeID => p_MJTasks_AgentID_TypeID, p_EnvironmentID => p_MJTasks_AgentID_EnvironmentID, p_ProjectID => p_MJTasks_AgentID_ProjectID, p_ConversationDetailID => p_MJTasks_AgentID_ConversationDetailID, p_UserID => p_MJTasks_AgentID_UserID, p_AgentID => p_MJTasks_AgentID_AgentID, p_Status => p_MJTasks_AgentID_Status, p_PercentComplete => p_MJTasks_AgentID_PercentComplete, p_DueAt => p_MJTasks_AgentID_DueAt, p_StartedAt => p_MJTasks_AgentID_StartedAt, p_CompletedAt => p_MJTasks_AgentID_CompletedAt);
 
     END LOOP;
 
@@ -19352,6 +20813,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spCreateSearchScopeTestQuery'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spCreateSearchScopeTestQuery"(
     IN p_ID UUID DEFAULT NULL,
     IN p_SearchScopeID UUID DEFAULT NULL,
@@ -19412,6 +20881,14 @@ IF p_ID IS NOT NULL THEN
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spUpdateSearchScopeTestQuery'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spUpdateSearchScopeTestQuery"(
     IN p_ID UUID,
     IN p_SearchScopeID UUID,
@@ -19448,6 +20925,14 @@ UPDATE
 END;
 $$ LANGUAGE plpgsql;
 
+DO $$ DECLARE r record;
+BEGIN
+  FOR r IN SELECT oid::regprocedure AS sig FROM pg_proc
+           WHERE proname = 'spDeleteSearchScopeTestQuery'
+             AND pronamespace = '__mj'::regnamespace
+  LOOP EXECUTE 'DROP FUNCTION IF EXISTS ' || r.sig || ' CASCADE';
+  END LOOP;
+END $$;
 CREATE OR REPLACE FUNCTION __mj."spDeleteSearchScopeTestQuery"(
     IN p_ID UUID
 )
@@ -20297,8 +21782,7 @@ INSERT INTO __mj."Entity" (
          , "UserViewMaxRows"
          , "__mj_CreatedAt"
          , "__mj_UpdatedAt"
-      )
-      VALUES (
+      ) VALUES (
          '73a3ede8-070f-4cc8-bd5d-c6b654fae2f6',
          'MJ: Search Scopes',
          'Search Scopes',
@@ -20307,17 +21791,9 @@ INSERT INTO __mj."Entity" (
          'SearchScope',
          'vwSearchScopes',
          '__mj',
-         1,
-         1,
-         1
-         , 1
-         , 0
-         , 0
-         , 0
-         , 1
-         , 1
-         , 1
-         , 1000
+         TRUE,
+         TRUE,
+         TRUE, TRUE, FALSE, FALSE, FALSE, TRUE, TRUE, TRUE, 1000
          , NOW()
          , NOW()
       );
@@ -20328,19 +21804,13 @@ INSERT INTO __mj."ApplicationEntity"
                                        ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '73a3ede8-070f-4cc8-bd5d-c6b654fae2f6', (SELECT COALESCE(MAX("Sequence"),0)+1 FROM __mj."ApplicationEntity" WHERE "ApplicationID" = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: Search Scopes for role UI */
 
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('73a3ede8-070f-4cc8-bd5d-c6b654fae2f6', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, NOW(), NOW());
+INSERT INTO __mj."EntityPermission" ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('73a3ede8-070f-4cc8-bd5d-c6b654fae2f6', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, FALSE, FALSE, FALSE, NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: Search Scopes for role Developer */
 
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('73a3ede8-070f-4cc8-bd5d-c6b654fae2f6', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0, NOW(), NOW());
+INSERT INTO __mj."EntityPermission" ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('73a3ede8-070f-4cc8-bd5d-c6b654fae2f6', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, FALSE, NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: Search Scopes for role Integration */
 
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('73a3ede8-070f-4cc8-bd5d-c6b654fae2f6', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, NOW(), NOW());
+INSERT INTO __mj."EntityPermission" ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('73a3ede8-070f-4cc8-bd5d-c6b654fae2f6', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, TRUE, NOW(), NOW());
 /* SQL generated to create new entity MJ: Search Scope Providers */
 
 INSERT INTO __mj."Entity" (
@@ -20365,8 +21835,7 @@ INSERT INTO __mj."Entity" (
          , "UserViewMaxRows"
          , "__mj_CreatedAt"
          , "__mj_UpdatedAt"
-      )
-      VALUES (
+      ) VALUES (
          '9f373ffc-d99c-44fc-bd52-15b27d21e8c8',
          'MJ: Search Scope Providers',
          'Search Scope Providers',
@@ -20375,17 +21844,9 @@ INSERT INTO __mj."Entity" (
          'SearchScopeProvider',
          'vwSearchScopeProviders',
          '__mj',
-         1,
-         1,
-         1
-         , 1
-         , 0
-         , 0
-         , 0
-         , 1
-         , 1
-         , 1
-         , 1000
+         TRUE,
+         TRUE,
+         TRUE, TRUE, FALSE, FALSE, FALSE, TRUE, TRUE, TRUE, 1000
          , NOW()
          , NOW()
       );
@@ -20396,19 +21857,13 @@ INSERT INTO __mj."ApplicationEntity"
                                        ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '9f373ffc-d99c-44fc-bd52-15b27d21e8c8', (SELECT COALESCE(MAX("Sequence"),0)+1 FROM __mj."ApplicationEntity" WHERE "ApplicationID" = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: Search Scope Providers for role UI */
 
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('9f373ffc-d99c-44fc-bd52-15b27d21e8c8', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, NOW(), NOW());
+INSERT INTO __mj."EntityPermission" ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('9f373ffc-d99c-44fc-bd52-15b27d21e8c8', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, FALSE, FALSE, FALSE, NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: Search Scope Providers for role Developer */
 
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('9f373ffc-d99c-44fc-bd52-15b27d21e8c8', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0, NOW(), NOW());
+INSERT INTO __mj."EntityPermission" ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('9f373ffc-d99c-44fc-bd52-15b27d21e8c8', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, FALSE, NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: Search Scope Providers for role Integration */
 
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('9f373ffc-d99c-44fc-bd52-15b27d21e8c8', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, NOW(), NOW());
+INSERT INTO __mj."EntityPermission" ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('9f373ffc-d99c-44fc-bd52-15b27d21e8c8', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, TRUE, NOW(), NOW());
 /* SQL generated to create new entity MJ: Search Scope External Indexes */
 
 INSERT INTO __mj."Entity" (
@@ -20433,8 +21888,7 @@ INSERT INTO __mj."Entity" (
          , "UserViewMaxRows"
          , "__mj_CreatedAt"
          , "__mj_UpdatedAt"
-      )
-      VALUES (
+      ) VALUES (
          '96bf4fe3-f5fd-4423-9c26-4b6542909a07',
          'MJ: Search Scope External Indexes',
          'Search Scope External Indexes',
@@ -20443,17 +21897,9 @@ INSERT INTO __mj."Entity" (
          'SearchScopeExternalIndex',
          'vwSearchScopeExternalIndexes',
          '__mj',
-         1,
-         1,
-         1
-         , 1
-         , 0
-         , 0
-         , 0
-         , 1
-         , 1
-         , 1
-         , 1000
+         TRUE,
+         TRUE,
+         TRUE, TRUE, FALSE, FALSE, FALSE, TRUE, TRUE, TRUE, 1000
          , NOW()
          , NOW()
       );
@@ -20464,19 +21910,13 @@ INSERT INTO __mj."ApplicationEntity"
                                        ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '96bf4fe3-f5fd-4423-9c26-4b6542909a07', (SELECT COALESCE(MAX("Sequence"),0)+1 FROM __mj."ApplicationEntity" WHERE "ApplicationID" = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: Search Scope External Indexes for role UI */
 
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('96bf4fe3-f5fd-4423-9c26-4b6542909a07', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, NOW(), NOW());
+INSERT INTO __mj."EntityPermission" ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('96bf4fe3-f5fd-4423-9c26-4b6542909a07', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, FALSE, FALSE, FALSE, NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: Search Scope External Indexes for role Developer */
 
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('96bf4fe3-f5fd-4423-9c26-4b6542909a07', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0, NOW(), NOW());
+INSERT INTO __mj."EntityPermission" ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('96bf4fe3-f5fd-4423-9c26-4b6542909a07', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, FALSE, NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: Search Scope External Indexes for role Integration */
 
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('96bf4fe3-f5fd-4423-9c26-4b6542909a07', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, NOW(), NOW());
+INSERT INTO __mj."EntityPermission" ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('96bf4fe3-f5fd-4423-9c26-4b6542909a07', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, TRUE, NOW(), NOW());
 /* SQL generated to create new entity MJ: Search Scope Entities */
 
 INSERT INTO __mj."Entity" (
@@ -20501,8 +21941,7 @@ INSERT INTO __mj."Entity" (
          , "UserViewMaxRows"
          , "__mj_CreatedAt"
          , "__mj_UpdatedAt"
-      )
-      VALUES (
+      ) VALUES (
          '41facffe-0f36-4f41-9263-a96fc7507da3',
          'MJ: Search Scope Entities',
          'Search Scope Entities',
@@ -20511,17 +21950,9 @@ INSERT INTO __mj."Entity" (
          'SearchScopeEntity',
          'vwSearchScopeEntities',
          '__mj',
-         1,
-         1,
-         1
-         , 1
-         , 0
-         , 0
-         , 0
-         , 1
-         , 1
-         , 1
-         , 1000
+         TRUE,
+         TRUE,
+         TRUE, TRUE, FALSE, FALSE, FALSE, TRUE, TRUE, TRUE, 1000
          , NOW()
          , NOW()
       );
@@ -20532,19 +21963,13 @@ INSERT INTO __mj."ApplicationEntity"
                                        ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '41facffe-0f36-4f41-9263-a96fc7507da3', (SELECT COALESCE(MAX("Sequence"),0)+1 FROM __mj."ApplicationEntity" WHERE "ApplicationID" = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: Search Scope Entities for role UI */
 
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('41facffe-0f36-4f41-9263-a96fc7507da3', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, NOW(), NOW());
+INSERT INTO __mj."EntityPermission" ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('41facffe-0f36-4f41-9263-a96fc7507da3', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, FALSE, FALSE, FALSE, NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: Search Scope Entities for role Developer */
 
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('41facffe-0f36-4f41-9263-a96fc7507da3', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0, NOW(), NOW());
+INSERT INTO __mj."EntityPermission" ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('41facffe-0f36-4f41-9263-a96fc7507da3', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, FALSE, NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: Search Scope Entities for role Integration */
 
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('41facffe-0f36-4f41-9263-a96fc7507da3', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, NOW(), NOW());
+INSERT INTO __mj."EntityPermission" ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('41facffe-0f36-4f41-9263-a96fc7507da3', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, TRUE, NOW(), NOW());
 /* SQL generated to create new entity MJ: Search Scope Storage Accounts */
 
 INSERT INTO __mj."Entity" (
@@ -20569,8 +21994,7 @@ INSERT INTO __mj."Entity" (
          , "UserViewMaxRows"
          , "__mj_CreatedAt"
          , "__mj_UpdatedAt"
-      )
-      VALUES (
+      ) VALUES (
          'dda7a98a-a52d-4426-9035-be0a4f60fddc',
          'MJ: Search Scope Storage Accounts',
          'Search Scope Storage Accounts',
@@ -20579,17 +22003,9 @@ INSERT INTO __mj."Entity" (
          'SearchScopeStorageAccount',
          'vwSearchScopeStorageAccounts',
          '__mj',
-         1,
-         1,
-         1
-         , 1
-         , 0
-         , 0
-         , 0
-         , 1
-         , 1
-         , 1
-         , 1000
+         TRUE,
+         TRUE,
+         TRUE, TRUE, FALSE, FALSE, FALSE, TRUE, TRUE, TRUE, 1000
          , NOW()
          , NOW()
       );
@@ -20600,19 +22016,13 @@ INSERT INTO __mj."ApplicationEntity"
                                        ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', 'dda7a98a-a52d-4426-9035-be0a4f60fddc', (SELECT COALESCE(MAX("Sequence"),0)+1 FROM __mj."ApplicationEntity" WHERE "ApplicationID" = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: Search Scope Storage Accounts for role UI */
 
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('dda7a98a-a52d-4426-9035-be0a4f60fddc', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, NOW(), NOW());
+INSERT INTO __mj."EntityPermission" ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('dda7a98a-a52d-4426-9035-be0a4f60fddc', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, FALSE, FALSE, FALSE, NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: Search Scope Storage Accounts for role Developer */
 
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('dda7a98a-a52d-4426-9035-be0a4f60fddc', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0, NOW(), NOW());
+INSERT INTO __mj."EntityPermission" ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('dda7a98a-a52d-4426-9035-be0a4f60fddc', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, FALSE, NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: Search Scope Storage Accounts for role Integration */
 
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('dda7a98a-a52d-4426-9035-be0a4f60fddc', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, NOW(), NOW());
+INSERT INTO __mj."EntityPermission" ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('dda7a98a-a52d-4426-9035-be0a4f60fddc', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, TRUE, NOW(), NOW());
 /* SQL generated to create new entity MJ: AI Agent Search Scopes */
 
 INSERT INTO __mj."Entity" (
@@ -20637,8 +22047,7 @@ INSERT INTO __mj."Entity" (
          , "UserViewMaxRows"
          , "__mj_CreatedAt"
          , "__mj_UpdatedAt"
-      )
-      VALUES (
+      ) VALUES (
          '071b87ea-0e32-4aed-9225-3e38b573e803',
          'MJ: AI Agent Search Scopes',
          'AI Agent Search Scopes',
@@ -20647,17 +22056,9 @@ INSERT INTO __mj."Entity" (
          'AIAgentSearchScope',
          'vwAIAgentSearchScopes',
          '__mj',
-         1,
-         1,
-         1
-         , 1
-         , 0
-         , 0
-         , 0
-         , 1
-         , 1
-         , 1
-         , 1000
+         TRUE,
+         TRUE,
+         TRUE, TRUE, FALSE, FALSE, FALSE, TRUE, TRUE, TRUE, 1000
          , NOW()
          , NOW()
       );
@@ -20668,19 +22069,13 @@ INSERT INTO __mj."ApplicationEntity"
                                        ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '071b87ea-0e32-4aed-9225-3e38b573e803', (SELECT COALESCE(MAX("Sequence"),0)+1 FROM __mj."ApplicationEntity" WHERE "ApplicationID" = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: AI Agent Search Scopes for role UI */
 
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('071b87ea-0e32-4aed-9225-3e38b573e803', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, NOW(), NOW());
+INSERT INTO __mj."EntityPermission" ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('071b87ea-0e32-4aed-9225-3e38b573e803', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, FALSE, FALSE, FALSE, NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: AI Agent Search Scopes for role Developer */
 
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('071b87ea-0e32-4aed-9225-3e38b573e803', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0, NOW(), NOW());
+INSERT INTO __mj."EntityPermission" ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('071b87ea-0e32-4aed-9225-3e38b573e803', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, FALSE, NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: AI Agent Search Scopes for role Integration */
 
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('071b87ea-0e32-4aed-9225-3e38b573e803', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, NOW(), NOW());
+INSERT INTO __mj."EntityPermission" ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('071b87ea-0e32-4aed-9225-3e38b573e803', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, TRUE, NOW(), NOW());
 /* SQL text to add special date field __mj_CreatedAt to entity __mj."SearchScopeProvider" */
 
 /* SQL text to add special date field __mj_CreatedAt to entity __mj."SearchScopeProvider" */
@@ -20796,8 +22191,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'a29c855a-12b2-4329-a77e-495336bfb25f' OR ("EntityID" = '9F373FFC-D99C-44FC-BD52-15B27D21E8C8' AND "Name" = 'ID')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -20824,9 +22218,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'a29c855a-12b2-4329-a77e-495336bfb25f',
         '9F373FFC-D99C-44FC-BD52-15B27D21E8C8', -- "Entity": "MJ": "Search" "Scope" "Providers"
         100001,
@@ -20837,19 +22229,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         'gen_random_uuid()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        1,
-        0,
-        0,
-        1,
-        1,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        TRUE,
+        TRUE,
         'Search',
         NOW(),
         NOW()
@@ -20862,8 +22254,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '7652da27-ef4b-47a2-b3ec-58d7ce7ebac2' OR ("EntityID" = '9F373FFC-D99C-44FC-BD52-15B27D21E8C8' AND "Name" = 'SearchScopeID')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -20890,9 +22281,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '7652da27-ef4b-47a2-b3ec-58d7ce7ebac2',
         '9F373FFC-D99C-44FC-BD52-15B27D21E8C8', -- "Entity": "MJ": "Search" "Scope" "Providers"
         100002,
@@ -20903,19 +22292,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        TRUE,
         'Search',
         NOW(),
         NOW()
@@ -20928,8 +22317,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '55084853-42e2-4336-99e0-9a2efef222b7' OR ("EntityID" = '9F373FFC-D99C-44FC-BD52-15B27D21E8C8' AND "Name" = 'SearchProviderID')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -20956,9 +22344,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '55084853-42e2-4336-99e0-9a2efef222b7',
         '9F373FFC-D99C-44FC-BD52-15B27D21E8C8', -- "Entity": "MJ": "Search" "Scope" "Providers"
         100003,
@@ -20969,19 +22355,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         'C6923FA5-3F3D-4756-A2D8-E57125AF450F',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        TRUE,
         'Search',
         NOW(),
         NOW()
@@ -20994,8 +22380,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '85fc3334-560f-4cc8-8f59-8e5bf4634aa1' OR ("EntityID" = '9F373FFC-D99C-44FC-BD52-15B27D21E8C8' AND "Name" = 'Enabled')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -21022,9 +22407,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '85fc3334-560f-4cc8-8f59-8e5bf4634aa1',
         '9F373FFC-D99C-44FC-BD52-15B27D21E8C8', -- "Entity": "MJ": "Search" "Scope" "Providers"
         100004,
@@ -21035,19 +22418,19 @@ BEGIN
         1,
         1,
         0,
-        0,
+        FALSE,
         '(1)',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -21060,8 +22443,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '2e6a14b0-02c7-4ce3-ad65-13654d0a5f4a' OR ("EntityID" = '9F373FFC-D99C-44FC-BD52-15B27D21E8C8' AND "Name" = 'MaxResultsOverride')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -21088,9 +22470,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '2e6a14b0-02c7-4ce3-ad65-13654d0a5f4a',
         '9F373FFC-D99C-44FC-BD52-15B27D21E8C8', -- "Entity": "MJ": "Search" "Scope" "Providers"
         100005,
@@ -21101,19 +22481,19 @@ BEGIN
         4,
         10,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -21126,8 +22506,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '67a5a112-4714-4dc9-a7e6-a4b85a70c8ca' OR ("EntityID" = '9F373FFC-D99C-44FC-BD52-15B27D21E8C8' AND "Name" = 'ProviderConfigOverride')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -21154,9 +22533,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '67a5a112-4714-4dc9-a7e6-a4b85a70c8ca',
         '9F373FFC-D99C-44FC-BD52-15B27D21E8C8', -- "Entity": "MJ": "Search" "Scope" "Providers"
         100006,
@@ -21167,19 +22544,19 @@ BEGIN
         -1,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -21192,8 +22569,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '200b34af-0cb4-4687-a7c5-0c7e5c5ea9e9' OR ("EntityID" = '9F373FFC-D99C-44FC-BD52-15B27D21E8C8' AND "Name" = 'QueryTransformTemplateID')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -21220,9 +22596,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '200b34af-0cb4-4687-a7c5-0c7e5c5ea9e9',
         '9F373FFC-D99C-44FC-BD52-15B27D21E8C8', -- "Entity": "MJ": "Search" "Scope" "Providers"
         100007,
@@ -21233,19 +22607,19 @@ BEGIN
         16,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         '48248F34-2837-EF11-86D4-6045BDEE16E6',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -21258,8 +22632,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '491537e5-16fb-42f1-a62a-4061a9b60db2' OR ("EntityID" = '9F373FFC-D99C-44FC-BD52-15B27D21E8C8' AND "Name" = '__mj_CreatedAt')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -21286,9 +22659,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '491537e5-16fb-42f1-a62a-4061a9b60db2',
         '9F373FFC-D99C-44FC-BD52-15B27D21E8C8', -- "Entity": "MJ": "Search" "Scope" "Providers"
         100008,
@@ -21299,19 +22670,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -21324,8 +22695,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '593aba5b-78f6-4ad2-9d58-5468382f53b4' OR ("EntityID" = '9F373FFC-D99C-44FC-BD52-15B27D21E8C8' AND "Name" = '__mj_UpdatedAt')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -21352,9 +22722,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '593aba5b-78f6-4ad2-9d58-5468382f53b4',
         '9F373FFC-D99C-44FC-BD52-15B27D21E8C8', -- "Entity": "MJ": "Search" "Scope" "Providers"
         100009,
@@ -21365,19 +22733,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -21390,8 +22758,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'e35727e8-e80f-4f6a-84da-937bd59f6b56' OR ("EntityID" = 'CDB135CC-6D3C-480B-90AE-25B7805F82C1' AND "Name" = 'SearchScopeAccess')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -21418,9 +22785,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'e35727e8-e80f-4f6a-84da-937bd59f6b56',
         'CDB135CC-6D3C-480B-90AE-25B7805F82C1', -- "Entity": "MJ": "AI" "Agents"
         100145, -- auto-bumped from 100138 (UQ_EntityField_EntityID_Sequence dedup),
@@ -21431,19 +22796,19 @@ BEGIN
         40,
         0,
         0,
-        0,
+        FALSE,
         'None',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -21456,8 +22821,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '61f64e71-bcc7-4c78-97ec-f1bb9f519384' OR ("EntityID" = '071B87EA-0E32-4AED-9225-3E38B573E803' AND "Name" = 'ID')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -21484,9 +22848,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '61f64e71-bcc7-4c78-97ec-f1bb9f519384',
         '071B87EA-0E32-4AED-9225-3E38B573E803', -- "Entity": "MJ": "AI" "Agent" "Search" "Scopes"
         100001,
@@ -21497,19 +22859,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         'gen_random_uuid()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        1,
-        0,
-        0,
-        1,
-        1,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        TRUE,
+        TRUE,
         'Search',
         NOW(),
         NOW()
@@ -21522,8 +22884,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '01e24891-763a-4e7d-9c8b-7f99949bf5d3' OR ("EntityID" = '071B87EA-0E32-4AED-9225-3E38B573E803' AND "Name" = 'AgentID')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -21550,9 +22911,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '01e24891-763a-4e7d-9c8b-7f99949bf5d3',
         '071B87EA-0E32-4AED-9225-3E38B573E803', -- "Entity": "MJ": "AI" "Agent" "Search" "Scopes"
         100002,
@@ -21563,19 +22922,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         'CDB135CC-6D3C-480B-90AE-25B7805F82C1',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -21588,8 +22947,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'cdecdf44-874d-4449-b71e-94fbb306b36c' OR ("EntityID" = '071B87EA-0E32-4AED-9225-3E38B573E803' AND "Name" = 'SearchScopeID')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -21616,9 +22974,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'cdecdf44-874d-4449-b71e-94fbb306b36c',
         '071B87EA-0E32-4AED-9225-3E38B573E803', -- "Entity": "MJ": "AI" "Agent" "Search" "Scopes"
         100003,
@@ -21629,19 +22985,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -21654,8 +23010,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '4328ab1e-9530-4e13-8375-05da343ece10' OR ("EntityID" = '071B87EA-0E32-4AED-9225-3E38B573E803' AND "Name" = 'Phase')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -21682,9 +23037,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '4328ab1e-9530-4e13-8375-05da343ece10',
         '071B87EA-0E32-4AED-9225-3E38B573E803', -- "Entity": "MJ": "AI" "Agent" "Search" "Scopes"
         100004,
@@ -21695,19 +23048,19 @@ BEGIN
         40,
         0,
         0,
-        0,
+        FALSE,
         'Both',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -21720,8 +23073,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '123e2661-6bf9-43b7-b2b3-55db128d2ed6' OR ("EntityID" = '071B87EA-0E32-4AED-9225-3E38B573E803' AND "Name" = 'Status')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -21748,9 +23100,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '123e2661-6bf9-43b7-b2b3-55db128d2ed6',
         '071B87EA-0E32-4AED-9225-3E38B573E803', -- "Entity": "MJ": "AI" "Agent" "Search" "Scopes"
         100005,
@@ -21761,19 +23111,19 @@ BEGIN
         40,
         0,
         0,
-        0,
+        FALSE,
         'Active',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -21786,8 +23136,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'deecc0a9-0839-46ac-9ab2-03307adc34b0' OR ("EntityID" = '071B87EA-0E32-4AED-9225-3E38B573E803' AND "Name" = 'StartAt')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -21814,9 +23163,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'deecc0a9-0839-46ac-9ab2-03307adc34b0',
         '071B87EA-0E32-4AED-9225-3E38B573E803', -- "Entity": "MJ": "AI" "Agent" "Search" "Scopes"
         100006,
@@ -21827,19 +23174,19 @@ BEGIN
         10,
         34,
         7,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -21852,8 +23199,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '0b70946d-08b2-40a7-9ae5-972f1a7145b9' OR ("EntityID" = '071B87EA-0E32-4AED-9225-3E38B573E803' AND "Name" = 'EndAt')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -21880,9 +23226,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '0b70946d-08b2-40a7-9ae5-972f1a7145b9',
         '071B87EA-0E32-4AED-9225-3E38B573E803', -- "Entity": "MJ": "AI" "Agent" "Search" "Scopes"
         100007,
@@ -21893,19 +23237,19 @@ BEGIN
         10,
         34,
         7,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -21918,8 +23262,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '17f25f75-1267-4120-bce4-dbf73b571f42' OR ("EntityID" = '071B87EA-0E32-4AED-9225-3E38B573E803' AND "Name" = 'Priority')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -21946,9 +23289,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '17f25f75-1267-4120-bce4-dbf73b571f42',
         '071B87EA-0E32-4AED-9225-3E38B573E803', -- "Entity": "MJ": "AI" "Agent" "Search" "Scopes"
         100008,
@@ -21959,19 +23300,19 @@ BEGIN
         4,
         10,
         0,
-        0,
+        FALSE,
         '(100)',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -21984,8 +23325,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'ff1ff102-4bca-4f45-9521-4a45f3c7859e' OR ("EntityID" = '071B87EA-0E32-4AED-9225-3E38B573E803' AND "Name" = 'MaxResults')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -22012,9 +23352,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'ff1ff102-4bca-4f45-9521-4a45f3c7859e',
         '071B87EA-0E32-4AED-9225-3E38B573E803', -- "Entity": "MJ": "AI" "Agent" "Search" "Scopes"
         100009,
@@ -22025,19 +23363,19 @@ BEGIN
         4,
         10,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -22050,8 +23388,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'ca51b876-d36c-4af9-b493-b98e39ba613e' OR ("EntityID" = '071B87EA-0E32-4AED-9225-3E38B573E803' AND "Name" = 'MinScore')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -22078,9 +23415,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'ca51b876-d36c-4af9-b493-b98e39ba613e',
         '071B87EA-0E32-4AED-9225-3E38B573E803', -- "Entity": "MJ": "AI" "Agent" "Search" "Scopes"
         100010,
@@ -22091,19 +23426,19 @@ BEGIN
         5,
         5,
         4,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -22116,8 +23451,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '6df56365-f3e8-4a69-9436-dfa74dc52285' OR ("EntityID" = '071B87EA-0E32-4AED-9225-3E38B573E803' AND "Name" = 'QueryTemplateID')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -22144,9 +23478,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '6df56365-f3e8-4a69-9436-dfa74dc52285',
         '071B87EA-0E32-4AED-9225-3E38B573E803', -- "Entity": "MJ": "AI" "Agent" "Search" "Scopes"
         100011,
@@ -22157,19 +23489,19 @@ BEGIN
         16,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         '48248F34-2837-EF11-86D4-6045BDEE16E6',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -22182,8 +23514,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '5bb839f8-d6c6-4970-bee7-8a59063f9d3b' OR ("EntityID" = '071B87EA-0E32-4AED-9225-3E38B573E803' AND "Name" = 'FusionWeightsOverride')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -22210,9 +23541,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '5bb839f8-d6c6-4970-bee7-8a59063f9d3b',
         '071B87EA-0E32-4AED-9225-3E38B573E803', -- "Entity": "MJ": "AI" "Agent" "Search" "Scopes"
         100012,
@@ -22223,19 +23552,19 @@ BEGIN
         -1,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -22248,8 +23577,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '9b7ee84d-7137-4e18-86fb-bec32bc712f6' OR ("EntityID" = '071B87EA-0E32-4AED-9225-3E38B573E803' AND "Name" = 'IsDefault')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -22276,9 +23604,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '9b7ee84d-7137-4e18-86fb-bec32bc712f6',
         '071B87EA-0E32-4AED-9225-3E38B573E803', -- "Entity": "MJ": "AI" "Agent" "Search" "Scopes"
         100013,
@@ -22289,19 +23615,19 @@ BEGIN
         1,
         1,
         0,
-        0,
+        FALSE,
         '(0)',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -22314,8 +23640,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '10a9f6f1-85d2-4924-9a60-e060861ccd3d' OR ("EntityID" = '071B87EA-0E32-4AED-9225-3E38B573E803' AND "Name" = '__mj_CreatedAt')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -22342,9 +23667,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '10a9f6f1-85d2-4924-9a60-e060861ccd3d',
         '071B87EA-0E32-4AED-9225-3E38B573E803', -- "Entity": "MJ": "AI" "Agent" "Search" "Scopes"
         100014,
@@ -22355,19 +23678,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -22380,8 +23703,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'af0fa8be-427e-4f7e-b13f-603847453fdb' OR ("EntityID" = '071B87EA-0E32-4AED-9225-3E38B573E803' AND "Name" = '__mj_UpdatedAt')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -22408,9 +23730,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'af0fa8be-427e-4f7e-b13f-603847453fdb',
         '071B87EA-0E32-4AED-9225-3E38B573E803', -- "Entity": "MJ": "AI" "Agent" "Search" "Scopes"
         100015,
@@ -22421,19 +23741,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -22446,8 +23766,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'ba30a0f7-343b-4e6f-a4ab-8bfeea1a980f' OR ("EntityID" = '96BF4FE3-F5FD-4423-9C26-4B6542909A07' AND "Name" = 'ID')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -22474,9 +23793,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'ba30a0f7-343b-4e6f-a4ab-8bfeea1a980f',
         '96BF4FE3-F5FD-4423-9C26-4B6542909A07', -- "Entity": "MJ": "Search" "Scope" "External" "Indexes"
         100001,
@@ -22487,19 +23804,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         'gen_random_uuid()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        1,
-        0,
-        0,
-        1,
-        1,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        TRUE,
+        TRUE,
         'Search',
         NOW(),
         NOW()
@@ -22512,8 +23829,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '7cae4c9a-dac4-4e2a-b4df-6f21f0af0ad9' OR ("EntityID" = '96BF4FE3-F5FD-4423-9C26-4B6542909A07' AND "Name" = 'SearchScopeID')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -22540,9 +23856,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '7cae4c9a-dac4-4e2a-b4df-6f21f0af0ad9',
         '96BF4FE3-F5FD-4423-9C26-4B6542909A07', -- "Entity": "MJ": "Search" "Scope" "External" "Indexes"
         100002,
@@ -22553,19 +23867,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -22578,8 +23892,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '65ee70a3-709e-409c-8717-9b0e955b4bbd' OR ("EntityID" = '96BF4FE3-F5FD-4423-9C26-4B6542909A07' AND "Name" = 'IndexType')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -22606,9 +23919,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '65ee70a3-709e-409c-8717-9b0e955b4bbd',
         '96BF4FE3-F5FD-4423-9C26-4B6542909A07', -- "Entity": "MJ": "Search" "Scope" "External" "Indexes"
         100003,
@@ -22619,19 +23930,19 @@ BEGIN
         80,
         0,
         0,
-        0,
+        FALSE,
         'Vector',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -22644,8 +23955,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '8a0c71c0-b1d6-47a1-bf51-fb340a8f0637' OR ("EntityID" = '96BF4FE3-F5FD-4423-9C26-4B6542909A07' AND "Name" = 'VectorIndexID')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -22672,9 +23982,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '8a0c71c0-b1d6-47a1-bf51-fb340a8f0637',
         '96BF4FE3-F5FD-4423-9C26-4B6542909A07', -- "Entity": "MJ": "Search" "Scope" "External" "Indexes"
         100004,
@@ -22685,19 +23993,19 @@ BEGIN
         16,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         '1D248F34-2837-EF11-86D4-6045BDEE16E6',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -22710,8 +24018,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '256e7c08-b86f-46a4-b9d1-908cf2b41410' OR ("EntityID" = '96BF4FE3-F5FD-4423-9C26-4B6542909A07' AND "Name" = 'ExternalIndexName')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -22738,9 +24045,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '256e7c08-b86f-46a4-b9d1-908cf2b41410',
         '96BF4FE3-F5FD-4423-9C26-4B6542909A07', -- "Entity": "MJ": "Search" "Scope" "External" "Indexes"
         100005,
@@ -22751,19 +24056,19 @@ BEGIN
         800,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -22776,8 +24081,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'e8e33d62-8e0d-4396-8ba3-243b8c284412' OR ("EntityID" = '96BF4FE3-F5FD-4423-9C26-4B6542909A07' AND "Name" = 'ExternalIndexConfig')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -22804,9 +24108,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'e8e33d62-8e0d-4396-8ba3-243b8c284412',
         '96BF4FE3-F5FD-4423-9C26-4B6542909A07', -- "Entity": "MJ": "Search" "Scope" "External" "Indexes"
         100006,
@@ -22817,19 +24119,19 @@ BEGIN
         -1,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -22842,8 +24144,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '9933f05b-bd14-49cb-940e-62c055b9d2e9' OR ("EntityID" = '96BF4FE3-F5FD-4423-9C26-4B6542909A07' AND "Name" = 'MetadataFilter')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -22870,9 +24171,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '9933f05b-bd14-49cb-940e-62c055b9d2e9',
         '96BF4FE3-F5FD-4423-9C26-4B6542909A07', -- "Entity": "MJ": "Search" "Scope" "External" "Indexes"
         100007,
@@ -22883,19 +24182,19 @@ BEGIN
         -1,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -22908,8 +24207,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'c7781789-1b92-46b7-b3b9-2aada7e0b445' OR ("EntityID" = '96BF4FE3-F5FD-4423-9C26-4B6542909A07' AND "Name" = '__mj_CreatedAt')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -22936,9 +24234,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'c7781789-1b92-46b7-b3b9-2aada7e0b445',
         '96BF4FE3-F5FD-4423-9C26-4B6542909A07', -- "Entity": "MJ": "Search" "Scope" "External" "Indexes"
         100008,
@@ -22949,19 +24245,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -22974,8 +24270,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '96d1010e-e70d-46ae-b4d3-21edef9cfa1b' OR ("EntityID" = '96BF4FE3-F5FD-4423-9C26-4B6542909A07' AND "Name" = '__mj_UpdatedAt')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -23002,9 +24297,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '96d1010e-e70d-46ae-b4d3-21edef9cfa1b',
         '96BF4FE3-F5FD-4423-9C26-4B6542909A07', -- "Entity": "MJ": "Search" "Scope" "External" "Indexes"
         100009,
@@ -23015,19 +24308,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -23040,8 +24333,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'c600d34e-a849-4786-afee-f8a0cfe376a5' OR ("EntityID" = '41FACFFE-0F36-4F41-9263-A96FC7507DA3' AND "Name" = 'ID')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -23068,9 +24360,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'c600d34e-a849-4786-afee-f8a0cfe376a5',
         '41FACFFE-0F36-4F41-9263-A96FC7507DA3', -- "Entity": "MJ": "Search" "Scope" "Entities"
         100001,
@@ -23081,19 +24371,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         'gen_random_uuid()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        1,
-        0,
-        0,
-        1,
-        1,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        TRUE,
+        TRUE,
         'Search',
         NOW(),
         NOW()
@@ -23106,8 +24396,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '7da23a72-91c1-43ef-bb79-c23b1138b805' OR ("EntityID" = '41FACFFE-0F36-4F41-9263-A96FC7507DA3' AND "Name" = 'SearchScopeID')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -23134,9 +24423,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '7da23a72-91c1-43ef-bb79-c23b1138b805',
         '41FACFFE-0F36-4F41-9263-A96FC7507DA3', -- "Entity": "MJ": "Search" "Scope" "Entities"
         100002,
@@ -23147,19 +24434,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        TRUE,
         'Search',
         NOW(),
         NOW()
@@ -23172,8 +24459,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '0de72b0e-6a49-4fe2-a5aa-deac7b4a5497' OR ("EntityID" = '41FACFFE-0F36-4F41-9263-A96FC7507DA3' AND "Name" = 'EntityID')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -23200,9 +24486,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '0de72b0e-6a49-4fe2-a5aa-deac7b4a5497',
         '41FACFFE-0F36-4F41-9263-A96FC7507DA3', -- "Entity": "MJ": "Search" "Scope" "Entities"
         100003,
@@ -23213,19 +24497,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         'E0238F34-2837-EF11-86D4-6045BDEE16E6',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        TRUE,
         'Search',
         NOW(),
         NOW()
@@ -23238,8 +24522,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '51d98dbb-2607-4db2-b4d5-e154a279f38d' OR ("EntityID" = '41FACFFE-0F36-4F41-9263-A96FC7507DA3' AND "Name" = 'ExtraFilter')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -23266,9 +24549,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '51d98dbb-2607-4db2-b4d5-e154a279f38d',
         '41FACFFE-0F36-4F41-9263-A96FC7507DA3', -- "Entity": "MJ": "Search" "Scope" "Entities"
         100004,
@@ -23279,19 +24560,19 @@ BEGIN
         -1,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -23304,8 +24585,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '85051778-e209-448e-bd45-1b7d81b7a62d' OR ("EntityID" = '41FACFFE-0F36-4F41-9263-A96FC7507DA3' AND "Name" = 'UserSearchString')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -23332,9 +24612,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '85051778-e209-448e-bd45-1b7d81b7a62d',
         '41FACFFE-0F36-4F41-9263-A96FC7507DA3', -- "Entity": "MJ": "Search" "Scope" "Entities"
         100005,
@@ -23345,19 +24623,19 @@ BEGIN
         -1,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -23370,8 +24648,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '7eeffb78-beca-4f12-b42e-90a2a15a6b20' OR ("EntityID" = '41FACFFE-0F36-4F41-9263-A96FC7507DA3' AND "Name" = '__mj_CreatedAt')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -23398,9 +24675,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '7eeffb78-beca-4f12-b42e-90a2a15a6b20',
         '41FACFFE-0F36-4F41-9263-A96FC7507DA3', -- "Entity": "MJ": "Search" "Scope" "Entities"
         100006,
@@ -23411,19 +24686,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -23436,8 +24711,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '3b95a95c-7561-4ecc-ac50-b60fe2652981' OR ("EntityID" = '41FACFFE-0F36-4F41-9263-A96FC7507DA3' AND "Name" = '__mj_UpdatedAt')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -23464,9 +24738,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '3b95a95c-7561-4ecc-ac50-b60fe2652981',
         '41FACFFE-0F36-4F41-9263-A96FC7507DA3', -- "Entity": "MJ": "Search" "Scope" "Entities"
         100007,
@@ -23477,19 +24749,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -23502,8 +24774,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'a1bf8e66-ccb8-4fd1-a8b3-c4e88038c39d' OR ("EntityID" = 'DDA7A98A-A52D-4426-9035-BE0A4F60FDDC' AND "Name" = 'ID')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -23530,9 +24801,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'a1bf8e66-ccb8-4fd1-a8b3-c4e88038c39d',
         'DDA7A98A-A52D-4426-9035-BE0A4F60FDDC', -- "Entity": "MJ": "Search" "Scope" "Storage" "Accounts"
         100001,
@@ -23543,19 +24812,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         'gen_random_uuid()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        1,
-        0,
-        0,
-        1,
-        1,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        TRUE,
+        TRUE,
         'Search',
         NOW(),
         NOW()
@@ -23568,8 +24837,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'ec7b8330-9783-48da-a831-b30fedd524d8' OR ("EntityID" = 'DDA7A98A-A52D-4426-9035-BE0A4F60FDDC' AND "Name" = 'SearchScopeID')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -23596,9 +24864,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'ec7b8330-9783-48da-a831-b30fedd524d8',
         'DDA7A98A-A52D-4426-9035-BE0A4F60FDDC', -- "Entity": "MJ": "Search" "Scope" "Storage" "Accounts"
         100002,
@@ -23609,19 +24875,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -23634,8 +24900,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'c7d14730-1957-4701-8146-b7e6359d6cc5' OR ("EntityID" = 'DDA7A98A-A52D-4426-9035-BE0A4F60FDDC' AND "Name" = 'FileStorageAccountID')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -23662,9 +24927,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'c7d14730-1957-4701-8146-b7e6359d6cc5',
         'DDA7A98A-A52D-4426-9035-BE0A4F60FDDC', -- "Entity": "MJ": "Search" "Scope" "Storage" "Accounts"
         100003,
@@ -23675,19 +24938,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         '18033543-B80D-4BF7-ADAF-DE1AA2CF70D0',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -23700,8 +24963,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '5f214253-2774-4f2e-9d7e-5f285b6a7a58' OR ("EntityID" = 'DDA7A98A-A52D-4426-9035-BE0A4F60FDDC' AND "Name" = 'FolderPath')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -23728,9 +24990,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '5f214253-2774-4f2e-9d7e-5f285b6a7a58',
         'DDA7A98A-A52D-4426-9035-BE0A4F60FDDC', -- "Entity": "MJ": "Search" "Scope" "Storage" "Accounts"
         100004,
@@ -23741,19 +25001,19 @@ BEGIN
         2000,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -23766,8 +25026,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'aa5cca6d-1e8f-414d-8e77-d0722e3c49f2' OR ("EntityID" = 'DDA7A98A-A52D-4426-9035-BE0A4F60FDDC' AND "Name" = '__mj_CreatedAt')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -23794,9 +25053,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'aa5cca6d-1e8f-414d-8e77-d0722e3c49f2',
         'DDA7A98A-A52D-4426-9035-BE0A4F60FDDC', -- "Entity": "MJ": "Search" "Scope" "Storage" "Accounts"
         100005,
@@ -23807,19 +25064,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -23832,8 +25089,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'a336ca5c-fabb-44ce-bb76-c9c4443b18bb' OR ("EntityID" = 'DDA7A98A-A52D-4426-9035-BE0A4F60FDDC' AND "Name" = '__mj_UpdatedAt')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -23860,9 +25116,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'a336ca5c-fabb-44ce-bb76-c9c4443b18bb',
         'DDA7A98A-A52D-4426-9035-BE0A4F60FDDC', -- "Entity": "MJ": "Search" "Scope" "Storage" "Accounts"
         100006,
@@ -23873,19 +25127,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -23898,8 +25152,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '8a3ac258-d46f-4f39-a702-f6245b12c903' OR ("EntityID" = '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6' AND "Name" = 'ID')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -23926,9 +25179,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '8a3ac258-d46f-4f39-a702-f6245b12c903',
         '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6', -- "Entity": "MJ": "Search" "Scopes"
         100001,
@@ -23939,19 +25190,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         'gen_random_uuid()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        1,
-        0,
-        0,
-        1,
-        1,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        TRUE,
+        TRUE,
         'Search',
         NOW(),
         NOW()
@@ -23964,8 +25215,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'f1d0b9b9-c574-4aef-9aa4-216311b89832' OR ("EntityID" = '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6' AND "Name" = 'Name')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -23992,9 +25242,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'f1d0b9b9-c574-4aef-9aa4-216311b89832',
         '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6', -- "Entity": "MJ": "Search" "Scopes"
         100002,
@@ -24005,19 +25253,19 @@ BEGIN
         400,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        1,
-        1,
-        0,
-        1,
-        0,
-        1,
+        TRUE,
+        TRUE,
+        FALSE,
+        TRUE,
+        FALSE,
+        TRUE,
         'Search',
         NOW(),
         NOW()
@@ -24030,8 +25278,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '9ea24f13-a7a9-4f9c-8768-1edb30bcc1cc' OR ("EntityID" = '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6' AND "Name" = 'Description')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -24058,9 +25305,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '9ea24f13-a7a9-4f9c-8768-1edb30bcc1cc',
         '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6', -- "Entity": "MJ": "Search" "Scopes"
         100003,
@@ -24071,19 +25316,19 @@ BEGIN
         -1,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -24096,8 +25341,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '08742c69-8f96-4f6e-aa66-51144c787c0d' OR ("EntityID" = '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6' AND "Name" = 'Icon')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -24124,9 +25368,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '08742c69-8f96-4f6e-aa66-51144c787c0d',
         '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6', -- "Entity": "MJ": "Search" "Scopes"
         100004,
@@ -24137,19 +25379,19 @@ BEGIN
         400,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -24162,8 +25404,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '0b7ff847-1b91-41af-a697-a100ccdad772' OR ("EntityID" = '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6' AND "Name" = 'IsGlobal')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -24190,9 +25431,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '0b7ff847-1b91-41af-a697-a100ccdad772',
         '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6', -- "Entity": "MJ": "Search" "Scopes"
         100005,
@@ -24203,19 +25442,19 @@ BEGIN
         1,
         1,
         0,
-        0,
+        FALSE,
         '(0)',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -24228,8 +25467,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '2928bc70-e4d4-47da-9c89-cdaacb6d6ef3' OR ("EntityID" = '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6' AND "Name" = 'IsDefault')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -24256,9 +25494,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '2928bc70-e4d4-47da-9c89-cdaacb6d6ef3',
         '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6', -- "Entity": "MJ": "Search" "Scopes"
         100006,
@@ -24269,19 +25505,19 @@ BEGIN
         1,
         1,
         0,
-        0,
+        FALSE,
         '(0)',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -24294,8 +25530,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '77f1e21b-fe13-46bd-9f82-fa810ece1986' OR ("EntityID" = '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6' AND "Name" = 'OwnerUserID')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -24322,9 +25557,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '77f1e21b-fe13-46bd-9f82-fa810ece1986',
         '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6', -- "Entity": "MJ": "Search" "Scopes"
         100007,
@@ -24335,19 +25568,19 @@ BEGIN
         16,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         'E1238F34-2837-EF11-86D4-6045BDEE16E6',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -24360,8 +25593,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '583c7e77-3761-4db2-97cb-6704fe96626d' OR ("EntityID" = '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6' AND "Name" = 'Status')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -24388,9 +25620,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '583c7e77-3761-4db2-97cb-6704fe96626d',
         '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6', -- "Entity": "MJ": "Search" "Scopes"
         100008,
@@ -24401,19 +25631,19 @@ BEGIN
         40,
         0,
         0,
-        0,
+        FALSE,
         'Active',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -24426,8 +25656,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '51624b43-0f8a-4b9d-ba9f-b0f52eedbba5' OR ("EntityID" = '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6' AND "Name" = 'StartAt')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -24454,9 +25683,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '51624b43-0f8a-4b9d-ba9f-b0f52eedbba5',
         '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6', -- "Entity": "MJ": "Search" "Scopes"
         100009,
@@ -24467,19 +25694,19 @@ BEGIN
         10,
         34,
         7,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -24492,8 +25719,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'bb666bcd-dc97-4de9-a69a-f0909b960cd8' OR ("EntityID" = '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6' AND "Name" = 'EndAt')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -24520,9 +25746,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'bb666bcd-dc97-4de9-a69a-f0909b960cd8',
         '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6', -- "Entity": "MJ": "Search" "Scopes"
         100010,
@@ -24533,19 +25757,19 @@ BEGIN
         10,
         34,
         7,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -24558,8 +25782,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '54b3b159-1d2a-45c4-b2e9-6c2b70558ff9' OR ("EntityID" = '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6' AND "Name" = 'ScopeConfig')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -24586,9 +25809,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '54b3b159-1d2a-45c4-b2e9-6c2b70558ff9',
         '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6', -- "Entity": "MJ": "Search" "Scopes"
         100011,
@@ -24599,19 +25820,19 @@ BEGIN
         -1,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -24624,8 +25845,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '1761df2d-7ef5-404f-bf5e-f3b896bd18e6' OR ("EntityID" = '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6' AND "Name" = 'SearchContextConfig')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -24652,9 +25872,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '1761df2d-7ef5-404f-bf5e-f3b896bd18e6',
         '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6', -- "Entity": "MJ": "Search" "Scopes"
         100012,
@@ -24665,19 +25883,19 @@ BEGIN
         -1,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -24690,8 +25908,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'fe2b7b85-82de-4f0c-82a8-5eb346a033e5' OR ("EntityID" = '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6' AND "Name" = '__mj_CreatedAt')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -24718,9 +25935,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'fe2b7b85-82de-4f0c-82a8-5eb346a033e5',
         '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6', -- "Entity": "MJ": "Search" "Scopes"
         100013,
@@ -24731,19 +25946,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -24756,8 +25971,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '27bdfea3-a5eb-4f23-980f-d05734b15ea1' OR ("EntityID" = '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6' AND "Name" = '__mj_UpdatedAt')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -24784,9 +25998,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '27bdfea3-a5eb-4f23-980f-d05734b15ea1',
         '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6', -- "Entity": "MJ": "Search" "Scopes"
         100014,
@@ -24797,19 +26009,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -24933,8 +26145,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = 'b057887b-ab60-4ceb-b81a-8c28aa9f87d7'
     ) THEN
-        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('b057887b-ab60-4ceb-b81a-8c28aa9f87d7', 'CDB135CC-6D3C-480B-90AE-25B7805F82C1', '071B87EA-0E32-4AED-9225-3E38B573E803', 'AgentID', 'One To Many', 1, 1, 1, NOW(), NOW());
+        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('b057887b-ab60-4ceb-b81a-8c28aa9f87d7', 'CDB135CC-6D3C-480B-90AE-25B7805F82C1', '071B87EA-0E32-4AED-9225-3E38B573E803', 'AgentID', 'One To Many', TRUE, TRUE, 1, NOW(), NOW());
     END IF;
 END $$;
 
@@ -24943,8 +26154,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '6bcfbc05-685e-419a-9873-1b465046257a'
     ) THEN
-        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('6bcfbc05-685e-419a-9873-1b465046257a', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '41FACFFE-0F36-4F41-9263-A96FC7507DA3', 'EntityID', 'One To Many', 1, 1, 1, NOW(), NOW());
+        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('6bcfbc05-685e-419a-9873-1b465046257a', 'E0238F34-2837-EF11-86D4-6045BDEE16E6', '41FACFFE-0F36-4F41-9263-A96FC7507DA3', 'EntityID', 'One To Many', TRUE, TRUE, 1, NOW(), NOW());
     END IF;
 END $$;
 
@@ -24953,8 +26163,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '79987dc1-1b45-4776-98b4-7a29c86568e8'
     ) THEN
-        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('79987dc1-1b45-4776-98b4-7a29c86568e8', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6', 'OwnerUserID', 'One To Many', 1, 1, 1, NOW(), NOW());
+        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('79987dc1-1b45-4776-98b4-7a29c86568e8', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6', 'OwnerUserID', 'One To Many', TRUE, TRUE, 1, NOW(), NOW());
     END IF;
 END $$;
 
@@ -24963,8 +26172,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '9bb412ac-ea73-487e-84b6-c29ed2f06f1e'
     ) THEN
-        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('9bb412ac-ea73-487e-84b6-c29ed2f06f1e', '1D248F34-2837-EF11-86D4-6045BDEE16E6', '96BF4FE3-F5FD-4423-9C26-4B6542909A07', 'VectorIndexID', 'One To Many', 1, 1, 1, NOW(), NOW());
+        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('9bb412ac-ea73-487e-84b6-c29ed2f06f1e', '1D248F34-2837-EF11-86D4-6045BDEE16E6', '96BF4FE3-F5FD-4423-9C26-4B6542909A07', 'VectorIndexID', 'One To Many', TRUE, TRUE, 1, NOW(), NOW());
     END IF;
 END $$;
 
@@ -24973,8 +26181,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '7f8887a8-bb79-4e7e-a681-4c8c33e74ddd'
     ) THEN
-        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('7f8887a8-bb79-4e7e-a681-4c8c33e74ddd', '48248F34-2837-EF11-86D4-6045BDEE16E6', '9F373FFC-D99C-44FC-BD52-15B27D21E8C8', 'QueryTransformTemplateID', 'One To Many', 1, 1, 1, NOW(), NOW());
+        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('7f8887a8-bb79-4e7e-a681-4c8c33e74ddd', '48248F34-2837-EF11-86D4-6045BDEE16E6', '9F373FFC-D99C-44FC-BD52-15B27D21E8C8', 'QueryTransformTemplateID', 'One To Many', TRUE, TRUE, 1, NOW(), NOW());
     END IF;
 END $$;
 
@@ -24983,8 +26190,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '4fba6675-e486-4565-914b-1a31dbbf648e'
     ) THEN
-        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('4fba6675-e486-4565-914b-1a31dbbf648e', '48248F34-2837-EF11-86D4-6045BDEE16E6', '071B87EA-0E32-4AED-9225-3E38B573E803', 'QueryTemplateID', 'One To Many', 1, 1, 2, NOW(), NOW());
+        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('4fba6675-e486-4565-914b-1a31dbbf648e', '48248F34-2837-EF11-86D4-6045BDEE16E6', '071B87EA-0E32-4AED-9225-3E38B573E803', 'QueryTemplateID', 'One To Many', TRUE, TRUE, 2, NOW(), NOW());
     END IF;
 END $$;
 
@@ -24993,8 +26199,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = 'b68da6fd-620d-4ca8-b85f-2e02ad53d117'
     ) THEN
-        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('b68da6fd-620d-4ca8-b85f-2e02ad53d117', '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6', 'DDA7A98A-A52D-4426-9035-BE0A4F60FDDC', 'SearchScopeID', 'One To Many', 1, 1, 1, NOW(), NOW());
+        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('b68da6fd-620d-4ca8-b85f-2e02ad53d117', '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6', 'DDA7A98A-A52D-4426-9035-BE0A4F60FDDC', 'SearchScopeID', 'One To Many', TRUE, TRUE, 1, NOW(), NOW());
     END IF;
 END $$;
 
@@ -25003,8 +26208,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = 'a61fddf5-038c-4803-affa-48e935614470'
     ) THEN
-        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('a61fddf5-038c-4803-affa-48e935614470', '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6', '41FACFFE-0F36-4F41-9263-A96FC7507DA3', 'SearchScopeID', 'One To Many', 1, 1, 2, NOW(), NOW());
+        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('a61fddf5-038c-4803-affa-48e935614470', '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6', '41FACFFE-0F36-4F41-9263-A96FC7507DA3', 'SearchScopeID', 'One To Many', TRUE, TRUE, 2, NOW(), NOW());
     END IF;
 END $$;
 
@@ -25013,8 +26217,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '37c47d6e-c4b9-4b72-9a4c-2af68243a081'
     ) THEN
-        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('37c47d6e-c4b9-4b72-9a4c-2af68243a081', '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6', '96BF4FE3-F5FD-4423-9C26-4B6542909A07', 'SearchScopeID', 'One To Many', 1, 1, 2, NOW(), NOW());
+        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('37c47d6e-c4b9-4b72-9a4c-2af68243a081', '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6', '96BF4FE3-F5FD-4423-9C26-4B6542909A07', 'SearchScopeID', 'One To Many', TRUE, TRUE, 2, NOW(), NOW());
     END IF;
 END $$;
 
@@ -25023,8 +26226,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '42dca023-1d72-4c96-abe8-f09992656982'
     ) THEN
-        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('42dca023-1d72-4c96-abe8-f09992656982', '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6', '071B87EA-0E32-4AED-9225-3E38B573E803', 'SearchScopeID', 'One To Many', 1, 1, 3, NOW(), NOW());
+        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('42dca023-1d72-4c96-abe8-f09992656982', '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6', '071B87EA-0E32-4AED-9225-3E38B573E803', 'SearchScopeID', 'One To Many', TRUE, TRUE, 3, NOW(), NOW());
     END IF;
 END $$;
 
@@ -25033,8 +26235,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '24356e46-1a6a-49d5-9a8a-b2b66d69828c'
     ) THEN
-        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('24356e46-1a6a-49d5-9a8a-b2b66d69828c', '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6', '9F373FFC-D99C-44FC-BD52-15B27D21E8C8', 'SearchScopeID', 'One To Many', 1, 1, 2, NOW(), NOW());
+        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('24356e46-1a6a-49d5-9a8a-b2b66d69828c', '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6', '9F373FFC-D99C-44FC-BD52-15B27D21E8C8', 'SearchScopeID', 'One To Many', TRUE, TRUE, 2, NOW(), NOW());
     END IF;
 END $$;
 
@@ -25043,8 +26244,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '814d3a76-8697-4a34-9d25-a0ab00c49269'
     ) THEN
-        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('814d3a76-8697-4a34-9d25-a0ab00c49269', '18033543-B80D-4BF7-ADAF-DE1AA2CF70D0', 'DDA7A98A-A52D-4426-9035-BE0A4F60FDDC', 'FileStorageAccountID', 'One To Many', 1, 1, 2, NOW(), NOW());
+        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('814d3a76-8697-4a34-9d25-a0ab00c49269', '18033543-B80D-4BF7-ADAF-DE1AA2CF70D0', 'DDA7A98A-A52D-4426-9035-BE0A4F60FDDC', 'FileStorageAccountID', 'One To Many', TRUE, TRUE, 2, NOW(), NOW());
     END IF;
 END $$;
 
@@ -25053,8 +26253,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = 'd222547d-cc16-46ea-87c5-08257cb77cfb'
     ) THEN
-        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('d222547d-cc16-46ea-87c5-08257cb77cfb', 'C6923FA5-3F3D-4756-A2D8-E57125AF450F', '9F373FFC-D99C-44FC-BD52-15B27D21E8C8', 'SearchProviderID', 'One To Many', 1, 1, 3, NOW(), NOW());
+        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('d222547d-cc16-46ea-87c5-08257cb77cfb', 'C6923FA5-3F3D-4756-A2D8-E57125AF450F', '9F373FFC-D99C-44FC-BD52-15B27D21E8C8', 'SearchProviderID', 'One To Many', TRUE, TRUE, 3, NOW(), NOW());
     END IF;
 END $$;
 
@@ -25063,8 +26262,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '95c28d1a-762c-44da-ade0-778e24c8edc1' OR ("EntityID" = '9F373FFC-D99C-44FC-BD52-15B27D21E8C8' AND "Name" = 'SearchScope')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -25091,9 +26289,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '95c28d1a-762c-44da-ade0-778e24c8edc1',
         '9F373FFC-D99C-44FC-BD52-15B27D21E8C8', -- "Entity": "MJ": "Search" "Scope" "Providers"
         100019,
@@ -25104,19 +26300,19 @@ BEGIN
         400,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -25129,8 +26325,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '37fd004e-4d7c-4c5d-a36a-80130a9a9de1' OR ("EntityID" = '9F373FFC-D99C-44FC-BD52-15B27D21E8C8' AND "Name" = 'SearchProvider')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -25157,9 +26352,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '37fd004e-4d7c-4c5d-a36a-80130a9a9de1',
         '9F373FFC-D99C-44FC-BD52-15B27D21E8C8', -- "Entity": "MJ": "Search" "Scope" "Providers"
         100020,
@@ -25170,19 +26363,19 @@ BEGIN
         400,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -25195,8 +26388,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '893329f6-feb8-49ad-b657-c2372ffe3ff0' OR ("EntityID" = '9F373FFC-D99C-44FC-BD52-15B27D21E8C8' AND "Name" = 'QueryTransformTemplate')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -25223,9 +26415,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '893329f6-feb8-49ad-b657-c2372ffe3ff0',
         '9F373FFC-D99C-44FC-BD52-15B27D21E8C8', -- "Entity": "MJ": "Search" "Scope" "Providers"
         100021,
@@ -25236,19 +26426,19 @@ BEGIN
         510,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -25261,8 +26451,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '7d14c45b-5123-429f-a521-c9a91b95d773' OR ("EntityID" = '071B87EA-0E32-4AED-9225-3E38B573E803' AND "Name" = 'Agent')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -25289,9 +26478,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '7d14c45b-5123-429f-a521-c9a91b95d773',
         '071B87EA-0E32-4AED-9225-3E38B573E803', -- "Entity": "MJ": "AI" "Agent" "Search" "Scopes"
         100031,
@@ -25302,19 +26489,19 @@ BEGIN
         510,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -25327,8 +26514,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'd092cad7-c36d-4424-a334-160d95618f14' OR ("EntityID" = '071B87EA-0E32-4AED-9225-3E38B573E803' AND "Name" = 'SearchScope')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -25355,9 +26541,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'd092cad7-c36d-4424-a334-160d95618f14',
         '071B87EA-0E32-4AED-9225-3E38B573E803', -- "Entity": "MJ": "AI" "Agent" "Search" "Scopes"
         100032,
@@ -25368,19 +26552,19 @@ BEGIN
         400,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -25393,8 +26577,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '375fc42c-f058-46a7-96b2-16c23455c473' OR ("EntityID" = '071B87EA-0E32-4AED-9225-3E38B573E803' AND "Name" = 'QueryTemplate')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -25421,9 +26604,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '375fc42c-f058-46a7-96b2-16c23455c473',
         '071B87EA-0E32-4AED-9225-3E38B573E803', -- "Entity": "MJ": "AI" "Agent" "Search" "Scopes"
         100033,
@@ -25434,19 +26615,19 @@ BEGIN
         510,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -25459,8 +26640,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'eadb1b0b-0bb1-42f9-89dc-071e27a7a250' OR ("EntityID" = '96BF4FE3-F5FD-4423-9C26-4B6542909A07' AND "Name" = 'SearchScope')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -25487,9 +26667,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'eadb1b0b-0bb1-42f9-89dc-071e27a7a250',
         '96BF4FE3-F5FD-4423-9C26-4B6542909A07', -- "Entity": "MJ": "Search" "Scope" "External" "Indexes"
         100019,
@@ -25500,19 +26678,19 @@ BEGIN
         400,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -25525,8 +26703,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'a90acfd1-04d4-4f5a-aad8-3e67136cd31e' OR ("EntityID" = '96BF4FE3-F5FD-4423-9C26-4B6542909A07' AND "Name" = 'VectorIndex')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -25553,9 +26730,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'a90acfd1-04d4-4f5a-aad8-3e67136cd31e',
         '96BF4FE3-F5FD-4423-9C26-4B6542909A07', -- "Entity": "MJ": "Search" "Scope" "External" "Indexes"
         100020,
@@ -25566,19 +26741,19 @@ BEGIN
         510,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -25591,8 +26766,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'c378104a-502c-4e25-958f-37d66f0d1d69' OR ("EntityID" = '41FACFFE-0F36-4F41-9263-A96FC7507DA3' AND "Name" = 'SearchScope')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -25619,9 +26793,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'c378104a-502c-4e25-958f-37d66f0d1d69',
         '41FACFFE-0F36-4F41-9263-A96FC7507DA3', -- "Entity": "MJ": "Search" "Scope" "Entities"
         100015,
@@ -25632,19 +26804,19 @@ BEGIN
         400,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -25657,8 +26829,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '1755b943-1cab-442c-a7b5-ca9bd7e93ba6' OR ("EntityID" = '41FACFFE-0F36-4F41-9263-A96FC7507DA3' AND "Name" = 'Entity')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -25685,9 +26856,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '1755b943-1cab-442c-a7b5-ca9bd7e93ba6',
         '41FACFFE-0F36-4F41-9263-A96FC7507DA3', -- "Entity": "MJ": "Search" "Scope" "Entities"
         100016,
@@ -25698,19 +26867,19 @@ BEGIN
         510,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -25723,8 +26892,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '4a346c5b-c24c-4ff3-91eb-66bf29f302ec' OR ("EntityID" = 'DDA7A98A-A52D-4426-9035-BE0A4F60FDDC' AND "Name" = 'SearchScope')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -25751,9 +26919,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '4a346c5b-c24c-4ff3-91eb-66bf29f302ec',
         'DDA7A98A-A52D-4426-9035-BE0A4F60FDDC', -- "Entity": "MJ": "Search" "Scope" "Storage" "Accounts"
         100013,
@@ -25764,19 +26930,19 @@ BEGIN
         400,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -25789,8 +26955,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '011f306d-14e0-4ac0-8a9d-5da534784011' OR ("EntityID" = 'DDA7A98A-A52D-4426-9035-BE0A4F60FDDC' AND "Name" = 'FileStorageAccount')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -25817,9 +26982,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '011f306d-14e0-4ac0-8a9d-5da534784011',
         'DDA7A98A-A52D-4426-9035-BE0A4F60FDDC', -- "Entity": "MJ": "Search" "Scope" "Storage" "Accounts"
         100014,
@@ -25830,19 +26993,19 @@ BEGIN
         400,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -25855,8 +27018,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'd21a94b6-51be-4a9d-8907-818f56ffe599' OR ("EntityID" = '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6' AND "Name" = 'OwnerUser')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -25883,9 +27045,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'd21a94b6-51be-4a9d-8907-818f56ffe599',
         '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6', -- "Entity": "MJ": "Search" "Scopes"
         100029,
@@ -25896,19 +27056,19 @@ BEGIN
         200,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -25919,328 +27079,328 @@ END $$;
 UPDATE __mj."EntityField"
                SET "UserSearchPredicateAPI" = 'BeginsWith'
                WHERE "ID" = '1B312173-DA2A-492C-A8F7-EB92CC0F8BDA'
-               AND "AutoUpdateUserSearchPredicate" = 1;
+               AND "AutoUpdateUserSearchPredicate" = TRUE;
 
 UPDATE __mj."EntityField"
                SET "UserSearchPredicateAPI" = 'BeginsWith'
                WHERE "ID" = 'C4F745BD-57E7-4F87-9B65-8BBDD2B50529'
-               AND "AutoUpdateUserSearchPredicate" = 1;
+               AND "AutoUpdateUserSearchPredicate" = TRUE;
 
 UPDATE __mj."EntityField"
                SET "UserSearchPredicateAPI" = 'BeginsWith'
                WHERE "ID" = '6517DB09-A12E-4F1B-95B6-0B0A92918A1D'
-               AND "AutoUpdateUserSearchPredicate" = 1;
+               AND "AutoUpdateUserSearchPredicate" = TRUE;
 
 UPDATE __mj."EntityField"
                SET "UserSearchPredicateAPI" = 'Exact'
                WHERE "ID" = 'BC44595E-6FCA-42A9-AAF8-4A730088BE46'
-               AND "AutoUpdateUserSearchPredicate" = 1;
+               AND "AutoUpdateUserSearchPredicate" = TRUE;
 
 UPDATE __mj."Entity"
-            SET "AllowUserSearchAPI" = 1
+            SET "AllowUserSearchAPI" = TRUE
             WHERE "ID" = 'CDB135CC-6D3C-480B-90AE-25B7805F82C1'
-            AND "AutoUpdateAllowUserSearchAPI" = 1;
+            AND "AutoUpdateAllowUserSearchAPI" = TRUE;
 /* Set field properties for entity */
 
 UPDATE __mj."EntityField"
-               SET "IsNameField" = 1
+               SET "IsNameField" = TRUE
                WHERE "ID" = '95C28D1A-762C-44DA-ADE0-778E24C8EDC1'
-               AND "AutoUpdateIsNameField" = 1;
+               AND "AutoUpdateIsNameField" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "IsNameField" = 1
+               SET "IsNameField" = TRUE
                WHERE "ID" = '37FD004E-4D7C-4C5D-A36A-80130A9A9DE1'
-               AND "AutoUpdateIsNameField" = 1;
+               AND "AutoUpdateIsNameField" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '85FC3334-560F-4CC8-8F59-8E5BF4634AA1'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '2E6A14B0-02C7-4CE3-AD65-13654D0A5F4A'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '95C28D1A-762C-44DA-ADE0-778E24C8EDC1'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '37FD004E-4D7C-4C5D-A36A-80130A9A9DE1'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = '95C28D1A-762C-44DA-ADE0-778E24C8EDC1'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = '37FD004E-4D7C-4C5D-A36A-80130A9A9DE1'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
                SET "UserSearchPredicateAPI" = 'BeginsWith'
                WHERE "ID" = '95C28D1A-762C-44DA-ADE0-778E24C8EDC1'
-               AND "AutoUpdateUserSearchPredicate" = 1;
+               AND "AutoUpdateUserSearchPredicate" = TRUE;
 
 UPDATE __mj."EntityField"
                SET "UserSearchPredicateAPI" = 'BeginsWith'
                WHERE "ID" = '37FD004E-4D7C-4C5D-A36A-80130A9A9DE1'
-               AND "AutoUpdateUserSearchPredicate" = 1;
+               AND "AutoUpdateUserSearchPredicate" = TRUE;
 /* Set field properties for entity */
 
 UPDATE __mj."EntityField"
-               SET "IsNameField" = 1
+               SET "IsNameField" = TRUE
                WHERE "ID" = '7D14C45B-5123-429F-A521-C9A91B95D773'
-               AND "AutoUpdateIsNameField" = 1;
+               AND "AutoUpdateIsNameField" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "IsNameField" = 1
+               SET "IsNameField" = TRUE
                WHERE "ID" = 'D092CAD7-C36D-4424-A334-160D95618F14'
-               AND "AutoUpdateIsNameField" = 1;
+               AND "AutoUpdateIsNameField" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '4328AB1E-9530-4E13-8375-05DA343ECE10'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '123E2661-6BF9-43B7-B2B3-55DB128D2ED6'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '17F25F75-1267-4120-BCE4-DBF73B571F42'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '9B7EE84D-7137-4E18-86FB-BEC32BC712F6'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '7D14C45B-5123-429F-A521-C9A91B95D773'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = 'D092CAD7-C36D-4424-A334-160D95618F14'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = '4328AB1E-9530-4E13-8375-05DA343ECE10'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = '123E2661-6BF9-43B7-B2B3-55DB128D2ED6'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = '7D14C45B-5123-429F-A521-C9A91B95D773'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = 'D092CAD7-C36D-4424-A334-160D95618F14'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
                SET "UserSearchPredicateAPI" = 'Exact'
                WHERE "ID" = '4328AB1E-9530-4E13-8375-05DA343ECE10'
-               AND "AutoUpdateUserSearchPredicate" = 1;
+               AND "AutoUpdateUserSearchPredicate" = TRUE;
 
 UPDATE __mj."EntityField"
                SET "UserSearchPredicateAPI" = 'Exact'
                WHERE "ID" = '123E2661-6BF9-43B7-B2B3-55DB128D2ED6'
-               AND "AutoUpdateUserSearchPredicate" = 1;
+               AND "AutoUpdateUserSearchPredicate" = TRUE;
 /* Set field properties for entity */
 
 UPDATE __mj."EntityField"
-               SET "IsNameField" = 1
+               SET "IsNameField" = TRUE
                WHERE "ID" = '4A346C5B-C24C-4FF3-91EB-66BF29F302EC'
-               AND "AutoUpdateIsNameField" = 1;
+               AND "AutoUpdateIsNameField" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "IsNameField" = 1
+               SET "IsNameField" = TRUE
                WHERE "ID" = '011F306D-14E0-4AC0-8A9D-5DA534784011'
-               AND "AutoUpdateIsNameField" = 1;
+               AND "AutoUpdateIsNameField" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '5F214253-2774-4F2E-9D7E-5F285B6A7A58'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '4A346C5B-C24C-4FF3-91EB-66BF29F302EC'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '011F306D-14E0-4AC0-8A9D-5DA534784011'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = '5F214253-2774-4F2E-9D7E-5F285B6A7A58'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = '4A346C5B-C24C-4FF3-91EB-66BF29F302EC'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = '011F306D-14E0-4AC0-8A9D-5DA534784011'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
                SET "UserSearchPredicateAPI" = 'BeginsWith'
                WHERE "ID" = '4A346C5B-C24C-4FF3-91EB-66BF29F302EC'
-               AND "AutoUpdateUserSearchPredicate" = 1;
+               AND "AutoUpdateUserSearchPredicate" = TRUE;
 
 UPDATE __mj."EntityField"
                SET "UserSearchPredicateAPI" = 'BeginsWith'
                WHERE "ID" = '011F306D-14E0-4AC0-8A9D-5DA534784011'
-               AND "AutoUpdateUserSearchPredicate" = 1;
+               AND "AutoUpdateUserSearchPredicate" = TRUE;
 /* Set field properties for entity */
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '0B7FF847-1B91-41AF-A697-A100CCDAD772'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '2928BC70-E4D4-47DA-9C89-CDAACB6D6EF3'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '583C7E77-3761-4DB2-97CB-6704FE96626D'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = 'D21A94B6-51BE-4A9D-8907-818F56FFE599'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = '9EA24F13-A7A9-4F9C-8768-1EDB30BCC1CC'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
                SET "UserSearchPredicateAPI" = 'BeginsWith'
                WHERE "ID" = 'F1D0B9B9-C574-4AEF-9AA4-216311B89832'
-               AND "AutoUpdateUserSearchPredicate" = 1;
+               AND "AutoUpdateUserSearchPredicate" = TRUE;
 /* Set field properties for entity */
 
 UPDATE __mj."EntityField"
-               SET "IsNameField" = 1
+               SET "IsNameField" = TRUE
                WHERE "ID" = 'EADB1B0B-0BB1-42F9-89DC-071E27A7A250'
-               AND "AutoUpdateIsNameField" = 1;
+               AND "AutoUpdateIsNameField" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '65EE70A3-709E-409C-8717-9B0E955B4BBD'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '256E7C08-B86F-46A4-B9D1-908CF2B41410'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = 'EADB1B0B-0BB1-42F9-89DC-071E27A7A250'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = 'A90ACFD1-04D4-4F5A-AAD8-3E67136CD31E'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = '65EE70A3-709E-409C-8717-9B0E955B4BBD'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = '256E7C08-B86F-46A4-B9D1-908CF2B41410'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = 'EADB1B0B-0BB1-42F9-89DC-071E27A7A250'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
                SET "UserSearchPredicateAPI" = 'BeginsWith'
                WHERE "ID" = 'EADB1B0B-0BB1-42F9-89DC-071E27A7A250'
-               AND "AutoUpdateUserSearchPredicate" = 1;
+               AND "AutoUpdateUserSearchPredicate" = TRUE;
 
 UPDATE __mj."EntityField"
                SET "UserSearchPredicateAPI" = 'Exact'
                WHERE "ID" = '65EE70A3-709E-409C-8717-9B0E955B4BBD'
-               AND "AutoUpdateUserSearchPredicate" = 1;
+               AND "AutoUpdateUserSearchPredicate" = TRUE;
 /* Set field properties for entity */
 
 UPDATE __mj."EntityField"
-               SET "IsNameField" = 1
+               SET "IsNameField" = TRUE
                WHERE "ID" = 'C378104A-502C-4E25-958F-37D66F0D1D69'
-               AND "AutoUpdateIsNameField" = 1;
+               AND "AutoUpdateIsNameField" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "IsNameField" = 1
+               SET "IsNameField" = TRUE
                WHERE "ID" = '1755B943-1CAB-442C-A7B5-CA9BD7E93BA6'
-               AND "AutoUpdateIsNameField" = 1;
+               AND "AutoUpdateIsNameField" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '51D98DBB-2607-4DB2-B4D5-E154A279F38D'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = 'C378104A-502C-4E25-958F-37D66F0D1D69'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "DefaultInView" = 1
+               SET "DefaultInView" = TRUE
                WHERE "ID" = '1755B943-1CAB-442C-A7B5-CA9BD7E93BA6'
-               AND "AutoUpdateDefaultInView" = 1;
+               AND "AutoUpdateDefaultInView" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = 'C378104A-502C-4E25-958F-37D66F0D1D69'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
-               SET "IncludeInUserSearchAPI" = 1
+               SET "IncludeInUserSearchAPI" = TRUE
                WHERE "ID" = '1755B943-1CAB-442C-A7B5-CA9BD7E93BA6'
-               AND "AutoUpdateIncludeInUserSearchAPI" = 1;
+               AND "AutoUpdateIncludeInUserSearchAPI" = TRUE;
 
 UPDATE __mj."EntityField"
                SET "UserSearchPredicateAPI" = 'BeginsWith'
                WHERE "ID" = 'C378104A-502C-4E25-958F-37D66F0D1D69'
-               AND "AutoUpdateUserSearchPredicate" = 1;
+               AND "AutoUpdateUserSearchPredicate" = TRUE;
 
 UPDATE __mj."EntityField"
                SET "UserSearchPredicateAPI" = 'BeginsWith'
                WHERE "ID" = '1755B943-1CAB-442C-A7B5-CA9BD7E93BA6'
-               AND "AutoUpdateUserSearchPredicate" = 1;
+               AND "AutoUpdateUserSearchPredicate" = TRUE;
 /* Set categories for 8 fields */
 -- UPDATE Entity Field Category Info MJ: Search Scope Storage Accounts."SearchScope"
 
@@ -26251,7 +27411,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '4A346C5B-C24C-4FF3-91EB-66BF29F302EC' AND "AutoUpdateCategory" = 1;
+   "ID" = '4A346C5B-C24C-4FF3-91EB-66BF29F302EC' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope Storage Accounts."SearchScopeID"
 
 UPDATE __mj."EntityField"
@@ -26262,7 +27422,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'EC7B8330-9783-48DA-A831-B30FEDD524D8' AND "AutoUpdateCategory" = 1;
+   "ID" = 'EC7B8330-9783-48DA-A831-B30FEDD524D8' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope Storage Accounts."FileStorageAccount"
 
 UPDATE __mj."EntityField"
@@ -26272,7 +27432,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '011F306D-14E0-4AC0-8A9D-5DA534784011' AND "AutoUpdateCategory" = 1;
+   "ID" = '011F306D-14E0-4AC0-8A9D-5DA534784011' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope Storage Accounts."FileStorageAccountID"
 
 UPDATE __mj."EntityField"
@@ -26283,7 +27443,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'C7D14730-1957-4701-8146-B7E6359D6CC5' AND "AutoUpdateCategory" = 1;
+   "ID" = 'C7D14730-1957-4701-8146-B7E6359D6CC5' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope Storage Accounts."FolderPath"
 
 UPDATE __mj."EntityField"
@@ -26293,7 +27453,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '5F214253-2774-4F2E-9D7E-5F285B6A7A58' AND "AutoUpdateCategory" = 1;
+   "ID" = '5F214253-2774-4F2E-9D7E-5F285B6A7A58' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope Storage Accounts."ID"
 
 UPDATE __mj."EntityField"
@@ -26303,7 +27463,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'A1BF8E66-CCB8-4FD1-A8B3-C4E88038C39D' AND "AutoUpdateCategory" = 1;
+   "ID" = 'A1BF8E66-CCB8-4FD1-A8B3-C4E88038C39D' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope Storage Accounts.__mj_CreatedAt
 
 UPDATE __mj."EntityField"
@@ -26313,7 +27473,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'AA5CCA6D-1E8F-414D-8E77-D0722E3C49F2' AND "AutoUpdateCategory" = 1;
+   "ID" = 'AA5CCA6D-1E8F-414D-8E77-D0722E3C49F2' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope Storage Accounts.__mj_UpdatedAt
 
 UPDATE __mj."EntityField"
@@ -26323,7 +27483,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'A336CA5C-FABB-44CE-BB76-C9C4443B18BB' AND "AutoUpdateCategory" = 1;
+   "ID" = 'A336CA5C-FABB-44CE-BB76-C9C4443B18BB' AND "AutoUpdateCategory" = TRUE;
 /* Set entity icon to fa fa-folder-open */
 
 UPDATE __mj."Entity"
@@ -26340,7 +27500,7 @@ INSERT INTO __mj."EntitySetting" ("ID", "EntityID", "Name", "Value", "__mj_Creat
 /* Set DefaultForNewUser=0 for NEW entity (category: supporting, confidence: high) */
 
 UPDATE __mj."ApplicationEntity"
-         SET "DefaultForNewUser" = 0, "__mj_UpdatedAt" = NOW()
+         SET "DefaultForNewUser" = FALSE, "__mj_UpdatedAt" = NOW()
          WHERE "EntityID" = 'DDA7A98A-A52D-4426-9035-BE0A4F60FDDC';
 /* Set categories for 9 fields */
 -- UPDATE Entity Field Category Info MJ: Search Scope Entities."ID"
@@ -26352,7 +27512,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'C600D34E-A849-4786-AFEE-F8A0CFE376A5' AND "AutoUpdateCategory" = 1;
+   "ID" = 'C600D34E-A849-4786-AFEE-F8A0CFE376A5' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope Entities."SearchScopeID"
 
 UPDATE __mj."EntityField"
@@ -26363,7 +27523,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '7DA23A72-91C1-43EF-BB79-C23B1138B805' AND "AutoUpdateCategory" = 1;
+   "ID" = '7DA23A72-91C1-43EF-BB79-C23B1138B805' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope Entities."EntityID"
 
 UPDATE __mj."EntityField"
@@ -26374,7 +27534,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '0DE72B0E-6A49-4FE2-A5AA-DEAC7B4A5497' AND "AutoUpdateCategory" = 1;
+   "ID" = '0DE72B0E-6A49-4FE2-A5AA-DEAC7B4A5497' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope Entities."SearchScope"
 
 UPDATE __mj."EntityField"
@@ -26385,7 +27545,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'C378104A-502C-4E25-958F-37D66F0D1D69' AND "AutoUpdateCategory" = 1;
+   "ID" = 'C378104A-502C-4E25-958F-37D66F0D1D69' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope Entities."Entity"
 
 UPDATE __mj."EntityField"
@@ -26396,7 +27556,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '1755B943-1CAB-442C-A7B5-CA9BD7E93BA6' AND "AutoUpdateCategory" = 1;
+   "ID" = '1755B943-1CAB-442C-A7B5-CA9BD7E93BA6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope Entities."ExtraFilter"
 
 UPDATE __mj."EntityField"
@@ -26406,7 +27566,7 @@ SET
    "ExtendedType" = 'Code',
    "CodeType" = 'SQL'
 WHERE 
-   "ID" = '51D98DBB-2607-4DB2-B4D5-E154A279F38D' AND "AutoUpdateCategory" = 1;
+   "ID" = '51D98DBB-2607-4DB2-B4D5-E154A279F38D' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope Entities."UserSearchString"
 
 UPDATE __mj."EntityField"
@@ -26416,7 +27576,7 @@ SET
    "ExtendedType" = 'Code',
    "CodeType" = 'Other'
 WHERE 
-   "ID" = '85051778-E209-448E-BD45-1B7D81B7A62D' AND "AutoUpdateCategory" = 1;
+   "ID" = '85051778-E209-448E-BD45-1B7D81B7A62D' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope Entities.__mj_CreatedAt
 
 UPDATE __mj."EntityField"
@@ -26426,7 +27586,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '7EEFFB78-BECA-4F12-B42E-90A2A15A6B20' AND "AutoUpdateCategory" = 1;
+   "ID" = '7EEFFB78-BECA-4F12-B42E-90A2A15A6B20' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope Entities.__mj_UpdatedAt
 
 UPDATE __mj."EntityField"
@@ -26436,7 +27596,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '3B95A95C-7561-4ECC-AC50-B60FE2652981' AND "AutoUpdateCategory" = 1;
+   "ID" = '3B95A95C-7561-4ECC-AC50-B60FE2652981' AND "AutoUpdateCategory" = TRUE;
 /* Set categories for 12 fields */
 -- UPDATE Entity Field Category Info MJ: Search Scope Providers."ID"
 
@@ -26447,7 +27607,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'A29C855A-12B2-4329-A77E-495336BFB25F' AND "AutoUpdateCategory" = 1;
+   "ID" = 'A29C855A-12B2-4329-A77E-495336BFB25F' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope Providers."SearchScopeID"
 
 UPDATE __mj."EntityField"
@@ -26458,7 +27618,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '7652DA27-EF4B-47A2-B3EC-58D7CE7EBAC2' AND "AutoUpdateCategory" = 1;
+   "ID" = '7652DA27-EF4B-47A2-B3EC-58D7CE7EBAC2' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope Providers."SearchProviderID"
 
 UPDATE __mj."EntityField"
@@ -26469,7 +27629,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '55084853-42E2-4336-99E0-9A2EFEF222B7' AND "AutoUpdateCategory" = 1;
+   "ID" = '55084853-42E2-4336-99E0-9A2EFEF222B7' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope Providers."SearchScope"
 
 UPDATE __mj."EntityField"
@@ -26480,7 +27640,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '95C28D1A-762C-44DA-ADE0-778E24C8EDC1' AND "AutoUpdateCategory" = 1;
+   "ID" = '95C28D1A-762C-44DA-ADE0-778E24C8EDC1' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope Providers."SearchProvider"
 
 UPDATE __mj."EntityField"
@@ -26491,7 +27651,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '37FD004E-4D7C-4C5D-A36A-80130A9A9DE1' AND "AutoUpdateCategory" = 1;
+   "ID" = '37FD004E-4D7C-4C5D-A36A-80130A9A9DE1' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope Providers."Enabled"
 
 UPDATE __mj."EntityField"
@@ -26501,7 +27661,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '85FC3334-560F-4CC8-8F59-8E5BF4634AA1' AND "AutoUpdateCategory" = 1;
+   "ID" = '85FC3334-560F-4CC8-8F59-8E5BF4634AA1' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope Providers."MaxResultsOverride"
 
 UPDATE __mj."EntityField"
@@ -26511,7 +27671,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '2E6A14B0-02C7-4CE3-AD65-13654D0A5F4A' AND "AutoUpdateCategory" = 1;
+   "ID" = '2E6A14B0-02C7-4CE3-AD65-13654D0A5F4A' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope Providers."ProviderConfigOverride"
 
 UPDATE __mj."EntityField"
@@ -26522,7 +27682,7 @@ SET
    "ExtendedType" = 'Code',
    "CodeType" = 'Other'
 WHERE 
-   "ID" = '67A5A112-4714-4DC9-A7E6-A4B85A70C8CA' AND "AutoUpdateCategory" = 1;
+   "ID" = '67A5A112-4714-4DC9-A7E6-A4B85A70C8CA' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope Providers."QueryTransformTemplateID"
 
 UPDATE __mj."EntityField"
@@ -26533,7 +27693,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '200B34AF-0CB4-4687-A7C5-0C7E5C5EA9E9' AND "AutoUpdateCategory" = 1;
+   "ID" = '200B34AF-0CB4-4687-A7C5-0C7E5C5EA9E9' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope Providers."QueryTransformTemplate"
 
 UPDATE __mj."EntityField"
@@ -26544,7 +27704,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '893329F6-FEB8-49AD-B657-C2372FFE3FF0' AND "AutoUpdateCategory" = 1;
+   "ID" = '893329F6-FEB8-49AD-B657-C2372FFE3FF0' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope Providers.__mj_CreatedAt
 
 UPDATE __mj."EntityField"
@@ -26554,7 +27714,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '491537E5-16FB-42F1-A62A-4061A9B60DB2' AND "AutoUpdateCategory" = 1;
+   "ID" = '491537E5-16FB-42F1-A62A-4061A9B60DB2' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope Providers.__mj_UpdatedAt
 
 UPDATE __mj."EntityField"
@@ -26564,7 +27724,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '593ABA5B-78F6-4AD2-9D58-5468382F53B4' AND "AutoUpdateCategory" = 1;
+   "ID" = '593ABA5B-78F6-4AD2-9D58-5468382F53B4' AND "AutoUpdateCategory" = TRUE;
 /* Set entity icon to fa fa-search */
 
 UPDATE __mj."Entity"
@@ -26594,12 +27754,12 @@ INSERT INTO __mj."EntitySetting" ("ID", "EntityID", "Name", "Value", "__mj_Creat
 /* Set DefaultForNewUser=0 for NEW entity (category: supporting, confidence: high) */
 
 UPDATE __mj."ApplicationEntity"
-         SET "DefaultForNewUser" = 0, "__mj_UpdatedAt" = NOW()
+         SET "DefaultForNewUser" = FALSE, "__mj_UpdatedAt" = NOW()
          WHERE "EntityID" = '41FACFFE-0F36-4F41-9263-A96FC7507DA3';
 /* Set DefaultForNewUser=0 for NEW entity (category: supporting, confidence: high) */
 
 UPDATE __mj."ApplicationEntity"
-         SET "DefaultForNewUser" = 0, "__mj_UpdatedAt" = NOW()
+         SET "DefaultForNewUser" = FALSE, "__mj_UpdatedAt" = NOW()
          WHERE "EntityID" = '9F373FFC-D99C-44FC-BD52-15B27D21E8C8';
 /* Set categories for 11 fields */
 -- UPDATE Entity Field Category Info MJ: Search Scope External Indexes."SearchScope"
@@ -26611,7 +27771,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'EADB1B0B-0BB1-42F9-89DC-071E27A7A250' AND "AutoUpdateCategory" = 1;
+   "ID" = 'EADB1B0B-0BB1-42F9-89DC-071E27A7A250' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope External Indexes."SearchScopeID"
 
 UPDATE __mj."EntityField"
@@ -26621,7 +27781,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '7CAE4C9A-DAC4-4E2A-B4DF-6F21F0AF0AD9' AND "AutoUpdateCategory" = 1;
+   "ID" = '7CAE4C9A-DAC4-4E2A-B4DF-6F21F0AF0AD9' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope External Indexes."IndexType"
 
 UPDATE __mj."EntityField"
@@ -26631,7 +27791,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '65EE70A3-709E-409C-8717-9B0E955B4BBD' AND "AutoUpdateCategory" = 1;
+   "ID" = '65EE70A3-709E-409C-8717-9B0E955B4BBD' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope External Indexes."VectorIndexID"
 
 UPDATE __mj."EntityField"
@@ -26642,7 +27802,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '8A0C71C0-B1D6-47A1-BF51-FB340A8F0637' AND "AutoUpdateCategory" = 1;
+   "ID" = '8A0C71C0-B1D6-47A1-BF51-FB340A8F0637' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope External Indexes."VectorIndex"
 
 UPDATE __mj."EntityField"
@@ -26653,7 +27813,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'A90ACFD1-04D4-4F5A-AAD8-3E67136CD31E' AND "AutoUpdateCategory" = 1;
+   "ID" = 'A90ACFD1-04D4-4F5A-AAD8-3E67136CD31E' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope External Indexes."ExternalIndexName"
 
 UPDATE __mj."EntityField"
@@ -26663,7 +27823,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '256E7C08-B86F-46A4-B9D1-908CF2B41410' AND "AutoUpdateCategory" = 1;
+   "ID" = '256E7C08-B86F-46A4-B9D1-908CF2B41410' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope External Indexes."ExternalIndexConfig"
 
 UPDATE __mj."EntityField"
@@ -26673,7 +27833,7 @@ SET
    "ExtendedType" = 'Code',
    "CodeType" = 'Other'
 WHERE 
-   "ID" = 'E8E33D62-8E0D-4396-8BA3-243B8C284412' AND "AutoUpdateCategory" = 1;
+   "ID" = 'E8E33D62-8E0D-4396-8BA3-243B8C284412' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope External Indexes."MetadataFilter"
 
 UPDATE __mj."EntityField"
@@ -26683,7 +27843,7 @@ SET
    "ExtendedType" = 'Code',
    "CodeType" = 'Other'
 WHERE 
-   "ID" = '9933F05B-BD14-49CB-940E-62C055B9D2E9' AND "AutoUpdateCategory" = 1;
+   "ID" = '9933F05B-BD14-49CB-940E-62C055B9D2E9' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope External Indexes."ID"
 
 UPDATE __mj."EntityField"
@@ -26693,7 +27853,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'BA30A0F7-343B-4E6F-A4AB-8BFEEA1A980F' AND "AutoUpdateCategory" = 1;
+   "ID" = 'BA30A0F7-343B-4E6F-A4AB-8BFEEA1A980F' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope External Indexes.__mj_CreatedAt
 
 UPDATE __mj."EntityField"
@@ -26703,7 +27863,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'C7781789-1B92-46B7-B3B9-2AADA7E0B445' AND "AutoUpdateCategory" = 1;
+   "ID" = 'C7781789-1B92-46B7-B3B9-2AADA7E0B445' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scope External Indexes.__mj_UpdatedAt
 
 UPDATE __mj."EntityField"
@@ -26713,7 +27873,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '96D1010E-E70D-46AE-B4D3-21EDEF9CFA1B' AND "AutoUpdateCategory" = 1;
+   "ID" = '96D1010E-E70D-46AE-B4D3-21EDEF9CFA1B' AND "AutoUpdateCategory" = TRUE;
 /* Set entity icon to fa fa-search-plus */
 
 UPDATE __mj."Entity"
@@ -26730,7 +27890,7 @@ INSERT INTO __mj."EntitySetting" ("ID", "EntityID", "Name", "Value", "__mj_Creat
 /* Set DefaultForNewUser=0 for NEW entity (category: supporting, confidence: high) */
 
 UPDATE __mj."ApplicationEntity"
-         SET "DefaultForNewUser" = 0, "__mj_UpdatedAt" = NOW()
+         SET "DefaultForNewUser" = FALSE, "__mj_UpdatedAt" = NOW()
          WHERE "EntityID" = '96BF4FE3-F5FD-4423-9C26-4B6542909A07';
 /* Set categories for 15 fields */
 -- UPDATE Entity Field Category Info MJ: Search Scopes."ID"
@@ -26742,7 +27902,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '8A3AC258-D46F-4F39-A702-F6245B12C903' AND "AutoUpdateCategory" = 1;
+   "ID" = '8A3AC258-D46F-4F39-A702-F6245B12C903' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scopes."Name"
 
 UPDATE __mj."EntityField"
@@ -26752,7 +27912,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'F1D0B9B9-C574-4AEF-9AA4-216311B89832' AND "AutoUpdateCategory" = 1;
+   "ID" = 'F1D0B9B9-C574-4AEF-9AA4-216311B89832' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scopes."Description"
 
 UPDATE __mj."EntityField"
@@ -26762,7 +27922,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '9EA24F13-A7A9-4F9C-8768-1EDB30BCC1CC' AND "AutoUpdateCategory" = 1;
+   "ID" = '9EA24F13-A7A9-4F9C-8768-1EDB30BCC1CC' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scopes."Icon"
 
 UPDATE __mj."EntityField"
@@ -26772,7 +27932,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '08742C69-8F96-4F6E-AA66-51144C787C0D' AND "AutoUpdateCategory" = 1;
+   "ID" = '08742C69-8F96-4F6E-AA66-51144C787C0D' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scopes."IsGlobal"
 
 UPDATE __mj."EntityField"
@@ -26782,7 +27942,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '0B7FF847-1B91-41AF-A697-A100CCDAD772' AND "AutoUpdateCategory" = 1;
+   "ID" = '0B7FF847-1B91-41AF-A697-A100CCDAD772' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scopes."IsDefault"
 
 UPDATE __mj."EntityField"
@@ -26792,7 +27952,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '2928BC70-E4D4-47DA-9C89-CDAACB6D6EF3' AND "AutoUpdateCategory" = 1;
+   "ID" = '2928BC70-E4D4-47DA-9C89-CDAACB6D6EF3' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scopes."OwnerUserID"
 
 UPDATE __mj."EntityField"
@@ -26802,7 +27962,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '77F1E21B-FE13-46BD-9F82-FA810ECE1986' AND "AutoUpdateCategory" = 1;
+   "ID" = '77F1E21B-FE13-46BD-9F82-FA810ECE1986' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scopes."OwnerUser"
 
 UPDATE __mj."EntityField"
@@ -26812,7 +27972,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'D21A94B6-51BE-4A9D-8907-818F56FFE599' AND "AutoUpdateCategory" = 1;
+   "ID" = 'D21A94B6-51BE-4A9D-8907-818F56FFE599' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scopes."Status"
 
 UPDATE __mj."EntityField"
@@ -26822,7 +27982,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '583C7E77-3761-4DB2-97CB-6704FE96626D' AND "AutoUpdateCategory" = 1;
+   "ID" = '583C7E77-3761-4DB2-97CB-6704FE96626D' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scopes."StartAt"
 
 UPDATE __mj."EntityField"
@@ -26832,7 +27992,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '51624B43-0F8A-4B9D-BA9F-B0F52EEDBBA5' AND "AutoUpdateCategory" = 1;
+   "ID" = '51624B43-0F8A-4B9D-BA9F-B0F52EEDBBA5' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scopes."EndAt"
 
 UPDATE __mj."EntityField"
@@ -26842,7 +28002,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'BB666BCD-DC97-4DE9-A69A-F0909B960CD8' AND "AutoUpdateCategory" = 1;
+   "ID" = 'BB666BCD-DC97-4DE9-A69A-F0909B960CD8' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scopes."ScopeConfig"
 
 UPDATE __mj."EntityField"
@@ -26852,7 +28012,7 @@ SET
    "ExtendedType" = 'Code',
    "CodeType" = 'Other'
 WHERE 
-   "ID" = '54B3B159-1D2A-45C4-B2E9-6C2B70558FF9' AND "AutoUpdateCategory" = 1;
+   "ID" = '54B3B159-1D2A-45C4-B2E9-6C2B70558FF9' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scopes."SearchContextConfig"
 
 UPDATE __mj."EntityField"
@@ -26862,7 +28022,7 @@ SET
    "ExtendedType" = 'Code',
    "CodeType" = 'Other'
 WHERE 
-   "ID" = '1761DF2D-7EF5-404F-BF5E-F3B896BD18E6' AND "AutoUpdateCategory" = 1;
+   "ID" = '1761DF2D-7EF5-404F-BF5E-F3B896BD18E6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scopes.__mj_CreatedAt
 
 UPDATE __mj."EntityField"
@@ -26872,7 +28032,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'FE2B7B85-82DE-4F0C-82A8-5EB346A033E5' AND "AutoUpdateCategory" = 1;
+   "ID" = 'FE2B7B85-82DE-4F0C-82A8-5EB346A033E5' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: Search Scopes.__mj_UpdatedAt
 
 UPDATE __mj."EntityField"
@@ -26882,7 +28042,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '27BDFEA3-A5EB-4F23-980F-D05734B15EA1' AND "AutoUpdateCategory" = 1;
+   "ID" = '27BDFEA3-A5EB-4F23-980F-D05734B15EA1' AND "AutoUpdateCategory" = TRUE;
 /* Set entity icon to fa fa-search-location */
 
 UPDATE __mj."Entity"
@@ -26899,7 +28059,7 @@ INSERT INTO __mj."EntitySetting" ("ID", "EntityID", "Name", "Value", "__mj_Creat
 /* Set DefaultForNewUser=1 for NEW entity (category: primary, confidence: high) */
 
 UPDATE __mj."ApplicationEntity"
-         SET "DefaultForNewUser" = 1, "__mj_UpdatedAt" = NOW()
+         SET "DefaultForNewUser" = TRUE, "__mj_UpdatedAt" = NOW()
          WHERE "EntityID" = '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6';
 /* Set categories for 18 fields */
 -- UPDATE Entity Field Category Info MJ: AI Agent Search Scopes."ID"
@@ -26911,7 +28071,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '61F64E71-BCC7-4C78-97EC-F1BB9F519384' AND "AutoUpdateCategory" = 1;
+   "ID" = '61F64E71-BCC7-4C78-97EC-F1BB9F519384' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Search Scopes."AgentID"
 
 UPDATE __mj."EntityField"
@@ -26922,7 +28082,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '01E24891-763A-4E7D-9C8B-7F99949BF5D3' AND "AutoUpdateCategory" = 1;
+   "ID" = '01E24891-763A-4E7D-9C8B-7F99949BF5D3' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Search Scopes."SearchScopeID"
 
 UPDATE __mj."EntityField"
@@ -26933,7 +28093,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'CDECDF44-874D-4449-B71E-94FBB306B36C' AND "AutoUpdateCategory" = 1;
+   "ID" = 'CDECDF44-874D-4449-B71E-94FBB306B36C' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Search Scopes."Agent"
 
 UPDATE __mj."EntityField"
@@ -26944,7 +28104,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '7D14C45B-5123-429F-A521-C9A91B95D773' AND "AutoUpdateCategory" = 1;
+   "ID" = '7D14C45B-5123-429F-A521-C9A91B95D773' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Search Scopes."SearchScope"
 
 UPDATE __mj."EntityField"
@@ -26955,7 +28115,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'D092CAD7-C36D-4424-A334-160D95618F14' AND "AutoUpdateCategory" = 1;
+   "ID" = 'D092CAD7-C36D-4424-A334-160D95618F14' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Search Scopes."Phase"
 
 UPDATE __mj."EntityField"
@@ -26966,7 +28126,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '4328AB1E-9530-4E13-8375-05DA343ECE10' AND "AutoUpdateCategory" = 1;
+   "ID" = '4328AB1E-9530-4E13-8375-05DA343ECE10' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Search Scopes."Status"
 
 UPDATE __mj."EntityField"
@@ -26976,7 +28136,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '123E2661-6BF9-43B7-B2B3-55DB128D2ED6' AND "AutoUpdateCategory" = 1;
+   "ID" = '123E2661-6BF9-43B7-B2B3-55DB128D2ED6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Search Scopes."Priority"
 
 UPDATE __mj."EntityField"
@@ -26986,7 +28146,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '17F25F75-1267-4120-BCE4-DBF73B571F42' AND "AutoUpdateCategory" = 1;
+   "ID" = '17F25F75-1267-4120-BCE4-DBF73B571F42' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Search Scopes."IsDefault"
 
 UPDATE __mj."EntityField"
@@ -26996,7 +28156,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '9B7EE84D-7137-4E18-86FB-BEC32BC712F6' AND "AutoUpdateCategory" = 1;
+   "ID" = '9B7EE84D-7137-4E18-86FB-BEC32BC712F6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Search Scopes."StartAt"
 
 UPDATE __mj."EntityField"
@@ -27007,7 +28167,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'DEECC0A9-0839-46AC-9AB2-03307ADC34B0' AND "AutoUpdateCategory" = 1;
+   "ID" = 'DEECC0A9-0839-46AC-9AB2-03307ADC34B0' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Search Scopes."EndAt"
 
 UPDATE __mj."EntityField"
@@ -27018,7 +28178,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '0B70946D-08B2-40A7-9AE5-972F1A7145B9' AND "AutoUpdateCategory" = 1;
+   "ID" = '0B70946D-08B2-40A7-9AE5-972F1A7145B9' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Search Scopes."MaxResults"
 
 UPDATE __mj."EntityField"
@@ -27028,7 +28188,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'FF1FF102-4BCA-4F45-9521-4A45F3C7859E' AND "AutoUpdateCategory" = 1;
+   "ID" = 'FF1FF102-4BCA-4F45-9521-4A45F3C7859E' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Search Scopes."MinScore"
 
 UPDATE __mj."EntityField"
@@ -27039,7 +28199,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'CA51B876-D36C-4AF9-B493-B98E39BA613E' AND "AutoUpdateCategory" = 1;
+   "ID" = 'CA51B876-D36C-4AF9-B493-B98E39BA613E' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Search Scopes."QueryTemplateID"
 
 UPDATE __mj."EntityField"
@@ -27050,7 +28210,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '6DF56365-F3E8-4A69-9436-DFA74DC52285' AND "AutoUpdateCategory" = 1;
+   "ID" = '6DF56365-F3E8-4A69-9436-DFA74DC52285' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Search Scopes."QueryTemplate"
 
 UPDATE __mj."EntityField"
@@ -27061,7 +28221,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '375FC42C-F058-46A7-96B2-16C23455C473' AND "AutoUpdateCategory" = 1;
+   "ID" = '375FC42C-F058-46A7-96B2-16C23455C473' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Search Scopes."FusionWeightsOverride"
 
 UPDATE __mj."EntityField"
@@ -27071,7 +28231,7 @@ SET
    "ExtendedType" = 'Code',
    "CodeType" = 'Other'
 WHERE 
-   "ID" = '5BB839F8-D6C6-4970-BEE7-8A59063F9D3B' AND "AutoUpdateCategory" = 1;
+   "ID" = '5BB839F8-D6C6-4970-BEE7-8A59063F9D3B' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Search Scopes.__mj_CreatedAt
 
 UPDATE __mj."EntityField"
@@ -27081,7 +28241,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '10A9F6F1-85D2-4924-9A60-E060861CCD3D' AND "AutoUpdateCategory" = 1;
+   "ID" = '10A9F6F1-85D2-4924-9A60-E060861CCD3D' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agent Search Scopes.__mj_UpdatedAt
 
 UPDATE __mj."EntityField"
@@ -27091,7 +28251,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'AF0FA8BE-427E-4F7E-B13F-603847453FDB' AND "AutoUpdateCategory" = 1;
+   "ID" = 'AF0FA8BE-427E-4F7E-B13F-603847453FDB' AND "AutoUpdateCategory" = TRUE;
 /* Set entity icon to fa fa-search-plus */
 
 UPDATE __mj."Entity"
@@ -27108,7 +28268,7 @@ INSERT INTO __mj."EntitySetting" ("ID", "EntityID", "Name", "Value", "__mj_Creat
 /* Set DefaultForNewUser=0 for NEW entity (category: junction, confidence: high) */
 
 UPDATE __mj."ApplicationEntity"
-         SET "DefaultForNewUser" = 0, "__mj_UpdatedAt" = NOW()
+         SET "DefaultForNewUser" = FALSE, "__mj_UpdatedAt" = NOW()
          WHERE "EntityID" = '071B87EA-0E32-4AED-9225-3E38B573E803';
 /* Set categories for 74 fields */
 -- UPDATE Entity Field Category Info MJ: AI Agents."ID"
@@ -27119,7 +28279,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'AA64DA98-1DA1-4525-8CC5-BC3E3E4893B6' AND "AutoUpdateCategory" = 1;
+   "ID" = 'AA64DA98-1DA1-4525-8CC5-BC3E3E4893B6' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."Name"
 
 UPDATE __mj."EntityField"
@@ -27128,7 +28288,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '1B312173-DA2A-492C-A8F7-EB92CC0F8BDA' AND "AutoUpdateCategory" = 1;
+   "ID" = '1B312173-DA2A-492C-A8F7-EB92CC0F8BDA' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."Description"
 
 UPDATE __mj."EntityField"
@@ -27137,7 +28297,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '6EDC921F-36C4-4739-9F2A-8F9F00E95AE7' AND "AutoUpdateCategory" = 1;
+   "ID" = '6EDC921F-36C4-4739-9F2A-8F9F00E95AE7' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."LogoURL"
 
 UPDATE __mj."EntityField"
@@ -27146,7 +28306,7 @@ SET
    "ExtendedType" = 'URL',
    "CodeType" = NULL
 WHERE 
-   "ID" = '77845738-5781-458B-AD3C-5DAE745373C2' AND "AutoUpdateCategory" = 1;
+   "ID" = '77845738-5781-458B-AD3C-5DAE745373C2' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."TypeID"
 
 UPDATE __mj."EntityField"
@@ -27156,7 +28316,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '91CA077D-3F59-48E1-A593-AF8686276115' AND "AutoUpdateCategory" = 1;
+   "ID" = '91CA077D-3F59-48E1-A593-AF8686276115' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."Status"
 
 UPDATE __mj."EntityField"
@@ -27165,7 +28325,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'BC44595E-6FCA-42A9-AAF8-4A730088BE46' AND "AutoUpdateCategory" = 1;
+   "ID" = 'BC44595E-6FCA-42A9-AAF8-4A730088BE46' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."DriverClass"
 
 UPDATE __mj."EntityField"
@@ -27174,7 +28334,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'BB9AD9CB-40C0-41F1-B54B-750C844FD41B' AND "AutoUpdateCategory" = 1;
+   "ID" = 'BB9AD9CB-40C0-41F1-B54B-750C844FD41B' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."IconClass"
 
 UPDATE __mj."EntityField"
@@ -27183,7 +28343,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'E3E05E29-CDAF-4BFE-9FC8-4450EEBE05E5' AND "AutoUpdateCategory" = 1;
+   "ID" = 'E3E05E29-CDAF-4BFE-9FC8-4450EEBE05E5' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."ModelSelectionMode"
 
 UPDATE __mj."EntityField"
@@ -27192,7 +28352,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'FEEBD49D-5572-45D7-9F1E-08AE762F41D9' AND "AutoUpdateCategory" = 1;
+   "ID" = 'FEEBD49D-5572-45D7-9F1E-08AE762F41D9' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."DefaultArtifactTypeID"
 
 UPDATE __mj."EntityField"
@@ -27201,7 +28361,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'F58EA638-CE95-4D2A-9095-9909149B83C7' AND "AutoUpdateCategory" = 1;
+   "ID" = 'F58EA638-CE95-4D2A-9095-9909149B83C7' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."OwnerUserID"
 
 UPDATE __mj."EntityField"
@@ -27211,7 +28371,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '261B4D18-464B-4AD9-9FFD-EA8B70C576D8' AND "AutoUpdateCategory" = 1;
+   "ID" = '261B4D18-464B-4AD9-9FFD-EA8B70C576D8' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."ArtifactCreationMode"
 
 UPDATE __mj."EntityField"
@@ -27220,7 +28380,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '4371BED0-7C4A-4D24-9E07-17E15D617607' AND "AutoUpdateCategory" = 1;
+   "ID" = '4371BED0-7C4A-4D24-9E07-17E15D617607' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."FunctionalRequirements"
 
 UPDATE __mj."EntityField"
@@ -27229,7 +28389,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'F613597C-C38F-4D71-B64A-8BBCFD87D8CC' AND "AutoUpdateCategory" = 1;
+   "ID" = 'F613597C-C38F-4D71-B64A-8BBCFD87D8CC' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."TechnicalDesign"
 
 UPDATE __mj."EntityField"
@@ -27238,7 +28398,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'CAEA2872-B089-4192-8FA8-1737FF357FFD' AND "AutoUpdateCategory" = 1;
+   "ID" = 'CAEA2872-B089-4192-8FA8-1737FF357FFD' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."IsRestricted"
 
 UPDATE __mj."EntityField"
@@ -27247,7 +28407,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'E5B17B79-282F-4F19-9656-246DE119D588' AND "AutoUpdateCategory" = 1;
+   "ID" = 'E5B17B79-282F-4F19-9656-246DE119D588' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."AgentTypePromptParams"
 
 UPDATE __mj."EntityField"
@@ -27256,7 +28416,7 @@ SET
    "ExtendedType" = 'Code',
    "CodeType" = 'JavaScript'
 WHERE 
-   "ID" = 'FD515BF1-7E8A-4CB0-A8CE-D5C0C8C132D7' AND "AutoUpdateCategory" = 1;
+   "ID" = 'FD515BF1-7E8A-4CB0-A8CE-D5C0C8C132D7' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."CategoryID"
 
 UPDATE __mj."EntityField"
@@ -27265,7 +28425,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '7DCA7B3C-9A81-4D32-AF2E-5EA32B22D988' AND "AutoUpdateCategory" = 1;
+   "ID" = '7DCA7B3C-9A81-4D32-AF2E-5EA32B22D988' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."Type"
 
 UPDATE __mj."EntityField"
@@ -27274,7 +28434,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'C4F745BD-57E7-4F87-9B65-8BBDD2B50529' AND "AutoUpdateCategory" = 1;
+   "ID" = 'C4F745BD-57E7-4F87-9B65-8BBDD2B50529' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."DefaultArtifactType"
 
 UPDATE __mj."EntityField"
@@ -27283,7 +28443,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '6C1C76DF-BBFF-4903-9BB9-3325B5ABB4B1' AND "AutoUpdateCategory" = 1;
+   "ID" = '6C1C76DF-BBFF-4903-9BB9-3325B5ABB4B1' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."OwnerUser"
 
 UPDATE __mj."EntityField"
@@ -27293,7 +28453,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'B098B41F-7953-473E-8257-DB6BFFEF48A0' AND "AutoUpdateCategory" = 1;
+   "ID" = 'B098B41F-7953-473E-8257-DB6BFFEF48A0' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."Category"
 
 UPDATE __mj."EntityField"
@@ -27302,7 +28462,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '6517DB09-A12E-4F1B-95B6-0B0A92918A1D' AND "AutoUpdateCategory" = 1;
+   "ID" = '6517DB09-A12E-4F1B-95B6-0B0A92918A1D' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents.__mj_CreatedAt
 
 UPDATE __mj."EntityField"
@@ -27311,7 +28471,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '353D4710-73B2-4AF5-8A93-9DC1F47FF6E5' AND "AutoUpdateCategory" = 1;
+   "ID" = '353D4710-73B2-4AF5-8A93-9DC1F47FF6E5' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents.__mj_UpdatedAt
 
 UPDATE __mj."EntityField"
@@ -27320,7 +28480,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '3177830D-10A0-4003-B95D-8514974BA846' AND "AutoUpdateCategory" = 1;
+   "ID" = '3177830D-10A0-4003-B95D-8514974BA846' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."ParentID"
 
 UPDATE __mj."EntityField"
@@ -27330,7 +28490,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'A6F8773F-4021-45DD-B142-9BFE4F67EC87' AND "AutoUpdateCategory" = 1;
+   "ID" = 'A6F8773F-4021-45DD-B142-9BFE4F67EC87' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."ExposeAsAction"
 
 UPDATE __mj."EntityField"
@@ -27339,7 +28499,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'DF61AC7C-79A7-4058-96A1-85EBA9339D45' AND "AutoUpdateCategory" = 1;
+   "ID" = 'DF61AC7C-79A7-4058-96A1-85EBA9339D45' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."ExecutionOrder"
 
 UPDATE __mj."EntityField"
@@ -27348,7 +28508,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '090830CE-4073-486C-BBF2-E2105BEADD91' AND "AutoUpdateCategory" = 1;
+   "ID" = '090830CE-4073-486C-BBF2-E2105BEADD91' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."ExecutionMode"
 
 UPDATE __mj."EntityField"
@@ -27357,7 +28517,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '8261D630-2560-4C03-BE14-C8A9682ABBB4' AND "AutoUpdateCategory" = 1;
+   "ID" = '8261D630-2560-4C03-BE14-C8A9682ABBB4' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."InvocationMode"
 
 UPDATE __mj."EntityField"
@@ -27366,7 +28526,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '3AFE3A93-073F-4EF0-A03F-BF1C1BE3C39C' AND "AutoUpdateCategory" = 1;
+   "ID" = '3AFE3A93-073F-4EF0-A03F-BF1C1BE3C39C' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."Parent"
 
 UPDATE __mj."EntityField"
@@ -27375,7 +28535,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '52E74C81-D246-4B52-B7A7-91757C299671' AND "AutoUpdateCategory" = 1;
+   "ID" = '52E74C81-D246-4B52-B7A7-91757C299671' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."RootParentID"
 
 UPDATE __mj."EntityField"
@@ -27385,7 +28545,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '644AA4B2-1044-430C-BCBA-245644294E02' AND "AutoUpdateCategory" = 1;
+   "ID" = '644AA4B2-1044-430C-BCBA-245644294E02' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."EnableContextCompression"
 
 UPDATE __mj."EntityField"
@@ -27394,7 +28554,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '09AFE563-63E3-4F2B-B6F1-5945432FF07B' AND "AutoUpdateCategory" = 1;
+   "ID" = '09AFE563-63E3-4F2B-B6F1-5945432FF07B' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."ContextCompressionMessageThreshold"
 
 UPDATE __mj."EntityField"
@@ -27404,7 +28564,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '451D5C8F-6749-4789-A158-658B38A74AE4' AND "AutoUpdateCategory" = 1;
+   "ID" = '451D5C8F-6749-4789-A158-658B38A74AE4' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."ContextCompressionPromptID"
 
 UPDATE __mj."EntityField"
@@ -27414,7 +28574,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'FFD209C5-48F3-45D1-9094-E76EC832EA07' AND "AutoUpdateCategory" = 1;
+   "ID" = 'FFD209C5-48F3-45D1-9094-E76EC832EA07' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."ContextCompressionMessageRetentionCount"
 
 UPDATE __mj."EntityField"
@@ -27424,7 +28584,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '73A50D68-976F-49A7-9737-12D1D26C6011' AND "AutoUpdateCategory" = 1;
+   "ID" = '73A50D68-976F-49A7-9737-12D1D26C6011' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."ContextCompressionPrompt"
 
 UPDATE __mj."EntityField"
@@ -27434,7 +28594,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'AD36EF69-1494-409C-A97E-FE73669DD28A' AND "AutoUpdateCategory" = 1;
+   "ID" = 'AD36EF69-1494-409C-A97E-FE73669DD28A' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."PayloadDownstreamPaths"
 
 UPDATE __mj."EntityField"
@@ -27444,7 +28604,7 @@ SET
    "ExtendedType" = 'Code',
    "CodeType" = 'JavaScript'
 WHERE 
-   "ID" = '85B6AA86-796D-4970-9E35-5A483498B517' AND "AutoUpdateCategory" = 1;
+   "ID" = '85B6AA86-796D-4970-9E35-5A483498B517' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."PayloadUpstreamPaths"
 
 UPDATE __mj."EntityField"
@@ -27454,7 +28614,7 @@ SET
    "ExtendedType" = 'Code',
    "CodeType" = 'JavaScript'
 WHERE 
-   "ID" = 'DA784B76-66CD-434B-90BD-DEC808917E68' AND "AutoUpdateCategory" = 1;
+   "ID" = 'DA784B76-66CD-434B-90BD-DEC808917E68' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."PayloadSelfReadPaths"
 
 UPDATE __mj."EntityField"
@@ -27464,7 +28624,7 @@ SET
    "ExtendedType" = 'Code',
    "CodeType" = 'JavaScript'
 WHERE 
-   "ID" = 'EBF3B958-F07C-420B-82BE-2CB1E396A0F5' AND "AutoUpdateCategory" = 1;
+   "ID" = 'EBF3B958-F07C-420B-82BE-2CB1E396A0F5' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."PayloadSelfWritePaths"
 
 UPDATE __mj."EntityField"
@@ -27474,7 +28634,7 @@ SET
    "ExtendedType" = 'Code',
    "CodeType" = 'JavaScript'
 WHERE 
-   "ID" = '61E51FC3-8EFA-40D9-9525-F3FAD0A95DCA' AND "AutoUpdateCategory" = 1;
+   "ID" = '61E51FC3-8EFA-40D9-9525-F3FAD0A95DCA' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."PayloadScope"
 
 UPDATE __mj."EntityField"
@@ -27483,7 +28643,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '2E542986-0164-4B9E-8457-06826A4AB892' AND "AutoUpdateCategory" = 1;
+   "ID" = '2E542986-0164-4B9E-8457-06826A4AB892' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."FinalPayloadValidation"
 
 UPDATE __mj."EntityField"
@@ -27492,7 +28652,7 @@ SET
    "ExtendedType" = 'Code',
    "CodeType" = 'JavaScript'
 WHERE 
-   "ID" = '1C7959AE-F48B-4858-8383-28C3F4706314' AND "AutoUpdateCategory" = 1;
+   "ID" = '1C7959AE-F48B-4858-8383-28C3F4706314' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."FinalPayloadValidationMode"
 
 UPDATE __mj."EntityField"
@@ -27502,7 +28662,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '8931DE12-4048-4DEB-A2A3-E821354CFFB2' AND "AutoUpdateCategory" = 1;
+   "ID" = '8931DE12-4048-4DEB-A2A3-E821354CFFB2' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."FinalPayloadValidationMaxRetries"
 
 UPDATE __mj."EntityField"
@@ -27512,7 +28672,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'AF62DAAB-74D4-4539-9B47-58DD4A023E4B' AND "AutoUpdateCategory" = 1;
+   "ID" = 'AF62DAAB-74D4-4539-9B47-58DD4A023E4B' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."StartingPayloadValidation"
 
 UPDATE __mj."EntityField"
@@ -27521,7 +28681,7 @@ SET
    "ExtendedType" = 'Code',
    "CodeType" = 'JavaScript'
 WHERE 
-   "ID" = 'B7A2371C-A22C-48EA-827E-824F8A40DA3D' AND "AutoUpdateCategory" = 1;
+   "ID" = 'B7A2371C-A22C-48EA-827E-824F8A40DA3D' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."StartingPayloadValidationMode"
 
 UPDATE __mj."EntityField"
@@ -27531,7 +28691,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '0947203D-A5CA-4ED2-895B-17A8007323FC' AND "AutoUpdateCategory" = 1;
+   "ID" = '0947203D-A5CA-4ED2-895B-17A8007323FC' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."InjectNotes"
 
 UPDATE __mj."EntityField"
@@ -27540,7 +28700,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '37E075BD-CC4B-4AE1-8D12-7EC45B663F69' AND "AutoUpdateCategory" = 1;
+   "ID" = '37E075BD-CC4B-4AE1-8D12-7EC45B663F69' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."MaxNotesToInject"
 
 UPDATE __mj."EntityField"
@@ -27550,7 +28710,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'A8DA4C67-B2F7-4C1D-8522-A2B5B4BADA21' AND "AutoUpdateCategory" = 1;
+   "ID" = 'A8DA4C67-B2F7-4C1D-8522-A2B5B4BADA21' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."NoteInjectionStrategy"
 
 UPDATE __mj."EntityField"
@@ -27559,7 +28719,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'F5F6BE87-06F4-404D-A1C3-B315C562C32B' AND "AutoUpdateCategory" = 1;
+   "ID" = 'F5F6BE87-06F4-404D-A1C3-B315C562C32B' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."InjectExamples"
 
 UPDATE __mj."EntityField"
@@ -27568,7 +28728,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '1C9957C7-A851-4C05-83B3-F49A5FC3FE4D' AND "AutoUpdateCategory" = 1;
+   "ID" = '1C9957C7-A851-4C05-83B3-F49A5FC3FE4D' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."MaxExamplesToInject"
 
 UPDATE __mj."EntityField"
@@ -27578,7 +28738,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'DDEE3E91-4B0D-4264-9EF1-ACAAB8D105E5' AND "AutoUpdateCategory" = 1;
+   "ID" = 'DDEE3E91-4B0D-4264-9EF1-ACAAB8D105E5' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."ExampleInjectionStrategy"
 
 UPDATE __mj."EntityField"
@@ -27587,7 +28747,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '291FEE7A-1245-4C82-A470-07EEB8847F1E' AND "AutoUpdateCategory" = 1;
+   "ID" = '291FEE7A-1245-4C82-A470-07EEB8847F1E' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."MaxCostPerRun"
 
 UPDATE __mj."EntityField"
@@ -27596,7 +28756,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '23850C5A-311A-4271-AE53-BD36921C5AA5' AND "AutoUpdateCategory" = 1;
+   "ID" = '23850C5A-311A-4271-AE53-BD36921C5AA5' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."MaxTokensPerRun"
 
 UPDATE __mj."EntityField"
@@ -27605,7 +28765,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'C5F8BB50-DC10-4DFC-AC45-8613C152EE94' AND "AutoUpdateCategory" = 1;
+   "ID" = 'C5F8BB50-DC10-4DFC-AC45-8613C152EE94' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."MaxIterationsPerRun"
 
 UPDATE __mj."EntityField"
@@ -27614,7 +28774,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '3FA6B9F3-60BC-4631-8EB4-7ED0D04844C4' AND "AutoUpdateCategory" = 1;
+   "ID" = '3FA6B9F3-60BC-4631-8EB4-7ED0D04844C4' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."MaxTimePerRun"
 
 UPDATE __mj."EntityField"
@@ -27623,7 +28783,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'E64A4FF8-BAD5-491C-9D8D-E5E70378ED67' AND "AutoUpdateCategory" = 1;
+   "ID" = 'E64A4FF8-BAD5-491C-9D8D-E5E70378ED67' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."MinExecutionsPerRun"
 
 UPDATE __mj."EntityField"
@@ -27632,7 +28792,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'BCCCA2DC-8A15-4701-98E2-337FB60B463A' AND "AutoUpdateCategory" = 1;
+   "ID" = 'BCCCA2DC-8A15-4701-98E2-337FB60B463A' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."MaxExecutionsPerRun"
 
 UPDATE __mj."EntityField"
@@ -27641,7 +28801,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'F0CCA759-DEA4-4F61-B233-C632EE9317E1' AND "AutoUpdateCategory" = 1;
+   "ID" = 'F0CCA759-DEA4-4F61-B233-C632EE9317E1' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."DefaultPromptEffortLevel"
 
 UPDATE __mj."EntityField"
@@ -27651,7 +28811,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'DCBAEEFD-C5A2-449D-A4B9-EAB1290C2F89' AND "AutoUpdateCategory" = 1;
+   "ID" = 'DCBAEEFD-C5A2-449D-A4B9-EAB1290C2F89' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."ChatHandlingOption"
 
 UPDATE __mj."EntityField"
@@ -27660,7 +28820,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'BC671EC0-ED51-4F0B-A46C-50BE0CE53E51' AND "AutoUpdateCategory" = 1;
+   "ID" = 'BC671EC0-ED51-4F0B-A46C-50BE0CE53E51' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."MessageMode"
 
 UPDATE __mj."EntityField"
@@ -27669,7 +28829,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '445C1618-EADB-4B34-B318-40C662141FE1' AND "AutoUpdateCategory" = 1;
+   "ID" = '445C1618-EADB-4B34-B318-40C662141FE1' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."MaxMessages"
 
 UPDATE __mj."EntityField"
@@ -27678,7 +28838,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'F8924303-D53A-43B0-B70F-5B74FA6248D9' AND "AutoUpdateCategory" = 1;
+   "ID" = 'F8924303-D53A-43B0-B70F-5B74FA6248D9' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."AllowEphemeralClientTools"
 
 UPDATE __mj."EntityField"
@@ -27687,7 +28847,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '98BE9EE9-A855-488E-9D97-441AEBA2B34D' AND "AutoUpdateCategory" = 1;
+   "ID" = '98BE9EE9-A855-488E-9D97-441AEBA2B34D' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."AttachmentStorageProviderID"
 
 UPDATE __mj."EntityField"
@@ -27697,7 +28857,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '4B5A24CC-1BC2-40E3-B83E-C8E164E6CFED' AND "AutoUpdateCategory" = 1;
+   "ID" = '4B5A24CC-1BC2-40E3-B83E-C8E164E6CFED' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."AttachmentRootPath"
 
 UPDATE __mj."EntityField"
@@ -27706,7 +28866,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'BA112220-B0D8-4C6F-B63A-027EB706B132' AND "AutoUpdateCategory" = 1;
+   "ID" = 'BA112220-B0D8-4C6F-B63A-027EB706B132' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."InlineStorageThresholdBytes"
 
 UPDATE __mj."EntityField"
@@ -27716,7 +28876,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'EC3D6539-FAF4-49B7-9A9B-6327249C9D06' AND "AutoUpdateCategory" = 1;
+   "ID" = 'EC3D6539-FAF4-49B7-9A9B-6327249C9D06' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."AttachmentStorageProvider"
 
 UPDATE __mj."EntityField"
@@ -27726,7 +28886,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'B6261245-1F52-43BA-9C92-A3E494D8C5BE' AND "AutoUpdateCategory" = 1;
+   "ID" = 'B6261245-1F52-43BA-9C92-A3E494D8C5BE' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."DefaultStorageAccountID"
 
 UPDATE __mj."EntityField"
@@ -27737,7 +28897,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '76AF4818-C79E-4DB5-8039-6B51C1C3A832' AND "AutoUpdateCategory" = 1;
+   "ID" = '76AF4818-C79E-4DB5-8039-6B51C1C3A832' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."DefaultStorageAccount"
 
 UPDATE __mj."EntityField"
@@ -27748,7 +28908,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'D900C3B8-F414-4468-AAA1-3CEB52C80ACD' AND "AutoUpdateCategory" = 1;
+   "ID" = 'D900C3B8-F414-4468-AAA1-3CEB52C80ACD' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."ScopeConfig"
 
 UPDATE __mj."EntityField"
@@ -27757,7 +28917,7 @@ SET
    "ExtendedType" = 'Code',
    "CodeType" = 'JavaScript'
 WHERE 
-   "ID" = 'F644A0DD-0C7D-44E5-A2D5-0DAE4F0455AD' AND "AutoUpdateCategory" = 1;
+   "ID" = 'F644A0DD-0C7D-44E5-A2D5-0DAE4F0455AD' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."NoteRetentionDays"
 
 UPDATE __mj."EntityField"
@@ -27766,7 +28926,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '38ABFFF6-5E0D-4AF1-B5CC-AB46B2358FB4' AND "AutoUpdateCategory" = 1;
+   "ID" = '38ABFFF6-5E0D-4AF1-B5CC-AB46B2358FB4' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."ExampleRetentionDays"
 
 UPDATE __mj."EntityField"
@@ -27775,7 +28935,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'A112A808-63DB-4B48-B38F-06554B912DED' AND "AutoUpdateCategory" = 1;
+   "ID" = 'A112A808-63DB-4B48-B38F-06554B912DED' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."AutoArchiveEnabled"
 
 UPDATE __mj."EntityField"
@@ -27784,7 +28944,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = '85774265-68C5-4067-9C2B-F70A7F21B94A' AND "AutoUpdateCategory" = 1;
+   "ID" = '85774265-68C5-4067-9C2B-F70A7F21B94A' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."RerankerConfiguration"
 
 UPDATE __mj."EntityField"
@@ -27793,7 +28953,7 @@ SET
    "ExtendedType" = 'Code',
    "CodeType" = 'JavaScript'
 WHERE 
-   "ID" = '269087F5-DEBE-4B14-8FA3-5938ADCF7325' AND "AutoUpdateCategory" = 1;
+   "ID" = '269087F5-DEBE-4B14-8FA3-5938ADCF7325' AND "AutoUpdateCategory" = TRUE;
 -- UPDATE Entity Field Category Info MJ: AI Agents."SearchScopeAccess"
 
 UPDATE __mj."EntityField"
@@ -27803,7 +28963,7 @@ SET
    "ExtendedType" = NULL,
    "CodeType" = NULL
 WHERE 
-   "ID" = 'E35727E8-E80F-4F6A-84DA-937BD59F6B56' AND "AutoUpdateCategory" = 1;
+   "ID" = 'E35727E8-E80F-4F6A-84DA-937BD59F6B56' AND "AutoUpdateCategory" = TRUE;
 /* Generated Validation Functions for MJ: Search Scope External Indexes */
 -- CHECK constraint for MJ: Search Scope External Indexes @ Table Level was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function
 
@@ -27864,8 +29024,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '4de8a2a1-b47d-481c-942a-7ef761bad70c' OR ("EntityID" = 'C30F80EC-E7CE-468E-B6C6-B8888F0F45C6' AND "Name" = 'ArchiveRun')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -27892,9 +29051,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '4de8a2a1-b47d-481c-942a-7ef761bad70c',
         'C30F80EC-E7CE-468E-B6C6-B8888F0F45C6', -- "Entity": "MJ": "Archive" "Run" "Details"
         100030, -- auto-bumped from 100028 (UQ_EntityField_EntityID_Sequence dedup),
@@ -27905,19 +29062,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -27947,8 +29104,7 @@ INSERT INTO __mj."Entity" (
          , "UserViewMaxRows"
          , "__mj_CreatedAt"
          , "__mj_UpdatedAt"
-      )
-      VALUES (
+      ) VALUES (
          '3939c9ec-bf91-4009-b83e-6e79307e06e9',
          'MJ: Search Scope Permissions',
          'Search Scope Permissions',
@@ -27957,17 +29113,9 @@ INSERT INTO __mj."Entity" (
          'SearchScopePermission',
          'vwSearchScopePermissions',
          '__mj',
-         1,
-         1,
-         1
-         , 1
-         , 0
-         , 0
-         , 0
-         , 1
-         , 1
-         , 1
-         , 1000
+         TRUE,
+         TRUE,
+         TRUE, TRUE, FALSE, FALSE, FALSE, TRUE, TRUE, TRUE, 1000
          , NOW()
          , NOW()
       );
@@ -27978,19 +29126,13 @@ INSERT INTO __mj."ApplicationEntity"
                                        ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '3939c9ec-bf91-4009-b83e-6e79307e06e9', (SELECT COALESCE(MAX("Sequence"),0)+1 FROM __mj."ApplicationEntity" WHERE "ApplicationID" = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: Search Scope Permissions for role UI */
 
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('3939c9ec-bf91-4009-b83e-6e79307e06e9', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, NOW(), NOW());
+INSERT INTO __mj."EntityPermission" ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('3939c9ec-bf91-4009-b83e-6e79307e06e9', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, FALSE, FALSE, FALSE, NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: Search Scope Permissions for role Developer */
 
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('3939c9ec-bf91-4009-b83e-6e79307e06e9', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0, NOW(), NOW());
+INSERT INTO __mj."EntityPermission" ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('3939c9ec-bf91-4009-b83e-6e79307e06e9', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, FALSE, NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: Search Scope Permissions for role Integration */
 
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('3939c9ec-bf91-4009-b83e-6e79307e06e9', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, NOW(), NOW());
+INSERT INTO __mj."EntityPermission" ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('3939c9ec-bf91-4009-b83e-6e79307e06e9', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, TRUE, NOW(), NOW());
 /* SQL text to add special date field __mj_CreatedAt to entity __mj."SearchScopePermission" */
 
 /* SQL text to add special date field __mj_CreatedAt to entity __mj."SearchScopePermission" */
@@ -28016,8 +29158,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '643c02f8-60c1-4a99-9bf1-e7ab3ad84800' OR ("EntityID" = '3939C9EC-BF91-4009-B83E-6E79307E06E9' AND "Name" = 'ID')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -28044,9 +29185,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '643c02f8-60c1-4a99-9bf1-e7ab3ad84800',
         '3939C9EC-BF91-4009-B83E-6E79307E06E9', -- "Entity": "MJ": "Search" "Scope" "Permissions"
         100001,
@@ -28057,19 +29196,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         'gen_random_uuid()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        1,
-        0,
-        0,
-        1,
-        1,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        TRUE,
+        TRUE,
         'Search',
         NOW(),
         NOW()
@@ -28082,8 +29221,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'aedd1cbc-6d4a-4ab0-9403-c3c0ac7d662d' OR ("EntityID" = '3939C9EC-BF91-4009-B83E-6E79307E06E9' AND "Name" = 'SearchScopeID')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -28110,9 +29248,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'aedd1cbc-6d4a-4ab0-9403-c3c0ac7d662d',
         '3939C9EC-BF91-4009-B83E-6E79307E06E9', -- "Entity": "MJ": "Search" "Scope" "Permissions"
         100002,
@@ -28123,19 +29259,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        TRUE,
         'Search',
         NOW(),
         NOW()
@@ -28148,8 +29284,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'bbd065e7-97b7-4ce3-b97a-a32a9d237bd3' OR ("EntityID" = '3939C9EC-BF91-4009-B83E-6E79307E06E9' AND "Name" = 'UserID')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -28176,9 +29311,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'bbd065e7-97b7-4ce3-b97a-a32a9d237bd3',
         '3939C9EC-BF91-4009-B83E-6E79307E06E9', -- "Entity": "MJ": "Search" "Scope" "Permissions"
         100003,
@@ -28189,19 +29322,19 @@ BEGIN
         16,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         'E1238F34-2837-EF11-86D4-6045BDEE16E6',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        TRUE,
         'Search',
         NOW(),
         NOW()
@@ -28214,8 +29347,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'c5f5ef24-662e-406a-803c-e9b2ab311b75' OR ("EntityID" = '3939C9EC-BF91-4009-B83E-6E79307E06E9' AND "Name" = 'RoleID')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -28242,9 +29374,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'c5f5ef24-662e-406a-803c-e9b2ab311b75',
         '3939C9EC-BF91-4009-B83E-6E79307E06E9', -- "Entity": "MJ": "Search" "Scope" "Permissions"
         100004,
@@ -28255,19 +29385,19 @@ BEGIN
         16,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         'DA238F34-2837-EF11-86D4-6045BDEE16E6',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        TRUE,
         'Search',
         NOW(),
         NOW()
@@ -28280,8 +29410,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '06a5b4dc-729b-40f9-9c9e-c7f03ef33eeb' OR ("EntityID" = '3939C9EC-BF91-4009-B83E-6E79307E06E9' AND "Name" = 'PermissionLevel')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -28308,9 +29437,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '06a5b4dc-729b-40f9-9c9e-c7f03ef33eeb',
         '3939C9EC-BF91-4009-B83E-6E79307E06E9', -- "Entity": "MJ": "Search" "Scope" "Permissions"
         100005,
@@ -28321,19 +29448,19 @@ BEGIN
         40,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -28346,8 +29473,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'a3d15591-ae65-4680-b625-553679e43fbc' OR ("EntityID" = '3939C9EC-BF91-4009-B83E-6E79307E06E9' AND "Name" = '__mj_CreatedAt')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -28374,9 +29500,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'a3d15591-ae65-4680-b625-553679e43fbc',
         '3939C9EC-BF91-4009-B83E-6E79307E06E9', -- "Entity": "MJ": "Search" "Scope" "Permissions"
         100006,
@@ -28387,19 +29511,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -28412,8 +29536,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'fd5e940b-edf0-4751-904f-01023961a3e8' OR ("EntityID" = '3939C9EC-BF91-4009-B83E-6E79307E06E9' AND "Name" = '__mj_UpdatedAt')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -28440,9 +29563,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'fd5e940b-edf0-4751-904f-01023961a3e8',
         '3939C9EC-BF91-4009-B83E-6E79307E06E9', -- "Entity": "MJ": "Search" "Scope" "Permissions"
         100007,
@@ -28453,19 +29574,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -28505,8 +29626,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '73bde172-011b-4d43-ac10-031be9367126'
     ) THEN
-        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('73bde172-011b-4d43-ac10-031be9367126', 'DA238F34-2837-EF11-86D4-6045BDEE16E6', '3939C9EC-BF91-4009-B83E-6E79307E06E9', 'RoleID', 'One To Many', 1, 1, 1, NOW(), NOW());
+        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('73bde172-011b-4d43-ac10-031be9367126', 'DA238F34-2837-EF11-86D4-6045BDEE16E6', '3939C9EC-BF91-4009-B83E-6E79307E06E9', 'RoleID', 'One To Many', TRUE, TRUE, 1, NOW(), NOW());
     END IF;
 END $$;
 
@@ -28515,8 +29635,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '4c407124-9797-4a76-8d68-1322dd2e76db'
     ) THEN
-        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('4c407124-9797-4a76-8d68-1322dd2e76db', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', '3939C9EC-BF91-4009-B83E-6E79307E06E9', 'UserID', 'One To Many', 1, 1, 2, NOW(), NOW());
+        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('4c407124-9797-4a76-8d68-1322dd2e76db', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', '3939C9EC-BF91-4009-B83E-6E79307E06E9', 'UserID', 'One To Many', TRUE, TRUE, 2, NOW(), NOW());
     END IF;
 END $$;
 
@@ -28525,8 +29644,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '5036194d-6382-44bc-ad75-1cc62bebd513'
     ) THEN
-        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('5036194d-6382-44bc-ad75-1cc62bebd513', '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6', '3939C9EC-BF91-4009-B83E-6E79307E06E9', 'SearchScopeID', 'One To Many', 1, 1, 3, NOW(), NOW());
+        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('5036194d-6382-44bc-ad75-1cc62bebd513', '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6', '3939C9EC-BF91-4009-B83E-6E79307E06E9', 'SearchScopeID', 'One To Many', TRUE, TRUE, 3, NOW(), NOW());
     END IF;
 END $$;
 
@@ -28535,8 +29653,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'bee7fd29-f483-457d-add5-5d057a626f94' OR ("EntityID" = '3939C9EC-BF91-4009-B83E-6E79307E06E9' AND "Name" = 'SearchScope')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -28563,9 +29680,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'bee7fd29-f483-457d-add5-5d057a626f94',
         '3939C9EC-BF91-4009-B83E-6E79307E06E9', -- "Entity": "MJ": "Search" "Scope" "Permissions"
         100015,
@@ -28576,19 +29691,19 @@ BEGIN
         400,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -28601,8 +29716,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'cb709707-99b2-4da3-b5ae-7b8675484e83' OR ("EntityID" = '3939C9EC-BF91-4009-B83E-6E79307E06E9' AND "Name" = 'User')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -28629,9 +29743,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'cb709707-99b2-4da3-b5ae-7b8675484e83',
         '3939C9EC-BF91-4009-B83E-6E79307E06E9', -- "Entity": "MJ": "Search" "Scope" "Permissions"
         100016,
@@ -28642,19 +29754,19 @@ BEGIN
         200,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -28667,8 +29779,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'dbde454c-e91c-4bc9-a9c3-6a82d5866259' OR ("EntityID" = '3939C9EC-BF91-4009-B83E-6E79307E06E9' AND "Name" = 'Role')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -28695,9 +29806,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'dbde454c-e91c-4bc9-a9c3-6a82d5866259',
         '3939C9EC-BF91-4009-B83E-6E79307E06E9', -- "Entity": "MJ": "Search" "Scope" "Permissions"
         100017,
@@ -28708,19 +29817,19 @@ BEGIN
         100,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -28733,8 +29842,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'b78487f3-c411-4b75-837d-0d8d4b1d6dac' OR ("EntityID" = '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6' AND "Name" = 'RerankerBudgetCents')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -28761,9 +29869,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'b78487f3-c411-4b75-837d-0d8d4b1d6dac',
         '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6', -- "Entity": "MJ": "Search" "Scopes"
         100031,
@@ -28774,19 +29880,19 @@ BEGIN
         4,
         10,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -28816,8 +29922,7 @@ INSERT INTO __mj."Entity" (
          , "UserViewMaxRows"
          , "__mj_CreatedAt"
          , "__mj_UpdatedAt"
-      )
-      VALUES (
+      ) VALUES (
          '4ceda8d2-ce31-43e7-9236-40d4445e818e',
          'MJ: Search Execution Logs',
          'Search Execution Logs',
@@ -28826,17 +29931,9 @@ INSERT INTO __mj."Entity" (
          'SearchExecutionLog',
          'vwSearchExecutionLogs',
          '__mj',
-         1,
-         1,
-         1
-         , 1
-         , 0
-         , 0
-         , 0
-         , 1
-         , 1
-         , 1
-         , 1000
+         TRUE,
+         TRUE,
+         TRUE, TRUE, FALSE, FALSE, FALSE, TRUE, TRUE, TRUE, 1000
          , NOW()
          , NOW()
       );
@@ -28847,19 +29944,13 @@ INSERT INTO __mj."ApplicationEntity"
                                        ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '4ceda8d2-ce31-43e7-9236-40d4445e818e', (SELECT COALESCE(MAX("Sequence"),0)+1 FROM __mj."ApplicationEntity" WHERE "ApplicationID" = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: Search Execution Logs for role UI */
 
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('4ceda8d2-ce31-43e7-9236-40d4445e818e', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, NOW(), NOW());
+INSERT INTO __mj."EntityPermission" ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('4ceda8d2-ce31-43e7-9236-40d4445e818e', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, FALSE, FALSE, FALSE, NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: Search Execution Logs for role Developer */
 
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('4ceda8d2-ce31-43e7-9236-40d4445e818e', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0, NOW(), NOW());
+INSERT INTO __mj."EntityPermission" ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('4ceda8d2-ce31-43e7-9236-40d4445e818e', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, FALSE, NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: Search Execution Logs for role Integration */
 
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('4ceda8d2-ce31-43e7-9236-40d4445e818e', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, NOW(), NOW());
+INSERT INTO __mj."EntityPermission" ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('4ceda8d2-ce31-43e7-9236-40d4445e818e', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, TRUE, NOW(), NOW());
 /* SQL text to add special date field __mj_CreatedAt to entity __mj."SearchExecutionLog" */
 
 /* SQL text to add special date field __mj_CreatedAt to entity __mj."SearchExecutionLog" */
@@ -28885,8 +29976,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'b0643e1a-d845-45b4-bade-ddcac9dbea63' OR ("EntityID" = '4CEDA8D2-CE31-43E7-9236-40D4445E818E' AND "Name" = 'ID')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -28913,9 +30003,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'b0643e1a-d845-45b4-bade-ddcac9dbea63',
         '4CEDA8D2-CE31-43E7-9236-40D4445E818E', -- "Entity": "MJ": "Search" "Execution" "Logs"
         100001,
@@ -28926,19 +30014,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         'gen_random_uuid()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        1,
-        0,
-        0,
-        1,
-        1,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        TRUE,
+        TRUE,
         'Search',
         NOW(),
         NOW()
@@ -28951,8 +30039,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '2fed1195-2960-44fb-89e4-1e32b011c2b5' OR ("EntityID" = '4CEDA8D2-CE31-43E7-9236-40D4445E818E' AND "Name" = 'SearchScopeID')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -28979,9 +30066,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '2fed1195-2960-44fb-89e4-1e32b011c2b5',
         '4CEDA8D2-CE31-43E7-9236-40D4445E818E', -- "Entity": "MJ": "Search" "Execution" "Logs"
         100002,
@@ -28992,19 +30077,19 @@ BEGIN
         16,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -29017,8 +30102,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'b5c50946-eff9-4dd5-948b-bb4a860b8ae4' OR ("EntityID" = '4CEDA8D2-CE31-43E7-9236-40D4445E818E' AND "Name" = 'UserID')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -29045,9 +30129,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'b5c50946-eff9-4dd5-948b-bb4a860b8ae4',
         '4CEDA8D2-CE31-43E7-9236-40D4445E818E', -- "Entity": "MJ": "Search" "Execution" "Logs"
         100003,
@@ -29058,19 +30140,19 @@ BEGIN
         16,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         'E1238F34-2837-EF11-86D4-6045BDEE16E6',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -29083,8 +30165,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '3c19db93-6b2b-4c07-97a3-b21c73acf46e' OR ("EntityID" = '4CEDA8D2-CE31-43E7-9236-40D4445E818E' AND "Name" = 'AIAgentID')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -29111,9 +30192,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '3c19db93-6b2b-4c07-97a3-b21c73acf46e',
         '4CEDA8D2-CE31-43E7-9236-40D4445E818E', -- "Entity": "MJ": "Search" "Execution" "Logs"
         100004,
@@ -29124,19 +30203,19 @@ BEGIN
         16,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         'CDB135CC-6D3C-480B-90AE-25B7805F82C1',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -29149,8 +30228,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'cccc2935-1742-41f3-b5ae-f8de8bea75bf' OR ("EntityID" = '4CEDA8D2-CE31-43E7-9236-40D4445E818E' AND "Name" = 'Query')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -29177,9 +30255,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'cccc2935-1742-41f3-b5ae-f8de8bea75bf',
         '4CEDA8D2-CE31-43E7-9236-40D4445E818E', -- "Entity": "MJ": "Search" "Execution" "Logs"
         100005,
@@ -29190,19 +30266,19 @@ BEGIN
         -1,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -29215,8 +30291,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'dd90fe9d-95ac-42d7-b4b5-ff302eef7c6a' OR ("EntityID" = '4CEDA8D2-CE31-43E7-9236-40D4445E818E' AND "Name" = 'TotalDurationMs')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -29243,9 +30318,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'dd90fe9d-95ac-42d7-b4b5-ff302eef7c6a',
         '4CEDA8D2-CE31-43E7-9236-40D4445E818E', -- "Entity": "MJ": "Search" "Execution" "Logs"
         100006,
@@ -29256,19 +30329,19 @@ BEGIN
         4,
         10,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -29281,8 +30354,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'cba37db4-d488-4a92-be09-c5f614d4bf2b' OR ("EntityID" = '4CEDA8D2-CE31-43E7-9236-40D4445E818E' AND "Name" = 'ResultCount')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -29309,9 +30381,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'cba37db4-d488-4a92-be09-c5f614d4bf2b',
         '4CEDA8D2-CE31-43E7-9236-40D4445E818E', -- "Entity": "MJ": "Search" "Execution" "Logs"
         100007,
@@ -29322,19 +30392,19 @@ BEGIN
         4,
         10,
         0,
-        0,
+        FALSE,
         '(0)',
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -29347,8 +30417,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '66dec9b6-e31e-40ff-a8c0-ea763656a434' OR ("EntityID" = '4CEDA8D2-CE31-43E7-9236-40D4445E818E' AND "Name" = 'RerankerName')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -29375,9 +30444,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '66dec9b6-e31e-40ff-a8c0-ea763656a434',
         '4CEDA8D2-CE31-43E7-9236-40D4445E818E', -- "Entity": "MJ": "Search" "Execution" "Logs"
         100008,
@@ -29388,19 +30455,19 @@ BEGIN
         200,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -29413,8 +30480,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'd3b82b4e-7349-4f6a-aed8-72ed2c0c6d28' OR ("EntityID" = '4CEDA8D2-CE31-43E7-9236-40D4445E818E' AND "Name" = 'RerankerCostCents')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -29441,9 +30507,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'd3b82b4e-7349-4f6a-aed8-72ed2c0c6d28',
         '4CEDA8D2-CE31-43E7-9236-40D4445E818E', -- "Entity": "MJ": "Search" "Execution" "Logs"
         100009,
@@ -29454,19 +30518,19 @@ BEGIN
         9,
         10,
         4,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -29479,8 +30543,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '30f1f439-432a-41c7-8d03-3fbb7c922ed2' OR ("EntityID" = '4CEDA8D2-CE31-43E7-9236-40D4445E818E' AND "Name" = 'Status')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -29507,9 +30570,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '30f1f439-432a-41c7-8d03-3fbb7c922ed2',
         '4CEDA8D2-CE31-43E7-9236-40D4445E818E', -- "Entity": "MJ": "Search" "Execution" "Logs"
         100010,
@@ -29520,19 +30581,19 @@ BEGIN
         40,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -29545,8 +30606,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '991c7288-c1e8-43f4-b72d-c3c68441f4b9' OR ("EntityID" = '4CEDA8D2-CE31-43E7-9236-40D4445E818E' AND "Name" = 'FailureReason')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -29573,9 +30633,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '991c7288-c1e8-43f4-b72d-c3c68441f4b9',
         '4CEDA8D2-CE31-43E7-9236-40D4445E818E', -- "Entity": "MJ": "Search" "Execution" "Logs"
         100011,
@@ -29586,19 +30644,19 @@ BEGIN
         1000,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -29611,8 +30669,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '27dd3cc2-837b-4d8b-89a5-687ec1ff4471' OR ("EntityID" = '4CEDA8D2-CE31-43E7-9236-40D4445E818E' AND "Name" = 'ProvidersJSON')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -29639,9 +30696,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '27dd3cc2-837b-4d8b-89a5-687ec1ff4471',
         '4CEDA8D2-CE31-43E7-9236-40D4445E818E', -- "Entity": "MJ": "Search" "Execution" "Logs"
         100012,
@@ -29652,19 +30707,19 @@ BEGIN
         -1,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -29677,8 +30732,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '20b17dad-b04f-4ff1-902e-7108c9cbdc27' OR ("EntityID" = '4CEDA8D2-CE31-43E7-9236-40D4445E818E' AND "Name" = '__mj_CreatedAt')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -29705,9 +30759,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '20b17dad-b04f-4ff1-902e-7108c9cbdc27',
         '4CEDA8D2-CE31-43E7-9236-40D4445E818E', -- "Entity": "MJ": "Search" "Execution" "Logs"
         100013,
@@ -29718,19 +30770,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -29743,8 +30795,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '188a7339-d591-4ec4-b6ca-a875977ac9a1' OR ("EntityID" = '4CEDA8D2-CE31-43E7-9236-40D4445E818E' AND "Name" = '__mj_UpdatedAt')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -29771,9 +30822,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '188a7339-d591-4ec4-b6ca-a875977ac9a1',
         '4CEDA8D2-CE31-43E7-9236-40D4445E818E', -- "Entity": "MJ": "Search" "Execution" "Logs"
         100014,
@@ -29784,19 +30833,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -29830,8 +30879,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '4659f2ca-3351-4f3e-b77f-e6fe520d25c4'
     ) THEN
-        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('4659f2ca-3351-4f3e-b77f-e6fe520d25c4', 'CDB135CC-6D3C-480B-90AE-25B7805F82C1', '4CEDA8D2-CE31-43E7-9236-40D4445E818E', 'AIAgentID', 'One To Many', 1, 1, 1, NOW(), NOW());
+        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('4659f2ca-3351-4f3e-b77f-e6fe520d25c4', 'CDB135CC-6D3C-480B-90AE-25B7805F82C1', '4CEDA8D2-CE31-43E7-9236-40D4445E818E', 'AIAgentID', 'One To Many', TRUE, TRUE, 1, NOW(), NOW());
     END IF;
 END $$;
 
@@ -29840,8 +30888,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = 'a6961582-fb9d-4453-b6df-6e9576af585a'
     ) THEN
-        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('a6961582-fb9d-4453-b6df-6e9576af585a', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', '4CEDA8D2-CE31-43E7-9236-40D4445E818E', 'UserID', 'One To Many', 1, 1, 2, NOW(), NOW());
+        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('a6961582-fb9d-4453-b6df-6e9576af585a', 'E1238F34-2837-EF11-86D4-6045BDEE16E6', '4CEDA8D2-CE31-43E7-9236-40D4445E818E', 'UserID', 'One To Many', TRUE, TRUE, 2, NOW(), NOW());
     END IF;
 END $$;
 
@@ -29850,8 +30897,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = '1c63ff71-a025-4ba4-b60e-6afd2a67318a'
     ) THEN
-        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('1c63ff71-a025-4ba4-b60e-6afd2a67318a', '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6', '4CEDA8D2-CE31-43E7-9236-40D4445E818E', 'SearchScopeID', 'One To Many', 1, 1, 3, NOW(), NOW());
+        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('1c63ff71-a025-4ba4-b60e-6afd2a67318a', '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6', '4CEDA8D2-CE31-43E7-9236-40D4445E818E', 'SearchScopeID', 'One To Many', TRUE, TRUE, 3, NOW(), NOW());
     END IF;
 END $$;
 
@@ -29860,8 +30906,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'bbeffe02-f0ab-4dc3-82a7-771a4dc41a95' OR ("EntityID" = '4CEDA8D2-CE31-43E7-9236-40D4445E818E' AND "Name" = 'SearchScope')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -29888,9 +30933,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'bbeffe02-f0ab-4dc3-82a7-771a4dc41a95',
         '4CEDA8D2-CE31-43E7-9236-40D4445E818E', -- "Entity": "MJ": "Search" "Execution" "Logs"
         100029,
@@ -29901,19 +30944,19 @@ BEGIN
         400,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -29926,8 +30969,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '09a02147-9a2d-4b5b-aaf9-17efe50ebdaf' OR ("EntityID" = '4CEDA8D2-CE31-43E7-9236-40D4445E818E' AND "Name" = 'User')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -29954,9 +30996,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '09a02147-9a2d-4b5b-aaf9-17efe50ebdaf',
         '4CEDA8D2-CE31-43E7-9236-40D4445E818E', -- "Entity": "MJ": "Search" "Execution" "Logs"
         100030,
@@ -29967,19 +31007,19 @@ BEGIN
         200,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -29992,8 +31032,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '26507587-925b-4310-b74a-bb4b42f491ce' OR ("EntityID" = '4CEDA8D2-CE31-43E7-9236-40D4445E818E' AND "Name" = 'AIAgent')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -30020,9 +31059,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '26507587-925b-4310-b74a-bb4b42f491ce',
         '4CEDA8D2-CE31-43E7-9236-40D4445E818E', -- "Entity": "MJ": "Search" "Execution" "Logs"
         100031,
@@ -30033,19 +31070,19 @@ BEGIN
         510,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -30075,8 +31112,7 @@ INSERT INTO __mj."Entity" (
          , "UserViewMaxRows"
          , "__mj_CreatedAt"
          , "__mj_UpdatedAt"
-      )
-      VALUES (
+      ) VALUES (
          '839b8511-0b9f-44b0-a687-2d9cedc81301',
          'MJ: Search Scope Test Queries',
          'Search Scope Test Queries',
@@ -30085,17 +31121,9 @@ INSERT INTO __mj."Entity" (
          'SearchScopeTestQuery',
          'vwSearchScopeTestQueries',
          '__mj',
-         1,
-         1,
-         1
-         , 1
-         , 0
-         , 0
-         , 0
-         , 1
-         , 1
-         , 1
-         , 1000
+         TRUE,
+         TRUE,
+         TRUE, TRUE, FALSE, FALSE, FALSE, TRUE, TRUE, TRUE, 1000
          , NOW()
          , NOW()
       );
@@ -30106,19 +31134,13 @@ INSERT INTO __mj."ApplicationEntity"
                                        ('EBA5CCEC-6A37-EF11-86D4-000D3A4E707E', '839b8511-0b9f-44b0-a687-2d9cedc81301', (SELECT COALESCE(MAX("Sequence"),0)+1 FROM __mj."ApplicationEntity" WHERE "ApplicationID" = 'EBA5CCEC-6A37-EF11-86D4-000D3A4E707E'), NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: Search Scope Test Queries for role UI */
 
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('839b8511-0b9f-44b0-a687-2d9cedc81301', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 0, 0, 0, NOW(), NOW());
+INSERT INTO __mj."EntityPermission" ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('839b8511-0b9f-44b0-a687-2d9cedc81301', 'E0AFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, FALSE, FALSE, FALSE, NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: Search Scope Test Queries for role Developer */
 
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('839b8511-0b9f-44b0-a687-2d9cedc81301', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 0, NOW(), NOW());
+INSERT INTO __mj."EntityPermission" ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('839b8511-0b9f-44b0-a687-2d9cedc81301', 'DEAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, FALSE, NOW(), NOW());
 /* SQL generated to add new permission for entity MJ: Search Scope Test Queries for role Integration */
 
-INSERT INTO __mj."EntityPermission"
-                                                   ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES
-                                                   ('839b8511-0b9f-44b0-a687-2d9cedc81301', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', 1, 1, 1, 1, NOW(), NOW());
+INSERT INTO __mj."EntityPermission" ("EntityID", "RoleID", "CanRead", "CanCreate", "CanUpdate", "CanDelete", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('839b8511-0b9f-44b0-a687-2d9cedc81301', 'DFAFCCEC-6A37-EF11-86D4-000D3A4E707E', TRUE, TRUE, TRUE, TRUE, NOW(), NOW());
 /* SQL text to add special date field __mj_CreatedAt to entity __mj."SearchScopeTestQuery" */
 
 /* SQL text to add special date field __mj_CreatedAt to entity __mj."SearchScopeTestQuery" */
@@ -30144,8 +31166,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '5f6f9d12-560a-43b3-af9d-7f3639a15d69' OR ("EntityID" = '839B8511-0B9F-44B0-A687-2D9CEDC81301' AND "Name" = 'ID')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -30172,9 +31193,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '5f6f9d12-560a-43b3-af9d-7f3639a15d69',
         '839B8511-0B9F-44B0-A687-2D9CEDC81301', -- "Entity": "MJ": "Search" "Scope" "Test" "Queries"
         100001,
@@ -30185,19 +31204,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         'gen_random_uuid()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        1,
-        0,
-        0,
-        1,
-        1,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        TRUE,
+        TRUE,
         'Search',
         NOW(),
         NOW()
@@ -30210,8 +31229,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'b614f0a2-9f7c-4103-95b6-14e42778ff7e' OR ("EntityID" = '839B8511-0B9F-44B0-A687-2D9CEDC81301' AND "Name" = 'SearchScopeID')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -30238,9 +31256,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'b614f0a2-9f7c-4103-95b6-14e42778ff7e',
         '839B8511-0B9F-44B0-A687-2D9CEDC81301', -- "Entity": "MJ": "Search" "Scope" "Test" "Queries"
         100002,
@@ -30251,19 +31267,19 @@ BEGIN
         16,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6',
         'ID',
-        0,
-        0,
-        1,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        TRUE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -30276,8 +31292,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '41d39e10-6f65-405a-9f3c-b0627f88e7d4' OR ("EntityID" = '839B8511-0B9F-44B0-A687-2D9CEDC81301' AND "Name" = 'Label')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -30304,9 +31319,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '41d39e10-6f65-405a-9f3c-b0627f88e7d4',
         '839B8511-0B9F-44B0-A687-2D9CEDC81301', -- "Entity": "MJ": "Search" "Scope" "Test" "Queries"
         100003,
@@ -30317,19 +31330,19 @@ BEGIN
         400,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -30342,8 +31355,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '31c33ece-73cb-4656-8676-27ee2c86d573' OR ("EntityID" = '839B8511-0B9F-44B0-A687-2D9CEDC81301' AND "Name" = 'Query')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -30370,9 +31382,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '31c33ece-73cb-4656-8676-27ee2c86d573',
         '839B8511-0B9F-44B0-A687-2D9CEDC81301', -- "Entity": "MJ": "Search" "Scope" "Test" "Queries"
         100004,
@@ -30383,19 +31393,19 @@ BEGIN
         -1,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -30408,8 +31418,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'efde95c3-785d-412b-ac26-275d8f99c121' OR ("EntityID" = '839B8511-0B9F-44B0-A687-2D9CEDC81301' AND "Name" = 'ExpectedTopResultEntity')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -30436,9 +31445,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'efde95c3-785d-412b-ac26-275d8f99c121',
         '839B8511-0B9F-44B0-A687-2D9CEDC81301', -- "Entity": "MJ": "Search" "Scope" "Test" "Queries"
         100005,
@@ -30449,19 +31456,19 @@ BEGIN
         510,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -30474,8 +31481,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '48f6f725-df4e-4441-be19-2fc416d35a8c' OR ("EntityID" = '839B8511-0B9F-44B0-A687-2D9CEDC81301' AND "Name" = 'ExpectedTopResultRecordID')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -30502,9 +31508,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '48f6f725-df4e-4441-be19-2fc416d35a8c',
         '839B8511-0B9F-44B0-A687-2D9CEDC81301', -- "Entity": "MJ": "Search" "Scope" "Test" "Queries"
         100006,
@@ -30515,19 +31519,19 @@ BEGIN
         16,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -30540,8 +31544,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '4c8dd20d-8547-4c6b-9d5f-14d8770a1315' OR ("EntityID" = '839B8511-0B9F-44B0-A687-2D9CEDC81301' AND "Name" = 'Notes')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -30568,9 +31571,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '4c8dd20d-8547-4c6b-9d5f-14d8770a1315',
         '839B8511-0B9F-44B0-A687-2D9CEDC81301', -- "Entity": "MJ": "Search" "Scope" "Test" "Queries"
         100007,
@@ -30581,19 +31582,19 @@ BEGIN
         -1,
         0,
         0,
-        1,
+        TRUE,
         NULL,
-        0,
-        1,
-        0,
+        FALSE,
+        TRUE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -30606,8 +31607,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '3446808c-f10b-40ee-afcd-e80c04cb9c34' OR ("EntityID" = '839B8511-0B9F-44B0-A687-2D9CEDC81301' AND "Name" = '__mj_CreatedAt')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -30634,9 +31634,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '3446808c-f10b-40ee-afcd-e80c04cb9c34',
         '839B8511-0B9F-44B0-A687-2D9CEDC81301', -- "Entity": "MJ": "Search" "Scope" "Test" "Queries"
         100008,
@@ -30647,19 +31645,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -30672,8 +31670,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = '9699c598-1eff-4ead-bf83-03463e09ece5' OR ("EntityID" = '839B8511-0B9F-44B0-A687-2D9CEDC81301' AND "Name" = '__mj_UpdatedAt')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -30700,9 +31697,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         '9699c598-1eff-4ead-bf83-03463e09ece5',
         '839B8511-0B9F-44B0-A687-2D9CEDC81301', -- "Entity": "MJ": "Search" "Scope" "Test" "Queries"
         100009,
@@ -30713,19 +31708,19 @@ BEGIN
         10,
         34,
         7,
-        0,
+        FALSE,
         'NOW()',
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -30738,8 +31733,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityRelationship" WHERE "ID" = 'ea5dd428-30c9-4de6-b11a-f1c3f53da84c'
     ) THEN
-        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt")
-        VALUES ('ea5dd428-30c9-4de6-b11a-f1c3f53da84c', '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6', '839B8511-0B9F-44B0-A687-2D9CEDC81301', 'SearchScopeID', 'One To Many', 1, 1, 1, NOW(), NOW());
+        INSERT INTO __mj."EntityRelationship" ("ID", "EntityID", "RelatedEntityID", "RelatedEntityJoinField", "Type", "BundleInAPI", "DisplayInForm", "Sequence", "__mj_CreatedAt", "__mj_UpdatedAt") VALUES ('ea5dd428-30c9-4de6-b11a-f1c3f53da84c', '73A3EDE8-070F-4CC8-BD5D-C6B654FAE2F6', '839B8511-0B9F-44B0-A687-2D9CEDC81301', 'SearchScopeID', 'One To Many', TRUE, TRUE, 1, NOW(), NOW());
     END IF;
 END $$;
 
@@ -30748,8 +31742,7 @@ BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM __mj."EntityField" WHERE "ID" = 'f7f10218-85ad-47a5-893d-aa6194144a31' OR ("EntityID" = '839B8511-0B9F-44B0-A687-2D9CEDC81301' AND "Name" = 'SearchScope')
     ) THEN
-        INSERT INTO __mj."EntityField"
-        (
+        INSERT INTO __mj."EntityField" (
         "ID",
         "EntityID",
         "Sequence",
@@ -30776,9 +31769,7 @@ BEGIN
         "RelatedEntityDisplayType",
         "__mj_CreatedAt",
         "__mj_UpdatedAt"
-        )
-        VALUES
-        (
+        ) VALUES (
         'f7f10218-85ad-47a5-893d-aa6194144a31',
         '839B8511-0B9F-44B0-A687-2D9CEDC81301', -- "Entity": "MJ": "Search" "Scope" "Test" "Queries"
         100019,
@@ -30789,19 +31780,19 @@ BEGIN
         400,
         0,
         0,
-        0,
+        FALSE,
         NULL,
-        0,
-        0,
-        1,
+        FALSE,
+        FALSE,
+        TRUE,
         NULL,
         NULL,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
+        FALSE,
         'Search',
         NOW(),
         NOW()
@@ -35524,11 +36515,11 @@ COMMENT ON COLUMN __mj."SearchScopeTestQuery"."Notes" IS 'Free-form notes explai
 -- way for entity metadata.
 -- =============================================================================
 
--- NOTE: unrecognized batch type (UNKNOWN) — passed through as-is
-DROP CONSTRAINT UQ_SearchScopePermission_User;
-
--- NOTE: unrecognized batch type (UNKNOWN) — passed through as-is
-DROP CONSTRAINT UQ_SearchScopePermission_Role;
+-- Removed: the converter emitted bare `DROP CONSTRAINT ...` statements here
+-- (the second halves of two ALTER TABLE statements it split incorrectly).
+-- The actual constraint-drop is folded into the hand-fixed
+-- `ALTER TABLE ... DROP CONSTRAINT IF EXISTS ...` block at the top of the
+-- "Section 5" SearchScopePermission section above (around line 417).
 
 /* spUpdate Permissions for MJ: AI Agent Categories */
 
