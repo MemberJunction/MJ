@@ -2,6 +2,26 @@
 
 .search-composite-wrap {
     position: relative;
-    display: inline-block;
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
     width: 100%;
+}
+
+.search-composite-scope {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: stretch;
+}
+
+.search-composite-wrap > mj-search-input {
+    flex: 1;
+    min-width: 0;
+}
+
+.search-composite-wrap > mj-search-suggest {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
 }

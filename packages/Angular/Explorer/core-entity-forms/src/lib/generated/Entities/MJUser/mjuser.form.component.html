@@ -1833,6 +1833,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Search Scopes Section -->
+    <mj-collapsible-panel
+        SectionKey="mJSearchScopes"
+        SectionName="Search Scopes"
+        Icon="fa fa-search-location"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJSearchScopes')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scopes','OwnerUserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Search Scopes')"
+                [AllowLoad]="IsSectionExpanded('mJSearchScopes')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJSearchScopes', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Archive Configurations Section -->
     <mj-collapsible-panel
         SectionKey="mJArchiveConfigurations"
@@ -2352,6 +2377,56 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJArchiveRuns', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Search Scope Permissions Section -->
+    <mj-collapsible-panel
+        SectionKey="mJSearchScopePermissions"
+        SectionName="Search Scope Permissions"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJSearchScopePermissions')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope Permissions','UserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Search Scope Permissions')"
+                [AllowLoad]="IsSectionExpanded('mJSearchScopePermissions')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJSearchScopePermissions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Search Execution Logs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJSearchExecutionLogs"
+        SectionName="Search Execution Logs"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJSearchExecutionLogs')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Execution Logs','UserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Search Execution Logs')"
+                [AllowLoad]="IsSectionExpanded('mJSearchExecutionLogs')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJSearchExecutionLogs', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
