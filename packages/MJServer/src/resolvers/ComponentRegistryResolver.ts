@@ -232,7 +232,6 @@ export class ComponentRegistryExtendedResolver {
             if (cached) {
                 // If client sent a hash and it matches, return 304
                 if (hash && hash === cached.hash) {
-                    LogStatus(`Component ${namespace}/${name} not modified (server cache hit, hash match)`);
                     return {
                         specification: undefined,
                         hash: cached.hash,
@@ -242,7 +241,6 @@ export class ComponentRegistryExtendedResolver {
                 }
 
                 // Client has no hash or a different hash — return cached spec
-                LogStatus(`Component ${namespace}/${name} served from server cache`);
                 return {
                     specification: cached.specJson,
                     hash: cached.hash,
@@ -265,7 +263,6 @@ export class ComponentRegistryExtendedResolver {
 
             // If not modified (304 from registry), return to client
             if (response.notModified) {
-                LogStatus(`Component ${namespace}/${name} not modified (registry 304)`);
                 return {
                     specification: undefined,
                     hash: response.hash,

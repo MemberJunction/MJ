@@ -5,7 +5,7 @@
 
 import { ComponentSpec, ComponentLibraryDependency } from '@memberjunction/interactive-component-types';
 import { UserInfo, Metadata, LogError } from '@memberjunction/core';
-import { ComponentMetadataEngine, MJComponentLibraryEntity, MJComponentEntityExtended } from '@memberjunction/core-entities';
+import { ComponentMetadataEngine, MJComponentLibraryEntity } from '@memberjunction/core-entities';
 
 import { ComponentCompiler } from '../compiler';
 import { ComponentRegistry } from '../registry';
@@ -515,55 +515,36 @@ export class ComponentManager {
     // Check cache first
     const cacheKey = this.getComponentKey(spec, {});
     const cached = this.fetchCache.get(cacheKey);
-    
+
     if (cached && this.isCacheValid(cached)) {
       this.log(`Using cached spec for: ${spec.name}`);
       return cached.spec;
     }
-    
+
     // Handle LOCAL registry components (registry is null/undefined)
     if (!spec.registry) {
-      this.log(`Fetching from local registry: ${spec.name}`);
-      
-      // Find component in local ComponentMetadataEngine
-      const localComponent = this.componentEngine.Components?.find(
-        (c: MJComponentEntityExtended) => {
-          // Match by name (case-insensitive for better compatibility)
-          const nameMatch = c.Name?.toLowerCase() === spec.name?.toLowerCase();
-          
-          // Match by namespace if provided (handle different formats)
-          const namespaceMatch = !spec.namespace || c.Namespace?.toLowerCase() === spec.namespace?.toLowerCase();
+      const localComponent = await this.componentEngine.FindComponent(spec.name, spec.namespace);
 
-          if (nameMatch && !namespaceMatch) {
-          }
-          
-          return nameMatch && namespaceMatch;
-        }
-      );
-      
       if (!localComponent) {
         throw new Error(`Local component not found: ${spec.name}`);
       }
-      
-      // Parse specification from local component
+
       if (!localComponent.Specification) {
         throw new Error(`Local component ${spec.name} has no specification`);
       }
-      
+
       const fullSpec = JSON.parse(localComponent.Specification);
-      
-      // Cache it
+
       this.fetchCache.set(cacheKey, {
         spec: fullSpec,
         fetchedAt: new Date(),
         usageNotified: false
       });
-      
+
       return fullSpec;
     }
-    
+
     // Handle EXTERNAL registry components (registry has a name)
-    // Initialize GraphQL client if needed
     if (!this.graphQLClient) {
       await this.initializeGraphQLClient();
     }
@@ -573,8 +554,7 @@ export class ComponentManager {
     }
 
     // Fetch from external registry, passing the cached hash (if any) so the
-    // server can return 304 Not Modified when the spec hasn't changed — this
-    // avoids transferring the full spec payload on every TTL expiry
+    // server can return 304 Not Modified when the spec hasn't changed
     this.log(`Fetching from external registry: ${spec.registry}/${spec.name}`);
     const cachedHash = cached?.hash;
 
@@ -601,8 +581,6 @@ export class ComponentManager {
     }
 
     const fullSpec = response.specification as ComponentSpec;
-
-    // Apply resolution mode if specified
     const processedSpec = this.applyResolutionMode(fullSpec, spec, options?.resolutionMode);
 
     // Cache it with the registry hash for future 304 checks
