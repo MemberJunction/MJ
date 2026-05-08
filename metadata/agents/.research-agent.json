@@ -150,6 +150,13 @@
             "lastModified": "2026-03-14T01:24:30.048Z",
             "checksum": "03ec54a55a9a6428d24077811896d312d4f4ef434887e67ba35fbded0073cd8d"
           }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Scoped Search",
+            "Status": "Active"
+          }
         }
       ],
       "MJ: AI Agent Relationships": [
@@ -296,6 +303,13 @@
           "sync": {
             "lastModified": "2026-02-13T21:09:23.981Z",
             "checksum": "78558c71cbfb2759018a8685d77bf0601f4b14529fbec57cdf2a096e31cecf2c"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Scoped Search",
+            "Status": "Active"
           }
         }
       ],
@@ -460,6 +474,15 @@
           "sync": {
             "lastModified": "2026-02-13T21:09:23.994Z",
             "checksum": "fe936dc4b6cea51a3508ebb5889c66106b72b0e272783d1aa863d0e9c11b5039"
+          }
+        }
+      ],
+      "MJ: AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Scoped Search",
+            "Status": "Active"
           }
         }
       ],

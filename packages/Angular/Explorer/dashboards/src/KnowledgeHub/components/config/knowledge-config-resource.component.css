@@ -902,3 +902,447 @@
     margin-right: 4px;
     font-size: 10px;
 }
+
+/* ===== Search Scopes Manager ===== */
+
+.scope-manager {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    gap: 16px;
+    min-height: 420px;
+}
+
+.scope-manager-list {
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 8px;
+    padding: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.scope-manager-list-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 6px 8px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--mj-text-muted);
+    border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+.scope-manager-new-btn {
+    background: transparent;
+    border: 1px solid var(--mj-border-default);
+    color: var(--mj-text-link);
+    padding: 3px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.7rem;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: normal;
+}
+
+.scope-manager-new-btn:hover {
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-brand-primary);
+}
+
+.scope-manager-loading,
+.scope-manager-empty,
+.scope-manager-empty-detail {
+    padding: 16px;
+    color: var(--mj-text-muted);
+    text-align: center;
+    font-size: 0.85rem;
+}
+
+.scope-manager-empty-detail {
+    padding: 40px 24px;
+    background: var(--mj-bg-surface-card);
+    border: 1px dashed var(--mj-border-default);
+    border-radius: 8px;
+}
+
+.scope-manager-list-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border: none;
+    background: transparent;
+    color: var(--mj-text-primary);
+    font-size: 0.875rem;
+    cursor: pointer;
+    border-radius: 6px;
+    text-align: left;
+    transition: background 120ms ease;
+}
+
+.scope-manager-list-item:hover {
+    background: var(--mj-bg-surface-hover);
+}
+
+.scope-manager-list-item.active {
+    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
+    font-weight: 500;
+}
+
+.scope-manager-list-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.scope-manager-badge {
+    font-size: 0.625rem;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.scope-manager-detail {
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 8px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+}
+
+.scope-manager-tabs {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    border-bottom: 1px solid var(--mj-border-subtle);
+    padding-bottom: 8px;
+    flex-wrap: wrap;
+}
+
+.scope-manager-tab {
+    background: transparent;
+    border: none;
+    padding: 6px 12px;
+    color: var(--mj-text-secondary);
+    font-size: 0.875rem;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background 120ms ease, color 120ms ease;
+}
+
+.scope-manager-tab:hover {
+    background: var(--mj-bg-surface-hover);
+    color: var(--mj-text-primary);
+}
+
+.scope-manager-tab.active {
+    color: var(--mj-brand-primary);
+    border-bottom: 2px solid var(--mj-brand-primary);
+    border-radius: 0;
+    font-weight: 500;
+}
+
+.scope-manager-tab-spacer {
+    flex: 1;
+}
+
+.scope-manager-save-btn {
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
+    border: none;
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.scope-manager-save-btn:hover {
+    background: var(--mj-brand-primary-hover);
+}
+
+.scope-manager-delete-btn {
+    background: transparent;
+    border: 1px solid var(--mj-border-default);
+    color: var(--mj-status-error-text);
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.scope-manager-delete-btn:hover {
+    background: var(--mj-status-error-bg);
+    border-color: var(--mj-status-error-border);
+}
+
+.scope-manager-open-btn {
+    background: transparent;
+    border: 1px solid var(--mj-border-default);
+    color: var(--mj-text-primary);
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.scope-manager-open-btn:hover {
+    background: var(--mj-bg-surface-hover);
+    border-color: var(--mj-border-strong);
+}
+
+.scope-definition-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 16px;
+}
+
+.scope-definition-grid label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.8125rem;
+    color: var(--mj-text-secondary);
+}
+
+.scope-definition-grid label > span {
+    font-weight: 500;
+    color: var(--mj-text-primary);
+}
+
+.scope-definition-full {
+    grid-column: 1 / -1;
+}
+
+.scope-definition-toggle {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+}
+
+.scope-definition-toggle input[type="checkbox"] {
+    accent-color: var(--mj-brand-primary);
+}
+
+.scope-code-block {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-primary);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 4px;
+    padding: 8px;
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Search Analytics section (P3.3)
+   ────────────────────────────────────────────────────────────────────────── */
+.search-analytics-kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 12px;
+    margin: 16px 0;
+}
+
+.search-analytics-kpi {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 14px 16px;
+    border: 1px solid var(--mj-border-default);
+    border-radius: 6px;
+    background: var(--mj-bg-surface);
+}
+
+.search-analytics-kpi-label {
+    font-size: 0.78rem;
+    color: var(--mj-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.search-analytics-kpi-value {
+    font-size: 1.6rem;
+    font-weight: 600;
+    color: var(--mj-text-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+.search-analytics-kpi-hint {
+    color: var(--mj-text-muted);
+    font-size: 0.72rem;
+}
+
+.search-analytics-h3 {
+    margin: 22px 0 8px;
+    font-size: 1rem;
+    color: var(--mj-text-primary);
+}
+
+.search-analytics-empty {
+    color: var(--mj-text-muted);
+    font-size: 0.85rem;
+    margin: 4px 0 14px;
+}
+
+.search-analytics-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.86rem;
+}
+
+.search-analytics-table thead th {
+    text-align: left;
+    border-bottom: 1px solid var(--mj-border-default);
+    padding: 6px 10px;
+    color: var(--mj-text-muted);
+    font-weight: 500;
+}
+
+.search-analytics-table tbody td {
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--mj-border-subtle);
+    font-variant-numeric: tabular-nums;
+}
+
+.search-analytics-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.search-analytics-refresh {
+    margin-top: 16px;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.9rem;
+    border: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-primary);
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.82rem;
+}
+
+.search-analytics-refresh:hover {
+    border-color: var(--mj-brand-primary);
+    color: var(--mj-brand-primary);
+}
+
+/* ─── Permissions Audit (P2A.7) ──────────────────────────────────────────── */
+
+.search-permissions-loading {
+    padding: 1.2rem;
+    color: var(--mj-text-secondary);
+    font-style: italic;
+}
+
+.search-permissions-filters {
+    display: grid;
+    grid-template-columns: 1fr 1fr 180px 130px;
+    gap: 0.5rem;
+    margin-bottom: 0.8rem;
+}
+
+.search-permissions-filters .mj-input {
+    padding: 0.4rem 0.6rem;
+    border: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-primary);
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
+
+.search-permissions-summary {
+    color: var(--mj-text-secondary);
+    font-size: 0.82rem;
+    margin-bottom: 0.6rem;
+}
+
+.search-permissions-empty {
+    padding: 1.2rem;
+    color: var(--mj-text-muted);
+    text-align: center;
+    background: var(--mj-bg-surface-card);
+    border-radius: 4px;
+}
+
+.search-permissions-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.search-permissions-table th,
+.search-permissions-table td {
+    padding: 0.5rem 0.7rem;
+    border-bottom: 1px solid var(--mj-border-default);
+    text-align: left;
+}
+
+.search-permissions-table th {
+    font-weight: 600;
+    color: var(--mj-text-secondary);
+    background: var(--mj-bg-surface-card);
+}
+
+.search-permissions-secondary {
+    color: var(--mj-text-muted);
+    font-size: 0.78rem;
+}
+
+.search-permissions-tag {
+    display: inline-block;
+    padding: 0.1rem 0.5rem;
+    background: var(--mj-bg-surface-card);
+    color: var(--mj-text-secondary);
+    border-radius: 3px;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.search-permissions-level {
+    display: inline-block;
+    padding: 0.15rem 0.55rem;
+    border-radius: 3px;
+    font-size: 0.78rem;
+    font-weight: 500;
+}
+
+.search-permissions-level-none {
+    background: color-mix(in srgb, var(--mj-status-error) 12%, var(--mj-bg-surface));
+    color: var(--mj-status-error-text);
+}
+
+.search-permissions-level-read {
+    background: color-mix(in srgb, var(--mj-status-info) 12%, var(--mj-bg-surface));
+    color: var(--mj-status-info-text);
+}
+
+.search-permissions-level-search {
+    background: color-mix(in srgb, var(--mj-status-success) 12%, var(--mj-bg-surface));
+    color: var(--mj-status-success-text);
+}
+
+.search-permissions-level-manage {
+    background: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface));
+    color: var(--mj-brand-primary);
+}
