@@ -17,10 +17,11 @@ import {
   ChangeDetectorRef
 } from '@angular/core';
 import { Subject } from 'rxjs';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { ComponentSpec, ComponentCallbacks, ComponentStyles, ComponentObject, BaseEventArgs } from '@memberjunction/interactive-component-types';
 import { ReactBridgeService } from '../services/react-bridge.service';
 import { AngularAdapterService } from '../services/angular-adapter.service';
-import { 
+import {
   createErrorBoundary,
   ComponentHierarchyRegistrar,
   resourceManager,
@@ -147,7 +148,7 @@ export interface UserSettingsChangedEvent {
   `],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class MJReactComponent implements AfterViewInit, OnDestroy {
+export class MJReactComponent extends BaseAngularComponent implements AfterViewInit, OnDestroy  {
   private _component!: ComponentSpec;
 
   /**
@@ -275,6 +276,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     private cdr: ChangeDetectorRef,
     private notificationService: MJNotificationService
   ) {
+    super();
     // Generate unique component ID for resource tracking
     this.componentId = `mj-react-component-${Date.now()}-${Math.random()}`;
   }
@@ -357,10 +359,10 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     try {
       // Ensure React is loaded
       await this.reactBridge.getReactContext();
-      
+
       // Wait for React to be fully ready (handles first-load delay)
       await this.reactBridge.waitForReactReady();
-      
+
       // NEW: Use ComponentManager if enabled (default: true)
       if (this.useComponentManager) {
         console.log(`🎯 [initializeComponent] Using NEW ComponentManager approach`);
@@ -518,7 +520,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     const resolved = await resolver.resolveComponents(
       spec, 
       namespace,
-      Metadata.Provider.CurrentUser // Pass current user context for database operations
+      this.ProviderToUse.CurrentUser // Pass current user context for database operations
     );
     
     if (this.enableLogging) {
@@ -539,7 +541,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
       
       // Load the entire hierarchy with one simple call
       const result = await manager.loadHierarchy(this.component, {
-        contextUser: Metadata.Provider.CurrentUser,
+        contextUser: this.ProviderToUse.CurrentUser,
         defaultNamespace: 'Global',
         defaultVersion: this.component.version || this.generateComponentHash(this.component),
         returnType: 'both'
@@ -648,7 +650,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
     }
     
     // Initialize metadata engine
-    await ComponentMetadataEngine.Instance.Config(false, Metadata.Provider.CurrentUser);
+    await ComponentMetadataEngine.Instance.Config(false, this.ProviderToUse.CurrentUser);
     
     // Use the runtime's hierarchy registrar
     const registrar = new ComponentHierarchyRegistrar(
@@ -677,7 +679,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
         allowOverride: false,  // Each version is unique
         allLibraries: ComponentMetadataEngine.Instance.ComponentLibraries,
         debug: true,
-        contextUser: Metadata.Provider.CurrentUser
+        contextUser: this.ProviderToUse.CurrentUser
       }
     );
     
@@ -945,8 +947,12 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
           // now in some cases we have key/value pairs that the component we are hosting
           // use, but are not the pkey, so if that is the case, we'll run a quick view to try
           // and get the pkey so that we can emit the openEntityRecord call with the pkey
-          const md = new Metadata();
+          const md = this.ProviderToUse;
           const e = md.EntityByName(entityName);
+          if (!e) {
+            console.warn(`Entity not found: ${entityName}`);
+            return;
+          }
           let shouldRunView = false;
           // now check each key in the keyToUse to see if it is a pkey
           for (const singleKey of keyToUse.KeyValuePairs) {
@@ -968,7 +974,7 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
           // if we get here and shouldRunView is true, we need to run a view using the info provided
           // by our contained component to get the pkey
           if (shouldRunView) {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView({
               EntityName: entityName,
               ExtraFilter: keyToUse.ToWhereClause()
@@ -1286,12 +1292,12 @@ export class MJReactComponent implements AfterViewInit, OnDestroy {
   public static forceClearRegistries(): void {
     // Clear React runtime's component registry service
     ComponentRegistryService.reset();
-    
+
     // Clear any cached hierarchy registrar
     if (typeof window !== 'undefined' && (window as any).__MJ_COMPONENT_HIERARCHY_REGISTRAR__) {
       (window as any).__MJ_COMPONENT_HIERARCHY_REGISTRAR__ = null;
     }
-    
+
     console.log('🧹 All component registries cleared for fresh load');
   }
 

@@ -8,6 +8,7 @@ export class GrantRule implements IConversionRule {
   AppliesTo: StatementType[] = ['GRANT', 'REVOKE'];
   Priority = 80;
   BypassSqlglot = true;
+  BypassJustification = 'T-SQL GRANT EXEC → PG GRANT EXECUTE renaming, plus wrapping each GRANT in DO $ EXCEPTION blocks so the grant tolerates missing roles or functions during fresh installs. sqlglot does not apply this idempotency wrapping or rename EXEC → EXECUTE.';
 
   PostProcess(sql: string, _originalSQL: string, context: ConversionContext): string {
     let result = convertIdentifiers(sql);
@@ -32,17 +33,14 @@ export class GrantRule implements IConversionRule {
     const isExecuteGrant = /\b(?:GRANT|REVOKE)\s+EXECUTE\b/i.test(result);
 
     if (isExecuteGrant) {
-      // Extract the target object name to check if it was created
-      const nameMatch = result.match(/EXECUTE\s+ON\s+(?:FUNCTION\s+)?(?:\w+\.)?"?(\w+)"?\s+TO/i);
-      if (nameMatch) {
-        const objName = nameMatch[1];
-        if (!context.CreatedFunctions.has(objName)) {
-          // Function was skipped/not created — comment out the grant
-          return `-- SKIPPED (function not created): ${result.trim()}\n`;
-        }
-      }
-
-      // PostgreSQL requires FUNCTION keyword for GRANT/REVOKE EXECUTE
+      // PostgreSQL requires FUNCTION keyword for GRANT/REVOKE EXECUTE.
+      // Even when the function isn't CREATE'd in this file — it likely lives in
+      // the baseline or an earlier migration, and by the time this runs in
+      // sequence the function exists. Previously we skipped these grants, which
+      // silently dropped privileges grants for functions defined elsewhere (e.g.
+      // v5.15 Grant_Dataset_SP_Execute_Permissions targets sprocs from earlier
+      // migrations). Wrap in DO/EXCEPTION so grants on missing objects no-op
+      // rather than fail the migration.
       result = result.replace(
         /\b(GRANT\s+EXECUTE\s+ON)\s+(?!FUNCTION\b)/i,
         '$1 FUNCTION '
@@ -51,17 +49,25 @@ export class GrantRule implements IConversionRule {
         /\b(REVOKE\s+EXECUTE\s+ON)\s+(?!FUNCTION\b)/i,
         '$1 FUNCTION '
       );
-    } else {
-      // GRANT SELECT/INSERT/etc. — check if the target view/table exists
-      const nameMatch = result.match(/(?:GRANT|REVOKE)\s+\w+\s+ON\s+(?:\w+\.)?"?(\w+)"?\s+TO/i);
-      if (nameMatch) {
-        const objName = nameMatch[1];
-        // If it starts with vw and isn't in CreatedViews, skip it
-        if (objName.startsWith('vw') && !context.CreatedViews.has(objName)) {
-          return `-- SKIPPED (view not created): ${result.trim()}\n`;
-        }
-      }
     }
+
+    // Quote mixed-case object names in GRANT/REVOKE ... ON schema.NAME ... TO ...
+    // T-SQL is case-insensitive, so CodeGen often emits unquoted mixed-case names
+    // like `__mj.vwFlywayVersionHistoryParsed`. PG folds unquoted identifiers to
+    // lowercase, then fails to find the real mixed-case relation. Quote the name
+    // part when it contains uppercase and isn't already quoted.
+    result = result.replace(
+      /\b(GRANT|REVOKE)\s+([A-Za-z ,]+?)\s+ON\s+(FUNCTION\s+)?([\w"]+)\.([A-Za-z_]\w*)(\s+TO)/gi,
+      (_match, verb, perms, fnKw, schema, name, to) => {
+        const needsQuoting = /[A-Z]/.test(name) && !name.startsWith('"');
+        const quotedName = needsQuoting ? `"${name}"` : name;
+        return `${verb} ${perms} ON ${fnKw ?? ''}${schema}.${quotedName}${to}`;
+      }
+    );
+
+    // GRANT SELECT/INSERT on views: emit them even when the view is in an
+    // earlier migration. If the view truly doesn't exist, the grant will fail
+    // loudly at apply time — better than silent permission gaps.
 
     result = result.trimEnd();
     if (!result.endsWith(';')) result += ';';

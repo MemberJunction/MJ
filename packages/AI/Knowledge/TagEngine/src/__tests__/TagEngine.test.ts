@@ -88,6 +88,9 @@ vi.mock('@memberjunction/tag-engine-base', () => ({
             Tags: mockTags,
             GetTagByID: vi.fn().mockImplementation((id: string) => mockTags.find(t => t.ID.toLowerCase() === id.toLowerCase())),
             GetTagByName: vi.fn().mockImplementation((name: string) => mockTags.find(t => t.Name.toLowerCase() === name.trim().toLowerCase())),
+            GetTagBySynonym: vi.fn().mockReturnValue(undefined),
+            GetVisibleTags: vi.fn().mockImplementation(() => mockTags.filter(t => (t as { Status?: string }).Status !== 'Merged')),
+            GetScopesForTag: vi.fn().mockReturnValue([]),
             GetChildTags: vi.fn().mockImplementation((pid: string) => mockTags.filter(t => t.ParentID?.toLowerCase() === pid.toLowerCase())),
             GetSubtree: vi.fn().mockImplementation((rootID: string) => {
                 const result: typeof mockTags = [];

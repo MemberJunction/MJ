@@ -204,7 +204,7 @@ export abstract class RelatedEntityDisplayComponentGeneratorBase {
      */
     protected GetForeignKey(entityName: string, relatedEntityName: string): EntityFieldInfo {
         // find a foreign key field that links the entity to the related entity
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: codegen runs offline against a single provider
         const e = md.EntityByName(entityName);
         if (!e)
             throw new Error(`Could not find entity "${entityName}". Verify the entity name is correct and includes any required prefix (e.g., "MJ: ").`);

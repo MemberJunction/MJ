@@ -1,5 +1,6 @@
 import {
     GranteeType,
+    IMetadataProvider,
     Metadata,
     NormalizedPermission,
     PermissionAction,
@@ -117,13 +118,13 @@ export class QueryPermissionProvider extends PermissionProviderBase {
         return results;
     }
 
-    async GetResourcePermissions(resourceType: string, resourceId: string): Promise<NormalizedPermission[]> {
+    async GetResourcePermissions(resourceType: string, resourceId: string, provider?: IMetadataProvider): Promise<NormalizedPermission[]> {
         if (resourceType !== 'Queries') return [];
 
         const rows = await this.fetchPermissionsForQuery(resourceId);
         if (rows.length === 0) return [];
 
-        const md = new Metadata();
+        const md = provider ?? new Metadata();
         const nameMap = await this.bulkLookupNames('Queries', [resourceId]);
         const queryName = nameMap.get(resourceId);
         return rows.map((row) => {

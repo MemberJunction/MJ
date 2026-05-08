@@ -15,14 +15,16 @@ import {
 } from '@memberjunction/ng-base-application';
 import { Metadata, EntityInfo, LogStatus, StartupManager, CompositeKey } from '@memberjunction/core';
 import { MJEventType, MJGlobal, uuidv4 , UUIDsEqual } from '@memberjunction/global';
-import { EventCodes, NavigationService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService } from '@memberjunction/ng-shared';
+import { EventCodes, NavigationService, SharedService, SYSTEM_APP_ID, TitleService, DeveloperModeService, ThemeService, HomeAppPinService } from '@memberjunction/ng-shared';
+import { StartupValidationService } from '../services/startup-validation.service';
 import { LogoGradient } from '@memberjunction/ng-shared-generic';
 import { NavItemClickEvent } from './components/header/app-nav.component';
 import { MJAuthBase } from '@memberjunction/ng-auth-services';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { UserAvatarService } from '@memberjunction/ng-user-avatar';
-import { SettingsDialogService } from './services/settings-dialog.service';
 import { UserSharingCenterDialogService } from './services/user-sharing-center-dialog.service';
+import { AboutDialogService } from './services/about-dialog.service';
+import { ProfileDialogService } from './services/profile-dialog.service';
 import { LoadingTheme, LoadingAnimationType, AnimationStep, getActiveTheme } from './loading-themes';
 import { AppAccessDialogComponent, AppAccessDialogConfig, AppAccessDialogResult } from './components/dialogs/app-access-dialog.component';
 import { TabContainerComponent } from './components/tabs/tab-container.component';
@@ -31,7 +33,9 @@ import { MJUserEntity, InstanceConfigEngine } from '@memberjunction/core-entitie
 import { CommandPaletteService } from '../command-palette/command-palette.service';
 import { FileOpenService } from '@memberjunction/ng-file-storage';
 import { FeedbackDialogService, FeedbackService } from '@memberjunction/ng-feedback';
+import { PACKAGE_VERSION } from '@memberjunction/graphql-dataprovider';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 /**
  * Main shell component for the new Explorer UX.
  *
@@ -46,7 +50,7 @@ import { FeedbackDialogService, FeedbackService } from '@memberjunction/ng-feedb
   templateUrl: './shell.component.html',
   styleUrls: ['./shell.component.css']
 })
-export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
+export class ShellComponent extends BaseAngularComponent implements OnInit, OnDestroy, AfterViewInit {
   private subscriptions: Subscription[] = [];
   private urlBasedNavigation = false; // Track if we're loading from a URL
   private initialNavigationComplete = false; // Track if initial navigation has completed
@@ -79,6 +83,9 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
   private animationSequenceTimeout: ReturnType<typeof setTimeout> | null = null;
   // Loading recovery reset
   ShowResetOption = false;
+
+  /** MemberJunction framework version, shown in the loading screen and About dialog. */
+  public readonly MJVersion: string = PACKAGE_VERSION;
   private loadingResetTimeout: ReturnType<typeof setTimeout> | null = null;
   private readonly loadingResetDelayMs = 20_000; // 20 seconds before showing reset option
   currentLoadingText: string;
@@ -156,11 +163,13 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     private authBase: MJAuthBase,
     private cdr: ChangeDetectorRef,
     private userAvatarService: UserAvatarService,
-    private settingsDialogService: SettingsDialogService,
     private userSharingCenterDialogService: UserSharingCenterDialogService,
+    private aboutDialogService: AboutDialogService,
+    private profileDialogService: ProfileDialogService,
     private viewContainerRef: ViewContainerRef,
     private titleService: TitleService,
     public developerModeService: DeveloperModeService,
+    private startupValidationService: StartupValidationService,
     private commandPaletteService: CommandPaletteService,
     private themeService: ThemeService,
     private homePinService: HomeAppPinService,
@@ -168,6 +177,19 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     private feedbackDialogService: FeedbackDialogService,
     private feedbackService: FeedbackService
   ) {
+    super();
+
+    // Thread the active provider into the bootstrap services that need provider
+    // context. They each fall back to Metadata.Provider when no explicit provider
+    // is set, so this is a no-op for single-provider apps but enables correct
+    // behavior in multi-provider setups.
+    const providerForServices = this.ProviderToUse;
+    this.appManager.Provider = providerForServices;
+    this.workspaceManager.Provider = providerForServices;
+    this.developerModeService.Provider = providerForServices;
+    this.startupValidationService.Provider = providerForServices;
+    if (SharedService.Instance) SharedService.Instance.Provider = providerForServices;
+
     // Initialize theme immediately so loading UI shows correct colors from the start
     this.activeTheme = getActiveTheme();
 
@@ -237,7 +259,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     });
 
     // Get current user
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const user = md.CurrentUser;
     if (!user) {
       throw new Error('No current user found');
@@ -412,7 +434,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     this.subscriptions.push(
       MJGlobal.Instance.GetEventListener(false).subscribe(async (updateEvent) => {
         if (updateEvent.eventCode === EventCodes.AvatarUpdated) {
-          const md = new Metadata();
+          const md = this.ProviderToUse;
           const currentUserInfo = md.CurrentUser;
           const userEntity = await md.GetEntityObject<any>('MJ: Users');
           await userEntity.Load(currentUserInfo.ID);
@@ -1925,7 +1947,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
 
     // Build context for the menu
     const context: UserMenuContext = {
-      user: new Metadata().CurrentUser,
+      user: this.ProviderToUse.CurrentUser,
       userEntity: this.userEntity!,
       shell: this as unknown as Record<string, unknown>,
       viewContainerRef: this.viewContainerRef,
@@ -1935,7 +1957,9 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       workspaceManager: this.workspaceManager,
       authService: this.authBase,
       pinService: this.homePinService,
-      openSettings: () => this.openSettingsDialog(),
+      // Legacy hook retained for plugin compatibility — no-op now that the
+      // multi-tab Settings dialog has been replaced by the Identity Card flow.
+      openSettings: () => { /* deprecated; profile menu item now emits 'profile' */ },
       themePreference: this.themeService.Preference,
       availableThemes: this.themeService.AvailableThemes,
       appliedTheme: this.themeService.AppliedTheme,
@@ -1996,12 +2020,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     const result = await this.userMenu.HandleItemClick(itemId);
 
     // Handle special signals from menu handlers
-    if (result.message === 'toggle-dev-mode') {
-      await this.developerModeService.Toggle();
-      // Menu will refresh via the subscription above
-      return;
-    }
-
     if (result.message?.startsWith('select-theme-')) {
       const themeId = result.message.substring('select-theme-'.length);
       await this.themeService.SetTheme(themeId);
@@ -2044,6 +2062,24 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     if (result.message === 'submit-feedback') {
       this.userMenuVisible = false;
       this.ShowFeedbackDialog();
+      return;
+    }
+
+    if (result.message === 'about') {
+      this.userMenuVisible = false;
+      this.aboutDialogService.open(this.viewContainerRef, {
+        avatarUrl: this.userImageURL || null,
+        avatarIconClass: this.userIconClass || null
+      });
+      return;
+    }
+
+    if (result.message === 'profile') {
+      this.userMenuVisible = false;
+      this.profileDialogService.open(this.viewContainerRef, {
+        avatarUrl: this.userImageURL || null,
+        avatarIconClass: this.userIconClass || null
+      });
       return;
     }
 
@@ -2093,20 +2129,6 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
     return element as UserMenuItem;
   }
 
-  /**
-   * Open the settings dialog
-   */
-  private openSettingsDialog(): void {
-    this.settingsDialogService.open(this.viewContainerRef);
-  }
-
-  /**
-   * Open Settings in a full-screen modal dialog
-   */
-  onSettings(): void {
-    this.userMenuVisible = false;
-    this.openSettingsDialog();
-  }
 
   /**
    * Pin the currently active resource to the Home dashboard
@@ -2195,7 +2217,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
       const recordId = config['recordId'] as string;
       if (!entityName || !recordId) return null;
 
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const entityInfo = md.Entities.find(e => e.Name === entityName);
       if (!entityInfo) return null;
 
@@ -2348,7 +2370,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    */
   private async loadUserAvatar(currentUserInfo: { ID: string; FirstLast?: string; Name?: string; Email?: string }): Promise<void> {
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       this.userName = currentUserInfo.FirstLast || currentUserInfo.Name || 'User';
       this.userEmail = currentUserInfo.Email || '';
 
@@ -2446,7 +2468,7 @@ export class ShellComponent implements OnInit, OnDestroy, AfterViewInit {
    * Load searchable entities from metadata
    */
   private async loadSearchableEntities(): Promise<void> {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     this.searchableEntities = md.Entities.filter((e) => e.AllowUserSearchAPI).sort((a, b) => a.Name.localeCompare(b.Name));
     if (this.searchableEntities.length > 0) {
       this.selectedEntity = this.searchableEntities[0];

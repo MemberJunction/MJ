@@ -1,0 +1,50 @@
+<div class="database-designer-dashboard">
+
+  <!-- ── Main entity list ───────────────────────────────────────────────── -->
+  <div class="database-designer-content">
+    <mj-database-entity-list
+      (NewEntity)="OnNewEntity()"
+      (EditEntity)="OnEditEntity($event)"
+      (ViewEntity)="OnViewEntity($event)">
+    </mj-database-entity-list>
+  </div>
+
+  <!-- ── Create Wizard slide-over panel ────────────────────────────────── -->
+  @if (ShowCreateWizard) {
+    <mj-slide-panel
+      Mode="slide"
+      Title="New Entity"
+      [Visible]="ShowCreateWizard"
+      [Resizable]="true"
+      [WidthPx]="9999"
+      [MaxWidthRatio]="1"
+      [MinWidthPx]="960"
+      (Closed)="OnWizardClosed()">
+      <mj-database-create-wizard
+        (EntityCreated)="OnEntityCreated()"
+        (Cancelled)="OnWizardClosed()">
+      </mj-database-create-wizard>
+    </mj-slide-panel>
+  }
+
+  <!-- ── Modify slide-over panel ───────────────────────────────────────── -->
+  @if (ModifyEntityId) {
+    <mj-slide-panel
+      Mode="slide"
+      Title="Edit Entity"
+      [Visible]="!!ModifyEntityId"
+      [Resizable]="true"
+      [WidthPx]="9999"
+      [MaxWidthRatio]="1"
+      [MinWidthPx]="960"
+      [CanClose]="ModifyPanelCanClose"
+      (Closed)="OnModifyPanelClosed()">
+      <mj-database-modify
+        [EntityId]="ModifyEntityId!"
+        (EntityModified)="OnEntityModified()"
+        (Cancelled)="OnModifyPanelClosed()">
+      </mj-database-modify>
+    </mj-slide-panel>
+  }
+
+</div>

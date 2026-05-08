@@ -53,10 +53,13 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
     /** Array of entity records to render on the map. Accepts BaseEntity[] or plain Record objects. */
     @Input() Records: Record<string, unknown>[] = [];
 
-    /** Latitude field name. Defaults to __mj_Latitude. */
+    /**
+     * Latitude field name. If left at the default, auto-resolves to the field
+     * on `Entity` tagged with `ExtendedType='GeoLatitude'`.
+     */
     @Input() LatitudeField: string = '__mj_Latitude';
 
-    /** Longitude field name. Defaults to __mj_Longitude. */
+    /** Longitude field name. Same auto-resolution as LatitudeField. */
     @Input() LongitudeField: string = '__mj_Longitude';
 
     /** Current render mode. */
@@ -91,6 +94,7 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
     private engine: MapCore.MapEngine | null = null;
     private visibilityObserver: IntersectionObserver | null = null;
     private pendingRender = false;
+    private autoModeApplied = false;
     IsLoading = true;
     MarkerCount = 0;
 
@@ -99,8 +103,39 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
         return this.TotalRecordCount > 0 && this.Records.length < this.TotalRecordCount;
     }
 
+    /** True when the entity has a per-record boundary GeoJSON field — gates the Boundary toolbar button. */
+    get HasBoundaryField(): boolean {
+        if (!this.Entity) return false;
+        const fieldName = this.BoundaryField || 'BoundaryGeoJSON';
+        return this.Entity.Fields.some(f => f.Name === fieldName);
+    }
+
+    /**
+     * Resolve a lat/lng field name. Explicit override wins; otherwise picks the
+     * field tagged with the matching `ExtendedType` on `Entity`.
+     */
+    private resolveGeoField(input: string, defaultName: string, extendedType: 'GeoLatitude' | 'GeoLongitude'): string {
+        if (input && input !== defaultName) return input; // explicit override
+        if (this.Entity) {
+            const tagged = this.Entity.Fields.find(f => f.ExtendedType === extendedType);
+            if (tagged) return tagged.Name;
+        }
+        return input || defaultName;
+    }
+    private get effectiveLatitudeField(): string {
+        return this.resolveGeoField(this.LatitudeField, '__mj_Latitude', 'GeoLatitude');
+    }
+    private get effectiveLongitudeField(): string {
+        return this.resolveGeoField(this.LongitudeField, '__mj_Longitude', 'GeoLongitude');
+    }
+
     ngOnInit(): void {
-        // Map initialization happens when the component becomes visible
+        // Snap saved 'boundary' → 'point' when the entity has no boundary field
+        // (the button is hidden, so the user would be stuck on it).
+        if (this.RenderMode === 'boundary' && !this.HasBoundaryField) {
+            this.RenderMode = 'point';
+            this.RenderModeChange.emit(this.RenderMode);
+        }
     }
 
     ngAfterViewInit(): void {
@@ -128,6 +163,23 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
     }
 
     ngOnChanges(changes: SimpleChanges): void {
+        // Entity change invalidates per-Entity config (lat/lng field names,
+        // Boundary visibility) cached at engine-init. Tear down so the next
+        // render rebuilds against the new Entity.
+        if (changes['Entity'] && !changes['Entity'].firstChange && this.engine) {
+            this.engine.destroy();
+            this.engine = null;
+            this.autoModeApplied = false;
+            this.IsLoading = true;
+            this.cdr.detectChanges();
+            if (this.mapContainer?.nativeElement) {
+                this.InitializeMap();
+            } else {
+                this.pendingRender = true;
+            }
+            return;
+        }
+
         if (changes['Records'] || changes['RenderMode']) {
             if (this.engine) {
                 setTimeout(() => {
@@ -167,8 +219,8 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
                 lng: this.DisplayState?.CenterLng ?? 0
             },
             zoom: this.DisplayState?.ZoomLevel ?? 2,
-            latitudeField: this.LatitudeField,
-            longitudeField: this.LongitudeField,
+            latitudeField: this.effectiveLatitudeField,
+            longitudeField: this.effectiveLongitudeField,
             boundaryField: this.BoundaryField,
             geoResolver: GeoDataEngine.Instance,
             getRecordId: (record: Record<string, unknown>) => {
@@ -248,6 +300,30 @@ export class MapViewComponent implements OnInit, AfterViewInit, OnDestroy, OnCha
         this.engine.render(this.Records, this.RenderMode);
         this.MarkerCount = this.engine.getStats().markerCount;
         this.cdr.detectChanges();
+
+        // One-shot: if 'point' rendered nothing but records carry GeoJSON
+        // (e.g. MJ: Countries), flip to 'boundary' so the map isn't blank.
+        // autoModeApplied prevents second-guessing manual mode changes.
+        if (!this.autoModeApplied
+            && this.RenderMode === 'point'
+            && this.MarkerCount === 0
+            && this.Records.length > 0
+            && this.RecordsHaveBoundaryData()) {
+            this.autoModeApplied = true;
+            this.SetRenderMode('boundary');
+        }
+    }
+
+    /**
+     * True if at least one loaded record carries a non-empty value in the boundary field.
+     */
+    private RecordsHaveBoundaryData(): boolean {
+        const field = this.BoundaryField;
+        for (const record of this.Records) {
+            const val = this.GetField(record, field);
+            if (val != null && val !== '') return true;
+        }
+        return false;
     }
 
     /**

@@ -7,7 +7,7 @@
  * - Support for entity linking via SourceEntityID
  */
 
-import { QueryInfo, QueryFieldInfo, QueryParameterInfo, Metadata, EntityInfo, EntityFieldInfo } from '@memberjunction/core';
+import { QueryInfo, QueryFieldInfo, QueryParameterInfo, IMetadataProvider, Metadata, EntityInfo, EntityFieldInfo } from '@memberjunction/core';
 
 // ========================================
 // Selection Mode
@@ -350,14 +350,14 @@ export interface TargetEntityInfo {
 export function resolveTargetEntity(
     sourceEntityName: string | undefined,
     sourceFieldName: string | undefined,
-    md: Metadata
+    md: IMetadataProvider
 ): TargetEntityInfo {
     if (!sourceEntityName || !sourceFieldName) {
         return { isPrimaryKey: false, isForeignKey: false };
     }
 
     // Look up the source entity
-    const sourceEntity = md.Entities.find(e => e.Name === sourceEntityName);
+    const sourceEntity = md.EntityByName(sourceEntityName);
     if (!sourceEntity) {
         return { isPrimaryKey: false, isForeignKey: false };
     }
@@ -381,7 +381,7 @@ export function resolveTargetEntity(
 
     // Check if it's a foreign key (has RelatedEntity)
     if (entityField.RelatedEntity && entityField.RelatedEntity.trim().length > 0) {
-        const relatedEntity = md.Entities.find(e => e.Name === entityField.RelatedEntity);
+        const relatedEntity = md.EntityByName(entityField.RelatedEntity);
         return {
             targetEntityName: entityField.RelatedEntity,
             targetEntityId: relatedEntity?.ID,
@@ -397,8 +397,8 @@ export function resolveTargetEntity(
 /**
  * Builds column configs from QueryFieldInfo metadata
  */
-export function buildColumnsFromQueryFields(fields: QueryFieldInfo[]): QueryGridColumnConfig[] {
-    const md = new Metadata();
+export function buildColumnsFromQueryFields(fields: QueryFieldInfo[], provider?: IMetadataProvider): QueryGridColumnConfig[] {
+    const md = provider ?? (new Metadata() as unknown as IMetadataProvider);
 
     return fields
         .sort((a, b) => (a.Sequence || 0) - (b.Sequence || 0))

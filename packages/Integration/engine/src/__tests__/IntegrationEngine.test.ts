@@ -74,27 +74,55 @@ vi.mock('@memberjunction/core', async () => {
             RunViews(...args: unknown[]) { return mockRunViewsFn(...args); }
             RunView(...args: unknown[]) { return mockRunViewFn(...args); }
         },
-        Metadata: class MockMetadata {
-            // Stub out the database provider so ApplyRecords' BeginTransaction/Commit/Rollback
-            // pattern is a no-op in unit tests. Real transaction behavior is exercised by
-            // the full-stack regression suite.
-            static Provider = {
+        Metadata: (() => {
+            class MockMetadata {
+                // Stub out the database provider so ApplyRecords' BeginTransaction/Commit/Rollback
+                // pattern is a no-op in unit tests. Real transaction behavior is exercised by
+                // the full-stack regression suite.
+                //
+                // Multi-provider migration: IntegrationEngine now uses this.ProviderToUse which
+                // falls back to Metadata.Provider. Several existing tests dynamically override
+                // `MockMetadata.prototype.GetEntityObject` to inject failures — `Metadata.Provider`
+                // delegates to `MockMetadata.prototype.GetEntityObject` so a single prototype
+                // override affects both code paths (helper-class instance + static Provider).
+                static Provider: {
+                    BeginTransaction: ReturnType<typeof vi.fn>;
+                    CommitTransaction: ReturnType<typeof vi.fn>;
+                    RollbackTransaction: ReturnType<typeof vi.fn>;
+                    Entities: { Name: string; FirstPrimaryKey: { Name: string } }[];
+                    EntityByName: (name: string) => { Name: string; FirstPrimaryKey: { Name: string } } | undefined;
+                    GetEntityObject: (...args: unknown[]) => Promise<unknown>;
+                };
+                get Entities() {
+                    return [{
+                        Name: 'Contacts',
+                        FirstPrimaryKey: { Name: 'ID' },
+                    }];
+                }
+                EntityByName(name: string) {
+                    return this.Entities.find(e => e.Name === name);
+                }
+                async GetEntityObject(entityName: string) {
+                    const entity = createMockEntity({ ID: `new-${entityName}-id` });
+                    mockEntityInstances.set(entityName, entity);
+                    return entity;
+                }
+            }
+            MockMetadata.Provider = {
                 BeginTransaction: vi.fn().mockResolvedValue(undefined),
                 CommitTransaction: vi.fn().mockResolvedValue(undefined),
                 RollbackTransaction: vi.fn().mockResolvedValue(undefined),
+                Entities: [{ Name: 'Contacts', FirstPrimaryKey: { Name: 'ID' } }],
+                EntityByName(name: string) {
+                    return this.Entities.find(e => e.Name === name);
+                },
+                // Delegate to the prototype so test-time prototype overrides flow through.
+                GetEntityObject(...args: unknown[]) {
+                    return MockMetadata.prototype.GetEntityObject.apply(new MockMetadata(), args as [string]);
+                },
             };
-            get Entities() {
-                return [{
-                    Name: 'Contacts',
-                    FirstPrimaryKey: { Name: 'ID' },
-                }];
-            }
-            async GetEntityObject(entityName: string) {
-                const entity = createMockEntity({ ID: `new-${entityName}-id` });
-                mockEntityInstances.set(entityName, entity);
-                return entity;
-            }
-        },
+            return MockMetadata;
+        })(),
         CompositeKey: class MockCompositeKey {
             KeyValuePairs: Array<{ FieldName: string; Value: string }> = [];
         },

@@ -262,8 +262,8 @@ export class PermissionEngine extends BaseEngine<PermissionEngine> {
      * (e.g., the Resource Access Report) to populate the Resource Type picker
      * after a Domain is selected.
      */
-    public GetResourceTypes(domainName: string): string[] {
-        return this._providers.get(domainName)?.GetResourceTypes() ?? [];
+    public GetResourceTypes(domainName: string, provider?: IMetadataProvider): string[] {
+        return this._providers.get(domainName)?.GetResourceTypes(provider ?? this.ProviderToUse) ?? [];
     }
 
     /**

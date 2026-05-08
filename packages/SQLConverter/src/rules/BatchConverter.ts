@@ -169,22 +169,32 @@ export function convertFile(config: BatchConverterConfig): BatchConverterResult 
     }
   }
 
-  // Only emit section headers for groups that have content
-  const sections: { header: string; items: string[] }[] = [
+  // Only emit section headers for groups that have content.
+  // Sections that come AFTER Data are flagged to receive a preamble flushing
+  // pending trigger events. The Data section's INSERT/UPDATE/DELETE statements
+  // can fire deferred constraint triggers or accumulate pending row events;
+  // a subsequent ALTER TABLE (FK & CHECK Constraints) on the same table then
+  // fails with "cannot ALTER TABLE ... because it has pending trigger events".
+  // `SET CONSTRAINTS ALL IMMEDIATE;` forces deferred constraint checks to run
+  // immediately, which also flushes the queue.
+  const flushPreamble = '\n-- Flush any pending deferred trigger events from prior DML so DDL below can proceed.\nSET CONSTRAINTS ALL IMMEDIATE;\n';
+  const sections: { header: string; items: string[]; flushBefore?: boolean }[] = [
     { header: 'DDL: Tables, PKs, Indexes', items: groups.Tables },
     { header: 'Helper Functions (fn*)', items: groups.HelperFunctions },
     { header: 'Views', items: groups.Views },
     { header: 'Stored Procedures (sp*)', items: groups.StoredProcedures },
     { header: 'Triggers', items: groups.Triggers },
     { header: 'Data (INSERT/UPDATE/DELETE)', items: groups.Data },
-    { header: 'FK & CHECK Constraints', items: groups.FKConstraints },
+    { header: 'FK & CHECK Constraints', items: groups.FKConstraints, flushBefore: true },
     { header: 'Grants', items: groups.Grants },
     { header: 'Comments', items: groups.Comments },
     { header: 'Other', items: groups.Other },
   ];
+  const dataHasContent = groups.Data.length > 0;
   for (const section of sections) {
     if (section.items.length > 0) {
       outputParts.push(`\n-- ===================== ${section.header} =====================\n`);
+      if (section.flushBefore && dataHasContent) outputParts.push(flushPreamble);
       outputParts.push(...section.items);
     }
   }

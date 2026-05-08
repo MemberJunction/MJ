@@ -47,7 +47,7 @@ export { PostgreSQLHeaderBuilder, getHeaderBuilder, registerHeaderBuilder } from
 export type { DialectHeaderBuilder } from './DialectHeaderBuilder.js';
 
 // Centralized type resolution
-export { resolveType, resolveInlineType, parseTypeString } from './TypeResolver.js';
+export { resolveType, resolveInlineType, parseTypeString, MJ_OVERRIDES } from './TypeResolver.js';
 export type { ParsedType } from './TypeResolver.js';
 
 // Post-processor
@@ -56,3 +56,6 @@ export { postProcess } from './PostProcessor.js';
 // Batch converter (main orchestrator)
 export { convertFile, printReport } from './BatchConverter.js';
 export type { BatchConverterConfig, BatchConverterResult } from './BatchConverter.js';
+
+// EntityField sequence deduplicator (post-conversion fixup for UQ_EntityField_EntityID_Sequence)
+export { deduplicateEntityFieldSequences } from './SequenceDeduplicator.js';

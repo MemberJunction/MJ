@@ -6,14 +6,31 @@
   <base href="/" />
 
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!--
+    Theme pre-paint — sets data-theme="dark" on <html> BEFORE Angular
+    boots so the first frame paints with the user's saved theme instead
+    of flashing light first. Reads 'mj-theme', the unified key written by
+    both ThemeService (post-login) and the login-screen toggle. Falls back
+    to OS prefers-color-scheme on true first visits. Wrapped in try/catch
+    so localStorage exceptions (Safari private mode, disabled storage) can
+    never block app load.
+  -->
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('mj-theme');
+        var isDark = saved ? saved === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+        if (isDark) document.documentElement.setAttribute('data-theme', 'dark');
+      } catch (e) { /* swallow — theme just falls back to light */ }
+    })();
+  </script>
   <link rel="icon" href="favicon.ico" sizes="48x48">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png">
   <link href="https://fonts.googleapis.com/css?family=Ubuntu&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
-  <script src="https://kit.fontawesome.com/6829eb2cdc.js" crossorigin="anonymous"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" crossorigin="anonymous" referrerpolicy="no-referrer">
   <!-- Leaflet for map view -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>

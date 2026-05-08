@@ -43,7 +43,7 @@ interface AppDisplayData {
 @RegisterClass(BaseResourceComponent, 'HomeDashboard')
 export class HomeDashboardComponent extends BaseResourceComponent implements AfterViewInit, OnDestroy {
   protected override destroy$ = new Subject<void>();
-  private metadata = new Metadata();
+  private metadata = this.ProviderToUse;
   private pinService = inject(HomeAppPinService);
 
   @ViewChild('appConfigDialog') appConfigDialog!: UserAppConfigComponent;
@@ -1129,7 +1129,7 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   }
 
   private async loadAvailableResources(): Promise<void> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
     // Actions come from ActionEngineBase's cache — no RunView needed. Config() is idempotent,
     // so calling it in parallel with the remaining RunViews is cheap on repeat loads and avoids

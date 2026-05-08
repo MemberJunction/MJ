@@ -23,7 +23,7 @@ export class GetVideoAnalyticsAction extends TikTokBaseAction {
                 throw new Error('CompanyIntegrationID is required');
             }
             
-            await this.initializeOAuth(companyIntegrationId);
+            await this.initializeOAuth(companyIntegrationId, params);
             
             // Extract parameters
             const videoIds = this.getParamValue(Params, 'VideoIDs');

@@ -180,7 +180,7 @@ export class HomeApplication extends BaseApplication {
    */
   private resolveIcon(entityName: string | undefined, resourceTypeName: string): string {
     if (entityName) {
-      const md = new Metadata();
+      const md = this.Provider;
       const entityIcon = md.EntityByName(entityName)?.Icon;
       if (entityIcon) {
         return entityIcon;
@@ -375,7 +375,7 @@ export class HomeApplication extends BaseApplication {
 
     // Check the cache first
     try {
-      const cachedName = await Metadata.Provider.GetCachedRecordName(entityName, compositeKey, true);
+      const cachedName = await this.Provider.GetCachedRecordName(entityName, compositeKey, true);
       if (cachedName) {
         return cachedName;
       }
@@ -437,7 +437,7 @@ export class HomeApplication extends BaseApplication {
    */
   private saveStackToStorage(): void {
     try {
-      const provider = Metadata.Provider.LocalStorageProvider;
+      const provider = this.Provider.LocalStorageProvider;
       if (!provider) {
         return;
       }
@@ -454,7 +454,8 @@ export class HomeApplication extends BaseApplication {
         timestamp: s.timestamp
       }));
 
-      provider.SetItem(STORAGE_KEY, JSON.stringify(serializable), STORAGE_CATEGORY).catch(err => {
+      // Native object storage — provider handles any required serialization internally.
+      provider.SetItem<OrphanResourceSnapshot[]>(STORAGE_KEY, serializable, STORAGE_CATEGORY).catch(err => {
         console.warn('Failed to persist recent nav stack:', err);
       });
     } catch (err) {
@@ -468,18 +469,14 @@ export class HomeApplication extends BaseApplication {
    */
   private async loadStackFromStorage(): Promise<void> {
     try {
-      const provider = Metadata.Provider.LocalStorageProvider;
+      const provider = this.Provider.LocalStorageProvider;
       if (!provider) {
         return;
       }
 
-      const raw = await provider.GetItem(STORAGE_KEY, STORAGE_CATEGORY);
-      if (!raw) {
-        return;
-      }
-
-      const parsed = JSON.parse(raw) as OrphanResourceSnapshot[];
-      if (!Array.isArray(parsed)) {
+      // Native object read — IDB returns the array directly; localStorage / Redis JSON-decode internally.
+      const parsed = await provider.GetItem<OrphanResourceSnapshot[]>(STORAGE_KEY, STORAGE_CATEGORY);
+      if (!parsed || !Array.isArray(parsed)) {
         return;
       }
 

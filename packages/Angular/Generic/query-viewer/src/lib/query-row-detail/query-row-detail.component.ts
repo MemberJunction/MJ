@@ -13,7 +13,7 @@ import {
 import { trigger, transition, style, animate } from '@angular/animations';
 import { Subject } from 'rxjs';
 import { takeUntil, debounceTime } from 'rxjs/operators';
-import { Metadata, QueryInfo, QueryFieldInfo, EntityInfo } from '@memberjunction/core';
+import { QueryInfo, QueryFieldInfo, EntityInfo } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { QueryGridColumnConfig } from '../query-data-grid/models/query-grid-types';
 
@@ -131,7 +131,6 @@ export class QueryRowDetailComponent implements OnInit, OnDestroy {
 
     private destroy$ = new Subject<void>();
     private widthPersistSubject = new Subject<number>();
-    private metadata = new Metadata();
     private minWidth = 300;
     private maxWidth = 800;
 

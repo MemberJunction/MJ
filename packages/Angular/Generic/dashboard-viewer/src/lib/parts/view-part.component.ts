@@ -2,7 +2,7 @@ import { Component, ChangeDetectorRef, AfterViewInit, OnDestroy } from '@angular
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { BaseDashboardPart } from './base-dashboard-part';
 import { PanelConfig } from '../models/dashboard-types';
-import { Metadata, EntityInfo } from '@memberjunction/core';
+import { EntityInfo } from '@memberjunction/core';
 import { MJUserViewEntityExtended } from '@memberjunction/core-entities';
 import { EntityViewMode, RecordSelectedEvent, RecordOpenedEvent } from '@memberjunction/ng-entity-viewer';
 import { MapRenderMode } from '@memberjunction/ng-map-view';
@@ -143,7 +143,7 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
         this.setLoading(true);
 
         try {
-            const md = new Metadata();
+            const p = this.ProviderToUse;
 
             // Set view mode from config
             this.viewMode = (config?.['displayMode'] as EntityViewMode) || 'grid';
@@ -152,7 +152,7 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
 
             if (viewId) {
                 // Load saved view by ID
-                const viewEntity = await md.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views');
+                const viewEntity = await p.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views', p.CurrentUser);
                 const loaded = await viewEntity.Load(viewId);
                 this.viewEntity = viewEntity; // IMPORTANT - only set this.viewEntity AFTER we have it loaded in the above
 
@@ -165,10 +165,10 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
                 if (viewEntity.ViewEntityInfo) {
                     this.entityInfo = viewEntity.ViewEntityInfo;
                 } else if (viewEntity.Entity) {
-                    this.entityInfo = md.Entities.find(e => e.Name === viewEntity!.Entity) || null;
+                    this.entityInfo = p.EntityByName(viewEntity!.Entity) || null;
                 } else if (viewEntity.EntityID) {
                     // Last resort: look up by EntityID
-                    this.entityInfo = md.Entities.find(e => UUIDsEqual(e.ID, viewEntity!.EntityID)) || null;
+                    this.entityInfo = p.Entities.find(e => UUIDsEqual(e.ID, viewEntity!.EntityID)) || null;
                 }
 
                 if (!this.entityInfo) {
@@ -176,7 +176,7 @@ export class ViewPartComponent extends BaseDashboardPart implements AfterViewIni
                 }
             } else if (entityName) {
                 // Create dynamic view for entity (no saved view)
-                this.entityInfo = md.Entities.find(e => e.Name === entityName) || null;
+                this.entityInfo = p.EntityByName(entityName) || null;
 
                 if (!this.entityInfo) {
                     throw new Error(`Entity "${entityName}" not found`);

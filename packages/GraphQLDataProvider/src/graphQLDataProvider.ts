@@ -256,7 +256,8 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             const ls = this.LocalStorageProvider;
             if (ls) {
                 const key = this.LocalStoragePrefix + "sessionId";
-                const storedSession = await ls.GetItem(key);
+                // Session ID is a plain string — typed retrieval avoids the generic 'unknown' default.
+                const storedSession = await ls.GetItem<string>(key);
                 return storedSession;
             }
             return null;
@@ -3111,6 +3112,9 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     type: 'remote-invalidate',
                     entityName: event.EntityName,
                     baseEntity: null,
+                    // Attach the publishing provider so multi-provider client setups can resolve
+                    // entity metadata against the correct server (instead of the global default).
+                    provider: this,
                     payload: {
                         primaryKeyValues: event.PrimaryKeyValues,
                         action: event.Action,

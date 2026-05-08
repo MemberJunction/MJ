@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, ChangeDetectorRef } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJConversationEntity, MJResourcePermissionEntity, MJUserEntity } from '@memberjunction/core-entities';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { DialogService } from '../../services/dialog.service';
@@ -137,7 +138,7 @@ interface SharePermission {
     .link-display { display: flex; gap: 8px; }
   `]
 })
-export class ShareModalComponent implements OnInit {
+export class ShareModalComponent extends BaseAngularComponent implements OnInit  {
   @Input() conversation!: MJConversationEntity;
   @Input() currentUser!: UserInfo;
   @Input() isOpen: boolean = false;
@@ -161,7 +162,8 @@ export class ShareModalComponent implements OnInit {
     private dialogService: DialogService,
     private toastService: ToastService,
     private cdr: ChangeDetectorRef
-  ) {}
+  ) {
+  super();}
 
   ngOnInit() {
     if (this.conversation) {
@@ -172,7 +174,7 @@ export class ShareModalComponent implements OnInit {
 
   private async loadPermissions(): Promise<void> {
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJResourcePermissionEntity>({
         EntityName: 'MJ: Resource Permissions',
         ExtraFilter: `ResourceTypeID='${this.CONVERSATIONS_RESOURCE_TYPE_ID}' AND ResourceRecordID='${this.conversation.ID}' AND Status='Approved'`,
@@ -182,7 +184,7 @@ export class ShareModalComponent implements OnInit {
       if (result.Success && result.Results) {
         const permissionPromises = result.Results.map(async (perm) => {
           if (perm.UserID) {
-            const userRv = new RunView();
+            const userRv = RunView.FromMetadataProvider(this.ProviderToUse);
             const userResult = await userRv.RunView<MJUserEntity>({
               EntityName: 'MJ: Users',
               ExtraFilter: `ID='${perm.UserID}'`,
@@ -240,7 +242,7 @@ export class ShareModalComponent implements OnInit {
 
     try {
       // Look up user by email
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const userResult = await rv.RunView<MJUserEntity>({
         EntityName: 'MJ: Users',
         ExtraFilter: `Email='${email}'`,
@@ -284,7 +286,7 @@ export class ShareModalComponent implements OnInit {
 
     try {
       if (permission.permissionId) {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const permEntity = await md.GetEntityObject<MJResourcePermissionEntity>('MJ: Resource Permissions');
         await permEntity.Load(permission.permissionId);
 
@@ -304,7 +306,7 @@ export class ShareModalComponent implements OnInit {
 
   private async savePermission(permission: SharePermission): Promise<void> {
     try {
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const permEntity = await md.GetEntityObject<MJResourcePermissionEntity>('MJ: Resource Permissions');
 
       if (permission.permissionId) {

@@ -1,3 +1,8 @@
+/**
+ * @deprecated Use `convertFile` (BatchConverter) for production conversion.
+ * `ConversionPipeline` is retained for backward compat and LLM-fallback tests.
+ * See `ConversionPipeline.ts` for migration guidance.
+ */
 export { ConversionPipeline } from './ConversionPipeline.js';
 export { SQLFileSplitter } from './SQLFileSplitter.js';
 export { DatabaseAuditRunner } from './DatabaseAuditor.js';
@@ -56,6 +61,7 @@ export {
   resolveType,
   resolveInlineType,
   parseTypeString,
+  MJ_OVERRIDES,
 } from './rules/index.js';
 export type {
   IConversionRule,
@@ -69,3 +75,11 @@ export type {
   DialectHeaderBuilder,
   ParsedType,
 } from './rules/index.js';
+
+// Post-conversion validation/fixup
+export { deduplicateEntityFieldSequences } from './rules/SequenceDeduplicator.js';
+export type { SequenceFix, DeduplicationResult } from './rules/SequenceDeduplicator.js';
+
+// Parity reporting
+export { generateParityReport } from './rules/ParityReporter.js';
+export type { ParityReport, ParityGap, MigrationFileInfo } from './rules/ParityReporter.js';

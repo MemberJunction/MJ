@@ -103,8 +103,7 @@ export class MJTestFormComponentExtended extends MJTestFormComponent implements 
   keyboardShortcutsEnabled = true;
   showShortcuts = false; // Hidden by default
   private shortcutsSettingEntity: MJUserSettingEntity | null = null;
-  private metadata = new Metadata();
-
+  private get metadata() { return this.ProviderToUse; }
   // Evaluation preferences
   evalPreferences: EvaluationPreferences = { showExecution: true, showHuman: true, showAuto: false };
 
@@ -182,7 +181,7 @@ export class MJTestFormComponentExtended extends MJTestFormComponent implements 
     this.cdr.markForCheck();
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJTestRunEntity>({
         EntityName: 'MJ: Test Runs',
         ExtraFilter: `TestID='${this.record.ID}'`,
@@ -217,7 +216,7 @@ export class MJTestFormComponentExtended extends MJTestFormComponent implements 
     if (testRunIds.length === 0) return;
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const chunkSize = 50;
       for (let i = 0; i < testRunIds.length; i += chunkSize) {
         const chunk = testRunIds.slice(i, i + chunkSize);
@@ -282,7 +281,7 @@ export class MJTestFormComponentExtended extends MJTestFormComponent implements 
     this.cdr.markForCheck();
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJTestSuiteTestEntity>({
         EntityName: 'MJ: Test Suite Tests',
         ExtraFilter: `TestID='${this.record.ID}'`,
@@ -528,7 +527,7 @@ export class MJTestFormComponentExtended extends MJTestFormComponent implements 
 
     try {
       // Load all test runs for this test
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const runsResult = await rv.RunView<MJTestRunEntity>({
         EntityName: 'MJ: Test Runs',
         ExtraFilter: `TestID='${this.record.ID}'`,
@@ -639,7 +638,7 @@ export class MJTestFormComponentExtended extends MJTestFormComponent implements 
     // Load suite run info for each unique suite run
     if (suiteMap.size > 0) {
       const suiteRunIds = Array.from(suiteMap.keys()).map(id => `'${id}'`).join(',');
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const suiteRunsResult = await rv.RunView<MJTestSuiteRunEntity>({
         EntityName: 'MJ: Test Suite Runs',
         ExtraFilter: `ID IN (${suiteRunIds})`,

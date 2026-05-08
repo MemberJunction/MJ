@@ -9,6 +9,10 @@ See **[claude-full-auto.md](claude-full-auto.md)** for the full-autonomy develop
 
 # MemberJunction Development Guide
 
+## 📜 Project-Wide Standards
+
+- **[Publish-Then-No-Breaking-Changes Policy](packages/OpenApp/PUBLISH_NO_BREAK_POLICY.md)** — within a published OpenApp major version, only additive schema changes are allowed. No dropping tables or columns, no narrowing types, no renaming, no adding required parameters. Breaking changes force a major version bump. Consult this before authoring any migration that modifies an existing schema. (Adopted 2026-04-29; applies prospectively from each app's next published version going forward.)
+
 ## 🚨 CRITICAL RULES - VIOLATIONS ARE UNACCEPTABLE 🚨
 
 ### 1. NO COMMITS WITHOUT EXPLICIT APPROVAL
@@ -204,6 +208,8 @@ The `/guides/` folder contains comprehensive best practices guides for specific 
   - Adding new feature modules with subpath exports
   - How the auto-generated lazy config is produced by `mj codegen manifest --lazy-config`
   - Troubleshooting lazy loading issues
+
+- **[BaseEntity Server-Side Patterns](guides/BASE_ENTITY_SERVER_PATTERNS.md)**: Use **before** writing a new server-side entity subclass under `MJCoreEntitiesServer`. Covers the persisted-embedding pattern (`Save()` + `EmbedTextLocal` + engine cache sync), cross-record invariants via `ValidateAsync` (NOT DB triggers), and FK cleanup before delete. Reference implementations: `MJAIAgentNoteEntityServer`, `MJTagEntityServer`, `MJTagScopeEntityServer`. Lift the recipes from there — don't reinvent.
 
 When building dashboards, creating new Angular applications, comparing UUIDs, or implementing complex UI features, **read the relevant guide first** to ensure consistency with established patterns.
 
@@ -710,6 +716,65 @@ protected generateSingleOperation(operation: Operation): string {
 - Use for entity object creation: `const entity = await md.GetEntityObject<EntityType>('Entity Name')`
 - **NEVER** directly instantiate entity classes with `new EntityClass()`
 - **NEVER** look up entity names at runtime - they are fixed in the schema
+
+### Looking Up an EntityInfo by Name — ALWAYS use `EntityByName`
+
+When you need to find an `EntityInfo` from the metadata, **always use `md.EntityByName(name)`**, never `md.Entities.find(...)`.
+
+```typescript
+// ✅ CORRECT — case-insensitive, trim-handling, O(1) lookup via the entity-by-name map
+const entity = new Metadata().EntityByName(params.EntityName);
+if (entity && !this.IsCachingEnabledForEntity(entity)) { ... }
+
+// ❌ WRONG — case-sensitive, whitespace-sensitive, O(N) array scan
+const entity = md.Entities.find(e => e.Name === params.EntityName);
+```
+
+**Why:**
+- `Entities.find(e => e.Name === ...)` is **case-sensitive** and **whitespace-sensitive** by string equality. Real-world callers pass `'channel actions'`, `'Channel Actions'`, or `' Channel Actions '` interchangeably; `find` only matches the exact registered casing. Bugs from this skew slip through code review easily.
+- `EntityByName` lowercases and trims internally, then uses the pre-populated `_entityMapByName` for O(1) resolution. It also handles the unset-Provider case (returns `undefined`) so your code can fail-open on boot.
+- `EntityByName` returns `EntityInfo | undefined`, so always guard with `if (entity)` before dereferencing.
+
+This rule applies to any code that needs to look up a single entity by name. Use `Entities` (the array) only when you genuinely need to iterate over all entities (e.g. to filter by `SchemaName`).
+
+### 🚨 CRITICAL: Don't Reach for the Global `Metadata` Provider in Per-Provider Code Paths
+
+`new Metadata()` and the static `Metadata.Provider` both resolve to the **process-global default provider**. That's fine in single-provider apps, but **wrong** in any code path that may run under a non-default provider — most importantly:
+
+- **Multi-provider client setups** (a client connecting to multiple MJ servers in parallel — each server is a separate `IMetadataProvider` with its own entities, roles, AllowCaching flags, and CurrentUser).
+- **Server-side code servicing multiple tenants/connections** where the active provider is bound to the request, not to the process.
+
+The rule:
+
+1. **If a class instance already owns a provider** (e.g. `ProviderBase`, `BaseEngine`, `BaseEntity`), use **`this`** / **`this.ProviderToUse`** — never `new Metadata()`.
+2. **If a function/method receives a provider via parameter or event**, use **that** provider — never `new Metadata()`. Examples: cache writes pass the provider that produced the data; `BaseEntityEvent.provider` carries the publishing provider for `remote-invalidate` events.
+3. **If neither of the above applies**, accept an optional `provider?: IMetadataProvider` parameter and fall back to the global only as a last resort:
+   ```typescript
+   public DoThing(name: string, provider?: IMetadataProvider) {
+       const md = provider ?? Metadata.Provider;     // explicit fallback
+       const entity = md?.EntityByName(name);
+       // ...
+   }
+   ```
+
+```typescript
+// ❌ WRONG — silently uses the global provider, even if the caller is on a different one
+const md = new Metadata();
+const entity = md.EntityByName(name);
+
+// ✅ CORRECT (inside a provider class) — use `this`, which IS an IMetadataProvider
+const entity = this.EntityByName(name);
+
+// ✅ CORRECT (helper that doesn't own a provider) — accept it as a parameter
+function gateCacheWrite(name: string, provider?: IMetadataProvider) {
+    const md = provider ?? Metadata.Provider;
+    return md?.EntityByName(name);
+}
+```
+
+**Why this matters**: `LocalCacheManager.SetRunViewResult`, `BaseEntityEvent` consumers, `AuthorizationEvaluator`, and `BaseEngine.applyRemoteRecordData` all read per-provider state (entity flags, roles, current user). When they reach for `new Metadata()` in a multi-provider client, they read the wrong server's metadata and produce subtly wrong cache decisions, role evaluations, or entity instances. These are latent bugs that don't surface until parallel-server scenarios exist.
+
+**When `new Metadata()` IS fine**: methods that genuinely operate on the global default — e.g., a one-off CLI script, application bootstrap, a singleton initializer that explicitly registers itself as the global provider.
 
 ### 🚨 CRITICAL: Entity Naming Convention Warning
 

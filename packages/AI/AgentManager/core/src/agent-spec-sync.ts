@@ -2,7 +2,8 @@ import {
     Metadata,
     RunView,
     UserInfo,
-    LogError
+    LogError,
+    IMetadataProvider
 } from '@memberjunction/core';
 import {
     MJAIAgentEntity,
@@ -147,6 +148,22 @@ export class AgentSpecSync {
     private _contextUser?: UserInfo;
 
     /**
+     * Optional per-request metadata provider for multi-user server isolation.
+     * When omitted, falls back to the global Metadata.Provider.
+     * @private
+     */
+    private _provider?: IMetadataProvider;
+
+    /**
+     * Returns the metadata provider to use for entity operations. Prefers a
+     * caller-supplied provider for server isolation; otherwise falls back to
+     * the global Metadata.Provider.
+     */
+    private get providerToUse(): IMetadataProvider {
+        return this._provider ?? Metadata.Provider;
+    }
+
+    /**
      * Tracks all database mutations performed during save operations
      * @private
      */
@@ -163,7 +180,7 @@ export class AgentSpecSync {
      * @param spec - Optional initial spec data (for creating new agents or working with existing data)
      * @param contextUser - Optional context user (required for server-side operations)
      */
-    constructor(spec?: Partial<AgentSpec>, contextUser?: UserInfo) {
+    constructor(spec?: Partial<AgentSpec>, contextUser?: UserInfo, provider?: IMetadataProvider) {
         if (spec) {
             this.spec = this.initializeSpec(spec);
             this._isDirty = true;
@@ -178,6 +195,7 @@ export class AgentSpecSync {
             };
         }
         this._contextUser = contextUser;
+        this._provider = provider;
     }
 
     // ===== MUTATION TRACKING METHODS =====
@@ -243,9 +261,10 @@ export class AgentSpecSync {
     static async LoadFromDatabase(
         agentId: string,
         contextUser?: UserInfo,
-        includeSubAgents: boolean = true
+        includeSubAgents: boolean = true,
+        provider?: IMetadataProvider
     ): Promise<AgentSpecSync> {
-        const instance = new AgentSpecSync(undefined, contextUser);
+        const instance = new AgentSpecSync(undefined, contextUser, provider);
         await instance.loadFromEntities(agentId, includeSubAgents);
         return instance;
     }
@@ -271,10 +290,11 @@ export class AgentSpecSync {
     static async LoadByName(
         agentName: string,
         contextUser?: UserInfo,
-        includeSubAgents: boolean = true
+        includeSubAgents: boolean = true,
+        provider?: IMetadataProvider
     ): Promise<AgentSpecSync> {
         // Find agent by name
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(provider);
         const result = await rv.RunView<MJAIAgentEntity>({
             EntityName: 'MJ: AI Agents',
             ExtraFilter: `Name='${agentName.replace(/'/g, "''")}'`,
@@ -294,7 +314,7 @@ export class AgentSpecSync {
         }
 
         const agent = result.Results[0];
-        return AgentSpecSync.LoadFromDatabase(agent.ID, contextUser, includeSubAgents);
+        return AgentSpecSync.LoadFromDatabase(agent.ID, contextUser, includeSubAgents, provider);
     }
 
     /**
@@ -321,8 +341,8 @@ export class AgentSpecSync {
      * await spec.SaveToDatabase();
      * ```
      */
-    static FromRawSpec(rawSpec: AgentSpec, contextUser?: UserInfo): AgentSpecSync {
-        return new AgentSpecSync(rawSpec, contextUser);
+    static FromRawSpec(rawSpec: AgentSpec, contextUser?: UserInfo, provider?: IMetadataProvider): AgentSpecSync {
+        return new AgentSpecSync(rawSpec, contextUser, provider);
     }
 
     // ===== LOADING METHODS =====
@@ -340,8 +360,8 @@ export class AgentSpecSync {
      * @throws {Error} If agent is not found
      */
     private async loadFromEntities(agentId: string, includeSubAgents: boolean): Promise<void> {
-        const md = new Metadata();
-        const rv = new RunView();
+        const md = this.providerToUse;
+        const rv = RunView.FromMetadataProvider(this._provider);
 
         // Step 1: Load the main agent entity
         const agentEntity = await md.GetEntityObject<MJAIAgentEntity>(
@@ -475,7 +495,8 @@ export class AgentSpecSync {
                         const subAgentSync = await AgentSpecSync.LoadFromDatabase(
                             subAgentSpec.SubAgent.ID,
                             this._contextUser,
-                            true // Recursively load nested sub-agents too
+                            true, // Recursively load nested sub-agents too
+                            this._provider
                         );
 
                         // Replace the minimal SubAgent with the complete spec
@@ -830,7 +851,7 @@ export class AgentSpecSync {
      * @throws {Error} If validation fails or save fails
      */
     private async saveAgentEntity(validate: boolean): Promise<string> {
-        const md = new Metadata();
+        const md = this.providerToUse;
         const agentEntity = await md.GetEntityObject<MJAIAgentEntity>(
             'MJ: AI Agents',
             this._contextUser
@@ -965,7 +986,7 @@ export class AgentSpecSync {
             return;
         }
 
-        const md = new Metadata();
+        const md = this.providerToUse;
 
         for (const actionSpec of this.spec.Actions) {
             const actionEntity = await md.GetEntityObject<MJAIAgentActionEntity>(
@@ -1064,7 +1085,7 @@ export class AgentSpecSync {
             };
 
             // Recursively create the sub-agent using AgentSpecSync
-            const childSync = new AgentSpecSync(childSpec, this._contextUser);
+            const childSync = new AgentSpecSync(childSpec, this._contextUser, this._provider);
             childSync.markDirty();
             const childResult = await childSync.SaveToDatabase();
 
@@ -1084,7 +1105,7 @@ export class AgentSpecSync {
 
             // Recursively update the sub-agent using AgentSpecSync
             // This ensures all fields including FunctionalRequirements and TechnicalDesign are updated
-            const childSync = new AgentSpecSync(childSpec, this._contextUser);
+            const childSync = new AgentSpecSync(childSpec, this._contextUser, this._provider);
             childSync.markDirty();
             childSync.markLoaded();  // Mark as loaded so delete logic runs for orphaned records
             await childSync.SaveToDatabase();
@@ -1105,7 +1126,7 @@ export class AgentSpecSync {
      * @throws {Error} If relationship save fails
      */
     private async saveRelatedSubAgent(agentId: string, SubAgentSpec: SubAgentSpec): Promise<void> {
-        const md = new Metadata();
+        const md = this.providerToUse;
         const relationshipEntity = await md.GetEntityObject<MJAIAgentRelationshipEntity>(
             'MJ: AI Agent Relationships',
             this._contextUser
@@ -1178,8 +1199,8 @@ export class AgentSpecSync {
         }
 
         console.log(`💬 savePrompts: Processing ${this.spec.Prompts.length} prompt(s)...`);
-        const md = new Metadata();
-        const rv = new RunView();
+        const md = this.providerToUse;
+        const rv = RunView.FromMetadataProvider(this._provider);
 
         // Step 1: Create or update AIPrompt records
         for (let i = 0; i < this.spec.Prompts.length; i++) {
@@ -1318,7 +1339,7 @@ export class AgentSpecSync {
         }
 
         console.log(`🔷 saveSteps: Processing ${this.spec.Steps.length} step(s)...`);
-        const md = new Metadata();
+        const md = this.providerToUse;
 
         for (const stepSpec of this.spec.Steps) {
             const stepEntity = await md.GetEntityObject<MJAIAgentStepEntity>(
@@ -1448,7 +1469,7 @@ export class AgentSpecSync {
         }
 
         console.log(`🔶 saveStepPaths: Processing ${this.spec.Paths.length} path(s)...`);
-        const md = new Metadata();
+        const md = this.providerToUse;
 
         // Create a map of step names to IDs for easy lookup
         const stepNameToId = new Map<string, string>();
@@ -1687,7 +1708,7 @@ export class AgentSpecSync {
      * @throws {Error} If any query fails
      */
     private async loadCurrentDatabaseState(agentId: string): Promise<DatabaseState> {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this._provider);
 
         // Batch load all related records for this agent
         const [actions, prompts, relationships, steps, childAgents] = await rv.RunViews([
@@ -1826,7 +1847,7 @@ export class AgentSpecSync {
      * @throws {Error} If any delete operation fails
      */
     private async deleteOrphans(orphans: Orphans): Promise<void> {
-        const md = new Metadata();
+        const md = this.providerToUse;
 
         // Phase 1: Leaf entities (Paths, Actions)
         console.log(`🗑️ Phase 1: Deleting ${orphans.paths.length} paths and ${orphans.actions.length} actions...`);
@@ -1962,7 +1983,7 @@ export class AgentSpecSync {
     private async orphanChildAgent(childAgentId: string): Promise<void> {
         console.log(`🔗 orphanChildAgent: Orphaning child agent ${childAgentId}...`);
 
-        const md = new Metadata();
+        const md = this.providerToUse;
         const childAgent = await md.GetEntityObject<MJAIAgentEntity>('MJ: AI Agents', this._contextUser);
 
         const loaded = await childAgent.Load(childAgentId);

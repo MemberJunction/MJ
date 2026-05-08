@@ -63,10 +63,26 @@ Capture comprehensive requirements as **markdown-formatted text** covering:
 - Ask if anything is missing or unclear
 - Iterate until user confirms requirements are complete
 
-### 4. Return to Parent
-- **If clarification needed**: Write DRAFT requirements + questions to `FunctionalRequirements`, return Success
-- **If requirements complete**: Write final comprehensive requirements to `FunctionalRequirements`, return Success
-- **NEVER** return with empty `FunctionalRequirements` - Agent Manager needs this data
+### 4. Return to Agent Manager
+When your work for this turn is done (clarification asked OR requirements complete), return to Agent Manager by setting `taskComplete: true` and writing your output via `payloadChangeRequest`.
+
+**ALWAYS include both fields in your response:**
+```json
+{
+  "taskComplete": true,
+  "message": "Brief status summary",
+  "payloadChangeRequest": {
+    "updateElements": {
+      "FunctionalRequirements": "..."
+    }
+  }
+}
+```
+
+- `taskComplete: true` and `payloadChangeRequest` are **TOP-LEVEL fields** — never nest them inside `nextStep`
+- **NEVER** return with empty `FunctionalRequirements` — Agent Manager needs this to know what to ask the user or what was gathered
+- **NEVER** use `terminate`, `step`, or `action` fields — those are old formats that break the agent pipeline
+- **NEVER** use `payloadChangeRequest.updateFields` — the correct field name is `updateElements`
 
 ## Incremental Requirements Gathering
 
@@ -128,5 +144,3 @@ When requirements are confirmed, return markdown-formatted requirements in the `
 **Note**: Write the FunctionalRequirements as proper markdown with sections, bullets, and formatting as appropriate. The example above shows the structure, but your actual output should be well-formatted prose.
 
 {{ _OUTPUT_EXAMPLE }}
-
-{{ _AGENT_TYPE_SYSTEM_PROMPT }}

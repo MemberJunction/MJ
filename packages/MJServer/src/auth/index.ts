@@ -233,7 +233,7 @@ export const verifyUserRecord = async (
         if (newUser) {
           // new user worked! we already have the stuff we need for the cache, so no need to go to the DB now, just create a new UserInfo object and use the return value from the createNewUser method
           // to init it, including passing in the role list for the user.
-          const md: Metadata = new Metadata();
+          const md: Metadata = new Metadata(); // global-provider-ok: JWT validation + role lookup runs BEFORE AppContext.providers is built — no per-request provider yet
 
           const initData: MJUserEntityType & { UserRoles: { UserID: string; RoleName: string; RoleID: string }[] } = newUser.GetAll();
 
@@ -244,7 +244,7 @@ export const verifyUserRecord = async (
             return { UserID: initData.ID, RoleName: role, RoleID: roleID };
           });
 
-          user = new UserInfo(Metadata.Provider, initData);
+          user = new UserInfo(Metadata.Provider, initData); // global-provider-ok: same JWT-validation context — no per-request provider yet
           UserCache.Instance.Users.push(user);
           console.warn(`   >>> New user ${email} created successfully!`);
         }

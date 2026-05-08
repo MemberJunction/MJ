@@ -1,0 +1,307 @@
+/* ── Root ─────────────────────────────────────────────────────────────────── */
+
+.fields-grid-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  gap: 0;
+}
+
+/* ── Info banner ──────────────────────────────────────────────────────────── */
+
+.fields-info {
+  margin: 0;
+  padding: 10px 16px;
+  font-size: 0.875rem;
+  color: var(--mj-text-secondary);
+  background: var(--mj-bg-surface-card);
+  border-bottom: 1px solid var(--mj-border-subtle);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fields-info i {
+  color: var(--mj-status-info);
+  flex-shrink: 0;
+}
+
+/* ── Error banner ─────────────────────────────────────────────────────────── */
+
+.fields-error-banner {
+  padding: 8px 16px;
+  background: var(--mj-status-error-bg);
+  color: var(--mj-status-error-text);
+  border-bottom: 1px solid var(--mj-status-error-border);
+  font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Table wrap ───────────────────────────────────────────────────────────── */
+
+.table-wrap {
+  flex: 1;
+  overflow: auto;
+}
+
+/* ── Fields table ─────────────────────────────────────────────────────────── */
+
+.fields-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  /* fixed layout enforces column widths regardless of content — prevents the
+     browser from redistributing space and crushing flexible columns */
+  table-layout: fixed;
+}
+
+.fields-table thead tr {
+  border-bottom: 2px solid var(--mj-border-default);
+  background: var(--mj-bg-surface-card);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.fields-table th {
+  padding: 8px 10px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--mj-text-secondary);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+.required-mark {
+  color: var(--mj-status-error);
+  font-size: 0.8rem;
+}
+
+.field-row {
+  border-bottom: 1px solid var(--mj-border-subtle);
+  transition: background 0.1s;
+}
+
+.field-row:hover {
+  background: var(--mj-bg-surface-hover);
+}
+
+.field-row.row-active {
+  background: color-mix(in srgb, var(--mj-brand-primary) 5%, var(--mj-bg-surface));
+}
+
+.field-row.row-error {
+  background: var(--mj-status-error-bg);
+}
+
+.field-row.row-hidden {
+  opacity: 0.45;
+}
+
+.fields-table td {
+  padding: 7px 10px;
+  vertical-align: middle;
+  overflow: hidden;
+}
+
+/* ── Column widths ────────────────────────────────────────────────────────── */
+/* Flexible columns use percentages so they scale with the panel.
+   Utility columns (checkbox, length, actions) use px since their content
+   is inherently fixed-size.  col-desc gets no explicit width — it receives
+   all remaining space under table-layout: fixed. */
+
+.col-name    { width: 22%; }
+.col-type    { width: 20%; }
+.col-req     { width: 58px; text-align: center; }
+.col-extra   { width: 76px; }
+.col-default { width: 11%; }
+.col-desc    { overflow: hidden; }
+.col-actions { width: 40px; text-align: center; }
+
+/* ── Cell content ─────────────────────────────────────────────────────────── */
+
+.name-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+}
+
+/* Inside the name flex cell, let the input grow and shrink freely so the
+   RESERVED badge can sit beside it without pushing the input off-screen. */
+.name-cell .cell-input {
+  flex: 1;
+  min-width: 0;
+  width: 0;
+}
+
+.cell-input {
+  width: 100%;
+  min-width: 0;
+  padding: 5px 8px;
+  font-size: 0.875rem;
+  border-radius: 4px;
+}
+
+.cell-select {
+  cursor: pointer;
+}
+
+.cell-number {
+  width: 80px;
+}
+
+.cell-number-sm {
+  width: 58px;
+}
+
+.cell-input.input-error {
+  border-color: var(--mj-status-error-border);
+  background: var(--mj-status-error-bg);
+}
+
+.precision-scale {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sep {
+  color: var(--mj-text-muted);
+  font-size: 0.875rem;
+}
+
+.cell-na {
+  color: var(--mj-text-muted);
+  font-size: 0.875rem;
+}
+
+.checkbox-wrap {
+  display: flex;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.checkbox-wrap input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--mj-brand-primary);
+}
+
+.reserved-badge {
+  display: inline-block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--mj-status-error-bg);
+  color: var(--mj-status-error-text);
+  border: 1px solid var(--mj-status-error-border);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── Row action buttons ───────────────────────────────────────────────────── */
+
+.action-icon-btn {
+  background: none;
+  border: none;
+  padding: 5px 7px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--mj-text-muted);
+  font-size: 0.875rem;
+  transition: color 0.15s, background 0.15s;
+  line-height: 1;
+}
+
+.action-icon-btn:hover {
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface-hover);
+}
+
+.action-icon-btn.delete-btn:hover {
+  color: var(--mj-status-error-text);
+  background: var(--mj-status-error-bg);
+}
+
+/* ── Auto-managed rows ────────────────────────────────────────────────────── */
+
+.auto-col-row td {
+  background: var(--mj-bg-surface-sunken);
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.auto-col-divider td {
+  border-bottom: 2px solid var(--mj-border-default);
+}
+
+.auto-lock {
+  font-size: 0.7rem;
+  color: var(--mj-text-muted);
+  margin-right: 5px;
+}
+
+.auto-lock-icon {
+  color: var(--mj-text-muted);
+  font-size: 0.75rem;
+}
+
+.auto-badge {
+  display: inline-block;
+  font-size: 0.6rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-left: 5px;
+  vertical-align: middle;
+  background: var(--mj-bg-surface-card);
+  color: var(--mj-text-muted);
+  border: 1px solid var(--mj-border-default);
+}
+
+.auto-default {
+  font-family: monospace;
+  font-size: 0.8rem;
+  color: var(--mj-text-muted);
+}
+
+.auto-desc {
+  font-style: italic;
+  color: var(--mj-text-muted);
+  font-size: 0.8rem;
+}
+
+.req-yes {
+  color: var(--mj-status-success);
+}
+
+/* ── Empty row ────────────────────────────────────────────────────────────── */
+
+.empty-row {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--mj-text-muted);
+  font-size: 0.875rem;
+}
+
+/* ── Add field bar ────────────────────────────────────────────────────────── */
+
+.add-field-bar {
+  padding: 10px 16px;
+  border-top: 1px solid var(--mj-border-subtle);
+  background: var(--mj-bg-surface-card);
+  flex-shrink: 0;
+}

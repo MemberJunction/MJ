@@ -55,7 +55,7 @@ export class AssignUserRolesAction extends BaseAction {
                 };
             }
 
-            const md = new Metadata();
+            const md = params.Provider ?? new Metadata();
 
             // Validate user exists - check UserCache first
             // For newly created users, the cache might not be updated yet
@@ -92,7 +92,7 @@ export class AssignUserRolesAction extends BaseAction {
             const errors: string[] = [];
 
             if (rolesToAssign.length > 0) {
-                const provider = Metadata.Provider as DatabaseProviderBase;
+                const provider = (params.Provider ?? Metadata.Provider) as DatabaseProviderBase;
                 await provider.BeginTransaction();
                 try {
                     for (const role of rolesToAssign) {

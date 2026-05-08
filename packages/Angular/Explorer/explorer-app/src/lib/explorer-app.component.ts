@@ -26,6 +26,7 @@ import { ConversationBridgeService } from '@memberjunction/ng-conversations';
 import { ApplicationManager, WorkspaceStateManager } from '@memberjunction/ng-base-application';
 import { AppContextSnapshot } from '@memberjunction/ai-core-plus';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 @Component({
   standalone: false,
   selector: 'mj-explorer-app',
@@ -33,8 +34,14 @@ import { AppContextSnapshot } from '@memberjunction/ai-core-plus';
   styleUrls: ['./explorer-app.component.css'],
   encapsulation: ViewEncapsulation.None
 })
-export class MJExplorerAppComponent implements OnInit, OnDestroy {
-  private static readonly THEME_STORAGE_KEY = 'mj-login-theme';
+export class MJExplorerAppComponent extends BaseAngularComponent implements OnInit, OnDestroy {
+  /**
+   * Unified theme storage key. Same value the inline pre-paint script in
+   * index.html and ThemeService both read/write. Single source of truth so
+   * the login-screen toggle, the post-login ThemeService, and the inline
+   * first-paint script all stay in sync.
+   */
+  private static readonly THEME_STORAGE_KEY = 'mj-theme';
 
   public title = 'MJ Explorer';
   public initialPath = '/';
@@ -71,6 +78,7 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
     private workspaceState: WorkspaceStateManager,
     private cdr: ChangeDetectorRef,
   ) {
+    super();
     this.registerClientTools();
   }
 
@@ -91,7 +99,7 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
       if (result.success) {
         // Start the client tool session so agents can invoke browser-side tools.
         // Uses the GraphQLDataProvider's sessionId which is the PubSub correlation key.
-        const provider = Metadata.Provider as { sessionId?: string };
+        const provider = this.ProviderToUse as { sessionId?: string };
         if (provider.sessionId) {
           this.agentClient.StartSession(provider.sessionId);
         }
@@ -299,7 +307,7 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
     if (conversationId) {
       params['conversationId'] = conversationId;
     }
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const chatApp = md.Applications.find(a => a.Name === 'Chat');
     this.navigationService.OpenNavItemByName('Conversations', params, chatApp?.ID);
   }
@@ -322,7 +330,7 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
       ? navItems.find(n => n.Label === activeNavItemName)
       : navItems.find(n => n.isDefault) || navItems[0];
 
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const currentUser = md.CurrentUser;
 
     this.AppContextSnapshot = {
@@ -416,7 +424,7 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
       Handler: async (params) => {
         const entityName = String(params['EntityName']);
         const recordId = String(params['RecordID']);
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const entityInfo = md.Entities.find(e => e.Name === entityName);
         const pkey = new CompositeKey();
         if (entityInfo) {
@@ -453,7 +461,7 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
         }
 
         // Resolve app ID and navigate
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const app = md.Applications.find(a => a.Name.toLowerCase() === appName.toLowerCase());
         if (!app) {
           return { Success: false, ErrorMessage: `Application '${appName}' not found` };
@@ -671,7 +679,11 @@ export class MJExplorerAppComponent implements OnInit, OnDestroy {
   }
 
   /**
-   * Load saved theme preference from localStorage, falling back to OS preference
+   * Load saved theme preference from localStorage, falling back to OS preference.
+   *
+   * Reads the same THEME_STORAGE_KEY ('mj-theme') the inline pre-paint script
+   * reads, so both paths reach the same decision and Angular bootstrap doesn't
+   * override the script's correct first-paint setting.
    */
   private applyLoginTheme(): void {
     const saved = localStorage.getItem(MJExplorerAppComponent.THEME_STORAGE_KEY);

@@ -8,7 +8,8 @@ import { z } from 'zod';
 import { cosmiconfigSync } from 'cosmiconfig';
 import path from 'path';
 import { logStatus } from '../Misc/status_logging';
-import { LogError } from '@memberjunction/core';
+import { LogError, DatabasePlatform } from '@memberjunction/core';
+import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
 
 /** Global configuration explorer for finding MJ config files */
@@ -530,8 +531,8 @@ const configInfoSchema = z.object({
   SQLOutput: sqlOutputConfigSchema,
   forceRegeneration: forceRegenerationConfigSchema,
 
-  /** Database platform type: 'mssql' for SQL Server, 'postgresql' for PostgreSQL */
-  dbType: z.enum(['mssql', 'postgresql']).default('mssql'),
+  /** Database platform: 'sqlserver' or 'postgresql'. */
+  dbPlatform: z.enum(['sqlserver', 'postgresql']).default('sqlserver'),
   dbHost: z.string(),
   dbPort: z.coerce.number().int().positive().default(1433),
   codeGenLogin: z.string(),
@@ -542,6 +543,13 @@ const configInfoSchema = z.object({
     .boolean()
     .default(false)
     .transform((v) => (v ? 'Y' : 'N')),
+  /**
+   * Optional SQL Server request timeout in milliseconds applied to the CodeGen
+   * connection pool. Defaults to 120000 (2 minutes). Set in `mj.config.cjs` or
+   * via the `MJ_CODEGEN_REQUEST_TIMEOUT` environment variable when long-running
+   * CodeGen steps (e.g. spUpdateExistingEntityFieldsFromSchema) exceed the default.
+   */
+  dbRequestTimeout: z.coerce.number().int().positive().optional(),
   outputCode: z.string().nullish(),
   mjCoreSchema: z.string().default('__mj'),
   graphqlPort: z.coerce.number().int().positive().default(4000),
@@ -561,14 +569,17 @@ const configInfoSchema = z.object({
  */
 export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
   // Database connection settings (from environment variables)
-  dbType: (process.env.DB_TYPE as 'mssql' | 'postgresql') ?? 'mssql',
+  dbPlatform: resolveDbPlatformFromEnv() ?? 'sqlserver',
   dbHost: process.env.DB_HOST ?? 'localhost',
-  dbPort: 1433,
+  dbPort: parseInt(process.env.DB_PORT ?? '1433', 10),
   dbDatabase: process.env.DB_DATABASE ?? '',
   codeGenLogin: process.env.CODEGEN_DB_USERNAME ?? '',
   codeGenPassword: process.env.CODEGEN_DB_PASSWORD ?? '',
   dbInstanceName: process.env.DB_INSTANCE_NAME,
   dbTrustServerCertificate: parseBooleanEnv(process.env.DB_TRUST_SERVER_CERTIFICATE) ? 'Y' : 'N',
+  dbRequestTimeout: process.env.MJ_CODEGEN_REQUEST_TIMEOUT
+    ? parseInt(process.env.MJ_CODEGEN_REQUEST_TIMEOUT, 10)
+    : undefined,
   mjCoreSchema: '__mj',
   graphqlPort: 4000,
   verboseOutput: false,
@@ -752,7 +763,6 @@ export const { mjCoreSchema, dbDatabase } = configInfo;
 export function initializeConfig(cwd: string): ConfigInfo {
   currentWorkingDirectory = cwd;
 
-  // Merge user config with DEFAULT_CODEGEN_CONFIG
   const userConfigResult = explorer.search(currentWorkingDirectory);
   const mergedConfig = userConfigResult?.config
     ? mergeConfigs(DEFAULT_CODEGEN_CONFIG, userConfigResult.config)
@@ -931,9 +941,9 @@ export function mj_core_schema(): string {
 }
 
 /**
- * Returns the configured database platform type.
- * Defaults to 'mssql' for backward compatibility.
+ * Returns the configured database platform.
+ * Defaults to 'sqlserver' when the user config does not specify one.
  */
-export function dbType(): 'mssql' | 'postgresql' {
-  return configInfo.dbType;
+export function dbPlatform(): DatabasePlatform {
+  return configInfo.dbPlatform;
 }

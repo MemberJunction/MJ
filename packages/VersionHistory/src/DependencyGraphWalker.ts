@@ -1,4 +1,4 @@
-import { CompositeKey, EntityInfo, EntityFieldInfo, EntityRelationshipInfo, Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { CompositeKey, EntityInfo, EntityFieldInfo, EntityRelationshipInfo, IMetadataProvider, Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { DependencyNode, WalkOptions } from './types';
 import { buildCompositeKeyFromRecord, escapeSqlString } from './constants';
@@ -145,6 +145,14 @@ export class DependencyGraphWalker {
     /** Cache: entityID → forward FK references from field metadata */
     private forwardRefCache = new Map<string, ForwardReference[]>();
 
+    /** Optional provider override; falls back to Metadata.Provider when not set. */
+    private _provider?: IMetadataProvider;
+
+    /** Returns the active provider — explicit override if set, otherwise the global default. */
+    protected get ProviderToUse(): IMetadataProvider {
+        return this._provider ?? Metadata.Provider;
+    }
+
     // =========================================================================
     // Public API
     // =========================================================================
@@ -165,7 +173,7 @@ export class DependencyGraphWalker {
         options: WalkOptions,
         contextUser: UserInfo
     ): Promise<DependencyNode> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const entityInfo = md.EntityByName(entityName);
         if (!entityInfo) {
             throw new Error(`Entity '${entityName}' not found in metadata`);
@@ -397,7 +405,7 @@ export class DependencyGraphWalker {
         const cached = this.reverseRelCache.get(parentEntity.ID);
         if (cached) return cached;
 
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const relationships: ReverseRelationship[] = [];
 
         for (const rel of parentEntity.RelatedEntities) {
@@ -431,7 +439,7 @@ export class DependencyGraphWalker {
         const cached = this.forwardRefCache.get(entity.ID);
         if (cached) return cached;
 
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const refs: ForwardReference[] = [];
 
         for (const field of entity.Fields) {

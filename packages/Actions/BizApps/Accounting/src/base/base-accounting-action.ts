@@ -3,7 +3,7 @@ import { ActionParam, ActionResultSimple, RunActionParams } from '@memberjunctio
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
 import { UserInfo } from '@memberjunction/core';
 import { MJCompanyIntegrationEntity, MJIntegrationEntity } from '@memberjunction/core-entities';
-import { Metadata, RunView } from '@memberjunction/core';
+import { IMetadataProvider, Metadata, RunView } from '@memberjunction/core';
 
 /**
  * Base class for all accounting-related actions.
@@ -137,8 +137,8 @@ export abstract class BaseAccountingAction extends BaseAction {
     /**
      * Gets the base URL for API calls from the integration
      */
-    protected async getAPIBaseURL(contextUser: UserInfo): Promise<string> {
-        const md = new Metadata();
+    protected async getAPIBaseURL(contextUser: UserInfo, provider?: IMetadataProvider): Promise<string> {
+        const md = provider ?? new Metadata();
         const integration = await md.GetEntityObject<MJIntegrationEntity>('MJ: Integrations', contextUser);
         
         const rv = new RunView();

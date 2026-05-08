@@ -84,6 +84,25 @@ export class ComponentManager {
     // Check if already loading to prevent duplicate work
     const existingPromise = this.loadingPromises.get(componentKey);
     if (existingPromise && !options.forceRefresh) {
+      // Before returning the pending promise, check if the compiled component
+      // is already in the registry. This prevents deadlock in circular dependency
+      // chains: A's Step 6 loads B, B's Step 6 loads A again — but A was already
+      // compiled and registered (Step 5 runs before Step 6). Returning the pending
+      // promise would deadlock because it's waiting on its own call chain.
+      const namespace = spec.namespace || options.defaultNamespace || 'Global';
+      const version = spec.version || options.defaultVersion || 'latest';
+      const contentHash = this.calculateHash(spec);
+      const registered = this.registry.get(spec.name, namespace, version, contentHash);
+      if (registered) {
+        this.log(`Component already registered (circular dep resolution): ${spec.name}`);
+        return {
+          success: true,
+          component: registered,
+          spec,
+          fromCache: true
+        };
+      }
+
       this.log(`Component already loading: ${spec.name}, waiting...`);
       return existingPromise;
     }
@@ -115,8 +134,9 @@ export class ComponentManager {
       // STEP 1: Check if already loaded in ComponentRegistry
       const namespace = spec.namespace || options.defaultNamespace || 'Global';
       const version = spec.version || options.defaultVersion || 'latest';
-      
-      const existing = this.registry.get(spec.name, namespace, version);
+      const contentHash = this.calculateHash(spec);
+
+      const existing = this.registry.get(spec.name, namespace, version, contentHash);
       if (existing && !options.forceRefresh && !options.forceRecompile) {
         this.log(`Component found in registry: ${spec.name}`);
         
@@ -149,7 +169,7 @@ export class ComponentManager {
           this.fetchCache.set(componentKey, {
             spec: fullSpec,
             fetchedAt: new Date(),
-            hash: await this.calculateHash(fullSpec),
+            hash: this.calculateHash(fullSpec),
             usageNotified: false
           });
         } catch (error) {
@@ -173,7 +193,7 @@ export class ComponentManager {
           this.fetchCache.set(componentKey, {
             spec: fullSpec,
             fetchedAt: new Date(),
-            hash: await this.calculateHash(fullSpec),
+            hash: this.calculateHash(fullSpec),
             usageNotified: false
           });
         }
@@ -203,11 +223,16 @@ export class ComponentManager {
       // STEP 5: Register in ComponentRegistry
       if (!existing || options.forceRefresh || options.forceRecompile) {
         this.log(`Registering component: ${spec.name}`);
+        // Register under the INPUT spec's hash so callers passing the same
+        // spec shape on subsequent loads hit the cache. If we keyed by the
+        // post-fetch fullSpec hash instead, registry-stub callers would
+        // never re-find the entry they just cached.
         this.registry.register(
           fullSpec.name,
           compiledComponent,
           namespace,
-          version
+          version,
+          contentHash
         );
       }
       
@@ -400,8 +425,13 @@ export class ComponentManager {
       }
       
       // Load dependencies
-      if (result.spec?.dependencies) {
-        for (const dep of result.spec.dependencies) {
+      // Prefer the input spec's dependencies over the cached result's dependencies.
+      // When a parent component is served from cache, result.spec contains stale
+      // dependency code. The input spec has the latest dependency code from the caller.
+      // Each dependency still gets its own individual cache check via loadComponent.
+      const dependencies = spec.dependencies || result.spec?.dependencies;
+      if (dependencies) {
+        for (const dep of dependencies) {
           // Normalize dependency spec for local registry lookup
           const depSpec = { ...dep };
           // OPTIMIZATION: If the dependency already has code (from registry population),
@@ -720,9 +750,14 @@ export class ComponentManager {
   }
   
   /**
-   * Calculate a hash for a component spec (for cache validation)
+   * Calculate a content fingerprint for a component spec. Used both as a
+   * cache-validation marker on `CacheEntry` and as part of the cache key so
+   * specs that share `(registry, namespace, name, version)` but carry
+   * different `code` (e.g. a registry-reference stub vs. an inline-code
+   * Studio export of the same artifact) do not collide on a single cache
+   * slot. Sync because callers use it to build keys in non-async paths.
    */
-  private async calculateHash(spec: ComponentSpec): Promise<string> {
+  private calculateHash(spec: ComponentSpec): string {
     // Simple hash based on spec content
     const content = JSON.stringify({
       name: spec.name,
@@ -730,25 +765,30 @@ export class ComponentManager {
       code: spec.code,
       libraries: spec.libraries
     });
-    
-    // Simple hash function (in production, use crypto)
+
+    // FNV-style 32-bit integer hash
     let hash = 0;
     for (let i = 0; i < content.length; i++) {
       const char = content.charCodeAt(i);
       hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // Convert to 32bit integer
+      hash = hash & hash;
     }
     return hash.toString(16);
   }
   
   /**
-   * Generate a unique key for a component
+   * Generate a unique key for a component. Includes a content fingerprint so
+   * specs that share `(registry, namespace, name, version)` but carry
+   * different `code` (e.g. a registry-reference stub vs. an inline-code
+   * Studio export of the same artifact) are cached as separate entries
+   * instead of clobbering each other on a single slot.
    */
   private getComponentKey(spec: ComponentSpec, options: LoadOptions): string {
     const registry = spec.registry || 'local';
     const namespace = spec.namespace || options.defaultNamespace || 'Global';
     const version = spec.version || options.defaultVersion || 'latest';
-    return `${registry}:${namespace}:${spec.name}:${version}`;
+    const hash = this.calculateHash(spec);
+    return `${registry}:${namespace}:${spec.name}:${version}#${hash}`;
   }
   
   /**

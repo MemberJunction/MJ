@@ -8,7 +8,7 @@
  * @module @memberjunction/search-engine
  */
 
-import { LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSearchProvider } from './ISearchProvider';
 import { SearchSource, SearchFilters, SearchResultItem, SearchResultType } from './search.types';
@@ -21,6 +21,21 @@ import { SearchSource, SearchFilters, SearchResultItem, SearchResultType } from 
 @RegisterClass(BaseSearchProvider, 'EntitySearchProvider')
 export class EntitySearchProvider extends BaseSearchProvider {
     public readonly SourceType: SearchSource = 'entity';
+
+    /**
+     * Minimum trimmed term length we accept. One- and two-character substrings against
+     * a `LIKE '%term%'` pattern across every searchable entity is essentially a
+     * full-database scan with negligible relevance, so we early-return for those.
+     */
+    private static readonly MIN_TERM_LENGTH = 3;
+
+    /**
+     * Per-entity hard timeout. If one entity's RunView is taking longer than this,
+     * we drop its results rather than hold the entire fan-out hostage. The query
+     * keeps running in SQL Server until completion (we can't cancel mssql Requests
+     * here), but other entities' results still land for the user.
+     */
+    private static readonly PER_ENTITY_TIMEOUT_MS = 30_000;
 
     /**
      * Execute an entity search across all entities with AllowUserSearchAPI=true.
@@ -37,8 +52,10 @@ export class EntitySearchProvider extends BaseSearchProvider {
         filters: SearchFilters | undefined,
         contextUser: UserInfo
     ): Promise<SearchResultItem[]> {
+        const trimmed = (query ?? '').trim();
+        if (trimmed.length < EntitySearchProvider.MIN_TERM_LENGTH) return [];
         try {
-            const md = new Metadata();
+            const md = this.Provider;
             const searchableEntities = this.getSearchableEntities(md, filters);
 
             if (searchableEntities.length === 0) {
@@ -47,9 +64,9 @@ export class EntitySearchProvider extends BaseSearchProvider {
             }
 
             // Debug: log searchable entities and their search fields
-            LogStatus(`EntitySearchProvider: Searching ${searchableEntities.length} entities for "${query}"`);
+            LogStatus(`EntitySearchProvider: Searching ${searchableEntities.length} entities for "${trimmed}"`);
             for (const e of searchableEntities.slice(0, 3)) {
-                const entity = md.Entities.find(ent => ent.Name === e.Name);
+                const entity = md.EntityByName(e.Name);
                 if (entity) {
                     const searchFields = entity.Fields.filter(f => f.IncludeInUserSearchAPI);
                     LogStatus(`  Entity "${e.Name}": ${searchFields.length} searchable fields [${searchFields.slice(0, 5).map(f => f.Name).join(', ')}${searchFields.length > 5 ? '...' : ''}]`);
@@ -59,9 +76,9 @@ export class EntitySearchProvider extends BaseSearchProvider {
             // Calculate per-entity limit: distribute topK across entities
             const perEntityLimit = Math.max(3, Math.ceil(topK / Math.max(1, searchableEntities.length)));
 
-            // Search all entities in parallel
+            // Search all entities in parallel, each gated by a hard timeout
             const searchPromises = searchableEntities.map(entity =>
-                this.searchOneEntity(entity.Name, query, perEntityLimit, contextUser)
+                this.searchOneEntity(entity.Name, trimmed, perEntityLimit, contextUser)
             );
 
             const results = await Promise.all(searchPromises);
@@ -81,7 +98,7 @@ export class EntitySearchProvider extends BaseSearchProvider {
      * Get the list of entities eligible for search, optionally filtered by name.
      */
     private getSearchableEntities(
-        md: Metadata,
+        md: IMetadataProvider,
         filters: SearchFilters | undefined
     ): { Name: string }[] {
         let entities = md.Entities.filter(e => e.AllowUserSearchAPI);
@@ -95,9 +112,32 @@ export class EntitySearchProvider extends BaseSearchProvider {
     }
 
     /**
-     * Search a single entity using RunView with UserSearchString.
+     * Search a single entity using RunView with UserSearchString. Wraps the
+     * underlying RunView in a hard timeout so a slow entity cannot hold up
+     * the whole fan-out — partial results from the other entities still land.
      */
     private async searchOneEntity(
+        entityName: string,
+        query: string,
+        maxRows: number,
+        contextUser: UserInfo
+    ): Promise<SearchResultItem[]> {
+        const work = this.searchOneEntityRaw(entityName, query, maxRows, contextUser);
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const timeout = new Promise<SearchResultItem[]>(resolve => {
+            timer = setTimeout(() => {
+                LogError(`EntitySearchProvider: timeout (${EntitySearchProvider.PER_ENTITY_TIMEOUT_MS}ms) searching "${entityName}"`);
+                resolve([]);
+            }, EntitySearchProvider.PER_ENTITY_TIMEOUT_MS);
+        });
+        try {
+            return await Promise.race([work, timeout]);
+        } finally {
+            if (timer) clearTimeout(timer);
+        }
+    }
+
+    private async searchOneEntityRaw(
         entityName: string,
         query: string,
         maxRows: number,
@@ -135,8 +175,8 @@ export class EntitySearchProvider extends BaseSearchProvider {
         entityName: string,
         query: string
     ): SearchResultItem[] {
-        const md = new Metadata();
-        const entityInfo = md.Entities.find(e => e.Name === entityName);
+        const md = this.Provider;
+        const entityInfo = md.EntityByName(entityName);
         const queryLower = query.toLowerCase();
 
         // Get searchable fields and classify them by importance

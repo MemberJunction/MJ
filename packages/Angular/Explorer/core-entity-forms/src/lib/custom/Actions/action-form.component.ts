@@ -108,7 +108,7 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
         }
         
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const transactionGroup = await md.CreateTransactionGroup();
             
             // Set transaction group on the Action record
@@ -212,7 +212,7 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
         if (!this.record.CategoryID) return;
 
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const entity = await md.GetEntityObject<MJActionCategoryEntity>('MJ: Action Categories');
             const loaded = await entity.Load(this.record.CategoryID);
             if (loaded) {
@@ -226,7 +226,7 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
     private async loadActionParams() {
         this.isLoadingParams = true;
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<MJActionParamEntity>({
                 EntityName: 'MJ: Action Params',
                 ExtraFilter: `ActionID='${this.record.ID}'`,
@@ -264,7 +264,7 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
     private async loadResultCodes() {
         this.isLoadingResultCodes = true;
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<MJActionResultCodeEntity>({
                 EntityName: 'MJ: Action Result Codes',
                 ExtraFilter: `ActionID='${this.record.ID}'`,
@@ -303,7 +303,7 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
      */
     private async reloadAfterSaveSilent(): Promise<void> {
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const [paramResult, codeResult] = await rv.RunViews([
                 {
                     EntityName: 'MJ: Action Params',
@@ -344,7 +344,7 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
     private async loadRecentExecutions() {
         this.isLoadingExecutions = true;
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<MJActionExecutionLogEntity>({
                 EntityName: 'MJ: Action Execution Logs',
                 ExtraFilter: `ActionID='${this.record.ID}'`,
@@ -369,7 +369,7 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
     private async loadActionLibraries() {
         this.isLoadingLibraries = true;
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<MJActionLibraryEntity>({
                 EntityName: 'MJ: Action Libraries',
                 ExtraFilter: `ActionID='${this.record.ID}'`,
@@ -382,7 +382,7 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
                 // Load library details
                 if (this.actionLibraries.length > 0) {
                     const libraryIds = this.actionLibraries.map(al => al.LibraryID).filter(id => id);
-                    const md = new Metadata();
+                    const md = this.ProviderToUse;
                     this.libraries = [];
                     
                     for (const libId of libraryIds) {
@@ -403,7 +403,7 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
 
     private async loadExecutionStats() {
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             // Load ALL executions for accurate statistics
             const result = await rv.RunView<MJActionExecutionLogEntity>({
                 EntityName: 'MJ: Action Execution Logs',
@@ -755,7 +755,7 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
     async addParameter(type: 'Input' | 'Output' | 'Both') {
         if (!this.EditMode || !this.record.IsSaved) return;
         
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const newParam = await md.GetEntityObject<MJActionParamEntity>('MJ: Action Params');
         
         // Set default values
@@ -959,7 +959,7 @@ export class MJActionFormComponentExtended extends MJActionFormComponent impleme
     async addResultCode() {
         if (!this.EditMode || !this.record.IsSaved) return;
         
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const newResultCode = await md.GetEntityObject<MJActionResultCodeEntity>('MJ: Action Result Codes');
         
         // Set default values

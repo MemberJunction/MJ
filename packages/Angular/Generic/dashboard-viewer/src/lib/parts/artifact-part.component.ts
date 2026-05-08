@@ -3,7 +3,7 @@ import { RegisterClass } from '@memberjunction/global';
 import { BaseDashboardPart } from './base-dashboard-part';
 import { PanelConfig } from '../models/dashboard-types';
 import { AnalyzeArtifactService, NavigationRequest } from '@memberjunction/ng-artifacts';
-import { DataSnapshot, UserInfo, Metadata, CompositeKey } from '@memberjunction/core';
+import { DataSnapshot, UserInfo, CompositeKey } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 
 /**
@@ -146,7 +146,7 @@ export class ArtifactPartComponent extends BaseDashboardPart implements AfterVie
     public get currentUser(): UserInfo {
         // Use provided CurrentUser, or fall back to Metadata.CurrentUser
         // In client-side Angular context, Metadata.CurrentUser should always be available
-        const user = this.CurrentUser || new Metadata().CurrentUser;
+        const user = this.CurrentUser || this.ProviderToUse.CurrentUser;
         if (!user) {
             throw new Error('No current user available - user must be logged in to view artifacts');
         }

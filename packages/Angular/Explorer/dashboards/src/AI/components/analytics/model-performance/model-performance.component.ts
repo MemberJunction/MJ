@@ -11,6 +11,7 @@ import {
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { RunView } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UUIDsEqual } from '@memberjunction/global';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 
@@ -425,7 +426,7 @@ const FIELDS = [
         }
     `]
 })
-export class AnalyticsModelPerformanceComponent implements OnInit, OnDestroy {
+export class AnalyticsModelPerformanceComponent extends BaseAngularComponent implements OnInit, OnDestroy {
     @Input() TimeRange = '7d';
     @Output() TimeRangeChange = new EventEmitter<string>();
 
@@ -450,7 +451,10 @@ export class AnalyticsModelPerformanceComponent implements OnInit, OnDestroy {
 
     private allRuns: PromptRunRecord[] = [];
 
-    ngOnInit(): void {
+    async ngOnInit(): Promise<void> {
+        // AIEngineBase is deferred at startup — make sure it's loaded before
+        // we read .Vendors / .Models from it.
+        await AIEngineBase.Instance.EnsureLoaded();
         this.loadVendorOptions();
         this.LoadData();
     }
@@ -509,7 +513,7 @@ export class AnalyticsModelPerformanceComponent implements OnInit, OnDestroy {
         this.cdr.detectChanges();
 
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const dateFilter = this.buildDateFilter();
 
             const result = await rv.RunView<PromptRunRecord>({

@@ -1,6 +1,6 @@
 import { CodeGenConnection } from '../Database/codeGenDatabaseProvider';
 import { logError, logStatus } from "./status_logging";
-import { configInfo, dbType, mj_core_schema } from "../Config/config";
+import { configInfo, dbPlatform, mj_core_schema } from "../Config/config";
 
 
 export type IntegrityCheckResult = {
@@ -20,7 +20,7 @@ export type RunIntegrityCheck = {
  * SQL Server uses [brackets], PostgreSQL uses "double quotes".
  */
 function qi(name: string): string {
-    if (dbType() === 'postgresql') {
+    if (dbPlatform() === 'postgresql') {
         return '"' + name + '"';
     }
     return '[' + name + ']';
@@ -32,7 +32,7 @@ function qi(name: string): string {
  * PostgreSQL: SELECT * FROM ... LIMIT 1
  */
 function selectOne(schema: string, viewName: string): string {
-    if (dbType() === 'postgresql') {
+    if (dbPlatform() === 'postgresql') {
         return `SELECT * FROM ${qi(schema)}.${qi(viewName)} LIMIT 1`;
     }
     return `SELECT TOP 1 * FROM ${qi(schema)}.${qi(viewName)}`;

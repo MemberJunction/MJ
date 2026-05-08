@@ -14,7 +14,7 @@ export class EntityCRUDHandler {
     static async createEntity(entityName: string, data: any, user: UserInfo): Promise<{ success: boolean, entity?: any, error?: string, details?: any, validationErrors?: any[] }> {
         try {
             // Get entity object
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
             const entity = await md.GetEntityObject(entityName, user);
             
             // Check permissions
@@ -84,7 +84,7 @@ export class EntityCRUDHandler {
     static async getEntity(entityName: string, id: string | number, relatedEntities: string[] = null, user: UserInfo): Promise<{ success: boolean, entity?: any, error?: string }> {
         try {
             // Get entity object
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
             const entity = await md.GetEntityObject(entityName, user);
             
             // Check permissions
@@ -123,7 +123,7 @@ export class EntityCRUDHandler {
     static async updateEntity(entityName: string, id: string | number, data: any, user: UserInfo): Promise<{ success: boolean, entity?: any, error?: string, details?: any, validationErrors?: any[] }> {
         try {
             // Get entity object
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
             const entity = await md.GetEntityObject(entityName, user);
             
             // Check permissions
@@ -210,7 +210,7 @@ export class EntityCRUDHandler {
     static async deleteEntity(entityName: string, id: string | number, options: EntityDeleteOptions, user: UserInfo): Promise<{ success: boolean, error?: string, details?: any }> {
         try {
             // Get entity object
-            const md = new Metadata();
+            const md = new Metadata(); // global-provider-ok: REST endpoint — no per-request provider injection in REST middleware yet
             const entity = await md.GetEntityObject(entityName, user);
             
             // Check permissions

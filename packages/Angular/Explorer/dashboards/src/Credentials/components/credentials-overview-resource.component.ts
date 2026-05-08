@@ -71,7 +71,7 @@ export class CredentialsOverviewResourceComponent extends BaseResourceComponent 
     private auditLogs: MJAuditLogEntity[] = [];
 
     // Permissions
-    private _metadata = new Metadata();
+    private _metadata = this.ProviderToUse;
     private _permissionCache = new Map<string, boolean>();
 
     // Category colors for charts - using CSS custom properties via getComputedStyle at runtime
@@ -157,7 +157,7 @@ export class CredentialsOverviewResourceComponent extends BaseResourceComponent 
             this.isLoading = true;
             this.cdr.markForCheck();
 
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
             // Calculate date range for audit logs (last 30 days)
             const thirtyDaysAgo = new Date();

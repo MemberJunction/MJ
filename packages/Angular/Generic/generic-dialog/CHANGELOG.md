@@ -1,5 +1,25 @@
 # Change Log - @memberjunction/ng-generic-dialog
 
+## 5.33.0
+
+### Patch Changes
+
+- @memberjunction/ng-ui-components@5.33.0
+
+## 5.32.0
+
+### Patch Changes
+
+- @memberjunction/ng-ui-components@5.32.0
+
+## 5.31.0
+
+### Patch Changes
+
+- 7ed7a4b: no metadata/migration changes
+- Updated dependencies [7ed7a4b]
+  - @memberjunction/ng-ui-components@5.31.0
+
 ## 5.30.1
 
 ### Patch Changes

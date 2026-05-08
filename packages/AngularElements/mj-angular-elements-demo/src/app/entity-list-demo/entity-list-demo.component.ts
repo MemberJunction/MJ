@@ -64,7 +64,7 @@ export class EntityListDemoComponent implements OnInit {
       // This will fire off each time if we've already logged in, but if we've not yet, it will wait here until we do
       if (event.event === MJEventType.LoggedIn) { 
         // Load entity metadata
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: test/demo harness, single-provider context
         this.entityList = md.Entities;
         
         // Need to manually trigger change detection when used as a web component

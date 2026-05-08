@@ -1,0 +1,25 @@
+<nav class="step-indicator" aria-label="Wizard steps">
+  @for (step of Steps; track TrackByStep($index, step); let last = $last; let i = $index) {
+    <div
+      class="step"
+      [class.step-complete]="step.isComplete"
+      [class.step-active]="step.isActive"
+      [class.step-future]="!step.isComplete && !step.isActive"
+      [attr.aria-current]="step.isActive ? 'step' : null">
+
+      <div class="step-circle">
+        @if (step.isComplete) {
+          <i class="fa-solid fa-check"></i>
+        } @else {
+          <span>{{ i + 1 }}</span>
+        }
+      </div>
+
+      <span class="step-label">{{ step.label }}</span>
+    </div>
+
+    @if (!last) {
+      <div class="step-connector" [class.connector-done]="step.isComplete"></div>
+    }
+  }
+</nav>

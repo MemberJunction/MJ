@@ -23,7 +23,7 @@ export class InstagramGetBusinessPostsAction extends InstagramBaseAction {
             const endDate = this.getParamValue(params.Params, 'EndDate');
 
             // Initialize OAuth
-            if (!await this.initializeOAuth(companyIntegrationId)) {
+            if (!await this.initializeOAuth(companyIntegrationId, params)) {
                 return {
                     Success: false,
                     Message: 'Failed to initialize Instagram authentication',

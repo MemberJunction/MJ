@@ -104,7 +104,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
   // === Permission Checks ===
   /** Cache for permission checks to avoid repeated calculations */
   private _permissionCache = new Map<string, boolean>();
-  private _metadata = new Metadata();
+  private _metadata = this.ProviderToUse;
 
   /** Check if user can create AI Agents */
   public get UserCanCreateAgents(): boolean {
@@ -594,7 +594,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
 
       // Create agent + linked prompts + linked actions in one atomic transaction.
       // agent.ID is assigned client-side by NewRecord() so we can use it on child records before submit.
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const tg = await md.CreateTransactionGroup();
 
       agent.TransactionGroup = tg;
@@ -711,7 +711,7 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
   /** Load categories for descendant-based filter matching */
   private async loadCategories(): Promise<void> {
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<{ ID: string; ParentID: string | null }>({
         EntityName: 'MJ: AI Agent Categories',
         Fields: ['ID', 'ParentID'],

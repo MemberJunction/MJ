@@ -40,7 +40,7 @@ import { ClusteringService, ClusterScatterComponent } from '@memberjunction/ng-c
  */
 function buildEnvScopedKey(base: string): string {
     try {
-        const origin = (Metadata.Provider as GraphQLDataProvider).ConfigData?.URL;
+        const origin = (Metadata.Provider as GraphQLDataProvider).ConfigData?.URL; // global-provider-ok: free helper function — no component context
         if (origin) {
             // Use just the origin portion (protocol + host) so path differences don't fragment keys
             const url = new URL(origin);
@@ -389,7 +389,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
         }
 
         // Fetch vectors + metadata directly from the vector database (Pinecone)
-        const provider = Metadata.Provider as GraphQLDataProvider;
+        const provider = this.ProviderToUse as GraphQLDataProvider;
         const aiClient = new GraphQLAIClient(provider);
         const result = await aiClient.FetchEntityVectors({
             entityDocumentID: entityDocID,
@@ -438,7 +438,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
         const entityName = metadata['Entity'];
         if (entityName) {
             try {
-                const md = new Metadata();
+                const md = this.ProviderToUse;
                 const entityInfo = md.Entities.find(e => e.Name === entityName);
                 if (entityInfo) {
                     // Combine all IsNameField fields in Sequence order
@@ -481,6 +481,8 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
             const clusterData = this.buildClusterDataForPrompt(this.Result);
             if (!clusterData) return;
 
+            // AIEngineBase is deferred at startup; ensure it's loaded before reading .Prompts.
+            await AIEngineBase.Instance.EnsureLoaded();
             // Look up the "Cluster Naming" prompt from AIEngineBase cached metadata
             const promptEntity = AIEngineBase.Instance.Prompts.find(p => p.Name === 'Cluster Naming');
             if (!promptEntity) {
@@ -488,7 +490,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
                 return;
             }
 
-            const provider = Metadata.Provider as GraphQLDataProvider;
+            const provider = this.ProviderToUse as GraphQLDataProvider;
             const aiClient = new GraphQLAIClient(provider);
             const result = await aiClient.RunAIPrompt({
                 promptId: promptEntity.ID,
@@ -564,7 +566,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
      */
     private ComputeFieldPriority(entityName: string): string[] {
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const entityInfo = md.Entities.find(e => e.Name === entityName);
             if (!entityInfo) return [];
 
@@ -694,7 +696,7 @@ export class ClusterVisualizationResourceComponent extends BaseResourceComponent
     /** Persist saved visualizations to UserInfoEngine settings */
     private async persistSavedVisualizations(): Promise<void> {
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const userId = md.CurrentUser?.ID;
             if (!userId) return;
 

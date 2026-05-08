@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, combineLatest } from 'rxjs';
 import { map, shareReplay } from 'rxjs/operators';
 import { MJArtifactEntity, MJArtifactVersionEntity } from '@memberjunction/core-entities';
-import { Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { ArtifactPermissionService } from './artifact-permission.service';
 
 /**
@@ -34,7 +34,23 @@ export class ArtifactStateService {
     shareReplay(1)
   );
 
+  private _provider: IMetadataProvider | null = null;
+
   constructor(private artifactPermissionService: ArtifactPermissionService) {}
+
+  /**
+   * The metadata provider this service uses. When unset, falls back to Metadata.Provider.
+   * Setting it propagates to the dependent artifact-permission service.
+   */
+  public get Provider(): IMetadataProvider {
+      return this._provider ?? Metadata.Provider;
+  }
+  public set Provider(value: IMetadataProvider | null) {
+    this._provider = value;
+    if (value !== null) {
+      this.artifactPermissionService.Provider = value;
+    }
+  }
 
   /**
    * Check if current user can read an artifact
@@ -83,7 +99,7 @@ export class ArtifactStateService {
    */
   async openArtifactByVersionId(versionId: string): Promise<void> {
     try {
-      const md = new Metadata();
+      const md = this.Provider;
       const version = await md.GetEntityObject<MJArtifactVersionEntity>('MJ: Artifact Versions');
       const loaded = await version.Load(versionId);
 
@@ -158,7 +174,7 @@ export class ArtifactStateService {
    */
   async loadArtifactsForConversation(conversationId: string, currentUser: UserInfo): Promise<MJArtifactEntity[]> {
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.Provider);
       const result = await rv.RunView<MJArtifactEntity>(
         {
           EntityName: 'MJ: Artifacts',
@@ -190,7 +206,7 @@ export class ArtifactStateService {
    */
   async loadArtifactsForCollection(collectionId: string, currentUser: UserInfo): Promise<MJArtifactEntity[]> {
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.Provider);
       // Load artifacts through the collection join - use subquery to get artifact IDs from versions
       const artifactsResult = await rv.RunView<MJArtifactEntity>(
         {
@@ -230,7 +246,7 @@ export class ArtifactStateService {
     currentUser: UserInfo
   ): Promise<Array<{ version: MJArtifactVersionEntity; artifact: MJArtifactEntity }>> {
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.Provider);
 
       // Load ALL versions in collection (no DISTINCT - each version is separate)
       const versionResult = await rv.RunView<MJArtifactVersionEntity>({
@@ -289,7 +305,7 @@ export class ArtifactStateService {
    */
   async loadArtifact(id: string, currentUser: UserInfo): Promise<MJArtifactEntity | null> {
     try {
-      const md = new Metadata();
+      const md = this.Provider;
       const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', currentUser);
       const loaded = await artifact.Load(id);
 
@@ -311,7 +327,7 @@ export class ArtifactStateService {
    * @returns The created artifact
    */
   async createArtifact(data: Partial<MJArtifactEntity>, currentUser: UserInfo): Promise<MJArtifactEntity> {
-    const md = new Metadata();
+    const md = this.Provider;
     const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', currentUser);
 
     Object.assign(artifact, data);
@@ -339,7 +355,7 @@ export class ArtifactStateService {
       throw new Error('You do not have permission to edit this artifact');
     }
 
-    const md = new Metadata();
+    const md = this.Provider;
     const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', currentUser);
 
     const loaded = await artifact.Load(id);
@@ -371,7 +387,7 @@ export class ArtifactStateService {
       throw new Error('You do not have permission to delete this artifact');
     }
 
-    const md = new Metadata();
+    const md = this.Provider;
     const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts', currentUser);
 
     const loaded = await artifact.Load(id);
@@ -408,7 +424,7 @@ export class ArtifactStateService {
     // Get version ID if not provided
     let targetVersionId = versionId;
     if (!targetVersionId) {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.Provider);
       const versionResult = await rv.RunView<any>(
         {
           EntityName: 'MJ: Artifact Versions',
@@ -427,7 +443,7 @@ export class ArtifactStateService {
       targetVersionId = versionResult.Results[0].ID;
     }
 
-    const md = new Metadata();
+    const md = this.Provider;
     const collectionArtifact = await md.GetEntityObject('MJ: Collection Artifacts', currentUser);
 
     (collectionArtifact as any).CollectionID = collectionId;
@@ -452,7 +468,7 @@ export class ArtifactStateService {
       throw new Error('You do not have permission to remove this artifact from a collection');
     }
 
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     // Find all versions of this artifact in the collection
     const result = await rv.RunView<any>(
       {

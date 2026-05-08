@@ -65,14 +65,14 @@ export async function generateCommand(options: Record<string, unknown>): Promise
     // 3. Verify database connection and metadata
     spinner.text = 'Loading metadata...';
     // Assume provider and AIEngine are already configured by the calling application (MJCLI)
-    if (!Metadata.Provider) {
+    if (!Metadata.Provider) { // global-provider-ok: CLI tool, single-provider context
       throw new Error('Metadata provider not configured. Please ensure database connection is set up before running CLI.');
     }
     spinner.succeed('Metadata loaded');
 
     // 4. Filter and build entity groups
     spinner.start('Filtering entities...');
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: CLI tool, single-provider context
 
     // DIAGNOSTIC: Log entity filtering context
     if (config.verbose) {
@@ -208,7 +208,7 @@ export async function generateCommand(options: Record<string, unknown>): Promise
 
           // Test and fix query
           // Access the database provider through Metadata.Provider
-          const dataProvider = Metadata.Provider as DatabaseProviderBase;
+          const dataProvider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: CLI tool, single-provider context
           const entityMetadata = group.entities.map((e: EntityInfo) => formatEntityMetadataForPrompt(e, group.entities));
           const queryTester = new QueryTester(
             dataProvider,

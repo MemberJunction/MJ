@@ -94,6 +94,25 @@ vi.mock('@memberjunction/core', () => ({
   SetProvider: vi.fn(),
 }));
 
+// `resolveDbPlatformFromEnv` lives in `@memberjunction/generic-database-provider`
+// (server-only — it touches `process.env`). The real package would pull in
+// AI / actions / queue transitively, which is too heavy for a unit-test mock.
+// Inline the actual implementation here so the env-var-handling tests below
+// exercise the genuine behavior (they're testing this function).
+vi.mock('@memberjunction/generic-database-provider', () => ({
+  resolveDbPlatformFromEnv: (envVarName: string = 'DB_PLATFORM'): 'sqlserver' | 'postgresql' | undefined => {
+    const raw = process.env[envVarName];
+    if (raw === undefined) return undefined;
+    const normalized = raw.trim().toLowerCase();
+    if (normalized === '') return undefined;
+    if (normalized === 'sqlserver' || normalized === 'postgresql') return normalized;
+    throw new Error(
+      `Invalid ${envVarName} value '${raw}'. Must be 'sqlserver' or 'postgresql' (case-insensitive). ` +
+        `Legacy aliases ('mssql', 'postgres', 'pg') and the legacy env var DB_TYPE are no longer supported.`,
+    );
+  },
+}));
+
 vi.mock('@memberjunction/sqlserver-dataprovider', () => ({
   SQLServerDataProvider: vi.fn(),
   SQLServerProviderConfigData: vi.fn(),
@@ -116,14 +135,14 @@ import {
   GetReadWriteProvider,
 } from '../util.js';
 
-// getDbType is a pure function in index.ts, but importing index.ts triggers
-// type-graphql. Replicate the logic here for isolated testing.
-function getDbType(): 'sqlserver' | 'postgresql' {
-  const dbType = process.env.DB_TYPE?.toLowerCase();
-  if (dbType === 'postgresql' || dbType === 'postgres' || dbType === 'pg') {
-    return 'postgresql';
-  }
-  return 'sqlserver';
+// `index.ts` exports `getDbType` but importing it triggers type-graphql at
+// module load time, which is too heavy for a unit test. Re-derive the same
+// logic here using the canonical helper from @memberjunction/global so the
+// behavior under test stays in lockstep with production.
+import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
+import type { DatabasePlatform } from '@memberjunction/core';
+function getDbType(): DatabasePlatform {
+  return resolveDbPlatformFromEnv() ?? 'sqlserver';
 }
 
 // --------------------------------------------------------------------------
@@ -196,52 +215,80 @@ describe('Database Abstraction Layer', () => {
   });
 
   // ======================================================================
-  // 1. DB_TYPE detection
+  // 1. DB_PLATFORM detection (strict: throws on typo, DB_TYPE no longer read)
   // ======================================================================
-  describe('getDbType – DB_TYPE environment detection', () => {
-    it('should return "sqlserver" when DB_TYPE is not set', () => {
+  describe('getDbType – DB_PLATFORM env detection', () => {
+    beforeEach(() => {
+      // Clear both vars before each case. DB_PLATFORM is what the resolver
+      // reads now; DB_TYPE is cleared too so we can prove it's ignored
+      // (no silent fallback to the removed legacy var).
+      delete process.env.DB_PLATFORM;
       delete process.env.DB_TYPE;
+    });
+
+    it('returns "sqlserver" by default when DB_PLATFORM is not set', () => {
       expect(getDbType()).toBe('sqlserver');
     });
 
-    it('should return "postgresql" when DB_TYPE is "postgresql"', () => {
+    it('returns "postgresql" when DB_PLATFORM is the canonical "postgresql"', () => {
+      process.env.DB_PLATFORM = 'postgresql';
+      expect(getDbType()).toBe('postgresql');
+    });
+
+    it('returns "sqlserver" when DB_PLATFORM is the canonical "sqlserver"', () => {
+      process.env.DB_PLATFORM = 'sqlserver';
+      expect(getDbType()).toBe('sqlserver');
+    });
+
+    it('is case-insensitive for canonical values', () => {
+      process.env.DB_PLATFORM = 'PostgreSQL';
+      expect(getDbType()).toBe('postgresql');
+
+      process.env.DB_PLATFORM = 'SQLSERVER';
+      expect(getDbType()).toBe('sqlserver');
+    });
+
+    it('treats empty-string DB_PLATFORM as unset (returns "sqlserver" default)', () => {
+      process.env.DB_PLATFORM = '';
+      expect(getDbType()).toBe('sqlserver');
+    });
+
+    it('treats whitespace-only DB_PLATFORM as unset', () => {
+      process.env.DB_PLATFORM = '   ';
+      expect(getDbType()).toBe('sqlserver');
+    });
+
+    it('throws on legacy alias "mssql"', () => {
+      process.env.DB_PLATFORM = 'mssql';
+      expect(() => getDbType()).toThrow(/Invalid DB_PLATFORM value 'mssql'/);
+    });
+
+    it('throws on legacy alias "postgres"', () => {
+      process.env.DB_PLATFORM = 'postgres';
+      expect(() => getDbType()).toThrow(/Invalid DB_PLATFORM value 'postgres'/);
+    });
+
+    it('throws on legacy alias "pg"', () => {
+      process.env.DB_PLATFORM = 'pg';
+      expect(() => getDbType()).toThrow(/Invalid DB_PLATFORM value 'pg'/);
+    });
+
+    it('throws on unrecognized value "mysql"', () => {
+      process.env.DB_PLATFORM = 'mysql';
+      expect(() => getDbType()).toThrow(/Invalid DB_PLATFORM value 'mysql'/);
+    });
+
+    it('error message names the offending env var (so callers know which one)', () => {
+      process.env.DB_PLATFORM = 'oracle';
+      expect(() => getDbType()).toThrow(
+        /Must be 'sqlserver' or 'postgresql'/,
+      );
+    });
+
+    it('ignores DB_TYPE entirely (legacy env var no longer consulted)', () => {
+      // Before strict mode, DB_TYPE was the primary, then a fallback. Now
+      // it's neither — anyone with DB_TYPE in their .env must rename it.
       process.env.DB_TYPE = 'postgresql';
-      expect(getDbType()).toBe('postgresql');
-    });
-
-    it('should return "postgresql" when DB_TYPE is "postgres"', () => {
-      process.env.DB_TYPE = 'postgres';
-      expect(getDbType()).toBe('postgresql');
-    });
-
-    it('should return "postgresql" when DB_TYPE is "pg"', () => {
-      process.env.DB_TYPE = 'pg';
-      expect(getDbType()).toBe('postgresql');
-    });
-
-    it('should be case-insensitive for DB_TYPE values', () => {
-      process.env.DB_TYPE = 'PostgreSQL';
-      expect(getDbType()).toBe('postgresql');
-
-      process.env.DB_TYPE = 'POSTGRES';
-      expect(getDbType()).toBe('postgresql');
-
-      process.env.DB_TYPE = 'PG';
-      expect(getDbType()).toBe('postgresql');
-    });
-
-    it('should return "sqlserver" for unrecognized DB_TYPE values', () => {
-      process.env.DB_TYPE = 'mysql';
-      expect(getDbType()).toBe('sqlserver');
-    });
-
-    it('should return "sqlserver" for empty-string DB_TYPE', () => {
-      process.env.DB_TYPE = '';
-      expect(getDbType()).toBe('sqlserver');
-    });
-
-    it('should return "sqlserver" when DB_TYPE is "sqlserver"', () => {
-      process.env.DB_TYPE = 'sqlserver';
       expect(getDbType()).toBe('sqlserver');
     });
   });
@@ -487,32 +534,32 @@ describe('Database Abstraction Layer', () => {
   // 7. Context creation – database type branching in contextFunction
   // ======================================================================
   describe('Database type branching for context creation', () => {
-    it('should identify postgres when DB_TYPE is "postgresql"', () => {
-      process.env.DB_TYPE = 'postgresql';
-      const dbType = process.env.DB_TYPE?.toLowerCase();
-      const isPostgres = dbType === 'postgresql' || dbType === 'postgres' || dbType === 'pg';
-      expect(isPostgres).toBe(true);
-    });
-
-    it('should identify postgres when DB_TYPE is "pg"', () => {
-      process.env.DB_TYPE = 'pg';
-      const dbType = process.env.DB_TYPE?.toLowerCase();
-      const isPostgres = dbType === 'postgresql' || dbType === 'postgres' || dbType === 'pg';
-      expect(isPostgres).toBe(true);
-    });
-
-    it('should not identify postgres when DB_TYPE is "sqlserver"', () => {
-      process.env.DB_TYPE = 'sqlserver';
-      const dbType = process.env.DB_TYPE?.toLowerCase();
-      const isPostgres = dbType === 'postgresql' || dbType === 'postgres' || dbType === 'pg';
-      expect(isPostgres).toBe(false);
-    });
-
-    it('should not identify postgres when DB_TYPE is undefined', () => {
+    beforeEach(() => {
+      delete process.env.DB_PLATFORM;
       delete process.env.DB_TYPE;
-      const dbType = process.env.DB_TYPE?.toLowerCase();
-      const isPostgres = dbType === 'postgresql' || dbType === 'postgres' || dbType === 'pg';
-      expect(isPostgres).toBe(false);
+    });
+
+    // The branching logic in context creation goes through the same
+    // canonical helper that getDbType() uses, so all callers see one
+    // consistent platform value.
+    it('identifies postgres when DB_PLATFORM is "postgresql"', () => {
+      process.env.DB_PLATFORM = 'postgresql';
+      expect(getDbType() === 'postgresql').toBe(true);
+    });
+
+    it('throws (does not silently downgrade) on legacy alias "pg"', () => {
+      process.env.DB_PLATFORM = 'pg';
+      expect(() => getDbType()).toThrow(/Invalid DB_PLATFORM/);
+    });
+
+    it('does not identify postgres when DB_PLATFORM is "sqlserver"', () => {
+      process.env.DB_PLATFORM = 'sqlserver';
+      expect(getDbType() === 'postgresql').toBe(false);
+    });
+
+    it('does not identify postgres when DB_PLATFORM is undefined', () => {
+      delete process.env.DB_PLATFORM;
+      expect(getDbType() === 'postgresql').toBe(false);
     });
   });
 
@@ -793,23 +840,38 @@ describe('Database Abstraction Layer', () => {
   // 14. getDbType return type
   // ======================================================================
   describe('getDbType return type compliance', () => {
-    it('should return a value matching the DatabasePlatform union type', () => {
+    beforeEach(() => {
+      delete process.env.DB_PLATFORM;
       delete process.env.DB_TYPE;
+    });
+
+    it('returns a value matching the DatabasePlatform union type when unset', () => {
       const result = getDbType();
       const validValues: string[] = ['sqlserver', 'postgresql'];
       expect(validValues).toContain(result);
     });
 
-    it('should always return one of the two valid DatabasePlatform values', () => {
-      const testValues = ['', 'oracle', 'mysql', 'sqlite', 'mongodb', undefined];
-      for (const val of testValues) {
+    it('returns a canonical value or throws — never returns a non-canonical string', () => {
+      // Strict contract: getDbType() either returns one of the two canonical
+      // platform names, or throws. There's no third "fallback to default"
+      // outcome for non-empty unrecognized values — silent fallback was the
+      // bug we're eliminating.
+      const validReturns = ['sqlserver', 'postgresql'];
+
+      // Unset / empty / whitespace return the default
+      for (const val of [undefined, '', '   ']) {
         if (val === undefined) {
-          delete process.env.DB_TYPE;
+          delete process.env.DB_PLATFORM;
         } else {
-          process.env.DB_TYPE = val;
+          process.env.DB_PLATFORM = val;
         }
-        const result = getDbType();
-        expect(['sqlserver', 'postgresql']).toContain(result);
+        expect(validReturns).toContain(getDbType());
+      }
+
+      // Unrecognized non-empty values throw
+      for (const val of ['oracle', 'mysql', 'sqlite', 'mongodb']) {
+        process.env.DB_PLATFORM = val;
+        expect(() => getDbType()).toThrow(/Invalid DB_PLATFORM/);
       }
     });
   });

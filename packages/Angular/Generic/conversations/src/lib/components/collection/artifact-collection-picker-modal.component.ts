@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnChanges, SimpleChanges, ChangeDetectorRef } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 
 import { FormsModule } from '@angular/forms';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
@@ -485,7 +486,7 @@ interface CollectionNode {
     }
   `]
 })
-export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges {
+export class ArtifactCollectionPickerModalComponent extends BaseAngularComponent implements OnInit, OnChanges  {
   @Input() isOpen: boolean = false;
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
@@ -517,9 +518,11 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
     private toastService: ToastService,
     private permissionService: CollectionPermissionService,
     private cdr: ChangeDetectorRef
-  ) {}
+  ) {
+  super();}
 
   async ngOnInit() {
+    this.permissionService.Provider = this.ProviderToUse;
     if (this.isOpen) {
       await this.loadCollections();
     }
@@ -550,7 +553,7 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
       this.errorMessage = '';
 
       // Load all collections in environment
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJCollectionEntity>({
         EntityName: 'MJ: Collections',
         ExtraFilter: `EnvironmentID='${this.environmentId}'`,
@@ -741,7 +744,7 @@ export class ArtifactCollectionPickerModalComponent implements OnInit, OnChanges
 
     try {
       this.isCreatingCollection = true;
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const collection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
 
       collection.Name = this.newCollectionName.trim();

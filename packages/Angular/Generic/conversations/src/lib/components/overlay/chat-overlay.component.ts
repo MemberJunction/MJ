@@ -25,6 +25,7 @@ import {
     inject
 } from '@angular/core';
 import { Subject } from 'rxjs';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { takeUntil } from 'rxjs/operators';
 import { UserInfo, Metadata, CompositeKey } from '@memberjunction/core';
 import { MJConversationEntity, MJTaskEntity, MJEnvironmentEntityExtended, UserInfoEngine } from '@memberjunction/core-entities';
@@ -55,7 +56,7 @@ interface OverlaySizePrefs {
     templateUrl: './chat-overlay.component.html',
     styleUrls: ['./chat-overlay.component.css']
 })
-export class ChatAgentsOverlayComponent implements OnInit, OnDestroy {
+export class ChatAgentsOverlayComponent extends BaseAngularComponent implements OnInit, OnDestroy  {
     private cdr = inject(ChangeDetectorRef);
     private bridge = inject(ConversationBridgeService);
     private agentClient = inject(AgentClientService);
@@ -345,7 +346,7 @@ export class ChatAgentsOverlayComponent implements OnInit, OnDestroy {
     /** Auto-resolve CurrentUser and EnvironmentId from Metadata when not provided as inputs */
     private resolveDefaults(): void {
         if (!this.CurrentUser) {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             this.CurrentUser = md.CurrentUser;
         }
         if (!this.EnvironmentId) {

@@ -2,7 +2,7 @@ import { BaseEntity } from "./baseEntity";
 import { EntityDependency, EntityInfo,  RecordChange, RecordDependency, RecordMergeRequest, RecordMergeResult, EntityDocumentTypeInfo } from "./entityInfo";
 import { ApplicationInfo } from "./applicationInfo";
 import { RunViewParams } from "../views/runView";
-import { AuditLogTypeInfo, AuthorizationInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
+import { AuditLogTypeInfo, AuthorizationInfo, AuthorizationRoleInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
 import { RunReportParams } from "./runReport";
 import { QueryCategoryInfo, QueryFieldInfo, QueryInfo, QueryPermissionInfo, QueryEntityInfo, QueryParameterInfo, QueryDependencyInfo, SQLDialectInfo, QuerySQLInfo } from "./queryInfo";
@@ -388,19 +388,63 @@ export class EntityRecordNameResult  {
  */
 export interface ILocalStorageProvider {
     /**
-     * Retrieves an item from storage.
+     * Retrieves a value from storage. The implementation is responsible for any
+     * deserialization required by the underlying medium:
+     *  - **IndexedDB**: returns the value directly via structured clone (Date/Map/Set/typed arrays preserved, no parse needed)
+     *  - **localStorage / Redis**: deserializes from JSON internally
+     *  - **In-memory**: returns the stored reference
+     *
+     * Returns `null` for missing keys or corrupt entries.
+     *
+     * @typeParam T - Expected type of the stored value. Caller-controlled — the provider does
+     *                not validate the runtime shape against this type. Falls back to `unknown`.
      * @param key - The key to retrieve
      * @param category - Optional category for key isolation (e.g., 'RunViewCache', 'Metadata')
      */
-    GetItem(key: string, category?: string): Promise<string | null>;
+    GetItem<T = unknown>(key: string, category?: string): Promise<T | null>;
 
     /**
-     * Stores an item in storage.
+     * Batched retrieval — reads N values for N keys in one logical operation.
+     *
+     * Returns a `Map` keyed by the input key strings. Missing keys map to `null`.
+     * The map preserves the original key set so callers can index by key without
+     * relying on array-position alignment.
+     *
+     * **Why batch?** IndexedDB serializes transactions on the same object store —
+     * `Promise.all([...N GetItem calls])` looks parallel but pays per-transaction
+     * setup cost (~3–10ms each) for every key. A single transaction with N
+     * `get()` calls amortizes that overhead. Redis can use `MGET`/pipelines.
+     * In-memory implementations have no real win but implement consistently for
+     * a uniform API.
+     *
+     * Implementations are free to fall back to per-key reads internally if the
+     * underlying medium doesn't support batching — the contract is just "read
+     * all of these as efficiently as you can". An empty `keys` array returns
+     * an empty map without touching the storage backend.
+     *
+     * @typeParam T - Expected type of all stored values. Caller-controlled.
+     * @param keys - The keys to retrieve. Duplicates are deduplicated; the
+     *               returned map has one entry per unique key.
+     * @param category - Optional category for key isolation (applies to all keys)
+     */
+    GetItems<T = unknown>(keys: string[], category?: string): Promise<Map<string, T | null>>;
+
+    /**
+     * Stores a value. Callers should pass plain data (objects/arrays/primitives/Date/etc).
+     * Implementations handle any serialization required by the medium:
+     *  - **IndexedDB**: stores natively via structured clone (no string conversion)
+     *  - **localStorage / Redis**: serializes to JSON internally
+     *  - **In-memory**: stores the reference directly
+     *
+     * **Class instances lose their prototype on retrieval** — store the underlying data
+     * (e.g. via `entity.GetAll()`) and reconstruct on read if needed.
+     *
+     * @typeParam T - Type of the value being stored. Caller-controlled.
      * @param key - The key to store under
      * @param value - The value to store
      * @param category - Optional category for key isolation
      */
-    SetItem(key: string, value: string, category?: string): Promise<void>;
+    SetItem<T>(key: string, value: T, category?: string): Promise<void>;
 
     /**
      * Removes an item from storage.
@@ -498,6 +542,12 @@ export interface IMetadataProvider {
     get AuditLogTypes(): AuditLogTypeInfo[]
 
     get Authorizations(): AuthorizationInfo[]
+
+    /**
+     * Flat collection of all authorization-role assignments.
+     * Consumed by `AuthorizationInfo.Roles` for lazy per-auth filtering.
+     */
+    get AuthorizationRoles(): AuthorizationRoleInfo[]
 
     get Queries(): QueryInfo[]
 
@@ -1375,6 +1425,12 @@ export class AllMetadata {
     AllRowLevelSecurityFilters: RowLevelSecurityFilterInfo[] = [];
     AllAuditLogTypes: AuditLogTypeInfo[] = [];
     AllAuthorizations: AuthorizationInfo[] = [];
+    /**
+     * Flat collection of all authorization-role assignments.
+     * Loaded via `AllMetadataArrays` and used by `AuthorizationInfo.Roles`
+     * for lazy, on-demand filtering — mirrors the `AllQueryFields` pattern.
+     */
+    AllAuthorizationRoles: AuthorizationRoleInfo[] = [];
     AllQueryCategories: QueryCategoryInfo[] = [];
     AllQueries: QueryInfo[] = [];
     AllQueryFields: QueryFieldInfo[] = [];

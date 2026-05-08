@@ -326,6 +326,12 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   }
 
   async ngOnInit() {
+    // Bind provider-aware services to this component's provider so multi-server
+    // browser apps don't silently fall back to the global Metadata.Provider.
+    // ArtifactStateService cascades to ArtifactPermissionService and CollectionPermissionService.
+    this.artifactState.Provider = this.ProviderToUse;
+    this.artifactPermissionService.Provider = this.ProviderToUse;
+
     // Initialize global streaming service FIRST
     // This establishes the single PubSub connection for all conversations
     this.streamingService.initialize();
@@ -454,7 +460,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
   private buildTasksFilter(): void {
     // Filter tasks by conversations the user owns or is a participant in, or tasks owned
     // by the user
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const cd = md.EntityByName('MJ: Conversation Details');
     const c = md.EntityByName('MJ: Conversations');
     if (!cd || !c) {
@@ -656,7 +662,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
       };
 
       const engine = UserInfoEngine.Instance;
-      const md = new Metadata();
+      const md = this.ProviderToUse;
 
       // Find existing setting from cached user settings
       let setting = engine.UserSettings.find(s => s.Setting === this.USER_SETTING_SIDEBAR_KEY);
@@ -1162,7 +1168,7 @@ export class ConversationWorkspaceComponent extends BaseAngularComponent impleme
    */
   async onArtifactShareRequested(artifactId: string): Promise<void> {
     // Load the artifact entity to pass to the modal
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const artifact = await md.GetEntityObject<MJArtifactEntity>('MJ: Artifacts');
     await artifact.Load(artifactId);
 

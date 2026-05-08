@@ -9,6 +9,7 @@ import {
   ViewEncapsulation,
 } from '@angular/core';
 import { Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import {
   AfterRecordRestoreEventArgs,
   AfterRecycleBinOpenEventArgs,
@@ -106,7 +107,7 @@ import {
   changeDetection: ChangeDetectionStrategy.OnPush,
   encapsulation: ViewEncapsulation.None,
 })
-export class RecycleBinChipComponent implements OnInit {
+export class RecycleBinChipComponent extends BaseAngularComponent implements OnInit  {
   /**
    * Entity name whose deleted records will be surfaced. When null/empty,
    * the chip hides itself entirely.
@@ -125,7 +126,7 @@ export class RecycleBinChipComponent implements OnInit {
 
   /**
    * Optional context user for permission checks. Falls back to
-   * `Metadata.Provider.CurrentUser` when omitted.
+   * `this.ProviderToUse.CurrentUser` when omitted.
    */
   @Input() ContextUser: UserInfo | null = null;
 
@@ -148,7 +149,8 @@ export class RecycleBinChipComponent implements OnInit {
 
   private isInitialized = false;
 
-  constructor(private cdr: ChangeDetectorRef) {}
+  constructor(private cdr: ChangeDetectorRef) {
+  super();}
 
   ngOnInit(): void {
     this.isInitialized = true;
@@ -196,7 +198,7 @@ export class RecycleBinChipComponent implements OnInit {
       return;
     }
 
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const entityInfo = md.Entities.find(
       e => e.Name.trim().toLowerCase() === this._entityName!.trim().toLowerCase(),
     );
@@ -225,7 +227,7 @@ export class RecycleBinChipComponent implements OnInit {
 
     // Cheap count query — just IDs, capped low
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<{ ID: string; RecordID: string }>({
         EntityName: 'MJ: Record Changes',
         Fields: ['ID', 'RecordID'],

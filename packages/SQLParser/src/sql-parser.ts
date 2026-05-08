@@ -900,6 +900,11 @@ export class SQLParser {
             }
         }
 
+        // Enrich parameters with default values extracted from {% else %} blocks.
+        // Pattern: {% if Var %} ... {{ Var | sqlFilter }} ... {% else %} ... = 'literal' ... {% endif %}
+        // The literal in the else branch is the semantic default for the parameter.
+        SQLParser.enrichDefaultsFromElseBranches(sql, paramMap);
+
         return Array.from(paramMap.values());
     }
 
@@ -1628,6 +1633,83 @@ export class SQLParser {
             }
         }
         return null;
+    }
+
+    /**
+     * Extracts the primary variable name from an {% if %} condition expression.
+     * Handles patterns like:
+     *   "Status"                         → "Status"
+     *   "Status and Status.length > 0"   → "Status"
+     *   "StartDate and StartDate.length" → "StartDate"
+     */
+    private static extractConditionVariable(condition: string): string | null {
+        const match = condition.match(/^\s*([A-Za-z_]\w*)/);
+        return match ? match[1] : null;
+    }
+
+    /**
+     * Extracts a SQL literal value from an {% else %} branch body.
+     * Looks for patterns like:
+     *   `= 'Attended'`    → "Attended"
+     *   `= 42`            → 42
+     *   `= 3.14`          → 3.14
+     *
+     * Only returns a value when exactly one literal is found, to avoid
+     * ambiguity from complex else bodies with multiple conditions.
+     */
+    private static extractLiteralFromElseBody(body: string): string | number | null {
+        // Match string literals: = 'value' (SQL single-quoted strings)
+        const stringMatches = [...body.matchAll(/=\s*'([^']+)'/g)];
+        if (stringMatches.length === 1) {
+            return stringMatches[0][1];
+        }
+
+        // Match numeric literals: = 42 or = 3.14 (but not parts of column names)
+        const numericMatches = [...body.matchAll(/=\s*(-?\d+(?:\.\d+)?)\b/g)];
+        if (numericMatches.length === 1 && stringMatches.length === 0) {
+            const num = Number(numericMatches[0][1]);
+            return isNaN(num) ? null : num;
+        }
+
+        return null;
+    }
+
+    /**
+     * Enriches parameters that lack default values by inspecting {% else %} branches
+     * of conditional blocks. When a block guards a parameter with {% if Var %} and
+     * the else branch contains a single literal value (e.g., `= 'Attended'`), that
+     * literal is assigned as the parameter's default.
+     *
+     * Only sets defaults on parameters that don't already have one (from a `| default()` filter).
+     */
+    private static enrichDefaultsFromElseBranches(
+        sql: string,
+        paramMap: Map<string, MJParameterInfo>
+    ): void {
+        const blocks = SQLParser.ExtractConditionalBlocks(sql);
+
+        for (const block of blocks) {
+            // Need at least 2 branches (if + else) and last branch must be else (condition === null)
+            if (block.branches.length < 2) continue;
+            const elseBranch = block.branches[block.branches.length - 1];
+            if (elseBranch.condition !== null) continue;
+
+            // Extract the variable from the if-condition
+            const ifCondition = block.branches[0].condition;
+            if (!ifCondition) continue;
+
+            const varName = SQLParser.extractConditionVariable(ifCondition);
+            if (!varName) continue;
+
+            // Only enrich parameters that exist and don't already have a default
+            const param = paramMap.get(varName);
+            if (!param || param.defaultValue !== null) continue;
+
+            const literal = SQLParser.extractLiteralFromElseBody(elseBranch.body.raw);
+            if (literal !== null) {
+                param.defaultValue = literal;
+            }
+        }
     }
 
     private static findConditionalVariables(tokens: MJToken[]): {

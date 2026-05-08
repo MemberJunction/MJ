@@ -1,4 +1,4 @@
-import { Metadata, NormalizedPermission, RunView, UserInfo, UserRoleInfo } from '@memberjunction/core';
+import { IMetadataProvider, Metadata, NormalizedPermission, RunView, UserInfo, UserRoleInfo } from '@memberjunction/core';
 import { PERMISSION_DOMAIN_ICONS, PermissionEngine } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 
@@ -36,8 +36,8 @@ export interface PermissionsDomainGroup {
  * Load every user from `MJ: Users` with just the columns the Permissions admin
  * dropdowns need. Sorted by Name.
  */
-export async function loadPermissionsUsers(): Promise<PermissionsUserOption[]> {
-    const rv = new RunView();
+export async function loadPermissionsUsers(provider?: IMetadataProvider): Promise<PermissionsUserOption[]> {
+    const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
     const result = await rv.RunView<PermissionsUserOption>({
         EntityName: 'MJ: Users',
         Fields: ['ID', 'Name', 'Email'],
@@ -59,14 +59,15 @@ export async function loadPermissionsUsers(): Promise<PermissionsUserOption[]> {
  */
 export async function resolvePermissionsUser(
     userId: string,
-    userDropdown: PermissionsUserOption[]
+    userDropdown: PermissionsUserOption[],
+    provider?: IMetadataProvider
 ): Promise<UserInfo | null> {
-    const md = new Metadata();
+    const md = (provider ?? new Metadata()) as unknown as IMetadataProvider;
     if (md.CurrentUser && UUIDsEqual(md.CurrentUser.ID, userId)) {
         return md.CurrentUser;
     }
 
-    const rv = new RunView();
+    const rv = provider ? RunView.FromMetadataProvider(provider) : new RunView();
     const rolesResult = await rv.RunView<{
         ID: string;
         UserID: string;

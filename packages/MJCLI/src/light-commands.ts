@@ -24,6 +24,8 @@ export const LIGHT_COMMANDS: ReadonlySet<string> = new Set([
   // Database commands - use @memberjunction/skyway-core + config only
   'clean',
   'migrate',
+  'migrate convert',
+  'migrate create',
 
   // Install wizard - uses @memberjunction/installer engine (lightweight, no bootstrap)
   'install',

@@ -376,7 +376,7 @@ export class QueryCacheManager extends BaseSingleton<QueryCacheManager> {
     // ── Helpers ─────────────────────────────────────────────────────────────
 
     private FindQueryById(queryId: string): QueryInfo | undefined {
-        return Metadata.Provider.Queries.find(
+        return Metadata.Provider.Queries.find( // global-provider-ok: QueryCacheManager is a singleton tracking the global query catalog
             (q: QueryInfo) => UUIDsEqual(q.ID, queryId),
         );
     }

@@ -41,7 +41,7 @@ import {
     MJCommunicationProviderEntityExtended,
 } from '@memberjunction/communication-types';
 
-// @memberjunction/core-entities (335 classes)
+// @memberjunction/core-entities (338 classes)
 import {
     AIAgentPermissionProvider,
     AccessControlRuleProvider,
@@ -330,6 +330,9 @@ import {
     MJTagAuditLogEntity,
     MJTagCoOccurrenceEntity,
     MJTagEntity,
+    MJTagScopeEntity,
+    MJTagSuggestionEntity,
+    MJTagSynonymEntity,
     MJTaggedItemEntity,
     MJTaskDependencyEntity,
     MJTaskEntity,
@@ -441,7 +444,7 @@ import {
     WebURLPartComponent,
 } from '@memberjunction/ng-dashboard-viewer';
 
-// @memberjunction/ng-dashboards (74 classes)
+// @memberjunction/ng-dashboards (87 classes)
 import {
     AIAnalyticsResourceComponent,
     AIOverviewHubComponent,
@@ -449,13 +452,19 @@ import {
     ActionExplorerComponent,
     ActionsOverviewComponent,
     ActivityComponent,
+    AdminDataSchemaComponent,
+    AdminDevToolsResourceComponent,
+    AdminIdentityAccessComponent,
+    AdminMonitoringComponent,
     AgentConfigurationComponent,
     AgentRequestsResourceComponent,
     AnalyticsResourceComponent,
+    AppStateInspectorComponent,
     ApplicationRolesResourceComponent,
     ArchiveConfigResourceComponent,
     ArchiveRunsResourceComponent,
     AutotaggingPipelineResourceComponent,
+    ClassRegistryInspectorComponent,
     ClusterVisualizationResourceComponent,
     CodeManagementComponent,
     CommunicationDashboardComponent,
@@ -475,13 +484,18 @@ import {
     DashboardBrowserResourceComponent,
     DataExplorerDashboardComponent,
     DataExplorerResourceComponent,
+    DatabaseDesignerDashboardComponent,
     DuplicateDetectionResourceComponent,
     EntityAdminDashboardComponent,
     EntityIntegrationComponent,
+    EventMonitorComponent,
     ExecutionMonitoringComponent,
+    GraphQLConsoleComponent,
     HomeApplication,
     HomeDashboardComponent,
     KnowledgeConfigResourceComponent,
+    LayoutInspectorComponent,
+    LazyModuleStatusComponent,
     ListsBrowseResource,
     ListsCategoriesResource,
     ListsMyListsResource,
@@ -504,8 +518,10 @@ import {
     SchedulingJobsResourceComponent,
     SchedulingOverviewResourceComponent,
     SecurityPermissionsComponent,
+    SettingsExplorerComponent,
     SystemConfigurationComponent,
     SystemDiagnosticsComponent,
+    TagsResourceComponent,
     TestingAnalyticsResourceComponent,
     TestingDashboardComponent,
     TestingDashboardTabResourceComponent,
@@ -853,6 +869,9 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJTagAuditLogEntity,
     MJTagCoOccurrenceEntity,
     MJTagEntity,
+    MJTagScopeEntity,
+    MJTagSuggestionEntity,
+    MJTagSynonymEntity,
     MJTaggedItemEntity,
     MJTaskDependencyEntity,
     MJTaskEntity,
@@ -948,13 +967,19 @@ export const CLASS_REGISTRATIONS: any[] = [
     ActionExplorerComponent,
     ActionsOverviewComponent,
     ActivityComponent,
+    AdminDataSchemaComponent,
+    AdminDevToolsResourceComponent,
+    AdminIdentityAccessComponent,
+    AdminMonitoringComponent,
     AgentConfigurationComponent,
     AgentRequestsResourceComponent,
     AnalyticsResourceComponent,
+    AppStateInspectorComponent,
     ApplicationRolesResourceComponent,
     ArchiveConfigResourceComponent,
     ArchiveRunsResourceComponent,
     AutotaggingPipelineResourceComponent,
+    ClassRegistryInspectorComponent,
     ClusterVisualizationResourceComponent,
     CodeManagementComponent,
     CommunicationDashboardComponent,
@@ -974,13 +999,18 @@ export const CLASS_REGISTRATIONS: any[] = [
     DashboardBrowserResourceComponent,
     DataExplorerDashboardComponent,
     DataExplorerResourceComponent,
+    DatabaseDesignerDashboardComponent,
     DuplicateDetectionResourceComponent,
     EntityAdminDashboardComponent,
     EntityIntegrationComponent,
+    EventMonitorComponent,
     ExecutionMonitoringComponent,
+    GraphQLConsoleComponent,
     HomeApplication,
     HomeDashboardComponent,
     KnowledgeConfigResourceComponent,
+    LayoutInspectorComponent,
+    LazyModuleStatusComponent,
     ListsBrowseResource,
     ListsCategoriesResource,
     ListsMyListsResource,
@@ -1003,8 +1033,10 @@ export const CLASS_REGISTRATIONS: any[] = [
     SchedulingJobsResourceComponent,
     SchedulingOverviewResourceComponent,
     SecurityPermissionsComponent,
+    SettingsExplorerComponent,
     SystemConfigurationComponent,
     SystemDiagnosticsComponent,
+    TagsResourceComponent,
     TestingAnalyticsResourceComponent,
     TestingDashboardComponent,
     TestingDashboardTabResourceComponent,
@@ -1037,7 +1069,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 479;
+export const CLASS_REGISTRATIONS_COUNT = 495;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
