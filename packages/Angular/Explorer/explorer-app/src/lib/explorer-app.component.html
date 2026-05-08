@@ -3,6 +3,12 @@
   <router-outlet></router-outlet>
 }
 
+<!-- Service worker update-available toast. Renders nothing when the SW is
+     disabled (dev builds, kill switch off), so it's safe to include here
+     unconditionally. Lives at the shell so a pending update is visible
+     across all routes. -->
+<mj-update-notification />
+
 <!-- Normal authenticated view (not OAuth callback) -->
 @if ((authBase.isAuthenticated() | async) && !isOAuthCallback) {
   <div class="app-main">

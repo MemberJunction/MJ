@@ -1,5 +1,69 @@
 # Change Log - @memberjunction/aiengine
 
+## 5.33.0
+
+### Patch Changes
+
+- Updated dependencies [95eb27e]
+- Updated dependencies [74b0be0]
+- Updated dependencies [5cc5326]
+- Updated dependencies [7e4957d]
+  - @memberjunction/core@5.33.0
+  - @memberjunction/global@5.33.0
+  - @memberjunction/ai-engine-base@5.33.0
+  - @memberjunction/ai-core-plus@5.33.0
+  - @memberjunction/ai-vectors-memory@5.33.0
+  - @memberjunction/actions-base@5.33.0
+  - @memberjunction/core-entities@5.33.0
+  - @memberjunction/storage@5.33.0
+  - @memberjunction/ai@5.33.0
+
+## 5.32.0
+
+### Patch Changes
+
+- Updated dependencies [a7e8b3b]
+- Updated dependencies [b9c67ac]
+  - @memberjunction/core@5.32.0
+  - @memberjunction/ai-engine-base@5.32.0
+  - @memberjunction/ai-core-plus@5.32.0
+  - @memberjunction/ai-vectors-memory@5.32.0
+  - @memberjunction/actions-base@5.32.0
+  - @memberjunction/core-entities@5.32.0
+  - @memberjunction/storage@5.32.0
+  - @memberjunction/ai@5.32.0
+  - @memberjunction/global@5.32.0
+
+## 5.31.0
+
+### Minor Changes
+
+- 60e7541: Add --incremental flag for push/pull, lazy embedding loading, indexed batch context lookups, batched pull queries
+
+### Patch Changes
+
+- 7ed7a4b: no metadata/migration changes
+- 84494bb: Fix AIEngine lazy embedding loader poisoning the cache on first-call failure. `ensureEmbeddingsGenerated` now wraps the in-flight load in `try/finally` so a transient failure (e.g., model download flake) clears `_embeddingsPromise` and the next FindSimilar* call retries cleanly. Previously, a single failed load would reject every subsequent FindSimilar* call for the rest of the process lifetime.
+- 6779c1e: Lazy field hydration in BaseEntity + smarter engine startup (~30x warm-load speedup, ~14s to ~470ms). Defers per-row Field construction until something mutates or walks Fields, removes a speculative per-view fast-start path, adds a `deferred` flag to `@RegisterForStartup` and an `EnsureLoaded()` shortcut on `BaseEngine` / `AIEngine`. DeveloperModeService and WorkspaceStateManager swapped weak `Get`/`Set` calls for typed accessors. EnsureLoaded calls added at AI engine consumption sites.
+- Updated dependencies [fc8b9b8]
+- Updated dependencies [cde4d2c]
+- Updated dependencies [7ed7a4b]
+- Updated dependencies [60e7541]
+- Updated dependencies [18be074]
+- Updated dependencies [17b8087]
+- Updated dependencies [6779c1e]
+- Updated dependencies [de34786]
+- Updated dependencies [5db36d9]
+  - @memberjunction/core-entities@5.31.0
+  - @memberjunction/ai-engine-base@5.31.0
+  - @memberjunction/ai@5.31.0
+  - @memberjunction/ai-core-plus@5.31.0
+  - @memberjunction/ai-vectors-memory@5.31.0
+  - @memberjunction/actions-base@5.31.0
+  - @memberjunction/core@5.31.0
+  - @memberjunction/global@5.31.0
+  - @memberjunction/storage@5.31.0
+
 ## 5.30.1
 
 ### Patch Changes

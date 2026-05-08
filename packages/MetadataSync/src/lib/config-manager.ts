@@ -10,19 +10,29 @@
 import { cosmiconfigSync } from 'cosmiconfig';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
 import { BaseSingleton } from '@memberjunction/global';
+import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
 import { MJConfig } from '../config';
+
+const ENV_DB_PLATFORM = resolveDbPlatformFromEnv();
 
 /**
  * Default configuration for MetadataSync
  *
  * Provides database connection settings from environment variables,
- * matching the pattern used by MJServer's DEFAULT_SERVER_CONFIG.
- * This ensures consistent behavior with the MJ ecosystem.
+ * matching the pattern used by MJServer's DEFAULT_SERVER_CONFIG and
+ * MJCLI's DEFAULT_CLI_CONFIG. This ensures consistent behavior with the
+ * rest of the MJ ecosystem — without `dbPlatform` resolved here, `mj sync
+ * push` against a PG .env silently constructs a SqlServerDataProvider and
+ * fails with `socket hang up` when its tedious driver tries to talk to
+ * postgres on port 5432.
  */
 const DEFAULT_SYNC_CONFIG: Partial<MJConfig> = {
   // Database connection settings (environment-driven with defaults)
+  dbPlatform: ENV_DB_PLATFORM ?? 'sqlserver',
   dbHost: process.env.DB_HOST ?? 'localhost',
-  dbPort: process.env.DB_PORT ? parseInt(process.env.DB_PORT, 10) : 1433,
+  dbPort: process.env.DB_PORT
+    ? parseInt(process.env.DB_PORT, 10)
+    : (ENV_DB_PLATFORM === 'postgresql' ? 5432 : 1433),
   dbDatabase: process.env.DB_DATABASE,
   dbUsername: process.env.DB_USERNAME,
   dbPassword: process.env.DB_PASSWORD,

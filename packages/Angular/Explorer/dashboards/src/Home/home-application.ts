@@ -454,7 +454,8 @@ export class HomeApplication extends BaseApplication {
         timestamp: s.timestamp
       }));
 
-      provider.SetItem(STORAGE_KEY, JSON.stringify(serializable), STORAGE_CATEGORY).catch(err => {
+      // Native object storage — provider handles any required serialization internally.
+      provider.SetItem<OrphanResourceSnapshot[]>(STORAGE_KEY, serializable, STORAGE_CATEGORY).catch(err => {
         console.warn('Failed to persist recent nav stack:', err);
       });
     } catch (err) {
@@ -473,13 +474,9 @@ export class HomeApplication extends BaseApplication {
         return;
       }
 
-      const raw = await provider.GetItem(STORAGE_KEY, STORAGE_CATEGORY);
-      if (!raw) {
-        return;
-      }
-
-      const parsed = JSON.parse(raw) as OrphanResourceSnapshot[];
-      if (!Array.isArray(parsed)) {
+      // Native object read — IDB returns the array directly; localStorage / Redis JSON-decode internally.
+      const parsed = await provider.GetItem<OrphanResourceSnapshot[]>(STORAGE_KEY, STORAGE_CATEGORY);
+      if (!parsed || !Array.isArray(parsed)) {
         return;
       }
 

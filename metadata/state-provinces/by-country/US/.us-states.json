@@ -718,8 +718,8 @@
       "Name": "New York",
       "Code": "NY",
       "ISO3166_2": "US-NY",
-      "Latitude": 40.7128,
-      "Longitude": -74.006,
+      "Latitude": 42.9538,
+      "Longitude": -75.5268,
       "BoundaryGeoJSON": "@file:by-country/US/boundaries/US-NY.geojson",
       "CommonAliases": [
         "New York"
@@ -730,8 +730,8 @@
       "ID": "E56517D1-B1A3-422C-9499-34666CD67B78"
     },
     "sync": {
-      "lastModified": "2026-04-11T04:09:41.296Z",
-      "checksum": "8d00ae832e53c18b111f454a8d3c6c78a5c981d6b5e757e0382d1a3a9c48859b"
+      "lastModified": "2026-05-07T23:24:13.175Z",
+      "checksum": "edf912d5274b73cdb4f19aa6fde8436757f1d866df4ce9adbd1c177fe0d2b638"
     }
   },
   {

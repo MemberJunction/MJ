@@ -2,7 +2,7 @@ import { BaseEntity } from "./baseEntity";
 import { EntityDependency, EntityDocumentTypeInfo, EntityInfo, RecordDependency, RecordMergeRequest, RecordMergeResult } from "./entityInfo";
 import { IMetadataProvider, ProviderConfigDataBase, MetadataInfo, ILocalStorageProvider, IFileSystemProvider, DatasetResultType, DatasetStatusResultType, DatasetItemFilterType, EntityRecordNameInput, EntityRecordNameResult, ProviderType, PotentialDuplicateRequest, PotentialDuplicateResponse, EntityMergeOptions, AllMetadata, IRunViewProvider, RunViewResult, IRunQueryProvider, RunQueryResult, RunViewWithCacheCheckParams, RunViewsWithCacheCheckResponse, RunViewCacheStatus, RunViewWithCacheCheckResult, FullTextSearchParams, FullTextSearchResult, FullTextSearchResultItem } from "./interfaces";
 import { RunQueryParams } from "./runQuery";
-import { LocalCacheManager } from "./localCacheManager";
+import { LocalCacheManager, CachedRunViewResult } from "./localCacheManager";
 import { ApplicationInfo } from "../generic/applicationInfo";
 import { AuditLogTypeInfo, AuthorizationInfo, AuthorizationRoleInfo, RoleInfo, RowLevelSecurityFilterInfo, UserInfo } from "./securityInfo";
 import { TransactionGroupBase } from "./transactionGroup";
@@ -1483,13 +1483,14 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         telemetryEventId: string,
         contextUser?: UserInfo
     ): Promise<typeof this._preRunViewsResultType> {
-        const smartCacheCheckParams: RunViewWithCacheCheckParams[] = [];
-
-        for (const param of params) {
-            // Entity status check
+        // Phase 1 — sync setup: entity status checks, entity_object Fields population,
+        // and fingerprint computation. None of this touches storage; do it serially
+        // so we have the full fingerprint list ready to issue ONE batched IDB read.
+        const cacheable: { paramIndex: number; fingerprint: string }[] = [];
+        for (let i = 0; i < params.length; i++) {
+            const param = params[i];
             await this.EntityStatusCheck(param, 'PreRunViews');
 
-            // Handle entity_object result type - need all fields
             if (param.ResultType === 'entity_object') {
                 const entity = this.EntityByName(param.EntityName);
                 if (!entity) {
@@ -1498,24 +1499,30 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                 param.Fields = entity.Fields.map(f => f.Name);
             }
 
-            // Build the cache check param with optional cache status
-            let cacheStatus: RunViewCacheStatus | undefined;
-
             if (param.CacheLocal && LocalCacheManager.Instance.IsInitialized) {
                 const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
-                const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
-                if (cached) {
-                    cacheStatus = {
-                        maxUpdatedAt: cached.maxUpdatedAt,
-                        rowCount: cached.rowCount
-                    };
-                }
+                cacheable.push({ paramIndex: i, fingerprint });
             }
+        }
 
-            smartCacheCheckParams.push({
-                params: param,
-                cacheStatus
-            });
+        // Phase 2 — batched read: one IDB transaction (or one Redis MGET) returns
+        // every cached entry's status (maxUpdatedAt + rowCount). Was previously N
+        // serialized GetItem calls — for the 8-engine warm-load case this drops
+        // from ~85 transactions to 1.
+        const cacheMap = cacheable.length > 0
+            ? await LocalCacheManager.Instance.GetRunViewResults(cacheable.map(c => c.fingerprint))
+            : new Map<string, CachedRunViewResult | null>();
+
+        // Phase 3 — assemble per-param cache check entries from the resolved map.
+        const smartCacheCheckParams: RunViewWithCacheCheckParams[] = params.map(p => ({ params: p }));
+        for (const { paramIndex, fingerprint } of cacheable) {
+            const cached = cacheMap.get(fingerprint);
+            if (cached) {
+                smartCacheCheckParams[paramIndex].cacheStatus = {
+                    maxUpdatedAt: cached.maxUpdatedAt,
+                    rowCount: cached.rowCount,
+                };
+            }
         }
 
         return {
@@ -1565,9 +1572,30 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }));
         }
 
-        // Process all results in parallel
+        // ── Batched cache pre-read for 'current' entries ──────────────────
+        // Each 'current' result needs its cached row data to materialize the response.
+        // Collect every fingerprint up front and issue ONE batched read instead of
+        // letting each per-param processor do its own GetRunViewResult call (~85
+        // serialized IDB transactions in the 8-engine warm-load case).
+        const currentFingerprints: string[] = [];
+        for (const sr of response.results) {
+            if (sr.status === 'current' && params[sr.viewIndex]) {
+                currentFingerprints.push(
+                    LocalCacheManager.Instance.GenerateRunViewFingerprint(
+                        params[sr.viewIndex],
+                        this.InstanceConnectionString
+                    )
+                );
+            }
+        }
+        const preResolvedCache = currentFingerprints.length > 0
+            ? await LocalCacheManager.Instance.GetRunViewResults(currentFingerprints)
+            : new Map<string, CachedRunViewResult | null>();
+
+        // Process all results in parallel — 'current' entries now read from the
+        // pre-resolved map instead of issuing their own GetRunViewResult calls.
         const processingPromises = params.map((param, i) =>
-            this.processSingleSmartCacheResult<T>(param, i, response.results, contextUser)
+            this.processSingleSmartCacheResult<T>(param, i, response.results, preResolvedCache, contextUser)
         );
 
         const processedResults = await Promise.all(processingPromises);
@@ -1595,11 +1623,17 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     /**
      * Processes a single smart cache check result.
      * Handles cache lookup for 'current' items and cache update for 'stale' items.
+     *
+     * @param preResolvedCache - Pre-resolved cache map produced by the batched
+     *   `GetRunViewResults` call in `executeSmartCacheCheck`. Lookups for
+     *   'current' items hit this map instead of issuing per-param IDB reads,
+     *   amortizing IndexedDB transaction overhead across the whole batch.
      */
     private async processSingleSmartCacheResult<T>(
         param: RunViewParams,
         index: number,
         serverResults: RunViewWithCacheCheckResult<T>[],
+        preResolvedCache: Map<string, CachedRunViewResult | null>,
         contextUser?: UserInfo
     ): Promise<{ result: RunViewResult<T>; cacheHit: boolean; cacheMiss: boolean }> {
         const checkResult = serverResults.find(r => r.viewIndex === index);
@@ -1621,9 +1655,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         }
 
         if (checkResult.status === 'current') {
-            // Cache is current - use cached data
+            // Cache is current - use the pre-resolved cache entry from the batched read
+            // (executeSmartCacheCheck reads all 'current' fingerprints in one IDB
+            // transaction up front, so we don't pay per-param transaction overhead here).
             const fingerprint = LocalCacheManager.Instance.GenerateRunViewFingerprint(param, this.InstanceConnectionString);
-            const cached = await LocalCacheManager.Instance.GetRunViewResult(fingerprint);
+            const cached = preResolvedCache.get(fingerprint) ?? null;
 
             if (cached) {
                 const cachedResult: RunViewResult<T> = {
@@ -3128,30 +3164,53 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @param itemFilters 
      */
     public async GetAndCacheDatasetByName(datasetName: string, itemFilters?: DatasetItemFilterType[], contextUser?: UserInfo, providerToUse?: IMetadataProvider): Promise<DatasetResultType> {
-        // first see if we have anything in cache at all, no reason to check server dates if we dont
-        if (await this.IsDatasetCached(datasetName, itemFilters)) {
-            // compare the local version, if exists to the server version dates
-            if (await this.IsDatasetCacheUpToDate(datasetName, itemFilters)) {
-                // we're up to date, all we need to do is get the local cache and return it
-                return this.GetCachedDataset(datasetName, itemFilters);
-            }
-            else {
-                // we're out of date, so get the dataset from the server
-                const dataset = await this.GetDatasetByName(datasetName, itemFilters, contextUser, providerToUse);
-                // cache it
-                await this.CacheDataset(datasetName, itemFilters, dataset);
+        const ls = this.LocalStorageProvider;
+        const key = ls ? this.GetDatasetCacheKey(datasetName, itemFilters) : null;
+        const dateKey = key ? key + '_date' : null;
 
-                return dataset;
+        // ── Single batched read: data + date in one IDB transaction ────────────
+        // Previously this path issued 3 sequential reads of the data key (existence
+        // check, staleness check, materialize) plus 1 read of the date key. Now we
+        // pull both keys in one transaction up front and reuse the in-memory data
+        // for staleness checking and the return value.
+        let cachedDataset: DatasetResultType | null = null;
+        let cachedDateStr: string | null = null;
+        if (ls && key && dateKey) {
+            const both = await ls.GetItems<DatasetResultType | string>([key, dateKey], 'DatasetCache');
+            const rawData = both.get(key);
+            const rawDate = both.get(dateKey);
+            // Type guards — entries can be either depending on which key matched.
+            // (The cache writes data under `key` and the ISO date string under `dateKey`,
+            // so this is safe so long as the cache hasn't been corrupted.)
+            cachedDataset = (rawData && typeof rawData !== 'string') ? rawData as DatasetResultType : null;
+            cachedDateStr = (typeof rawDate === 'string') ? rawDate : null;
+        }
+
+        if (cachedDataset && cachedDateStr) {
+            // We have a candidate cache entry — confirm freshness with the server.
+            const localDate = new Date(cachedDateStr);
+            const status = await this.GetDatasetStatusByName(datasetName, itemFilters);
+            if (status && localDate.getTime() >= status.LatestUpdateDate.getTime()) {
+                // Timestamps suggest cache is fresh; verify per-entity row counts to
+                // catch deleted rows (timestamp comparison alone misses pure deletes).
+                let allCountsMatch = true;
+                for (const eu of status.EntityUpdateDates) {
+                    const localEntity = cachedDataset.Results.find(e => UUIDsEqual(e.EntityID, eu.EntityID));
+                    if (!localEntity || localEntity.Results.length !== eu.RowCount) {
+                        allCountsMatch = false;
+                        break;
+                    }
+                }
+                if (allCountsMatch) {
+                    return cachedDataset;
+                }
             }
         }
-        else {
-            // get the dataset from the server
-            const dataset = await this.GetDatasetByName(datasetName, itemFilters, contextUser, providerToUse);
-            // cache it
-            await this.CacheDataset(datasetName, itemFilters, dataset);
 
-            return dataset;
-        }
+        // Cold path or stale: fetch from server and cache.
+        const dataset = await this.GetDatasetByName(datasetName, itemFilters, contextUser, providerToUse);
+        await this.CacheDataset(datasetName, itemFilters, dataset);
+        return dataset;
     }
 
 
@@ -3166,7 +3225,7 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         if (ls) {
             const key = this.GetDatasetCacheKey(datasetName, itemFilters);
             const dateKey = key + '_date';
-            const val: string = await ls.GetItem(dateKey);
+            const val = await ls.GetItem<string>(dateKey);
             if (val) {
                 return new Date(val);
             }
@@ -3229,9 +3288,9 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const ls = this.LocalStorageProvider;
         if (ls) {
             const key = this.GetDatasetCacheKey(datasetName, itemFilters);
-            const val = await ls.GetItem(key);
-            if (val) {
-                const dataset = JSON.parse(val);
+            // Native object read — IDB structured-clones, localStorage / Redis JSON-decode internally.
+            const dataset = await ls.GetItem<DatasetResultType>(key);
+            if (dataset) {
                 return dataset;
             }
         }
@@ -3247,11 +3306,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         const ls = this.LocalStorageProvider;
         if (ls) {
             const key = this.GetDatasetCacheKey(datasetName, itemFilters);
-            const val = JSON.stringify(dataset);
-            await ls.SetItem(key, val);
-            const dateKey = key + '_date';
-            const dateVal = dataset.LatestUpdateDate.toISOString();
-            await ls.SetItem(dateKey, dateVal);
+            // Native object storage — no JSON.stringify on the hot path.
+            await ls.SetItem<DatasetResultType>(key, dataset);
+            // Date is stored as ISO string for forward-compatibility across providers
+            // (Redis can't natively round-trip Date; localStorage requires string).
+            await ls.SetItem<string>(key + '_date', dataset.LatestUpdateDate.toISOString());
         }
     }
 
@@ -3264,8 +3323,12 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
     public async IsDatasetCached(datasetName: string, itemFilters?: DatasetItemFilterType[]): Promise<boolean> {
         const ls = this.LocalStorageProvider;
         if (ls) {
+            // Probe via the tiny `_date` ISO-string key instead of pulling the
+            // full multi-MB dataset blob. The two are written together by
+            // CacheDataset, so the date's presence is a faithful proxy for the
+            // data's presence.
             const key = this.GetDatasetCacheKey(datasetName, itemFilters);
-            const val = await ls.GetItem(key);
+            const val = await ls.GetItem<string>(key + '_date');
             return val !== null && val !== undefined;
         }
     }
@@ -3491,20 +3554,28 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
             const overallStart = Date.now();
 
-            // Load timestamps
-            this._latestLocalMetadataTimestamps = JSON.parse(await ls.GetItem(this.LocalStoragePrefix + ProviderBase.localStorageTimestampsKey));
+            // The metadata snapshot uses three keys (timestamps, format, AllMetadata).
+            // Pull them in a single batched read — saves two IDB transaction round-trips
+            // on warm boot. The values are still strings (string storage is intentional
+            // here so the gzip+base64 compression path round-trips cleanly).
+            const tsKey   = this.LocalStoragePrefix + ProviderBase.localStorageTimestampsKey;
+            const fmtKey  = this.LocalStoragePrefix + ProviderBase.localStorageFormatKey;
+            const dataKey = this.LocalStoragePrefix + ProviderBase.localStorageAllMetadataKey;
 
-            // Read raw data from storage
             const readStart = Date.now();
-            const raw = await ls.GetItem(this.LocalStoragePrefix + ProviderBase.localStorageAllMetadataKey);
+            const all = await ls.GetItems<string>([tsKey, fmtKey, dataKey]);
             const readMs = Date.now() - readStart;
 
+            const tsRaw = all.get(tsKey) ?? null;
+            const format = all.get(fmtKey) ?? null;
+            const raw = all.get(dataKey) ?? null;
+
+            this._latestLocalMetadataTimestamps = tsRaw ? JSON.parse(tsRaw) : null;
             if (!raw) return;
 
             // Decompress if stored in compressed format, otherwise parse directly
             const parseStart = Date.now();
             let temp: any;
-            const format = await ls.GetItem(this.LocalStoragePrefix + ProviderBase.localStorageFormatKey);
             if (format === 'gzip' && typeof raw === 'string') {
                 // Compressed path: base64 → binary → gzip decompress → JSON parse
                 const binary = ProviderBase.base64ToArrayBuffer(raw);
@@ -3599,8 +3670,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
 
             const start = Date.now();
 
-            // Save timestamps
-            await ls.SetItem(this.LocalStoragePrefix + ProviderBase.localStorageTimestampsKey, JSON.stringify(this._latestLocalMetadataTimestamps));
+            // Save timestamps as a JSON string. The metadata snapshot path intentionally uses
+            // string storage so the compressed (gzip+base64) format below can round-trip cleanly
+            // through providers that don't support binary natively.
+            await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageTimestampsKey, JSON.stringify(this._latestLocalMetadataTimestamps));
 
             // Serialize the AllMetadata object
             const jsonString = JSON.stringify(this._localMetadata);
@@ -3614,8 +3687,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
                     const compressedBuffer = await new Response(compressedStream).arrayBuffer();
                     const base64 = ProviderBase.arrayBufferToBase64(compressedBuffer);
 
-                    await ls.SetItem(this.LocalStoragePrefix + ProviderBase.localStorageAllMetadataKey, base64);
-                    await ls.SetItem(this.LocalStoragePrefix + ProviderBase.localStorageFormatKey, 'gzip');
+                    await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageAllMetadataKey, base64);
+                    await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageFormatKey, 'gzip');
 
                     const elapsed = Date.now() - start;
                     const ratio = jsonString.length > 0 ? (base64.length / jsonString.length * 100).toFixed(1) : '?';
@@ -3632,8 +3705,8 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }
 
             // Fallback: uncompressed save (older environments without CompressionStream)
-            await ls.SetItem(this.LocalStoragePrefix + ProviderBase.localStorageAllMetadataKey, jsonString);
-            await ls.SetItem(this.LocalStoragePrefix + ProviderBase.localStorageFormatKey, 'json');
+            await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageAllMetadataKey, jsonString);
+            await ls.SetItem<string>(this.LocalStoragePrefix + ProviderBase.localStorageFormatKey, 'json');
 
             const elapsed = Date.now() - start;
             LogStatusEx({

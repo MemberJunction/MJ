@@ -217,18 +217,16 @@ export class ApplicationManager {
    * Reload the user's application configuration.
    * Call this after changes to UserApplication records to refresh the app list.
    *
-   * Forces UserInfoEngine to refresh from the server before reading state — without
-   * this, the engine's own debounced refresh (via DataChange$ event subscription)
-   * may not have fired yet (default 1500ms debounce when Filter is present), and
-   * `engine.UserApplications` would still hold stale data.
+   * Reads engine.UserApplications and rebuilds our derived observables. The engine's
+   * own event-driven refresh (via subscribeToEngineChanges + the UserApplications
+   * config's short DebounceTime) keeps the underlying data fresh — we no longer need
+   * a synchronous force-refresh here, which previously triggered NG0100 in callers
+   * with `@if`/`@for` bindings whose values mutate during their save loop.
    */
   async ReloadUserApplications(): Promise<void> {
     this.loading$.next(true);
 
     try {
-      // Force-refresh the engine so we read freshly-loaded UserApplications,
-      // not whatever's still queued behind the entity-event debounce.
-      await UserInfoEngine.Instance.Config(true, this.Provider.CurrentUser, this.Provider);
       await this.loadUserApplicationConfig();
     } finally {
       this.loading$.next(false);

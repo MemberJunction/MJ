@@ -43,8 +43,9 @@ ALTER TABLE \${flyway:defaultSchema}.EntityDocument
       expect(result).not.toContain('sys.default_constraints');
       // Should NOT contain OBJECT_ID (SQL Server function)
       expect(result).not.toContain('OBJECT_ID');
-      // Should NOT be wrapped in DO $$ (the whole block is simplified away)
+      // Should NOT be wrapped in a DO block (the whole block is simplified away)
       expect(result).not.toContain('DO $$');
+      expect(result).not.toContain('DO $mj$');
     });
 
     it('should handle multiple ADD DEFAULT FOR in a single block', () => {
@@ -104,8 +105,10 @@ UPDATE [__mj].[Foo] SET [Bar] = @v WHERE [Baz] = 1;`;
 
       const result = convert(sql);
 
-      // Should go through normal DO $$ conversion
-      expect(result).toContain('DO $$');
+      // Should go through normal DO-block conversion. Tagged `$mj$` delimiter
+      // (not bare `$$`) so embedded user data containing literal `$$` doesn't
+      // prematurely terminate the dollar-quote.
+      expect(result).toContain('DO $mj$');
       expect(result).toContain('v_v');
     });
   });

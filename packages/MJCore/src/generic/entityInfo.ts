@@ -536,6 +536,13 @@ export class EntityFieldInfo extends BaseInfo {
     IncludeInUserSearchAPI: boolean = null
     FullTextSearchEnabled: boolean = false
     UserSearchParamFormatAPI: string = null
+    /**
+     * Search predicate controlling how user-search queries match against this field
+     * in the LIKE-based search path used when the entity does not have FullTextSearchEnabled.
+     * Valid values: 'BeginsWith' | 'Contains' | 'EndsWith' | 'Exact'. Default 'Contains'.
+     * Honored by GenericDatabaseProvider.createViewUserSearchSQL.
+     */
+    UserSearchPredicateAPI: string = null
     IncludeInGeneratedForm: boolean = null
     GeneratedFormSection: string = null
     IsVirtual: boolean = null 
@@ -1046,6 +1053,33 @@ export class EntityFieldInfo extends BaseInfo {
      */
     get HasDefaultValue(): boolean {
         return this.DefaultValue && this.DefaultValue.trim().length > 0
+    }
+
+    /**
+     * Returns true when the field's `spUpdate` / `spCreate` procedure
+     * exposes a `<Param>_Clear` companion parameter — i.e. the field is
+     * nullable and has a non-NULL database default.
+     *
+     * Codegen emits the companion so a caller can disambiguate
+     * "leave unchanged / apply default" (omit the parameter) from
+     * "explicitly set this column to NULL" (`<Param>_Clear = 1`).
+     * Without it, the SP body's `ISNULL(@Param, [Col])` merge silently
+     * substitutes the existing value or default, and a literal NULL
+     * could never be persisted.
+     *
+     * Save-time callers in the data providers use this to decide whether
+     * to also emit the `_Clear` companion parameter when the entity
+     * intentionally sets such a field to NULL. Stays in sync with
+     * `CodeGenLib`'s `needsClearCompanion`.
+     *
+     * Note: relies on `DefaultValue` already being normalized by
+     * `ExtractActualDefaultValue` at populate time — that helper strips
+     * the DB's wrapping parens and converts a literal `NULL` default to
+     * JS `null`. So if `HasDefaultValue` is true, the default is
+     * guaranteed to be non-NULL.
+     */
+    get NeedsClearCompanion(): boolean {
+        return this.AllowsNull;
     }
 
     /**
@@ -1752,12 +1786,29 @@ export class EntityInfo extends BaseInfo {
      * If no fields match, if there is a field called "Name", that is returned. If there is no field called "Name", null is returned.
      */
     get NameField(): EntityFieldInfo | null {
-      const f = this.Fields.find((f) => f.IsNameField);
-
-      if (!f)
-        return this.Fields.find((f) => f.Name?.trim().toLowerCase() === 'name');
-      else
-        return f;
+      // Multiple fields can have IsNameField=true (e.g. Entity has both `Name`
+      // and `DisplayName` marked). Without a deterministic preference, the
+      // pick depends on `this.Fields` insertion order — which differs between
+      // SQL Server (where `Name` happens to come first) and PostgreSQL (where
+      // `DisplayName` does). Codegen builds JOIN aliases off NameField, so
+      // the divergence produces views like `vwDatasetItems` that SELECT the
+      // wrong column on PG (`DisplayName AS "Entity"` instead of
+      // `Name AS "Entity"`), and downstream consumers like
+      // TemplateEngineBase.GetDatasetByName then look up `"Templates"`
+      // (the DisplayName) instead of `"MJ: Templates"` (the actual Name) and
+      // crash with `Entity Templates not found in metadata`.
+      //
+      // Resolution rule: when more than one field claims IsNameField, prefer
+      // the one literally named `Name`. Falls back to the first IsNameField
+      // match (preserves prior behavior when there's no `Name` field), then
+      // to a field named `Name` even without IsNameField set (legacy default).
+      const candidates = this.Fields.filter((f) => f.IsNameField);
+      if (candidates.length > 1) {
+        const literalName = candidates.find((f) => f.Name?.trim().toLowerCase() === 'name');
+        if (literalName) return literalName;
+      }
+      if (candidates.length > 0) return candidates[0];
+      return this.Fields.find((f) => f.Name?.trim().toLowerCase() === 'name') ?? null;
     }
 
     /**************************************************************************
