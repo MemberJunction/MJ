@@ -1,0 +1,51 @@
+.provider-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding-top: 0.5rem;
+}
+
+.provider-picker-label {
+    font-weight: 600;
+    color: var(--mj-text-primary);
+}
+
+.provider-picker-select {
+    width: 100%;
+    max-width: 600px;
+}
+
+.provider-picker-error {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--mj-status-error-text);
+    background: var(--mj-status-error-bg);
+    padding: 0.5rem 0.75rem;
+    border-left: 3px solid var(--mj-status-error-border);
+    border-radius: 2px;
+}
+
+.provider-picker-warning {
+    margin: 0;
+    font-size: 0.875rem;
+    color: var(--mj-status-warning-text);
+    background: var(--mj-status-warning-bg);
+    padding: 0.5rem 0.75rem;
+    border-left: 3px solid var(--mj-status-warning-border);
+    border-radius: 2px;
+}
+
+.provider-picker-warning code,
+.provider-picker-help code {
+    background: var(--mj-bg-surface-sunken);
+    padding: 0.1rem 0.3rem;
+    border-radius: 2px;
+    font-family: ui-monospace, SFMono-Regular, monospace;
+    font-size: 0.85em;
+}
+
+.provider-picker-help {
+    margin: 0;
+    font-size: 0.8125rem;
+    color: var(--mj-text-muted);
+}

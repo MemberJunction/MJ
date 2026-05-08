@@ -13,6 +13,7 @@ export * from './custom/MJAIAgentNoteEntityServer.server';
 export * from './custom/MJAIAgentExampleEntityServer.server';
 export * from './custom/MJVectorIndexEntityServer.server';
 export * from './custom/MJTagEntityServer.server';
+export * from './custom/MJSearchScopeEntityServer.server';
 export * from './custom/MJTagScopeEntityServer.server';
 export * from './custom/util';
 

@@ -1,5 +1,7 @@
 # MemberJunction Universal Search — Design Plan
 
+> **Extension:** Phase 1 of the Search Scopes & RAG+ initiative extends this architecture with scoped search, agent pre-execution RAG, and a new `ScopedSearchAction`. See [`plans/search-scopes-rag-plus.md`](../search-scopes-rag-plus.md) and the implementation guide at [`guides/SEARCH_SCOPES_AND_RAG_GUIDE.md`](../../guides/SEARCH_SCOPES_AND_RAG_GUIDE.md). The universal search `SearchEngine`, provider contract, and fusion pipeline described below are unchanged — scopes layer on top as an optional constraint that providers honor via `scopeConstraints?: ScopeConstraints`.
+
 ## Executive Summary
 
 This plan transforms MJ Explorer's search from a fragmented, entity-at-a-time LIKE-based experience into a unified, sub-500ms hybrid search platform. The work spans six layers: CodeGen intelligence, a new `@memberjunction/search-engine` server package, a `GraphQLSearchClient` in GraphQLDataProvider, enhanced `@memberjunction/ng-search` widgets (including autocomplete), a shell quick-search bar, and instance-level feature configuration.

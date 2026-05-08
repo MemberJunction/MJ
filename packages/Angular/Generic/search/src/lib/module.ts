@@ -9,6 +9,8 @@ import { SearchFilterComponent } from './search-filter.component';
 import { SearchInputComponent } from './search-input.component';
 import { SearchSuggestComponent } from './search-suggest.component';
 import { SearchCompositeComponent } from './search-composite.component';
+import { SearchScopeSelectorComponent } from './search-scope-selector.component';
+import { SearchScopeChildGridComponent } from './search-scope-child-grid.component';
 
 @NgModule({
     declarations: [
@@ -17,7 +19,9 @@ import { SearchCompositeComponent } from './search-composite.component';
         SearchFilterComponent,
         SearchInputComponent,
         SearchSuggestComponent,
-        SearchCompositeComponent
+        SearchCompositeComponent,
+        SearchScopeSelectorComponent,
+        SearchScopeChildGridComponent
     ],
     imports: [
         CommonModule,
@@ -30,7 +34,9 @@ import { SearchCompositeComponent } from './search-composite.component';
         SearchFilterComponent,
         SearchInputComponent,
         SearchSuggestComponent,
-        SearchCompositeComponent
+        SearchCompositeComponent,
+        SearchScopeSelectorComponent,
+        SearchScopeChildGridComponent
     ]
 })
 export class SearchModule { }
