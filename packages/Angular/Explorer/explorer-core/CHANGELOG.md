@@ -1,5 +1,195 @@
 # Change Log - @memberjunction/ng-explorer-core
 
+## 5.33.0
+
+### Minor Changes
+
+- 97ed790: feat(explorer): Identity Card profile dialog + Admin app reorganization + Developer Tools suite
+
+  **Profile dialog (replaces legacy Settings)** — A focused single-pane Identity Card with slide-in panels for photo and theme editing, functional notification channel toggles (saved via UserInfoEngine), role chips, account info, and sign-out. Drops the redundant Apps tab and the dead Appearance placeholder.
+
+  **About MemberJunction dialog** — Added to the avatar menu's System group. Shows the framework version, three quick stats (entities/applications/queries), the connected user, a "Connected to <host>" line, and an expandable diagnostics section with a copy-to-clipboard helper. A small "MemberJunction · v<version>" line is also shown on the loading screen.
+
+  **User-menu cleanup** — Removed the Toggle Developer Mode / Log Layout (Debug) / Inspect App State items. The two debug items had richer replacements as full dashboards in Admin → Developer Tools. `DeveloperModeService` itself remains for future per-record dev affordances.
+
+  **Admin app reorganization (10 → 4 top-nav)** — Each top-nav item is now a container resource that owns its own left-nav of sub-sections via dynamic component instantiation, with URL deep-linking through NavigationService (`?section=<id>`). Containers detach + reattach sub-component views instead of destroying them, so Event Monitor's capture, GraphQL Console history, scroll positions, and search inputs persist across switches.
+  - **Identity & Access**: Users · Roles · Apps · App Roles · Permissions · API Keys
+  - **Data & Schema**: ERD · Query Browser · Database Designer
+  - **Monitoring**: Diagnostics · SQL Logging
+  - **Developer Tools**: GraphQL Console · Event Monitor · Class Registry · Lazy Loading · Settings Explorer · App State · Layout
+
+  **Developer Tools suite (7 inspectors)**:
+  - **GraphQL Console** with `mj-code-editor` (graphql + json syntax highlighting), three-tab sidebar (History · Entities · Schema), introspection-driven Schema explorer that detects introspection-disabled and renders a clean lock-icon panel instead of a stack trace, Entities tab listing every `Metadata.Provider.Entities` with metadata-driven CRUD/RunView template generation (uses `getGraphQLTypeNameBase` + `FieldMapper.MapFieldName` so `__mj_*` columns are correctly emitted as `_mj__*` with inline comments), query history with favorites and copy-as-cURL, resizable vertical + horizontal splitters, default replace / shift-click append insertion behavior, Cmd/Ctrl+Enter to run.
+  - **Event Monitor** with replay-enabled live tail (`GetEventListener(true)`), sortable column headers, distinct-attribute dropdown filters (Type / Component / Code), pulse indicator, pause/resume/clear, empty-payload-aware expansion.
+  - **Class Registry** browser grouped by base class with priority + winner/shadowed badges to surface override conflicts at a glance.
+  - **Lazy Loading** chunk inspector with progress bar, filter chips, expandable cards listing the registrations a chunk brings in, and a Force Load button to preload a chunk on demand.
+  - **Settings Explorer** for `MJ: User Settings` + `MJ: Instance Configurations` with type detection, JSON-aware previews, and a split detail pane.
+  - **App State Inspector** + **Layout Inspector** — read-only JSON viewers using `mj-code-editor` with refresh / copy / download actions.
+
+  All Developer Tools preferences persist per-user via `UserInfoEngine` under the `MJ.DevTools.<scope>` key prefix — search inputs, dropdown selections, sort order, expanded groups, splitter sizes, GraphQL query history, and active sub-sections.
+
+  **Other**:
+  - Re-exported `PACKAGE_VERSION` from `@memberjunction/graphql-dataprovider`'s public API for use in About + loading screen.
+  - Extended `LazyModuleRegistry` with public `GetSnapshot()` + `ForceLoad()` methods + globalThis publish so diagnostic tools in `ng-dashboards` can introspect lazy state without creating a hard package dependency on `ng-explorer-core`.
+  - Added Dialog Button Placement convention to `packages/Angular/CLAUDE.md` (Save / Submit on the LEFT, Cancel on the RIGHT — opposite of the Windows convention).
+  - Admin app metadata (`.admin-application.json`) updated to the new 4-item top-nav structure.
+
+### Patch Changes
+
+- Updated dependencies [97ed790]
+- Updated dependencies [95eb27e]
+- Updated dependencies [74b0be0]
+- Updated dependencies [5cc5326]
+- Updated dependencies [7e4957d]
+- Updated dependencies [3e84676]
+  - @memberjunction/ng-dashboards@5.33.0
+  - @memberjunction/graphql-dataprovider@5.33.0
+  - @memberjunction/core@5.33.0
+  - @memberjunction/global@5.33.0
+  - @memberjunction/ng-entity-viewer@5.33.0
+  - @memberjunction/ng-explorer-settings@5.33.0
+  - @memberjunction/ng-shared@5.33.0
+  - @memberjunction/ng-ai-test-harness@5.33.0
+  - @memberjunction/ng-artifacts@5.33.0
+  - @memberjunction/ng-conversations@5.33.0
+  - @memberjunction/ng-feedback@5.33.0
+  - @memberjunction/ng-file-storage@5.33.0
+  - @memberjunction/ng-notifications@5.33.0
+  - @memberjunction/ng-record-tags@5.33.0
+  - @memberjunction/ng-search@5.33.0
+  - @memberjunction/entity-communications-client@5.33.0
+  - @memberjunction/ai-engine-base@5.33.0
+  - @memberjunction/ai-core-plus@5.33.0
+  - @memberjunction/ng-auth-services@5.33.0
+  - @memberjunction/ng-base-application@5.33.0
+  - @memberjunction/ng-entity-form-dialog@5.33.0
+  - @memberjunction/ng-entity-permissions@5.33.0
+  - @memberjunction/ng-list-detail-grid@5.33.0
+  - @memberjunction/ng-base-forms@5.33.0
+  - @memberjunction/ng-base-types@5.33.0
+  - @memberjunction/ng-container-directives@5.33.0
+  - @memberjunction/ng-dashboard-viewer@5.33.0
+  - @memberjunction/ng-query-viewer@5.33.0
+  - @memberjunction/ng-record-changes@5.33.0
+  - @memberjunction/ng-record-selector@5.33.0
+  - @memberjunction/ng-resource-permissions@5.33.0
+  - @memberjunction/ng-shared-generic@5.33.0
+  - @memberjunction/ng-user-avatar@5.33.0
+  - @memberjunction/communication-types@5.33.0
+  - @memberjunction/core-entities@5.33.0
+  - @memberjunction/templates-base-types@5.33.0
+  - @memberjunction/ng-export-service@5.33.0
+  - @memberjunction/ng-generic-dialog@5.33.0
+  - @memberjunction/ng-ui-components@5.33.0
+  - @memberjunction/ng-word-cloud@5.33.0
+  - @memberjunction/export-engine@5.33.0
+
+## 5.32.0
+
+### Patch Changes
+
+- Updated dependencies [a7e8b3b]
+- Updated dependencies [b9c67ac]
+  - @memberjunction/core@5.32.0
+  - @memberjunction/ai-engine-base@5.32.0
+  - @memberjunction/ai-core-plus@5.32.0
+  - @memberjunction/ng-auth-services@5.32.0
+  - @memberjunction/ng-base-application@5.32.0
+  - @memberjunction/ng-dashboards@5.32.0
+  - @memberjunction/ng-entity-form-dialog@5.32.0
+  - @memberjunction/ng-entity-permissions@5.32.0
+  - @memberjunction/ng-explorer-settings@5.32.0
+  - @memberjunction/ng-list-detail-grid@5.32.0
+  - @memberjunction/ng-shared@5.32.0
+  - @memberjunction/ng-ai-test-harness@5.32.0
+  - @memberjunction/ng-artifacts@5.32.0
+  - @memberjunction/ng-base-forms@5.32.0
+  - @memberjunction/ng-base-types@5.32.0
+  - @memberjunction/ng-container-directives@5.32.0
+  - @memberjunction/ng-conversations@5.32.0
+  - @memberjunction/ng-dashboard-viewer@5.32.0
+  - @memberjunction/ng-entity-viewer@5.32.0
+  - @memberjunction/ng-feedback@5.32.0
+  - @memberjunction/ng-file-storage@5.32.0
+  - @memberjunction/ng-notifications@5.32.0
+  - @memberjunction/ng-query-viewer@5.32.0
+  - @memberjunction/ng-record-changes@5.32.0
+  - @memberjunction/ng-record-selector@5.32.0
+  - @memberjunction/ng-record-tags@5.32.0
+  - @memberjunction/ng-resource-permissions@5.32.0
+  - @memberjunction/ng-search@5.32.0
+  - @memberjunction/ng-shared-generic@5.32.0
+  - @memberjunction/ng-user-avatar@5.32.0
+  - @memberjunction/communication-types@5.32.0
+  - @memberjunction/entity-communications-client@5.32.0
+  - @memberjunction/graphql-dataprovider@5.32.0
+  - @memberjunction/core-entities@5.32.0
+  - @memberjunction/templates-base-types@5.32.0
+  - @memberjunction/ng-export-service@5.32.0
+  - @memberjunction/ng-generic-dialog@5.32.0
+  - @memberjunction/ng-ui-components@5.32.0
+  - @memberjunction/ng-word-cloud@5.32.0
+  - @memberjunction/export-engine@5.32.0
+  - @memberjunction/global@5.32.0
+
+## 5.31.0
+
+### Patch Changes
+
+- 7ed7a4b: no metadata/migration changes
+- Updated dependencies [fc8b9b8]
+- Updated dependencies [cde4d2c]
+- Updated dependencies [7ed7a4b]
+- Updated dependencies [60e7541]
+- Updated dependencies [18be074]
+- Updated dependencies [17b8087]
+- Updated dependencies [6779c1e]
+- Updated dependencies [c8b6f8a]
+- Updated dependencies [de34786]
+- Updated dependencies [5db36d9]
+- Updated dependencies [0e3365f]
+  - @memberjunction/core-entities@5.31.0
+  - @memberjunction/graphql-dataprovider@5.31.0
+  - @memberjunction/ng-dashboards@5.31.0
+  - @memberjunction/ai-engine-base@5.31.0
+  - @memberjunction/ai-core-plus@5.31.0
+  - @memberjunction/ng-auth-services@5.31.0
+  - @memberjunction/ng-base-application@5.31.0
+  - @memberjunction/ng-entity-form-dialog@5.31.0
+  - @memberjunction/ng-entity-permissions@5.31.0
+  - @memberjunction/ng-explorer-settings@5.31.0
+  - @memberjunction/ng-list-detail-grid@5.31.0
+  - @memberjunction/ng-shared@5.31.0
+  - @memberjunction/ng-ai-test-harness@5.31.0
+  - @memberjunction/ng-artifacts@5.31.0
+  - @memberjunction/ng-base-forms@5.31.0
+  - @memberjunction/ng-base-types@5.31.0
+  - @memberjunction/ng-container-directives@5.31.0
+  - @memberjunction/ng-conversations@5.31.0
+  - @memberjunction/ng-dashboard-viewer@5.31.0
+  - @memberjunction/ng-entity-viewer@5.31.0
+  - @memberjunction/ng-export-service@5.31.0
+  - @memberjunction/ng-feedback@5.31.0
+  - @memberjunction/ng-file-storage@5.31.0
+  - @memberjunction/ng-generic-dialog@5.31.0
+  - @memberjunction/ng-notifications@5.31.0
+  - @memberjunction/ng-query-viewer@5.31.0
+  - @memberjunction/ng-record-changes@5.31.0
+  - @memberjunction/ng-record-selector@5.31.0
+  - @memberjunction/ng-record-tags@5.31.0
+  - @memberjunction/ng-resource-permissions@5.31.0
+  - @memberjunction/ng-search@5.31.0
+  - @memberjunction/ng-shared-generic@5.31.0
+  - @memberjunction/ng-ui-components@5.31.0
+  - @memberjunction/ng-user-avatar@5.31.0
+  - @memberjunction/ng-word-cloud@5.31.0
+  - @memberjunction/communication-types@5.31.0
+  - @memberjunction/entity-communications-client@5.31.0
+  - @memberjunction/core@5.31.0
+  - @memberjunction/export-engine@5.31.0
+  - @memberjunction/global@5.31.0
+  - @memberjunction/templates-base-types@5.31.0
+
 ## 5.30.1
 
 ### Patch Changes

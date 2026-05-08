@@ -10,7 +10,7 @@ vi.mock('cosmiconfig', () => ({
 vi.mock('@memberjunction/core', () => ({
     LogError: vi.fn(),
     LogStatus: vi.fn(),
-    SeverityType: { Info: 'Info', Warning: 'Warning', Critical: 'Critical' }
+    SeverityType: { Info: 'Info', Warning: 'Warning', Critical: 'Critical' },
 }));
 
 vi.mock('@memberjunction/global', () => ({
@@ -21,7 +21,11 @@ vi.mock('@memberjunction/global', () => ({
             }
         }
     },
-    RegisterClass: () => (target: unknown) => target
+    RegisterClass: () => (target: unknown) => target,
+}));
+
+vi.mock('@memberjunction/generic-database-provider', () => ({
+    resolveDbPlatformFromEnv: vi.fn().mockReturnValue(undefined),
 }));
 
 vi.mock('@memberjunction/config', () => ({
@@ -206,3 +210,4 @@ describe('getExternalEntitySchemas', () => {
         expect(result).toEqual([]);
     });
 });
+

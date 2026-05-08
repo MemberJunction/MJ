@@ -29,6 +29,10 @@ export interface AdditionalSchemaInfoOptions {
   approvedOnly?: boolean;
   /** Only include confirmed candidates (status === 'confirmed') from discovery */
   confirmedOnly?: boolean;
+  /** Minimum confidence (0-100) for value-list / enum entries. Default 85. */
+  valueListConfidenceThreshold?: number;
+  /** If true, skip emitting Fields[] entirely. Default false. */
+  excludeValueLists?: boolean;
 }
 
 interface SoftPKEntry {
@@ -44,10 +48,23 @@ interface SoftFKEntry {
   Description?: string;
 }
 
+/** Per-column value-list entry emitted in Fields[] when enum detection is active */
+export interface FieldValueListEntry {
+  FieldName: string;
+  ValueListType: 'List' | 'ListOrUserEntry';
+  PossibleValues: string[];
+  /** Optional description surfaced to humans reviewing the file */
+  Description?: string;
+  /** Confidence at emission time, 0–100. Useful for audit / re-tuning thresholds. */
+  Confidence?: number;
+}
+
 interface TableSchemaInfo {
   TableName: string;
   PrimaryKey?: SoftPKEntry[];
   ForeignKeys?: SoftFKEntry[];
+  /** Enum/value-list fields discovered by LLM analysis */
+  Fields?: FieldValueListEntry[];
 }
 
 interface SchemaNameInfo {
@@ -104,7 +121,10 @@ export class AdditionalSchemaInfoGenerator {
           table,
           discoveredPKs,
           discoveredFKs,
-          options.discoveredOnly ?? false
+          options.discoveredOnly ?? false,
+          options.valueListConfidenceThreshold ?? 85,
+          options.excludeValueLists ?? false,
+          options.confirmedOnly ?? false
         );
 
         if (tableInfo) {
@@ -190,14 +210,17 @@ export class AdditionalSchemaInfoGenerator {
 
   /**
    * Build a single table's schema info entry by combining
-   * introspected and discovered keys.
+   * introspected and discovered keys, plus value-list fields.
    */
   private buildTableInfo(
     schema: SchemaDefinition,
     table: TableDefinition,
     discoveredPKs: PKCandidate[],
     discoveredFKs: FKCandidate[],
-    discoveredOnly: boolean
+    discoveredOnly: boolean,
+    valueListThreshold: number,
+    excludeValueLists: boolean,
+    confirmedOnly: boolean
   ): TableSchemaInfo | null {
     const pks: SoftPKEntry[] = [];
     const fks: SoftFKEntry[] = [];
@@ -212,7 +235,12 @@ export class AdditionalSchemaInfoGenerator {
     this.collectDiscoveredPKs(schema.name, table.name, discoveredPKs, pks);
     this.collectDiscoveredFKs(schema.name, table.name, discoveredFKs, fks);
 
-    if (pks.length === 0 && fks.length === 0) {
+    // Source 3: Value-list fields from enum detection
+    const fields = excludeValueLists
+      ? []
+      : this.collectValueListFields(table, valueListThreshold, confirmedOnly);
+
+    if (pks.length === 0 && fks.length === 0 && fields.length === 0) {
       return null;
     }
 
@@ -223,8 +251,44 @@ export class AdditionalSchemaInfoGenerator {
     if (fks.length > 0) {
       entry.ForeignKeys = fks;
     }
+    if (fields.length > 0) {
+      entry.Fields = fields;
+    }
 
     return entry;
+  }
+
+  /**
+   * Collect value-list field entries from columns with enum verdicts.
+   * Only includes columns where the LLM marked isEnum=true and confidence
+   * meets the threshold.
+   */
+  private collectValueListFields(
+    table: TableDefinition,
+    threshold: number,
+    confirmedOnly: boolean
+  ): FieldValueListEntry[] {
+    const fields: FieldValueListEntry[] = [];
+
+    for (const col of table.columns) {
+      const verdict = col.valueListVerdict;
+      if (!verdict || !verdict.isEnum) continue;
+      if (verdict.confidence * 100 < threshold) continue;
+      if (confirmedOnly && !col.userApproved) continue;
+
+      // Sort values alphabetically — matches CHECK-constraint pass behavior
+      const sortedValues = [...verdict.values].sort();
+
+      fields.push({
+        FieldName: col.name,
+        ValueListType: verdict.type,
+        PossibleValues: sortedValues,
+        Description: col.description ?? undefined,
+        Confidence: Math.round(verdict.confidence * 100),
+      });
+    }
+
+    return fields;
   }
 
   /**

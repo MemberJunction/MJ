@@ -1,5 +1,26 @@
 # Change Log - @memberjunction/ai
 
+## 5.33.0
+
+### Patch Changes
+
+- Updated dependencies [5cc5326]
+  - @memberjunction/global@5.33.0
+
+## 5.32.0
+
+### Patch Changes
+
+- @memberjunction/global@5.32.0
+
+## 5.31.0
+
+### Patch Changes
+
+- 7ed7a4b: no metadata/migration changes
+- Updated dependencies [7ed7a4b]
+  - @memberjunction/global@5.31.0
+
 ## 5.30.1
 
 ### Patch Changes

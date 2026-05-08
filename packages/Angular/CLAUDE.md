@@ -193,6 +193,36 @@ See the root [CLAUDE.md](../../CLAUDE.md) rule #4 for the full policy. Summary:
 - **Use `@if`/`@for`/`@switch`** block syntax for all new templates (not `*ngIf`/`*ngFor`)
 - **Use `inject()` function** for DI in new components (not constructor injection)
 
+## 🚨 Dialog Button Placement (MJ Convention) 🚨
+
+**Confirm/Submit buttons go on the LEFT, Cancel buttons go on the RIGHT.** This is the opposite of the Windows convention but matches MemberJunction's design system. Apply to all dialogs, modals, popovers, and action button groups.
+
+```html
+<!-- ✅ CORRECT — Save (primary) on the LEFT, Cancel on the RIGHT -->
+<div class="footer">
+  <button class="btn btn--primary">Save</button>
+  <button class="btn">Cancel</button>
+</div>
+
+<!-- ✅ CORRECT — destructive action far left, then primary, then cancel -->
+<div class="footer">
+  <button class="btn btn--danger">Sign out</button>
+  <span class="spacer"></span>
+  <button class="btn btn--primary">Save</button>
+  <button class="btn">Cancel</button>
+</div>
+
+<!-- ❌ WRONG — Cancel before Save (Windows convention) -->
+<div class="footer">
+  <button class="btn">Cancel</button>
+  <button class="btn btn--primary">Save</button>
+</div>
+```
+
+The same rule applies to `[Submit] [Cancel]`, `[Update] [Cancel]`, `[Apply] [Discard]`, etc. — the affirmative action is always leftmost (after any far-left destructive actions like Sign Out / Delete).
+
+---
+
 ## Icon Libraries
 - **PRIMARY ICON LIBRARY: Font Awesome** - Use Font Awesome icons throughout all Angular components
 - **NEVER use Kendo icons** - Replace all Kendo icon references (k-icon, k-i-*) with Font Awesome equivalents

@@ -392,11 +392,12 @@ import {
     DefaultArchiveDriver,
 } from '@memberjunction/archiving-engine';
 
-// @memberjunction/codegen-lib (4 classes)
+// @memberjunction/codegen-lib (5 classes)
 import {
     EntityDataGridRelatedEntityGenerator,
     JoinGridRelatedEntityGenerator,
     PostgreSQLCodeGenProvider,
+    SQLServerCodeGenProvider,
     TimelineRelatedEntityGenerator,
 } from '@memberjunction/codegen-lib';
 
@@ -1256,6 +1257,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     EntityDataGridRelatedEntityGenerator,
     JoinGridRelatedEntityGenerator,
     PostgreSQLCodeGenProvider,
+    SQLServerCodeGenProvider,
     TimelineRelatedEntityGenerator,
     MSGraphProvider,
     SendGridProvider,
@@ -1801,7 +1803,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 743;
+export const CLASS_REGISTRATIONS_COUNT = 744;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
