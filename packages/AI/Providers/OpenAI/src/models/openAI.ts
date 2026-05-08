@@ -364,9 +364,15 @@ export class OpenAILLM extends BaseLLM {
     };
 
     /**
-     * Reset streaming state for a new request
+     * Reset streaming state for a new request. Overrides the base-class hook so
+     * `BaseLLM.handleStreamingChatCompletion` calls this both at the start of a
+     * request AND in its `finally` block — releasing accumulated reasoning/
+     * thinking buffers and preventing state from a prior request bleeding into
+     * the next. Inheriting providers (Cerebras, Fireworks, Groq, xAI, Zhipu,
+     * Inception, LlamaCpp, etc.) automatically benefit from this override. See
+     * audit R2-C5.
      */
-    private resetStreamingState(): void {
+    protected resetStreamingState(): void {
         this._streamingState = {
             accumulatedThinking: '',
             inThinkingBlock: false,

@@ -104,6 +104,55 @@
     border-bottom: 1px solid var(--mj-border-subtle);
 }
 
+.streaming-status-strip {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--mj-border-subtle);
+}
+
+.streaming-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 9999px;
+    border: 1px solid var(--mj-border-default);
+    background: var(--mj-bg-surface);
+    color: var(--mj-text-secondary);
+    font-size: 0.74rem;
+}
+
+.streaming-chip-pending {
+    color: var(--mj-text-muted);
+}
+
+.streaming-chip-completed {
+    background: color-mix(in srgb, var(--mj-status-success) 10%, var(--mj-bg-surface));
+    border-color: var(--mj-status-success-border);
+    color: var(--mj-status-success-text);
+}
+
+.streaming-chip-error {
+    background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
+    border-color: var(--mj-status-error-border);
+    color: var(--mj-status-error-text);
+}
+
+.streaming-chip-name {
+    font-weight: 500;
+}
+
+.streaming-chip-count {
+    opacity: 0.7;
+}
+
+.streaming-chip-time {
+    opacity: 0.6;
+    font-size: 0.7rem;
+}
+
 .filter-chip {
     display: inline-flex;
     align-items: center;

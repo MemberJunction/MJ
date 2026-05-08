@@ -9,6 +9,7 @@ import {
     GridSelectionMode,
     buildCompositeKey
 } from '@memberjunction/ng-entity-viewer';
+import { EntityInfo } from '@memberjunction/core';
 import { FormNavigationEvent } from './types/navigation-events';
 
 /**
@@ -32,7 +33,8 @@ import { FormNavigationEvent } from './types/navigation-events';
             [SelectionMode]="SelectionMode"
             (AfterRowDoubleClick)="onRowDoubleClick($event)"
             (AfterRowClick)="onRowClick($event)"
-            (AfterDataLoad)="onDataLoad($event)">
+            (AfterDataLoad)="onDataLoad($event)"
+            (NewRecordTabRequested)="onNewRecordTabRequested($event)">
         </mj-entity-data-grid>
     `,
     styles: [`
@@ -97,5 +99,19 @@ export class ExplorerEntityDataGridComponent {
     onDataLoad(event: AfterDataLoadEventArgs): void {
         // Re-emit the event for any consumers
         this.AfterDataLoad.emit(event);
+    }
+
+    /**
+     * The inner grid's "New" button bubbles up here. We re-emit as a
+     * `new-record` Navigate event so the host form (and Explorer's
+     * SingleRecordComponent) can call NavigationService.OpenNewEntityRecord
+     * and pre-populate the foreign-key fields from NewRecordValues.
+     */
+    onNewRecordTabRequested(event: { entityInfo: EntityInfo; defaultValues: Record<string, unknown> }): void {
+        this.Navigate.emit({
+            Kind: 'new-record',
+            EntityName: event.entityInfo.Name,
+            DefaultValues: event.defaultValues,
+        });
     }
 }

@@ -1525,7 +1525,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             result.Type = entity.IsSaved ? 'update' : 'create';
             result.Success = true;
             result.NewValues = entity.GetAll();
-            entity.ResultHistory.push(result);
+            entity.RegisterResultHistoryEntry(result);
             return result.NewValues;
         }
 
@@ -1539,7 +1539,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             result.StartedAt = new Date();
             result.Type = entity.IsSaved ? 'update' : 'create';
             result.OriginalValues = entity.Fields.map(f => { return {FieldName: f.CodeName, Value: f.Value} });
-            entity.ResultHistory.push(result); // push the new result as we have started a process
+            entity.RegisterResultHistoryEntry(result); // push the new result as we have started a process
 
             // Create the query for the mutation first, we will provide the specific
             // input values later in the loop below. Here we are just setting up the mutation
@@ -1811,7 +1811,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             result.StartedAt = new Date();
             result.Type = 'delete';
             result.OriginalValues = entity.Fields.map(f => { return {FieldName: f.CodeName, Value: f.Value} });
-            entity.ResultHistory.push(result); // push the new result as we have started a process
+            entity.RegisterResultHistoryEntry(result); // push the new result as we have started a process
 
             const vars = {};
             const mutationInputTypes = [];
