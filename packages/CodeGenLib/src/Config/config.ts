@@ -543,6 +543,13 @@ const configInfoSchema = z.object({
     .boolean()
     .default(false)
     .transform((v) => (v ? 'Y' : 'N')),
+  /**
+   * Optional SQL Server request timeout in milliseconds applied to the CodeGen
+   * connection pool. Defaults to 120000 (2 minutes). Set in `mj.config.cjs` or
+   * via the `MJ_CODEGEN_REQUEST_TIMEOUT` environment variable when long-running
+   * CodeGen steps (e.g. spUpdateExistingEntityFieldsFromSchema) exceed the default.
+   */
+  dbRequestTimeout: z.coerce.number().int().positive().optional(),
   outputCode: z.string().nullish(),
   mjCoreSchema: z.string().default('__mj'),
   graphqlPort: z.coerce.number().int().positive().default(4000),
@@ -570,6 +577,9 @@ export const DEFAULT_CODEGEN_CONFIG: Partial<ConfigInfo> = {
   codeGenPassword: process.env.CODEGEN_DB_PASSWORD ?? '',
   dbInstanceName: process.env.DB_INSTANCE_NAME,
   dbTrustServerCertificate: parseBooleanEnv(process.env.DB_TRUST_SERVER_CERTIFICATE) ? 'Y' : 'N',
+  dbRequestTimeout: process.env.MJ_CODEGEN_REQUEST_TIMEOUT
+    ? parseInt(process.env.MJ_CODEGEN_REQUEST_TIMEOUT, 10)
+    : undefined,
   mjCoreSchema: '__mj',
   graphqlPort: 4000,
   verboseOutput: false,

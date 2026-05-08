@@ -17,12 +17,11 @@ export interface MapConfig {
     latitudeField?: string;
     /** Longitude field name. Defaults to '__mj_Longitude'. */
     longitudeField?: string;
-    /** GeoDataEngine-compatible resolver for coordinate-based choropleth. */
+    /**
+     * GeoDataEngine-compatible resolver. Required for choropleth (Regions) mode —
+     * no text-field fallback, records must carry pre-geocoded lat/lng.
+     */
     geoResolver?: GeoResolver;
-    /** Country field name for text-field fallback choropleth. Defaults to 'Country'. */
-    countryField?: string;
-    /** Async function returning country reference data (for text-field fallback). */
-    loadCountryData?: () => Promise<CountryData[]>;
     /** Returns a composite primary key string for a record. */
     getRecordId?: (record: Record<string, unknown>) => string;
     /** Returns a display name for a record. */
@@ -54,20 +53,16 @@ export interface MapConfig {
 /** GeoDataEngine-compatible resolver interface. */
 export interface GeoResolver {
     ResolvePointToLocation(lat: number, lng: number): GeoPointResolution;
+    /** Awaited before the first choropleth resolve when the resolver lazy-loads. */
+    EnsureLoaded?: () => Promise<void>;
+    /** When true, MapCore skips the EnsureLoaded await on the fast path. */
+    Loaded?: boolean;
 }
 
 /** Result of resolving a coordinate to geographic regions. */
 export interface GeoPointResolution {
     Country?: { ID: string; Name: string; BoundaryGeoJSON?: string | null } | undefined;
     State?: { ID: string; Name: string; BoundaryGeoJSON?: string | null } | undefined;
-}
-
-/** Country reference data for text-field fallback choropleth. */
-export interface CountryData {
-    Name: string;
-    ISO2?: string;
-    BoundaryGeoJSON?: string | null;
-    CommonAliases?: string | null;
 }
 
 /** Emitted when a point marker is clicked. */
@@ -134,9 +129,6 @@ export function spatialCluster(
 
 /** Ray-casting point-in-polygon test. Ring uses GeoJSON [lng, lat] pairs. */
 export function pointInPolygon(lat: number, lng: number, ring: Array<[number, number]>): boolean;
-
-/** Match a free-text country name to reference data via Name, ISO2, or CommonAliases. */
-export function findCountryMatch(countries: CountryData[], searchName: string): CountryData | null;
 
 /** Library version. */
 export const VERSION: string;

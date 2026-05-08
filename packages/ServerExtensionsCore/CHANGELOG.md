@@ -1,5 +1,16 @@
 # @memberjunction/server-extensions-core
 
+## 5.33.0
+
+### Patch Changes
+
+- Updated dependencies [95eb27e]
+- Updated dependencies [74b0be0]
+- Updated dependencies [5cc5326]
+- Updated dependencies [7e4957d]
+  - @memberjunction/core@5.33.0
+  - @memberjunction/global@5.33.0
+
 ## 5.32.0
 
 ### Patch Changes
