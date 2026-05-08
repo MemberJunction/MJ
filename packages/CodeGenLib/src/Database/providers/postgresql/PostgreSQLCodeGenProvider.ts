@@ -11,6 +11,11 @@ import {
 import { configInfo } from '../../../Config/config';
 import { logError, logWarning } from '../../../Misc/status_logging';
 import { PostgreSQLDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
+import {
+    shouldIncludeFieldInParams,
+    useJsonArgShape,
+} from '@memberjunction/generic-database-provider';
+import { POSTGRESQL_PROCEDURE_PARAM_LIMIT } from '@memberjunction/postgresql-dataprovider';
 import * as fs from 'fs';
 import path from 'path';
 import { executeWithFallback } from './viewFallback';
@@ -346,6 +351,255 @@ $do$;
     }
 
     /**
+     * Returns true when this entity should emit JSON-arg sprocs (single `JSONB`
+     * parameter, key-presence semantics) for the given CRUD verb instead of the
+     * default typed-arg shape. Driven by PostgreSQL's hard 100-arg `FUNC_MAX_ARGS`
+     * ceiling — once a typed-arg sproc would project past `POSTGRESQL_PROCEDURE_PARAM_LIMIT`,
+     * we switch to JSON-arg.
+     *
+     * Calls the same `useJsonArgShape` predicate used by the runtime so codegen
+     * emit and runtime invocation cannot disagree (see `crudSprocFieldRules`
+     * in `@memberjunction/generic-database-provider`).
+     */
+    private shouldUseJsonArgShape(entity: EntityInfo, sprocType: 'create' | 'update' | 'delete'): boolean {
+        return useJsonArgShape(entity, sprocType, POSTGRESQL_PROCEDURE_PARAM_LIMIT);
+    }
+
+    /**
+     * Returns the per-column JSON cast expression for the JSON-arg sproc body,
+     * e.g. `(p_data->>'PromptID')::UUID` or `(p_data->>'Status')` for plain text.
+     * The mapping mirrors `mapSQLType` but as JSON-extraction casts; types that
+     * don't need a cast (TEXT/VARCHAR) emit just the bare extraction. Binary
+     * (BYTEA) decodes from base64 string. JSON-typed columns use `->` (not
+     * `->>`) to keep the JSONB structure intact.
+     */
+    private renderJsonExtractAndCast(field: EntityFieldInfo): string {
+        const pgType = this.mapSQLType(field.SQLFullType).toUpperCase();
+        const fieldKey = `'${field.Name}'`;
+
+        // JSON / JSONB columns: keep structure via `p_data->'Field'`, no text cast.
+        if (pgType === 'JSONB' || pgType === 'JSON') {
+            return `(p_data->${fieldKey})::${pgType}`;
+        }
+        // Binary: caller serializes as base64-encoded string; sproc decodes.
+        if (pgType === 'BYTEA') {
+            return `decode(p_data->>${fieldKey}, 'base64')`;
+        }
+        // Plain text — no cast needed; PG returns TEXT from `->>`.
+        if (pgType === 'TEXT' || pgType.startsWith('VARCHAR') || pgType.startsWith('CHAR')) {
+            return `(p_data->>${fieldKey})`;
+        }
+        // Everything else (UUID, INTEGER, BIGINT, NUMERIC, BOOLEAN, TIMESTAMP[TZ], DATE, etc.)
+        // gets an explicit cast off the text extraction.
+        return `(p_data->>${fieldKey})::${pgType}`;
+    }
+
+    /**
+     * Generates the SET clause body for a JSON-arg UPDATE sproc — one `CASE WHEN
+     * p_data ? 'Field' THEN <cast> ELSE "Field" END` per writable column, plus
+     * the audit-timestamp assignment.
+     */
+    private renderJsonArgUpdateSetClause(entity: EntityInfo): string {
+        const writableFields = entity.Fields.filter((f) => shouldIncludeFieldInParams(f, 'update') && !f.IsPrimaryKey);
+        const setClauses = writableFields.map((field) => {
+            const colName = pgDialect.QuoteIdentifier(field.Name);
+            const fieldKey = `'${field.Name}'`;
+            const cast = this.renderJsonExtractAndCast(field);
+            return `${colName} = CASE WHEN p_data ? ${fieldKey} THEN ${cast} ELSE ${colName} END`;
+        });
+        // __mj_UpdatedAt is always touched on UPDATE, never driven by p_data.
+        setClauses.push(`${pgDialect.QuoteIdentifier(EntityInfo.UpdatedAtFieldName)} = NOW()`);
+        return setClauses.join(',\n        ');
+    }
+
+    /**
+     * Generates the JSON-arg variant of `spUpdate*` for wide entities. Single
+     * `p_data JSONB` parameter; per-column `CASE WHEN p_data ? 'Field' THEN
+     * <cast> ELSE "Field" END` body. Key-absent leaves the column unchanged;
+     * key=null clears it; key=value sets it. Identity column (`ID`) is required
+     * in the payload; all other columns are optional.
+     */
+    private generateCRUDUpdateJsonArg(entity: EntityInfo): string {
+        const fnName = this.getCRUDRoutineName(entity, CRUDType.Update);
+        const viewName = this.getBaseViewName(entity);
+        const permissions = this.generateCRUDPermissions(entity, fnName, CRUDType.Update);
+        const setClause = this.renderJsonArgUpdateSetClause(entity);
+        const trigger = this.generateTimestampTrigger(entity);
+
+        // PK lookup. Composite-PK entities aren't expected to hit JSON-arg in
+        // practice (no current wide entity has a composite PK), but the shape
+        // still needs to handle them — extract each PK from p_data and AND the
+        // WHERE clause.
+        const pkExtractions = entity.PrimaryKeys.map(
+            (pk) => `    v_${this.toSnakeCase(pk.CodeName)} ${this.mapSQLType(pk.SQLFullType)} := (p_data->>'${pk.Name}')::${this.mapSQLType(pk.SQLFullType)};`
+        ).join('\n');
+        const pkValidation = entity.PrimaryKeys.map((pk) => `p_data ? '${pk.Name}'`).join(' AND ');
+        const whereClause = entity.PrimaryKeys.map(
+            (pk) => `${pgDialect.QuoteIdentifier(pk.Name)} = v_${this.toSnakeCase(pk.CodeName)}`
+        ).join(' AND ');
+
+        return `
+------------------------------------------------------------
+----- UPDATE FUNCTION FOR ${entity.BaseTable} (JSON-arg shape)
+------------------------------------------------------------
+${this.generateDropAllOverloadsBlock(entity.SchemaName, fnName)}
+CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(p_data JSONB)
+RETURNS SETOF ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}
+AS $$
+DECLARE
+${pkExtractions}
+    v_updated_count INTEGER;
+BEGIN
+    IF p_data IS NULL OR NOT (${pkValidation}) THEN
+        RAISE EXCEPTION '${fnName}: p_data must include ${entity.PrimaryKeys.map((pk) => `"${pk.Name}"`).join(', ')}';
+    END IF;
+
+    UPDATE ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable)}
+    SET
+        ${setClause}
+    WHERE
+        ${whereClause};
+
+    GET DIAGNOSTICS v_updated_count = ROW_COUNT;
+
+    IF v_updated_count = 0 THEN
+        -- Nothing was updated, return empty result set
+        RETURN;
+    END IF;
+
+    -- Return the updated record from the base view
+    RETURN QUERY
+    SELECT * FROM ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}
+    WHERE ${whereClause};
+END;
+$$ LANGUAGE plpgsql;
+${permissions}
+
+${trigger}
+`;
+    }
+
+    /**
+     * Generates the JSON-arg variant of `spCreate*` for wide entities. Single
+     * `p_data JSONB` parameter; uses `EXECUTE format(...)` to build the INSERT
+     * dynamically based on which keys are present in `p_data` so absent keys
+     * fall back to column DEFAULT (matching the typed-arg sproc's default-
+     * substitution behavior). Returns the newly created row from the base view.
+     *
+     * Single-UUID-PK entities auto-generate the PK if `p_data` doesn't include
+     * one (matching `gen_random_uuid()` default). Composite-PK entities require
+     * caller-supplied PKs.
+     */
+    private generateCRUDCreateJsonArg(entity: EntityInfo): string {
+        const fnName = this.getCRUDRoutineName(entity, CRUDType.Create);
+        const viewName = this.getBaseViewName(entity);
+        const permissions = this.generateCRUDPermissions(entity, fnName, CRUDType.Create);
+
+        const firstKey = entity.FirstPrimaryKey;
+        const pkType = firstKey.Type.toLowerCase().trim();
+        const pkIsUuidSingle =
+            (pkType === 'uniqueidentifier' || pkType === 'uuid') && entity.PrimaryKeys.length === 1;
+        const pkPgType = this.mapSQLType(firstKey.SQLFullType);
+        const pkColQuoted = pgDialect.QuoteIdentifier(firstKey.Name);
+
+        // Writable fields participating in the INSERT — exclude PK (handled
+        // separately so we can supply a generated UUID when key is absent),
+        // exclude virtual / special-date / non-API-writable.
+        const writableFields = entity.Fields.filter(
+            (f) => shouldIncludeFieldInParams(f, 'create') && !f.IsPrimaryKey
+        );
+
+        // Per-field cast tokens for the dynamic INSERT. Built as a JS array so
+        // the sproc body iterates over (column-name, cast-expression) pairs at
+        // runtime to assemble the column / value lists from p_data keys.
+        //
+        // The cast expressions are emitted with `$1` (parameterized placeholder)
+        // instead of `p_data` because they end up inside an `EXECUTE v_sql USING
+        // p_data` call. PG's dynamic-SQL parser does NOT see the enclosing
+        // function's locals — `p_data` is unbound inside the dynamic SQL — so we
+        // bind it as `$1` and reference `($1->>'Field')` from inside the dynamic
+        // INSERT. This is the canonical safe pattern for dynamic SQL with values:
+        // values flow through the binding mechanism, never through string
+        // interpolation, so there's zero injection surface.
+        const fieldCastEntries = writableFields
+            .map((f) => {
+                const cast = this.renderJsonExtractAndCast(f).replace(/p_data/g, '$$1');
+                return `        WHEN '${f.Name}' THEN '${cast.replace(/'/g, "''")}'`;
+            })
+            .join('\n');
+
+        const fieldNamesArrayLiteral = writableFields.map((f) => `'${f.Name}'`).join(', ');
+
+        // ID resolution body: differs by PK strategy. Single-UUID PK is auto-
+        // generated when the caller doesn't supply one; everything else (composite,
+        // non-UUID) requires the caller to provide the key explicitly.
+        const idResolveBody = pkIsUuidSingle
+            ? `    IF p_data ? '${firstKey.Name}' THEN
+        v_id := (p_data->>'${firstKey.Name}')::${pkPgType};
+    ELSE
+        v_id := gen_random_uuid();
+    END IF;`
+            : `    IF NOT (p_data ? '${firstKey.Name}') THEN
+        RAISE EXCEPTION '${fnName}: p_data must include "${firstKey.Name}"';
+    END IF;
+    v_id := (p_data->>'${firstKey.Name}')::${pkPgType};`;
+
+        return `
+------------------------------------------------------------
+----- CREATE FUNCTION FOR ${entity.BaseTable} (JSON-arg shape)
+------------------------------------------------------------
+${this.generateDropAllOverloadsBlock(entity.SchemaName, fnName)}
+CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(p_data JSONB)
+RETURNS SETOF ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}
+AS $$
+DECLARE
+    v_id ${pkPgType};
+    v_field_name TEXT;
+    v_cast_expr  TEXT;
+    v_col_list   TEXT;
+    v_val_list   TEXT;
+    v_sql        TEXT;
+BEGIN
+${idResolveBody}
+
+    v_col_list := quote_ident('${firstKey.Name.replace(/'/g, "''")}');
+    v_val_list := quote_literal(v_id) || '::${pkPgType}';
+
+    -- Build column / value lists from keys present in p_data. Absent keys are
+    -- omitted entirely so the column's DEFAULT applies (matching the typed-arg
+    -- sproc's default-substitution semantics).
+    FOREACH v_field_name IN ARRAY ARRAY[${fieldNamesArrayLiteral}]
+    LOOP
+        IF p_data ? v_field_name THEN
+            v_cast_expr := CASE v_field_name
+${fieldCastEntries}
+            END;
+            v_col_list := v_col_list || ', ' || quote_ident(v_field_name);
+            v_val_list := v_val_list || ', ' || v_cast_expr;
+        END IF;
+    END LOOP;
+
+    v_sql := format(
+        'INSERT INTO ${pgDialect.QuoteSchema(entity.SchemaName, entity.BaseTable).replace(/'/g, "''")} (%s) VALUES (%s)',
+        v_col_list,
+        v_val_list
+    );
+    -- USING p_data binds the cast expressions' \`$1\` placeholders to the
+    -- function's p_data argument. Without USING, dynamic SQL has no access to
+    -- the enclosing function's locals and the \`$1->>\` references would fail
+    -- with \`column "p_data" does not exist\`.
+    EXECUTE v_sql USING p_data;
+
+    RETURN QUERY
+    SELECT * FROM ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}
+    WHERE ${pkColQuoted} = v_id;
+END;
+$$ LANGUAGE plpgsql;
+${permissions}
+`;
+    }
+
+    /**
      * Generates a PostgreSQL `CREATE OR REPLACE FUNCTION` for inserting a new record.
      * The function accepts typed parameters for each writable field, performs an `INSERT`
      * into the base table, and returns the newly created row from the base view via
@@ -355,8 +609,17 @@ $do$;
      *
      * Prepends a DROP-all-overloads block (see `generateDropAllOverloadsBlock`) so
      * adding/removing a column doesn't trigger PG's overload-ambiguity error.
+     *
+     * Wide entities (where `useJsonArgShape` returns true) emit a JSON-arg variant
+     * via `generateCRUDCreateJsonArg` — single `p_data JSONB` parameter, dynamic
+     * INSERT built from keys present in the payload. Same semantics; different
+     * wire shape needed because of PostgreSQL's 100-arg function ceiling.
      */
     generateCRUDCreate(entity: EntityInfo): string {
+        if (this.shouldUseJsonArgShape(entity, 'create')) {
+            return this.generateCRUDCreateJsonArg(entity);
+        }
+
         const fnName = this.getCRUDRoutineName(entity, CRUDType.Create);
         const viewName = this.getBaseViewName(entity);
         const paramString = this.generateCRUDParamString(entity.Fields, false);
@@ -418,6 +681,10 @@ ${permissions}
      * and emits `GRANT EXECUTE` permissions.
      */
     generateCRUDUpdate(entity: EntityInfo): string {
+        if (this.shouldUseJsonArgShape(entity, 'update')) {
+            return this.generateCRUDUpdateJsonArg(entity);
+        }
+
         const fnName = this.getCRUDRoutineName(entity, CRUDType.Update);
         const viewName = this.getBaseViewName(entity);
         const paramString = this.generateCRUDParamString(entity.Fields, true);
@@ -949,37 +1216,34 @@ END $$;
     // ─── UTILITY ─────────────────────────────────────────────────────────
 
     /**
-     * Maps a SQL default value expression to its PostgreSQL equivalent. Translates
-     * Override of `needsClearCompanion` to use the narrow rule on PostgreSQL:
-     * only nullable fields with a non-NULL DB default get a `_Clear` companion.
+     * Renders a column DEFAULT expression for embedding in a generated SQL
+     * statement. Handles three cases:
      *
-     * The base class was broadened in commit 34d86261d5 (PR #2533) to emit
-     * `_Clear` for ALL nullable columns. That broadening is necessary for
-     * tolerant-SP semantics (so callers can persist explicit NULL on fields
-     * that COALESCE-merge would otherwise preserve), but it doubles the param
-     * count of CRUD SPs. PostgreSQL has a hard 100-argument limit per function
-     * (`functions cannot have more than 100 arguments`), and entities with
-     * 80+ nullable columns (AIPromptRun, AIAgent, AIPrompt) exceed it.
+     * 1. **SS-style function defaults** — `NEWID()` → `gen_random_uuid()`,
+     *    `GETUTCDATE()` → `NOW() AT TIME ZONE 'UTC'`, etc. Mapped via the
+     *    `functionMap` table.
      *
-     * Narrowing here for PG keeps wide tables under the limit. The trade-off:
-     * on PG, fields with a NULL default (or no default) cannot be cleared
-     * via `BaseEntity.Save()` — they fall back to the COALESCE merge, which
-     * keeps the existing value. Concrete impact: `ScheduledJob` lock cleanup
-     * on PG should use a direct UPDATE rather than relying on the `_Clear`
-     * mechanism. Mirrored at runtime in `PostgreSQLDataProvider.buildCRUDParams`
-     * to keep the call site aligned with the SP signature.
-     */
-    protected override needsClearCompanion(ef: EntityFieldInfo): boolean {
-        if (!ef.AllowsNull || !ef.HasDefaultValue) return false;
-        const formattedDefault = this.formatDefaultValue(ef.DefaultValue, ef.NeedsQuotes);
-        return !this.Dialect.IsNullLiteral(formattedDefault);
-    }
-
-    /**
-     * SQL Server built-in functions (e.g., `NEWID()` to `gen_random_uuid()`,
-     * `GETUTCDATE()` to `NOW() AT TIME ZONE 'UTC'`), strips outer parentheses and
-     * surrounding single quotes, and re-applies quoting based on the {@link needsQuotes}
-     * flag. Returns `'NULL'` for empty or whitespace-only input.
+     * 2. **PG typed-literal defaults** — values like `'Pending'::character
+     *    varying`, `'-1'::integer`, `'F51358F3-...'::uuid`, `'{}'::jsonb`
+     *    that PG returns from `information_schema.columns.column_default`.
+     *    These are already fully-formed PG expressions; pass through
+     *    verbatim. PG handles them natively in every context this method's
+     *    output appears (INSERT VALUES, COALESCE inside INSERT/UPDATE,
+     *    CASE-WHEN inside the clear-companion pattern).
+     *
+     *    The type name after `::` may be a single identifier OR multiple
+     *    words separated by spaces (`character varying`, `double precision`,
+     *    `time with time zone`, etc.). Without correctly matching multi-word
+     *    types, stripping the outer quotes and re-wrapping would produce
+     *    `'''Pending''::character varying'` — a string literal whose value
+     *    contains the cast syntax — and INSERTs would fail with "value too
+     *    long for type character varying(N)".
+     *
+     * 3. **Plain string defaults** — strip outer parens / quotes, then
+     *    optionally re-apply single-quote wrap (with `'` → `''` escaping)
+     *    based on the `needsQuotes` flag.
+     *
+     * Returns `'NULL'` for empty or whitespace-only input.
      */
     formatDefaultValue(defaultValue: string, needsQuotes: boolean): string {
         if (!defaultValue || defaultValue.trim().length === 0) return 'NULL';
@@ -1014,14 +1278,34 @@ END $$;
             trimmedValue = trimmedValue.substring(1, trimmedValue.length - 1);
         }
 
-        // PG default values can come back as typed literals like
-        // `'Pending'::character varying` or `'Active'::text`. The cast
-        // suffix means the value is already a fully-formed PG expression —
-        // stripping the leading-and-trailing quotes (line 14721 bug:
-        // `'Pending'::character varying` → cleanValue = `Pending'::character varying`
-        // → re-wrap → `'Pending'::character varying'` which is invalid SQL)
-        // is wrong here. Detect this shape and pass through verbatim.
-        if (/^'.*'::\w+(\s*\(\s*\d+\s*\))?(\s*\[\s*\])?$/.test(trimmedValue)) {
+        // PG returns typed-literal defaults from
+        // `information_schema.columns.column_default`, e.g.
+        // `'Pending'::character varying` or `'-1'::integer` or
+        // `'{}'::jsonb`. These are already fully-formed PG expressions and
+        // pass through verbatim — PG handles them natively in every context
+        // this method's output appears (INSERT VALUES, COALESCE inside
+        // INSERT/UPDATE, CASE-WHEN inside the clear-companion pattern).
+        // Empirically verified in PG 17 against `character varying`,
+        // `integer`, `uuid`, `bigint`, `double precision`, `boolean`, and
+        // `timestamp with time zone`.
+        //
+        // Stripping the leading-and-trailing quotes here is wrong: the value
+        // re-wrap downstream would produce `'''Pending''::character
+        // varying'` — a string literal whose content is the cast syntax —
+        // and INSERTs would fail with "value too long for type character
+        // varying(N)" because the literal is longer than the column.
+        //
+        // The type name after `::` may be a single identifier (`text`,
+        // `uuid`, `integer`) OR multiple words separated by spaces
+        // (`character varying`, `double precision`, `time with time zone`,
+        // `timestamp without time zone`, `bit varying`), optionally followed
+        // by a length parameter `(N)` and/or array suffix `[]`. The
+        // `\w+(?:\s+\w+)*` portion captures both single-word and multi-word
+        // type names. The original regex matched only single-identifier
+        // types and silently fell through to the broken re-wrap path for
+        // multi-word names — this fix extends the match without changing
+        // behavior for the cases the original regex already caught.
+        if (/^'.*'::\w+(?:\s+\w+)*(\s*\(\s*\d+\s*\))?(\s*\[\s*\])?$/.test(trimmedValue)) {
             return trimmedValue;
         }
 

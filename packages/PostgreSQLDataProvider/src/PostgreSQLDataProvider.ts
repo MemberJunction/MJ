@@ -32,6 +32,23 @@ import { PostgreSQLTransactionGroup } from './PostgreSQLTransactionGroup.js';
 const pgDialect = new PostgreSQLDialect();
 
 /**
+ * Soft ceiling on PostgreSQL CRUD sproc parameter counts. PG's hard
+ * `FUNC_MAX_ARGS` is 100 (compiled into the server, not adjustable on managed
+ * services). 90 leaves 10 args of headroom so adding a column to an entity
+ * near the limit doesn't unexpectedly flip its sproc shape between releases.
+ *
+ * Single source of truth for both runtime (`PostgreSQLDataProvider.ProcedureParamLimit`)
+ * and CodeGen (which doesn't have a live provider instance to query at codegen
+ * time). Bumping this value should regenerate sprocs for any entity newly
+ * crossing the threshold.
+ *
+ * Lives in the PG provider package because it's a PG-specific platform
+ * constant; consumers in other packages (CodeGenLib's PG provider, the rules
+ * module via callers passing it as a `paramLimit` arg) import it from here.
+ */
+export const POSTGRESQL_PROCEDURE_PARAM_LIMIT = 90;
+
+/**
  * PostgreSQL data provider for MemberJunction.
  *
  * Implements the full DatabaseProviderBase interface using the `pg` driver.
@@ -60,6 +77,22 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
 
     override get PlatformKey(): DatabasePlatform {
         return 'postgresql';
+    }
+
+    /**
+     * PostgreSQL's `FUNC_MAX_ARGS` is 100 (compiled into the server, not configurable on managed
+     * services like RDS/Aurora/Cloud SQL). When a CRUD sproc would exceed this, CodeGen emits a
+     * JSON-arg shape instead of typed args.
+     *
+     * The actual value lives as the exported `POSTGRESQL_PROCEDURE_PARAM_LIMIT` constant at the
+     * top of this file, so runtime and codegen-time both reference one number — drift between
+     * them silently breaks CRUD calls.
+     *
+     * See [plans/json-arg-crud-sprocs.md](../../../../plans/json-arg-crud-sprocs.md) and
+     * GitHub issue #2552.
+     */
+    public override get ProcedureParamLimit(): number {
+        return POSTGRESQL_PROCEDURE_PARAM_LIMIT;
     }
 
     /**************************************************************************/
@@ -872,23 +905,6 @@ SELECT * FROM delete_result`;
             .replace(/__+/g, '_');
     }
 
-    /**
-     * PG-specific narrow rule for whether to send a `_Clear` companion param
-     * on save. Mirrors `PostgreSQLCodeGenProvider.needsClearCompanion`: a
-     * `_Clear` is emitted iff the column is nullable AND has a non-NULL DB
-     * default. PG has a hard 100-argument limit per function, so we cannot
-     * use the broader `EntityFieldInfo.NeedsClearCompanion` rule here without
-     * busting that ceiling on wide tables. Both ends (codegen-emit + runtime-
-     * call) must agree on the same predicate or callers will pass `_Clear`
-     * params the SP doesn't accept (or vice versa).
-     */
-    private pgNeedsClearCompanion(field: EntityFieldInfo): boolean {
-        if (!field.AllowsNull || !field.HasDefaultValue) return false;
-        const dv = (field.DefaultValue ?? '').toString().trim();
-        if (dv.length === 0) return false;
-        return dv.toUpperCase() !== 'NULL';
-    }
-
     private quoteFieldNamesInToken(token: string, fieldNames: Set<string>): string {
         for (const fieldName of fieldNames) {
             // Negative lookahead: don't quote words followed by ( — those are function calls
@@ -976,6 +992,13 @@ SELECT * FROM delete_result`;
         // Encrypt field values using the generic method from GenericDatabaseProvider
         await this.EncryptFieldValuesForSave(entity, fieldValueMap, contextUser);
 
+        // Wide entities use the JSON-arg sproc shape — single JSONB payload
+        // instead of N typed args. Codegen emits the matching shape; the same
+        // `useJsonArgShape` predicate gates both sides.
+        if (this.UseJsonArgShape(entityInfo, isNew ? 'create' : 'update')) {
+            return this.buildJsonArgCRUDParams(fieldValueMap);
+        }
+
         // Build parameterized query components from (possibly encrypted) values
         const paramValues: unknown[] = [];
         const placeholders: string[] = [];
@@ -995,22 +1018,11 @@ SELECT * FROM delete_result`;
             paramIndex++;
 
             // Pillar 1 (tolerant SPs): when caller intentionally sets a
-            // nullable column with a non-NULL DB default to NULL, signal the
-            // SP's `_Clear` companion. Otherwise the SP body's COALESCE merge
-            // (update) or default-substitution (create) silently keeps the
-            // existing value or applies the default — a literal NULL could
-            // never be persisted.
-            //
-            // PG-specific narrow rule (deviates from EntityFieldInfo.NeedsClearCompanion):
-            // PG has a hard 100-argument limit per function. The broadened
-            // `_Clear`-for-all-nullable-columns rule from PR #2533 doubles the
-            // param count of CRUD SPs; entities with 80+ nullable columns
-            // (AIPromptRun: 165, AIAgent: 123, AIPrompt: 103) overshoot the
-            // limit. Use the original narrow rule here (only fields with a
-            // non-NULL DB default) so the SP signatures stay under 100 params.
-            // Mirrored in PostgreSQLCodeGenProvider.needsClearCompanion to keep
-            // the runtime call site aligned with the codegen-emitted signature.
-            if ((value === null || value === undefined) && this.pgNeedsClearCompanion(field)) {
+            // nullable column to NULL, signal the SP's `_Clear` companion so
+            // the body knows to persist the literal NULL rather than letting
+            // COALESCE preserve the existing value (update) or substitute the
+            // default (create).
+            if ((value === null || value === undefined) && field.NeedsClearCompanion) {
                 const clearParamName = pgDialect.ParameterRef(field.CodeName + '_Clear');
                 paramValues.push(true);
                 placeholders.push(`${clearParamName} => $${paramIndex + 1}`);
@@ -1019,6 +1031,54 @@ SELECT * FROM delete_result`;
         }
 
         return { paramValues, paramPlaceholders: placeholders.join(', ') };
+    }
+
+    /**
+     * Builds the JSON-arg CRUD payload for wide entities. Returns a single
+     * positional `$1::jsonb` placeholder backed by a JSON-stringified payload
+     * keyed by entity field names. Mirrors the typed-arg path's lossless
+     * "include every writable field" behavior — key-presence semantics on
+     * the JSONB sproc body interpret missing keys as "leave unchanged" and
+     * key-with-null as "clear", so an explicit null in the payload doubles as
+     * the `_Clear` signal without needing a companion arg.
+     *
+     * Binary fields (BYTEA / varbinary) are base64-encoded inline; the codegen-
+     * emitted sproc body decodes via `decode(p_data->>'Field', 'base64')`.
+     * Date/timestamp values serialize via JSON `Date.toISOString()` and the
+     * sproc casts back to TIMESTAMPTZ.
+     */
+    private buildJsonArgCRUDParams(
+        fieldValueMap: Map<EntityFieldInfo, unknown>
+    ): { paramValues: unknown[]; paramPlaceholders: string } {
+        const payload: Record<string, unknown> = {};
+        for (const [field, value] of fieldValueMap) {
+            const processed = PGQueryParameterProcessor.ProcessParameterValue(value);
+            // Binary columns serialize as base64 strings (no native JSON binary).
+            // The codegen-emitted sproc body decodes via `decode(..., 'base64')`.
+            if (this.isBinaryField(field) && processed !== null && processed !== undefined) {
+                payload[field.Name] = this.encodeBinaryToBase64(processed);
+            } else {
+                payload[field.Name] = processed;
+            }
+        }
+        return {
+            paramValues: [JSON.stringify(payload)],
+            paramPlaceholders: 'p_data => $1::jsonb',
+        };
+    }
+
+    private isBinaryField(field: EntityFieldInfo): boolean {
+        const t = (field.Type || '').toLowerCase().trim();
+        return t === 'bytea' || t.startsWith('varbinary') || t.startsWith('image');
+    }
+
+    private encodeBinaryToBase64(value: unknown): string {
+        if (value instanceof Uint8Array) return Buffer.from(value).toString('base64');
+        if (Buffer.isBuffer(value)) return value.toString('base64');
+        if (typeof value === 'string') return value; // already encoded
+        // Fallback — coerce via Buffer.from; throws on incompatible types,
+        // surfacing the encoding failure at save time rather than silent corruption.
+        return Buffer.from(value as ArrayBufferLike).toString('base64');
     }
 
     /**
