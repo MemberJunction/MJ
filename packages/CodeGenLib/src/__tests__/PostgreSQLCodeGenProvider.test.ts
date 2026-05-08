@@ -347,6 +347,18 @@ describe('PostgreSQLCodeGenProvider', () => {
             expect(sql).not.toMatch(/p_optionalcol\d+\s+(integer|timestamp|boolean|nvarchar|text)/i);
         });
 
+        it('JSON-arg sproc header: RETURNS and AS $$ on separate lines', () => {
+            // Matches the existing migration-file convention (multi-line declaration).
+            // pg_get_functiondef and the rest of MJ's PG migrations all emit RETURNS
+            // on its own line followed by AS $$ on the next; keeping the codegen
+            // template aligned makes diffs against re-extracted sprocs trivially clean.
+            const entity = createWideEntity();
+            expect(provider.generateCRUDUpdate(entity)).toMatch(/RETURNS SETOF [^\n]+\nAS \$\$/);
+            expect(provider.generateCRUDUpdate(entity)).not.toMatch(/RETURNS SETOF [^\n]+ AS \$\$/);
+            expect(provider.generateCRUDCreate(entity)).toMatch(/RETURNS SETOF [^\n]+\nAS \$\$/);
+            expect(provider.generateCRUDCreate(entity)).not.toMatch(/RETURNS SETOF [^\n]+ AS \$\$/);
+        });
+
         it('UPDATE wide entity body uses CASE WHEN p_data ? for each writable column', () => {
             const entity = createWideEntity();
             const sql = provider.generateCRUDUpdate(entity);
