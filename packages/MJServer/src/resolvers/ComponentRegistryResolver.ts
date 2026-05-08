@@ -1,5 +1,5 @@
 import { Arg, Ctx, Field, InputType, ObjectType, Query, Mutation, Resolver } from 'type-graphql';
-import { UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { UserInfo, LogError, LogStatus, LocalCacheManager } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { MJComponentRegistryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
@@ -168,13 +168,31 @@ class ComponentFeedbackResponse {
 @Resolver()
 export class ComponentRegistryExtendedResolver {
     private componentEngine = ComponentMetadataEngine.Instance;
-    
+
+    /** TTL for server-side component spec cache (1 hour). Registry components are
+     *  immutable — only new versions are created with changes. The cache key includes
+     *  the version, so explicit versions are effectively permanent within this TTL.
+     *  The TTL primarily governs how often "latest" version pointers are re-resolved. */
+    private static readonly COMPONENT_CACHE_TTL_MS = 60 * 60 * 1000;
+
     constructor() {
         // No longer pre-initialize clients - create on demand
     }
-    
+
     /**
-     * Get a component from a registry with optional hash for caching
+     * Build a deterministic cache key for a registry component.
+     */
+    private getComponentCacheKey(registryName: string, namespace: string, name: string, version: string): string {
+        return `RegistryComponent|${registryName}|${namespace}|${name}|${version}`;
+    }
+
+    /**
+     * Get a component from a registry with optional hash for caching.
+     *
+     * Caching strategy (three tiers):
+     * 1. Client sends hash from a previous fetch → server can return 304 if unchanged
+     * 2. Server checks LocalCacheManager for a cached spec from a recent fetch
+     * 3. On miss, fetches from the external registry, caches the result, and returns it
      */
     @Query(() => ComponentSpecWithHashType)
     async GetRegistryComponent(
@@ -189,35 +207,65 @@ export class ComponentRegistryExtendedResolver {
             // Get user from cache
             const user = UserCache.Instance.Users.find((u) => u.Email.trim().toLowerCase() === userPayload.email?.trim().toLowerCase());
             if (!user) throw new Error(`User ${userPayload.email} not found in UserCache`);
-            
+
             // Get registry from database by name
             const registry = await this.getRegistryByName(registryName, user);
             if (!registry) {
                 throw new Error(`Registry not found: ${registryName}`);
             }
-            
+
             // Check user permissions (use registry ID for permission check)
             await this.checkUserAccess(user, registry.ID);
-            
+
             // Initialize component engine
             await this.componentEngine.Config(false, user);
-            
-            // Create client on-demand for this registry
+
+            const resolvedVersion = version || 'latest';
+            const cacheKey = this.getComponentCacheKey(registry.Name, namespace, name, resolvedVersion);
+
+            // --- Tier 1: Check server-side cache ---
+            const cached = await LocalCacheManager.Instance.GetCachedValue<{
+                specJson: string;
+                hash: string;
+            }>(cacheKey);
+
+            if (cached) {
+                // If client sent a hash and it matches, return 304
+                if (hash && hash === cached.hash) {
+                    LogStatus(`Component ${namespace}/${name} not modified (server cache hit, hash match)`);
+                    return {
+                        specification: undefined,
+                        hash: cached.hash,
+                        notModified: true,
+                        message: 'Not modified'
+                    };
+                }
+
+                // Client has no hash or a different hash — return cached spec
+                LogStatus(`Component ${namespace}/${name} served from server cache`);
+                return {
+                    specification: cached.specJson,
+                    hash: cached.hash,
+                    notModified: false,
+                    message: undefined
+                };
+            }
+
+            // --- Tier 2: Fetch from external registry ---
             const registryClient = this.createClientForRegistry(registry);
-            
-            // Fetch component from registry with hash support
+
             const response = await registryClient.getComponentWithHash({
                 registry: registry.Name,
                 namespace,
                 name,
-                version: version || 'latest',
+                version: resolvedVersion,
                 hash: hash,
                 userEmail: user.Email
             });
-            
-            // If not modified (304), return response with notModified flag
+
+            // If not modified (304 from registry), return to client
             if (response.notModified) {
-                LogStatus(`Component ${namespace}/${name} not modified (hash: ${response.hash})`);
+                LogStatus(`Component ${namespace}/${name} not modified (registry 304)`);
                 return {
                     specification: undefined,
                     hash: response.hash,
@@ -225,16 +273,25 @@ export class ComponentRegistryExtendedResolver {
                     message: response.message || 'Not modified'
                 };
             }
-            
+
             // Extract the specification from the response
             const component = response.specification;
             if (!component) {
                 throw new Error(`Component ${namespace}/${name} returned without specification`);
             }
-            
-            // Return the ComponentSpec as a JSON string
+
+            const specJson = JSON.stringify(component);
+
+            // --- Cache the result for subsequent requests ---
+            LocalCacheManager.Instance.SetCachedValue(
+                cacheKey,
+                { specJson, hash: response.hash },
+                ComponentRegistryExtendedResolver.COMPONENT_CACHE_TTL_MS,
+                `${namespace}/${name}@${resolvedVersion}`
+            ).catch(e => LogError(`Failed to cache component spec: ${e}`));
+
             return {
-                specification: JSON.stringify(component),
+                specification: specJson,
                 hash: response.hash,
                 notModified: false,
                 message: undefined

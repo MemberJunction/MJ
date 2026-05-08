@@ -18,7 +18,7 @@ function LogStatusVerbose(message: string): void {
 /**
  * The type of cache entry: dataset, runview, or runquery
  */
-export type CacheEntryType = 'dataset' | 'runview' | 'runquery';
+export type CacheEntryType = 'dataset' | 'runview' | 'runquery' | 'generic';
 
 /**
  * Information about a cached entry, used for the registry and dashboard display
@@ -232,6 +232,8 @@ export const CacheCategory = {
     DatasetCache: 'DatasetCache',
     /** Cache for metadata */
     Metadata: 'Metadata',
+    /** Cache for generic key-value data (external API responses, etc.) */
+    GenericCache: 'GenericCache',
     /** Default category for uncategorized data */
     Default: 'default'
 } as const;
@@ -1851,6 +1853,103 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     }
 
     // ========================================================================
+    // GENERIC KEY-VALUE CACHE
+    // ========================================================================
+
+    /**
+     * Stores an arbitrary value in the cache with a required TTL.
+     * Use this for caching external API responses, computed results, or any
+     * data that doesn't fit the RunView/RunQuery/Dataset patterns.
+     *
+     * @param key - A unique cache key (e.g. "RegistryComponent|Skip|ns|name|1.0.0")
+     * @param value - The value to cache (must be serializable by the storage provider)
+     * @param ttlMs - Time-to-live in milliseconds (required — generic data has no
+     *                BaseEntity events to trigger invalidation, so TTL is the only
+     *                freshness mechanism)
+     * @param name - Optional human-readable name for dashboard display
+     */
+    public async SetCachedValue<T>(key: string, value: T, ttlMs: number, name?: string): Promise<void> {
+        if (!this._storageProvider || !this._config.enabled) return;
+
+        const sizeBytes = this.estimateSize(JSON.stringify(value));
+        await this.evictIfNeeded(sizeBytes);
+
+        const now = Date.now();
+
+        try {
+            await this._storageProvider.SetItem<T>(key, value, CacheCategory.GenericCache);
+
+            this.registerEntry({
+                key,
+                type: 'generic',
+                name: name || key,
+                fingerprint: key,
+                cachedAt: now,
+                lastAccessedAt: now,
+                accessCount: 1,
+                sizeBytes,
+                expiresAt: now + ttlMs
+            });
+
+            LogStatusVerbose(`LocalCacheManager.SetCachedValue: Cached "${key.substring(0, 60)}" (${sizeBytes} bytes, TTL ${ttlMs}ms)`);
+        } catch (e) {
+            LogError(`LocalCacheManager.SetCachedValue failed: ${e}`);
+        }
+    }
+
+    /**
+     * Retrieves a cached value by key. Returns null if not found or expired.
+     *
+     * @param key - The cache key used in SetCachedValue
+     * @returns The cached value, or null if missing/expired
+     */
+    public async GetCachedValue<T>(key: string): Promise<T | null> {
+        if (!this._storageProvider || !this._config.enabled) {
+            LogStatusEx({ message: `LocalCacheManager.GetCachedValue: early return for "${key}" — provider=${!!this._storageProvider}, enabled=${this._config.enabled}` });
+            return null;
+        }
+
+        // Check if entry has expired
+        const entry = this._registry.get(key);
+        if (entry?.expiresAt && Date.now() > entry.expiresAt) {
+            await this.InvalidateCachedValue(key);
+            this._stats.misses++;
+            return null;
+        }
+
+        try {
+            const value = await this._storageProvider.GetItem<T>(key, CacheCategory.GenericCache);
+            if (value !== null && value !== undefined) {
+                this.recordAccess(key);
+                this._stats.hits++;
+                return value;
+            }
+            LogStatusVerbose(`LocalCacheManager.GetCachedValue: storage returned null for "${key}"`);
+        } catch (e) {
+            LogError(`LocalCacheManager.GetCachedValue failed: ${e}`);
+        }
+
+        this._stats.misses++;
+        return null;
+    }
+
+    /**
+     * Invalidates a cached value by key.
+     *
+     * @param key - The cache key to invalidate
+     */
+    public async InvalidateCachedValue(key: string): Promise<void> {
+        if (!this._storageProvider) return;
+
+        try {
+            await this._storageProvider.Remove(key, CacheCategory.GenericCache);
+            this.unregisterEntry(key);
+        } catch (e) {
+            LogError(`LocalCacheManager.InvalidateCachedValue failed: ${e}`);
+        }
+    }
+
+    // ========================================================================
     // REGISTRY QUERIES (FOR DASHBOARD)
     // ========================================================================
 
@@ -1878,7 +1977,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const byType: Record<CacheEntryType, { count: number; sizeBytes: number }> = {
             dataset: { count: 0, sizeBytes: 0 },
             runview: { count: 0, sizeBytes: 0 },
-            runquery: { count: 0, sizeBytes: 0 }
+            runquery: { count: 0, sizeBytes: 0 },
+            generic: { count: 0, sizeBytes: 0 }
         };
 
         for (const entry of entries) {
@@ -1987,6 +2087,8 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
                 return CacheCategory.RunQueryCache;
             case 'dataset':
                 return CacheCategory.DatasetCache;
+            case 'generic':
+                return CacheCategory.GenericCache;
             default:
                 return CacheCategory.Default;
         }
@@ -2145,7 +2247,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         }
 
         if (toDelete.length > 0) {
-            LogStatusEx({ message: `    🗑️ [Cache EVICT] Evicting ${toDelete.length} entries to free ${freedBytes} bytes: ${toDelete.map(k => `"${k}"`).join(', ')}`, verboseOnly: true });
+            LogStatusVerbose(`[Cache EVICT] Evicting ${toDelete.length} entries to free ${freedBytes} bytes`);
         }
 
         for (const key of toDelete) {
@@ -2286,9 +2388,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         }
 
         if (toDelete.length > 0) {
-            if (this._config.verboseLogging) {
-                LogStatusEx({ message: `    🗑️ [Cache SWEEP] Evicting ${toDelete.length} TTL-expired entries`, verboseOnly: true });
-            }
+            LogStatusEx({ message: `[Cache SWEEP] Evicting ${toDelete.length} TTL-expired entries: ${toDelete.slice(0, 5).join(', ')}${toDelete.length > 5 ? '...' : ''}` });
 
             for (const key of toDelete) {
                 try {
