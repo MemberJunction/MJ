@@ -12,10 +12,10 @@ import { configInfo } from '../../../Config/config';
 import { logError, logWarning } from '../../../Misc/status_logging';
 import { PostgreSQLDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
 import {
-    POSTGRESQL_PROCEDURE_PARAM_LIMIT,
     shouldIncludeFieldInParams,
     useJsonArgShape,
 } from '@memberjunction/generic-database-provider';
+import { POSTGRESQL_PROCEDURE_PARAM_LIMIT } from '@memberjunction/postgresql-dataprovider';
 import * as fs from 'fs';
 import path from 'path';
 import { executeWithFallback } from './viewFallback';
