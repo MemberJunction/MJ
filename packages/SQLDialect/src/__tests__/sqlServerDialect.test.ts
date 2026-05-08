@@ -346,4 +346,42 @@ describe('SQLServerDialect', () => {
             expect(dialect.IsNull('@MyParam', '[Status]')).toBe('ISNULL(@MyParam, [Status])');
         });
     });
+
+    describe('QuoteStringLiteral', () => {
+        it('wraps a value in single quotes', () => {
+            expect(dialect.QuoteStringLiteral('hello')).toBe("'hello'");
+        });
+
+        it("doubles internal apostrophes for SQL injection safety", () => {
+            expect(dialect.QuoteStringLiteral("O'Brien")).toBe("'O''Brien'");
+        });
+
+        it("handles values with multiple apostrophes", () => {
+            expect(dialect.QuoteStringLiteral("it's a 'test'")).toBe("'it''s a ''test'''");
+        });
+
+        it('returns just the quotes for empty input', () => {
+            expect(dialect.QuoteStringLiteral('')).toBe("''");
+        });
+    });
+
+    describe('QuoteColumnAlias', () => {
+        it('returns a bare identifier (SQL Server is case-insensitive)', () => {
+            expect(dialect.QuoteColumnAlias('EntityName')).toBe('EntityName');
+        });
+    });
+
+    describe('CastToBoundedString', () => {
+        it('emits CAST AS NVARCHAR(450) by default to match indexable RecordID width', () => {
+            expect(dialect.CastToBoundedString('src.[ID]')).toBe('CAST(src.[ID] AS NVARCHAR(450))');
+        });
+
+        it('honours an explicit maxLength', () => {
+            expect(dialect.CastToBoundedString('x', 100)).toBe('CAST(x AS NVARCHAR(100))');
+        });
+
+        it('falls back to NVARCHAR(MAX) above 4000 chars (matches resolveStringType)', () => {
+            expect(dialect.CastToBoundedString('x', 8000)).toBe('CAST(x AS NVARCHAR(MAX))');
+        });
+    });
 });

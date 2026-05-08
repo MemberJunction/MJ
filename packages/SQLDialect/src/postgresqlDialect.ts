@@ -168,6 +168,17 @@ export class PostgreSQLDialect extends SQLDialect {
         return `${schema}."${object}"`;
     }
 
+    /**
+     * PostgreSQL folds unquoted identifiers to lowercase, which would turn
+     * `AS EntityName` into the result column `entityname`. Quoting the
+     * alias preserves the requested casing for callers that key off the
+     * column name (e.g. when consuming results into a TypeScript object
+     * with a PascalCase property).
+     */
+    QuoteColumnAlias(aliasName: string): string {
+        return `"${aliasName}"`;
+    }
+
     // ─── Pagination ──────────────────────────────────────────────────
 
     LimitClause(limit: number, offset?: number): LimitClauseResult {
@@ -182,6 +193,10 @@ export class PostgreSQLDialect extends SQLDialect {
 
     BooleanLiteral(value: boolean): string {
         return value ? 'true' : 'false';
+    }
+
+    BooleanParameterType(): string {
+        return 'boolean';
     }
 
     /**
@@ -202,18 +217,18 @@ export class PostgreSQLDialect extends SQLDialect {
     }
 
     /**
-     * PostgreSQL function parameters use a `p_<snake_case_name>` convention
-     * (no `@`-prefix syntax in PG). The snake-case transform converts the
-     * canonical PascalCase identifier MJ uses everywhere into PG's preferred
-     * shape — e.g. `MyParam` → `p_my_param`.
+     * PostgreSQL function parameters use a `p_<flat lowercase>` convention
+     * (no `@`-prefix syntax in PG). This matches the baseline-ported SP names
+     * (which lowercased SQL Server's PascalCase parameter names without
+     * separators — e.g. `@CompanyID` → `p_companyid`) and the runtime
+     * PostgreSQLDataProvider, which calls procs with `p_${field.Name.toLowerCase()}`.
+     *
+     * Earlier this used a snake_case transform (`p_company_id`), which
+     * produced functions the runtime could never invoke. Underscores already
+     * in the input (e.g. the `_Clear` companion suffix) are preserved.
      */
     ParameterRef(name: string): string {
-        const snake = name
-            .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
-            .replace(/([A-Z]+)([A-Z][a-z])/g, '$1_$2')
-            .toLowerCase()
-            .replace(/__+/g, '_');
-        return `p_${snake}`;
+        return `p_${name.toLowerCase()}`;
     }
 
     /**
@@ -227,12 +242,55 @@ export class PostgreSQLDialect extends SQLDialect {
         return "(NOW() AT TIME ZONE 'UTC')";
     }
 
+    // ─── Type-Name Sets ──────────────────────────────────────────────
+    // PostgreSQL's column-type names as they appear in `pg_catalog` /
+    // `information_schema` / `EntityField.Type` for entities backed by PG.
+    // Includes both the formal name (`character varying`) and the internal
+    // / short alias (`varchar`, `bpchar`) since both surface depending on
+    // the metadata source.
+
+    private static readonly _BooleanTypeNames = ['bool', 'boolean'] as const;
+    private static readonly _StringTypeNames = ['text', 'varchar', 'char', 'character', 'character varying', 'bpchar', 'citext', 'name'] as const;
+    private static readonly _DateTypeNames = ['date', 'time', 'time without time zone', 'time with time zone', 'timestamp', 'timestamptz', 'timestamp with time zone', 'timestamp without time zone'] as const;
+    private static readonly _IntegerTypeNames = ['int', 'int2', 'int4', 'int8', 'integer', 'bigint', 'smallint', 'serial', 'bigserial', 'smallserial', 'oid'] as const;
+    private static readonly _FloatTypeNames = ['decimal', 'numeric', 'real', 'double precision', 'float4', 'float8'] as const;
+    private static readonly _UuidTypeNames = ['uuid'] as const;
+    private static readonly _BinaryTypeNames = ['bytea'] as const;
+    private static readonly _JsonTypeNames = ['json', 'jsonb', 'xml'] as const;
+    private static readonly _CurrencyTypeNames = ['money'] as const;
+    private static readonly _IntervalTypeNames = ['interval'] as const;
+    private static readonly _NetworkTypeNames = ['inet', 'cidr', 'macaddr', 'macaddr8'] as const;
+
+    get BooleanTypeNames(): readonly string[]  { return PostgreSQLDialect._BooleanTypeNames; }
+    get StringTypeNames(): readonly string[]   { return PostgreSQLDialect._StringTypeNames; }
+    get DateTypeNames(): readonly string[]     { return PostgreSQLDialect._DateTypeNames; }
+    get IntegerTypeNames(): readonly string[]  { return PostgreSQLDialect._IntegerTypeNames; }
+    get FloatTypeNames(): readonly string[]    { return PostgreSQLDialect._FloatTypeNames; }
+    get UuidTypeNames(): readonly string[]     { return PostgreSQLDialect._UuidTypeNames; }
+    get BinaryTypeNames(): readonly string[]   { return PostgreSQLDialect._BinaryTypeNames; }
+    get JsonTypeNames(): readonly string[]     { return PostgreSQLDialect._JsonTypeNames; }
+    get CurrencyTypeNames(): readonly string[] { return PostgreSQLDialect._CurrencyTypeNames; }
+    get IntervalTypeNames(): readonly string[] { return PostgreSQLDialect._IntervalTypeNames; }
+    get NetworkTypeNames(): readonly string[]  { return PostgreSQLDialect._NetworkTypeNames; }
+
     NewUUID(): string {
         return 'gen_random_uuid()';
     }
 
     CastToText(expr: string): string {
         return `CAST(${expr} AS TEXT)`;
+    }
+
+    /**
+     * PostgreSQL-specific Flyway escape. PostgreSQL string concatenation uses
+     * `||` (not `+`), and TEXT has no length cap — so a simple split with `||`
+     * suffices and no cast-to-MAX dance is needed (unlike SQL Server, which
+     * silently truncates `NVARCHAR(N) + NVARCHAR(M)` past 4,000 chars).
+     * PostgreSQL string literals don't take an `N` prefix either; everything
+     * is already Unicode.
+     */
+    EscapeFlywayStringInterpolation(sql: string): string {
+        return sql.replaceAll(/\$\{/g, "$$'||'{");
     }
 
     CastToUUID(expr: string): string {

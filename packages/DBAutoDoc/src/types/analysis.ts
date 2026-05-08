@@ -62,6 +62,22 @@ export interface TableAnalysisContext {
   groundTruth?: TableGroundTruthContext;
   /** Cross-table FK candidate stats from discovery phase — helps LLM make better FK decisions */
   fkCandidateStats?: Array<{ sourceColumn: string; targetSchema: string; targetTable: string; targetColumn: string; valueOverlap: number; cardinalityRatio: number; confidence: number }>;
+  /** Enum candidate evidence per column — columns that passed the deterministic pre-filter */
+  enumCandidates?: EnumCandidateContext[];
+}
+
+/**
+ * Pre-filter result for a single column identified as a potential enum.
+ * Injected into the table-analysis prompt so the LLM can make a verdict.
+ */
+export interface EnumCandidateContext {
+  columnName: string;
+  values: string[];
+  distinctCount: number;
+  totalRows: number;
+  cardinalityRatio: number;
+  dataType: string;
+  maxLength?: number;
 }
 
 export interface TableGroundTruthContext {
@@ -92,5 +108,19 @@ export interface AnalysisResult {
 export interface ColumnDescriptionResult {
   columnName: string;
   description: string;
+  reasoning: string;
+  /** Optional enum/value-list verdict from LLM analysis */
+  valueList?: ValueListResult;
+}
+
+/**
+ * LLM's assessment of whether a column is an enum/value-list.
+ * Returned as part of the table-analysis prompt response.
+ */
+export interface ValueListResult {
+  isEnum: boolean;
+  type: 'List' | 'ListOrUserEntry';
+  confidence: number;
+  values: string[];
   reasoning: string;
 }

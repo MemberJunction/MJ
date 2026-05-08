@@ -1,0 +1,411 @@
+<div class="mj-inspector mj-inspector--solo">
+    <div class="mj-inspector__header">
+        <div class="mj-inspector__header-icon"><i class="fa-solid fa-code"></i></div>
+        <div>
+            <h3 class="mj-inspector__header-title">GraphQL Console</h3>
+            <div class="mj-inspector__header-sub">
+                @if (ApiUrl) {
+                    Connected to <code class="gc-endpoint">{{ ApiUrl }}</code>
+                } @else {
+                    Run queries against the connected MJ API
+                }
+            </div>
+        </div>
+        <span class="mj-inspector__header-spacer"></span>
+        <div class="mj-inspector__header-actions">
+            <button class="mj-inspector__btn"
+                    [class.gc-toggle--active]="ShowHistory"
+                    type="button" (click)="ToggleHistoryPanel()"
+                    title="Toggle history sidebar">
+                <i class="fa-solid fa-clock-rotate-left"></i> History
+            </button>
+            <button class="mj-inspector__btn" type="button" (click)="OnCopyAsCurl()" title="Copy as cURL command">
+                <i class="fa-solid fa-terminal"></i> Copy cURL
+            </button>
+        </div>
+    </div>
+
+    <div class="gc-body">
+        @if (ShowHistory) {
+            <aside class="gc-sidebar" [style.width.px]="SidebarWidthPx">
+                <div class="gc-sidebar-tabs">
+                    <button type="button"
+                            class="gc-sidebar-tab"
+                            [class.gc-sidebar-tab--active]="SidebarTab === 'history'"
+                            (click)="OnSidebarTabChange('history')">
+                        <i class="fa-solid fa-clock-rotate-left"></i> History
+                    </button>
+                    <button type="button"
+                            class="gc-sidebar-tab"
+                            [class.gc-sidebar-tab--active]="SidebarTab === 'entities'"
+                            (click)="OnSidebarTabChange('entities')">
+                        <i class="fa-solid fa-table-list"></i> Entities
+                    </button>
+                    <button type="button"
+                            class="gc-sidebar-tab"
+                            [class.gc-sidebar-tab--active]="SidebarTab === 'schema'"
+                            (click)="OnSidebarTabChange('schema')">
+                        <i class="fa-solid fa-sitemap"></i> Schema
+                    </button>
+                </div>
+
+                @if (SidebarTab === 'history') {
+                <div class="gc-history-head">
+                    <span>{{ History.length }} {{ History.length === 1 ? 'entry' : 'entries' }}</span>
+                    <button class="gc-history-clear"
+                            type="button"
+                            (click)="OnClearHistory()"
+                            title="Clear non-favorite history">
+                        <i class="fa-solid fa-broom"></i>
+                    </button>
+                </div>
+                @if (History.length === 0) {
+                    <div class="gc-history-empty">
+                        <i class="fa-regular fa-circle-question"></i>
+                        Run a query to see it here. Star <i class="fa-solid fa-star"></i> to keep it.
+                    </div>
+                } @else {
+                    <div class="gc-history-list">
+                        @for (h of History; track TrackByHistory($index, h)) {
+                            <button type="button"
+                                    class="gc-history-item"
+                                    [class.gc-history-item--error]="h.status === 'error'"
+                                    [class.gc-history-item--fav]="h.favorite"
+                                    (click)="OnRestoreHistory(h)">
+                                <div class="gc-history-item-head">
+                                    <i class="gc-history-status"
+                                       [class.fa-solid]="true"
+                                       [class.fa-circle-check]="h.status === 'ok'"
+                                       [class.fa-circle-xmark]="h.status === 'error'"
+                                       [class.gc-status--ok]="h.status === 'ok'"
+                                       [class.gc-status--err]="h.status === 'error'"></i>
+                                    <span class="gc-history-label">{{ h.label || 'unnamed' }}</span>
+                                    <button class="gc-history-fav"
+                                            type="button"
+                                            (click)="OnToggleFavorite(h, $event)"
+                                            [title]="h.favorite ? 'Unfavorite' : 'Favorite'">
+                                        <i [class]="h.favorite ? 'fa-solid fa-star' : 'fa-regular fa-star'"></i>
+                                    </button>
+                                    <button class="gc-history-del"
+                                            type="button"
+                                            (click)="OnDeleteHistory(h, $event)"
+                                            title="Remove from history">
+                                        <i class="fa-solid fa-xmark"></i>
+                                    </button>
+                                </div>
+                                <div class="gc-history-meta">
+                                    <span>{{ h.timestamp | date:'HH:mm:ss' }}</span>
+                                    @if (h.durationMs != null) {
+                                        <span>·</span>
+                                        <span>{{ h.durationMs }}ms</span>
+                                    }
+                                </div>
+                            </button>
+                        }
+                    </div>
+                }
+                } @else if (SidebarTab === 'entities') {
+                    <div class="gc-ent-toolbar">
+                        <div class="gc-ent-search-wrap">
+                            <i class="fa-solid fa-search gc-ent-search-icon"></i>
+                            <input type="search"
+                                   class="gc-ent-search"
+                                   placeholder="Search entities…"
+                                   [(ngModel)]="EntitiesSearch" />
+                        </div>
+                        @if (KnownSchemas.length > 1) {
+                            <select class="gc-ent-schema" [(ngModel)]="EntitySchemaFilter">
+                                <option value="">All schemas ({{ KnownSchemas.length }})</option>
+                                @for (s of KnownSchemas; track s) {
+                                    <option [value]="s">{{ s }}</option>
+                                }
+                            </select>
+                        }
+                    </div>
+                    <div class="gc-ent-meta">
+                        <span>{{ FilteredEntities.length }} of {{ Entities.length }}</span>
+                        <span class="gc-ent-hint">Click an entity to see operations</span>
+                    </div>
+                    <div class="gc-ent-list">
+                        @for (item of FilteredEntities; track TrackByEntity($index, item)) {
+                            <div class="gc-ent-card" [class.gc-ent-card--expanded]="item.expanded">
+                                <button type="button"
+                                        class="gc-ent-row"
+                                        (click)="ToggleEntity(item)">
+                                    <i class="fa-solid fa-chevron-right gc-ent-chev"
+                                       [class.gc-ent-chev--down]="item.expanded"></i>
+                                    <div class="gc-ent-info">
+                                        <div class="gc-ent-name">{{ item.info.Name }}</div>
+                                        <div class="gc-ent-meta-row">
+                                            <code class="gc-ent-typename">{{ item.typeName }}</code>
+                                            <span class="gc-ent-schema-badge">{{ item.schema }}</span>
+                                        </div>
+                                    </div>
+                                </button>
+                                @if (item.expanded) {
+                                    <div class="gc-ent-actions">
+                                        <button type="button" class="gc-ent-op gc-ent-op--read"
+                                                (click)="OnEntityOp(item, 'view', $event)"
+                                                title="Insert a Run View template (Shift-click to append)">
+                                            <i class="fa-solid fa-magnifying-glass"></i>
+                                            Run view
+                                        </button>
+                                        <button type="button" class="gc-ent-op gc-ent-op--read"
+                                                (click)="OnEntityOp(item, 'byId', $event)"
+                                                title="Fetch a single record by ID (Shift-click to append)">
+                                            <i class="fa-solid fa-fingerprint"></i>
+                                            Get by ID
+                                        </button>
+                                        @if (item.info.AllowCreateAPI) {
+                                            <button type="button" class="gc-ent-op gc-ent-op--write"
+                                                    (click)="OnEntityOp(item, 'create', $event)"
+                                                    title="Create a new record (Shift-click to append)">
+                                                <i class="fa-solid fa-plus"></i>
+                                                Create
+                                            </button>
+                                        }
+                                        @if (item.info.AllowUpdateAPI) {
+                                            <button type="button" class="gc-ent-op gc-ent-op--write"
+                                                    (click)="OnEntityOp(item, 'update', $event)"
+                                                    title="Update an existing record (Shift-click to append)">
+                                                <i class="fa-solid fa-pen"></i>
+                                                Update
+                                            </button>
+                                        }
+                                        @if (item.info.AllowDeleteAPI) {
+                                            <button type="button" class="gc-ent-op gc-ent-op--danger"
+                                                    (click)="OnEntityOp(item, 'delete', $event)"
+                                                    title="Delete a record (Shift-click to append)">
+                                                <i class="fa-solid fa-trash"></i>
+                                                Delete
+                                            </button>
+                                        }
+                                    </div>
+                                    @if (item.info.Description) {
+                                        <div class="gc-ent-desc">{{ item.info.Description }}</div>
+                                    }
+                                }
+                            </div>
+                        }
+                        @if (FilteredEntities.length === 0) {
+                            <div class="gc-ent-empty">
+                                <i class="fa-solid fa-search"></i>
+                                <span>No entities match.</span>
+                                @if (EntitiesSearch || EntitySchemaFilter) {
+                                    <button class="gc-ent-clear" type="button" (click)="ClearEntityFilters()">
+                                        Clear filters
+                                    </button>
+                                }
+                            </div>
+                        }
+                    </div>
+                } @else {
+                    <div class="gc-schema-toolbar">
+                        <div class="gc-schema-search-wrap">
+                            <i class="fa-solid fa-search gc-schema-search-icon"></i>
+                            <input type="search"
+                                   class="gc-schema-search"
+                                   placeholder="Search operations…"
+                                   [(ngModel)]="SchemaSearch" />
+                        </div>
+                        <button class="gc-schema-reload"
+                                type="button"
+                                (click)="OnReloadSchema()"
+                                [disabled]="SchemaLoading"
+                                title="Reload schema">
+                            <i class="fa-solid" [class.fa-rotate]="!SchemaLoading" [class.fa-spinner]="SchemaLoading" [class.fa-spin]="SchemaLoading"></i>
+                        </button>
+                    </div>
+
+                    @if (Operations.length > 0) {
+                        <div class="gc-schema-kinds">
+                            <button type="button"
+                                    class="gc-schema-kind"
+                                    [class.gc-schema-kind--active]="SchemaKindFilter === 'all'"
+                                    (click)="SchemaKindFilter = 'all'">
+                                All <span>{{ OperationCounts.all }}</span>
+                            </button>
+                            <button type="button"
+                                    class="gc-schema-kind gc-schema-kind--query"
+                                    [class.gc-schema-kind--active]="SchemaKindFilter === 'query'"
+                                    (click)="SchemaKindFilter = 'query'">
+                                <i class="fa-solid fa-magnifying-glass"></i> Query <span>{{ OperationCounts.query }}</span>
+                            </button>
+                            <button type="button"
+                                    class="gc-schema-kind gc-schema-kind--mutation"
+                                    [class.gc-schema-kind--active]="SchemaKindFilter === 'mutation'"
+                                    (click)="SchemaKindFilter = 'mutation'">
+                                <i class="fa-solid fa-pen"></i> Mutation <span>{{ OperationCounts.mutation }}</span>
+                            </button>
+                        </div>
+                    }
+
+                    @if (SchemaLoading) {
+                        <div class="gc-schema-state">
+                            <i class="fa-solid fa-spinner fa-spin"></i>
+                            <span>Introspecting schema…</span>
+                        </div>
+                    } @else if (SchemaIntrospectionDisabled) {
+                        <div class="gc-schema-state gc-schema-disabled">
+                            <i class="fa-solid fa-lock"></i>
+                            <div class="gc-schema-disabled-title">Introspection disabled</div>
+                            <div class="gc-schema-disabled-body">
+                                This server has GraphQL introspection turned off (typical in production). Schema browsing isn't available — write queries directly in the editor, or use the History tab to revisit previous queries.
+                            </div>
+                        </div>
+                    } @else if (SchemaError) {
+                        <div class="gc-schema-state gc-schema-state--err">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                            <div class="gc-schema-err-title">Couldn't load schema</div>
+                            <div class="gc-schema-err-body">{{ SchemaError }}</div>
+                        </div>
+                    } @else if (FilteredOperations.length === 0) {
+                        <div class="gc-schema-state">
+                            <i class="fa-solid fa-search"></i>
+                            <span>No operations match.</span>
+                        </div>
+                    } @else {
+                        <div class="gc-schema-list">
+                            @for (op of FilteredOperations; track TrackByOp($index, op)) {
+                                <button type="button"
+                                        class="gc-schema-op"
+                                        [class.gc-schema-op--mutation]="op.kind === 'mutation'"
+                                        (click)="OnInsertOperation(op, $event)"
+                                        [title]="(op.description || ('Insert ' + op.kind + ' template')) + ' · Shift-click to append'">
+                                    <div class="gc-schema-op-head">
+                                        <span class="gc-schema-op-kind">{{ op.kind }}</span>
+                                        <span class="gc-schema-op-name">{{ op.name }}</span>
+                                    </div>
+                                    @if (op.argSummary) {
+                                        <div class="gc-schema-op-args">({{ op.argSummary }})</div>
+                                    }
+                                    <div class="gc-schema-op-return">
+                                        <i class="fa-solid fa-arrow-right"></i> {{ op.returnSummary }}
+                                    </div>
+                                    @if (op.description) {
+                                        <div class="gc-schema-op-desc">{{ op.description }}</div>
+                                    }
+                                </button>
+                            }
+                        </div>
+                    }
+                }
+            </aside>
+            <div class="gc-splitter gc-splitter--vert"
+                 (mousedown)="OnSplitterDown($event, 'sidebar')"
+                 title="Drag to resize sidebar"></div>
+        }
+
+        <div class="gc-main">
+            <div class="gc-editor-wrap" [style.flex]="'0 0 ' + EditorHeightPct + '%'">
+                <div class="gc-editor-head">
+                    <span class="gc-editor-label">Query</span>
+                    <span class="gc-editor-hint">⌘/Ctrl+Enter to run · Shift+click an entity/op to append</span>
+                    <button class="gc-mini-btn" type="button" (click)="OnFormatQuery()" title="Tidy whitespace">
+                        <i class="fa-solid fa-broom"></i> Tidy
+                    </button>
+                    <button class="gc-mini-btn gc-mini-btn--danger" type="button" (click)="OnClearQuery()" title="Clear editor">
+                        <i class="fa-solid fa-eraser"></i> Clear
+                    </button>
+                </div>
+                <mj-code-editor
+                    class="gc-editor"
+                    [(ngModel)]="Query"
+                    [language]="'graphql'"
+                    [lineWrapping]="true"
+                    placeholder="Enter your GraphQL query…">
+                </mj-code-editor>
+            </div>
+
+            <div class="gc-splitter gc-splitter--horiz"
+                 (mousedown)="OnSplitterDown($event, 'editor')"
+                 title="Drag to resize editor / response"></div>
+
+            <div class="gc-vars-wrap">
+                <button class="gc-vars-toggle" type="button" (click)="ToggleVariables()">
+                    <i class="fa-solid fa-chevron-right gc-vars-chev" [class.gc-vars-chev--down]="ShowVariables"></i>
+                    Variables
+                    @if (Variables && Variables.trim() !== '{}' && Variables.trim() !== '') {
+                        <span class="gc-vars-pill">configured</span>
+                    }
+                </button>
+                @if (ShowVariables) {
+                    <mj-code-editor
+                        class="gc-editor gc-editor--vars"
+                        [(ngModel)]="Variables"
+                        [language]="'json'"
+                        [lineWrapping]="true"
+                        placeholder="{}">
+                    </mj-code-editor>
+                }
+            </div>
+
+            <div class="gc-run-bar">
+                <button class="gc-run-btn"
+                        type="button"
+                        [disabled]="Running"
+                        (click)="OnRun()">
+                    @if (Running) {
+                        <i class="fa-solid fa-spinner fa-spin"></i> Running…
+                    } @else {
+                        <i class="fa-solid fa-play"></i> Run
+                    }
+                </button>
+                @if (ResponseStatus !== 'idle') {
+                    <div class="gc-run-meta">
+                        @if (ResponseStatus === 'ok') {
+                            <span class="gc-status-badge gc-status-badge--ok">
+                                <i class="fa-solid fa-circle-check"></i> 200 OK
+                            </span>
+                        } @else {
+                            <span class="gc-status-badge gc-status-badge--err">
+                                <i class="fa-solid fa-triangle-exclamation"></i> Error
+                            </span>
+                        }
+                        @if (ResponseDurationMs != null) {
+                            <span class="gc-meta-pill"><i class="fa-regular fa-clock"></i> {{ ResponseDurationMs }}ms</span>
+                        }
+                        @if (ResponseSizeBytes != null) {
+                            <span class="gc-meta-pill"><i class="fa-solid fa-database"></i> {{ FormattedSize }}</span>
+                        }
+                    </div>
+                }
+                <span class="gc-spacer"></span>
+                @if (ResponseJson) {
+                    <button class="mj-inspector__btn"
+                            [class.mj-inspector__btn--success]="CopyConfirmed"
+                            type="button"
+                            (click)="OnCopyResponse()">
+                        <i class="fa-solid" [class.fa-clipboard]="!CopyConfirmed" [class.fa-check]="CopyConfirmed"></i>
+                        {{ CopyConfirmed ? 'Copied' : 'Copy' }}
+                    </button>
+                }
+            </div>
+
+            <div class="gc-response-wrap">
+                <div class="gc-response-head">
+                    <span class="gc-editor-label">Response</span>
+                </div>
+                @if (ErrorMessage && !ResponseJson) {
+                    <div class="gc-error">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <span>{{ ErrorMessage }}</span>
+                    </div>
+                } @else if (ResponseJson) {
+                    @if (ErrorMessage) {
+                        <div class="gc-error gc-error--inline">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                            <span>{{ ErrorMessage }}</span>
+                        </div>
+                    }
+                    <pre class="gc-response"><code>{{ ResponseJson }}</code></pre>
+                } @else {
+                    <div class="gc-empty">
+                        <i class="fa-solid fa-arrow-up-from-bracket"></i>
+                        <span>Run a query to see results here.</span>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
