@@ -567,35 +567,52 @@ export class ComponentManager {
     if (!this.graphQLClient) {
       await this.initializeGraphQLClient();
     }
-    
+
     if (!this.graphQLClient) {
       throw new Error('GraphQL client not available for registry fetching');
     }
-    
-    // Fetch from external registry
+
+    // Fetch from external registry, passing the cached hash (if any) so the
+    // server can return 304 Not Modified when the spec hasn't changed — this
+    // avoids transferring the full spec payload on every TTL expiry
     this.log(`Fetching from external registry: ${spec.registry}/${spec.name}`);
-    
-    const fullSpec = await this.graphQLClient.GetRegistryComponent({
+    const cachedHash = cached?.hash;
+
+    const response = await this.graphQLClient.GetRegistryComponentWithHash({
       registryName: spec.registry,
       namespace: spec.namespace || 'Global',
       name: spec.name,
-      version: spec.version || 'latest'
+      version: spec.version || 'latest',
+      hash: cachedHash
     });
-    
-    if (!fullSpec) {
+
+    // If not modified (304), reuse the cached spec and refresh the TTL
+    if (response.notModified && cached) {
+      this.log(`Registry returned 304 for ${spec.name}, reusing cached spec`);
+      this.fetchCache.set(cacheKey, {
+        ...cached,
+        fetchedAt: new Date()
+      });
+      return cached.spec;
+    }
+
+    if (!response.specification) {
       throw new Error(`Component not found in registry: ${spec.registry}/${spec.name}`);
     }
-    
+
+    const fullSpec = response.specification as ComponentSpec;
+
     // Apply resolution mode if specified
     const processedSpec = this.applyResolutionMode(fullSpec, spec, options?.resolutionMode);
-    
-    // Cache it
+
+    // Cache it with the registry hash for future 304 checks
     this.fetchCache.set(cacheKey, {
       spec: processedSpec,
       fetchedAt: new Date(),
+      hash: response.hash,
       usageNotified: false
     });
-    
+
     return processedSpec;
   }
   
