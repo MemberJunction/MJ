@@ -159,6 +159,11 @@ export class RuntimeUtilities {
       return {
         ResolvePointToLocation: (lat: number, lng: number) => {
           return geo.ResolvePointToLocation(lat, lng);
+        },
+        // GeoDataEngine is on-demand load — callers must await before ResolvePointToLocation works.
+        EnsureLoaded: () => geo.EnsureLoaded(),
+        get Loaded() {
+          return geo.Loaded;
         }
       };
     } catch {

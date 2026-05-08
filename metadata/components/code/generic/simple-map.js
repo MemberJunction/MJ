@@ -23,7 +23,6 @@ function SimpleMap({
     center,
     zoom,
     colors,
-    countryField = 'Country',
     boundaryField,
     maxPopupRecords = 5,
     // Event callback props (passed by parent/Skip-generated root component)
@@ -55,6 +54,28 @@ function SimpleMap({
     var _errorState = React.useState(null);
     var error = _errorState[0];
     var setError = _errorState[1];
+
+    // Hide Boundary button when entity has no per-record GeoJSON — otherwise
+    // it silently falls back to centroid circles indistinguishable from Points.
+    function hasBoundaryField() {
+        if (!entityName || !utilities || !utilities.md) return false;
+        var entity = utilities.md.Entities.find(function (e) { return e.Name === entityName; });
+        if (!entity || !entity.Fields) return false;
+        var fieldName = boundaryField || 'BoundaryGeoJSON';
+        return entity.Fields.some(function (f) { return f.Name === fieldName; });
+    }
+    var showBoundary = hasBoundaryField();
+    var availableModes = showBoundary
+        ? ['point', 'boundary', 'choropleth', 'heatmap']
+        : ['point', 'choropleth', 'heatmap'];
+
+    // Snap render mode to 'point' if a saved 'boundary' lands on an entity that
+    // doesn't expose the boundary field.
+    React.useEffect(function () {
+        if (!showBoundary && renderMode === 'boundary') {
+            setRenderMode('point');
+        }
+    }, [showBoundary, renderMode]);
 
     // -----------------------------------------------------------------------
     // Helpers for record identity (used in MapCore callbacks)
@@ -106,20 +127,6 @@ function SimpleMap({
         if (!containerRef.current || engineRef.current) return;
 
         try {
-            // Build loadCountryData callback for text-field fallback choropleth
-            var loadCountryData = null;
-            if (utilities && utilities.rv && typeof utilities.rv.RunView === 'function') {
-                loadCountryData = function () {
-                    return utilities.rv.RunView({
-                        EntityName: 'MJ: Countries',
-                        Fields: ['ID', 'Name', 'ISO2', 'BoundaryGeoJSON', 'CommonAliases'],
-                        ResultType: 'simple'
-                    }).then(function (result) {
-                        return (result && result.Success && result.Results) ? result.Results : [];
-                    });
-                };
-            }
-
             var engine = MapCore.createEngine({
                 container: containerRef.current,
                 center: center || { lat: 20, lng: 0 },
@@ -127,9 +134,7 @@ function SimpleMap({
                 latitudeField: latitudeField,
                 longitudeField: longitudeField,
                 geoResolver: (utilities && utilities.geoDataEngine) || null,
-                countryField: countryField,
                 boundaryField: boundaryField,
-                loadCountryData: loadCountryData,
                 clusterMarkers: clusterMarkers,
                 clusterRadius: clusterRadius,
                 maxPopupRecords: maxPopupRecords,
@@ -276,7 +281,7 @@ function SimpleMap({
             }
         },
             React.createElement('div', { style: { display: 'flex', gap: '4px' } },
-                ['point', 'boundary', 'choropleth', 'heatmap'].map(function (mode) {
+                availableModes.map(function (mode) {
                     return React.createElement('button', {
                         key: mode,
                         onClick: function () { setRenderMode(mode); },

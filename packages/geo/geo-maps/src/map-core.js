@@ -137,41 +137,6 @@ var MapCore = (function () {
     }
 
     // ================================================================
-    // Country Name Matching (text-field fallback for choropleth)
-    // ================================================================
-
-    /**
-     * Match a free-text country name to reference data via Name, ISO2, or CommonAliases.
-     * @param {Object[]} countries - Array of country records with Name, ISO2, CommonAliases
-     * @param {string} searchName
-     * @returns {Object|null}
-     */
-    function findCountryMatch(countries, searchName) {
-        var normalized = searchName.trim().toLowerCase();
-
-        for (var i = 0; i < countries.length; i++) {
-            if (String(countries[i].Name || '').toLowerCase() === normalized) return countries[i];
-        }
-
-        for (var i = 0; i < countries.length; i++) {
-            if (String(countries[i].ISO2 || '').toLowerCase() === normalized) return countries[i];
-        }
-
-        for (var i = 0; i < countries.length; i++) {
-            var aliases = countries[i].CommonAliases;
-            if (!aliases) continue;
-            try {
-                var arr = JSON.parse(String(aliases));
-                for (var j = 0; j < arr.length; j++) {
-                    if (arr[j].toLowerCase() === normalized) return countries[i];
-                }
-            } catch (e) { /* ignore parse errors */ }
-        }
-
-        return null;
-    }
-
-    // ================================================================
     // Popup HTML Construction
     // ================================================================
 
@@ -453,16 +418,7 @@ var MapCore = (function () {
      * Each record is expected to carry its own GeoJSON in config.boundaryField.
      * Records without boundary data fall back to a centroid marker if lat/lng exist.
      */
-    var BOUNDARY_MAX_POLYGONS = 200;
-
     function renderBoundary(map, layer, records, config) {
-        // Too many polygons causes stack overflow and browser freeze.
-        // Fall back to point markers when the dataset is too large.
-        if (records.length > BOUNDARY_MAX_POLYGONS) {
-            console.warn('[MapCore] Boundary mode: ' + records.length + ' records exceeds ' + BOUNDARY_MAX_POLYGONS + ' polygon limit, falling back to point markers');
-            return renderPointMarkers(map, layer, records, config);
-        }
-
         var boundaryField = config.boundaryField || 'BoundaryGeoJSON';
         var latField = config.latitudeField || '__mj_Latitude';
         var lngField = config.longitudeField || '__mj_Longitude';
@@ -482,7 +438,9 @@ var MapCore = (function () {
                     var geojson = typeof boundaryRaw === 'string'
                         ? JSON.parse(boundaryRaw) : boundaryRaw;
 
-                    // IIFE to capture color and record per iteration
+                    // IIFE: capture color/record/name/id per iteration. Without it,
+                    // mouseout/getBounds reference loop-shared variables and use the
+                    // last iteration's values for every polygon.
                     (function (rec, recName, recColor, recId) {
                         var baseStyle = {
                             fillColor: recColor,
@@ -667,61 +625,6 @@ var MapCore = (function () {
     }
 
     // ================================================================
-    // Rendering: Choropleth — text-field fallback (without GeoResolver)
-    // ================================================================
-
-    function renderChoroplethWithTextFallback(map, layer, records, config, countryCache) {
-        var latField = config.latitudeField || '__mj_Latitude';
-        var lngField = config.longitudeField || '__mj_Longitude';
-        var countryField = config.countryField || 'Country';
-        var colors = config.colors || DEFAULT_COLORS;
-        var bounds = [];
-        var recordsByCountry = {};
-
-        for (var i = 0; i < records.length; i++) {
-            var record = records[i];
-            var lat = getNumericField(record, latField);
-            var lng = getNumericField(record, lngField);
-            if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) continue;
-            bounds.push(L.latLng(lat, lng));
-
-            var country = String(getField(record, countryField) || 'Unknown');
-            if (!recordsByCountry[country]) recordsByCountry[country] = [];
-            recordsByCountry[country].push(record);
-        }
-
-        var countryNames = Object.keys(recordsByCountry);
-        var colorIdx = 0;
-
-        for (var ci = 0; ci < countryNames.length; ci++) {
-            var countryName = countryNames[ci];
-            var countryRecords = recordsByCountry[countryName];
-            var color = colors[colorIdx % colors.length];
-            var rendered = false;
-
-            if (countryCache) {
-                var countryData = findCountryMatch(countryCache, countryName);
-                if (countryData && countryData.BoundaryGeoJSON) {
-                    rendered = renderBoundaryRegion(
-                        layer, countryName, countryData.BoundaryGeoJSON,
-                        countryRecords, color, 'country', config
-                    );
-                }
-            }
-
-            if (!rendered) {
-                // Circle fallback at centroid of records
-                renderCircleFallback(layer, countryName, countryRecords, color, config);
-            }
-
-            colorIdx++;
-        }
-
-        fitBounds(map, bounds, config.maxZoom);
-        return bounds.length;
-    }
-
-    // ================================================================
     // MapEngine Factory
     // ================================================================
 
@@ -734,9 +637,7 @@ var MapCore = (function () {
      * @param {number} [config.zoom] - Initial zoom level
      * @param {string} [config.latitudeField] - Latitude field name (default '__mj_Latitude')
      * @param {string} [config.longitudeField] - Longitude field name (default '__mj_Longitude')
-     * @param {Object} [config.geoResolver] - GeoDataEngine-compatible resolver with ResolvePointToLocation()
-     * @param {string} [config.countryField] - Country field name for text-field fallback (default 'Country')
-     * @param {Function} [config.loadCountryData] - Async function returning country reference data
+     * @param {Object} [config.geoResolver] - GeoDataEngine-compatible resolver with ResolvePointToLocation(). Required for choropleth (Regions) mode.
      * @param {Function} [config.getRecordId] - Returns composite PK string for a record
      * @param {Function} [config.getRecordName] - Returns display name for a record
      * @param {Function} [config.onMarkerClick] - Callback when a point marker is clicked
@@ -760,7 +661,6 @@ var MapCore = (function () {
         var _records = [];
         var _mode = 'point';
         var _markerCount = 0;
-        var _countryCache = null;
         var _map = null;
         var _markerLayer = null;
 
@@ -829,25 +729,37 @@ var MapCore = (function () {
         }
 
         function renderChoroplethDispatch() {
-            if (_config.geoResolver) {
-                _markerCount = renderChoroplethWithGeoResolver(_map, _markerLayer, _records, _config);
-            } else if (_config.loadCountryData) {
-                if (_countryCache) {
-                    _markerCount = renderChoroplethWithTextFallback(_map, _markerLayer, _records, _config, _countryCache);
-                } else {
-                    _config.loadCountryData().then(function (countries) {
-                        _countryCache = countries;
-                        _markerCount = renderChoroplethWithTextFallback(_map, _markerLayer, _records, _config, _countryCache);
-                        notifyRenderComplete();
-                    }).catch(function () {
-                        _markerCount = renderChoroplethWithTextFallback(_map, _markerLayer, _records, _config, null);
-                        notifyRenderComplete();
-                    });
-                    return; // async — notifyRenderComplete called in .then/.catch
-                }
-            } else {
-                _markerCount = renderChoroplethWithTextFallback(_map, _markerLayer, _records, _config, null);
+            if (!_config.geoResolver) {
+                // No text-fallback — choropleth requires coordinate-based resolution.
+                console.warn('[MapCore] Choropleth (Regions) mode requires config.geoResolver. Nothing rendered.');
+                _markerCount = 0;
+                return;
             }
+
+            // GeoDataEngine is on-demand load — without this await the first
+            // resolve returns empty. Loaded check avoids re-awaiting after the
+            // initial parse.
+            var resolver = _config.geoResolver;
+            var ensureLoaded = typeof resolver.EnsureLoaded === 'function'
+                ? resolver.EnsureLoaded.bind(resolver)
+                : null;
+            var alreadyLoaded = ensureLoaded ? resolver.Loaded === true : true;
+
+            if (ensureLoaded && !alreadyLoaded) {
+                ensureLoaded().then(function () {
+                    if (!_map || !_markerLayer) return;
+                    _markerCount = renderChoroplethWithGeoResolver(_map, _markerLayer, _records, _config);
+                    notifyRenderComplete();
+                }).catch(function (err) {
+                    console.warn('[MapCore] geoResolver.EnsureLoaded() failed', err);
+                    if (!_map || !_markerLayer) return;
+                    _markerCount = renderChoroplethWithGeoResolver(_map, _markerLayer, _records, _config);
+                    notifyRenderComplete();
+                });
+                return; // async — notifyRenderComplete called in the chain above
+            }
+
+            _markerCount = renderChoroplethWithGeoResolver(_map, _markerLayer, _records, _config);
         }
 
         function notifyRenderComplete() {
@@ -912,7 +824,6 @@ var MapCore = (function () {
         createEngine: createEngine,
         spatialCluster: spatialCluster,
         pointInPolygon: pointInPolygon,
-        findCountryMatch: findCountryMatch,
         VERSION: '1.0.0'
     };
 })();
