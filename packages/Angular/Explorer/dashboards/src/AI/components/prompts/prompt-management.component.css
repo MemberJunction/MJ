@@ -3,87 +3,12 @@
    Clean flat-color interface with brand blue theme
    ============================================ */
 
-/* Container */
-.prompt-management-container {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  background: var(--mj-bg-surface-card);
-}
+/* Container is now provided by <mj-page-layout> */
 
-/* Dashboard Header - Clean White Style */
-.dashboard-header {
-  background: var(--mj-bg-surface);
-  padding: 16px 24px;
-  border-bottom: 1px solid var(--mj-border-default);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  position: relative;
-  z-index: 10;
-}
-
-.header-info {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-.dashboard-title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--mj-text-primary);
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.dashboard-title i {
-  color: var(--mj-brand-primary);
-  font-size: 22px;
-}
-
-.filter-toggle-btn {
-  background: var(--mj-bg-surface-card);
-  border: 1px solid var(--mj-border-default);
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--mj-text-secondary);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.filter-toggle-btn:hover {
-  background: var(--mj-bg-surface-sunken);
-  border-color: var(--mj-border-strong);
-  color: var(--mj-text-primary);
-}
-
-.filter-toggle-btn i {
-  font-size: 13px;
-  color: var(--mj-brand-primary);
-}
-
-.item-count {
-  color: var(--mj-text-muted);
-  font-size: 13px;
-  font-weight: 500;
-  background: var(--mj-bg-surface-sunken);
-  padding: 6px 12px;
-  border-radius: 16px;
-}
-
-.header-controls {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+/* Header content (projected into <mj-page-header>) */
+.ai-header-meta,
+.ai-header-actions {
+  display: contents;
 }
 
 /* View Toggle */

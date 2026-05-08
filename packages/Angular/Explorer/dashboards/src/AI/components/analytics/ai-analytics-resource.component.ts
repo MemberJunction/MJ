@@ -10,7 +10,9 @@
  * with debounced writes.
  */
 
-import { Component, ChangeDetectorRef, OnInit, OnDestroy, inject } from '@angular/core';
+import { Component, ChangeDetectorRef, OnInit, OnDestroy, ViewChild, inject } from '@angular/core';
+import { AnalyticsExecutiveSummaryComponent } from './executive-summary/executive-summary.component';
+import { AnalyticsPromptRunsComponent } from './prompt-runs/prompt-run-analysis.component';
 import { Subject } from 'rxjs';
 import { debounceTime, takeUntil } from 'rxjs/operators';
 import { ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
@@ -29,12 +31,31 @@ interface NavItem {
     standalone: false,
     selector: 'app-ai-analytics-resource',
     template: `
+      <mj-page-layout>
+        <mj-page-header
+            Title="Analytics"
+            Icon="fa-solid fa-chart-line">
+            @if (ShowSharedFilterBar) {
+                <app-analytics-filter-bar
+                    actions
+                    [TimeRange]="CurrentTimeRange"
+                    [Filters]="CurrentFilters"
+                    [TimeRangeOptions]="FilterBarConfig.TimeRangeOptions"
+                    [ShowModelFilter]="FilterBarConfig.ShowModelFilter"
+                    [ShowAgentFilter]="FilterBarConfig.ShowAgentFilter"
+                    [ShowPromptFilter]="FilterBarConfig.ShowPromptFilter"
+                    [ShowStatusFilter]="FilterBarConfig.ShowStatusFilter"
+                    [ShowCompareToggle]="FilterBarConfig.ShowCompareToggle"
+                    [ShowExportButton]="FilterBarConfig.ShowExportButton"
+                    (TimeRangeChange)="OnTimeRangeChange($event)"
+                    (FiltersChange)="OnFiltersChange($event)"
+                    (CompareToggled)="OnCompareToggled($event)"
+                    (ExportClicked)="OnExportClicked()"
+                ></app-analytics-filter-bar>
+            }
+        </mj-page-header>
         <div class="analytics-shell">
             <nav class="analytics-nav">
-                <div class="nav-header">
-                    <i class="fa-solid fa-chart-line"></i>
-                    <span>AI Analytics</span>
-                </div>
                 @for (item of NavItems; track item.Key) {
                     @if (item.Key === 'divider') {
                         <div class="nav-divider"></div>
@@ -54,39 +75,34 @@ interface NavItem {
                 @switch (ActiveSection) {
                     @case ('executive-summary') {
                         <app-analytics-executive-summary
+                            #executiveSummary
                             [TimeRange]="CurrentTimeRange"
                             [Filters]="CurrentFilters"
-                            (TimeRangeChange)="OnTimeRangeChange($event)"
-                            (FiltersChange)="OnFiltersChange($event)"
                             (SectionNavigate)="OnSectionChange($event)"
                         ></app-analytics-executive-summary>
                     }
                     @case ('prompt-runs') {
                         <app-analytics-prompt-runs
+                            #promptRuns
                             [TimeRange]="CurrentTimeRange"
                             [Filters]="CurrentFilters"
-                            (TimeRangeChange)="OnTimeRangeChange($event)"
-                            (FiltersChange)="OnFiltersChange($event)"
                         ></app-analytics-prompt-runs>
                     }
                     @case ('agent-runs') {
                         <app-analytics-agent-runs
                             [TimeRange]="CurrentTimeRange"
-                            (TimeRangeChange)="OnTimeRangeChange($event)"
+                            [Filters]="CurrentFilters"
                         ></app-analytics-agent-runs>
                     }
                     @case ('model-performance') {
                         <app-analytics-model-performance
                             [TimeRange]="CurrentTimeRange"
-                            (TimeRangeChange)="OnTimeRangeChange($event)"
                         ></app-analytics-model-performance>
                     }
                     @case ('cost-budget') {
                         <app-analytics-cost-budget
                             [TimeRange]="CurrentTimeRange"
                             [Filters]="CurrentFilters"
-                            (TimeRangeChange)="OnTimeRangeChange($event)"
-                            (FiltersChange)="OnFiltersChange($event)"
                         ></app-analytics-cost-budget>
                     }
                     @case ('error-analysis') {
@@ -98,12 +114,12 @@ interface NavItem {
                     @case ('usage-patterns') {
                         <app-analytics-usage-patterns
                             [TimeRange]="CurrentTimeRange"
-                            (TimeRangeChange)="OnTimeRangeChange($event)"
                         ></app-analytics-usage-patterns>
                     }
                 }
             </div>
         </div>
+      </mj-page-layout>
     `,
     styles: [`
         :host {
@@ -113,7 +129,8 @@ interface NavItem {
 
         .analytics-shell {
             display: flex;
-            height: 100%;
+            flex: 1;
+            min-height: 0;
             background: var(--mj-bg-page);
         }
 
@@ -128,23 +145,6 @@ interface NavItem {
             flex-direction: column;
             padding: 12px 0;
             overflow-y: auto;
-        }
-
-        .nav-header {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 8px 18px 16px;
-            font-size: 15px;
-            font-weight: 700;
-            color: var(--mj-text-primary);
-            border-bottom: 1px solid var(--mj-border-subtle);
-            margin-bottom: 8px;
-        }
-
-        .nav-header i {
-            color: var(--mj-brand-primary);
-            font-size: 16px;
         }
 
         .nav-item {
@@ -283,6 +283,9 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
     private settingsLoaded = false;
     private cdr = inject(ChangeDetectorRef);
 
+    @ViewChild('executiveSummary') private executiveSummary?: AnalyticsExecutiveSummaryComponent;
+    @ViewChild('promptRuns') private promptRuns?: AnalyticsPromptRunsComponent;
+
     public ActiveSection = 'executive-summary';
     public CurrentTimeRange = '24h';
     public CurrentFilters: GlobalFilterState = {
@@ -291,6 +294,31 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
         Prompts: [],
         Statuses: []
     };
+
+    /** Per-section filter-bar config — switched on ActiveSection. */
+    public get FilterBarConfig() {
+        switch (this.ActiveSection) {
+            case 'executive-summary':
+                return { ShowModelFilter: false, ShowAgentFilter: false, ShowPromptFilter: false, ShowStatusFilter: false, ShowCompareToggle: true,  ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
+            case 'prompt-runs':
+                return { ShowModelFilter: true,  ShowAgentFilter: true,  ShowPromptFilter: true,  ShowStatusFilter: true,  ShowCompareToggle: false, ShowExportButton: true,  TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
+            case 'agent-runs':
+                return { ShowModelFilter: false, ShowAgentFilter: true,  ShowPromptFilter: false, ShowStatusFilter: true,  ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
+            case 'cost-budget':
+                return { ShowModelFilter: true,  ShowAgentFilter: false, ShowPromptFilter: false, ShowStatusFilter: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['7d', '30d', '90d', 'MTD', 'YTD'] };
+            case 'error-analysis':
+                return { ShowModelFilter: true,  ShowAgentFilter: false, ShowPromptFilter: true,  ShowStatusFilter: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
+            case 'usage-patterns':
+                return { ShowModelFilter: false, ShowAgentFilter: false, ShowPromptFilter: false, ShowStatusFilter: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
+            default:
+                return { ShowModelFilter: false, ShowAgentFilter: false, ShowPromptFilter: false, ShowStatusFilter: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
+        }
+    }
+
+    /** Model Performance has its own custom filter UI inside the section, so the shared filter-bar is hidden there. */
+    public get ShowSharedFilterBar(): boolean {
+        return this.ActiveSection !== 'model-performance';
+    }
 
     readonly NavItems: NavItem[] = [
         { Label: 'Executive Summary', Icon: 'fa-solid fa-gauge-high', Key: 'executive-summary' },
@@ -344,6 +372,16 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
     public OnFiltersChange(filters: GlobalFilterState): void {
         this.CurrentFilters = filters;
         this.saveUserSettings();
+    }
+
+    /** Compare-toggle button — only visible on Executive Summary; forwards to that section. */
+    public OnCompareToggled(value: boolean): void {
+        this.executiveSummary?.OnCompareToggled?.(value);
+    }
+
+    /** Export button — only visible on Prompt Runs; forwards to that section. */
+    public OnExportClicked(): void {
+        this.promptRuns?.ExportCSV?.();
     }
 
     // ── Private Helpers ──

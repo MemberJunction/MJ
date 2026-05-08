@@ -1,27 +1,13 @@
-<div class="prompt-management-container">
+<mj-page-layout>
   <!-- Header -->
-  <div class="dashboard-header">
-    <div class="header-info">
-      <h2 class="dashboard-title">
-        <i class="fa-solid fa-message"></i>
-        AI Prompts
-      </h2>
-      <button
-        type="button"
-        class="filter-toggle-btn"
-        (click)="toggleFilters()"
-        title="Toggle Filters">
-        <i class="fa-solid fa-filter"></i>
-        @if (showFilters) {
-          Hide Filters
-        } @else {
-          Show Filters
-        }
-      </button>
-      <span class="item-count">{{ filteredPrompts.length }} prompts</span>
+  <mj-page-header
+    Title="Prompts"
+    Icon="fa-solid fa-comment-dots">
+    <div meta class="ai-header-meta">
+      <mj-filter-toggle [Active]="showFilters" (Toggled)="toggleFilters()"></mj-filter-toggle>
+      <mj-result-count [Count]="filteredPrompts.length" Label="prompts"></mj-result-count>
     </div>
-
-    <div class="header-controls">
+    <div actions class="ai-header-actions">
       <div class="view-toggle">
         <button
           type="button"
@@ -52,7 +38,7 @@
         </button>
       }
     </div>
-  </div>
+  </mj-page-header>
 
   <!-- Main Content with Splitter -->
   <div class="main-content">
@@ -498,4 +484,4 @@
       </div>
     }
   </div>
-</div>
+</mj-page-layout>

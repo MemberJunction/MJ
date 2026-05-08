@@ -1,27 +1,13 @@
-<div class="mcp-dashboard">
+<mj-page-layout>
     <!-- Header -->
-    <div class="dashboard-header">
-        <div class="header-info">
-            <h2 class="dashboard-title">
-                <i class="fa-solid fa-plug-circle-bolt"></i>
-                MCP Dashboard
-            </h2>
-            <button
-                type="button"
-                class="filter-toggle-btn"
-                (click)="toggleFilterPanel()"
-                title="Toggle Filters">
-                <i class="fa-solid fa-filter"></i>
-                @if (FilterPanelVisible) {
-                    Hide Filters
-                } @else {
-                    Show Filters
-                }
-            </button>
-            <span class="item-count">{{ CurrentFilteredCount }} of {{ CurrentTotalCount }} items</span>
+    <mj-page-header
+        Title="MCP Dashboard"
+        Icon="fa-solid fa-plug-circle-bolt">
+        <div meta class="mcp-header-meta">
+            <mj-filter-toggle [Active]="FilterPanelVisible" (Toggled)="toggleFilterPanel()"></mj-filter-toggle>
+            <mj-result-count [Count]="CurrentFilteredCount" [Total]="CurrentTotalCount" Label="items"></mj-result-count>
         </div>
-
-        <div class="header-controls">
+        <div actions class="mcp-header-actions">
             <!-- Tab Navigation -->
             <div class="tab-nav">
                 <button
@@ -65,13 +51,13 @@
             <!-- Action Buttons based on tab -->
             @switch (ActiveTab) {
                 @case ('servers') {
-                    <button mjButton variant="primary" (click)="createServer()">
+                    <button mjButton variant="primary" size="sm" (click)="createServer()">
                         <i class="fa-solid fa-plus"></i>
                         Add Server
                     </button>
                 }
                 @case ('connections') {
-                    <button mjButton variant="primary" (click)="createConnection()">
+                    <button mjButton variant="primary" size="sm" (click)="createConnection()">
                         <i class="fa-solid fa-plus"></i>
                         Add Connection
                     </button>
@@ -96,20 +82,20 @@
                             <i class="fa-solid fa-list"></i>
                         </button>
                     </div>
-                    <button mjButton variant="primary" (click)="openTestToolDialog()">
+                    <button mjButton variant="primary" size="sm" (click)="openTestToolDialog()">
                         <i class="fa-solid fa-play"></i>
                         Test Tool
                     </button>
                 }
                 @case ('logs') {
-                    <button mjButton variant="flat" (click)="loadAllData()" [disabled]="IsLoading" title="Refresh">
+                    <button mjButton variant="flat" size="sm" (click)="loadAllData()" [disabled]="IsLoading" title="Refresh">
                         <i class="fa-solid fa-sync" [class.fa-spin]="IsLoading"></i>
                         Refresh
                     </button>
                 }
             }
         </div>
-    </div>
+    </mj-page-header>
 
     <!-- Main Content with Filter Panel -->
     <div class="main-content">
@@ -249,7 +235,7 @@
                                     <div class="empty-state">
                                         <i class="fa-solid fa-server"></i>
                                         <p>No MCP servers configured</p>
-                                        <button mjButton variant="primary" (click)="createServer()">
+                                        <button mjButton variant="primary" size="sm" (click)="createServer()">
                                             Add Your First Server
                                         </button>
                                     </div>
@@ -362,7 +348,7 @@
                                     <div class="empty-state">
                                         <i class="fa-solid fa-link"></i>
                                         <p>No connections configured</p>
-                                        <button mjButton variant="primary" (click)="createConnection()">
+                                        <button mjButton variant="primary" size="sm" (click)="createConnection()">
                                             Add Your First Connection
                                         </button>
                                     </div>
@@ -804,7 +790,7 @@
             </div>
         </div>
     </div>
-</div>
+</mj-page-layout>
 
 <!-- Server Dialog (inline — avoids sub-component DI issues) -->
 @if (ShowServerDialog) {

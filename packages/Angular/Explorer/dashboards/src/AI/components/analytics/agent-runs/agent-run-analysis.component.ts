@@ -102,19 +102,6 @@ const COST_COLORS = [
     standalone: false,
     selector: 'app-analytics-agent-runs',
     template: `
-        <!-- Filter Bar -->
-        <app-analytics-filter-bar
-            [TimeRange]="TimeRange"
-            [Filters]="globalFilters"
-            [ShowModelFilter]="false"
-            [ShowPromptFilter]="false"
-            [ShowAgentFilter]="true"
-            [ShowStatusFilter]="true"
-            [ShowCompareToggle]="false"
-            [ShowExportButton]="false"
-            (TimeRangeChange)="OnTimeRangeChange($event)"
-            (FiltersChange)="OnFiltersChange($event)"
-        ></app-analytics-filter-bar>
 
         @if (IsLoading) {
             <div class="loading-container">

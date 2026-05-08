@@ -61,19 +61,6 @@ const FIELDS = [
     standalone: false,
     selector: 'app-analytics-error-analysis',
     template: `
-        <!-- Filter Bar -->
-        <app-analytics-filter-bar
-            [TimeRange]="TimeRange"
-            [Filters]="Filters"
-            [ShowAgentFilter]="false"
-            [ShowPromptFilter]="true"
-            [ShowModelFilter]="true"
-            [ShowStatusFilter]="false"
-            [ShowCompareToggle]="false"
-            [ShowExportButton]="false"
-            (TimeRangeChange)="OnTimeRangeChange($event)"
-            (FiltersChange)="OnFiltersChange($event)"
-        ></app-analytics-filter-bar>
 
         @if (IsLoading) {
             <div class="loading-container">

@@ -88,20 +88,6 @@ const TREEMAP_COLORS = [
     standalone: false,
     selector: 'app-analytics-cost-budget',
     template: `
-        <!-- Filter Bar -->
-        <app-analytics-filter-bar
-            [TimeRange]="TimeRange"
-            [TimeRangeOptions]="TimeRangeOptionsList"
-            [Filters]="Filters"
-            [ShowAgentFilter]="false"
-            [ShowPromptFilter]="false"
-            [ShowModelFilter]="true"
-            [ShowStatusFilter]="false"
-            [ShowCompareToggle]="false"
-            [ShowExportButton]="false"
-            (TimeRangeChange)="OnTimeRangeChange($event)"
-            (FiltersChange)="OnFiltersChange($event)"
-        ></app-analytics-filter-bar>
 
         @if (IsLoading) {
             <div class="loading-container">

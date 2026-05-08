@@ -1,27 +1,13 @@
-<div class="agent-configuration-container">
+<mj-page-layout>
   <!-- Header -->
-  <div class="dashboard-header">
-    <div class="header-info">
-      <h2 class="dashboard-title">
-        <i class="fa-solid fa-robot"></i>
-        Agent Configuration
-      </h2>
-      <button 
-        type="button" 
-        class="filter-toggle-btn"
-        (click)="toggleFilterPanel()"
-        title="Toggle Filters">
-        <i class="fa-solid fa-filter"></i>
-        @if (filterPanelVisible) {
-          Hide Filters
-        } @else {
-          Show Filters
-        }
-      </button>
-      <span class="item-count">{{ filteredAgents.length }} agents</span>
+  <mj-page-header
+    Title="Agents"
+    Icon="fa-solid fa-robot">
+    <div meta class="ai-header-meta">
+      <mj-filter-toggle [Active]="filterPanelVisible" (Toggled)="toggleFilterPanel()"></mj-filter-toggle>
+      <mj-result-count [Count]="filteredAgents.length" Label="agents"></mj-result-count>
     </div>
-    
-    <div class="header-controls">
+    <div actions class="ai-header-actions">
       <div class="view-toggle">
         <button
           type="button"
@@ -48,9 +34,9 @@
           <i class="fa-solid fa-folder-tree"></i>
         </button>
       </div>
-      
-      <button 
-        type="button" 
+
+      <button
+        type="button"
         class="control-btn primary"
         (click)="createNewAgent()"
         title="Create New Agent">
@@ -58,7 +44,7 @@
         New Agent
       </button>
     </div>
-  </div>
+  </mj-page-header>
 
   <!-- Main Content with Splitter -->
   <div class="main-content" >
@@ -457,6 +443,6 @@
       </div>
     }
   </div>
-</div>
+</mj-page-layout>
 
 <!-- AI Agent Test Harness - Now handled by service with minimize support -->

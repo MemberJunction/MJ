@@ -14,3 +14,8 @@ export * from './lib/splitter/splitter.component';
 export * from './lib/accordion/accordion.component';
 export * from './lib/window/window.component';
 export * from './lib/combobox/combobox.component';
+export * from './lib/page-header/page-header.component';
+export * from './lib/page-layout/page-layout.component';
+export * from './lib/filter-toggle/filter-toggle.component';
+export * from './lib/result-count/result-count.component';
+export * from './lib/filter-popover/filter-popover.component';

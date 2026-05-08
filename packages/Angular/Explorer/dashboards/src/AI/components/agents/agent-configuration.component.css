@@ -3,90 +3,12 @@
    Clean white header with brand blue accents
    ============================================ */
 
-/* Container */
-.agent-configuration-container {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  background: var(--mj-bg-surface-card);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-}
+/* Container is now provided by <mj-page-layout> */
 
-/* Dashboard Header - Clean White Style */
-.dashboard-header {
-  background: var(--mj-bg-surface);
-  padding: 16px 24px;
-  border-bottom: 1px solid var(--mj-border-default);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  position: relative;
-  z-index: 10;
-}
-
-.header-info {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-.dashboard-title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--mj-text-primary);
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.dashboard-title i {
-  color: var(--mj-brand-primary);
-  font-size: 22px;
-}
-
-.filter-toggle-btn {
-  background: var(--mj-bg-surface-card);
-  border: 1px solid var(--mj-border-default);
-  padding: 10px 18px;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--mj-text-secondary);
-  cursor: pointer;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.filter-toggle-btn:hover {
-  background: var(--mj-border-default);
-  border-color: var(--mj-border-strong);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.filter-toggle-btn i {
-  color: var(--mj-brand-primary);
-  font-size: 14px;
-}
-
-.item-count {
-  color: var(--mj-text-muted);
-  font-size: 14px;
-  font-weight: 500;
-  padding: 6px 12px;
-  background: var(--mj-bg-surface-card);
-  border-radius: 20px;
-  border: 1px solid var(--mj-border-default);
-}
-
-.header-controls {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+/* Header content (projected into <mj-page-header>) */
+.ai-header-meta,
+.ai-header-actions {
+  display: contents;
 }
 
 /* View Toggle */

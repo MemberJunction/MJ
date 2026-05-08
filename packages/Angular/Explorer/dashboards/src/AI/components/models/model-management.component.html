@@ -1,31 +1,17 @@
-<div class="model-management-v2">
+<mj-page-layout>
   @if (isLoading) {
     <div class="loading-container">
       <mj-loading [text]="currentLoadingMessage" size="large"></mj-loading>
     </div>
   } @else {
-    <div class="dashboard-header">
-      <div class="header-info">
-        <h2 class="dashboard-title">
-          <i class="fa-solid fa-microchip"></i>
-          AI Models
-        </h2>
-        <button
-          type="button"
-          class="filter-toggle-btn"
-          (click)="toggleFilters()"
-          title="Toggle Filters">
-          <i class="fa-solid fa-filter"></i>
-          @if (showFilters) {
-            Hide Filters
-          } @else {
-            Show Filters
-          }
-        </button>
-        <span class="item-count">{{ filteredModels.length }} models</span>
+    <mj-page-header
+      Title="Models"
+      Icon="fa-solid fa-microchip">
+      <div meta class="ai-header-meta">
+        <mj-filter-toggle [Active]="showFilters" (Toggled)="toggleFilters()"></mj-filter-toggle>
+        <mj-result-count [Count]="filteredModels.length" Label="models"></mj-result-count>
       </div>
-
-      <div class="header-controls">
+      <div actions class="ai-header-actions">
         <div class="view-toggle">
           <button
             type="button"
@@ -54,7 +40,7 @@
           New Model
         </button>
       </div>
-    </div>
+    </mj-page-header>
 
     <as-split direction="horizontal">
       @if (showFilters) {
@@ -578,4 +564,4 @@
       }
     </div>
   }
-</div>
+</mj-page-layout>

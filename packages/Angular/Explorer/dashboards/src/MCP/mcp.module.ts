@@ -16,7 +16,11 @@ import {
     MJDialogComponent,
     MJDialogActionsComponent,
     MJDropdownComponent,
-    MJNumericInputComponent
+    MJNumericInputComponent,
+    MJPageHeaderComponent,
+    MJPageLayoutComponent,
+    MJFilterToggleComponent,
+    MJResultCountComponent
 } from '@memberjunction/ng-ui-components';
 
 // MemberJunction Modules
@@ -56,6 +60,10 @@ import { MCPLogDetailPanelComponent } from './components/mcp-log-detail-panel.co
         MJDialogActionsComponent,
         MJDropdownComponent,
         MJNumericInputComponent,
+        MJPageHeaderComponent,
+        MJPageLayoutComponent,
+        MJFilterToggleComponent,
+        MJResultCountComponent,
         SharedGenericModule,
         CredentialsModule,
         CodeEditorModule,

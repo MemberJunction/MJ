@@ -1,83 +1,11 @@
-/* MCP Dashboard - Header + Filter Panel Layout */
-.mcp-dashboard {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    background: var(--mj-bg-page);
-    overflow: hidden;
-}
+/* MCP Dashboard - Header + Filter Panel Layout (outer shell now provided by <mj-page-layout>) */
 
 /* ========================================
-   Dashboard Header
+   Header content (projected into <mj-page-header>)
    ======================================== */
-.dashboard-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 20px;
-    background: var(--mj-bg-surface);
-    border-bottom: 1px solid var(--mj-border-default);
-    flex-shrink: 0;
-    gap: 16px;
-}
-
-.header-info {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-}
-
-.dashboard-title {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin: 0;
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--mj-text-primary);
-}
-
-.dashboard-title i {
-    color: var(--mj-brand-primary);
-    font-size: 20px;
-}
-
-.filter-toggle-btn {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    background: var(--mj-bg-surface-card);
-    border: 1px solid var(--mj-border-default);
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 13px;
-    color: var(--mj-text-secondary);
-    transition: all 0.2s ease;
-}
-
-.filter-toggle-btn:hover {
-    background: var(--mj-bg-surface-sunken);
-    border-color: var(--mj-border-strong);
-    color: var(--mj-text-primary);
-}
-
-.filter-toggle-btn i {
-    font-size: 12px;
-}
-
-.item-count {
-    font-size: 13px;
-    color: var(--mj-text-secondary);
-    padding: 4px 10px;
-    background: var(--mj-bg-surface-card);
-    border-radius: 4px;
-}
-
-.header-controls {
-    display: flex;
-    align-items: center;
-    gap: 16px;
+.mcp-header-meta,
+.mcp-header-actions {
+    display: contents;
 }
 
 /* Tab Navigation */
