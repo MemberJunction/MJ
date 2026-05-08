@@ -12,10 +12,10 @@ import { configInfo } from '../../../Config/config';
 import { logError, logWarning } from '../../../Misc/status_logging';
 import { PostgreSQLDialect, DatabasePlatform, SQLDialect } from '@memberjunction/sql-dialect';
 import {
+    POSTGRESQL_PROCEDURE_PARAM_LIMIT,
     shouldIncludeFieldInParams,
     useJsonArgShape,
 } from '@memberjunction/generic-database-provider';
-import { POSTGRESQL_PROCEDURE_PARAM_LIMIT } from '@memberjunction/postgresql-dataprovider';
 import * as fs from 'fs';
 import path from 'path';
 import { executeWithFallback } from './viewFallback';
@@ -41,6 +41,28 @@ export class PostgreSQLCodeGenProvider extends CodeGenDatabaseProvider {
     /** @inheritdoc */
     get PlatformKey(): DatabasePlatform {
         return 'postgresql';
+    }
+
+    /**
+     * @inheritdoc
+     *
+     * PostgreSQL: NOT supported. PG's strict `CREATE OR REPLACE VIEW` parser
+     * resolves view names against the existing catalog state at parse time, so
+     * a body that LEFT-JOINs the view-being-created to itself (e.g. for a
+     * self-FK's virtual NameField) raises `42P01 undefined_table` on first
+     * creation. A `CREATE OR REPLACE` retry against a NULL-typed stub then
+     * fails with `cannot change data type of view column ... from text to
+     * character varying(N)` because PG enforces strict column-type compat in
+     * `CREATE OR REPLACE`.
+     *
+     * Returning `false` tells `sql_codegen.ts` to skip the self-join entirely
+     * for self-FK + virtual-NameField cases. The trade-off: the corresponding
+     * virtual column (e.g. `RestoredFrom` on `vwRecordChanges`) is not emitted.
+     * Matches the baseline-shipped vwRecordChanges shape, which never had this
+     * column either.
+     */
+    override canSelfJoinViewForVirtualNameField(): boolean {
+        return false;
     }
 
     // ─── DROP GUARDS ─────────────────────────────────────────────────────
@@ -444,8 +466,7 @@ $do$;
 ------------------------------------------------------------
 ${this.generateDropAllOverloadsBlock(entity.SchemaName, fnName)}
 CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(p_data JSONB)
-RETURNS SETOF ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}
-AS $$
+RETURNS SETOF ${pgDialect.QuoteSchema(entity.SchemaName, viewName)} AS $$
 DECLARE
 ${pkExtractions}
     v_updated_count INTEGER;
@@ -509,21 +530,14 @@ ${trigger}
             (f) => shouldIncludeFieldInParams(f, 'create') && !f.IsPrimaryKey
         );
 
-        // Per-field cast tokens for the dynamic INSERT. Built as a JS array so
-        // the sproc body iterates over (column-name, cast-expression) pairs at
-        // runtime to assemble the column / value lists from p_data keys.
-        //
-        // The cast expressions are emitted with `$1` (parameterized placeholder)
-        // instead of `p_data` because they end up inside an `EXECUTE v_sql USING
-        // p_data` call. PG's dynamic-SQL parser does NOT see the enclosing
-        // function's locals — `p_data` is unbound inside the dynamic SQL — so we
-        // bind it as `$1` and reference `($1->>'Field')` from inside the dynamic
-        // INSERT. This is the canonical safe pattern for dynamic SQL with values:
-        // values flow through the binding mechanism, never through string
-        // interpolation, so there's zero injection surface.
+        // Per-field cast tokens for the dynamic INSERT. The expressions reference
+        // `$1` (a positional parameter) instead of `p_data` because they end up
+        // inside a dynamic SQL string passed to `EXECUTE ... USING p_data`. Inside
+        // EXECUTE'd SQL only the bound positional parameters are visible — the
+        // outer function's local variables (including p_data) are NOT in scope.
         const fieldCastEntries = writableFields
             .map((f) => {
-                const cast = this.renderJsonExtractAndCast(f).replace(/p_data/g, '$$1');
+                const cast = this.renderJsonExtractAndCast(f).replace(/p_data/g, '$1');
                 return `        WHEN '${f.Name}' THEN '${cast.replace(/'/g, "''")}'`;
             })
             .join('\n');
@@ -550,8 +564,7 @@ ${trigger}
 ------------------------------------------------------------
 ${this.generateDropAllOverloadsBlock(entity.SchemaName, fnName)}
 CREATE OR REPLACE FUNCTION ${pgDialect.QuoteSchema(entity.SchemaName, fnName)}(p_data JSONB)
-RETURNS SETOF ${pgDialect.QuoteSchema(entity.SchemaName, viewName)}
-AS $$
+RETURNS SETOF ${pgDialect.QuoteSchema(entity.SchemaName, viewName)} AS $$
 DECLARE
     v_id ${pkPgType};
     v_field_name TEXT;
@@ -584,10 +597,8 @@ ${fieldCastEntries}
         v_col_list,
         v_val_list
     );
-    -- USING p_data binds the cast expressions' \`$1\` placeholders to the
-    -- function's p_data argument. Without USING, dynamic SQL has no access to
-    -- the enclosing function's locals and the \`$1->>\` references would fail
-    -- with \`column "p_data" does not exist\`.
+    -- Pass p_data as a positional parameter so the cast expressions inside
+    -- v_val_list (which reference $1) can read the JSONB payload.
     EXECUTE v_sql USING p_data;
 
     RETURN QUERY
@@ -1216,34 +1227,10 @@ END $$;
     // ─── UTILITY ─────────────────────────────────────────────────────────
 
     /**
-     * Renders a column DEFAULT expression for embedding in a generated SQL
-     * statement. Handles three cases:
-     *
-     * 1. **SS-style function defaults** — `NEWID()` → `gen_random_uuid()`,
-     *    `GETUTCDATE()` → `NOW() AT TIME ZONE 'UTC'`, etc. Mapped via the
-     *    `functionMap` table.
-     *
-     * 2. **PG typed-literal defaults** — values like `'Pending'::character
-     *    varying`, `'-1'::integer`, `'F51358F3-...'::uuid`, `'{}'::jsonb`
-     *    that PG returns from `information_schema.columns.column_default`.
-     *    These are already fully-formed PG expressions; pass through
-     *    verbatim. PG handles them natively in every context this method's
-     *    output appears (INSERT VALUES, COALESCE inside INSERT/UPDATE,
-     *    CASE-WHEN inside the clear-companion pattern).
-     *
-     *    The type name after `::` may be a single identifier OR multiple
-     *    words separated by spaces (`character varying`, `double precision`,
-     *    `time with time zone`, etc.). Without correctly matching multi-word
-     *    types, stripping the outer quotes and re-wrapping would produce
-     *    `'''Pending''::character varying'` — a string literal whose value
-     *    contains the cast syntax — and INSERTs would fail with "value too
-     *    long for type character varying(N)".
-     *
-     * 3. **Plain string defaults** — strip outer parens / quotes, then
-     *    optionally re-apply single-quote wrap (with `'` → `''` escaping)
-     *    based on the `needsQuotes` flag.
-     *
-     * Returns `'NULL'` for empty or whitespace-only input.
+     * SQL Server built-in functions (e.g., `NEWID()` to `gen_random_uuid()`,
+     * `GETUTCDATE()` to `NOW() AT TIME ZONE 'UTC'`), strips outer parentheses and
+     * surrounding single quotes, and re-applies quoting based on the {@link needsQuotes}
+     * flag. Returns `'NULL'` for empty or whitespace-only input.
      */
     formatDefaultValue(defaultValue: string, needsQuotes: boolean): string {
         if (!defaultValue || defaultValue.trim().length === 0) return 'NULL';
@@ -1278,34 +1265,14 @@ END $$;
             trimmedValue = trimmedValue.substring(1, trimmedValue.length - 1);
         }
 
-        // PG returns typed-literal defaults from
-        // `information_schema.columns.column_default`, e.g.
-        // `'Pending'::character varying` or `'-1'::integer` or
-        // `'{}'::jsonb`. These are already fully-formed PG expressions and
-        // pass through verbatim — PG handles them natively in every context
-        // this method's output appears (INSERT VALUES, COALESCE inside
-        // INSERT/UPDATE, CASE-WHEN inside the clear-companion pattern).
-        // Empirically verified in PG 17 against `character varying`,
-        // `integer`, `uuid`, `bigint`, `double precision`, `boolean`, and
-        // `timestamp with time zone`.
-        //
-        // Stripping the leading-and-trailing quotes here is wrong: the value
-        // re-wrap downstream would produce `'''Pending''::character
-        // varying'` — a string literal whose content is the cast syntax —
-        // and INSERTs would fail with "value too long for type character
-        // varying(N)" because the literal is longer than the column.
-        //
-        // The type name after `::` may be a single identifier (`text`,
-        // `uuid`, `integer`) OR multiple words separated by spaces
-        // (`character varying`, `double precision`, `time with time zone`,
-        // `timestamp without time zone`, `bit varying`), optionally followed
-        // by a length parameter `(N)` and/or array suffix `[]`. The
-        // `\w+(?:\s+\w+)*` portion captures both single-word and multi-word
-        // type names. The original regex matched only single-identifier
-        // types and silently fell through to the broken re-wrap path for
-        // multi-word names — this fix extends the match without changing
-        // behavior for the cases the original regex already caught.
-        if (/^'.*'::\w+(?:\s+\w+)*(\s*\(\s*\d+\s*\))?(\s*\[\s*\])?$/.test(trimmedValue)) {
+        // PG default values can come back as typed literals like
+        // `'Pending'::character varying` or `'Active'::text`. The cast
+        // suffix means the value is already a fully-formed PG expression —
+        // stripping the leading-and-trailing quotes (line 14721 bug:
+        // `'Pending'::character varying` → cleanValue = `Pending'::character varying`
+        // → re-wrap → `'Pending'::character varying'` which is invalid SQL)
+        // is wrong here. Detect this shape and pass through verbatim.
+        if (/^'.*'::\w+(\s*\(\s*\d+\s*\))?(\s*\[\s*\])?$/.test(trimmedValue)) {
             return trimmedValue;
         }
 

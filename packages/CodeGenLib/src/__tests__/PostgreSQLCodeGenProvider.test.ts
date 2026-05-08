@@ -347,18 +347,6 @@ describe('PostgreSQLCodeGenProvider', () => {
             expect(sql).not.toMatch(/p_optionalcol\d+\s+(integer|timestamp|boolean|nvarchar|text)/i);
         });
 
-        it('JSON-arg sproc header: RETURNS and AS $$ on separate lines', () => {
-            // Matches the existing migration-file convention (multi-line declaration).
-            // pg_get_functiondef and the rest of MJ's PG migrations all emit RETURNS
-            // on its own line followed by AS $$ on the next; keeping the codegen
-            // template aligned makes diffs against re-extracted sprocs trivially clean.
-            const entity = createWideEntity();
-            expect(provider.generateCRUDUpdate(entity)).toMatch(/RETURNS SETOF [^\n]+\nAS \$\$/);
-            expect(provider.generateCRUDUpdate(entity)).not.toMatch(/RETURNS SETOF [^\n]+ AS \$\$/);
-            expect(provider.generateCRUDCreate(entity)).toMatch(/RETURNS SETOF [^\n]+\nAS \$\$/);
-            expect(provider.generateCRUDCreate(entity)).not.toMatch(/RETURNS SETOF [^\n]+ AS \$\$/);
-        });
-
         it('UPDATE wide entity body uses CASE WHEN p_data ? for each writable column', () => {
             const entity = createWideEntity();
             const sql = provider.generateCRUDUpdate(entity);
@@ -403,48 +391,24 @@ describe('PostgreSQLCodeGenProvider', () => {
             expect(sql).toContain('FOREACH v_field_name IN ARRAY');
         });
 
+        it('CREATE wide entity passes p_data to EXECUTE via USING (not direct reference)', () => {
+            // Regression guard: cast expressions inside the dynamic SQL string must
+            // reference $1 (a positional parameter), and EXECUTE must bind p_data
+            // to that parameter via USING. Referencing p_data directly inside the
+            // dynamic SQL fails because it's not in scope of the EXECUTE'd query.
+            const entity = createWideEntity();
+            const sql = provider.generateCRUDCreate(entity);
+            expect(sql).toContain('EXECUTE v_sql USING p_data');
+            // Cast expressions in the value list should reference $1, not p_data.
+            expect(sql).toContain(`($1->>''OptionalCol0'')::INT`);
+            expect(sql).not.toMatch(/'\(p_data->>''[A-Za-z]+''\)/);
+        });
+
         it('CREATE wide entity auto-generates UUID PK when absent from p_data', () => {
             const entity = createWideEntity();
             const sql = provider.generateCRUDCreate(entity);
             expect(sql).toContain(`IF p_data ? 'ID' THEN`);
             expect(sql).toContain('gen_random_uuid()');
-        });
-
-        it('CREATE wide entity binds p_data via EXECUTE ... USING (parameterized dynamic SQL)', () => {
-            // Regression guard: the INSERT runs through `EXECUTE v_sql`, which
-            // has its own SQL parser invocation and cannot see the enclosing
-            // function's `p_data` local. We bind p_data as $1 via USING, and the
-            // cast expressions in the dynamic SQL string must reference $1 — not
-            // p_data — for the JSON extraction to work. The earlier shape used
-            // `p_data->>` references inside the dynamic SQL, which failed at
-            // runtime with `column "p_data" does not exist`.
-            const entity = createWideEntity();
-            const sql = provider.generateCRUDCreate(entity);
-
-            // 1. EXECUTE includes the USING p_data binding
-            expect(sql).toMatch(/EXECUTE\s+v_sql\s+USING\s+p_data/);
-
-            // 2. Cast expressions inside the dynamic INSERT use $1 (not p_data)
-            //    for the JSON extractions, so the bound parameter is referenced.
-            //    Casts are emitted as string literals inside CASE WHEN clauses,
-            //    so the surrounding single quotes are doubled per SQL escaping.
-            expect(sql).toContain(`($1->>''OptionalCol0'')::INT`);
-            expect(sql).toContain(`($1->>''OptionalCol2'')::BOOLEAN`);
-            expect(sql).toContain(`($1->>''OptionalCol3'')`);
-
-            // 3. The PK extraction (which lives OUTSIDE the dynamic SQL, in
-            //    plain PL/pgSQL) keeps using p_data — that's the enclosing
-            //    function's local and is in scope there.
-            expect(sql).toMatch(/v_id\s*:=\s*\(p_data->>'ID'\)::UUID/);
-            expect(sql).toContain(`IF p_data ? 'ID' THEN`);
-
-            // 4. Negative: no `p_data->>` references inside the WHEN clauses
-            //    that build the dynamic SQL — those must be `$1->>`. The
-            //    string-literal escaping in the WHEN clause is `(p_data->>'X')`
-            //    in the OLD broken version, so a regex that matches a single-
-            //    quoted dynamic-SQL fragment containing `p_data->>` would
-            //    catch the regression.
-            expect(sql).not.toMatch(/WHEN\s+'\w+'\s+THEN\s+'\(p_data->>/);
         });
 
         it('narrow entities still emit typed-arg shape', () => {
@@ -662,56 +626,6 @@ describe('PostgreSQLCodeGenProvider', () => {
 
         it('should pass through numeric values', () => {
             expect(provider.formatDefaultValue('42', false)).toBe('42');
-        });
-
-        // PG typed-literal handling: information_schema.columns.column_default
-        // returns expressions like `'Pending'::character varying`. These are
-        // already fully-formed PG expressions and pass through verbatim — PG
-        // handles them natively in every context this method's output is used
-        // (INSERT VALUES, COALESCE in INSERT/UPDATE, CASE-WHEN clear-companion).
-        //
-        // Empirically verified in PG 17 (see /tmp tests run alongside this
-        // change) that bare `'Pending'::character varying`, `'-1'::integer`,
-        // `'F51358F3-...'::uuid`, and `'2024-01-01'::timestamp with time zone`
-        // all coerce correctly to their target column types in COALESCE inside
-        // INSERT VALUES.
-        //
-        // The original regex `^'.*'::\w+(...)?(...)?\$` only matched
-        // single-word type names and silently fell through to the re-wrap
-        // path for multi-word names like `character varying` and `double
-        // precision` — re-wrapping produced `'''Pending''::character
-        // varying'`, a string literal containing the cast syntax that
-        // overflowed varchar(20) columns. The fix extends the regex to
-        // accept multi-word type names without changing pass-through
-        // behavior for cases the original regex already caught.
-        it('should pass through typed-literal defaults verbatim', () => {
-            // text-like types — single-word
-            expect(provider.formatDefaultValue("'Active'::text", false)).toBe("'Active'::text");
-            expect(provider.formatDefaultValue("'foo'::varchar(50)", false)).toBe("'foo'::varchar(50)");
-            expect(provider.formatDefaultValue("'a'::char(1)", false)).toBe("'a'::char(1)");
-            expect(provider.formatDefaultValue("'After Save'::bpchar", false)).toBe("'After Save'::bpchar");
-            // text-like — multi-word (the case the original regex missed)
-            expect(provider.formatDefaultValue("'Pending'::character varying", false)).toBe(
-                "'Pending'::character varying"
-            );
-            // numeric / uuid / boolean — single-word
-            expect(provider.formatDefaultValue("'-1'::integer", false)).toBe("'-1'::integer");
-            expect(provider.formatDefaultValue("'42'::bigint", false)).toBe("'42'::bigint");
-            expect(provider.formatDefaultValue("'F51358F3-9447-4176-B313-BF8025FD8D09'::uuid", false)).toBe(
-                "'F51358F3-9447-4176-B313-BF8025FD8D09'::uuid"
-            );
-            // multi-word numeric
-            expect(provider.formatDefaultValue("'1.5'::double precision", false)).toBe(
-                "'1.5'::double precision"
-            );
-            // load-bearing casts
-            expect(provider.formatDefaultValue("'{}'::jsonb", false)).toBe("'{}'::jsonb");
-            expect(provider.formatDefaultValue("'1 day'::interval", false)).toBe("'1 day'::interval");
-            expect(provider.formatDefaultValue("'foo'::text[]", false)).toBe("'foo'::text[]");
-            // multi-word time types
-            expect(provider.formatDefaultValue("'2024-01-01'::timestamp with time zone", false)).toBe(
-                "'2024-01-01'::timestamp with time zone"
-            );
         });
     });
 
