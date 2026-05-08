@@ -98,6 +98,14 @@ export interface CodeGenTransaction {
  */
 export interface CodeGenConnection {
     /**
+     * The SQL dialect for this connection's platform. Exposes identifier quoting,
+     * timestamp expressions, etc. — used by callers (e.g. validator-function
+     * emission in `EntitySubClassGeneratorBase`) that need to author dialect-aware
+     * SQL but don't have access to a `CodeGenDatabaseProvider` instance.
+     */
+    readonly Dialect: SQLDialect;
+
+    /**
      * Executes a SQL query without parameters.
      * @param sql The SQL statement to execute.
      * @returns The query result with a `recordset` array.
