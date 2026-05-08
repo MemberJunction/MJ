@@ -196,15 +196,15 @@
     height: 1.25rem;
     padding: 0;
     border-radius: 50%;
-    background-color: #dc3545;
-    color: var(--white-color);
+    background-color: var(--mj-status-error);
+    color: var(--mj-text-inverse);
     font-size: 0.7rem;
     font-weight: 700;
     display: flex;
     align-items: center;
     justify-content: center;
-    border: 2px solid var(--white-color);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    border: 2px solid var(--mj-bg-surface);
+    box-shadow: var(--mj-shadow-md);
     
     &.notification-badge-lg {
         min-width: 1.5rem;

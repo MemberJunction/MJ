@@ -71,7 +71,7 @@ import { CommonModule } from '@angular/common';
       left: 0;
       right: 0;
       bottom: 0;
-      background-color: rgba(0, 0, 0, 0.5);
+      background-color: var(--mj-bg-overlay);
       z-index: 10001;
       pointer-events: auto;
     }
@@ -93,24 +93,24 @@ import { CommonModule } from '@angular/common';
 
     .system-validation-banner {
       border-radius: 4px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+      box-shadow: var(--mj-shadow-md);
       padding: 16px;
       animation: slide-down 0.3s ease-out;
     }
 
     .system-validation-error {
-      background-color: #ffebee;
-      border-left: 4px solid #f44336;
+      background-color: var(--mj-status-error-bg);
+      border-left: 4px solid var(--mj-status-error);
     }
 
     .system-validation-warning {
-      background-color: #fff8e1;
-      border-left: 4px solid #ff9800;
+      background-color: var(--mj-status-warning-bg);
+      border-left: 4px solid var(--mj-status-warning);
     }
 
     .system-validation-info {
-      background-color: #e3f2fd;
-      border-left: 4px solid #2196f3;
+      background-color: var(--mj-status-info-bg);
+      border-left: 4px solid var(--mj-status-info);
     }
 
     .banner-content {
@@ -128,15 +128,15 @@ import { CommonModule } from '@angular/common';
     }
 
     .severity-error {
-      color: #f44336;
+      color: var(--mj-status-error);
     }
 
     .severity-warning {
-      color: #ff9800;
+      color: var(--mj-status-warning);
     }
 
     .severity-info {
-      color: #2196f3;
+      color: var(--mj-status-info);
     }
 
     .banner-message {
