@@ -419,7 +419,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
             res.Message = 'User does not have permission to delete this view';
             res.StartedAt = new Date();
             res.EndedAt = new Date();
-            this.ResultHistory.push(res);
+            this.RegisterResultHistoryEntry(res);
             return false;
         }
     }
@@ -455,7 +455,7 @@ export class MJUserViewEntityExtended extends MJUserViewEntity  {
             res.Message = this.ID ? 'User does not have permission to edit this view' : 'User does not have permission to create a new view';
             res.StartedAt = new Date();
             res.EndedAt = new Date();
-            this.ResultHistory.push(res);
+            this.RegisterResultHistoryEntry(res);
             return false;
         }
     }

@@ -1,0 +1,127 @@
+<div class="scope-grid" [class.disabled]="Disabled">
+    @if (IsLoading) {
+        <div class="scope-grid-loading">Loading&hellip;</div>
+    } @else if (LoadError) {
+        <div class="scope-grid-error">
+            <i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+            {{ LoadError }}
+        </div>
+    } @else {
+        <table class="scope-grid-table">
+            <thead>
+                <tr>
+                    @for (col of Columns; track col.Field) {
+                        <th [style.width]="col.Width || null">{{ col.Label }}</th>
+                    }
+                    <th class="scope-grid-actions-col" aria-hidden="true"></th>
+                </tr>
+            </thead>
+            <tbody>
+                @if (Rows.length === 0) {
+                    <tr>
+                        <td [attr.colspan]="Columns.length + 1" class="scope-grid-empty">
+                            {{ EmptyMessage }}
+                        </td>
+                    </tr>
+                } @else {
+                    @for (row of Rows; track row.Entity) {
+                        <tr [class.saving]="row.Saving">
+                            @for (col of Columns; track col.Field) {
+                                <td [style.width]="col.Width || null">
+                                    @switch (col.Type) {
+                                        @case ('checkbox') {
+                                            <input
+                                                type="checkbox"
+                                                class="mj-checkbox"
+                                                [checked]="!!GetCellValue(row, col)"
+                                                [disabled]="Disabled || col.ReadOnly"
+                                                (change)="SetCellValue(row, col, $any($event.target).checked)">
+                                        }
+                                        @case ('number') {
+                                            <input
+                                                type="number"
+                                                class="mj-input scope-grid-input"
+                                                [value]="$any(GetCellValue(row, col)) ?? ''"
+                                                [placeholder]="col.Placeholder || ''"
+                                                [disabled]="Disabled || col.ReadOnly"
+                                                (change)="SetCellValue(row, col, $any($event.target).valueAsNumber)">
+                                        }
+                                        @case ('textarea') {
+                                            <textarea
+                                                class="mj-textarea scope-grid-textarea"
+                                                rows="2"
+                                                [value]="$any(GetCellValue(row, col)) || ''"
+                                                [placeholder]="col.Placeholder || ''"
+                                                [disabled]="Disabled || col.ReadOnly"
+                                                (change)="SetCellValue(row, col, $any($event.target).value)"></textarea>
+                                        }
+                                        @case ('code') {
+                                            <textarea
+                                                class="mj-textarea scope-grid-code"
+                                                rows="2"
+                                                spellcheck="false"
+                                                [value]="$any(GetCellValue(row, col)) || ''"
+                                                [placeholder]="col.Placeholder || ''"
+                                                [disabled]="Disabled || col.ReadOnly"
+                                                (change)="SetCellValue(row, col, $any($event.target).value)"></textarea>
+                                        }
+                                        @case ('lookup') {
+                                            <select
+                                                class="mj-input scope-grid-select"
+                                                [value]="$any(GetCellValue(row, col)) || ''"
+                                                [disabled]="Disabled || col.ReadOnly"
+                                                (change)="SetCellValue(row, col, $any($event.target).value)">
+                                                <option value="">— select —</option>
+                                                @for (opt of GetLookupOptions(col); track opt.ID) {
+                                                    <option [value]="opt.ID">{{ opt.Label }}</option>
+                                                }
+                                            </select>
+                                        }
+                                        @case ('select') {
+                                            <select
+                                                class="mj-input scope-grid-select"
+                                                [value]="$any(GetCellValue(row, col)) ?? ''"
+                                                [disabled]="Disabled || col.ReadOnly"
+                                                (change)="SetCellValue(row, col, $any($event.target).value)">
+                                                @for (opt of col.Options; track opt.Value) {
+                                                    <option [value]="$any(opt.Value)">{{ opt.Label }}</option>
+                                                }
+                                            </select>
+                                        }
+                                        @default {
+                                            <input
+                                                type="text"
+                                                class="mj-input scope-grid-input"
+                                                [value]="$any(GetCellValue(row, col)) || ''"
+                                                [placeholder]="col.Placeholder || ''"
+                                                [disabled]="Disabled || col.ReadOnly"
+                                                (change)="SetCellValue(row, col, $any($event.target).value)">
+                                        }
+                                    }
+                                </td>
+                            }
+                            <td class="scope-grid-actions-col">
+                                <button
+                                    type="button"
+                                    class="scope-grid-icon-btn"
+                                    title="Remove row"
+                                    [disabled]="Disabled || row.Saving"
+                                    (click)="RemoveRow(row)">
+                                    <i class="fa-solid fa-trash" aria-hidden="true"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+
+        @if (!Disabled) {
+            <div class="scope-grid-footer">
+                <button type="button" class="scope-grid-add-btn" (click)="AddRow()">
+                    {{ AddButtonLabel }}
+                </button>
+            </div>
+        }
+    }
+</div>

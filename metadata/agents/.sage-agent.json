@@ -382,15 +382,11 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:MJ: Actions.Name=Search",
+            "ActionID": "@lookup:MJ: Actions.Name=Scoped Search",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "67E333E0-0CC2-407B-855C-AD89EECB0CC4"
-          },
-          "sync": {
-            "lastModified": "2026-04-11T04:11:16.095Z",
-            "checksum": "a92448fc0cc93928d77e50184cd3d57029d0de07f765db104ea5e2c9574b16c2"
           }
         },
         {

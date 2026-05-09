@@ -69,6 +69,7 @@
     "@memberjunction/ai-provider-bundle": "5.33.0",
     "@memberjunction/ai-recommendations-rex": "5.33.0",
     "@memberjunction/ai-reranker": "5.33.0",
+    "@memberjunction/ai-vectors-memory": "5.33.0",
     "@memberjunction/ai-vectors-pgvector": "5.33.0",
     "@memberjunction/ai-vectors-pinecone": "5.33.0",
     "@memberjunction/ai-vectors-qdrant": "5.33.0",

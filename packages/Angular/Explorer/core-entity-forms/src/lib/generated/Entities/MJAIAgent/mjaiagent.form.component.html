@@ -264,7 +264,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="PayloadDownstreamPaths"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -272,7 +272,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="PayloadUpstreamPaths"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -280,7 +280,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="PayloadSelfReadPaths"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -288,7 +288,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="PayloadSelfWritePaths"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -304,7 +304,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="FinalPayloadValidation"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -328,7 +328,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="StartingPayloadValidation"
-            Type="textarea"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -521,6 +521,15 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
+            FieldName="DefaultStorageAccountID"
+            Type="textbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+            LinkType="Record"
+        ></mj-form-field>
 
     </mj-collapsible-panel>
 
@@ -585,30 +594,19 @@
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="false"
+            [ShowLabel]="true"
             FieldName="RerankerConfiguration"
             Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Details Section -->
-    <mj-collapsible-panel
-        SectionKey="details"
-        SectionName="Details"
-        Icon="fa fa-align-left"
-        [Form]="this"
-        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="false"
-            FieldName="DefaultStorageAccountID"
-            Type="textbox"
+            [ShowLabel]="true"
+            FieldName="SearchScopeAccess"
+            Type="select"
             [EditMode]="EditMode"
             [FormContext]="formContext"
-            LinkType="Record"
         ></mj-form-field>
 
     </mj-collapsible-panel>
@@ -912,6 +910,56 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentClientTools', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Search Scopes Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentSearchScopes"
+        SectionName="AI Agent Search Scopes"
+        Icon="fa fa-search-plus"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentSearchScopes')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Search Scopes','AgentID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Search Scopes')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentSearchScopes')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentSearchScopes', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Search Execution Logs Section -->
+    <mj-collapsible-panel
+        SectionKey="mJSearchExecutionLogs"
+        SectionName="Search Execution Logs"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJSearchExecutionLogs')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Execution Logs','AIAgentID')"
+                [NewRecordValues]="NewRecordValues('MJ: Search Execution Logs')"
+                [AllowLoad]="IsSectionExpanded('mJSearchExecutionLogs')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJSearchExecutionLogs', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

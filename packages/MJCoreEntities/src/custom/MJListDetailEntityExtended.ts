@@ -181,7 +181,7 @@ export class MJListDetailEntityExtended extends MJListDetailEntity  {
                 newResult.Message = e.message;
                 newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
                 newResult.EndedAt = new Date();               
-                this.ResultHistory.push(newResult);
+                this.RegisterResultHistoryEntry(newResult);
             }
             return false;
         }
