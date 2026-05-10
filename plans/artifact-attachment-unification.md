@@ -75,29 +75,27 @@ A new column on `MJ: Artifact Types` (e.g. `DefaultDeliveryMode`) with values:
 
 A per-artifact-instance override (e.g. `ConversationArtifactVersion.DeliveryMode`) lets a specific instance opt out of the default. This addresses the use case: "we have images we explicitly do *not* want inlined — let the LLM decide whether to fetch via tool."
 
-### 3. Standardize `get_full` across all tool libraries
+### 3. Standardize `get_full` on the base class
 
-Every `BaseArtifactToolLibrary` exposes a uniform tool:
+Make `get_full` a **concrete, default-implemented** tool on `BaseArtifactToolLibrary` (`packages/AI/CorePlus/src/artifact-tool-library.ts:27`). It's truly generic — `InvokeTool` already receives `artifactContent: string | Buffer`, and "return the full content" is pure plumbing:
 
 ```
-get_full(artifactId): { content: string | base64; encoding: 'utf8' | 'base64'; mimeType; sizeBytes }
+get_full(artifactId): { content: string; encoding: 'utf8' | 'base64'; mimeType; sizeBytes }
+  - if artifactContent is a Buffer → encode base64
+  - if string → return utf8 directly
 ```
 
-Current state:
+Implementation: the base class registers `get_full` automatically and provides its `InvokeTool` handler. Subclasses get it for free. A subclass can override **only** when the default isn't appropriate (e.g. a PDF library might prefer extracted text over raw PDF bytes — though arguably "raw" should still be available alongside `get_text`).
 
-| Library | Has `get_full`? |
-|---|---|
-| DataSnapshot | ✅ |
-| PDF | ✅ |
-| Docx | ❌ (has `get_text`/`get_html` separately) |
-| Excel | ❌ |
-| JSON | ❌ |
-| Text | ❌ |
-| SearchResultSet | ❌ |
+Current state vs. proposed:
 
-Add `get_full` to the missing libraries. For binary artifacts (images, audio, video) `get_full` returns base64 with `encoding: 'base64'` — letting the LLM choose to fetch the bytes when it decides it needs to "see" the image despite `ToolsOnly` / `Auto` having delivered only the manifest.
+| Library | Today | After |
+|---|---|---|
+| DataSnapshot | ✅ custom impl | inherits base, custom impl removed |
+| PDF | ✅ custom impl | inherits base, custom impl removed (or kept if extracted-text default is preferred) |
+| Docx, Excel, JSON, Text, SearchResultSet | ❌ | inherits base — gets it for free |
 
-This becomes the primitive that makes "tools-only" actually viable for image/audio artifacts: the LLM has a defined escape hatch.
+This is the primitive that makes `ToolsOnly` delivery viable for **inlineable types like images**: the LLM has a defined escape hatch to fetch bytes on demand even when the resolver did not pre-attach them as `image_url`. (See open question #1 about how each model driver handles a tool-returned base64 image — it may need to be re-injected as an `image_url` block in the next turn.)
 
 ### 4. Routing logic moves out of the resolver
 
@@ -142,10 +140,20 @@ Even when an artifact is on the inline path, enforce a server-side absolute cap.
 - Delete `ARTIFACT_TOOL_MIME_PREFIXES`
 - Document in new `packages/AI/Agents/docs/ARTIFACT_TOOLS_GUIDE.md`
 
-### Phase 4 — Deprecate the parallel attachment path
+### Phase 4 — Deprecate the parallel attachment path (no code-breaking changes)
 
-- Mark `ConversationDetailAttachment` deprecated; redirect all reads through artifacts
-- Schedule eventual table removal in a major version
+The `MJ: Entities.Status` field already supports `'Active' | 'Deprecated' | 'Disabled'`. Per the field's own description: *"Deprecated: functional but generates console warnings when used; Disabled: not available for use even though metadata and physical table remain."*
+
+Steps:
+
+- Add a new metadata file under `/metadata/entities/` (e.g. `.conversation-detail-attachments-deprecation.json`) that updates the `MJ: Conversation Detail Attachments` entity record with:
+  - `Status: "Deprecated"`
+  - Optionally an updated `Description` pointing readers to artifacts as the supported path
+- On `mj sync push`, this propagates through the normal entity-metadata pipeline. CodeGen then emits the deprecation marker into the generated `ConversationDetailAttachmentEntity` JSDoc on the next CodeGen run, and any runtime use of the entity logs a console warning (per the framework's existing handling of `Status === 'Deprecated'`).
+- Critically, **nothing is removed**: the table, the entity, the generated class, the GraphQL types all remain. Existing consumers keep working. They just see a deprecation warning, and IDE tooling surfaces the JSDoc tag.
+- Schedule eventual table removal in a future major version once all known consumers are migrated.
+
+This is the safest possible deprecation — pure metadata change, no schema migration, no code change in the entity package itself, full backwards compatibility, and the warning surfaces in both runtime logs and developer IDEs.
 
 ## Open questions
 
