@@ -177,6 +177,27 @@ subtype wildcard       (text/*, image/*)         — middle
 
 File extension as a secondary tiebreaker when MIME is missing or `application/octet-stream` (browsers default to that constantly for unknown extensions).
 
+#### Tie-breaking within a specificity tier
+
+Two types can legitimately register the same pattern (e.g. a system-provided `image/*` type plus an organization-supplied override). A new `Priority` field on `MJ: Artifact Types` (higher wins) resolves the choice deterministically. Matches the pattern used elsewhere in MJ — `AI Models`, `AI Vendors`, `AIPromptModel` all carry explicit priorities for the same reason.
+
+Resolution algorithm:
+
+```
+1. Filter to types whose ContentType pattern matches the upload's MIME
+2. Bucket by specificity: exact > subtype-wildcard
+3. Within the highest-specificity bucket, sort by Priority desc
+4. Tiebreaker if priorities are equal:
+   a. SystemSupplied = false beats SystemSupplied = true
+      (user customizations win over shipped defaults)
+   b. otherwise lowest ID wins (deterministic, arbitrary)
+5. Log the resolved choice at engine boot so operators can see
+   "image/*" -> CompanyImageType (Priority 100, User)
+              wins over Image (Priority 0, System)
+```
+
+At registration, log a WARN if two types share an identical `(ContentType, Priority, SystemSupplied)` triple — almost always a config mistake, and the deterministic-ID tiebreaker would otherwise hide the ambiguity.
+
 #### Default-registered Artifact Types ship covering the long tail
 
 | MIME | Artifact Type | Tools |
@@ -219,6 +240,40 @@ No system-wide global flag. Permissiveness is always scoped to a specific agent 
 #### Deletion of the JSON fallback
 
 `AgentRunner.ts:1432-1434`'s "use JSON when nothing matches" fallback is deleted. With pattern matching + the default registry + reject-by-default, there is never a legitimate path that lands on JSON for non-JSON content.
+
+#### Backfill for artifacts created before this change
+
+Historic artifacts uploaded before this work landed may have been silently assigned the JSON artifact type ID via the old fallback path, even though their bytes are CSV / XML / plain text / etc. After Section 6 lands those rows are misclassified — tool calls will fail because JSONToolLibrary can't parse the actual content.
+
+Policy: **no automatic, silent reclassification on upgrade.** Two reasons:
+
+- The whole plan exists to remove silent path changes; quietly rewriting historic rows is exactly that
+- A small fraction of "JSON-typed" artifacts genuinely *are* JSON (uploaded by users when JSON was registered) and should not be touched
+
+Instead, ship a one-time backfill script (e.g. `mj-cli artifacts reclassify`) that:
+
+- Scans `ConversationArtifactVersion` rows whose `TypeID` equals the historic JSON fallback ID
+- Sniffs the actual content MIME (file-magic detection on Buffer rows, JSON parse trial on text rows)
+- Looks up the correct artifact type using the new pattern-matching resolver
+- Defaults to **dry-run** — produces a per-row report
+
+  ```
+  Artifact 1234 (conversation 9999):
+    Current TypeID: ae674c7e...    (JSON, fallback)
+    Detected MIME:  text/csv
+    Proposed type:  CSV
+    Action:         RECLASSIFY (--apply)
+  ```
+
+- `--apply` actually writes; updates flow through Record Changes for full audit
+- Per-row rules:
+  - `Current TypeID ≠ JSON fallback` → skip (trust historic registration)
+  - `Current TypeID = JSON fallback AND detected = JSON` → skip (it was actually JSON)
+  - `Current TypeID = JSON fallback AND detected ≠ JSON` → candidate
+  - Detected MIME has no registered type → mark "orphaned, no action" in the report; operator decides
+- Filters: `--conversation-id`, `--since`, `--limit` for scoped runs
+
+The script ships in the same release as Section 6 but is invoked manually. Schema migration is purely additive (new types, new columns); the data correction is operator-controlled.
 
 ## Migration plan
 
