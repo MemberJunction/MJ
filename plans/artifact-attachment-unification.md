@@ -63,17 +63,25 @@ Net effect:
 - New Artifact Types automatically cover their MIME range with no resolver edits
 - "I uploaded that JSON in turn 3" is referenceable from turn 17
 
-### 2. Rendering modes per artifact type
+### 2. Rendering modes per artifact type — two states, one-way override
 
-A new column on `MJ: Artifact Types` (e.g. `DefaultDeliveryMode`) with values:
+A new column on `MJ: Artifact Types` (e.g. `DefaultDeliveryMode`) with **two values**:
 
 | Mode | Meaning |
 |---|---|
-| `Inline` | Always deliver as inline content block (`image_url`, etc.) — appropriate for vision/audio-native types under size cap |
-| `ToolsOnly` | Never inline — agent must call tools to read content |
-| `Auto` | Inline if (a) modality is multimodal-native for the model and (b) size ≤ threshold; otherwise tools |
+| `Inline` | Deliver as inline content block (`image_url`, `audio_url`, small text, etc.). The runtime asserts the active model driver supports the modality and the size is under the cap; if either condition fails the behavior is explicit (see Section 4). |
+| `ToolsOnly` | Never inline. Agent reaches the bytes only by calling tools (`get_full`, library-specific tools). |
 
-A per-artifact-instance override (e.g. `ConversationArtifactVersion.DeliveryMode`) lets a specific instance opt out of the default. This addresses the use case: "we have images we explicitly do *not* want inlined — let the LLM decide whether to fetch via tool."
+We previously considered an `Auto` value. Dropped — it collapses to either "try Inline with fallback" (same as Inline when Inline has an explicit fallback policy) or "use the type default when the instance has no override" (same as leaving the per-instance override unset). It adds states without adding behavior.
+
+**Per-instance override is one-way: opt-out of inline only.** A new `ForceToolsOnly: bool` field on `ConversationArtifactVersion` (default `false`). When `true`, the artifact is delivered via tools regardless of the type default. There is **no way** to flip an instance from `ToolsOnly` to `Inline` — the override can only narrow toward the more conservative delivery, never widen toward a setting that might not be supportable.
+
+Why one-way:
+- Going to tools-only always succeeds, so this override can never silently fail
+- A two-way override re-introduces the exact silent-fallback antipattern this plan exists to remove (set Inline; model doesn't support modality; resolver quietly falls back to tools; user has no idea why their config didn't take effect)
+- Use case for the override (e.g. "we have images we explicitly don't want inlined — let the LLM decide via tools") is fully served by opt-out only
+
+If a deployment legitimately needs an instance to be Inline when its type default is ToolsOnly, the answer is to change the type or pick a different type — not to silently widen one record.
 
 ### 3. Standardize `get_full` on the base class
 
@@ -97,20 +105,46 @@ Current state vs. proposed:
 
 This is the primitive that makes `ToolsOnly` delivery viable for **inlineable types like images**: the LLM has a defined escape hatch to fetch bytes on demand even when the resolver did not pre-attach them as `image_url`. (See open question #1 about how each model driver handles a tool-returned base64 image — it may need to be re-injected as an `image_url` block in the next turn.)
 
-### 4. Routing logic moves out of the resolver
+### 4. Routing logic moves out of the resolver — no silent fallthrough
 
-`RunAIAgentResolver` no longer makes type-by-type decisions. For each artifact attached to the conversation:
+`RunAIAgentResolver` no longer makes type-by-type decisions. For each artifact attached to the conversation, the routing is explicit and never silently flips:
 
 ```
-mode = artifactVersion.DeliveryMode ?? artifactType.DefaultDeliveryMode
+typeDefault = artifactType.DefaultDeliveryMode    // 'Inline' | 'ToolsOnly'
+forceTools  = artifactVersion.ForceToolsOnly      // bool, default false
 
-if mode == Inline AND modelDriver.SupportsModality(mimeType) AND sizeBytes < cap:
-    add inline content block to ChatMessage
-else:
+if typeDefault == 'ToolsOnly' OR forceTools:
     register with ArtifactToolManager (manifest + tools)
+    return
+
+// typeDefault == 'Inline' and no instance opt-out — Inline is intended.
+// We do NOT silently fall through to tools when conditions don't hold.
+
+if NOT modelDriver.SupportsModality(mimeType):
+    raise "Artifact type {typeName} configured for Inline delivery but model
+           {modelName} does not support modality {mimeType}. Either configure
+           the type as ToolsOnly, set ForceToolsOnly on this instance, or
+           switch to a model that supports this modality."
+
+if sizeBytes >= INLINE_SIZE_CAP:
+    // Defensible auto-fallback because the cap is itself a documented policy,
+    // not an environmental quirk. But it is NOT silent:
+    register with ArtifactToolManager (manifest + tools)
+    annotate manifest entry with: "Note: artifact configured for Inline
+        delivery but exceeds inline size cap ({sizeBytes} > {cap}); delivered
+        via tools."
+    log at WARN
+    return
+
+add inline content block to ChatMessage
 ```
 
-The `ARTIFACT_TOOL_MIME_PREFIXES` constant is deleted. `cap` lives in one place (configurable; sane default e.g. 100KB inline / 25MB tool-eligible).
+The two key behaviors:
+
+- **Modality mismatch is a hard error** (config bug — admin or user has paired an Inline type with a non-multimodal model; nothing the resolver does at runtime can fix this, so surface it loudly with a remediable message).
+- **Size cap is an explicit, documented fallback**, not silent: the manifest carries an annotation visible to the agent, and the server logs a warning. Both the LLM and the operator can tell that the override didn't take effect.
+
+The `ARTIFACT_TOOL_MIME_PREFIXES` constant is deleted. `INLINE_SIZE_CAP` lives in one place (configurable; sane default e.g. 100KB inline / 25MB tool-eligible).
 
 ### 5. Hard size guard — defense in depth
 
@@ -204,8 +238,8 @@ No system-wide global flag. Permissiveness is always scoped to a specific agent 
 
 ### Phase 3 — Move routing out of the resolver
 
-- Add `DefaultDeliveryMode` to `MJ: Artifact Types`
-- Add `DeliveryMode` override to `ConversationArtifactVersion`
+- Add `DefaultDeliveryMode` (`Inline` | `ToolsOnly`) to `MJ: Artifact Types`
+- Add `ForceToolsOnly: bool` (default `false`) to `ConversationArtifactVersion` — one-way opt-out of inline
 - Resolver delegates to artifact-type metadata + model-driver capability check
 - Delete `ARTIFACT_TOOL_MIME_PREFIXES`
 - Document in new `packages/AI/Agents/docs/ARTIFACT_TOOLS_GUIDE.md`
@@ -235,7 +269,7 @@ This is the safest possible deprecation — pure metadata change, no schema migr
 
 4. **MJStorage for artifacts that originate as attachments.** Today inline attachments may store base64 directly on the row. Artifact storage prefers `FileID` references to MJStorage. Need a size threshold for promotion to MJStorage during the Phase 2 backfill.
 
-5. **Per-artifact override UX.** If `DeliveryMode` is configurable per artifact instance, where does a user set it? Conversation UI? Agent configuration? Default-off and only set programmatically? Needs UX design.
+5. **Per-artifact override UX.** Where does a user set `ForceToolsOnly` on a `ConversationArtifactVersion`? Conversation UI? Agent configuration? Default-off and only set programmatically? Needs UX design.
 
 ## Triggering bug — confirmation
 
