@@ -7,14 +7,12 @@
       "Name": "MJ: Action Execution Logs",
       "BaseView": "vwActionExecutionLogs",
       "TrackRecordChanges": false,
-      "TrustServerCacheCompletely": false
+      "TrustServerCacheCompletely": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Action Execution Logs"
-    },
-    "sync": {
-      "lastModified": "2026-04-11T04:11:20.701Z",
-      "checksum": "802f048cf6551cdac81b21c8c4cb83b0f732ecccca56c80fbbbf395cca81e4a5"
     }
   },
   {
@@ -25,14 +23,12 @@
       "Name": "MJ: Audit Logs",
       "BaseView": "vwAuditLogs",
       "TrackRecordChanges": false,
-      "TrustServerCacheCompletely": false
+      "TrustServerCacheCompletely": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Audit Logs"
-    },
-    "sync": {
-      "lastModified": "2026-04-11T04:11:20.733Z",
-      "checksum": "d860fd0f2847fb04cb0557ad377bb4415dfb13e98fc2b670f993583c6f0f7790"
     }
   },
   {
@@ -43,14 +39,12 @@
       "Name": "MJ: Communication Logs",
       "BaseView": "vwCommunicationLogs",
       "TrackRecordChanges": false,
-      "TrustServerCacheCompletely": false
+      "TrustServerCacheCompletely": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Communication Logs"
-    },
-    "sync": {
-      "lastModified": "2026-04-11T04:11:20.764Z",
-      "checksum": "0989710f2ef9f4fe583c2e53a8f9cc9c10a4efb35499cb6ea1dd687aa539d16b"
     }
   },
   {
@@ -61,14 +55,12 @@
       "Name": "MJ: Communication Runs",
       "BaseView": "vwCommunicationRuns",
       "TrackRecordChanges": false,
-      "TrustServerCacheCompletely": false
+      "TrustServerCacheCompletely": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Communication Runs"
-    },
-    "sync": {
-      "lastModified": "2026-04-11T04:11:20.793Z",
-      "checksum": "b353a11d2adb5c6d81228f266cd1a1b38f34cea79b058a958290d0657f54ade3"
     }
   },
   {
@@ -79,14 +71,12 @@
       "Name": "MJ: Company Integration Run API Logs",
       "BaseView": "vwCompanyIntegrationRunAPILogs",
       "TrackRecordChanges": false,
-      "TrustServerCacheCompletely": false
+      "TrustServerCacheCompletely": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Company Integration Run API Logs"
-    },
-    "sync": {
-      "lastModified": "2026-04-11T04:11:20.577Z",
-      "checksum": "f0c08679eae7b5a5ef0162c8427e9c904fe8c15052d055db27fb4b84b746fc92"
     }
   },
   {
@@ -97,14 +87,12 @@
       "Name": "MJ: Company Integration Run Details",
       "BaseView": "vwCompanyIntegrationRunDetails",
       "TrackRecordChanges": false,
-      "TrustServerCacheCompletely": false
+      "TrustServerCacheCompletely": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Company Integration Run Details"
-    },
-    "sync": {
-      "lastModified": "2026-04-11T04:11:20.606Z",
-      "checksum": "9124862daf174a324bad8e7cf3d6fa22daf3ac37d0489f45616519c59c3b5569"
     }
   },
   {
@@ -115,14 +103,12 @@
       "Name": "MJ: Company Integration Runs",
       "BaseView": "vwCompanyIntegrationRuns",
       "TrackRecordChanges": false,
-      "TrustServerCacheCompletely": false
+      "TrustServerCacheCompletely": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Company Integration Runs"
-    },
-    "sync": {
-      "lastModified": "2026-04-11T04:11:20.629Z",
-      "checksum": "3a0238af980c713226f59948a5c4f986eb19601ed941bcdc5e7ea02150d287ac"
     }
   },
   {
@@ -133,14 +119,42 @@
       "Name": "MJ: Content Process Runs",
       "BaseView": "vwContentProcessRuns",
       "TrackRecordChanges": false,
-      "TrustServerCacheCompletely": false
+      "TrustServerCacheCompletely": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Content Process Runs"
+    }
+  },
+  {
+    "_comments": [
+      "Content Process Run Details - content processing per-record details (added with search hygiene)"
+    ],
+    "fields": {
+      "Name": "MJ: Content Process Run Details",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
-    "sync": {
-      "lastModified": "2026-04-11T04:11:20.816Z",
-      "checksum": "4cb01e4738d9884cd6f5bc179a9101dd04162b0da8895f3226288320c8fed884"
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Content Process Run Details"
+    }
+  },
+  {
+    "_comments": [
+      "Content Process Run Prompt Runs - links content process runs to AI prompt runs (added with search hygiene)"
+    ],
+    "fields": {
+      "Name": "MJ: Content Process Run Prompt Runs",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Content Process Run Prompt Runs"
     }
   },
   {
@@ -154,10 +168,6 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Conversation Details"
-    },
-    "sync": {
-      "lastModified": "2026-02-13T21:09:37.353Z",
-      "checksum": "9702a83652de31c17d1b4a9ebe9bb64b6caab6933b18b540f1eb017a66cc4d10"
     }
   },
   {
@@ -181,14 +191,12 @@
       "Name": "MJ: Duplicate Run Detail Matches",
       "BaseView": "vwDuplicateRunDetailMatches",
       "TrackRecordChanges": false,
-      "TrustServerCacheCompletely": false
+      "TrustServerCacheCompletely": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Duplicate Run Detail Matches"
-    },
-    "sync": {
-      "lastModified": "2026-04-11T04:11:21.083Z",
-      "checksum": "1fd621ddd5f20fe3a401ca490d6aeb6855857b95744213b592e36c55d4f0dd0c"
     }
   },
   {
@@ -198,14 +206,12 @@
     "fields": {
       "Name": "MJ: Duplicate Run Details",
       "BaseView": "vwDuplicateRunDetails",
-      "TrackRecordChanges": false
+      "TrackRecordChanges": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Duplicate Run Details"
-    },
-    "sync": {
-      "lastModified": "2026-02-13T21:09:37.532Z",
-      "checksum": "c1caada75ba4d50c1fa8d1ef5d2fa2ad80d35fee684830d6319df517e71eb557"
     }
   },
   {
@@ -215,14 +221,12 @@
     "fields": {
       "Name": "MJ: Duplicate Runs",
       "BaseView": "vwDuplicateRuns",
-      "TrackRecordChanges": false
+      "TrackRecordChanges": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Duplicate Runs"
-    },
-    "sync": {
-      "lastModified": "2026-02-13T21:09:37.536Z",
-      "checksum": "c1cc885ec81885358b6ba3dc888ed64df5840ffea03f6c0cf7b4843eb62d2384"
     }
   },
   {
@@ -232,14 +236,12 @@
     "fields": {
       "Name": "MJ: Entity Document Runs",
       "BaseView": "vwEntityDocumentRuns",
-      "TrackRecordChanges": false
+      "TrackRecordChanges": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Entity Document Runs"
-    },
-    "sync": {
-      "lastModified": "2026-02-13T21:09:37.540Z",
-      "checksum": "e36737bf060db20a574fc8399d04e34f9aad8c90eb28116a9a8015b87c63eb04"
     }
   },
   {
@@ -250,14 +252,12 @@
       "Name": "MJ: Error Logs",
       "BaseView": "vwErrorLogs",
       "TrackRecordChanges": false,
-      "TrustServerCacheCompletely": false
+      "TrustServerCacheCompletely": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Error Logs"
-    },
-    "sync": {
-      "lastModified": "2026-04-11T04:11:21.105Z",
-      "checksum": "bb9ad41624ba2704f8519d3dafd4fa3025d21b6197d8bf35cb24e0302808c3fe"
     }
   },
   {
@@ -267,14 +267,12 @@
     "fields": {
       "Name": "MJ: AI Agent Run Medias",
       "BaseView": "vwAIAgentRunMedias",
-      "TrackRecordChanges": false
+      "TrackRecordChanges": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Run Medias"
-    },
-    "sync": {
-      "lastModified": "2026-01-27T02:14:34.637Z",
-      "checksum": "d26ca866a8b2787cbaccd20f43649ffeacf72229a4c283c04bec432f4fc7aab5"
     }
   },
   {
@@ -284,14 +282,12 @@
     "fields": {
       "Name": "MJ: AI Agent Run Steps",
       "BaseView": "vwAIAgentRunSteps",
-      "TrackRecordChanges": false
+      "TrackRecordChanges": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Run Steps"
-    },
-    "sync": {
-      "lastModified": "2026-01-27T02:14:34.656Z",
-      "checksum": "29643bebe3644c6216402e51cad4e01effb0076f4c27876e180d03a940657c25"
     }
   },
   {
@@ -301,14 +297,12 @@
     "fields": {
       "Name": "MJ: AI Agent Runs",
       "BaseView": "vwAIAgentRuns",
-      "TrackRecordChanges": false
+      "TrackRecordChanges": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: AI Agent Runs"
-    },
-    "sync": {
-      "lastModified": "2026-01-27T02:14:34.674Z",
-      "checksum": "9e1addcb1cdcf11b89dc9c35a259d845988daacb2dc280c38260f23f12fe000c"
     }
   },
   {
@@ -318,14 +312,12 @@
     "fields": {
       "Name": "MJ: AI Prompt Run Medias",
       "BaseView": "vwAIPromptRunMedias",
-      "TrackRecordChanges": false
+      "TrackRecordChanges": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: AI Prompt Run Medias"
-    },
-    "sync": {
-      "lastModified": "2026-01-27T02:14:34.692Z",
-      "checksum": "2118a88846222b38094e4d5316a0c4067aa778ebb17cc8fa8b6b23521658c081"
     }
   },
   {
@@ -335,14 +327,12 @@
     "fields": {
       "Name": "MJ: AI Prompt Runs",
       "BaseView": "vwAIPromptRuns",
-      "TrackRecordChanges": false
+      "TrackRecordChanges": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: AI Prompt Runs"
-    },
-    "sync": {
-      "lastModified": "2026-01-27T02:14:34.706Z",
-      "checksum": "5e8733a565295a44701609b1fda694815b9f652c8f22aa2f0bbe90f7dd2f99dc"
     }
   },
   {
@@ -353,14 +343,42 @@
       "Name": "MJ: API Key Usage Logs",
       "BaseView": "vwAPIKeyUsageLogs",
       "TrackRecordChanges": false,
-      "TrustServerCacheCompletely": false
+      "TrustServerCacheCompletely": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: API Key Usage Logs"
+    }
+  },
+  {
+    "_comments": [
+      "Archive Run Details - per-record archive run details (added with search hygiene)"
+    ],
+    "fields": {
+      "Name": "MJ: Archive Run Details",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
-    "sync": {
-      "lastModified": "2026-04-11T04:11:21.352Z",
-      "checksum": "55e7c785c63aa0b61362316b6f594cef75d597de8dfa39e3f947193ac566c051"
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Archive Run Details"
+    }
+  },
+  {
+    "_comments": [
+      "Archive Runs - archive execution history (added with search hygiene)"
+    ],
+    "fields": {
+      "Name": "MJ: Archive Runs",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Archive Runs"
     }
   },
   {
@@ -374,10 +392,6 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Conversation Detail Artifacts"
-    },
-    "sync": {
-      "lastModified": "2026-01-27T02:14:34.910Z",
-      "checksum": "6dfab61420719612ad931e84267e14d71cf901b58867bfe3e7012ea4094f2c87"
     }
   },
   {
@@ -391,10 +405,6 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Conversation Detail Attachments"
-    },
-    "sync": {
-      "lastModified": "2026-01-27T02:14:34.929Z",
-      "checksum": "da7923000cb629ce25be72f4b81ff267ecddd7b72ed6ba09fdceadd50288d3e7"
     }
   },
   {
@@ -408,10 +418,36 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Conversation Detail Ratings"
+    }
+  },
+  {
+    "_comments": [
+      "MCP Tool Execution Logs - MCP tool invocation audit trail (added with search hygiene)"
+    ],
+    "fields": {
+      "Name": "MJ: MCP Tool Execution Logs",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
-    "sync": {
-      "lastModified": "2026-01-27T02:14:34.947Z",
-      "checksum": "b49e840aad8701ef6dc40c60b948ff31fcfa6bb84234f3958377b8770cafbf2f"
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: MCP Tool Execution Logs"
+    }
+  },
+  {
+    "_comments": [
+      "Report Snapshots - point-in-time report execution snapshots (added with search hygiene)"
+    ],
+    "fields": {
+      "Name": "MJ: Report Snapshots",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
+    },
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Report Snapshots"
     }
   },
   {
@@ -421,14 +457,27 @@
     "fields": {
       "Name": "MJ: Scheduled Job Runs",
       "BaseView": "vwScheduledJobRuns",
-      "TrackRecordChanges": false
+      "TrackRecordChanges": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Scheduled Job Runs"
+    }
+  },
+  {
+    "_comments": [
+      "Tag Audit Logs - tag mutation audit trail (added with search hygiene)"
+    ],
+    "fields": {
+      "Name": "MJ: Tag Audit Logs",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
-    "sync": {
-      "lastModified": "2026-01-27T02:14:34.964Z",
-      "checksum": "b683d3894f6ff2ccba2813667ca101dcc757a8c7f08284a8ef5474f53b352f2c"
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Tag Audit Logs"
     }
   },
   {
@@ -438,14 +487,27 @@
     "fields": {
       "Name": "MJ: Test Run Feedbacks",
       "BaseView": "vwTestRunFeedbacks",
-      "TrackRecordChanges": false
+      "TrackRecordChanges": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Test Run Feedbacks"
+    }
+  },
+  {
+    "_comments": [
+      "Test Run Outputs - per-test outputs from a test run (added with search hygiene)"
+    ],
+    "fields": {
+      "Name": "MJ: Test Run Outputs",
+      "TrackRecordChanges": false,
+      "TrustServerCacheCompletely": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
-    "sync": {
-      "lastModified": "2026-01-27T02:14:34.982Z",
-      "checksum": "cab85eccb50b9b0d51b19becfec075ce5d15bfc81bcb9f676228e29a98b1ef02"
+    "primaryKey": {
+      "ID": "@lookup:MJ: Entities.Name=MJ: Test Run Outputs"
     }
   },
   {
@@ -455,14 +517,12 @@
     "fields": {
       "Name": "MJ: Test Runs",
       "BaseView": "vwTestRuns",
-      "TrackRecordChanges": false
+      "TrackRecordChanges": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Test Runs"
-    },
-    "sync": {
-      "lastModified": "2026-01-27T02:14:34.999Z",
-      "checksum": "2a07dc4102f25bf550f907cf51919f1d69e0af41714aa0ae85bd0158bb0bf9b1"
     }
   },
   {
@@ -472,14 +532,12 @@
     "fields": {
       "Name": "MJ: Test Suite Runs",
       "BaseView": "vwTestSuiteRuns",
-      "TrackRecordChanges": false
+      "TrackRecordChanges": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Test Suite Runs"
-    },
-    "sync": {
-      "lastModified": "2026-01-27T02:14:35.018Z",
-      "checksum": "6da2304696cad0d60b92f2ebe1948acc921aac18659c3779b77688d4c50913d5"
     }
   },
   {
@@ -493,10 +551,6 @@
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Queue Tasks"
-    },
-    "sync": {
-      "lastModified": "2026-02-13T21:09:37.746Z",
-      "checksum": "1dc25fb022a992ea6a76eee2d9aa5c3a0f7746dde7fc87af24b60014e9a4e7fb"
     }
   },
   {
@@ -506,14 +560,12 @@
     "fields": {
       "Name": "MJ: Recommendation Runs",
       "BaseView": "vwRecommendationRuns",
-      "TrackRecordChanges": false
+      "TrackRecordChanges": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Recommendation Runs"
-    },
-    "sync": {
-      "lastModified": "2026-02-13T21:09:37.748Z",
-      "checksum": "f021de8e8d1301efdf63b021820c070c57fbf54a07f3add75da866ec3c094abd"
     }
   },
   {
@@ -523,14 +575,12 @@
     "fields": {
       "Name": "MJ: Record Change Replay Runs",
       "BaseView": "vwRecordChangeReplayRuns",
-      "TrackRecordChanges": false
+      "TrackRecordChanges": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Record Change Replay Runs"
-    },
-    "sync": {
-      "lastModified": "2026-02-13T21:09:37.859Z",
-      "checksum": "fa4e5ed6769cf05088fd78a1481362aa7b0670f853b40c386b79f16181003784"
     }
   },
   {
@@ -541,14 +591,12 @@
       "Name": "MJ: Record Changes",
       "BaseView": "vwRecordChanges",
       "TrackRecordChanges": false,
-      "TrustServerCacheCompletely": false
+      "TrustServerCacheCompletely": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Record Changes"
-    },
-    "sync": {
-      "lastModified": "2026-04-11T04:11:21.603Z",
-      "checksum": "49f262b83010ced95f8acce3bbf85d13d378eeb3acccc8b25c79a90bb4acb12e"
     }
   },
   {
@@ -559,14 +607,12 @@
       "Name": "MJ: Record Merge Deletion Logs",
       "BaseView": "vwRecordMergeDeletionLogs",
       "TrackRecordChanges": false,
-      "TrustServerCacheCompletely": false
+      "TrustServerCacheCompletely": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Record Merge Deletion Logs"
-    },
-    "sync": {
-      "lastModified": "2026-04-11T04:11:21.632Z",
-      "checksum": "54df70df9e64333d92e51fd17d4c217841692d295d0c29e4cf94cb89432c4958"
     }
   },
   {
@@ -577,14 +623,12 @@
       "Name": "MJ: Record Merge Logs",
       "BaseView": "vwRecordMergeLogs",
       "TrackRecordChanges": false,
-      "TrustServerCacheCompletely": false
+      "TrustServerCacheCompletely": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Record Merge Logs"
-    },
-    "sync": {
-      "lastModified": "2026-04-11T04:11:21.657Z",
-      "checksum": "d8f14f083f7a068dfb0b323909bfa5ce6cb9ac8c0d094b0c32f891c29419eab4"
     }
   },
   {
@@ -595,14 +639,12 @@
       "Name": "MJ: User Record Logs",
       "BaseView": "vwUserRecordLogs",
       "TrackRecordChanges": false,
-      "TrustServerCacheCompletely": false
+      "TrustServerCacheCompletely": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: User Record Logs"
-    },
-    "sync": {
-      "lastModified": "2026-04-11T04:11:21.683Z",
-      "checksum": "12778ad8540030a849cf2634bcca0c8b9d48624c58c902a7212398e80bf6e939"
     }
   },
   {
@@ -613,14 +655,12 @@
       "Name": "MJ: User View Run Details",
       "BaseView": "vwUserViewRunDetails",
       "TrackRecordChanges": false,
-      "TrustServerCacheCompletely": false
+      "TrustServerCacheCompletely": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: User View Run Details"
-    },
-    "sync": {
-      "lastModified": "2026-04-11T04:11:21.713Z",
-      "checksum": "1e264608470b3711ab7589abebbc1b7742dba20106c836816c47199ba4aa81a9"
     }
   },
   {
@@ -631,14 +671,12 @@
       "Name": "MJ: User View Runs",
       "BaseView": "vwUserViewRuns",
       "TrackRecordChanges": false,
-      "TrustServerCacheCompletely": false
+      "TrustServerCacheCompletely": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: User View Runs"
-    },
-    "sync": {
-      "lastModified": "2026-04-11T04:11:21.742Z",
-      "checksum": "0009dcaf1d180991d5dae5de2fc5d3a8579f797c3a1f419e5dee6688954ce9f8"
     }
   },
   {
@@ -649,14 +687,12 @@
       "Name": "MJ: Workflow Runs",
       "BaseView": "vwWorkflowRuns",
       "TrackRecordChanges": false,
-      "TrustServerCacheCompletely": false
+      "TrustServerCacheCompletely": false,
+      "AllowUserSearchAPI": false,
+      "AutoUpdateAllowUserSearchAPI": false
     },
     "primaryKey": {
       "ID": "@lookup:MJ: Entities.Name=MJ: Workflow Runs"
-    },
-    "sync": {
-      "lastModified": "2026-04-11T04:11:21.769Z",
-      "checksum": "9708eaa808d604bc9f29e2467b73a2f9630e50962f42c3c73005db933e60a0f5"
     }
   }
 ]
