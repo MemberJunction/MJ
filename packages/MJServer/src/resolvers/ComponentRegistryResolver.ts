@@ -1,6 +1,6 @@
 import { Arg, Ctx, Field, InputType, ObjectType, Query, Mutation, Resolver } from 'type-graphql';
-import { UserInfo, LogError, LogStatus, LocalCacheManager } from '@memberjunction/core';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { UUIDsEqual, MJLruCache } from '@memberjunction/global';
 import { UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { MJComponentRegistryEntity, ComponentMetadataEngine } from '@memberjunction/core-entities';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
@@ -165,15 +165,17 @@ class ComponentFeedbackResponse {
  * - REGISTRY_API_KEY_<REGISTRY_NAME>: API key for authenticating with the registry
  *   Example: REGISTRY_API_KEY_MJ_CENTRAL=your-api-key-here
  */
+/** Server-side cache for registry component specs. Uses MJLruCache for isolated
+ *  LRU eviction with TTL — avoids sharing eviction budgets with RunView/RunQuery
+ *  data in LocalCacheManager. */
+const componentSpecCache = new MJLruCache<string, { specJson: string; hash: string }>({
+    maxSize: 200,
+    ttlMs: 60 * 60 * 1000 // 1 hour — components are immutable; TTL governs "latest" pointer freshness
+});
+
 @Resolver()
 export class ComponentRegistryExtendedResolver {
     private componentEngine = ComponentMetadataEngine.Instance;
-
-    /** TTL for server-side component spec cache (1 hour). Registry components are
-     *  immutable — only new versions are created with changes. The cache key includes
-     *  the version, so explicit versions are effectively permanent within this TTL.
-     *  The TTL primarily governs how often "latest" version pointers are re-resolved. */
-    private static readonly COMPONENT_CACHE_TTL_MS = 60 * 60 * 1000;
 
     constructor() {
         // No longer pre-initialize clients - create on demand
@@ -191,7 +193,7 @@ export class ComponentRegistryExtendedResolver {
      *
      * Caching strategy (three tiers):
      * 1. Client sends hash from a previous fetch → server can return 304 if unchanged
-     * 2. Server checks LocalCacheManager for a cached spec from a recent fetch
+     * 2. Server checks in-memory LRU cache for a cached spec from a recent fetch
      * 3. On miss, fetches from the external registry, caches the result, and returns it
      */
     @Query(() => ComponentSpecWithHashType)
@@ -224,10 +226,7 @@ export class ComponentRegistryExtendedResolver {
             const cacheKey = this.getComponentCacheKey(registry.Name, namespace, name, resolvedVersion);
 
             // --- Tier 1: Check server-side cache ---
-            const cached = await LocalCacheManager.Instance.GetCachedValue<{
-                specJson: string;
-                hash: string;
-            }>(cacheKey);
+            const cached = componentSpecCache.Get(cacheKey);
 
             if (cached) {
                 // If client sent a hash and it matches, return 304
@@ -280,12 +279,7 @@ export class ComponentRegistryExtendedResolver {
             const specJson = JSON.stringify(component);
 
             // --- Cache the result for subsequent requests ---
-            LocalCacheManager.Instance.SetCachedValue(
-                cacheKey,
-                { specJson, hash: response.hash },
-                ComponentRegistryExtendedResolver.COMPONENT_CACHE_TTL_MS,
-                `${namespace}/${name}@${resolvedVersion}`
-            ).catch(e => LogError(`Failed to cache component spec: ${e}`));
+            componentSpecCache.Set(cacheKey, { specJson, hash: response.hash });
 
             return {
                 specification: specJson,
