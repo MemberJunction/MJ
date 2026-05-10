@@ -245,35 +245,36 @@ No system-wide global flag. Permissiveness is always scoped to a specific agent 
 
 Historic artifacts uploaded before this work landed may have been silently assigned the JSON artifact type ID via the old fallback path, even though their bytes are CSV / XML / plain text / etc. After Section 6 lands those rows are misclassified — tool calls will fail because JSONToolLibrary can't parse the actual content.
 
-Policy: **no automatic, silent reclassification on upgrade.** Two reasons:
+The backfill is split into two parts:
 
-- The whole plan exists to remove silent path changes; quietly rewriting historic rows is exactly that
-- A small fraction of "JSON-typed" artifacts genuinely *are* JSON (uploaded by users when JSON was registered) and should not be touched
+**A. Deterministic reclassification — runs in the migration.**
 
-Instead, ship a one-time backfill script (e.g. `mj-cli artifacts reclassify`) that:
+Bundled with the Section 6 schema migration. Touches only rows where `TypeID = legacy JSON fallback ID` — that's the explicit signal "this came through the silent path." For each such row:
 
-- Scans `ConversationArtifactVersion` rows whose `TypeID` equals the historic JSON fallback ID
-- Sniffs the actual content MIME (file-magic detection on Buffer rows, JSON parse trial on text rows)
-- Looks up the correct artifact type using the new pattern-matching resolver
-- Defaults to **dry-run** — produces a per-row report
+- Sniff actual MIME (file-magic for `ContentMode = 'File'` rows, JSON parse trial + content heuristics for inline text)
+- Resolve to the correct artifact type via the new pattern-matching resolver (Section 6)
+- If a match is found, rewrite `TypeID`; the previous value is recorded through Record Changes for full audit
+- If no match is found (detected MIME has no registered type), **leave the row untouched** and emit a warning row to a one-time audit log
 
-  ```
-  Artifact 1234 (conversation 9999):
-    Current TypeID: ae674c7e...    (JSON, fallback)
-    Detected MIME:  text/csv
-    Proposed type:  CSV
-    Action:         RECLASSIFY (--apply)
-  ```
+Why this is acceptable in a migration despite the "no silent reclassification" principle:
 
-- `--apply` actually writes; updates flow through Record Changes for full audit
-- Per-row rules:
-  - `Current TypeID ≠ JSON fallback` → skip (trust historic registration)
-  - `Current TypeID = JSON fallback AND detected = JSON` → skip (it was actually JSON)
-  - `Current TypeID = JSON fallback AND detected ≠ JSON` → candidate
-  - Detected MIME has no registered type → mark "orphaned, no action" in the report; operator decides
-- Filters: `--conversation-id`, `--since`, `--limit` for scoped runs
+- The migration itself is the explicit event — surfaced in migration logs, Record Changes audit, and release notes. Not silent.
+- Scope is tight: only the legacy fallback TypeID. Rows users intentionally set to JSON are untouched (they don't have the fallback ID; they have whatever ID was current at upload time).
+- The action is corrective, not transformative — we're undoing a known bug, not making a new policy decision per row.
+- Idempotent — re-running the migration finds no legacy-ID rows because the first run cleared them.
 
-The script ships in the same release as Section 6 but is invoked manually. Schema migration is purely additive (new types, new columns); the data correction is operator-controlled.
+Schema additions (new types, `Priority`, `DefaultDeliveryMode`, `ForceToolsOnly`) remain purely additive in their own earlier migration; the reclassification is a separate, isolated step that can be reverted by reading the prior TypeID from Record Changes if needed.
+
+**B. CLI tool for orphans and re-inspection.**
+
+A `mj-cli artifacts reclassify` command stays in the toolset for the cases the migration can't handle automatically:
+
+- Rows the migration flagged as orphaned (detected MIME with no registered type) — operator can register a type, then re-run the CLI to reclassify
+- Re-inspection after registering new artifact types post-upgrade
+- Scoped runs by `--conversation-id`, `--since`, `--type`, `--limit`
+- Dry-run by default; `--apply` writes through Record Changes
+
+The CLI is operator-facing and never auto-invoked. It's the manual counterpart to the migration's automated pass.
 
 ## Migration plan
 
