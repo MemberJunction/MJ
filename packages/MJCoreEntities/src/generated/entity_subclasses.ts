@@ -6416,7 +6416,7 @@ export const MJAIResultCacheSchema = z.object({
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: AI Configurations (vwAIConfigurations.ID)
         * * Description: The configuration used for this execution.`),
-    PromptEmbedding: z.number().nullable().describe(`
+    PromptEmbedding: z.string().nullable().describe(`
         * * Field Name: PromptEmbedding
         * * Display Name: Prompt Embedding
         * * SQL Data Type: varbinary
@@ -7639,7 +7639,7 @@ export const MJArchiveRunDetailSchema = z.object({
         * * Default Value: getutcdate()`),
     ArchiveRun: z.date().describe(`
         * * Field Name: ArchiveRun
-        * * Display Name: Archive Run
+        * * Display Name: Archive Run Timestamp
         * * SQL Data Type: datetimeoffset`),
     Entity: z.string().describe(`
         * * Field Name: Entity
@@ -14967,7 +14967,7 @@ export const MJEntityFieldSchema = z.object({
         * * Default Value: newsequentialid()`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity ID
+        * * Display Name: Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
     Sequence: z.number().describe(`
@@ -14978,7 +14978,7 @@ export const MJEntityFieldSchema = z.object({
         * * Description: Display order of the field within the entity`),
     Name: z.string().describe(`
         * * Field Name: Name
-        * * Display Name: Name
+        * * Display Name: Field Name
         * * SQL Data Type: nvarchar(255)
         * * Description: Name of the field within the database table`),
     DisplayName: z.string().nullable().describe(`
@@ -15016,7 +15016,7 @@ export const MJEntityFieldSchema = z.object({
         * * Description: Used for generating custom tabs in the generated forms, only utilized if GeneratedFormSection=Category`),
     Type: z.string().describe(`
         * * Field Name: Type
-        * * Display Name: Data Type
+        * * Display Name: SQL Type
         * * SQL Data Type: nvarchar(100)
         * * Description: SQL Data type (auto maintained by CodeGen)`),
     Length: z.number().nullable().describe(`
@@ -15132,7 +15132,7 @@ export const MJEntityFieldSchema = z.object({
         * * Description: If set to 1, and if AllowUpdateAPI=1, the field can be edited within a view when the view is in edit mode.`),
     IncludeInUserSearchAPI: z.boolean().describe(`
         * * Field Name: IncludeInUserSearchAPI
-        * * Display Name: Include In User Search
+        * * Display Name: Include In Search
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: If set to 1, this column will be included in user search queries for both traditional and full text search`),
@@ -15149,13 +15149,13 @@ export const MJEntityFieldSchema = z.object({
         * * Description: NULL`),
     IncludeInGeneratedForm: z.boolean().describe(`
         * * Field Name: IncludeInGeneratedForm
-        * * Display Name: Include In Generated Form
+        * * Display Name: Include In Form
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: If set to 1, this field will be included in the generated form by CodeGen. If set to 0, this field will be excluded from the generated form. For custom forms, this field has no effect as the layout is controlled independently.`),
     GeneratedFormSection: z.union([z.literal('Category'), z.literal('Details'), z.literal('Top')]).describe(`
         * * Field Name: GeneratedFormSection
-        * * Display Name: Generated Form Section
+        * * Display Name: Form Section
         * * SQL Data Type: nvarchar(10)
         * * Default Value: Details
     * * Value List Type: List
@@ -15169,7 +15169,7 @@ export const MJEntityFieldSchema = z.object({
         * * Display Name: Is Virtual
         * * SQL Data Type: bit
         * * Default Value: 0
-        * * Description: NULL`),
+        * * Description: When 1, this field is read-only at the API layer (excluded from spCreate / spUpdate / GraphQL input types). Set automatically when the column is either (a) not present in the base table — e.g., a joined name lookup in the base view, or (b) a SQL Server computed column or PostgreSQL generated column. Cases (a) and (b) are distinguished by the IsComputed flag: IsVirtual=1, IsComputed=0 means view-only; IsVirtual=1, IsComputed=1 means computed/generated and physically present in the base table.`),
     IsNameField: z.boolean().describe(`
         * * Field Name: IsNameField
         * * Display Name: Is Name Field
@@ -15231,7 +15231,7 @@ export const MJEntityFieldSchema = z.object({
         * * Description: Indicates whether the related entity information should be automatically updated from the database schema. When set to 0, relationships not part of the database schema can be manually defined at the application and AI agent level. Defaults to 1.`),
     ValuesToPackWithSchema: z.union([z.literal('All'), z.literal('Auto'), z.literal('None')]).describe(`
         * * Field Name: ValuesToPackWithSchema
-        * * Display Name: Values To Pack With Schema
+        * * Display Name: Values To Pack
         * * SQL Data Type: nvarchar(10)
         * * Default Value: Auto
     * * Value List Type: List
@@ -15253,13 +15253,13 @@ export const MJEntityFieldSchema = z.object({
         * * Description: Current status of the entity field - Active fields are available for use, Deprecated fields are discouraged but still functional, Disabled fields are not available for use`),
     AutoUpdateIsNameField: z.boolean().describe(`
         * * Field Name: AutoUpdateIsNameField
-        * * Display Name: Auto Update Is Name Field
+        * * Display Name: Auto Update Name Field
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When 1, allows system/LLM to auto-update IsNameField; when 0, user has locked this field`),
     AutoUpdateDefaultInView: z.boolean().describe(`
         * * Field Name: AutoUpdateDefaultInView
-        * * Display Name: Auto Update Default In View
+        * * Display Name: Auto Update View Default
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When 1, allows system/LLM to auto-update DefaultInView; when 0, user has locked this field`),
@@ -15319,7 +15319,7 @@ export const MJEntityFieldSchema = z.object({
         * * Description: When 1, indicates RelatedEntityID/RelatedEntityFieldName were set via metadata (not a database constraint). Protects these fields from being cleared by schema sync.`),
     RelatedEntityJoinFields: z.string().nullable().describe(`
         * * Field Name: RelatedEntityJoinFields
-        * * Display Name: Related Entity Join Fields
+        * * Display Name: Related Join Fields
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON configuration for additional fields to join from the related entity into this entity's base view. Supports modes: extend (add to NameField), override (replace NameField), disable (no joins). Schema: { mode?: string, fields?: [{ field: string, alias?: string }] }`),
     JSONType: z.string().nullable().describe(`
@@ -15329,7 +15329,7 @@ export const MJEntityFieldSchema = z.object({
         * * Description: The name of the TypeScript interface/type for this JSON field. When set, CodeGen emits a strongly-typed Object-suffixed accessor using this type instead of only the default string getter/setter.`),
     JSONTypeIsArray: z.boolean().describe(`
         * * Field Name: JSONTypeIsArray
-        * * Display Name: JSON Type Is Array
+        * * Display Name: JSON Is Array
         * * SQL Data Type: bit
         * * Default Value: 0
         * * Description: If true, the field holds a JSON array of JSONType items. The Object accessor returns Array<JSONType> | null and the setter accepts Array<JSONType> | null.`),
@@ -15338,11 +15338,17 @@ export const MJEntityFieldSchema = z.object({
         * * Display Name: JSON Type Definition
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Raw TypeScript code emitted by CodeGen above the entity class definition. Typically contains the interface/type definition referenced by JSONType. Can include imports, multiple types, or any valid TypeScript.`),
-    UserSearchPredicateAPI: z.string().describe(`
+    UserSearchPredicateAPI: z.union([z.literal('BeginsWith'), z.literal('Contains'), z.literal('EndsWith'), z.literal('Exact')]).describe(`
         * * Field Name: UserSearchPredicateAPI
-        * * Display Name: User Search Predicate
+        * * Display Name: Search Predicate
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Contains
+    * * Value List Type: List
+    * * Possible Values 
+    *   * BeginsWith
+    *   * Contains
+    *   * EndsWith
+    *   * Exact
         * * Description: Search predicate controlling how user search queries match against this field. Valid values: BeginsWith, Contains, EndsWith, Exact.`),
     AutoUpdateUserSearchPredicate: z.boolean().describe(`
         * * Field Name: AutoUpdateUserSearchPredicate
@@ -15352,7 +15358,7 @@ export const MJEntityFieldSchema = z.object({
         * * Description: When true, CodeGen LLM can auto-set the UserSearchPredicateAPI value during code generation runs.`),
     AutoUpdateFullTextSearch: z.boolean().describe(`
         * * Field Name: AutoUpdateFullTextSearch
-        * * Display Name: Auto Update Full Text Search
+        * * Display Name: Auto Update Full Text
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When true, CodeGen LLM can auto-set the FullTextSearchEnabled value during code generation runs.`),
@@ -15362,6 +15368,12 @@ export const MJEntityFieldSchema = z.object({
         * * SQL Data Type: bit
         * * Default Value: 1
         * * Description: When true (default), CodeGen can automatically suggest and apply ExtendedType values (GeoLatitude, GeoLongitude, GeoAddress, etc.) during LLM field categorization. Set to 0 to lock admin-specified ExtendedType.`),
+    IsComputed: z.boolean().describe(`
+        * * Field Name: IsComputed
+        * * Display Name: Is Computed
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, this field is a SQL Server computed column or PostgreSQL generated column — physically present in the base table but read-only at the SQL layer. Distinct from IsVirtual, which means the column is not in the base table at all (e.g., joined name lookups in the base view). A computed column has both IsVirtual=1 (read-only at the API layer) and IsComputed=1 (physically in the table). The difference matters for base-view JOIN target selection: when an FK's related Name Field is computed, the generated view joins to the related entity's base table instead of its view.`),
     FieldCodeName: z.string().nullable().describe(`
         * * Field Name: FieldCodeName
         * * Display Name: Field Code Name
@@ -15400,11 +15412,11 @@ export const MJEntityFieldSchema = z.object({
         * * SQL Data Type: nvarchar(255)`),
     RelatedEntityBaseTable: z.string().nullable().describe(`
         * * Field Name: RelatedEntityBaseTable
-        * * Display Name: Related Entity Table
+        * * Display Name: Related Entity Base Table
         * * SQL Data Type: nvarchar(255)`),
     RelatedEntityBaseView: z.string().nullable().describe(`
         * * Field Name: RelatedEntityBaseView
-        * * Display Name: Related Entity View
+        * * Display Name: Related Entity Base View
         * * SQL Data Type: nvarchar(255)`),
     RelatedEntityCodeName: z.string().nullable().describe(`
         * * Field Name: RelatedEntityCodeName
@@ -23565,10 +23577,6 @@ export const MJTagSchema = z.object({
         * * Field Name: MergedIntoTag
         * * Display Name: Merged Into Name
         * * SQL Data Type: nvarchar(255)`),
-    EmbeddingModel: z.string().nullable().describe(`
-        * * Field Name: EmbeddingModel
-        * * Display Name: Embedding Model Name
-        * * SQL Data Type: nvarchar(50)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
         * * Display Name: Root Parent
@@ -32127,7 +32135,7 @@ export class MJAIAgentPermissionEntity extends BaseEntity<MJAIAgentPermissionEnt
     		result.Errors.push(new ValidationErrorInfo(
     			"RoleID/UserID",
     			"You must specify either a Role or a User, but not both and not neither.",
-    			`RoleID: $[neutralized], UserID: $[neutralized]`,
+    			`RoleID: $${this.RoleID}, UserID: $${this.UserID}`,
     			ValidationErrorType.Failure
     		));
     	}
@@ -44143,10 +44151,10 @@ export class MJAIResultCacheEntity extends BaseEntity<MJAIResultCacheEntityType>
     * * SQL Data Type: varbinary
     * * Description: Vector representation of the prompt for similarity matching.
     */
-    get PromptEmbedding(): number | null {
+    get PromptEmbedding(): string | null {
         return this.Get('PromptEmbedding');
     }
-    set PromptEmbedding(value: number | null) {
+    set PromptEmbedding(value: string | null) {
         this.Set('PromptEmbedding', value);
     }
 
@@ -47265,7 +47273,7 @@ export class MJArchiveRunDetailEntity extends BaseEntity<MJArchiveRunDetailEntit
 
     /**
     * * Field Name: ArchiveRun
-    * * Display Name: Archive Run
+    * * Display Name: Archive Run Timestamp
     * * SQL Data Type: datetimeoffset
     */
     get ArchiveRun(): Date {
@@ -66271,7 +66279,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity ID
+    * * Display Name: Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     */
@@ -66292,7 +66300,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: Name
-    * * Display Name: Name
+    * * Display Name: Field Name
     * * SQL Data Type: nvarchar(255)
     * * Description: Name of the field within the database table
     */
@@ -66383,7 +66391,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: Type
-    * * Display Name: Data Type
+    * * Display Name: SQL Type
     * * SQL Data Type: nvarchar(100)
     * * Description: SQL Data type (auto maintained by CodeGen)
     */
@@ -66598,7 +66606,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: IncludeInUserSearchAPI
-    * * Display Name: Include In User Search
+    * * Display Name: Include In Search
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: If set to 1, this column will be included in user search queries for both traditional and full text search
@@ -66639,7 +66647,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: IncludeInGeneratedForm
-    * * Display Name: Include In Generated Form
+    * * Display Name: Include In Form
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: If set to 1, this field will be included in the generated form by CodeGen. If set to 0, this field will be excluded from the generated form. For custom forms, this field has no effect as the layout is controlled independently.
@@ -66653,7 +66661,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: GeneratedFormSection
-    * * Display Name: Generated Form Section
+    * * Display Name: Form Section
     * * SQL Data Type: nvarchar(10)
     * * Default Value: Details
     * * Value List Type: List
@@ -66675,7 +66683,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     * * Display Name: Is Virtual
     * * SQL Data Type: bit
     * * Default Value: 0
-    * * Description: NULL
+    * * Description: When 1, this field is read-only at the API layer (excluded from spCreate / spUpdate / GraphQL input types). Set automatically when the column is either (a) not present in the base table — e.g., a joined name lookup in the base view, or (b) a SQL Server computed column or PostgreSQL generated column. Cases (a) and (b) are distinguished by the IsComputed flag: IsVirtual=1, IsComputed=0 means view-only; IsVirtual=1, IsComputed=1 means computed/generated and physically present in the base table.
     */
     get IsVirtual(): boolean {
         return this.Get('IsVirtual');
@@ -66824,7 +66832,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: ValuesToPackWithSchema
-    * * Display Name: Values To Pack With Schema
+    * * Display Name: Values To Pack
     * * SQL Data Type: nvarchar(10)
     * * Default Value: Auto
     * * Value List Type: List
@@ -66862,7 +66870,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: AutoUpdateIsNameField
-    * * Display Name: Auto Update Is Name Field
+    * * Display Name: Auto Update Name Field
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: When 1, allows system/LLM to auto-update IsNameField; when 0, user has locked this field
@@ -66876,7 +66884,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: AutoUpdateDefaultInView
-    * * Display Name: Auto Update Default In View
+    * * Display Name: Auto Update View Default
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: When 1, allows system/LLM to auto-update DefaultInView; when 0, user has locked this field
@@ -67016,7 +67024,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: RelatedEntityJoinFields
-    * * Display Name: Related Entity Join Fields
+    * * Display Name: Related Join Fields
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON configuration for additional fields to join from the related entity into this entity's base view. Supports modes: extend (add to NameField), override (replace NameField), disable (no joins). Schema: { mode?: string, fields?: [{ field: string, alias?: string }] }
     */
@@ -67042,7 +67050,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: JSONTypeIsArray
-    * * Display Name: JSON Type Is Array
+    * * Display Name: JSON Is Array
     * * SQL Data Type: bit
     * * Default Value: 0
     * * Description: If true, the field holds a JSON array of JSONType items. The Object accessor returns Array<JSONType> | null and the setter accepts Array<JSONType> | null.
@@ -67069,15 +67077,21 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: UserSearchPredicateAPI
-    * * Display Name: User Search Predicate
+    * * Display Name: Search Predicate
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Contains
+    * * Value List Type: List
+    * * Possible Values 
+    *   * BeginsWith
+    *   * Contains
+    *   * EndsWith
+    *   * Exact
     * * Description: Search predicate controlling how user search queries match against this field. Valid values: BeginsWith, Contains, EndsWith, Exact.
     */
-    get UserSearchPredicateAPI(): string {
+    get UserSearchPredicateAPI(): 'BeginsWith' | 'Contains' | 'EndsWith' | 'Exact' {
         return this.Get('UserSearchPredicateAPI');
     }
-    set UserSearchPredicateAPI(value: string) {
+    set UserSearchPredicateAPI(value: 'BeginsWith' | 'Contains' | 'EndsWith' | 'Exact') {
         this.Set('UserSearchPredicateAPI', value);
     }
 
@@ -67097,7 +67111,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: AutoUpdateFullTextSearch
-    * * Display Name: Auto Update Full Text Search
+    * * Display Name: Auto Update Full Text
     * * SQL Data Type: bit
     * * Default Value: 1
     * * Description: When true, CodeGen LLM can auto-set the FullTextSearchEnabled value during code generation runs.
@@ -67121,6 +67135,20 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
     }
     set AutoUpdateExtendedType(value: boolean) {
         this.Set('AutoUpdateExtendedType', value);
+    }
+
+    /**
+    * * Field Name: IsComputed
+    * * Display Name: Is Computed
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, this field is a SQL Server computed column or PostgreSQL generated column — physically present in the base table but read-only at the SQL layer. Distinct from IsVirtual, which means the column is not in the base table at all (e.g., joined name lookups in the base view). A computed column has both IsVirtual=1 (read-only at the API layer) and IsComputed=1 (physically in the table). The difference matters for base-view JOIN target selection: when an FK's related Name Field is computed, the generated view joins to the related entity's base table instead of its view.
+    */
+    get IsComputed(): boolean {
+        return this.Get('IsComputed');
+    }
+    set IsComputed(value: boolean) {
+        this.Set('IsComputed', value);
     }
 
     /**
@@ -67206,7 +67234,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: RelatedEntityBaseTable
-    * * Display Name: Related Entity Table
+    * * Display Name: Related Entity Base Table
     * * SQL Data Type: nvarchar(255)
     */
     get RelatedEntityBaseTable(): string | null {
@@ -67215,7 +67243,7 @@ export class MJEntityFieldEntity extends BaseEntity<MJEntityFieldEntityType> {
 
     /**
     * * Field Name: RelatedEntityBaseView
-    * * Display Name: Related Entity View
+    * * Display Name: Related Entity Base View
     * * SQL Data Type: nvarchar(255)
     */
     get RelatedEntityBaseView(): string | null {
@@ -85869,6 +85897,46 @@ export class MJSearchScopePermissionEntity extends BaseEntity<MJSearchScopePermi
     }
 
     /**
+    * Validate() method override for MJ: Search Scope Permissions entity. This is an auto-generated method that invokes the generated validators for this entity for the following fields:
+    * * Table-Level: Each entry must be assigned to either a specific user or a specific role, but not both. This ensures that permissions are clearly defined for exactly one entity.
+    * @public
+    * @method
+    * @override
+    */
+    public override Validate(): ValidationResult {
+        const result = super.Validate();
+        this.ValidateUserAndRoleExclusivity(result);
+        result.Success = result.Success && (result.Errors.length === 0);
+
+        return result;
+    }
+
+    /**
+    * Each entry must be assigned to either a specific user or a specific role, but not both. This ensures that permissions are clearly defined for exactly one entity.
+    * @param result - the ValidationResult object to add any errors or warnings to
+    * @public
+    * @method
+    */
+    public ValidateUserAndRoleExclusivity(result: ValidationResult) {
+    	// Ensure that either UserID or RoleID is provided, but not both
+    	if (this.UserID != null && this.RoleID != null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"UserID",
+    			"A record cannot be assigned to both a User and a Role. Please provide only one.",
+    			this.UserID,
+    			ValidationErrorType.Failure
+    		));
+    	} else if (this.UserID == null && this.RoleID == null) {
+    		result.Errors.push(new ValidationErrorInfo(
+    			"UserID",
+    			"A record must be assigned to either a User or a Role.",
+    			this.UserID,
+    			ValidationErrorType.Failure
+    		));
+    	}
+    }
+
+    /**
     * * Field Name: ID
     * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
@@ -88405,15 +88473,6 @@ export class MJTagEntity extends BaseEntity<MJTagEntityType> {
     */
     get MergedIntoTag(): string | null {
         return this.Get('MergedIntoTag');
-    }
-
-    /**
-    * * Field Name: EmbeddingModel
-    * * Display Name: Embedding Model Name
-    * * SQL Data Type: nvarchar(50)
-    */
-    get EmbeddingModel(): string | null {
-        return this.Get('EmbeddingModel');
     }
 
     /**

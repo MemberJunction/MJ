@@ -83,6 +83,14 @@
         <mj-form-field 
             [Record]="record"
             [ShowLabel]="true"
+            FieldName="IsComputed"
+            Type="checkbox"
+            [EditMode]="EditMode"
+            [FormContext]="formContext"
+        ></mj-form-field>
+        <mj-form-field 
+            [Record]="record"
+            [ShowLabel]="true"
             FieldName="FieldCodeName"
             Type="textbox"
             [EditMode]="EditMode"
@@ -288,7 +296,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="CodeType"
-            Type="select"
+            Type="code"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
@@ -368,7 +376,7 @@
             [Record]="record"
             [ShowLabel]="true"
             FieldName="UserSearchPredicateAPI"
-            Type="textbox"
+            Type="select"
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
