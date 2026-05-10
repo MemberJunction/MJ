@@ -232,8 +232,8 @@ export class ComponentRegistryService {
   ): Promise<ComponentObject> {
     await this.initialize(contextUser);
     
-    // Find component in metadata
-    const component = this.componentEngine.Components.find((c: MJComponentEntity) => UUIDsEqual(c.ID, componentId));
+    // Find component in metadata via targeted query
+    const component = await this.componentEngine.FindComponentByID(componentId, contextUser);
     if (!component) {
       throw new Error(`Component not found: ${componentId}`);
     }
@@ -487,7 +487,7 @@ export class ComponentRegistryService {
   ): Promise<ComponentSpec> {
     await this.initialize(contextUser);
     
-    const component = this.componentEngine.Components.find((c: MJComponentEntity) => UUIDsEqual(c.ID, componentId));
+    const component = await this.componentEngine.FindComponentByID(componentId, contextUser);
     if (!component) {
       throw new Error(`Component not found: ${componentId}`);
     }
@@ -697,16 +697,14 @@ export class ComponentRegistryService {
     
     for (const dep of dependencies) {
       // Find the dependency component
-      const depComponent = this.componentEngine.Components.find(
-        (c: MJComponentEntity) => UUIDsEqual(c.ID, dep.DependencyComponentID)
-      );
-      
+      const depComponent = await this.componentEngine.FindComponentByID(dep.DependencyComponentID, contextUser);
+
       if (depComponent) {
         result.push({
           name: depComponent.Name,
           namespace: depComponent.Namespace || '',
-          version: depComponent.Version, // Version comes from the linked Component record
-          isRequired: true, // All dependencies are required in MemberJunction
+          version: depComponent.Version,
+          isRequired: true,
           location: depComponent.SourceRegistryID ? 'registry' : 'embedded',
           sourceRegistryID: depComponent.SourceRegistryID
         });
@@ -734,27 +732,23 @@ export class ComponentRegistryService {
     
     await this.initialize(contextUser);
     
-    const component = this.componentEngine.Components.find((c: MJComponentEntity) => UUIDsEqual(c.ID, componentId));
+    const component = await this.componentEngine.FindComponentByID(componentId, contextUser);
     if (!component) {
       return { componentId, dependencies: [] };
     }
-    
+
     // Get direct dependencies
     const directDeps = await this.loadDependencies(componentId, contextUser);
-    
+
     // Recursively resolve each dependency
     const dependencies: DependencyTree[] = [];
     for (const dep of directDeps) {
-      // Find the dependency component
-      const depComponent = this.componentEngine.Components.find(
-        c => c.Name.trim().toLowerCase() === dep.name.trim().toLowerCase() && 
-             c.Namespace?.trim().toLowerCase() === dep.namespace?.trim().toLowerCase()
-      );
-      
+      const depComponent = await this.componentEngine.FindComponent(dep.name, dep.namespace, undefined, contextUser);
+
       if (depComponent) {
         const subTree = await this.resolveDependencyTree(
-          depComponent.ID, 
-          contextUser, 
+          depComponent.ID,
+          contextUser,
           visited
         );
         dependencies.push(subTree);

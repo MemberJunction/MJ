@@ -95,7 +95,7 @@ export class ComponentResolver {
       }
       await this.componentEngine.Config(false, contextUser);
       if (this.debug) {
-        console.log(`✅ [ComponentResolver] Component engine initialized with ${this.componentEngine.Components?.length || 0} components`);
+        console.log(`✅ [ComponentResolver] Component engine initialized`);
       }
     }
     
@@ -243,36 +243,18 @@ export class ComponentResolver {
             console.error(`❌ [ComponentResolver] Failed to fetch from external registry: ${spec.name} from ${spec.registry}`);
           }
         } else {
-          // LOCAL REGISTRY: Get from local database
+          // LOCAL REGISTRY: Get from local database via targeted RunView
           if (this.debug) {
-            console.log(`💾 [ComponentResolver] Looking for locally registered component`);
+            console.log(`💾 [ComponentResolver] Looking for locally registered component: ${spec.name}`);
           }
-          
-          // First, try to find the component in the metadata engine
-          const allComponents = this.componentEngine.Components || [];
-          if (this.debug) {
-            console.log(`📊 [ComponentResolver] Total components in engine: ${allComponents.length}`);
-          }
-          
-          // Log all matching names to see duplicates
-          const matchingNames = allComponents.filter((c: any) => c.Name === spec.name);
-          if (matchingNames.length > 0 && this.debug) {
-            console.log(`🔎 [ComponentResolver] Found ${matchingNames.length} components with name "${spec.name}":`, 
-              matchingNames.map((c: any) => ({
-                ID: c.ID,
-                Name: c.Name,
-                Namespace: c.Namespace,
-                Version: c.Version,
-                Status: c.Status
-              }))
-            );
-          }
-          
-          const component = this.componentEngine.Components?.find(
-            (c: any) => c.Name === spec.name && 
-                 c.Namespace === (spec.namespace || namespace)
+
+          const component = await this.componentEngine.FindComponent(
+            spec.name,
+            spec.namespace || namespace,
+            undefined,
+            contextUser
           );
-          
+
           if (component) {
             if (this.debug) {
               console.log(`✅ [ComponentResolver] Found component in local DB:`, {
@@ -282,7 +264,7 @@ export class ComponentResolver {
                 Version: component.Version
               });
             }
-            
+
             // Get compiled component from registry service (local compilation)
             const compiledComponent = await this.registryService.getCompiledComponent(
               component.ID,
@@ -295,9 +277,6 @@ export class ComponentResolver {
             }
           } else {
             console.error(`❌ [ComponentResolver] Local registry component NOT found in database: ${spec.name} with namespace: ${spec.namespace || namespace}`);
-            if (this.debug) {
-              console.warn(`Local registry component not found in database: ${spec.name}`);
-            }
           }
         }
       } catch (error) {
