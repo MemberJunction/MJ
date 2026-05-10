@@ -176,11 +176,11 @@ Rationale:
 - Eliminates the worst failure mode — `get_full` on a random binary blob returns base64 garbage that LLMs can't usefully act on
 - Aligns with the broader theme of removing silent fallbacks throughout this plan
 
-#### One opt-in safety valve
+#### Per-agent opt-in only
 
-A system setting `AllowUnregisteredFileUploads` (default `false`). When `true`, unknown types resolve to a `Generic Binary` artifact type exposing only `get_full` (base64) and `get_metadata` (filename, size, MIME, sha256). Logged on every use so admins can audit.
+A new boolean field on `AIAgent`, e.g. `AcceptUnregisteredFiles` (default `false`). When `true` for a specific agent, an upload to a conversation targeting that agent with an unrecognized MIME resolves to a `Generic Binary` artifact type exposing only `get_full` (base64) and `get_metadata` (filename, size, MIME, sha256). Every use is logged so admins can audit which agents are accepting unregistered content.
 
-Even better — support a per-agent override `AcceptUnregisteredFiles: bool` so a research agent can be permissive while Sage stays strict.
+No system-wide global flag. Permissiveness is always scoped to a specific agent that has explicitly opted in — a research agent investigating unknown formats can be permissive while Sage stays strict, and there's no environment-level config that can silently re-open the rejection path for every agent at once.
 
 #### Deletion of the JSON fallback
 
