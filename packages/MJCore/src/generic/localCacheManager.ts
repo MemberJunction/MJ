@@ -2145,7 +2145,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         }
 
         if (toDelete.length > 0) {
-            LogStatusVerbose(`[Cache EVICT] Evicting ${toDelete.length} entries to free ${freedBytes} bytes`);
+            LogStatusEx({ message: `    🗑️ [Cache EVICT] Evicting ${toDelete.length} entries to free ${freedBytes} bytes: ${toDelete.map(k => `"${k}"`).join(', ')}`, verboseOnly: true });
         }
 
         for (const key of toDelete) {
@@ -2286,7 +2286,9 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         }
 
         if (toDelete.length > 0) {
-            LogStatusEx({ message: `[Cache SWEEP] Evicting ${toDelete.length} TTL-expired entries: ${toDelete.slice(0, 5).join(', ')}${toDelete.length > 5 ? '...' : ''}` });
+            if (this._config.verboseLogging) {
+                LogStatusEx({ message: `    🗑️ [Cache SWEEP] Evicting ${toDelete.length} TTL-expired entries`, verboseOnly: true });
+            }
 
             for (const key of toDelete) {
                 try {
