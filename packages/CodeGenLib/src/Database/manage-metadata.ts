@@ -3243,7 +3243,7 @@ export class ManageMetadataBase {
             ${this.boolLit(n.AutoIncrement)},
             ${this.boolLit(n.AllowUpdateAPI)},
             ${this.boolLit(n.IsVirtual)},
-            ${this.boolLit(n.IsComputed === true)},
+            ${this.boolLit(n.IsComputed)},
             ${n.RelatedEntityID && n.RelatedEntityID.length > 0 ? `'${n.RelatedEntityID}'` : 'NULL'},
             ${n.RelatedEntityFieldName && n.RelatedEntityFieldName.length > 0 ? `'${n.RelatedEntityFieldName}'` : 'NULL'},
             ${this.boolLit(n.IsNameField !== null ? n.IsNameField : false)},
