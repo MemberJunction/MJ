@@ -116,6 +116,76 @@ The `ARTIFACT_TOOL_MIME_PREFIXES` constant is deleted. `cap` lives in one place 
 
 Even when an artifact is on the inline path, enforce a server-side absolute cap. If exceeded, force-fall-back to tools and log a warning. No future MIME-list oversight should be able to silently 6x the prompt again.
 
+### 6. Unknown / unregistered file-type handling — reject by default
+
+Today, when a file's MIME doesn't match any registered Artifact Type, `AgentRunner.ts:1432-1434` silently falls back to the JSON artifact type ID:
+
+```typescript
+const artifactType = ArtifactMetadataEngine.Instance.GetArtifactTypeByMimeType(mimeType);
+if (!artifactType) {
+    LogStatus(`ProcessFileArtifacts: no ArtifactType found for MIME ${mimeType}, using JSON fallback`);
+}
+const artifactTypeId = artifactType?.ID ?? JSON_ARTIFACT_TYPE_ID;
+```
+
+This is wrong: a `.xyz` binary becomes a "JSON" artifact, and JSONToolLibrary then fails on first tool call when the bytes don't parse. Plus the `GetArtifactTypeByMimeType` lookup itself (`MJCoreEntities/src/engines/artifacts.ts:114-118`) is exact-match only — no wildcards, no extension hint, no pattern.
+
+**Proposed policy: reject unknown file types at upload time, with a generous default registry and one opt-in safety valve.**
+
+#### MIME resolution gets pattern matching
+
+Extend `GetArtifactTypeByMimeType` to support wildcards in `ArtifactType.ContentType`, walking most-specific to least-specific:
+
+```
+exact match            (application/json)        — highest priority
+subtype wildcard       (text/*, image/*)         — middle
+```
+
+File extension as a secondary tiebreaker when MIME is missing or `application/octet-stream` (browsers default to that constantly for unknown extensions).
+
+#### Default-registered Artifact Types ship covering the long tail
+
+| MIME | Artifact Type | Tools |
+|---|---|---|
+| `application/json` | JSON | existing |
+| `application/xml`, `text/xml` | XML | reuse Text or dedicated |
+| `text/csv`, `application/csv` | CSV | column-aware |
+| `application/pdf` | PDF | existing |
+| Office MIMEs | Excel / Word / PowerPoint | existing |
+| `image/*` | Image | inline `image_url`, vision-native |
+| `audio/*` | Audio | inline `audio_url` where supported |
+| `video/*` | Video | inline `video_url` where supported |
+| **`text/*` (catchall)** | **Generic Text** | `grep`, `get_lines`, `get_full` |
+
+The single `text/*` catchall is intentionally kept because text is text — log files, YAML, TOML, source code, Markdown all use the same primitives. Low-risk, broadly useful, no garbage-in problem.
+
+#### No binary catchall by default
+
+If the upload's MIME is `application/octet-stream` or anything else not matching the registry above, the **server rejects the upload** with a clear error before any bytes hit storage:
+
+```
+This file type (.xyz, application/octet-stream) is not supported by 
+this agent. Supported types: PDF, Word, Excel, JSON, CSV, XML, text 
+files, images, audio, video. Contact your administrator to register 
+additional types.
+```
+
+Rationale:
+- Forces intentionality — adding a new format means registering an artifact type with real tools, not silently base64-stuffing random bytes into prompts
+- Fails at the right layer (upload validation) rather than at agent-run time when the user has no useful diagnostic
+- Eliminates the worst failure mode — `get_full` on a random binary blob returns base64 garbage that LLMs can't usefully act on
+- Aligns with the broader theme of removing silent fallbacks throughout this plan
+
+#### One opt-in safety valve
+
+A system setting `AllowUnregisteredFileUploads` (default `false`). When `true`, unknown types resolve to a `Generic Binary` artifact type exposing only `get_full` (base64) and `get_metadata` (filename, size, MIME, sha256). Logged on every use so admins can audit.
+
+Even better — support a per-agent override `AcceptUnregisteredFiles: bool` so a research agent can be permissive while Sage stays strict.
+
+#### Deletion of the JSON fallback
+
+`AgentRunner.ts:1432-1434`'s "use JSON when nothing matches" fallback is deleted. With pattern matching + the default registry + reject-by-default, there is never a legitimate path that lands on JSON for non-JSON content.
+
 ## Migration plan
 
 ### Phase 1 — Stop the bleeding (small PR, ship now)
