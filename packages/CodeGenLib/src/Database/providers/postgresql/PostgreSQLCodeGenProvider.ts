@@ -2468,6 +2468,7 @@ numbered_rows AS (
       sf."AutoIncrement",
       ${this.buildAllowUpdateAPICase()},
       sf."IsVirtual",
+      sf."IsComputed",
       e."RelationshipDefaultDisplayType",
       e."Name" AS "EntityName",
       re."ID" AS "RelatedEntityID",

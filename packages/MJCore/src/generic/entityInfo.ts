@@ -545,8 +545,23 @@ export class EntityFieldInfo extends BaseInfo {
     UserSearchPredicateAPI: string = null
     IncludeInGeneratedForm: boolean = null
     GeneratedFormSection: string = null
-    IsVirtual: boolean = null 
-    IsNameField: boolean = null 
+    IsVirtual: boolean = null
+    /**
+     * When true, this field is a SQL Server computed column or PostgreSQL generated column —
+     * physically present in the base table but read-only at the SQL layer. Distinct from
+     * IsVirtual, which is also set to 1 for these fields (because they are read-only at the
+     * API layer) but is additionally set for view-only columns that don't exist in the base
+     * table at all (e.g., joined name lookups in the base view). Use the combination to
+     * disambiguate:
+     *   IsVirtual=0, IsComputed=0 → regular base-table column (writable)
+     *   IsVirtual=1, IsComputed=0 → view-only column (no physical storage)
+     *   IsVirtual=1, IsComputed=1 → computed/generated column (physical, read-only in SQL)
+     * Only relevant downstream consumer that branches on this is base-view JOIN target
+     * selection in CodeGen — when an FK's related Name Field is IsComputed=1, the join
+     * targets the related entity's base table (not its view).
+     */
+    IsComputed: boolean = null
+    IsNameField: boolean = null
     RelatedEntityID: string = null
     RelatedEntityFieldName: string = null
     IncludeRelatedEntityNameFieldInBaseView: boolean = null
@@ -801,6 +816,13 @@ export class EntityFieldInfo extends BaseInfo {
     IsFloat: boolean
     _RelatedEntityTableAlias: string
     _RelatedEntityNameFieldIsVirtual: boolean
+    /**
+     * Mirror of `IsComputed` on the related entity's Name Field. Tracked alongside
+     * `_RelatedEntityNameFieldIsVirtual` so that base-view JOIN-target selection can
+     * prefer the related entity's base table when the Name Field is a SQL computed/
+     * generated column (physically present in the base table even though IsVirtual=1).
+     */
+    _RelatedEntityNameFieldIsComputed: boolean
     private _rawEntityFieldValues: Record<string, unknown>[] | null = null;
     private _entityFieldValuesConstructed = false;
     _EntityFieldValues: EntityFieldValueInfo[];
@@ -812,6 +834,7 @@ export class EntityFieldInfo extends BaseInfo {
         sourceField: string;
         alias: string;
         isVirtual: boolean;
+        isComputed: boolean;
     }>;
 
     /**
