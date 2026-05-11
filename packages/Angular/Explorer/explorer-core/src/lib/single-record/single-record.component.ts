@@ -288,7 +288,16 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnIni
         this.navigationService.OpenEntityRecord(event.EntityName, event.PrimaryKey, { forceNewTab: event.OpenInNewTab });
         break;
       case 'new-record':
-        this.navigationService.OpenNewEntityRecord(event.EntityName, { newRecordValues: event.DefaultValues });
+        // Creating a new related record from inside an open record form (e.g. + New
+        // on a related-entity grid). Force a new tab so the parent record stays
+        // intact — otherwise the new-record form silently replaces the parent in
+        // single-resource mode and the user loses their context. This is the
+        // original intent of dea32401ff, now stated explicitly at the call site
+        // instead of as a global navigation heuristic.
+        this.navigationService.OpenNewEntityRecord(event.EntityName, {
+          newRecordValues: event.DefaultValues,
+          forceNewTab: true,
+        });
         break;
       case 'entity-hierarchy':
         this.navigationService.OpenEntityRecord(event.EntityName, event.PrimaryKey);
