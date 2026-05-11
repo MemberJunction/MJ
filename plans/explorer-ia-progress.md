@@ -8,7 +8,7 @@
 
 We're consolidating the dashboard header chrome of MJ Explorer into a small set of shared components in `@memberjunction/ng-ui-components`, then migrating each dashboard to use them. Per-page CSS for the header strip is being deleted as we go — the goal is that future drift is impossible because the styles live in exactly one place.
 
-So far: **6 shared components** built, **18 dashboards** fully migrated (MCP, 6 AI sub-pages, 3 Lists pages, all 5 Communication pages, Scheduling + 3 Scheduling resource entries). **~9 dashboards still use bespoke headers** (APIKeys, Credentials, Settings, Testing + Template B group).
+So far: **6 shared components** built, **23 dashboards** fully migrated (MCP, 6 AI sub-pages, 3 Lists pages, all 5 Communication pages, Scheduling + 3 Scheduling resources, all 5 Credentials pages). **~4 dashboards still use bespoke headers** in Template A (APIKeys, Settings, Testing + remaining Template B group).
 
 ## Shared components (lives in `@memberjunction/ng-ui-components`)
 
@@ -45,12 +45,17 @@ All 5 are standalone, design-token-only, PascalCase API.
 | Scheduling — Overview (resource) | ✅ | ✅ | n/a | n/a | n/a | Deep-link resource wrapper around `<app-scheduling-overview>`. |
 | Scheduling — Jobs (resource) | ✅ | ✅ | n/a | n/a | n/a | Deep-link resource wrapper around `<app-scheduling-jobs>`. |
 | Scheduling — Activity (resource) | ✅ | ✅ | n/a | n/a | n/a | Deep-link resource wrapper around `<app-scheduling-activity>`. |
+| Credentials — Overview | ✅ | ✅ | n/a | n/a | n/a | Refresh + "New Credential" in `[actions]`. No filters. |
+| Credentials — List | ✅ | ✅ | ✅ | ✅ | ✅ | Popover for Type + Status; view-toggle (grid/list); result-count + expiring/expired pills in `[meta]`. |
+| Credentials — Types | ✅ | ✅ | ✅ | ✅ | ✅ | Popover for Category (filterable); result-count + neutral pills (categories / credentials) in `[meta]`. |
+| Credentials — Categories | ✅ | ✅ | n/a | n/a | n/a | Expand/Collapse + Refresh + "New Category" in `[actions]`. Search in `[toolbar]`. |
+| Credentials — Audit Log | ✅ | ✅ | ✅ | ✅ | ✅ | Popover for Status + Operation + DateRange; view-toggle (timeline/table); Export + Refresh in `[actions]`. |
 
 ## Pages NOT yet migrated
 
 Per [`plans/explorer-layout-templates.md`](explorer-layout-templates.md):
 
-- **Template A** (sidebar + content): APIKeys, Credentials, Settings, Testing
+- **Template A** (sidebar + content): APIKeys, Settings, Testing
 - **Template B** (no sidebar): ApplicationRoles, DashboardBrowser, DatabaseDesigner, EntityAdmin, Permissions
 - **Documented exceptions** (will NOT be migrated as-is): Home (right-sidebar dashboard), Component Studio (toolbar-driven authoring shell), Data Explorer (workspace), Query Browser (resizable left panel)
 

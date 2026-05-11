@@ -5,7 +5,9 @@ import { Component, Input } from '@angular/core';
  *
  * Renders the standard icon · title · subtitle layout with three named projection
  * slots for additional content:
- *   - `[meta]`    — small inline content next to the title (filter toggles, counts)
+ *   - `[meta]`    — inline content immediately after the title text (result counts,
+ *                   status badges) — wraps onto the title's row so it stays
+ *                   horizontally adjacent to the title regardless of subtitle.
  *   - `[actions]` — right-aligned action buttons or sub-navigation
  *   - `[toolbar]` — optional secondary row beneath the title for dense controls
  *                   (filters, time-range pickers, breadcrumbs)
@@ -38,13 +40,15 @@ import { Component, Input } from '@angular/core';
             </div>
           }
           <div class="mj-page-header-text">
-            <h1 class="mj-page-header-title">{{ Title }}</h1>
+            <div class="mj-page-header-title-row">
+              <h1 class="mj-page-header-title">{{ Title }}</h1>
+              <div class="mj-page-header-meta">
+                <ng-content select="[meta]"></ng-content>
+              </div>
+            </div>
             @if (Subtitle) {
               <p class="mj-page-header-subtitle">{{ Subtitle }}</p>
             }
-          </div>
-          <div class="mj-page-header-meta">
-            <ng-content select="[meta]"></ng-content>
           </div>
         </div>
         <div class="mj-page-header-actions">

@@ -62,6 +62,15 @@
 
 .mj-page-header-text {
   min-width: 0;
+  flex: 1 1 auto;
+}
+
+.mj-page-header-title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--mj-space-3);
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .mj-page-header-title {
