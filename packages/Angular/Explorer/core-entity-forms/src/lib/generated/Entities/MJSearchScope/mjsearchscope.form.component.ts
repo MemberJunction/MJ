@@ -16,20 +16,19 @@ export class MJSearchScopeFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'scopeDefinition', sectionName: 'Scope Definition', isExpanded: true },
-            { sectionKey: 'scopeConfiguration', sectionName: 'Scope Configuration', isExpanded: true },
+            { sectionKey: 'generalInformation', sectionName: 'General Information', isExpanded: true },
+            { sectionKey: 'scopeBehavior', sectionName: 'Scope Behavior', isExpanded: true },
             { sectionKey: 'accessControl', sectionName: 'Access Control', isExpanded: false },
-            { sectionKey: 'lifecycleManagement', sectionName: 'Lifecycle Management', isExpanded: false },
-            { sectionKey: 'technicalConfiguration', sectionName: 'Technical Configuration', isExpanded: false },
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
+            { sectionKey: 'lifecycleAndAvailability', sectionName: 'Lifecycle and Availability', isExpanded: false },
+            { sectionKey: 'configuration', sectionName: 'Configuration', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJSearchScopeStorageAccounts', sectionName: 'Search Scope Storage Accounts', isExpanded: false },
-            { sectionKey: 'mJSearchScopeTestQueries', sectionName: 'Search Scope Test Queries', isExpanded: false },
-            { sectionKey: 'mJSearchScopeEntities', sectionName: 'Search Scope Entities', isExpanded: false },
             { sectionKey: 'mJSearchScopeExternalIndexes', sectionName: 'Search Scope External Indexes', isExpanded: false },
-            { sectionKey: 'mJSearchScopeProviders', sectionName: 'Search Scope Providers', isExpanded: false },
-            { sectionKey: 'mJAIAgentSearchScopes', sectionName: 'AI Agent Search Scopes', isExpanded: false },
+            { sectionKey: 'mJSearchScopeEntities', sectionName: 'Search Scope Entities', isExpanded: false },
             { sectionKey: 'mJSearchScopePermissions', sectionName: 'Search Scope Permissions', isExpanded: false },
+            { sectionKey: 'mJSearchScopeTestQueries', sectionName: 'Search Scope Test Queries', isExpanded: false },
+            { sectionKey: 'mJSearchScopeProviders', sectionName: 'Search Scope Providers', isExpanded: false },
+            { sectionKey: 'mJSearchScopeStorageAccounts', sectionName: 'Search Scope Storage Accounts', isExpanded: false },
+            { sectionKey: 'mJAIAgentSearchScopes', sectionName: 'AI Agent Search Scopes', isExpanded: false },
             { sectionKey: 'mJSearchExecutionLogs', sectionName: 'Search Execution Logs', isExpanded: false }
         ]);
     }
