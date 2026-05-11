@@ -8,10 +8,10 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Entity Relationships Section -->
+    <!-- Assignment Details Section -->
     <mj-collapsible-panel
-        SectionKey="entityRelationships"
-        SectionName="Entity Relationships"
+        SectionKey="assignmentDetails"
+        SectionName="Assignment Details"
         Icon="fa fa-link"
         [Form]="this"
         [FormContext]="formContext">
@@ -40,7 +40,7 @@
     <mj-collapsible-panel
         SectionKey="executionControl"
         SectionName="Execution Control"
-        Icon="fa fa-tasks"
+        Icon="fa fa-sliders-h"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -78,10 +78,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- Scheduling Section -->
+    <!-- Timeline Section -->
     <mj-collapsible-panel
-        SectionKey="scheduling"
-        SectionName="Scheduling"
+        SectionKey="timeline"
+        SectionName="Timeline"
         Icon="fa fa-calendar-alt"
         [Form]="this"
         [FormContext]="formContext">
@@ -108,7 +108,7 @@
     <mj-collapsible-panel
         SectionKey="searchConfiguration"
         SectionName="Search Configuration"
-        Icon="fa fa-sliders-h"
+        Icon="fa fa-cogs"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -151,7 +151,7 @@
     <mj-collapsible-panel
         SectionKey="systemMetadata"
         SectionName="System Metadata"
-        Icon="fa fa-cog"
+        Icon="fa fa-database"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 

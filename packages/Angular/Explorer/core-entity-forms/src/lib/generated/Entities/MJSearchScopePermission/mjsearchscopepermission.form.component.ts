@@ -15,7 +15,9 @@ export class MJSearchScopePermissionFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true }
+            { sectionKey: 'permissionScope', sectionName: 'Permission Scope', isExpanded: true },
+            { sectionKey: 'granteeInformation', sectionName: 'Grantee Information', isExpanded: true },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }
 }

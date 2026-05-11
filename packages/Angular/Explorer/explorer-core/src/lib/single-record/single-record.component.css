@@ -3,3 +3,46 @@
     height: 100%;
     width: 100%;
 }
+
+.single-record-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 48px 32px;
+    max-width: 720px;
+    margin: 64px auto;
+    background: var(--mj-bg-surface);
+    border: 1px solid var(--mj-status-error-border);
+    border-radius: 8px;
+    color: var(--mj-text-primary);
+}
+
+.single-record-error__icon {
+    font-size: 36px;
+    color: var(--mj-status-error);
+    margin-bottom: 16px;
+}
+
+.single-record-error__title {
+    font-size: 18px;
+    font-weight: 600;
+    margin: 0 0 12px 0;
+    color: var(--mj-status-error-text);
+}
+
+.single-record-error__detail {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--mj-text-secondary);
+    margin: 0 0 16px 0;
+    white-space: pre-wrap;
+}
+
+.single-record-error__hint {
+    font-size: 12px;
+    color: var(--mj-text-muted);
+    margin: 0;
+    font-style: italic;
+}
