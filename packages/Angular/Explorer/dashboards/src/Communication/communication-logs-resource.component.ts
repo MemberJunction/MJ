@@ -11,7 +11,7 @@ import { RunView } from '@memberjunction/core';
     <mj-page-layout>
       <mj-page-header Title="Logs" Icon="fa-solid fa-list-ul">
         <div actions class="header-actions">
-          <button mjButton variant="flat" size="sm" (click)="loadData()" [disabled]="isLoading" title="Refresh">
+          <button mjButton variant="secondary" size="sm" (click)="loadData()" [disabled]="isLoading" title="Refresh">
             <i class="fa-solid fa-rotate" [class.spinning]="isLoading"></i> Refresh
           </button>
         </div>

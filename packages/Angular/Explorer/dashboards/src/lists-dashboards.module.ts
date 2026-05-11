@@ -1,7 +1,17 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { MJButtonDirective } from '@memberjunction/ng-ui-components';
+import {
+  MJButtonDirective,
+  MJPageLayoutComponent,
+  MJPageHeaderComponent,
+  MJPageSearchComponent,
+  MJFilterPopoverComponent,
+  MJFilterPanelComponent,
+  MJFilterFieldComponent,
+  MJResultCountComponent,
+  MJViewToggleComponent,
+} from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { ListManagementModule } from '@memberjunction/ng-list-management';
@@ -31,6 +41,14 @@ import { ListSetOperationsService } from './Lists/services/list-set-operations.s
     FormsModule,
     ReactiveFormsModule,
     MJButtonDirective,
+    MJPageLayoutComponent,
+    MJPageHeaderComponent,
+    MJPageSearchComponent,
+    MJFilterPopoverComponent,
+    MJFilterPanelComponent,
+    MJFilterFieldComponent,
+    MJResultCountComponent,
+    MJViewToggleComponent,
     ContainerDirectivesModule,
     SharedGenericModule,
     ListManagementModule

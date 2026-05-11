@@ -53,12 +53,12 @@ interface NavItem {
                         </mj-filter-popover>
                     }
                     @if (FilterBarConfig.ShowCompareToggle) {
-                        <button mjButton variant="flat" size="sm" [class.mj-btn--toggled]="compareActive" (click)="toggleCompare()">
+                        <button mjButton variant="secondary" size="sm" [toggleable]="true" [(selected)]="compareActive" (selectedChange)="toggleCompare()">
                             <i class="fa-solid fa-code-compare"></i> Compare
                         </button>
                     }
                     @if (FilterBarConfig.ShowExportButton) {
-                        <button mjButton variant="flat" size="sm" (click)="OnExportClicked()">
+                        <button mjButton variant="secondary" size="sm" (click)="OnExportClicked()">
                             <i class="fa-solid fa-download"></i> Export
                         </button>
                     }
@@ -453,9 +453,8 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
         return (f.Models?.length ?? 0) + (f.Agents?.length ?? 0) + (f.Prompts?.length ?? 0) + (f.Statuses?.length ?? 0);
     }
 
-    /** Toggle Compare mode (button click handler in the [actions] slot). */
+    /** Toggle Compare mode — the mjButton directive owns the [(selected)] flip, so this handler only forwards the new value. */
     public toggleCompare(): void {
-        this.compareActive = !this.compareActive;
         this.OnCompareToggled(this.compareActive);
     }
 

@@ -52,7 +52,7 @@
                     </button>
                 }
                 @case ('logs') {
-                    <button mjButton variant="flat" size="sm" (click)="loadAllData()" [disabled]="IsLoading" title="Refresh">
+                    <button mjButton variant="secondary" size="sm" (click)="loadAllData()" [disabled]="IsLoading" title="Refresh">
                         <i class="fa-solid fa-sync" [class.fa-spin]="IsLoading"></i>
                         Refresh
                     </button>

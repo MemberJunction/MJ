@@ -29,7 +29,7 @@
         (KeyChange)="setViewMode($any($event))">
       </mj-view-toggle>
 
-      <button mjButton variant="flat" size="sm" (click)="loadData()" [disabled]="isLoading" title="Refresh">
+      <button mjButton variant="secondary" size="sm" (click)="loadData()" [disabled]="isLoading" title="Refresh">
         <i class="fa-solid fa-refresh" [class.fa-spin]="isLoading"></i>
         Refresh
       </button>

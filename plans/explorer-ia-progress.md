@@ -1,14 +1,14 @@
 # MJ Explorer · IA Standardization Progress
 
-> **Branch:** `information-architecture` · **Status:** Phase 2.3 in progress · **Last update:** 2026-05-08
->
+> **Branch:** `information-architecture` · **Status:** Phase 2.3 in progress · **Last update:** 2026-05-11
+
 > Companion doc to [`plans/explorer-layout-templates.md`](explorer-layout-templates.md) (the layout inventory) and [`plans/phase-2-kendo-removal.md`](phase-2-kendo-removal.md) (the parent plan).
 
 ## TL;DR
 
 We're consolidating the dashboard header chrome of MJ Explorer into a small set of shared components in `@memberjunction/ng-ui-components`, then migrating each dashboard to use them. Per-page CSS for the header strip is being deleted as we go — the goal is that future drift is impossible because the styles live in exactly one place.
 
-So far: **6 shared components** built, **6 dashboards** fully migrated (MCP + 5 AI sub-pages), Analytics also migrated with a proof-of-concept popover for filter density. **~13 dashboards still use bespoke headers**.
+So far: **6 shared components** built, **14 dashboards** fully migrated (MCP, 6 AI sub-pages, 3 Lists pages, all 5 Communication pages). **~10 dashboards still use bespoke headers** (APIKeys, Credentials, Scheduling, Settings, Testing + Template B group).
 
 ## Shared components (lives in `@memberjunction/ng-ui-components`)
 
@@ -33,12 +33,20 @@ All 5 are standalone, design-token-only, PascalCase API.
 | Models | ✅ | ✅ | ✅ | ✅ | ❌ (sidebar still) | Same sidebar pattern. |
 | AI Configuration | ✅ | ✅ | ✅ | ✅ | ❌ (sidebar still) | Same sidebar pattern. |
 | Analytics | ✅ | ✅ | n/a | n/a | ✅ (prototype) | Shell owns filter-bar in `[actions]`; `FilterBarConfig` getter switches Show flags per `ActiveSection`. ExportClicked / CompareToggled forwarded to active section via `@ViewChild`. Model Performance keeps its custom inline filter-bar (`ShowSharedFilterBar = false` carve-out). |
+| Lists — Browse | ✅ | ✅ | ✅ | ✅ | ✅ | Config-driven `<mj-filter-panel>` (Category dropdown + Status chip group); `<mj-view-toggle>` for grid/list; mjButton "New List" in `[actions]`. Body container restored to `flex: 1; min-height: 0; padding: 0 24px 24px`. |
+| Lists — Operations | ✅ | ✅ | n/a | n/a | n/a | Header only; KPI grid + tables in body. |
+| Lists — Categories | ✅ | ✅ | n/a | n/a | n/a | Header only; tree/table content in body. |
+| Communication — Logs | ✅ | ✅ | ✅ | ✅ | ✅ | Earlier session — popover with date range + status chips. |
+| Communication — Templates | ✅ | ✅ | n/a | n/a | n/a | Earlier session — card grid + search. |
+| Communication — Monitor | ✅ | ✅ | n/a | n/a | n/a | KPI strip + content grids; `loadData()` refresh button in `[actions]`. |
+| Communication — Providers | ✅ | ✅ | n/a | n/a | n/a | Provider card grid; "Add Provider" primary action. |
+| Communication — Runs | ✅ | ✅ | n/a | n/a | n/a | Summary stat trio + run timeline; Refresh button. |
 
 ## Pages NOT yet migrated
 
 Per [`plans/explorer-layout-templates.md`](explorer-layout-templates.md):
 
-- **Template A** (sidebar + content): APIKeys, Communication, Credentials, Scheduling, Settings, Testing
+- **Template A** (sidebar + content): APIKeys, Credentials, Scheduling, Settings, Testing
 - **Template B** (no sidebar): ApplicationRoles, DashboardBrowser, DatabaseDesigner, EntityAdmin, Permissions
 - **Documented exceptions** (will NOT be migrated as-is): Home (right-sidebar dashboard), Component Studio (toolbar-driven authoring shell), Data Explorer (workspace), Query Browser (resizable left panel)
 
@@ -70,14 +78,61 @@ MJExplorer's running Vite dev server caches compiled bundles in memory. When you
 
 **Workaround:** kill and restart MJExplorer after rebuilding `ng-ui-components` or `ng-dashboards`. Hard-refresh alone is not enough.
 
-### Component encapsulation + projected wrappers
-`mj-page-header` projects content into `[meta]` / `[actions]` / `[toolbar]` slots. Sections that wrap projected content in their own `<div meta>` or `<div actions>` should set `display: contents` on those wrappers so they don't add layout boxes (the page-header already handles flex). Pattern used in MCP/Agents/Prompts/etc.
+### Projected-slot wrappers need `display: contents`
+This bites every page migration. `mj-page-header`'s `[meta]` / `[actions]` / `[toolbar]` slots each apply `display: flex; gap: var(--mj-space-3)` so the projected children sit side by side with proper spacing. But if you wrap your projection in a `<div meta>` / `<div actions>` / `<div toolbar>` for code organization, that wrapper becomes the SINGLE flex child of the slot — the gap is consumed by the wrapper itself, not the buttons/popover/inputs inside it. They render squished together.
+
+**Fix:** every wrapper div used as a slot marker must have `display: contents` so it disappears from the box tree and its children become direct flex children of the slot:
+
+```css
+.ai-header-actions,
+.lists-header-actions,
+.mcp-header-actions {
+  display: contents;
+}
+```
+
+Pattern used in MCP / Agents / Prompts / Lists / etc. **Always add this CSS when introducing a new wrapped projection.**
+
+### Old per-page header padding doesn't carry forward
+The old bespoke `.X-header` divs typically carried `padding: 16px 24px`, giving the page horizontal breathing room. `<mj-page-header>` only pads ITS OWN card — content below the header has no padding by default. After removing the old header, content (cards, empty states, lists) ends up flush against the viewport edges.
+
+**Fix:** absorb the old header's side+bottom padding into the body container's own padding:
+
+```css
+.X-body-container {
+  flex: 1;
+  min-height: 0;
+  padding: 0 24px 24px;  /* restored from the deleted .X-header padding */
+}
+```
+
+Also switch `height: 100%` → `flex: 1; min-height: 0` so the container fills the remaining flex-column space below the header instead of fighting it.
 
 ### Component cards should not double as section cards
 The `app-analytics-filter-bar` originally had its own wrapper card styling (border, background, radius). When projected into `mj-page-header`'s actions slot, it became a card-on-card. **Fix:** strip the wrapper styling from any component you intend to project into `mj-page-header`. Now the filter-bar is just a flex group of controls; the page-header provides the surface.
 
+### Tree-dropdown inside CDK Overlay loses positioning
+`mj-tree-dropdown` uses `position: fixed` for its panel. CDK Overlay applies `transform` to its overlay-pane when `offsetY` / `offsetX` is set, which creates a containing block for `position: fixed` descendants. Result: the tree-dropdown panel renders relative to the popover, not the viewport — often ~800px off-screen. **Fix:** keep `offsetY` off the popover positions and provide spacing via CSS `margin-top` on the panel.
+
 ### ExpressionChangedAfterItHasBeenCheckedError risk
 Inputs with default values that are objects (e.g., `Filters: GlobalFilterState = { Models: [], ... }`) and bound to component getters (e.g., `[ActiveCount]="ActiveFilterCount"`) can occasionally fire the dreaded `ExpressionChangedAfterItHasBeenCheckedError` if the getter is read during change-detection AND the input is mutated. Not seen yet in this work, but worth watching.
+
+## Per-page migration checklist
+
+Run this against every page you migrate. Items 1–4 are the structural swap; 5–9 are the gotchas above that always trip migrations.
+
+1. **Inventory** — find any existing `mj-{x}-filter-panel` component for this page. If present, delete it; we use the centralized `<mj-filter-panel>` config-driven approach now.
+2. **Wrap the outer container** in `<mj-page-layout>`.
+3. **Add `<mj-page-header>`** at top with `Title` / `Icon` / optional `Subtitle`. Slot content:
+   - `[meta]` → result-count, status badges
+   - `[actions]` → filter-popover, view-toggle, primary CTAs (use `mjButton variant="primary" size="sm"`)
+   - `[toolbar]` → `<mj-page-search>` for searchTerm
+4. **Config-driven filter panel** — define `xxxFilterFields: FilterFieldConfig[]`, `xxxFilterValues: Record<string, unknown>`, `onFilterValuesChange(values)`, `resetPopoverFilters()`, and `ActiveFilterCount` getter (excluding searchTerm). For custom widgets (tree-dropdown, range inputs), use projected `<mj-filter-field>` as escape hatch.
+5. **`display: contents`** on every wrapper div used as a slot marker (`.xxx-header-actions`, `.xxx-header-meta`, `.xxx-header-toolbar`). Without this, gap between projected children is consumed by the wrapper.
+6. **Body container needs padding restored.** Add `padding: 0 24px 24px` (or the equivalent) to absorb what the old `.x-header` used to carry. Change `height: 100%` → `flex: 1; min-height: 0` so it fills remaining flex space.
+7. **Module imports** — add the shared components to the dashboards module's `imports:` array. Common omissions: `MJButtonDirective`, `MJPageSearchComponent`, `MJFilterPanelComponent`, `MJFilterFieldComponent`, `MJViewToggleComponent`.
+8. **Delete orphan CSS** — bespoke `.X-header`, `.filter-toggle-btn`, `.item-count`, `.view-toggle`, `.view-btn`, `.tab-nav`, `.tab-btn`, `.search-box`, `.search-input-wrapper`, `.filter-chip`, `.filter-bar`, `.filter-group`, `.filter-select` rules should all go.
+9. **MJExplorer restart required** after each rebuild of `ng-ui-components` — Vite HMR doesn't pick up symlinked workspace package changes. Hard-refresh alone is not enough.
 
 ## Next steps (priority order)
 
