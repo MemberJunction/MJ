@@ -77,6 +77,19 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     categoryId: 'all'
   };
 
+  /** Number of currently-applied filter criteria inside the popover (excludes searchTerm — surfaced separately in the header). */
+  public get ActiveFilterCount(): number {
+    const f = this.currentFilters;
+    let n = 0;
+    if (f.agentType && f.agentType !== 'all') n++;
+    if (f.parentAgent && f.parentAgent !== 'all') n++;
+    if (f.status && f.status !== 'all') n++;
+    if (f.executionMode && f.executionMode !== 'all') n++;
+    if (f.exposeAsAction && f.exposeAsAction !== 'all') n++;
+    if (f.categoryId && f.categoryId !== 'all') n++;
+    return n;
+  }
+
   public selectedAgentForTest: MJAIAgentEntityExtended | null = null;
 
   // mj-tree configuration for category tree view
@@ -362,6 +375,13 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
 
   public onFilterChange(): void {
     this.applyFilters();
+  }
+
+  /** Handler for the inline mj-page-search input in the page-header toolbar. */
+  public onSearchTermChange(value: string): void {
+    this.currentFilters = { ...this.currentFilters, searchTerm: value ?? '' };
+    this.applyFilters();
+    this.saveUserPreferencesDebounced();
   }
 
   public onResetFilters(): void {

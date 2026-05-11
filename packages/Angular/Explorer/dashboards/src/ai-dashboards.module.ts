@@ -11,7 +11,7 @@ import { NgTreesModule } from '@memberjunction/ng-trees';
 import { SharedDashboardWidgetsModule } from './shared/shared-dashboard-widgets.module';
 import { SharedPipesModule } from './shared/shared-pipes.module';
 import { SearchModule } from '@memberjunction/ng-search';
-import { MJComboboxComponent, MJDropdownComponent, MJPageHeaderComponent, MJPageLayoutComponent, MJFilterToggleComponent, MJResultCountComponent, MJFilterPopoverComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJComboboxComponent, MJDropdownComponent, MJPageHeaderComponent, MJPageLayoutComponent, MJFilterToggleComponent, MJResultCountComponent, MJFilterPopoverComponent, MJPageSearchComponent } from '@memberjunction/ng-ui-components';
 
 // AI Components
 import { ModelManagementComponent } from './AI/components/models/model-management.component';
@@ -123,6 +123,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     SharedDashboardWidgetsModule,
     SharedPipesModule,
     SearchModule,
+    MJButtonDirective,
     MJComboboxComponent,
     MJDropdownComponent,
     MJPageHeaderComponent,
@@ -130,6 +131,7 @@ import { MJWordCloudComponent } from '@memberjunction/ng-word-cloud';
     MJFilterToggleComponent,
     MJResultCountComponent,
     MJFilterPopoverComponent,
+    MJPageSearchComponent,
     ClusteringModule,
     SchedulingModule,
     MJWordCloudComponent

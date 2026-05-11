@@ -8,34 +8,25 @@ import { RunView } from '@memberjunction/core';
   standalone: false,
     selector: 'mj-communication-logs-resource',
     template: `
-    <div class="logs-wrapper">
-      <div class="card">
-        <div class="logs-toolbar">
-          <div class="search-input-wrapper">
-            <i class="fa-solid fa-search"></i>
-            <input type="text" placeholder="Search messages, providers, recipients..." (input)="onSearch($event)">
-          </div>
-          <div class="filter-chip" [class.active]="statusFilter === ''"
-            (click)="onStatusFilter('')">
-            <i class="fa-solid fa-filter"></i> All
-          </div>
-          <div class="filter-chip" [class.active]="statusFilter === 'Complete'"
-            (click)="onStatusFilter('Complete')">
-            <i class="fa-solid fa-check-circle"></i> Sent
-          </div>
-          <div class="filter-chip" [class.active]="statusFilter === 'Failed'"
-            (click)="onStatusFilter('Failed')">
-            <i class="fa-solid fa-times-circle"></i> Failed
-          </div>
-          <div class="filter-chip" [class.active]="statusFilter === 'Pending'"
-            (click)="onStatusFilter('Pending')">
-            <i class="fa-solid fa-clock"></i> Pending
-          </div>
-          <div class="toolbar-spacer"></div>
-          <button class="tb-btn" (click)="loadData()">
+    <mj-page-layout>
+      <mj-page-header Title="Logs" Icon="fa-solid fa-list-ul">
+        <div actions class="header-actions">
+          <button mjButton variant="flat" size="sm" (click)="loadData()" [disabled]="isLoading" title="Refresh">
             <i class="fa-solid fa-rotate" [class.spinning]="isLoading"></i> Refresh
           </button>
         </div>
+        <div toolbar class="header-toolbar">
+          <mj-page-search
+            Placeholder="Search messages, providers, recipients..."
+            (ValueChange)="onSearchValue($event)">
+          </mj-page-search>
+          <mj-filter-chip Label="All"     Icon="fa-solid fa-filter"        [Active]="statusFilter === ''"         (Clicked)="onStatusFilter('')"></mj-filter-chip>
+          <mj-filter-chip Label="Sent"    Icon="fa-solid fa-check-circle"  [Active]="statusFilter === 'Complete'" (Clicked)="onStatusFilter('Complete')"></mj-filter-chip>
+          <mj-filter-chip Label="Failed"  Icon="fa-solid fa-times-circle"  [Active]="statusFilter === 'Failed'"   (Clicked)="onStatusFilter('Failed')"></mj-filter-chip>
+          <mj-filter-chip Label="Pending" Icon="fa-solid fa-clock"         [Active]="statusFilter === 'Pending'"  (Clicked)="onStatusFilter('Pending')"></mj-filter-chip>
+        </div>
+      </mj-page-header>
+      <div class="logs-body">
         <div class="table-wrapper">
           <table class="log-table">
             <thead>
@@ -97,98 +88,36 @@ import { RunView } from '@memberjunction/core';
           </table>
         </div>
       </div>
-    </div>
+    </mj-page-layout>
     `,
     styles: [`
-    .logs-wrapper {
-        height: 100%;
-        padding: 24px;
-        background: var(--mj-bg-surface);
-    }
-    .card {
+    /* Body sits below <mj-page-header> inside <mj-page-layout>. */
+    .logs-body {
+        flex: 1;
+        min-height: 0;
+        margin: 0 24px 24px;
         background: var(--mj-bg-surface-card);
         border: 1px solid var(--mj-border-default);
         border-radius: 12px;
         overflow: hidden;
         display: flex;
         flex-direction: column;
-        height: 100%;
     }
 
-    /* TOOLBAR */
-    .logs-toolbar {
+    /* Header toolbar slot — projected into <mj-page-header>'s [toolbar] row */
+    .header-toolbar {
         display: flex;
         align-items: center;
         gap: 8px;
-        padding: 12px 20px;
-        border-bottom: 1px solid var(--mj-border-default);
-        background: var(--mj-bg-surface-sunken);
-        flex-shrink: 0;
+        flex-wrap: wrap;
+        width: 100%;
     }
-    .search-input-wrapper {
+
+    .header-actions {
         display: flex;
         align-items: center;
         gap: 8px;
-        flex: 1;
-        max-width: 400px;
-        padding: 6px 12px;
-        border: 1px solid var(--mj-border-default);
-        border-radius: 8px;
-        background: var(--mj-bg-surface);
-        transition: border-color 0.15s, box-shadow 0.15s;
     }
-    .search-input-wrapper:focus-within {
-        border-color: var(--mj-brand-primary);
-        box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
-    }
-    .search-input-wrapper i { color: var(--mj-text-muted); font-size: 12px; }
-    .search-input-wrapper input {
-        flex: 1; border: none; outline: none;
-        background: transparent; font-size: 12px;
-        font-family: inherit; color: var(--mj-text-primary);
-    }
-    .search-input-wrapper input::placeholder { color: var(--mj-text-muted); }
-
-    .filter-chip {
-        display: inline-flex; align-items: center;
-        gap: 4px; padding: 4px 10px;
-        border: 1px solid var(--mj-border-default);
-        border-radius: 16px;
-        background: var(--mj-bg-surface-card);
-        font-size: 11px; font-weight: 500;
-        color: var(--mj-text-secondary);
-        cursor: pointer; transition: all 0.15s;
-    }
-    .filter-chip:hover {
-        border-color: var(--mj-border-strong);
-        background: var(--mj-bg-surface-sunken);
-    }
-    .filter-chip.active {
-        border-color: var(--mj-brand-primary);
-        background: color-mix(in srgb, var(--mj-brand-primary) 15%, var(--mj-bg-surface));
-        color: var(--mj-brand-primary);
-    }
-    .filter-chip i { font-size: 10px; }
-
-    .toolbar-spacer { flex: 1; }
-
-    .tb-btn {
-        display: inline-flex; align-items: center;
-        gap: 6px; padding: 6px 12px;
-        border: 1px solid var(--mj-border-default);
-        border-radius: 4px;
-        background: var(--mj-bg-surface-card);
-        color: var(--mj-text-secondary);
-        font-size: 12px; font-weight: 500;
-        cursor: pointer; transition: all 0.15s ease;
-        font-family: inherit;
-    }
-    .tb-btn:hover {
-        background: var(--mj-bg-surface-sunken);
-        border-color: var(--mj-border-strong);
-        color: var(--mj-text-primary);
-    }
-    .tb-btn i { font-size: 12px; }
 
     @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
     .spinning { animation: spin 1s linear infinite; }
@@ -328,8 +257,8 @@ export class CommunicationLogsResourceComponent extends BaseResourceComponent im
         }
     }
 
-    public onSearch(event: Event): void {
-        this.searchTerm = (event.target as HTMLInputElement).value.toLowerCase();
+    public onSearchValue(value: string): void {
+        this.searchTerm = (value ?? '').toLowerCase();
         this.applyFilter();
     }
 

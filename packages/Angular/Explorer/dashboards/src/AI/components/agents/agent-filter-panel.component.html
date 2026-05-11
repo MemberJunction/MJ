@@ -11,21 +11,8 @@
   </div>
   
   <div class="filter-content">
-    <!-- Search Filter -->
-    <div class="filter-group">
-      <label class="filter-label">
-        <span class="fa-solid fa-search"></span>
-        Name
-      </label>
-      <input 
-        type="text"
-        class="filter-input"
-        [(ngModel)]="filters.searchTerm"
-        (ngModelChange)="onFilterChange()"
-        (input)="onFilterChange()"
-        placeholder="Search agents...">
-    </div>
-    
+    <!-- Search input is surfaced in the page-header toolbar, not duplicated here -->
+
     <!-- Category Filter (TreeDropdown) -->
     <div class="filter-group">
       <label class="filter-label">
@@ -50,78 +37,79 @@
         <span class="fa-solid fa-robot"></span>
         Type
       </label>
-      <select 
-        class="filter-select"
+      <mj-dropdown
+        [Data]="agentTypeOptions"
+        TextField="text"
+        ValueField="value"
+        [ValuePrimitive]="true"
         [(ngModel)]="filters.agentType"
         (ngModelChange)="onFilterChange()">
-        @for (option of agentTypeOptions; track option.value) {
-          <option [value]="option.value">{{ option.text }}</option>
-        }
-      </select>
+      </mj-dropdown>
     </div>
-    
+
     <!-- Parent Agent Filter -->
     <div class="filter-group">
       <label class="filter-label">
         <span class="fa-solid fa-sitemap"></span>
         Parent
       </label>
-      <select 
-        class="filter-select"
+      <mj-dropdown
+        [Data]="parentAgentOptions"
+        TextField="text"
+        ValueField="value"
+        [ValuePrimitive]="true"
+        [Filterable]="parentAgentOptions.length > 10"
         [(ngModel)]="filters.parentAgent"
         (ngModelChange)="onFilterChange()">
-        @for (option of parentAgentOptions; track option.value) {
-          <option [value]="option.value">{{ option.text }}</option>
-        }
-      </select>
+      </mj-dropdown>
     </div>
-    
+
     <!-- Status Filter -->
     <div class="filter-group">
       <label class="filter-label">
         <span class="fa-solid fa-toggle-on"></span>
         Status
       </label>
-      <select 
-        class="filter-select"
+      <mj-dropdown
+        [Data]="statusOptions"
+        TextField="text"
+        ValueField="value"
+        [ValuePrimitive]="true"
         [(ngModel)]="filters.status"
         (ngModelChange)="onFilterChange()">
-        @for (option of statusOptions; track option.value) {
-          <option [value]="option.value">{{ option.text }}</option>
-        }
-      </select>
+      </mj-dropdown>
     </div>
-    
+
     <!-- Execution Mode Filter -->
     <div class="filter-group">
       <label class="filter-label">
         <span class="fa-solid fa-list-ol"></span>
         Execution Mode
       </label>
-      <select 
-        class="filter-select"
+      <mj-dropdown
+        [Data]="executionModeOptions"
+        TextField="text"
+        ValueField="value"
+        [ValuePrimitive]="true"
         [(ngModel)]="filters.executionMode"
         (ngModelChange)="onFilterChange()">
-        @for (option of executionModeOptions; track option.value) {
-          <option [value]="option.value">{{ option.text }}</option>
-        }
-      </select>
+      </mj-dropdown>
     </div>
-    
+
     <!-- Expose As Action Filter -->
     <div class="filter-group">
       <label class="filter-label">
         <span class="fa-solid fa-share"></span>
         Action Exposure
       </label>
-      <select 
-        class="filter-select"
+      <mj-dropdown
+        [Data]="exposeAsActionOptions"
+        TextField="text"
+        ValueField="value"
+        [ValuePrimitive]="true"
         [(ngModel)]="filters.exposeAsAction"
         (ngModelChange)="onFilterChange()">
-        @for (option of exposeAsActionOptions; track option.value) {
-          <option [value]="option.value">{{ option.text }}</option>
-        }
-      </select>
+      </mj-dropdown>
     </div>
     
     <!-- Reset Button -->

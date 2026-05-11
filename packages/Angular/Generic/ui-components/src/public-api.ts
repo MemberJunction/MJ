@@ -19,3 +19,5 @@ export * from './lib/page-layout/page-layout.component';
 export * from './lib/filter-toggle/filter-toggle.component';
 export * from './lib/result-count/result-count.component';
 export * from './lib/filter-popover/filter-popover.component';
+export * from './lib/page-search/page-search.component';
+export * from './lib/filter-chip/filter-chip.component';

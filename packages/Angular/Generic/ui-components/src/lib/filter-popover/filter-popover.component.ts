@@ -191,10 +191,14 @@ export class MJFilterPopoverComponent {
 
   public IsOpen: boolean = false;
 
+  // Note: NO offsetY here — CDK applies offsetY as `transform: translateY(...)` on the
+  // overlay pane, which creates a containing block for `position: fixed` descendants.
+  // Tree dropdowns (and any other component using position: fixed) would then mis-position.
+  // The 6px spacing below the trigger is applied via margin-top on .mj-filter-popover-panel.
   public readonly Positions: ConnectedPosition[] = [
-    { originX: 'end',   originY: 'bottom', overlayX: 'end',   overlayY: 'top', offsetY: 4 },
-    { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top', offsetY: 4 },
-    { originX: 'end',   originY: 'top',    overlayX: 'end',   overlayY: 'bottom', offsetY: -4 }
+    { originX: 'end',   originY: 'bottom', overlayX: 'end',   overlayY: 'top' },
+    { originX: 'start', originY: 'bottom', overlayX: 'start', overlayY: 'top' },
+    { originX: 'end',   originY: 'top',    overlayX: 'end',   overlayY: 'bottom' }
   ];
 
   public Toggle(): void { this.IsOpen = !this.IsOpen; }

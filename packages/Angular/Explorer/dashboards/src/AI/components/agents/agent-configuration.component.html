@@ -4,10 +4,23 @@
     Title="Agents"
     Icon="fa-solid fa-robot">
     <div meta class="ai-header-meta">
-      <mj-filter-toggle [Active]="filterPanelVisible" (Toggled)="toggleFilterPanel()"></mj-filter-toggle>
       <mj-result-count [Count]="filteredAgents.length" Label="agents"></mj-result-count>
     </div>
     <div actions class="ai-header-actions">
+      <mj-filter-popover
+        [ActiveCount]="ActiveFilterCount"
+        [ShowClearAll]="ActiveFilterCount > 0"
+        (ClearAllRequested)="onResetFilters()">
+        <mj-agent-filter-panel
+          [agents]="agents"
+          [filteredAgents]="filteredAgents"
+          [filters]="currentFilters"
+          (filtersChange)="onFiltersChange($event)"
+          (filterChange)="onFilterChange()"
+          (resetFilters)="onResetFilters()">
+        </mj-agent-filter-panel>
+      </mj-filter-popover>
+
       <div class="view-toggle">
         <button
           type="button"
@@ -35,39 +48,23 @@
         </button>
       </div>
 
-      <button
-        type="button"
-        class="control-btn primary"
-        (click)="createNewAgent()"
-        title="Create New Agent">
+      <button mjButton variant="primary" size="sm" (click)="createNewAgent()" title="Create New Agent">
         <i class="fa-solid fa-plus"></i>
         New Agent
       </button>
     </div>
+    <div toolbar class="ai-header-toolbar">
+      <mj-page-search
+        Placeholder="Search agents..."
+        [Value]="currentFilters.searchTerm"
+        (ValueChange)="onSearchTermChange($event)">
+      </mj-page-search>
+    </div>
   </mj-page-header>
 
-  <!-- Main Content with Splitter -->
-  <div class="main-content" >
-    <as-split direction="horizontal" class="main-splitter">
-
-      <!-- Filter Panel (Left) -->
-      @if (filterPanelVisible) {
-      <as-split-area [size]="20" [minSize]="15" [maxSize]="30">
-        <mj-agent-filter-panel
-          [agents]="agents"
-          [filteredAgents]="filteredAgents"
-          [filters]="currentFilters"
-          (filtersChange)="onFiltersChange($event)"
-          (filterChange)="onFilterChange()"
-          (resetFilters)="onResetFilters()"
-          (closePanel)="toggleFilterPanel()">
-        </mj-agent-filter-panel>
-      </as-split-area>
-      }
-
-      <!-- Agents List Panel -->
-      <as-split-area>
-        <div class="agents-content">
+  <!-- Main Content (no sidebar — filters live in the popover above) -->
+  <div class="main-content">
+    <div class="agents-content">
           <!-- Loading State -->
           @if (isLoading) {
             <div class="loading-container">
@@ -295,8 +292,6 @@
             }
           }
         </div>
-      </as-split-area>
-    </as-split>
   </div>
 
   <!-- Detail Panel Overlay -->
