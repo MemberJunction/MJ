@@ -967,10 +967,10 @@
   {
     "fields": {
       "Name": "Llama 2 70B / Groq",
-      "Description": "Llama 2 70B on Groq",
+      "Description": "Llama 2 70B on Groq. Decommissioned by Groq — `llama2-70b-4096` is no longer available on the Groq API. Deactivated 2026-05-11.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 2,
-      "IsActive": true,
+      "IsActive": false,
       "InheritTypeModalities": true
     },
     "relatedEntities": {
@@ -2733,7 +2733,8 @@
       "Name": "Llama 3 70b",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 4,
-      "IsActive": true,
+      "IsActive": false,
+      "Description": "Llama 3 70B on Groq. Deprecated by Groq on 2025-05-31 in favor of `llama-3.3-70b-versatile`; `llama3-70b-8192` is fully decommissioned. Deactivated 2026-05-11.",
       "InheritTypeModalities": true
     },
     "relatedEntities": {
@@ -2797,10 +2798,10 @@
   {
     "fields": {
       "Name": "Llama 3.1 405b",
-      "Description": "Llama 3.1 405 billion parameters",
+      "Description": "Llama 3.1 405 billion parameters. Groq moved `llama-3.1-405b-reasoning` from preview to offline due to demand and never restored it; users were directed to `llama-3.3-70b-versatile`. No equivalent endpoint on Groq today. Deactivated 2026-05-11.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 5,
-      "IsActive": true,
+      "IsActive": false,
       "InheritTypeModalities": true
     },
     "relatedEntities": {
@@ -4821,10 +4822,10 @@
   {
     "fields": {
       "Name": "Claude 3.5 Sonnet",
-      "Description": "First model of the Claude 3.5 model family",
+      "Description": "First model of the Claude 3.5 model family. Retired by Anthropic on 2026-01-05 (deprecation notice 2025-08-13); `claude-3-5-sonnet-latest` no longer points at a live model. Replacement: Claude Sonnet 4.6 or newer. Deactivated 2026-05-11.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 5,
-      "IsActive": true,
+      "IsActive": false,
       "InheritTypeModalities": true
     },
     "relatedEntities": {
@@ -5571,10 +5572,10 @@
   {
     "fields": {
       "Name": "Mixtral 8x7B",
-      "Description": "MoE Model from Mistral AI",
+      "Description": "MoE Model from Mistral AI. The Mistral API endpoint `open-mistral-8x7b` was retired by Mistral on 2025-03-30; open weights remain available on Hugging Face but Mistral's hosted API no longer serves it. Replacement on Mistral: Mistral Small 3.2. Deactivated 2026-05-11.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 2,
-      "IsActive": true,
+      "IsActive": false,
       "InheritTypeModalities": true
     },
     "relatedEntities": {
@@ -6053,6 +6054,67 @@
     "sync": {
       "lastModified": "2026-02-13T21:08:25.033Z",
       "checksum": "699f90f4aa7138696b7988a097f94c7107a43851c00cb9b76b1228657e9ae9ed"
+    }
+  },
+  {
+    "fields": {
+      "Name": "FLUX.2 [max]",
+      "Description": "Black Forest Labs' top-tier image generation model in the FLUX.2 family. 32B parameter rectified flow transformer with the highest consistency editing in FLUX.2 — preserves colors, lighting, faces, written characters, and object detail. 4MP output ceiling. Default choice for product marketing, e-commerce variations, packaging, interior design, 3D reconstruction, and video production. Supports multi-reference editing with up to 8 reference images. March 2026 speed upgrade doubled throughput at zero quality loss.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Image Generator",
+      "PowerRank": 11,
+      "IsActive": true,
+      "SpeedRank": 6,
+      "CostRank": 7,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=FLUX.2 Pro"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Black Forest Labs",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Black Forest Labs",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "FLUXImageGenerator",
+            "APIName": "flux-2-max",
+            "MaxInputTokens": 10000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Black Forest Labs",
+            "StartedAt": "2025-11-25T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Image Generation",
+            "InputPricePerUnit": 0,
+            "OutputPricePerUnit": 0.07,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per Image",
+            "ProcessingType": "Realtime",
+            "Comments": "FLUX.2 [max] pricing on BFL direct API as of May 2026. Megapixel-based: input $0.03/MP (reference/editing inputs); output $0.07 first MP + $0.03 per additional MP. A 1024x1024 (1 MP) image ≈ $0.07; full 4 MP image ≈ $0.16. Recorded $0.07 as the per-image baseline (1 MP / 1024x1024) per the existing FLUX.2 Pro convention. Source: https://bfl.ai/pricing"
+          }
+        }
+      ]
     }
   },
   {
@@ -7764,10 +7826,10 @@
   {
     "fields": {
       "Name": "Gemini 1.5 Flash",
-      "Description": "Gemini 1.5 Flash is a fast and versatile multimodal model for scaling across diverse tasks.",
+      "Description": "Gemini 1.5 Flash is a fast and versatile multimodal model for scaling across diverse tasks. All Gemini 1.0 and 1.5 endpoints were shut down by Google in 2025 — `gemini-1.5-flash` returns 404. Replacement: `gemini-2.5-flash-lite` or 3.x Flash-Lite. Deactivated 2026-05-11.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 8,
-      "IsActive": true,
+      "IsActive": false,
       "InheritTypeModalities": true
     },
     "relatedEntities": {
@@ -8016,10 +8078,10 @@
   {
     "fields": {
       "Name": "Gemini 2.5 Pro Preview",
-      "Description": "Gemini 2.5 Pro Preview Model",
+      "Description": "Gemini 2.5 Pro Preview Model (`gemini-2.5-pro-preview-05-06`). On 2025-06-26 Google redirected this preview endpoint to the stable `gemini-2.5-pro`; the preview endpoint was fully shut down on 2025-07-15. Replacement: the stable `Gemini 2.5 Pro` entry already in inventory. Deactivated 2026-05-11.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 7,
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 0,
       "CostRank": 0,
       "InheritTypeModalities": true
@@ -8143,10 +8205,10 @@
   {
     "fields": {
       "Name": "Gemini 2.5 Flash Preview",
-      "Description": "Gemini 2.5 Flash Preview Model",
+      "Description": "Gemini 2.5 Flash Preview Model (`gemini-2.5-flash-preview-04-17`). Effective 2025-06-19 the endpoint began serving the GA `gemini-2.5-flash-05-20`, and was fully shut down on 2025-07-15. Replacement: the stable `Gemini 2.5 Flash` entry already in inventory. Deactivated 2026-05-11.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 7,
-      "IsActive": true,
+      "IsActive": false,
       "SpeedRank": 0,
       "CostRank": 0,
       "InheritTypeModalities": true
@@ -8396,10 +8458,10 @@
   {
     "fields": {
       "Name": "Gemini 1.5 Pro",
-      "Description": "Gemini 1.5 Pro",
+      "Description": "Gemini 1.5 Pro. All Gemini 1.0 and 1.5 endpoints were shut down by Google in 2025 — `gemini-1.5-pro-latest` (Google) and `gemini-1.5-pro-002` (Vertex) return 404. Replacement: Gemini 2.5 Pro / 3.x Pro. Deactivated 2026-05-11.",
       "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
       "PowerRank": 4,
-      "IsActive": true,
+      "IsActive": false,
       "InheritTypeModalities": true
     },
     "relatedEntities": {
