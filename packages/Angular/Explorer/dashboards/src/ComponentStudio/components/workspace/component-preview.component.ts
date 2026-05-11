@@ -196,7 +196,7 @@ export class ComponentPreviewComponent implements OnInit, OnDestroy {
   private refreshPreview(): void {
     if (!this.State.SelectedComponent) return;
 
-    const spec = this.State.GetComponentSpec(this.State.SelectedComponent);
+    const spec = this.State.ComponentSpec;
 
     // Null out to force React to unmount
     this.LocalComponentSpec = null;

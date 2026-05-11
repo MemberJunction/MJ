@@ -5,7 +5,7 @@
 
 import { ComponentSpec, ComponentLibraryDependency } from '@memberjunction/interactive-component-types';
 import { UserInfo, Metadata, LogError } from '@memberjunction/core';
-import { ComponentMetadataEngine, MJComponentLibraryEntity, MJComponentEntityExtended } from '@memberjunction/core-entities';
+import { ComponentMetadataEngine, MJComponentLibraryEntity } from '@memberjunction/core-entities';
 
 import { ComponentCompiler } from '../compiler';
 import { ComponentRegistry } from '../registry';
@@ -515,87 +515,82 @@ export class ComponentManager {
     // Check cache first
     const cacheKey = this.getComponentKey(spec, {});
     const cached = this.fetchCache.get(cacheKey);
-    
+
     if (cached && this.isCacheValid(cached)) {
       this.log(`Using cached spec for: ${spec.name}`);
       return cached.spec;
     }
-    
+
     // Handle LOCAL registry components (registry is null/undefined)
     if (!spec.registry) {
-      this.log(`Fetching from local registry: ${spec.name}`);
-      
-      // Find component in local ComponentMetadataEngine
-      const localComponent = this.componentEngine.Components?.find(
-        (c: MJComponentEntityExtended) => {
-          // Match by name (case-insensitive for better compatibility)
-          const nameMatch = c.Name?.toLowerCase() === spec.name?.toLowerCase();
-          
-          // Match by namespace if provided (handle different formats)
-          const namespaceMatch = !spec.namespace || c.Namespace?.toLowerCase() === spec.namespace?.toLowerCase();
+      const localComponent = await this.componentEngine.FindComponent(spec.name, spec.namespace);
 
-          if (nameMatch && !namespaceMatch) {
-          }
-          
-          return nameMatch && namespaceMatch;
-        }
-      );
-      
       if (!localComponent) {
         throw new Error(`Local component not found: ${spec.name}`);
       }
-      
-      // Parse specification from local component
+
       if (!localComponent.Specification) {
         throw new Error(`Local component ${spec.name} has no specification`);
       }
-      
+
       const fullSpec = JSON.parse(localComponent.Specification);
-      
-      // Cache it
+
       this.fetchCache.set(cacheKey, {
         spec: fullSpec,
         fetchedAt: new Date(),
         usageNotified: false
       });
-      
+
       return fullSpec;
     }
-    
+
     // Handle EXTERNAL registry components (registry has a name)
-    // Initialize GraphQL client if needed
     if (!this.graphQLClient) {
       await this.initializeGraphQLClient();
     }
-    
+
     if (!this.graphQLClient) {
       throw new Error('GraphQL client not available for registry fetching');
     }
-    
-    // Fetch from external registry
+
+    // Fetch from external registry, passing the cached hash (if any) so the
+    // server can return 304 Not Modified when the spec hasn't changed
     this.log(`Fetching from external registry: ${spec.registry}/${spec.name}`);
-    
-    const fullSpec = await this.graphQLClient.GetRegistryComponent({
+    const cachedHash = cached?.hash;
+
+    const response = await this.graphQLClient.GetRegistryComponentWithHash({
       registryName: spec.registry,
       namespace: spec.namespace || 'Global',
       name: spec.name,
-      version: spec.version || 'latest'
+      version: spec.version || 'latest',
+      hash: cachedHash
     });
-    
-    if (!fullSpec) {
+
+    // If not modified (304), reuse the cached spec and refresh the TTL
+    if (response.notModified && cached) {
+      this.log(`Registry returned 304 for ${spec.name}, reusing cached spec`);
+      this.fetchCache.set(cacheKey, {
+        ...cached,
+        fetchedAt: new Date()
+      });
+      return cached.spec;
+    }
+
+    if (!response.specification) {
       throw new Error(`Component not found in registry: ${spec.registry}/${spec.name}`);
     }
-    
-    // Apply resolution mode if specified
+
+    const fullSpec = response.specification as ComponentSpec;
     const processedSpec = this.applyResolutionMode(fullSpec, spec, options?.resolutionMode);
-    
-    // Cache it
+
+    // Cache it with the registry hash for future 304 checks
     this.fetchCache.set(cacheKey, {
       spec: processedSpec,
       fetchedAt: new Date(),
+      hash: response.hash,
       usageNotified: false
     });
-    
+
     return processedSpec;
   }
   

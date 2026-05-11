@@ -34,7 +34,7 @@ type TraverseModule = typeof _traverse & { default?: typeof _traverse };
 const traverse = (((_traverse as TraverseModule).default) ?? _traverse) as typeof _traverse;
 import * as t from '@babel/types';
 import { ComponentSpec, PropertyConstraint } from '@memberjunction/interactive-component-types';
-import { ComponentMetadataEngine } from '@memberjunction/core-entities';
+import { ComponentMetadataEngineServer } from '@memberjunction/core-entities-server';
 import { PropValueExtractor } from '../prop-value-extractor';
 import { SemanticValidator } from './semantic-validators/semantic-validator';
 import { SemanticValidatorRegistry } from './semantic-validators/semantic-validator-registry';
@@ -180,12 +180,7 @@ export class ComponentPropRule {
       if (dep && dep.name) {
         if (dep.location === 'registry') {
           // Try to load from registry
-          let match;
-          if (dep.registry) {
-            match = ComponentMetadataEngine.Instance.FindComponent(dep.name, dep.namespace, dep.registry);
-          } else {
-            match = ComponentMetadataEngine.Instance.FindComponent(dep.name, dep.namespace);
-          }
+          const match = ComponentMetadataEngineServer.Instance.FindComponent(dep.name, dep.namespace, dep.registry);
 
           if (!match) {
             console.warn(`Dependency component not found in registry: ${dep.name} (${dep.namespace || 'no namespace'})`);

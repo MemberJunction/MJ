@@ -1,14 +1,22 @@
-import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, UserInfo } from "@memberjunction/core";
+import { BaseEngine, BaseEnginePropertyConfig, IMetadataProvider, Metadata, RunView, UserInfo } from "@memberjunction/core";
 import { MJComponentEntityExtended } from "../custom/MJComponentEntityExtended";
-import { 
-    MJComponentLibraryEntity, 
+import {
+    MJComponentLibraryEntity,
     MJComponentLibraryLinkEntity,
     MJComponentRegistryEntity,
-    MJComponentDependencyEntity 
+    MJComponentDependencyEntity
 } from "../generated/entity_subclasses";
 
 /**
- * Caching of metadata for components and related data
+ * Caching of metadata for component libraries, registries, and dependencies.
+ *
+ * NOTE: The `MJ: Components` entity is intentionally NOT loaded by this engine.
+ * Component records contain large nvarchar(MAX) columns (Specification, vectors,
+ * prose fields) totaling ~150+ MB on production databases. Loading them via the
+ * engine forced all that data into the browser on every page refresh (~20s cold
+ * load) and poisoned the server-side LocalCacheManager by exceeding its memory
+ * budget and evicting all other cached entries. Callers that need component data
+ * should use RunView with targeted filters instead of bulk-loading all components.
  */
 export class ComponentMetadataEngine extends BaseEngine<ComponentMetadataEngine> {
     /**
@@ -18,7 +26,6 @@ export class ComponentMetadataEngine extends BaseEngine<ComponentMetadataEngine>
        return super.getInstance<ComponentMetadataEngine>();
     }
 
-    private _components: MJComponentEntityExtended[];
     private _componentLibraries: MJComponentLibraryEntity[];
     private _componentLibraryLinks: MJComponentLibraryLinkEntity[];
     private _componentRegistries: MJComponentRegistryEntity[];
@@ -26,12 +33,6 @@ export class ComponentMetadataEngine extends BaseEngine<ComponentMetadataEngine>
 
     public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider) {
         const c: Partial<BaseEnginePropertyConfig>[] = [
-            {
-                Type: 'entity',
-                EntityName: 'MJ: Components',
-                PropertyName: "_components",
-                CacheLocal: true
-            },
             {
                 Type: 'entity',
                 EntityName: 'MJ: Component Libraries',
@@ -60,10 +61,6 @@ export class ComponentMetadataEngine extends BaseEngine<ComponentMetadataEngine>
         await this.Load(c, provider, forceRefresh, contextUser);
     }
 
-    public get Components(): MJComponentEntityExtended[] {
-        return this._components;
-    }
-
     public get ComponentLibraries(): MJComponentLibraryEntity[] {
         return this._componentLibraries;
     }
@@ -81,12 +78,42 @@ export class ComponentMetadataEngine extends BaseEngine<ComponentMetadataEngine>
     }
 
     /**
-     * Finds a component on a case-insensitive match of name and optionally, namespace and registry if provided
+     * Finds a component by its primary key ID.
+     * Performs a targeted RunView query instead of searching a bulk-loaded cache.
      */
-    public FindComponent(name: string, namespace?: string, registry?: string): MJComponentEntityExtended | undefined {
-        const match =  this._components.find(c => c.Name.trim().toLowerCase() === name.trim().toLowerCase() && 
-                                             c.Namespace?.trim().toLowerCase() === namespace?.trim().toLowerCase() && 
-                                            (!registry || c.SourceRegistry?.trim().toLowerCase() === registry?.trim().toLowerCase()));
-        return match;
+    public async FindComponentByID(id: string, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<MJComponentEntityExtended | undefined> {
+        const md = provider ?? new Metadata(); // global-provider-ok: fallback when no provider passed
+        const entity = await md.GetEntityObject<MJComponentEntityExtended>('MJ: Components', contextUser);
+        if (await entity.Load(id)) {
+            return entity;
+        }
+        return undefined;
+    }
+
+    /**
+     * Finds a component by name (case-insensitive), optionally filtered by namespace and registry.
+     * Performs a targeted RunView query instead of searching a bulk-loaded cache.
+     */
+    public async FindComponent(name: string, namespace?: string, registry?: string, contextUser?: UserInfo): Promise<MJComponentEntityExtended | undefined> {
+        const rv = new RunView();
+        const filterParts = [`Name='${name.trim().replace(/'/g, "''")}'`];
+        if (namespace) {
+            filterParts.push(`Namespace='${namespace.trim().replace(/'/g, "''")}'`);
+        }
+        if (registry) {
+            filterParts.push(`SourceRegistry='${registry.trim().replace(/'/g, "''")}'`);
+        }
+
+        const result = await rv.RunView<MJComponentEntityExtended>({
+            EntityName: 'MJ: Components',
+            ExtraFilter: filterParts.join(' AND '),
+            MaxRows: 1,
+            ResultType: 'entity_object'
+        }, contextUser);
+
+        if (result.Success && result.Results.length > 0) {
+            return result.Results[0];
+        }
+        return undefined;
     }
 }
