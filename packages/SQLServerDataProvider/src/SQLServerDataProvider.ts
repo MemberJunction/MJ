@@ -934,6 +934,17 @@ export class SQLServerDataProvider
         continue;
       }
 
+      // PK-on-UPDATE special case: the SP signature DOES include the PK
+      // (caller needs it to identify the row), but in this provider it is
+      // appended at the end of the EXEC arg list by the post-loop block
+      // below (which sources its value from `entity.PrimaryKey.KeyValuePairs`
+      // — the loaded PK, including composite-key support). Skip it here
+      // to avoid a duplicate DECLARE/SET (which raises SQL Server "The
+      // variable name '@ID_xxx' has already been declared.")
+      if (isUpdate && f.IsPrimaryKey) {
+        continue;
+      }
+
       // PK on CREATE is in the SP signature (declared with a default so the
       // database can supply NEWSEQUENTIALID() etc.), but we only PASS it
       // when the caller has actually set an explicit value. Without a real
