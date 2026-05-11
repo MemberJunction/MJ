@@ -11,36 +11,7 @@
   display: contents;
 }
 
-/* View Toggle */
-.view-toggle {
-  display: flex;
-  background: var(--mj-bg-surface-sunken);
-  border-radius: 8px;
-  padding: 3px;
-  border: 1px solid var(--mj-border-default);
-}
-
-.view-btn {
-  background: transparent;
-  border: none;
-  padding: 8px 12px;
-  border-radius: 6px;
-  color: var(--mj-text-muted);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: 14px;
-}
-
-.view-btn:hover {
-  color: var(--mj-text-primary);
-  background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
-}
-
-.view-btn.active {
-  background: var(--mj-bg-surface);
-  color: var(--mj-brand-primary);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
+/* View toggle now provided by <mj-view-toggle>. */
 
 .control-btn {
   background: var(--mj-bg-surface-card);

@@ -20,35 +20,7 @@
   display: contents;
 }
 
-/* View Toggle */
-.view-toggle {
-  display: flex;
-  background: var(--mj-bg-surface-card);
-  border-radius: 8px;
-  padding: 3px;
-  border: 1px solid var(--mj-border-default);
-}
-
-.view-btn {
-  background: transparent;
-  border: none;
-  padding: 8px 14px;
-  border-radius: 6px;
-  color: var(--mj-text-muted);
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: 15px;
-}
-
-.view-btn:hover {
-  color: var(--mj-text-secondary);
-}
-
-.view-btn.active {
-  background: var(--mj-bg-surface);
-  color: var(--mj-brand-primary);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
-}
+/* View toggle now provided by <mj-view-toggle>. */
 
 .control-btn {
   background: var(--mj-bg-surface);

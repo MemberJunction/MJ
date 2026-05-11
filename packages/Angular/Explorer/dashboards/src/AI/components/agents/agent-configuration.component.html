@@ -11,42 +11,32 @@
         [ActiveCount]="ActiveFilterCount"
         [ShowClearAll]="ActiveFilterCount > 0"
         (ClearAllRequested)="onResetFilters()">
-        <mj-agent-filter-panel
-          [agents]="agents"
-          [filteredAgents]="filteredAgents"
-          [filters]="currentFilters"
-          (filtersChange)="onFiltersChange($event)"
-          (filterChange)="onFilterChange()"
-          (resetFilters)="onResetFilters()">
-        </mj-agent-filter-panel>
+        <mj-filter-panel
+          [Fields]="agentFilterFields"
+          [Values]="$any(currentFilters)"
+          (ValuesChange)="onFilterValuesChange($event)"
+          (Reset)="onResetFilters()">
+          <!-- Custom widget: Category uses a tree-dropdown, projected via mj-filter-field -->
+          <mj-filter-field Label="Category" Icon="fa-solid fa-folder-tree">
+            <mj-tree-dropdown
+              [BranchConfig]="CategoryBranchConfig"
+              [Value]="SelectedCategoryKey"
+              SelectionMode="single"
+              SelectableTypes="branch"
+              Placeholder="All Categories"
+              [Clearable]="true"
+              [EnableSearch]="true"
+              (ValueChange)="onCategoryChange($event)">
+            </mj-tree-dropdown>
+          </mj-filter-field>
+        </mj-filter-panel>
       </mj-filter-popover>
 
-      <div class="view-toggle">
-        <button
-          type="button"
-          class="view-btn"
-          [class.active]="viewMode === 'grid'"
-          (click)="setViewMode('grid')"
-          title="Grid View">
-          <i class="fa-solid fa-grip"></i>
-        </button>
-        <button
-          type="button"
-          class="view-btn"
-          [class.active]="viewMode === 'list'"
-          (click)="setViewMode('list')"
-          title="List View">
-          <i class="fa-solid fa-list"></i>
-        </button>
-        <button
-          type="button"
-          class="view-btn"
-          [class.active]="viewMode === 'tree'"
-          (click)="setViewMode('tree')"
-          title="Category Tree View">
-          <i class="fa-solid fa-folder-tree"></i>
-        </button>
-      </div>
+      <mj-view-toggle
+        [Options]="agentViewOptions"
+        [ActiveKey]="viewMode"
+        (KeyChange)="setViewMode($any($event))">
+      </mj-view-toggle>
 
       <button mjButton variant="primary" size="sm" (click)="createNewAgent()" title="Create New Agent">
         <i class="fa-solid fa-plus"></i>

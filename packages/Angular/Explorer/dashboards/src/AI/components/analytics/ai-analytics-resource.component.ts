@@ -19,6 +19,8 @@ import { ResourceData, UserInfoEngine } from '@memberjunction/core-entities';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { AIAnalyticsPreferences, GlobalFilterState } from '../../interfaces/analytics-preferences.interface';
+import { AIEngineBase } from '@memberjunction/ai-engine-base';
+import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 
 interface NavItem {
     Label?: string;
@@ -36,22 +38,40 @@ interface NavItem {
             Title="Analytics"
             Icon="fa-solid fa-chart-line">
             @if (ShowSharedFilterBar) {
-                <app-analytics-filter-bar
-                    actions
-                    [TimeRange]="CurrentTimeRange"
-                    [Filters]="CurrentFilters"
-                    [TimeRangeOptions]="FilterBarConfig.TimeRangeOptions"
-                    [ShowModelFilter]="FilterBarConfig.ShowModelFilter"
-                    [ShowAgentFilter]="FilterBarConfig.ShowAgentFilter"
-                    [ShowPromptFilter]="FilterBarConfig.ShowPromptFilter"
-                    [ShowStatusFilter]="FilterBarConfig.ShowStatusFilter"
-                    [ShowCompareToggle]="FilterBarConfig.ShowCompareToggle"
-                    [ShowExportButton]="FilterBarConfig.ShowExportButton"
-                    (TimeRangeChange)="OnTimeRangeChange($event)"
-                    (FiltersChange)="OnFiltersChange($event)"
-                    (CompareToggled)="OnCompareToggled($event)"
-                    (ExportClicked)="OnExportClicked()"
-                ></app-analytics-filter-bar>
+                <div actions class="ai-header-actions">
+                    @if (analyticsFilterFields.length > 0) {
+                        <mj-filter-popover
+                            [ActiveCount]="ActiveFilterCount"
+                            [ShowClearAll]="ActiveFilterCount > 0"
+                            (ClearAllRequested)="resetPopoverFilters()">
+                            <mj-filter-panel
+                                [Fields]="analyticsFilterFields"
+                                [Values]="analyticsFilterValues"
+                                (ValuesChange)="onAnalyticsFilterValuesChange($event)"
+                                (Reset)="resetPopoverFilters()">
+                            </mj-filter-panel>
+                        </mj-filter-popover>
+                    }
+                    @if (FilterBarConfig.ShowCompareToggle) {
+                        <button mjButton variant="flat" size="sm" [class.mj-btn--toggled]="compareActive" (click)="toggleCompare()">
+                            <i class="fa-solid fa-code-compare"></i> Compare
+                        </button>
+                    }
+                    @if (FilterBarConfig.ShowExportButton) {
+                        <button mjButton variant="flat" size="sm" (click)="OnExportClicked()">
+                            <i class="fa-solid fa-download"></i> Export
+                        </button>
+                    }
+                </div>
+                <div toolbar class="ai-header-toolbar time-range-chips">
+                    @for (chip of timeRangeChipOptions; track chip.value) {
+                        <mj-filter-chip
+                            [Label]="chip.text"
+                            [Active]="CurrentTimeRange === chip.value"
+                            (Clicked)="OnTimeRangeChange(chip.value)">
+                        </mj-filter-chip>
+                    }
+                </div>
             }
         </mj-page-header>
         <div class="analytics-shell">
@@ -318,6 +338,125 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
     /** Model Performance has its own custom filter UI inside the section, so the shared filter-bar is hidden there. */
     public get ShowSharedFilterBar(): boolean {
         return this.ActiveSection !== 'model-performance';
+    }
+
+    /** Status options used by the popover dropdown when the section has ShowStatusFilter. */
+    public readonly statusOptions = [
+        { text: 'Success',  value: 'Success' },
+        { text: 'Error',    value: 'Error' },
+        { text: 'Running',  value: 'Running' },
+        { text: 'Pending',  value: 'Pending' },
+        { text: 'Canceled', value: 'Canceled' },
+    ];
+
+    /** Built lazily from AIEngineBase. */
+    public get modelOptions(): { text: string; value: string }[] {
+        return AIEngineBase.Instance?.Models?.map(m => ({ text: m.Name ?? '', value: m.ID }))
+            ?.sort((a, b) => a.text.localeCompare(b.text)) ?? [];
+    }
+
+    public get agentOptions(): { text: string; value: string }[] {
+        return AIEngineBase.Instance?.Agents
+            ?.filter(a => a.Status === 'Active')
+            ?.map(a => ({ text: a.Name ?? '', value: a.ID }))
+            ?.sort((a, b) => a.text.localeCompare(b.text)) ?? [];
+    }
+
+    public get promptOptions(): { text: string; value: string }[] {
+        return AIEngineBase.Instance?.Prompts?.map(p => ({ text: p.Name ?? '', value: p.ID }))
+            ?.sort((a, b) => a.text.localeCompare(b.text)) ?? [];
+    }
+
+    /** Time-range chip options for the toolbar slot. */
+    public get timeRangeChipOptions(): { text: string; value: string }[] {
+        return this.FilterBarConfig.TimeRangeOptions.map(t => ({ text: t, value: t }));
+    }
+
+    /** Compare-mode visual state (kept on the shell now that analytics-filter-bar is gone). */
+    public compareActive = false;
+
+    /** Build the FilterFieldConfig[] for the popover based on the active section. */
+    public get analyticsFilterFields(): FilterFieldConfig[] {
+        const cfg = this.FilterBarConfig;
+        const fields: FilterFieldConfig[] = [];
+        if (cfg.ShowModelFilter) {
+            fields.push({
+                key: 'Models',
+                type: 'dropdown',
+                label: 'Model',
+                icon: 'fa-solid fa-microchip',
+                filterable: this.modelOptions.length > 10,
+                options: [{ text: 'All Models', value: '' }, ...this.modelOptions],
+            });
+        }
+        if (cfg.ShowAgentFilter) {
+            fields.push({
+                key: 'Agents',
+                type: 'dropdown',
+                label: 'Agent',
+                icon: 'fa-solid fa-robot',
+                filterable: this.agentOptions.length > 10,
+                options: [{ text: 'All Agents', value: '' }, ...this.agentOptions],
+            });
+        }
+        if (cfg.ShowPromptFilter) {
+            fields.push({
+                key: 'Prompts',
+                type: 'dropdown',
+                label: 'Prompt',
+                icon: 'fa-solid fa-comment-dots',
+                filterable: this.promptOptions.length > 10,
+                options: [{ text: 'All Prompts', value: '' }, ...this.promptOptions],
+            });
+        }
+        if (cfg.ShowStatusFilter) {
+            fields.push({
+                key: 'Statuses',
+                type: 'dropdown',
+                label: 'Status',
+                icon: 'fa-solid fa-toggle-on',
+                options: [{ text: 'All Statuses', value: '' }, ...this.statusOptions],
+            });
+        }
+        return fields;
+    }
+
+    /** Single-value flattened state for the centralized panel (the panel takes scalar values; we hold arrays in CurrentFilters). */
+    public get analyticsFilterValues(): Record<string, unknown> {
+        return {
+            Models:   this.CurrentFilters.Models?.[0]   ?? '',
+            Agents:   this.CurrentFilters.Agents?.[0]   ?? '',
+            Prompts:  this.CurrentFilters.Prompts?.[0]  ?? '',
+            Statuses: this.CurrentFilters.Statuses?.[0] ?? '',
+        };
+    }
+
+    /** Receive popover updates and translate scalar → array shape used by GlobalFilterState. */
+    public onAnalyticsFilterValuesChange(values: Record<string, unknown>): void {
+        const next: GlobalFilterState = {
+            Models:   values['Models']   ? [values['Models']   as string] : [],
+            Agents:   values['Agents']   ? [values['Agents']   as string] : [],
+            Prompts:  values['Prompts']  ? [values['Prompts']  as string] : [],
+            Statuses: values['Statuses'] ? [values['Statuses'] as string] : [],
+        };
+        this.OnFiltersChange(next);
+    }
+
+    /** Reset only the popover filters — leaves TimeRange and CompareActive alone. */
+    public resetPopoverFilters(): void {
+        this.OnFiltersChange({ Models: [], Agents: [], Prompts: [], Statuses: [] });
+    }
+
+    /** Active filter count for the popover badge. */
+    public get ActiveFilterCount(): number {
+        const f = this.CurrentFilters;
+        return (f.Models?.length ?? 0) + (f.Agents?.length ?? 0) + (f.Prompts?.length ?? 0) + (f.Statuses?.length ?? 0);
+    }
+
+    /** Toggle Compare mode (button click handler in the [actions] slot). */
+    public toggleCompare(): void {
+        this.compareActive = !this.compareActive;
+        this.OnCompareToggled(this.compareActive);
     }
 
     readonly NavItems: NavItem[] = [

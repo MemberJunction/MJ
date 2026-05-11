@@ -8,75 +8,10 @@
     display: contents;
 }
 
-/* Tab Navigation */
-.tab-nav {
-    display: flex;
-    gap: 4px;
-    background: var(--mj-bg-surface-card);
-    padding: 4px;
-    border-radius: 8px;
-}
-
-.tab-btn {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 14px;
-    background: transparent;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--mj-text-secondary);
-    transition: all 0.2s ease;
-}
-
-.tab-btn:hover {
-    background: color-mix(in srgb, var(--mj-bg-surface) 70%, transparent);
-    color: var(--mj-text-primary);
-}
-
-.tab-btn.active {
-    background: var(--mj-bg-surface);
-    color: var(--mj-brand-primary);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-}
-
-.tab-btn i {
-    font-size: 14px;
-}
-
-.tab-label {
-    font-weight: 500;
-}
-
-.tab-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 22px;
-    height: 18px;
-    padding: 0 6px;
-    background: var(--mj-border-default);
-    border-radius: 9px;
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--mj-text-muted);
-}
-
-.tab-btn.active .tab-badge {
-    background: color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
-    color: var(--mj-brand-primary);
-}
-
-.tab-badge.has-errors {
-    background: var(--mj-status-error);
-    color: var(--mj-text-inverse);
-}
+/* Tab navigation now provided by <mj-tab-nav>. */
 
 /* ========================================
-   Main Content Area (with Filter Panel)
+   Main Content Area
    ======================================== */
 .main-content {
     display: flex;
@@ -492,25 +427,8 @@
 }
 
 /* ========================================
-   View Mode Toggle
+   View mode toggle now provided by <mj-view-toggle>.
    ======================================== */
-.view-toggle {
-    display: flex;
-    border: 1px solid var(--mj-border-default);
-    border-radius: 6px;
-    overflow: hidden;
-}
-
-.view-toggle button {
-    border-radius: 0;
-    border: none;
-    padding: 6px 10px;
-}
-
-.view-toggle button.active {
-    background: var(--mj-brand-primary);
-    color: var(--mj-color-neutral-0);
-}
 
 /* ========================================
    Tools Tab - Server Groups

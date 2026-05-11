@@ -19,61 +19,7 @@
     color: var(--mj-text-inverse);
 }
 
-/* Search */
-.search-box {
-    position: relative;
-    width: 280px;
-}
-
-.search-icon {
-    position: absolute;
-    left: 10px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--mj-text-muted);
-    font-size: 13px;
-}
-
-.search-input {
-    width: 100%;
-    padding: 8px 12px 8px 32px;
-    border: 1px solid var(--mj-border-default);
-    border-radius: 6px;
-    font-size: 13px;
-    background: var(--mj-bg-surface);
-    color: var(--mj-text-primary);
-    box-sizing: border-box;
-}
-
-.search-input:focus {
-    outline: none;
-    border-color: var(--mj-border-focus);
-    box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
-}
-
-/* Filters */
-.filter-bar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 16px;
-    padding: 0 20px;
-    flex-wrap: wrap;
-}
-
-.filter-group {
-    display: flex;
-    gap: 8px;
-}
-
-.filter-select {
-    padding: 6px 10px;
-    border: 1px solid var(--mj-border-default);
-    border-radius: 6px;
-    font-size: 13px;
-    background: var(--mj-bg-surface);
-    color: var(--mj-text-primary);
-}
+/* Search & filters now live in <mj-page-header>'s toolbar/actions via shared components. */
 
 .clear-filters-btn {
     padding: 6px 12px;

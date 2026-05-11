@@ -11,6 +11,7 @@ import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { TreeBranchConfig, TreeLeafConfig, AfterNodeClickEventArgs, AfterNodeDoubleClickEventArgs } from '@memberjunction/ng-trees';
+import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 
 interface AgentFilter {
   searchTerm: string;
@@ -76,6 +77,93 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     exposeAsAction: 'all',
     categoryId: 'all'
   };
+
+  /** Static option arrays for the shared mj-filter-panel. */
+  public readonly statusOptions = [
+    { text: 'All Statuses', value: 'all' },
+    { text: 'Active',       value: 'active' },
+    { text: 'Inactive',     value: 'inactive' },
+  ];
+  public readonly executionModeOptions = [
+    { text: 'All Execution Modes', value: 'all' },
+    { text: 'Sequential',          value: 'Sequential' },
+    { text: 'Parallel',            value: 'Parallel' },
+  ];
+  public readonly exposeAsActionOptions = [
+    { text: 'All Agents',       value: 'all' },
+    { text: 'Exposed as Action', value: 'true' },
+    { text: 'Not Exposed',       value: 'false' },
+  ];
+
+  /** Dynamic agent-type options built from AIEngineBase metadata. */
+  public get agentTypeOptions(): { text: string; value: string }[] {
+    const aiEngine = AIEngineBase.Instance;
+    const types = aiEngine?.AgentTypes ?? [];
+    return [
+      { text: 'All Types', value: 'all' },
+      ...types.map(t => ({ text: t.Name, value: t.ID })),
+    ];
+  }
+
+  /** Dynamic parent-agent options built from the loaded agents (top-level only). */
+  public get parentAgentOptions(): { text: string; value: string }[] {
+    return [
+      { text: 'All Agents', value: 'all' },
+      { text: 'No Parent',  value: 'none' },
+      ...this.agents
+        .filter(a => !a.ParentID)
+        .map(a => ({ text: a.Name || 'Unnamed Agent', value: a.ID })),
+    ];
+  }
+
+  /** View-mode options for the shared <mj-view-toggle>. */
+  public readonly agentViewOptions = [
+    { key: 'grid', icon: 'fa-solid fa-grip',        title: 'Grid View' },
+    { key: 'list', icon: 'fa-solid fa-list',        title: 'List View' },
+    { key: 'tree', icon: 'fa-solid fa-folder-tree', title: 'Category Tree View' },
+  ];
+
+  /** Field config consumed by the centralized <mj-filter-panel>. */
+  public get agentFilterFields(): FilterFieldConfig[] {
+    return [
+      { key: 'agentType',      type: 'dropdown', label: 'Type',            icon: 'fa-solid fa-robot',     options: this.agentTypeOptions },
+      { key: 'parentAgent',    type: 'dropdown', label: 'Parent',          icon: 'fa-solid fa-sitemap',   options: this.parentAgentOptions, filterable: this.parentAgentOptions.length > 10 },
+      { key: 'status',         type: 'dropdown', label: 'Status',          icon: 'fa-solid fa-toggle-on', options: this.statusOptions },
+      { key: 'executionMode',  type: 'dropdown', label: 'Execution Mode',  icon: 'fa-solid fa-list-ol',   options: this.executionModeOptions },
+      { key: 'exposeAsAction', type: 'dropdown', label: 'Action Exposure', icon: 'fa-solid fa-share',     options: this.exposeAsActionOptions },
+    ];
+  }
+
+  /** Current category selection for the tree dropdown (Category is projected into mj-filter-panel as a custom widget). */
+  public SelectedCategoryKey: CompositeKey | null = null;
+
+  /** Handler for the projected mj-tree-dropdown — extracts the entity ID from the CompositeKey. */
+  public onCategoryChange(value: CompositeKey | CompositeKey[] | null): void {
+    if (value && !Array.isArray(value)) {
+      const idValue = value.KeyValuePairs?.find(kv => kv.FieldName === 'ID')?.Value;
+      this.currentFilters = { ...this.currentFilters, categoryId: idValue ?? 'all' };
+    } else {
+      this.currentFilters = { ...this.currentFilters, categoryId: 'all' };
+    }
+    this.SelectedCategoryKey = Array.isArray(value) ? null : value;
+    this.applyFilters();
+    this.saveUserPreferencesDebounced();
+  }
+
+  /** Receive the updated values record from <mj-filter-panel> and apply it. */
+  public onFilterValuesChange(values: Record<string, unknown>): void {
+    // Preserve fields the panel doesn't own (searchTerm comes from toolbar, categoryId from tree-dropdown handler)
+    this.currentFilters = {
+      ...this.currentFilters,
+      agentType:      (values['agentType']      as string) ?? 'all',
+      parentAgent:    (values['parentAgent']    as string) ?? 'all',
+      status:         (values['status']         as string) ?? 'all',
+      executionMode:  (values['executionMode']  as string) ?? 'all',
+      exposeAsAction: (values['exposeAsAction'] as string) ?? 'all',
+    };
+    this.applyFilters();
+    this.saveUserPreferencesDebounced();
+  }
 
   /** Number of currently-applied filter criteria inside the popover (excludes searchTerm — surfaced separately in the header). */
   public get ActiveFilterCount(): number {

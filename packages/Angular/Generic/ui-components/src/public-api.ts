@@ -21,3 +21,7 @@ export * from './lib/result-count/result-count.component';
 export * from './lib/filter-popover/filter-popover.component';
 export * from './lib/page-search/page-search.component';
 export * from './lib/filter-chip/filter-chip.component';
+export * from './lib/filter-field/filter-field.component';
+export * from './lib/filter-panel/filter-panel.component';
+export * from './lib/tab-nav/tab-nav.component';
+export * from './lib/view-toggle/view-toggle.component';

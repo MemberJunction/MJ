@@ -4,7 +4,6 @@
     Title="Configuration"
     Icon="fa-solid fa-cogs">
     <div meta class="ai-header-meta">
-      <mj-filter-toggle [Active]="filterPanelVisible" (Toggled)="toggleFilterPanel()"></mj-filter-toggle>
       <mj-result-count
         [Count]="filteredConfigurations.length"
         [Total]="configurations.length"
@@ -12,59 +11,40 @@
       </mj-result-count>
     </div>
     <div actions class="ai-header-actions">
-      <!-- View Toggle -->
-      <div class="view-toggle">
-        <button
-          type="button"
-          class="view-btn"
-          [class.active]="viewMode === 'grid'"
-          (click)="setViewMode('grid')"
-          title="Grid View">
-          <i class="fa-solid fa-grid-2"></i>
-        </button>
-        <button
-          type="button"
-          class="view-btn"
-          [class.active]="viewMode === 'list'"
-          (click)="setViewMode('list')"
-          title="List View">
-          <i class="fa-solid fa-list"></i>
-        </button>
-      </div>
+      <mj-filter-popover
+        [ActiveCount]="ActiveFilterCount"
+        [ShowClearAll]="ActiveFilterCount > 0"
+        (ClearAllRequested)="resetPopoverFilters()">
+        <mj-filter-panel
+          [Fields]="configFilterFields"
+          [Values]="configFilterValues"
+          (ValuesChange)="onFilterValuesChange($event)"
+          (Reset)="resetPopoverFilters()">
+        </mj-filter-panel>
+      </mj-filter-popover>
 
-      <button
-        type="button"
-        class="control-btn"
-        (click)="loadData()"
-        [disabled]="isLoading"
-        title="Refresh">
+      <mj-view-toggle
+        [Options]="configViewOptions"
+        [ActiveKey]="viewMode"
+        (KeyChange)="setViewMode($any($event))">
+      </mj-view-toggle>
+
+      <button mjButton variant="flat" size="sm" (click)="loadData()" [disabled]="isLoading" title="Refresh">
         <i class="fa-solid fa-refresh" [class.fa-spin]="isLoading"></i>
         Refresh
       </button>
     </div>
+    <div toolbar class="ai-header-toolbar">
+      <mj-page-search
+        Placeholder="Search configurations..."
+        [Value]="currentFilters.searchTerm"
+        (ValueChange)="onSearchTermChange($event)">
+      </mj-page-search>
+    </div>
   </mj-page-header>
 
-  <!-- Main Content with Splitter -->
+  <!-- Main Content (no sidebar — filters live in the popover above) -->
   <div class="main-content">
-    <as-split direction="horizontal" class="main-splitter">
-
-      <!-- Filter Panel (Left) -->
-      @if (filterPanelVisible) {
-      <as-split-area [size]="20" [minSize]="15" [maxSize]="30">
-        <mj-system-config-filter-panel
-          [configurations]="configurations"
-          [filteredConfigurations]="filteredConfigurations"
-          [filters]="currentFilters"
-          (filtersChange)="onFiltersChange($event)"
-          (filterChange)="onFilterChange()"
-          (resetFilters)="onResetFilters()"
-          (closePanel)="toggleFilterPanel()">
-        </mj-system-config-filter-panel>
-      </as-split-area>
-      }
-
-      <!-- Configurations List Panel -->
-      <as-split-area>
         <div class="configurations-content">
           <!-- Loading State -->
           @if (isLoading) {
@@ -354,8 +334,6 @@
             }
           }
         </div>
-      </as-split-area>
-    </as-split>
   </div>
 
   <!-- Detail Panel Overlay -->
