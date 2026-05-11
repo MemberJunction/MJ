@@ -110,6 +110,12 @@ export interface FetchPackOptions {
     HttpGet?: HttpGetter;
     /** Progress callback for verbose mode. */
     OnProgress?: (message: string) => void;
+    /**
+     * When true, fetch only the manifest and skip the per-file downloads.
+     * Used by `mj update:claude --check` to compare versions without paying
+     * for content the caller won't write. The returned `Files` map is empty.
+     */
+    ManifestOnly?: boolean;
 }
 
 export interface FetchedPack {
@@ -148,6 +154,10 @@ export async function fetchPack(opts: FetchPackOptions): Promise<FetchedPack> {
     );
 
     const files = new Map<string, Uint8Array>();
+    if (opts.ManifestOnly) {
+        return { Manifest: manifest, Files: files, RefUsed: refUsed, BaseUrl: baseUrl };
+    }
+
     for (const entry of manifest.files) {
         const url = baseUrl + entry.path;
         onProgress(`fetching ${entry.path}`);
