@@ -43,6 +43,11 @@ export const LIGHT_COMMANDS: ReadonlySet<string> = new Set([
   'sql-convert',
   'sql-audit',
 
+  // Claude pack commands - use only node stdlib + the lib/claude-pack/ helpers;
+  // no MJ runtime / bootstrap needed.
+  'install:claude',
+  'update:claude',
+
   // DBDoc commands - already use dynamic imports internally
   'dbdoc init',
   'dbdoc analyze',

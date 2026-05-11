@@ -1,17 +1,21 @@
 /**
  * Tests for `mj install:claude` and `mj update:claude`.
  *
- * Three layers of confidence:
+ * Four layers of confidence:
  *   1. Each command class loads and exposes the expected flag set (static)
  *   2. mapFlagsToInstallOptions translates oclif flags → installPack options
  *   3. End-to-end via Command.run([...argv]) with --from --dry-run, asserting
  *      the command exercises the full orchestrator path without any FS write
+ *   4. Subprocess test that spawns the actual `bin/run.js` so we can detect
+ *      regressions in things only the full CLI sees (prerun hook, banner
+ *      output, JSON-mode purity, etc.)
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import InstallClaude, { mapFlagsToInstallOptions } from '../../commands/install/claude.js';
 import UpdateClaude from '../../commands/update/claude.js';
@@ -315,5 +319,112 @@ describe('update:claude --check (via Command.run)', () => {
         const warningText = (parsed.warnings as string[]).join(' ');
         expect(warningText).toContain('Update available');
         expect(warningText).toContain('5.2.0');
+    });
+});
+
+// ---------------------------------------------------------------------------
+// Subprocess: spawns the actual bin/run.js
+// ---------------------------------------------------------------------------
+//
+// These tests catch regressions that only surface through the full CLI entry
+// point — the prerun hook in particular. Notable past bug: the prerun hook
+// printed the MJ banner ("~ M e m b e r J u n c t i o n ~" plus the userAgent)
+// to stdout unconditionally, contaminating --json output and breaking
+// `mj install:claude --json | jq .` for any downstream consumer. The fix was
+// to skip the banner when --json is in argv. This test guards that.
+
+describe('install:claude via spawned bin/run.js — --json purity', () => {
+    let target: string;
+    let packDir: string;
+    const BIN = path.resolve(__dirname, '..', '..', '..', 'bin', 'run.js');
+
+    beforeEach(() => {
+        target = mkdtempSync(path.join(tmpdir(), 'mj-cmd-bin-target-'));
+        packDir = mkdtempSync(path.join(tmpdir(), 'mj-cmd-bin-pack-'));
+        writeFileSync(
+            path.join(target, 'package.json'),
+            JSON.stringify({ name: 'user', dependencies: { '@memberjunction/cli': '^5.33.0' } })
+        );
+
+        const claudeMd = `<!-- MJ-MANAGED:CLAUDE-PACK START version=5.1.0 mj-major=5 -->\n\n<!-- MJ-MANAGED:CLAUDE-PACK END -->\n`;
+        const fixtureFiles: Record<string, string> = {
+            'CLAUDE.md': claudeMd,
+            '.claude/settings.json': JSON.stringify({
+                __mj_managed: { version: '5.1.0', mjMajor: '5', keys: ['env.MJ_CLAUDE_PACK'] },
+                env: { MJ_CLAUDE_PACK: '5.1.0' },
+            }),
+            '.claude/mj/VERSION': '5.1.0\n',
+        };
+        for (const [rel, content] of Object.entries(fixtureFiles)) {
+            const abs = path.join(packDir, ...rel.split('/'));
+            mkdirSync(path.dirname(abs), { recursive: true });
+            writeFileSync(abs, content);
+        }
+        const manifest = {
+            packVersion: '5.1.0',
+            mjMajor: '5',
+            remoteUrlPrefix: 'https://example/v5/',
+            files: Object.entries(fixtureFiles).map(([p, c]) => ({
+                path: p,
+                bytes: Buffer.byteLength(c, 'utf8'),
+                sha256: createHash('sha256').update(c).digest('hex'),
+            })),
+        };
+        writeFileSync(
+            path.join(packDir, '.claude/mj/MANIFEST.json'),
+            JSON.stringify(manifest, null, 2) + '\n'
+        );
+    });
+
+    afterEach(() => {
+        rmSync(target, { recursive: true, force: true });
+        rmSync(packDir, { recursive: true, force: true });
+    });
+
+    it('--json stdout is pure JSON (no banner contamination)', () => {
+        // Skip if the compiled CLI binary isn't present (tests run pre-build).
+        if (!existsSync(BIN)) {
+            console.warn(`Skipping subprocess test — ${BIN} not found. Run \`npm run build\` first.`);
+            return;
+        }
+        const res = spawnSync(
+            process.execPath,
+            [BIN, 'install:claude', '--dir', target, '--from', packDir, '--dry-run', '--json'],
+            { encoding: 'utf8' }
+        );
+        expect(res.status).toBe(0);
+
+        // The contract: stdout is parseable JSON, end of story.
+        // The MJ banner ("~ M e m b e r J u n c t i o n ~") + userAgent line
+        // are part of the pretty mode only — they must NOT leak into --json.
+        let parsed: unknown;
+        try {
+            parsed = JSON.parse(res.stdout);
+        } catch (err) {
+            throw new Error(
+                `--json stdout did not parse as JSON: ${(err as Error).message}\n` +
+                    `--- First 500 chars of stdout ---\n${res.stdout.slice(0, 500)}\n` +
+                    `--- /stdout snippet ---`
+            );
+        }
+        expect(parsed).toMatchObject({ ok: true, packVersion: '5.1.0' });
+        // Defensive: assert the banner string is absent from stdout
+        expect(res.stdout).not.toContain('~ M e m b e r J u n c t i o n ~');
+        expect(res.stdout).not.toContain('MemberJunction'); // figlet banner on wide terminals
+    });
+
+    it('pretty mode (no --json) DOES include the banner — regression-safe', () => {
+        if (!existsSync(BIN)) return;
+        const res = spawnSync(
+            process.execPath,
+            [BIN, 'install:claude', '--dir', target, '--from', packDir, '--dry-run'],
+            { encoding: 'utf8' }
+        );
+        expect(res.status).toBe(0);
+        // One of the two banner forms must be present
+        const hasBanner =
+            res.stdout.includes('~ M e m b e r J u n c t i o n ~') ||
+            res.stdout.includes('MemberJunction');
+        expect(hasBanner).toBe(true);
     });
 });
