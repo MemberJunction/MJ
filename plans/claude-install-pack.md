@@ -89,7 +89,7 @@
                                               commands/     ← curated subset
                                               skills/
                                               settings.template.json
-                                              build-pack.ts
+                                              build-pack.mjs
                                                   │
                                                   ▼
                                           templates/claude-pack/dist/v5/
@@ -197,7 +197,7 @@ Things that change per major MJ version and would mislead a user if stale:
 | | • **AI subsystem snapshot** — current AI Agent / AI Prompt entity model, vendor types |
 | `versions/v5/CHANGELOG.md` | Pack-level changelog: when each v5 pack revision shipped, what changed in the markdown content. Lets users see "ah, the pack went from 5.1.0 to 5.2.0 because we added §X". |
 
-When v6 ships, we add `versions/v6/` and update `build-pack.ts` to know about it. v5 packs continue to be regenerated until v5 is EOL.
+When v6 ships, we add `versions/v6/` and update `build-pack.mjs` to know about it. v5 packs continue to be regenerated until v5 is EOL.
 
 ### 4.3 What we explicitly **don't** put in the pack
 
@@ -230,9 +230,11 @@ For each `core/*.md`:
 
 ## 5. Pack Build Pipeline
 
-### 5.1 `build-pack.ts` — what it does
+### 5.1 `build-pack.mjs` — what it does
 
-A single TypeScript script at `templates/claude-pack/build-pack.ts`. Run it via `npm run claude-pack:build` (added to root `package.json`).
+A single Node ESM script at `templates/claude-pack/build-pack.mjs`. Run it via `npm run claude-pack:build` (added to root `package.json`).
+
+> **Implementation note:** the script is `.mjs` (plain Node, no transpile step), matching the repo's existing convention for root-level utility scripts (`ci/merge_main.mjs`, `scripts/fix-missing-dependencies.mjs`, etc.). Root has no `tsx`/`ts-node` dependency, so adding TypeScript here would mean pulling in a new tool just for one file. The script uses only Node's stdlib (`node:fs`, `node:path`, `node:crypto`, `node:url`).
 
 **Inputs:**
 - `templates/claude-pack/core/*.md` (in numeric order)
@@ -259,15 +261,16 @@ A single TypeScript script at `templates/claude-pack/build-pack.ts`. Run it via 
 ### 5.2 Algorithm
 
 ```
-build-pack.ts
-├── 1. Parse args: --major <N>  (default = derive from root package.json MJ version)
+build-pack.mjs
+├── 1. Parse args: --major <N>  (default = build every versions/v{N}/ folder found)
 ├── 2. Validate required source files exist; fail fast with clear error
 ├── 3. Read core/*.md in lexicographic order, normalize line endings, strip trailing whitespace
 ├── 4. Concatenate with `\n\n---\n\n` separators → core.md
 ├── 5. Read versions/v{N}/overlay.md → v{N}.md
 ├── 6. Compute sha256 of every managed file
 ├── 7. Render CLAUDE.md.template, replacing:
-│      {{PACK_VERSION}}, {{MJ_MAJOR}}, {{BUILD_DATE}}, {{REMOTE_URL_PREFIX}}
+│      {{PACK_VERSION}}, {{MJ_MAJOR}}, {{REMOTE_URL_PREFIX}}
+│      (no {{BUILD_DATE}} — see "Determinism" note below)
 ├── 8. Render settings.template.json the same way
 ├── 9. Generate REMOTE.md and MANIFEST.json with all checksums
 ├── 10. Copy commands/, skills/ directories verbatim into dist/v{N}/.claude/
@@ -279,7 +282,8 @@ build-pack.ts
 
 - **Pack semver = `<MJ_MAJOR>.<PACK_MINOR>.<PACK_PATCH>`** — e.g., `5.1.0`, `5.1.1`, `5.2.0`. The major component is *always* tied to the MJ major version. We bump the minor when content materially changes and the patch for typos/clarifications.
 - **One pack per supported MJ major.** When v6 launches, we ship `dist/v5/` and `dist/v6/` side by side until v5 EOLs.
-- **Pack version is stored in `templates/claude-pack/versions/v{N}/PACK_VERSION`** (a plain text file). `build-pack.ts` reads it and stamps everywhere it's needed.
+- **Pack version is stored in `templates/claude-pack/versions/v{N}/PACK_VERSION`** (a plain text file). `build-pack.mjs` reads it and stamps everywhere it's needed.
+- **Build output is deterministic.** Running `npm run claude-pack:build` twice on the same source produces byte-identical output — no `BUILD_DATE` or other time-of-build markers leak into generated files. This is what makes the `git diff --exit-code` CI gate work; without it the gate would flap on every wall-clock day change. The pack version itself is the content fingerprint.
 - The version is **separate from MJ's package versions** — bumping MJ from 5.1.3 to 5.1.4 does *not* automatically bump the pack. Pack bumps are explicit.
 
 ### 5.4 CI integration
@@ -794,7 +798,7 @@ Goal: prove the pipeline end to end with a tiny pack.
 | 3 | Author `versions/v5/overlay.md` (stub: 50 lines) | `templates/claude-pack/versions/v5/overlay.md` | File exists |
 | 4 | Author `versions/v5/PACK_VERSION` = `5.1.0` | same | File reads `5.1.0` |
 | 5 | Author `templates/claude-pack/CLAUDE.md.template` and `settings.template.json` | same | Templates parse |
-| 6 | Implement `build-pack.ts` per §5.2 | `templates/claude-pack/build-pack.ts` | Running it produces `dist/v5/` |
+| 6 | Implement `build-pack.mjs` per §5.2 | `templates/claude-pack/build-pack.mjs` | Running it produces `dist/v5/` |
 | 7 | Wire `npm run claude-pack:build` in root `package.json` | root `package.json` | Script runs |
 | 8 | Add CI gate: `git diff --exit-code templates/claude-pack/dist/` after rebuild | `.github/workflows/*.yml` | CI passes when committed in sync |
 | 9 | Commit the generated `dist/v5/` | repo | `dist/v5/CLAUDE.md` and `dist/v5/.claude/mj/*` exist |

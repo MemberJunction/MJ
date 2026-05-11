@@ -1,0 +1,42 @@
+{
+  "packVersion": "5.1.0",
+  "mjMajor": "5",
+  "remoteUrlPrefix": "https://raw.githubusercontent.com/MemberJunction/MJ/main/templates/claude-pack/dist/v5/",
+  "files": [
+    {
+      "path": ".claude/mj/README.md",
+      "bytes": 868,
+      "sha256": "3524cbc90c0fc3ccb16193f3639fc3bd1014f34f0ccbebf763619f73fa47c058"
+    },
+    {
+      "path": ".claude/mj/REMOTE.md",
+      "bytes": 1011,
+      "sha256": "979dc049c0492adf5a2f726e7ecdef24af5b404cfcc92154111859e14d7845f4"
+    },
+    {
+      "path": ".claude/mj/VERSION",
+      "bytes": 6,
+      "sha256": "c0eacacd7e27bbf341d21e7e0e2997a363840a210d8e358d4babaebd765b5bfd"
+    },
+    {
+      "path": ".claude/mj/core.md",
+      "bytes": 22508,
+      "sha256": "e2e1e89fbf8877917479cab4825de4f1f15c447f4a094c0981b0dbd9884b5de8"
+    },
+    {
+      "path": ".claude/mj/v5.md",
+      "bytes": 3739,
+      "sha256": "228c43599a2f6bbf1c58a17e7e7714574cdb37376b56e89d43b2311851cc2db7"
+    },
+    {
+      "path": ".claude/settings.json",
+      "bytes": 856,
+      "sha256": "67f6bab6014e04277ed9d89119d5e8fe8a680a77b9a9be41807be119a6f1e5ed"
+    },
+    {
+      "path": "CLAUDE.md",
+      "bytes": 929,
+      "sha256": "2c9c1808179ba8307832394883bc2107623fbd36cfd7e65b5df4f49251432492"
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "__mj_managed": {
+    "version": "{{PACK_VERSION}}",
+    "mjMajor": "{{MJ_MAJOR}}",
+    "keys": [
+      "permissions.allow",
+      "env.MJ_CLAUDE_PACK"
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(npm install)",
+      "Bash(npm run build)",
+      "Bash(npm run watch)",
+      "Bash(npm run test)",
+      "Bash(npm test)",
+      "Bash(npm run start:api)",
+      "Bash(npm run start:explorer)",
+      "Bash(mj *)",
+      "Bash(node --version)",
+      "Bash(node -v)",
+      "Bash(git status)",
+      "Bash(git diff)",
+      "Bash(git diff --staged)",
+      "Bash(git log:*)",
+      "Bash(git branch -vv)",
+      "Bash(git branch --show-current)",
+      "Bash(git fetch)",
+      "Bash(ls *)",
+      "Bash(find *)",
+      "Bash(grep *)"
+    ]
+  },
+  "env": {
+    "MJ_CLAUDE_PACK": "{{PACK_VERSION}}"
+  }
+}

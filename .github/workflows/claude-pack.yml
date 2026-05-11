@@ -1,0 +1,59 @@
+name: Claude Pack — dist freshness
+
+# Gate that fails when templates/claude-pack/dist/ is stale relative to the
+# pack source. Whoever changes a file under templates/claude-pack/{core,
+# versions,commands,skills}/, the templates, or build-pack.mjs MUST rerun
+# `npm run claude-pack:build` and commit the regenerated dist/ alongside.
+#
+# Path-filtered to only run when pack source or this workflow changes — keeps
+# unrelated PRs from waiting on it. Structurally modeled on pg-migrations.yml.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [next]
+    paths:
+      - 'templates/claude-pack/**'
+      - '.github/workflows/claude-pack.yml'
+  push:
+    branches: [next]
+    paths:
+      - 'templates/claude-pack/**'
+      - '.github/workflows/claude-pack.yml'
+
+jobs:
+  verify-dist-fresh:
+    name: Verify dist is up to date
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # The build script has no npm dependencies of its own — it only uses
+      # node:fs / node:crypto / node:path. We still need the lockfile install
+      # so `npm run claude-pack:build` finds the script entry; skipping it
+      # would still work but `npm ci --ignore-scripts` is essentially free
+      # given the cache and gives consistent behavior.
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Rebuild claude-pack
+        run: npm run claude-pack:build
+
+      - name: Verify dist/ is in sync with source
+        run: |
+          if git diff --exit-code templates/claude-pack/dist/; then
+            echo "::notice::templates/claude-pack/dist/ is in sync with source"
+          else
+            echo "::error::templates/claude-pack/dist/ is stale."
+            echo "::error::Run 'npm run claude-pack:build' locally and commit the regenerated dist/ alongside your source changes."
+            git diff --stat templates/claude-pack/dist/ >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi

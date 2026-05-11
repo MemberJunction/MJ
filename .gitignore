@@ -180,3 +180,11 @@ Demos/sample-skip-code-fix-prompt.json
 
 # Per-run artifacts from /audit-memory-leaks
 plans/.memory-leak-snapshots/
+
+# Claude Pack ships its built output in the repo: the bootstrap ZIP copies
+# dist/v{MAJOR}/ verbatim, and the claude-pack.yml CI workflow runs
+# `git diff --exit-code` against it to catch stale-relative-to-source dist
+# commits. The blanket `dist/` ignore above would silently hide both, so
+# explicitly un-ignore this one subtree.
+!/templates/claude-pack/dist/
+!/templates/claude-pack/dist/**
