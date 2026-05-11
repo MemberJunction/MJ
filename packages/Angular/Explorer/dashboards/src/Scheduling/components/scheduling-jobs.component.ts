@@ -19,6 +19,8 @@ import {
 })
 export class SchedulingJobsComponent implements OnInit, OnDestroy {
   @Input() initialState: Record<string, unknown> = {};
+  /** When true, the inner toolbar is hidden — the parent shell is rendering it in `<mj-page-header>` instead. */
+  @Input() HideToolbar = false;
   @Output() stateChange = new EventEmitter<Record<string, unknown>>();
 
   public Jobs: JobStatistics[] = [];

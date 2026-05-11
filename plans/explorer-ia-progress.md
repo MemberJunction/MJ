@@ -8,7 +8,7 @@
 
 We're consolidating the dashboard header chrome of MJ Explorer into a small set of shared components in `@memberjunction/ng-ui-components`, then migrating each dashboard to use them. Per-page CSS for the header strip is being deleted as we go — the goal is that future drift is impossible because the styles live in exactly one place.
 
-So far: **6 shared components** built, **14 dashboards** fully migrated (MCP, 6 AI sub-pages, 3 Lists pages, all 5 Communication pages). **~10 dashboards still use bespoke headers** (APIKeys, Credentials, Scheduling, Settings, Testing + Template B group).
+So far: **6 shared components** built, **18 dashboards** fully migrated (MCP, 6 AI sub-pages, 3 Lists pages, all 5 Communication pages, Scheduling + 3 Scheduling resource entries). **~9 dashboards still use bespoke headers** (APIKeys, Credentials, Settings, Testing + Template B group).
 
 ## Shared components (lives in `@memberjunction/ng-ui-components`)
 
@@ -41,12 +41,16 @@ All 5 are standalone, design-token-only, PascalCase API.
 | Communication — Monitor | ✅ | ✅ | n/a | n/a | n/a | KPI strip + content grids; `loadData()` refresh button in `[actions]`. |
 | Communication — Providers | ✅ | ✅ | n/a | n/a | n/a | Provider card grid; "Add Provider" primary action. |
 | Communication — Runs | ✅ | ✅ | n/a | n/a | n/a | Summary stat trio + run timeline; Refresh button. |
+| Scheduling (parent dashboard) | ✅ | ✅ | n/a | n/a | n/a | Sidebar dropped — converted to `<mj-tab-nav>` in `[actions]` slot like MCP. Healthy/Alerts pill in `[meta]`. Jobs tab badge bound to `ActiveJobCount`. |
+| Scheduling — Overview (resource) | ✅ | ✅ | n/a | n/a | n/a | Deep-link resource wrapper around `<app-scheduling-overview>`. |
+| Scheduling — Jobs (resource) | ✅ | ✅ | n/a | n/a | n/a | Deep-link resource wrapper around `<app-scheduling-jobs>`. |
+| Scheduling — Activity (resource) | ✅ | ✅ | n/a | n/a | n/a | Deep-link resource wrapper around `<app-scheduling-activity>`. |
 
 ## Pages NOT yet migrated
 
 Per [`plans/explorer-layout-templates.md`](explorer-layout-templates.md):
 
-- **Template A** (sidebar + content): APIKeys, Credentials, Scheduling, Settings, Testing
+- **Template A** (sidebar + content): APIKeys, Credentials, Settings, Testing
 - **Template B** (no sidebar): ApplicationRoles, DashboardBrowser, DatabaseDesigner, EntityAdmin, Permissions
 - **Documented exceptions** (will NOT be migrated as-is): Home (right-sidebar dashboard), Component Studio (toolbar-driven authoring shell), Data Explorer (workspace), Query Browser (resizable left panel)
 
@@ -70,6 +74,20 @@ Open question we landed on in the prototype: where should filters live? Options 
 
 ### 5. Shell-owns-filter-bar for sub-section dashboards
 For Analytics (a dashboard with internal sub-sections that share filter state): the **shell** renders the filter-bar once with a config getter that switches per active section. Sub-sections become pure presentational components that receive `[TimeRange]` / `[Filters]` as inputs. Section-specific events (`CompareToggled`, `ExportClicked`) forwarded via `@ViewChild`. Pattern is reusable for any multi-section dashboard.
+
+### 6. Slot assignments — what goes where
+The three projection slots on `<mj-page-header>` are not interchangeable. Consistent placement across pages is what makes the chrome feel unified.
+
+| Slot | What goes there | What does NOT |
+|---|---|---|
+| `[meta]` (next to title) | **Status badges**, **result counts** (`X of Y items`), pending-count pills, "Healthy" / "X Alerts" indicators — anything that describes the *state* of the page | Verbs / actions |
+| `[actions]` (right of header) | **Verbs**: Refresh, New X, primary CTAs, filter-popover trigger, view-toggle, tab-nav | Result counts / status badges (they belong in `[meta]`) |
+| `[toolbar]` (secondary row below title) | **Search input** + **quick-filter chips** that operate on the page's primary dataset. Chips sit *immediately adjacent* to search — they're the same logical control group | Dropdown filters (those belong in the filter popover) |
+
+**Anti-patterns observed mid-migration:**
+- Putting `<mj-result-count>` in `[actions]` next to Refresh — count is metadata, not a verb. Move to `[meta]`.
+- Pushing time-range chips to the far right of the toolbar with a `flex: 1` spacer — implies they're independent of search. Drop the spacer; let them flow naturally next to the search input.
+- Rendering `<select class="mj-input">` dropdowns directly in the toolbar — dense filter UI should live inside `<mj-filter-popover>` + `<mj-filter-panel>`, not flat on the toolbar row.
 
 ## Known gotchas
 
@@ -123,10 +141,11 @@ Run this against every page you migrate. Items 1–4 are the structural swap; 5�
 
 1. **Inventory** — find any existing `mj-{x}-filter-panel` component for this page. If present, delete it; we use the centralized `<mj-filter-panel>` config-driven approach now.
 2. **Wrap the outer container** in `<mj-page-layout>`.
-3. **Add `<mj-page-header>`** at top with `Title` / `Icon` / optional `Subtitle`. Slot content:
-   - `[meta]` → result-count, status badges
-   - `[actions]` → filter-popover, view-toggle, primary CTAs (use `mjButton variant="primary" size="sm"`)
-   - `[toolbar]` → `<mj-page-search>` for searchTerm
+3. **Add `<mj-page-header>`** at top with `Title` / `Icon` / optional `Subtitle`. Slot assignment (see Gotcha #6 for the full rules):
+   - `[meta]` → result-count, status/health badges, pending-count pills — **state of the page**
+   - `[actions]` → Refresh, primary CTA, filter-popover trigger, view-toggle, tab-nav — **verbs / interactive controls**. Refresh buttons use `mjButton variant="secondary" size="sm"` so they read as visible affordances against the white header (variant="flat" disappears on white).
+   - `[toolbar]` → `<mj-page-search>` + quick-filter chips **adjacent to search** (no `flex: 1` spacer between them — chips share the search's logical scope)
+   - Dense dropdown filters live in `<mj-filter-popover>` in `[actions]`, NOT flat in `[toolbar]`
 4. **Config-driven filter panel** — define `xxxFilterFields: FilterFieldConfig[]`, `xxxFilterValues: Record<string, unknown>`, `onFilterValuesChange(values)`, `resetPopoverFilters()`, and `ActiveFilterCount` getter (excluding searchTerm). For custom widgets (tree-dropdown, range inputs), use projected `<mj-filter-field>` as escape hatch.
 5. **`display: contents`** on every wrapper div used as a slot marker (`.xxx-header-actions`, `.xxx-header-meta`, `.xxx-header-toolbar`). Without this, gap between projected children is consumed by the wrapper.
 6. **Body container needs padding restored.** Add `padding: 0 24px 24px` (or the equivalent) to absorb what the old `.x-header` used to carry. Change `height: 100%` → `flex: 1; min-height: 0` so it fills remaining flex space.

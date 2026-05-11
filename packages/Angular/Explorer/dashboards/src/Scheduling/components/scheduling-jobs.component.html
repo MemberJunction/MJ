@@ -1,37 +1,39 @@
 <div class="jobs-container">
-  <!-- Toolbar -->
-  <div class="jobs-toolbar">
-    <div class="toolbar-left">
-      <div class="search-box">
-        <i class="fa-solid fa-search"></i>
-        <input type="text"
-          placeholder="Search jobs..."
-          [value]="SearchTerm"
-          (input)="OnSearchChange($any($event.target).value)" />
+  @if (!HideToolbar) {
+    <!-- Standalone toolbar — hidden when the parent SchedulingDashboard owns the chrome. -->
+    <div class="jobs-toolbar">
+      <div class="toolbar-left">
+        <div class="search-box">
+          <i class="fa-solid fa-search"></i>
+          <input type="text"
+            placeholder="Search jobs..."
+            [value]="SearchTerm"
+            (input)="OnSearchChange($any($event.target).value)" />
+        </div>
+        <select class="filter-select" [value]="StatusFilter" (change)="OnStatusFilterChange($any($event.target).value)">
+          <option value="">All Statuses</option>
+          @for (s of StatusOptions.slice(1); track s) {
+            <option [value]="s">{{s}}</option>
+          }
+        </select>
+        <select class="filter-select" [value]="TypeFilter" (change)="OnTypeFilterChange($any($event.target).value)">
+          <option value="">All Types</option>
+          @for (t of TypeOptions.slice(1); track t) {
+            <option [value]="t">{{t}}</option>
+          }
+        </select>
       </div>
-      <select class="filter-select" [value]="StatusFilter" (change)="OnStatusFilterChange($any($event.target).value)">
-        <option value="">All Statuses</option>
-        @for (s of StatusOptions.slice(1); track s) {
-          <option [value]="s">{{s}}</option>
-        }
-      </select>
-      <select class="filter-select" [value]="TypeFilter" (change)="OnTypeFilterChange($any($event.target).value)">
-        <option value="">All Types</option>
-        @for (t of TypeOptions.slice(1); track t) {
-          <option [value]="t">{{t}}</option>
-        }
-      </select>
+      <div class="toolbar-right">
+        <span class="result-count">{{FilteredJobs.length}} of {{Jobs.length}} jobs</span>
+        <button mjButton variant="secondary" (click)="Refresh()">
+          <i class="fa-solid fa-arrows-rotate"></i> Refresh
+        </button>
+        <button class="primary-btn" (click)="OpenCreateSlideout()">
+          <i class="fa-solid fa-plus"></i> New Job
+        </button>
+      </div>
     </div>
-    <div class="toolbar-right">
-      <span class="result-count">{{FilteredJobs.length}} of {{Jobs.length}} jobs</span>
-      <button mjButton variant="secondary" (click)="Refresh()">
-        <i class="fa-solid fa-arrows-rotate"></i> Refresh
-      </button>
-      <button class="primary-btn" (click)="OpenCreateSlideout()">
-        <i class="fa-solid fa-plus"></i> New Job
-      </button>
-    </div>
-  </div>
+  }
 
   <!-- Loading -->
   @if (IsLoading) {

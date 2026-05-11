@@ -1,42 +1,44 @@
 <div class="activity-container">
-  <!-- Toolbar -->
-  <div class="activity-toolbar">
-    <div class="toolbar-left">
-      <div class="search-box">
-        <i class="fa-solid fa-search"></i>
-        <input type="text" placeholder="Search executions..."
-          [value]="SearchTerm"
-          (input)="OnSearchChange($any($event.target).value)" />
+  @if (!HideToolbar) {
+    <!-- Standalone toolbar — hidden when the parent SchedulingDashboard owns the chrome. -->
+    <div class="activity-toolbar">
+      <div class="toolbar-left">
+        <div class="search-box">
+          <i class="fa-solid fa-search"></i>
+          <input type="text" placeholder="Search executions..."
+            [value]="SearchTerm"
+            (input)="OnSearchChange($any($event.target).value)" />
+        </div>
+        <select class="filter-select" [value]="StatusFilter" (change)="OnStatusFilterChange($any($event.target).value)">
+          <option value="">All Statuses</option>
+          @for (s of StatusOptions.slice(1); track s) {
+            <option [value]="s">{{s}}</option>
+          }
+        </select>
+        <select class="filter-select" [value]="JobNameFilter" (change)="OnJobNameFilterChange($any($event.target).value)">
+          <option value="">All Jobs</option>
+          @for (name of UniqueJobNames; track name) {
+            <option [value]="name">{{name}}</option>
+          }
+        </select>
       </div>
-      <select class="filter-select" [value]="StatusFilter" (change)="OnStatusFilterChange($any($event.target).value)">
-        <option value="">All Statuses</option>
-        @for (s of StatusOptions.slice(1); track s) {
-          <option [value]="s">{{s}}</option>
-        }
-      </select>
-      <select class="filter-select" [value]="JobNameFilter" (change)="OnJobNameFilterChange($any($event.target).value)">
-        <option value="">All Jobs</option>
-        @for (name of UniqueJobNames; track name) {
-          <option [value]="name">{{name}}</option>
-        }
-      </select>
-    </div>
-    <div class="toolbar-right">
-      <div class="time-range-group">
-        @for (range of TimeRanges; track range) {
-          <button
-            class="range-btn"
-            [class.active]="SelectedTimeRange === range.value"
-            (click)="OnTimeRangeChange(range.value)">
-            {{range.label}}
-          </button>
-        }
+      <div class="toolbar-right">
+        <div class="time-range-group">
+          @for (range of TimeRanges; track range) {
+            <button
+              class="range-btn"
+              [class.active]="SelectedTimeRange === range.value"
+              (click)="OnTimeRangeChange(range.value)">
+              {{range.label}}
+            </button>
+          }
+        </div>
+        <button mjButton variant="secondary" (click)="Refresh()">
+          <i class="fa-solid fa-arrows-rotate"></i> Refresh
+        </button>
       </div>
-      <button mjButton variant="secondary" (click)="Refresh()">
-        <i class="fa-solid fa-arrows-rotate"></i> Refresh
-      </button>
     </div>
-  </div>
+  }
 
   <!-- Loading -->
   @if (IsLoading) {

@@ -1,16 +1,18 @@
 <div class="overview-container">
-  <!-- Header Controls -->
-  <div class="overview-header">
-    <div class="header-controls">
-      <button mjButton variant="secondary" (click)="Refresh()">
-        <i class="fa-solid fa-arrows-rotate"></i> Refresh
-      </button>
-      <button mjButton [variant]="AutoRefreshEnabled ? 'primary' : 'secondary'" (click)="ToggleAutoRefresh()">
-        <i class="fa-solid fa-rotate"></i>
-        Auto-Refresh: {{AutoRefreshEnabled ? 'ON' : 'OFF'}}
-      </button>
+  @if (!HideToolbar) {
+    <!-- Standalone toolbar — hidden when the parent SchedulingDashboard owns the chrome. -->
+    <div class="overview-header">
+      <div class="header-controls">
+        <button mjButton variant="secondary" (click)="Refresh()">
+          <i class="fa-solid fa-arrows-rotate"></i> Refresh
+        </button>
+        <button mjButton [variant]="AutoRefreshEnabled ? 'primary' : 'secondary'" (click)="ToggleAutoRefresh()">
+          <i class="fa-solid fa-rotate"></i>
+          Auto-Refresh: {{AutoRefreshEnabled ? 'ON' : 'OFF'}}
+        </button>
+      </div>
     </div>
-  </div>
+  }
 
   @if (IsLoading) {
     <div class="loading-container">

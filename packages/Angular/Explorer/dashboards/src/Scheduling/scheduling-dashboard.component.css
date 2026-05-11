@@ -1,232 +1,43 @@
-.scheduling-dashboard-container {
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-    width: 100%;
-    background-color: var(--mj-bg-surface-sunken);
-    color: var(--mj-text-primary);
-    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+/* Body container: standard pattern shared across migrated dashboards. */
+.scheduling-body {
+    flex: 1;
+    min-height: 0;
+    padding: 0 24px 24px;
+    overflow-y: auto;
 }
 
-/* ── Header ──────────────────────────────────────────────── */
-.dashboard-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 16px 24px;
-    background: var(--mj-brand-primary);
-    border-bottom: 1px solid var(--mj-border-default);
-    box-shadow: var(--mj-shadow-md);
-    flex-shrink: 0;
+/* Header projection wrappers — display:contents lets children become direct flex
+   children of <mj-page-header>'s slot so its gap applies between them. */
+.scheduling-header-meta,
+.scheduling-header-actions {
+    display: contents;
 }
 
-.header-title {
+/* Per-tab toolbar rendered in the [toolbar] slot of <mj-page-header>. */
+.scheduling-toolbar {
     display: flex;
     align-items: center;
-    gap: 12px;
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: var(--mj-text-inverse);
+    gap: 8px;
+    flex-wrap: wrap;
 }
 
-.header-title i {
-    color: var(--mj-text-inverse);
-    font-size: 1.5rem;
-}
-
-.header-actions {
-    display: flex;
-    align-items: center;
-    gap: 16px;
-}
-
-.tab-label {
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: var(--mj-text-inverse);
-    background: rgba(255,255,255,0.15);
-    padding: 6px 14px;
-    border-radius: 20px;
-    backdrop-filter: blur(4px);
-}
-
-.status-badge {
-    display: flex;
+/* Status badge — small "Healthy" / "X Alerts" pill in the [meta] slot. */
+.scheduling-status-badge {
+    display: inline-flex;
     align-items: center;
     gap: 6px;
     font-size: 0.75rem;
     font-weight: 600;
-    color: var(--mj-status-warning);
-    background: rgba(251, 191, 36, 0.15);
-    padding: 6px 12px;
+    padding: 4px 10px;
     border-radius: 20px;
 }
-
-.status-badge.healthy {
+.scheduling-status-badge.healthy {
     color: var(--mj-status-success);
-    background: rgba(52, 211, 153, 0.15);
+    background: color-mix(in srgb, var(--mj-status-success) 12%, var(--mj-bg-surface));
+    border: 1px solid color-mix(in srgb, var(--mj-status-success) 25%, transparent);
 }
-
-/* ── Layout ──────────────────────────────────────────────── */
-.dashboard-content {
-    display: flex;
-    flex: 1;
-    overflow: hidden;
-}
-
-/* ── Sidebar ─────────────────────────────────────────────── */
-.sidebar {
-    width: 240px;
-    background-color: var(--mj-bg-surface-card);
-    border-right: 1px solid var(--mj-border-default);
-    padding: 20px 0;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    flex-shrink: 0;
-}
-
-.sidebar-section {
-    padding: 0 16px;
-    margin-bottom: 4px;
-}
-
-.sidebar-section:not(:first-child) {
-    margin-top: 16px;
-}
-
-.sidebar-section-title {
-    font-size: 0.7rem;
-    font-weight: 700;
-    color: var(--mj-text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    padding: 8px 0;
-}
-
-.nav-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 20px;
-    margin: 0 8px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    color: var(--mj-text-secondary);
-    font-weight: 500;
-    border-radius: 10px;
-    font-size: 0.9rem;
-}
-
-.nav-item:hover {
-    background-color: var(--mj-bg-surface-sunken);
-    color: var(--mj-brand-primary);
-}
-
-.nav-item.selected {
-    background: var(--mj-brand-primary);
-    color: var(--mj-text-inverse);
-    box-shadow: var(--mj-shadow-md);
-}
-
-.nav-item i {
-    width: 20px;
-    text-align: center;
-    font-size: 1rem;
-}
-
-.nav-item .badge {
-    margin-left: auto;
-    font-size: 0.7rem;
-    font-weight: 700;
-    padding: 2px 8px;
-    border-radius: 12px;
-    background: rgba(0, 118, 182, 0.1);
-    color: var(--mj-brand-primary);
-}
-
-.nav-item.selected .badge {
-    background: rgba(255,255,255,0.2);
-    color: var(--mj-text-inverse);
-}
-
-/* ── Main Content ────────────────────────────────────────── */
-.main-content {
-    flex: 1;
-    overflow-y: auto;
-    padding: 24px;
-    background: var(--mj-bg-surface-sunken);
-}
-
-.tab-container {
-    height: 100%;
-}
-
-.tab-content {
-    height: 100%;
-    animation: fadeIn 0.3s ease;
-}
-
-@keyframes fadeIn {
-    from { opacity: 0; transform: translateY(8px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-/* ── Responsive ──────────────────────────────────────────── */
-@media (max-width: 1024px) {
-    .sidebar {
-        width: 200px;
-    }
-    .main-content {
-        padding: 20px;
-    }
-}
-
-@media (max-width: 768px) {
-    .dashboard-content {
-        flex-direction: column;
-    }
-    .sidebar {
-        width: 100%;
-        flex-direction: row;
-        padding: 12px;
-        gap: 0;
-        overflow-x: auto;
-        border-right: none;
-        border-bottom: 1px solid var(--mj-border-default);
-    }
-    .sidebar-section {
-        display: none;
-    }
-    .nav-item {
-        flex-direction: column;
-        padding: 10px 16px;
-        margin: 0 4px;
-        gap: 6px;
-        white-space: nowrap;
-        font-size: 12px;
-    }
-    .nav-item .badge {
-        position: absolute;
-        top: 4px;
-        right: 4px;
-        margin-left: 0;
-        font-size: 9px;
-        padding: 1px 5px;
-    }
-    .main-content {
-        padding: 16px;
-    }
-    .dashboard-header {
-        padding: 12px 16px;
-    }
-    .header-title {
-        font-size: 1rem;
-    }
-    .tab-label {
-        display: none;
-    }
-    .status-badge span {
-        display: none;
-    }
+.scheduling-status-badge.alert {
+    color: var(--mj-status-warning-text);
+    background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+    border: 1px solid color-mix(in srgb, var(--mj-status-warning) 30%, transparent);
 }
