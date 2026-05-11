@@ -1108,15 +1108,19 @@ SELECT * FROM delete_result`;
         return value;
     }
 
+    /**
+     * Returns the fields that should be passed as parameters to this entity's
+     * spCreate (when `isNew=true`) or spUpdate (when `isNew=false`) procedure.
+     *
+     * Delegates to {@link EntityFieldInfo.IsSPParameter} — the single source
+     * of truth for the SP parameter contract. CodeGen uses the same predicate
+     * when emitting the SP body, so the declared parameter list and this
+     * runtime argument list always agree. Drift between the two surfaces as
+     * a "too many / too few arguments" error at save time.
+     */
     private getWritableFields(entityInfo: EntityInfo, isNew: boolean): EntityFieldInfo[] {
-        return entityInfo.Fields.filter((f: EntityFieldInfo) => {
-            if (f.IsVirtual) return false;
-            if (f.Name === '__mj_CreatedAt' || f.Name === '__mj_UpdatedAt') return false;
-            if (isNew && f.AutoIncrement) return false;
-            if (!isNew && f.IsPrimaryKey) return true;
-            if (f.ReadOnly && !f.IsPrimaryKey) return false;
-            return true;
-        });
+        const isUpdate = !isNew;
+        return entityInfo.Fields.filter((f: EntityFieldInfo) => f.IsSPParameter(isUpdate));
     }
 
     // ─── Record Change SQL Builders (abstract method implementations) ───
