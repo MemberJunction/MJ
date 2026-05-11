@@ -444,43 +444,51 @@ mj doctor                (existing — extend to include Claude-pack health chec
 
 We deliberately add `update:claude` as its own top-level path (not nested under `update:`) because no `update:` topic exists yet; this makes it discoverable via `mj update --help` if oclif autogenerates topic indices.
 
-### 7.3 File layout
+### 7.3 File layout (as built)
 
 ```
 packages/MJCLI/src/commands/install/claude.ts       ← `mj install:claude`
 packages/MJCLI/src/commands/update/claude.ts        ← `mj update:claude`
 packages/MJCLI/src/lib/claude-pack/
-    PackInstaller.ts       core install/update orchestrator
-    PackFetcher.ts         HTTPS fetch from raw.githubusercontent.com, sha256 verify
-    PackMerger.ts          per-file merge rules (§6.4)
-    PackPaths.ts           resolves source/target paths for both monorepo + distribution mode
-    ManagedBlockEditor.ts  parse + rewrite the <!-- MJ-MANAGED:* --> markers in CLAUDE.md
-    SettingsMerger.ts      deep-merge for .claude/settings.json
-    PackTypes.ts           shared types for the manifest, version, etc.
-    __tests__/             vitest tests, no network
+    PackInstaller.ts        core install/update orchestrator
+    PackFetcher.ts          HTTPS fetch from raw.githubusercontent.com, sha256 verify
+    PackMerger.ts           per-file merge rules (§6.4)
+    PackPaths.ts            resolves source/target paths for both monorepo + distribution mode
+    ManagedBlockEditor.ts   parse + rewrite the <!-- MJ-MANAGED:* --> markers in CLAUDE.md
+    SettingsMerger.ts       deep-merge for .claude/settings.json
+    PackOutputFormatter.ts  shared pretty + JSON renderers for the two commands
+    PackTypes.ts            shared types for the manifest, version, etc.
+packages/MJCLI/src/__tests__/claude-pack/
+    *.test.ts               vitest tests; no network, no FS mutation outside temp dirs
 ```
+
+> **Test directory note:** the plan originally called for `src/lib/claude-pack/__tests__/`,
+> but MJCLI's existing convention is to keep all tests under `src/__tests__/`, so the
+> claude-pack tests live in `src/__tests__/claude-pack/` to match. Tests are excluded
+> from the published build via `tsconfig.json`.
 
 ### 7.4 Command flags (consolidated)
 
 ```
 mj install:claude
-  --dir <path>           Target directory (default: cwd)
+  --dir <path>           Target directory (default: cwd, i.e. `.`)
   --major <N>            Force a specific MJ major (default: detected from package.json)
-  --ref <branch|tag>     Repo ref to fetch from (default: tag matching local MJ version, fallback main)
+  --ref <branch|tag>     Repo ref to fetch from (default: main; falls back from a 404-ing tag)
   --from <path>          Use a local pack source instead of fetching
   --dry-run              Print what would be written, write nothing
-  --yes                  Don't prompt
-  --force                Overwrite user-customized files (per file confirmation unless --yes)
+  --yes / -y             Don't prompt (reserved for future interactive paths; currently no-op)
+  --force                Overwrite user-customized commands/skills (saves .bak files)
   --offline              Forbid network; require --from
   --skip-commands        Don't seed .claude/commands/
   --skip-skills          Don't seed .claude/skills/
   --skip-settings        Don't merge .claude/settings.json
-  --json                 Machine-readable output (for scripting / hooks)
+  --json                 Machine-readable output (matches §7.5 schema)
+  --verbose / -v         Show progress messages from the fetcher and merger
 
 mj update:claude
   (same flags as above, plus:)
-  --check                Don't write anything; just print whether an update is available
-  --refresh-commands     Force-resync commands from pack (prompts per file)
+  --check                Don't write anything; print whether an update is available
+  --refresh-commands     Force-resync commands from pack (saves .bak files)
   --refresh-skills       Same for skills
   --allow-major          Required if remote pack major != local MJ major
 ```
@@ -739,22 +747,53 @@ Tiny self-contained script (~50 lines) committed to `templates/claude-pack/skill
 
 ## 11. Testing Plan
 
-### 11.1 Unit tests (vitest)
+### 11.1 Unit tests (vitest) — as shipped
 
-In `packages/MJCLI/src/lib/claude-pack/__tests__/`:
+In `packages/MJCLI/src/__tests__/claude-pack/` (see §7.3 note for path):
 
 | Test file | Covers |
 |---|---|
-| `ManagedBlockEditor.test.ts` | Parses + rewrites `<!-- MJ-MANAGED:CLAUDE-PACK START … -->` blocks; preserves user content above/below; handles missing markers; handles malformed markers |
-| `SettingsMerger.test.ts` | Deep-merges arrays vs objects; dedupes `permissions.allow`; preserves user keys; tolerates missing `__mj_managed` block (first-time install) |
-| `PackFetcher.test.ts` | Mocks `https.get`; verifies sha256; falls back from tag to main on 404; respects `--offline`; respects `--from <local-path>` |
-| `PackMerger.test.ts` | All §6.4 rules: absent vs identical vs user-modified file behavior; `--force` flag; `--dry-run` |
-| `PackPaths.test.ts` | Resolves correct paths for distribution vs monorepo install modes |
-| `build-pack.test.ts` | Concatenation order, version stamping, manifest generation, atomic write semantics |
+| `PackTypes.test.ts` | `emptyActionLog`, `recordOutcome` bucket mapping (including the `error` → `errors` plural rename), reason-string formatting |
+| `PackPaths.test.ts` | `targetPathsFor`, `parseSemverMajor` (handles `^/~/>=/v` prefixes), `detectMJMajor` from `package.json`, `resolveLocalPackRoot` for both MJ-repo-root and unpacked-dist shapes, `buildRemoteUrlPrefix` |
+| `PackFetcher.test.ts` | Mocked `https.get` via `HttpGetter` injection; success path; tag→main fallback on 404; no fallback on 5xx; per-file 404; sha256 + byte-length verification; malformed manifest JSON |
+| `ManagedBlockEditor.test.ts` | Parses + rewrites markers; handles attribute parsing; rejects malformed markers (END before START, only one marker, multiple START); preserves user content above/below; tolerates whitespace variants |
+| `SettingsMerger.test.ts` | Deep-merges arrays (user-first, deduped by stable JSON); recursive object merge; preserves user keys outside managed paths; replaces `__mj_managed` wholesale; type-mismatch falls back to pack value; `Changed` flag honors no-ops |
+| `PackMerger.test.ts` | Every §6.4 rule: CLAUDE.md wrap-vs-rewrite-vs-skip, .claude/mj/** sweep of stale files, settings deep-merge, commands/skills seed-once with `--force` saving `.bak`; `--dry-run` no-FS-write proof; `--skip-*` flags |
+| `PackInstaller.test.ts` | MJ-major detection + `--major` override; `--offline` requires `--from`; local pack with checksum verify; network fetch with mock; `--check` fast path (up-to-date / update-available / no-local); cross-major guard + `--allow-major`; §7.5-shape result |
+| `PackOutputFormatter.test.ts` | `formatJson` matches §7.5 schema; `formatPretty` success/failure banners, bucket listing, skipped-list truncation, warning rendering, "(check only)" + "no local MJ" labels |
+| `claude-commands.test.ts` | Static flag-set metadata for both commands; `mapFlagsToInstallOptions` exhaustive translation; end-to-end `Command.run([...argv])` with `--from --dry-run --json` against a real fixture pack (no network) |
+| `build-pack.test.ts` | The Milestone 1 build script (deferred from M1 per the user's "defer to M3" decision): determinism, output sanity, MANIFEST.json checksum integrity, error paths (missing PACK_VERSION, mismatched major, missing overlay, unknown `--major`), multi-major build with v6 fixture, commands/skills verbatim copy, .gitkeep exclusion |
 
 ### 11.2 Integration tests
 
-In `packages/MJCLI/src/__tests__/install-claude.integration.test.ts`:
+The scenarios below are covered across the unit-test files in §11.1 rather than
+in a single `install-claude.integration.test.ts` — each unit file owns the
+scenarios that exercise its surface, which keeps the failure messages
+specific (e.g. a sweep-of-stale-mj-files regression surfaces in
+`PackMerger.test.ts` rather than buried in a 30-case integration file).
+The scenario → test-file map:
+
+| Scenario | Covering test file |
+|---|---|
+| Fresh install in empty dir | `PackInstaller.test.ts`, `claude-commands.test.ts` (end-to-end) |
+| Install on top of existing CLAUDE.md (no markers) | `PackMerger.test.ts` — "wraps unmanaged CLAUDE.md with markers" |
+| Install on top of existing CLAUDE.md (with markers) | `PackMerger.test.ts` — "rewrites only the managed block" |
+| Install with existing settings.json | `PackMerger.test.ts` — "deep-merges into existing settings" |
+| Install with existing custom command | `PackMerger.test.ts` — "keeps user-modified commands without --force" |
+| `--force` overwrite | `PackMerger.test.ts` — "--force overwrites … and saves a .bak" |
+| Update across major versions without `--allow-major` | `PackInstaller.test.ts` — "errors with clear message when fixture has different mjMajor" |
+| Update across major versions with `--allow-major` | `PackInstaller.test.ts` — "--allow-major lets the cross-major merge proceed" |
+| `--check` with newer remote | `PackInstaller.test.ts` + `claude-commands.test.ts` |
+| `--offline --from <path>` | `PackInstaller.test.ts` — "errors when --offline given without --from" + the `--from` happy-path tests |
+| `--dry-run` | `PackMerger.test.ts` ("reports actions without writing anything") + `claude-commands.test.ts` end-to-end |
+
+A separate `install-claude.integration.test.ts` file remains a viable option
+if cross-cutting scenarios ever outgrow the unit tests, but the unit-tests-with-
+fixture-packs pattern is sufficient for the M3 surface.
+
+### 11.2-legacy Original integration table (kept for context)
+
+The original scenarios as drafted in the plan, now mapped via §11.2 above:
 
 | Scenario | Setup | Assertion |
 |---|---|---|
