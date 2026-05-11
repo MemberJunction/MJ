@@ -324,19 +324,32 @@ We do *not* gitignore `dist/` — it's intentionally committed. The CI gate ensu
 
 Modify `CreateMJDistribution.js` to copy `templates/claude-pack/dist/v{MAJOR}/` into the archive root. Insertion point: just before `await archive.finalize()` at line 417, around the cluster of `archive.append(...)` calls at 384–402.
 
-**Pseudocode:**
+**Pseudocode (as implemented):**
 ```js
-// New section: Claude Code pack
-const major = readMJMajorFromPackageJson(); // e.g., 5
-const packDir = path.join(__dirname, 'templates', 'claude-pack', 'dist', `v${major}`);
-if (!fs.existsSync(packDir)) {
-  throw new Error(`Claude pack not found at ${packDir}. Run 'npm run claude-pack:build' first.`);
+// Discover available dist/v{N}/ folders and pick the highest available major.
+// This sidesteps the "where does the MJ major version live?" question — root
+// package.json's `version` is the workspace semver (1.x), not user-facing MJ
+// (5.x). Discovery from the pack source itself avoids the coupling.
+const packDistRoot = path.join(__dirname, 'templates', 'claude-pack', 'dist');
+if (!fs.existsSync(packDistRoot)) {
+  throw new Error(`Claude pack dist not found at ${packDistRoot}. Run 'npm run claude-pack:build' first.`);
 }
-console.log(`   Adding Claude Code pack (v${major})...`);
-archive.directory(packDir, false);   // adds CLAUDE.md, .claude/* into ZIP root
+const majorDirs = fs.readdirSync(packDistRoot, { withFileTypes: true })
+  .filter(e => e.isDirectory() && /^v\d+$/.test(e.name))
+  .map(e => e.name)
+  .sort((a, b) => parseInt(b.slice(1), 10) - parseInt(a.slice(1), 10));
+if (majorDirs.length === 0) {
+  throw new Error(`Claude pack dist at ${packDistRoot} contains no v{N}/ subdirectories.`);
+}
+const selectedMajor = majorDirs[0];
+const packDir = path.join(packDistRoot, selectedMajor);
+console.log(`Adding Claude Code pack (${selectedMajor}) to zip file...`);
+// `dot: true` is required so the `.claude/` directory (dotfile-prefixed) is included.
+// `prefix: ''` lands contents at archive root alongside other root files.
+archive.glob('**/*', { cwd: packDir, dot: true }, { prefix: '' });
 ```
 
-`archive.directory(packDir, false)` puts the contents at archive root (i.e., the user's project root once extracted) — exactly where they belong.
+`archive.glob('**/*', ...)` matches the existing glob-based pattern used elsewhere in `CreateMJDistribution.js` (line 370) — `archive.directory()` was originally considered but glob is the convention here.
 
 ### 6.2 Path B — `ScaffoldPhase` post-extract guard
 
