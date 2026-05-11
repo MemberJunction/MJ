@@ -1,190 +1,220 @@
-# Agent Content Streaming: Wire `onStreaming` Through Single-Prompt Path
+# Agent Inter-Turn Streaming Messages
 
 ## Status
-- **Status**: Draft
+- **Status**: Draft (v2 — supersedes the v1 token-streaming approach in this branch's history)
 - **Created**: 2026-05-11
 - **Author**: Amith Nagarajan + Claude
 - **Branch**: `amith-nagarajan/agent-content-streaming`
 
 ## Overview
 
-MemberJunction's agent framework already has end-to-end *plumbing* for streaming **assembled content** (LLM tokens, not just status messages) from the LLM driver layer up through `AIPromptRunner` → `BaseAgent` → `RunAIAgentResolver` → GraphQL `PubSub`. The agent layer correctly forwards an `onStreaming` callback to prompt execution, and the LLM driver layer (`BaseLLM`) has a complete native streaming implementation (Server-Sent Events handling, `OnContent` / `OnComplete` / `OnError` callbacks).
+A multi-prompt loop agent produces several LLM turns to complete a task (plan → tool call → interpret → tool call → summarize). Today the user sees nothing between turns except generic status messages ("Calling tool X..."). True LLM token streaming through every turn would mostly leak internal reasoning JSON and noise.
 
-However, **the single-prompt execution path in `AIPromptRunner.executeModel()` never copies the caller's `onStreaming` callback onto `ChatParams.streamingCallbacks`, and never sets `ChatParams.streaming = true`**. As a result, even though `BaseLLM.ChatCompletion()` *can* stream, the prompt path always invokes it in buffered mode. Only the `ParallelExecutionCoordinator` path currently wires streaming through.
+The right granularity is **one user-facing message per turn**. The loop agent's structured JSON response is extended with an optional `streamingMessage` field that the model populates each turn with a brief 1-sentence description of what it's doing ("Searching the knowledge base...", "Drafting your summary..."). The moment the agent parses the response and confirms `onStreaming` is wired, it forwards that string through the existing streaming hook to the GraphQL subscriber.
 
-This plan adds that one missing connection so that any agent that passes `onStreaming` receives progressive content chunks, and verifies (and where necessary adds) native streaming implementations in the highest-priority provider drivers.
+The field — and the instruction to populate it — only appear in the prompt **when `onStreaming` is wired at runtime**. With no hook, the schema is unchanged and zero extra input/output tokens are spent.
 
 ## Goals & Non-Goals
 
 ### Goals
-- An agent caller that supplies `ExecuteAgentParams.onStreaming` receives token-level content chunks as the underlying LLM streams them.
-- The GraphQL subscription path (`RunAIAgentResolver`) emits `AgentExecutionStreamMessage` of type `'streaming'` for every chunk, in real time.
-- The single-prompt path in `AIPromptRunner.executeModel()` honors `AIPromptParams.onStreaming` identically to how `ParallelExecutionCoordinator` already does.
-- The final `ChatResult` returned to the caller is identical whether streaming was enabled or not (no behavior change for callers that don't pass `onStreaming`).
-- Anthropic, OpenAI, and Gemini drivers stream natively (the three highest-traffic providers).
+- Loop agents emit one user-facing progress message per turn, visible to the subscribing client in real time.
+- The message is part of the structured response (no separate side-channel, no JSON streaming parser).
+- The field is conditionally added to the response schema only when `onStreaming` is wired — no token cost when not used.
+- The existing `message` field's semantics for `Chat` turns are unchanged.
+- Works with the existing PubSub-based GraphQL streaming transport (`AgentExecutionStreamMessage` of type `'streaming'`).
 
 ### Non-Goals
-- Reworking the GraphQL subscription contract or PubSub message shape.
-- Streaming for parallel-execution tasks (already works).
-- Streaming for non-LLM AI types (embeddings, vision-only, etc.).
-- Adding streaming UI to MJExplorer or Skip chat — separate plan once the server side ships.
-- Streaming tool-call deltas (only assistant text content is in scope for v1).
+- Token-by-token streaming of the LLM response.
+- Changing `AIPromptRunner.executeModel` or any LLM driver code.
+- Streaming for `FlowAgentType` or other non-loop agent types (can opt in later via the same pattern).
+- Streaming tool-call deltas, payload deltas, or scratchpad content.
 
 ## Background & Context
 
-### What already works
-- **Agent → Prompt**: [base-agent.ts:5846-5854](packages/AI/Agents/src/base-agent.ts#L5846-L5854) wraps `params.onStreaming` and assigns it to `promptParams.onStreaming` with metadata `{ stepType: 'prompt', stepEntityId }`.
-- **Agent → Sub-agent**: [base-agent.ts:4467](packages/AI/Agents/src/base-agent.ts#L4467) forwards `onStreaming` to nested agent executions.
-- **BaseLLM streaming**: [baseLLM.ts:79](packages/AI/Core/src/generic/baseLLM.ts#L79) gates on `params.streaming && params.streamingCallbacks && this.SupportsStreaming`; lines 241-291 implement SSE parsing and call `OnContent` / `OnComplete` / `OnError`.
-- **ChatParams contract**: [chat.types.ts:114](packages/AI/Core/src/generic/chat.types.ts#L114) defines `StreamingChatCallbacks.OnContent(chunk, isComplete)`; [chat.types.ts:193](packages/AI/Core/src/generic/chat.types.ts#L193) exposes `ChatParams.streamingCallbacks`.
-- **Parallel path (reference impl)**: [ParallelExecutionCoordinator.ts:588-591](packages/AI/Prompts/src/ParallelExecutionCoordinator.ts#L588-L591) populates `innerParams.streamingCallbacks` from a task-level streaming config. This is the pattern to mirror in `executeModel`.
-- **GraphQL transport**: [RunAIAgentResolver.ts](packages/MJServer/src/resolvers/RunAIAgentResolver.ts) `createStreamingCallback` publishes `AgentExecutionStreamMessage` of type `'streaming'` separate from the `'ExecutionProgress'` status channel.
+### Where things live
 
-### What doesn't work
-- **AIPromptRunner single-prompt path**: [AIPromptRunner.ts:3180-3376](packages/AI/Prompts/src/AIPromptRunner.ts#L3180-L3376) builds `chatParams` and calls `llm.ChatCompletion(chatParams)` (lines 3361 and 3374) without ever touching `chatParams.streaming` or `chatParams.streamingCallbacks`. `params.onStreaming` is set on `AIPromptParams` but is dropped here.
-- **Provider drivers**: `BaseLLM` provides a default SSE-based streaming implementation, but each concrete driver (`AnthropicLLM`, `OpenAILLM`, `GeminiLLM`, etc.) must (a) declare `SupportsStreaming = true` and (b) ensure its `ChatCompletion` either uses the base streaming path or overrides it with the provider's native SDK streaming. Verification needed per provider.
+- **Response interface**: [loop-agent-response-type.ts](packages/AI/Agents/src/agent-types/loop-agent-response-type.ts) defines `LoopAgentResponse` — `message`, `taskComplete`, `nextStep`, etc.
+- **System prompt template**: [loop-agent-type-system-prompt.template.md](metadata/prompts/templates/system/loop-agent-type-system-prompt.template.md) — generates the interface description in the LLM prompt with Liquid `{% if %}` gates on `__agentTypePromptParams.*`.
+- **Agent type**: [loop-agent-type.ts](packages/AI/Agents/src/agent-types/loop-agent-type.ts) — `LoopAgentType.DetermineNextStep` parses the LLM response.
+- **Agent layer streaming forwarding**: [base-agent.ts:5846-5854](packages/AI/Agents/src/base-agent.ts#L5846-L5854) already forwards `params.onStreaming` and tags chunks with `{ stepType: 'prompt', stepEntityId }`.
+- **GraphQL stream publishing**: [RunAIAgentResolver.ts](packages/MJServer/src/resolvers/RunAIAgentResolver.ts) `createStreamingCallback` publishes `AgentExecutionStreamMessage` of type `'streaming'`.
+
+### Why `message` vs. a new `streamingMessage`
+
+`message` is already used in the response — required for `nextStep.type === 'Chat'` (the final user-facing reply on a Chat turn), and otherwise omitted. Overloading it for inter-turn progress messages would muddy the contract. A new optional `streamingMessage` field keeps semantics clean:
+
+- `streamingMessage`: brief progress text the model emits **every turn** when streaming is enabled. Always forwarded to `onStreaming`.
+- `message`: unchanged. Final user-facing reply on Chat turns. The UI's existing Chat-turn rendering continues to handle this.
 
 ## Architecture / Design
 
-### Flow with the fix in place
+### Flow
 
 ```mermaid
 sequenceDiagram
-    participant Client as GraphQL Client
+    participant Client as GraphQL Subscriber
     participant Resolver as RunAIAgentResolver
-    participant Agent as BaseAgent
+    participant Agent as BaseAgent / LoopAgentType
     participant Prompt as AIPromptRunner
-    participant LLM as BaseLLM / Provider
-    participant Pub as PubSub
+    participant LLM as BaseLLM
 
     Client->>Resolver: subscription RunAgent(...)
     Resolver->>Agent: ExecuteAgent({ onStreaming: cb })
-    Agent->>Prompt: executePrompt({ onStreaming: wrappedCb })
-    Note over Prompt: executeModel — NEW: copy<br/>onStreaming -> chatParams.streamingCallbacks<br/>set chatParams.streaming = true
-    Prompt->>LLM: ChatCompletion(chatParams)
-    loop For each SSE chunk
-        LLM-->>Prompt: OnContent(delta, false)
-        Prompt-->>Agent: onStreaming({ content: delta, isComplete: false })
-        Agent-->>Resolver: onStreaming({ ..., stepType, stepEntityId })
-        Resolver->>Pub: publish AgentExecutionStreamMessage(type: 'streaming')
-        Pub-->>Client: chunk
-    end
-    LLM-->>Prompt: OnContent('', true) + OnComplete(finalResult)
-    Prompt-->>Agent: final ChatResult
-    Agent-->>Resolver: AgentExecutionResult
-    Resolver-->>Client: completion
+    Note over Agent: streamingEnabled = (params.onStreaming != null)<br/>passed into __agentTypePromptParams
+    Agent->>Prompt: executePrompt (rendered prompt includes streamingMessage field)
+    Prompt->>LLM: ChatCompletion (buffered, no LLM-level streaming)
+    LLM-->>Prompt: full JSON response
+    Prompt-->>Agent: parsed LoopAgentResponse
+    Note over Agent: if parsed.streamingMessage && onStreaming<br/>fire onStreaming({content, isComplete: true, stepType: 'prompt', stepEntityId})
+    Agent->>Resolver: chunk → PubSub publish
+    Resolver-->>Client: streaming message
+    Note over Agent: continue loop → next prompt → next message
 ```
 
-### The change to `executeModel`
+### Schema change
 
-Insert immediately before the `llm.ChatCompletion(chatParams)` calls at [AIPromptRunner.ts:3360 and 3374](packages/AI/Prompts/src/AIPromptRunner.ts#L3360):
+Add to `LoopAgentResponse`:
 
 ```typescript
-// Wire streaming callbacks if caller provided onStreaming and the driver supports it
-if (params.onStreaming && llm.SupportsStreaming) {
-    chatParams.streaming = true;
-    chatParams.streamingCallbacks = {
-        OnContent: (chunk: string, isComplete: boolean) => {
-            params.onStreaming!({
-                content: chunk,
-                isComplete,
-                taskId: params.taskId,
-            });
-        },
-        // OnComplete intentionally omitted — final ChatResult is returned
-        // synchronously by ChatCompletion(); callers don't need a second signal.
-        OnError: (err: unknown) => {
-            // Defensive: errors are also thrown by ChatCompletion; this lets
-            // the caller surface a streaming-specific error early if desired.
-            this.logError(err, { category: 'ModelStreaming' });
-        },
-    };
+/**
+ * Optional brief progress message (<25 words) shown to the user while
+ * the agent works. Only present in the schema when streaming is enabled
+ * at runtime (i.e., the caller supplied an onStreaming callback).
+ *
+ * Populate every turn when this field is present in your schema. Use
+ * present-progressive tense: "Searching the knowledge base...",
+ * "Drafting your summary...".
+ *
+ * Independent of the final `message` field used on Chat turns.
+ */
+streamingMessage?: string;
+```
+
+### Prompt change
+
+Conditional block in [loop-agent-type-system-prompt.template.md](metadata/prompts/templates/system/loop-agent-type-system-prompt.template.md), inserted alongside the other `{% if %}` gates (around line 12, right after the `message?` field declaration):
+
+```liquid
+{% if __agentTypePromptParams.streamingEnabled %}
+    /** REQUIRED every turn. Brief 1-sentence (<25 words) description of
+     *  what you're doing, shown to the user in real time. Use present-
+     *  progressive tense. Examples: "Searching the knowledge base...",
+     *  "Looking up the customer record...", "Drafting your reply..." */
+    streamingMessage: string;
+{% endif %}
+```
+
+Plus a short behavioral note further down the template explaining when/how to use it.
+
+### Agent-type param plumbing
+
+`__agentTypePromptParams` is already populated in `LoopAgentType` when preparing prompt params. Add:
+
+```typescript
+// In LoopAgentType, where __agentTypePromptParams is built:
+__agentTypePromptParams.streamingEnabled = !!params.onStreaming;
+```
+
+### Emit point
+
+The emit lives in `BaseAgent` (not `LoopAgentType`) so that:
+- `LoopAgentType` stays purely declarative (schema + prompt template); no streaming concerns leak in.
+- The existing wrapper at [base-agent.ts:5846-5854](packages/AI/Agents/src/base-agent.ts#L5846-L5854) already knows `stepEntity.ID`, which is needed for the chunk metadata.
+
+In `BaseAgent`, immediately after the prompt result is parsed into the structured `LoopAgentResponse` (and before/after `DetermineNextStep` — either works since parsing must happen first):
+
+```typescript
+const parsed = /* parsed LoopAgentResponse */;
+if (parsed?.streamingMessage && params.onStreaming) {
+    try {
+        params.onStreaming({
+            content: parsed.streamingMessage,
+            isComplete: true,
+            stepType: 'prompt',
+            stepEntityId: stepEntity.ID,
+        });
+    } catch (err) {
+        // A misbehaving streaming callback must never break the loop
+        LogError(err);
+    }
 }
 ```
 
-**Why guard on `llm.SupportsStreaming`**: silently falling back to buffered mode when a driver doesn't support streaming is the correct UX — the agent still completes, just without progressive output. The caller can detect this via the absence of intermediate `onStreaming` calls.
-
-### `ChatResult` parity
-
-`BaseLLM.ChatCompletion` already assembles the streamed chunks into a complete `ChatResult` (see [baseLLM.ts:284-285](packages/AI/Core/src/generic/baseLLM.ts#L284-L285) where `OnComplete(result)` fires with the assembled result and the function then returns it). So `executeModel` continues to return a complete `ChatResult` regardless of streaming mode. No downstream code (token counting, logging, `AIPromptRun` recording) needs to change.
-
 ## Implementation Plan
 
-### Phase 1: Wire the single-prompt path (the actual fix)
+### Phase 1: Schema + prompt template
 
-1. **Edit `packages/AI/Prompts/src/AIPromptRunner.ts`** — Insert the streaming-callback wiring shown above immediately before the `llm.ChatCompletion(chatParams)` calls at [lines 3360-3375](packages/AI/Prompts/src/AIPromptRunner.ts#L3360). Apply to **both** branches (with and without `cancellationToken`) — extract into a small helper `private wireStreamingCallbacks(params, llm, chatParams)` to avoid duplication.
-2. **Add JSDoc** to `AIPromptParams.onStreaming` in `packages/AI/CorePlus/src/prompt.types.ts` clarifying that it is honored on both single and parallel paths and that it requires `llm.SupportsStreaming`.
+1. **`packages/AI/Agents/src/agent-types/loop-agent-response-type.ts`** — add optional `streamingMessage?: string` field to `LoopAgentResponse` with JSDoc as shown above.
+2. **`metadata/prompts/templates/system/loop-agent-type-system-prompt.template.md`** — add the `{% if __agentTypePromptParams.streamingEnabled %}` block declaring `streamingMessage` in the inline interface; add a short behavioral note further down.
+3. **Run `npx mj sync push --dir=metadata --include="prompts"`** from the repo root to push the template update into the database. Template changes are `@file:` references resolved at push time — a server restart alone will NOT pick them up.
 
-### Phase 2: Verify provider drivers
+### Phase 2: Wire `streamingEnabled` into prompt params
 
-For each of the three priority providers, open the package, check whether the driver:
-- Overrides `SupportsStreaming` to return `true`
-- Implements native streaming in its `ChatCompletion` or relies on `BaseLLM`'s default SSE path
+1. **`packages/AI/Agents/src/agent-types/loop-agent-type.ts`** — locate where `__agentTypePromptParams` (or equivalent) is built for the system prompt rendering; add `streamingEnabled: !!params.onStreaming`. (May require minor signature change to access `params` if not already in scope.)
+2. **`packages/AI/Agents/src/agent-types/loop-agent-prompt-params.ts`** — if there's a typed interface for these params, add the `streamingEnabled?: boolean` field.
 
-Providers to audit:
-1. **`packages/AI/Providers/Anthropic/`** — Anthropic SDK has first-class streaming events; native impl preferred over generic SSE
-2. **`packages/AI/Providers/OpenAI/`** — OpenAI SDK exposes async iterables for streamed completions
-3. **`packages/AI/Providers/Gemini/`** — `@google/generative-ai` exposes `generateContentStream`
+### Phase 3: Emit streaming message after each turn
 
-For each provider that doesn't yet stream:
-1. Add `public override get SupportsStreaming(): boolean { return true; }`
-2. In `ChatCompletion`, branch on `params.streaming && params.streamingCallbacks`:
-   - If true, call the SDK's streaming method, invoke `OnContent(delta, false)` per chunk, assemble the final `ChatResult`, and call `OnContent('', true)` + `OnComplete(result)` before returning.
-   - If false, keep existing buffered behavior.
-3. Cancellation: respect `AbortSignal` plumbed via `chatParams` so streamed requests can be cut short.
-
-### Phase 3: GraphQL subscription smoke test
-
-The resolver already publishes `'streaming'` messages — no code change expected — but verify:
-1. Run an agent with a known-streaming model end-to-end through `RunAIAgentResolver` ([packages/MJServer/src/resolvers/RunAIAgentResolver.ts](packages/MJServer/src/resolvers/RunAIAgentResolver.ts)).
-2. Confirm `AgentExecutionStreamMessage` records with `type: 'streaming'` and populated `streaming.content` flow over the GraphQL subscription before the final completion message.
-3. If the resolver buffers or coalesces by accident, fix to forward each chunk verbatim.
+1. **`packages/AI/Agents/src/base-agent.ts`** — after `executePrompt` returns and the response is parsed into the structured shape (near the existing parsing call), check for `parsed.streamingMessage` and `params.onStreaming`. If both present, invoke the callback with `{ content, isComplete: true, stepType: 'prompt', stepEntityId: stepEntity.ID }`. Wrap in try/catch.
+2. Confirm the existing sub-agent streaming forwarding at [base-agent.ts:4467](packages/AI/Agents/src/base-agent.ts#L4467) carries through — sub-agents inherit `onStreaming` and will emit their own `streamingMessage` chunks tagged with their own step entity IDs. No additional change needed.
 
 ### Phase 4: Tests
 
-1. **AIPromptRunner unit test** (new) — mock `BaseLLM` to fire 3 streamed chunks then complete; assert `params.onStreaming` was invoked 4 times (3 partial + 1 isComplete) and final `ChatResult` matches assembled chunks.
-2. **BaseAgent unit test** — mock prompt execution to emit streamed chunks; assert agent forwards them to `params.onStreaming` with `stepType: 'prompt'` and the correct `stepEntityId`.
-3. **Provider streaming tests** (per provider) — record a fixture of an SDK streaming response, replay it, assert `OnContent` is called per delta and assembled `ChatResult.message` matches the concatenation.
-4. **Regression**: existing prompt tests must continue passing — the streaming wiring is fully opt-in.
+1. **`packages/AI/Agents/src/__tests__/loop-agent-streaming.test.ts`** (new):
+   - When `params.onStreaming` is set and the LLM response contains `streamingMessage`, the callback fires exactly once per turn with the parsed string and `isComplete: true`.
+   - When `params.onStreaming` is set but `streamingMessage` is absent in the response, no callback fires.
+   - When `params.onStreaming` is `undefined`, even if `streamingMessage` is present in the response, no error occurs and no callback is attempted.
+   - When the callback throws, the agent loop continues normally.
+   - When the prompt is rendered with `streamingEnabled: false`, the rendered system prompt does **not** contain the `streamingMessage` declaration (snapshot or substring assertion).
+   - When `streamingEnabled: true`, the rendered prompt **does** contain it.
+2. **Existing loop-agent tests** — re-run after the template change to ensure no regressions.
+
+### Phase 5: GraphQL subscription smoke test
+
+The resolver path already exists and is unchanged. Manual verification:
+
+1. Start MJAPI + MJExplorer.
+2. From a GraphQL client, subscribe to `RunAIAgent` for an agent with a multi-step task.
+3. Confirm `AgentExecutionStreamMessage` records with `type: 'streaming'` arrive between turns, carrying the `streamingMessage` text in `streaming.content`.
 
 ## Migration & Data
 
-None. This is pure code; no schema, metadata, or migration changes.
+- **No DB schema changes.**
+- **One metadata sync**: the system prompt template is referenced via `@file:` in the AI Prompt record for the Loop Agent system prompt. `npx mj sync push --dir=metadata --include="prompts"` resolves the file and writes the new content into `TemplateText` in the database. Required before agents pick up the new schema.
 
 ## Testing Strategy
 
-- **Unit tests** as above for each layer.
-- **Manual end-to-end**: in MJExplorer or via GraphQL Playground, subscribe to `RunAIAgent` with a prompt that produces a long response (e.g., "Write a 500-word essay on X"). Confirm streamed chunks arrive incrementally and the final assembled content matches the buffered-mode response for the same input/seed.
-- **Edge cases**:
-  - Driver returns `SupportsStreaming = false` → caller should get buffered response, no streaming events, no errors.
-  - Mid-stream cancellation via `AbortSignal` — final `ChatResult` should report the partial content and a cancellation flag/error.
-  - Network drop mid-stream — `OnError` fires, `ChatCompletion` rejects, agent surfaces the failure.
-  - Tool-calling models (Anthropic/OpenAI) that interleave tool-use blocks with assistant text — only assistant text chunks fire `OnContent` in v1.
+- Unit tests as Phase 4.
+- Manual end-to-end via GraphQL subscription.
+- Edge cases:
+  - LLM returns malformed JSON → existing parsing fails before the emit point; no streaming side-effect.
+  - LLM populates `streamingMessage` even when not requested (no `streamingEnabled` in the schema) → forward it anyway if `params.onStreaming` is wired (cost was already paid, surface the value). Suppress entirely if `onStreaming` is absent.
+  - Sub-agent execution: `onStreaming` is already forwarded into sub-agents via [base-agent.ts:4467](packages/AI/Agents/src/base-agent.ts#L4467), so sub-agents' `streamingMessage` values flow through naturally with their own step metadata.
+  - Final Chat turn: `streamingMessage` (progress) and `message` (final reply) can both be present. Emit `streamingMessage` through the streaming channel; `message` continues to flow through the existing Chat-response path. UI distinguishes via step metadata.
+  - Model-specific verbosity: test against Claude, GPT, Gemini to confirm each respects the `<25 words` cap; soft-truncate on the receiving side if needed.
 
 ## Risks & Open Questions
 
-- **Risk: Token-accounting drift.** `BaseLLM` already assembles the final result; verify token-count fields on `ChatResult` are populated identically in streaming vs buffered mode. (Some SDKs report usage only on the final stream event.)
-- **Risk: Provider-specific quirks.** Anthropic and OpenAI both have content-block / part structures; concatenation must respect that the streamed `content` is the *assistant text only*, not raw event JSON.
-- **Open question: Backpressure.** If the GraphQL subscriber is slow, does `PubSub` queue indefinitely? Current behavior is shared with the existing `'ExecutionProgress'` channel — accept the same semantics for v1, revisit if it causes pressure in production.
-- **Open question: Cache interactions.** AI prompt caching (if hit) returns instantly with no streamable deltas. Behavior should be: emit a single `OnContent(fullResponse, true)` so callers see one chunk. Confirm in implementation.
+- **Risk: Model compliance.** Some models may omit `streamingMessage` despite the REQUIRED instruction. Mitigation: phrase the instruction clearly, verify per priority model, and accept that occasional silent turns are non-fatal (agent still works).
+- **Risk: Verbosity creep.** Models might write long `streamingMessage` values. Mitigation: explicit `<25 words` cap in the instruction; optional client-side truncation.
+- **Open question: First-turn behavior.** Should the very first turn (before any work is done) emit a `streamingMessage`? Yes — the model is instructed to populate it every turn; the first message describes what the agent is about to start.
+- **Open question: Does the existing `AgentExecutionStreamMessage` shape need a `kind` field to distinguish "inter-turn progress" from "final content"?** Possibly later. For v1, every chunk we emit through this path is inter-turn progress; the `stepType: 'prompt'` metadata is enough for the UI to decide rendering.
 
 ## Files to Modify
 
 | File | Change |
 |------|--------|
-| [packages/AI/Prompts/src/AIPromptRunner.ts](packages/AI/Prompts/src/AIPromptRunner.ts) | Add `wireStreamingCallbacks` helper; invoke before `ChatCompletion` calls at lines ~3360 and ~3374 |
-| [packages/AI/CorePlus/src/prompt.types.ts](packages/AI/CorePlus/src/prompt.types.ts) | JSDoc clarification on `AIPromptParams.onStreaming` |
-| `packages/AI/Providers/Anthropic/src/*LLM*.ts` | Verify/add native streaming via Anthropic SDK events |
-| `packages/AI/Providers/OpenAI/src/*LLM*.ts` | Verify/add native streaming via OpenAI async iterables |
-| `packages/AI/Providers/Gemini/src/*LLM*.ts` | Verify/add native streaming via `generateContentStream` |
-| `packages/AI/Prompts/src/__tests__/AIPromptRunner.streaming.test.ts` | New unit test |
-| `packages/AI/Agents/src/__tests__/base-agent.streaming.test.ts` | New unit test |
-| Per-provider `__tests__/*.streaming.test.ts` | New per-provider tests |
+| [packages/AI/Agents/src/agent-types/loop-agent-response-type.ts](packages/AI/Agents/src/agent-types/loop-agent-response-type.ts) | Add optional `streamingMessage?: string` to `LoopAgentResponse` |
+| [metadata/prompts/templates/system/loop-agent-type-system-prompt.template.md](metadata/prompts/templates/system/loop-agent-type-system-prompt.template.md) | Conditional `{% if __agentTypePromptParams.streamingEnabled %}` block declaring the field + behavioral instruction |
+| [packages/AI/Agents/src/agent-types/loop-agent-type.ts](packages/AI/Agents/src/agent-types/loop-agent-type.ts) | Set `__agentTypePromptParams.streamingEnabled = !!params.onStreaming` when preparing prompt params |
+| [packages/AI/Agents/src/agent-types/loop-agent-prompt-params.ts](packages/AI/Agents/src/agent-types/loop-agent-prompt-params.ts) | Add `streamingEnabled?: boolean` to the typed params interface (if applicable) |
+| [packages/AI/Agents/src/base-agent.ts](packages/AI/Agents/src/base-agent.ts) | Emit `params.onStreaming({ content: parsed.streamingMessage, isComplete: true, ... })` after each parsed prompt response when both are present |
+| `packages/AI/Agents/src/__tests__/loop-agent-streaming.test.ts` | New test file covering Phase 4 scenarios |
 
 ## References
 
-- Existing streaming reference: [ParallelExecutionCoordinator.ts:588-595](packages/AI/Prompts/src/ParallelExecutionCoordinator.ts#L588-L595)
-- BaseLLM streaming implementation: [baseLLM.ts:79-291](packages/AI/Core/src/generic/baseLLM.ts#L79-L291)
-- Agent streaming forwarding: [base-agent.ts:4467](packages/AI/Agents/src/base-agent.ts#L4467) and [base-agent.ts:5846-5854](packages/AI/Agents/src/base-agent.ts#L5846-L5854)
-- GraphQL stream publishing: [RunAIAgentResolver.ts](packages/MJServer/src/resolvers/RunAIAgentResolver.ts)
-- Streaming callback shape: [chat.types.ts:108-120](packages/AI/Core/src/generic/chat.types.ts#L108-L120)
+- v0 plan (raw token streaming): superseded — see git history of this file (commit prior to this revision).
+- Existing agent streaming forwarding: [base-agent.ts:4467](packages/AI/Agents/src/base-agent.ts#L4467) (sub-agents), [base-agent.ts:5846-5854](packages/AI/Agents/src/base-agent.ts#L5846-L5854) (prompt callback wrapper).
+- GraphQL stream publishing: [RunAIAgentResolver.ts](packages/MJServer/src/resolvers/RunAIAgentResolver.ts) `createStreamingCallback`.
+- Loop response interface: [loop-agent-response-type.ts](packages/AI/Agents/src/agent-types/loop-agent-response-type.ts).
+- Loop system prompt template: [loop-agent-type-system-prompt.template.md](metadata/prompts/templates/system/loop-agent-type-system-prompt.template.md).
