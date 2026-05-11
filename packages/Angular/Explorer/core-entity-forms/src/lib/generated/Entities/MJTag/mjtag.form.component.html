@@ -302,31 +302,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Tag Synonyms Section -->
-    <mj-collapsible-panel
-        SectionKey="mJTagSynonyms"
-        SectionName="Tag Synonyms"
-        Icon="fa fa-tags"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJTagSynonyms')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Synonyms','TagID')"
-                [NewRecordValues]="NewRecordValues('MJ: Tag Synonyms')"
-                [AllowLoad]="IsSectionExpanded('mJTagSynonyms')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJTagSynonyms', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Tag Co Occurrences (Tag B ID) Section -->
     <mj-collapsible-panel
         SectionKey="mJTagCoOccurrencesTagBID"
@@ -346,6 +321,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJTagCoOccurrencesTagBID', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Tag Synonyms Section -->
+    <mj-collapsible-panel
+        SectionKey="mJTagSynonyms"
+        SectionName="Tag Synonyms"
+        Icon="fa fa-tags"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJTagSynonyms')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Synonyms','TagID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tag Synonyms')"
+                [AllowLoad]="IsSectionExpanded('mJTagSynonyms')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJTagSynonyms', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

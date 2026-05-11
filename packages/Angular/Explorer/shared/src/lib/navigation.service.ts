@@ -244,48 +244,27 @@ export class NavigationService implements OnDestroy {
   }
 
   /**
-   * Decide whether the caller should use OpenTabForced (force-new path) or
-   * OpenTab (replace-temp path), and apply any pre-open side-effects.
+   * Returns whether the caller should use OpenTabForced (force-new path) or
+   * OpenTab (replace-temp path).
    *
-   * Rule 1 — explicit force-new (shift+click): pin the active temp tab so the
-   * "only one temporary tab" rule holds. The caller must call OpenTabForced.
+   * Rule: only honor an explicit force-new request — from the user via
+   * shift+click, or from the caller via `options.forceNewTab`. We deliberately
+   * do NOT apply heuristics that auto-switch the workspace out of
+   * single-resource mode on cross-resource navigation. A previous version of
+   * this method tried to do that ("force new if single-resource + different
+   * resource") and it caused a regression: every plain hyperlink click on a
+   * record opened a new tab and dropped the user into multi-tab mode, even
+   * though they didn't ask for it. That violated the principle that mode
+   * transitions are user-driven (shift) or explicitly requested (options).
    *
-   * Rule 2 — single-resource mode + cross-resource nav: a normal click on a
-   * related-grid + New (or any inbound nav to a *different* resource) must
-   * not silently replace the user's current context. The fix is to take the
-   * force-new path so the existing tab is preserved AND a new one is added in
-   * a single atomic config update — preventing a two-step (pin → OpenTab)
-   * sequence that confuses GoldenLayout's active-tab tracking and leaves the
-   * new tab created but unfocused.
-   *
-   * Returns true when the caller should call OpenTabForced. Without this,
-   * single-resource mode silently swallowed the user's view (Bug C) or, after
-   * a partial pin-only fix, created the tab but didn't activate it (Bug D).
+   * If a particular caller really needs the parent context preserved when
+   * creating/navigating to a child resource (e.g. "+New" on a related-entity
+   * grid inside an open record), the caller should pass `forceNewTab: true`
+   * in `NavigationOptions`. That keeps intent explicit at the call site
+   * instead of buried in a global heuristic.
    */
-  private handleSingleResourceModeTransition(forceNew: boolean, newRequest: TabRequest): boolean {
-    if (forceNew) {
-      return true; // Caller already wants force-new (shift+click)
-    }
-
-    const config = this.workspaceManager.GetConfiguration();
-
-    if (!config || !config.tabs || config.tabs.length === 0) {
-      return false;
-    }
-
-    const activeTab = config.tabs.find(tab => tab.id === config.activeTabId);
-    if (!activeTab || activeTab.isPinned) {
-      return false; // No active tab, or already pinned — replace-temp path is safe
-    }
-
-    // Single-resource mode (exactly one unpinned tab) + cross-resource nav.
-    // Re-opening the same resource (e.g. clicking the same nav item) keeps
-    // the replace-temp path, which is a visual no-op.
-    if (config.tabs.length === 1 && !this.isSameResource(activeTab, newRequest)) {
-      return true; // Switch to force-new path
-    }
-
-    return false;
+  private handleSingleResourceModeTransition(forceNew: boolean, _newRequest: TabRequest): boolean {
+    return forceNew;
   }
 
   /**

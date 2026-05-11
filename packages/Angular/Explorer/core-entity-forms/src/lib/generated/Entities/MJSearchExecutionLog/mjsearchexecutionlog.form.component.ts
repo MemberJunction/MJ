@@ -15,7 +15,11 @@ export class MJSearchExecutionLogFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true }
+            { sectionKey: 'searchContext', sectionName: 'Search Context', isExpanded: true },
+            { sectionKey: 'initiatorDetails', sectionName: 'Initiator Details', isExpanded: true },
+            { sectionKey: 'searchExecution', sectionName: 'Search Execution', isExpanded: false },
+            { sectionKey: 'rerankerDetails', sectionName: 'Reranker Details', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }
 }

@@ -8,25 +8,35 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Search Configuration Section -->
+    <!-- Scope Configuration Section -->
     <mj-collapsible-panel
-        SectionKey="searchConfiguration"
-        SectionName="Search Configuration"
-        Icon="fa fa-cog"
+        SectionKey="scopeConfiguration"
+        SectionName="Scope Configuration"
+        Icon="fa fa-crosshairs"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="true"
+            [ShowLabel]="false"
             FieldName="SearchScopeID"
             Type="textbox"
             [EditMode]="EditMode"
             [FormContext]="formContext"
             LinkType="Record"
         ></mj-form-field>
+
+    </mj-collapsible-panel>
+
+    <!-- Entity Configuration Section -->
+    <mj-collapsible-panel
+        SectionKey="entityConfiguration"
+        SectionName="Entity Configuration"
+        Icon="fa fa-database"
+        [Form]="this"
+        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="true"
+            [ShowLabel]="false"
             FieldName="EntityID"
             Type="textbox"
             [EditMode]="EditMode"
@@ -36,11 +46,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Query Overrides Section -->
+    <!-- Search Logic Section -->
     <mj-collapsible-panel
-        SectionKey="queryOverrides"
-        SectionName="Query Overrides"
-        Icon="fa fa-filter"
+        SectionKey="searchLogic"
+        SectionName="Search Logic"
+        Icon="fa fa-code"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -66,7 +76,7 @@
     <mj-collapsible-panel
         SectionKey="systemMetadata"
         SectionName="System Metadata"
-        Icon="fa fa-database"
+        Icon="fa fa-cog"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
