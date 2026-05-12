@@ -1,0 +1,39 @@
+{
+  "fields": {
+    "Name": "BettyNext - System Prompt",
+    "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+    "TemplateText": "@file:templates/BettyNext - System Prompt.template.md",
+    "ResponseFormat": "JSON",
+    "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+    "Status": "Active",
+    "Description": "System prompt for BettyNext. Loop agent that answers user questions strictly from ingested/vectorized content via the Search action, iterating until it finds support or exhausts reasonable queries. Forbidden from using baseline/training knowledge.",
+    "PromptRole": "System",
+    "PromptPosition": "First"
+  },
+  "relatedEntities": {
+    "MJ: AI Prompt Models": [
+      {
+        "fields": {
+          "PromptID": "@parent:ID",
+          "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash Lite",
+          "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+          "Priority": 1
+        },
+        "primaryKey": {
+          "ID": "81612EA5-455A-48A8-82E2-0C541956EAE9"
+        },
+        "sync": {
+          "lastModified": "2026-05-11T21:59:12.761Z",
+          "checksum": "7b9baa8ee75fdf67cdfaad9d636391d872a8dc02222edeeb994eaa982881fdff"
+        }
+      }
+    ]
+  },
+  "primaryKey": {
+    "ID": "54CA1C72-DCF0-4B9F-846B-D95DCF1D1E1E"
+  },
+  "sync": {
+    "lastModified": "2026-05-11T22:05:02.548Z",
+    "checksum": "1a4ef25870d0d3249451bb948c45f42806effe6a7cfc602d34af98f3a46ae007"
+  }
+}

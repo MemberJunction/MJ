@@ -1,0 +1,92 @@
+[
+  {
+    "fields": {
+      "Name": "BettyNext",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Assistant",
+      "Description": "Conversational assistant that answers user questions strictly from the organization's ingested and vectorized content. Iteratively calls the Search action with refined queries until it finds enough material to answer or exhausts reasonable searches. Forbidden from using baseline/training knowledge.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Loop",
+      "Status": "Active",
+      "ExecutionOrder": 10,
+      "ModelSelectionMode": "Agent",
+      "ArtifactCreationMode": "Never",
+      "ExposeAsAction": false,
+      "IconClass": "fa-solid fa-magnifying-glass-arrow-right",
+      "InjectNotes": false,
+      "InjectExamples": false
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Modalities": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Text",
+            "Direction": "Input",
+            "IsAllowed": true
+          },
+          "primaryKey": {
+            "ID": "DF2F2CD4-68B3-4302-A70C-7D1B3D6631CA"
+          },
+          "sync": {
+            "lastModified": "2026-05-11T21:59:22.221Z",
+            "checksum": "9562d0790334b74d9ba63dadcb809c9bd0c51eb124e74f111fc70c4c4160ea16"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ModalityID": "@lookup:MJ: AI Modalities.Name=Text",
+            "Direction": "Output",
+            "IsAllowed": true
+          },
+          "primaryKey": {
+            "ID": "BABFC6C7-7913-4980-AA86-6C38F2E4E7D2"
+          },
+          "sync": {
+            "lastModified": "2026-05-11T21:59:22.233Z",
+            "checksum": "088a80dd45831f2b9ee854cd99940fd9c681c5a7b49d8f2f7721bddb455fcc13"
+          }
+        }
+      ],
+      "MJ: AI Agent Prompts": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "PromptID": "@lookup:MJ: AI Prompts.Name=BettyNext - System Prompt",
+            "ExecutionOrder": 0,
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "CC3B1709-468B-4E66-9877-62FE1DC0F5F6"
+          },
+          "sync": {
+            "lastModified": "2026-05-11T21:59:22.246Z",
+            "checksum": "f151d4330319bb49b0a97282d3c9c3a67652b940b86affa0b6b3505603a85421"
+          }
+        }
+      ],
+      "MJ: AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=Search",
+            "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "167C202C-62B1-40B8-AE7C-5A652ADF4291"
+          },
+          "sync": {
+            "lastModified": "2026-05-11T21:59:22.257Z",
+            "checksum": "a92448fc0cc93928d77e50184cd3d57029d0de07f765db104ea5e2c9574b16c2"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "028384F0-0C59-4926-8B7A-54ADA2AEAC3D"
+    },
+    "sync": {
+      "lastModified": "2026-05-11T21:59:22.172Z",
+      "checksum": "1ef8452c513999810e4c92eb3401458c347459bde0e9b60109080f920defc93b"
+    }
+  }
+]
