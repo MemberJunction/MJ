@@ -1,4 +1,27 @@
-<div class="testing-dashboard-container">
+<mj-page-layout>
+  <mj-page-header
+    Title="Testing"
+    Icon="fa-solid fa-vial-circle-check"
+    Subtitle="Evaluate AI agents, workflows, and system components">
+    <div meta class="testing-header-meta">
+      @if (ActiveRuns.length > 0) {
+        <span class="testing-running-badge">
+          <i class="fa-solid fa-spinner fa-spin"></i>
+          {{ ActiveRuns.length }} running
+        </span>
+      }
+    </div>
+    <div actions class="testing-header-actions">
+      <mj-tab-nav
+        [Tabs]="Tabs"
+        [ActiveKey]="activeTab"
+        (TabChange)="onTabChange($any($event))">
+      </mj-tab-nav>
+      <app-evaluation-mode-toggle></app-evaluation-mode-toggle>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body [Flex]="true">
   @if (isLoading) {
     <div class="loading-container">
       <mj-loading text="Loading Testing Dashboard..." size="large"></mj-loading>
@@ -6,7 +29,7 @@
   }
 
   @if (!isLoading) {
-    <!-- Active Runs Banner -->
+    <!-- Active Runs Banner (in-body so it doesn't crowd the page-header) -->
     @if (ActiveRuns.length > 0) {
       <div class="active-runs-banner">
         <i class="fa-solid fa-spinner fa-spin"></i>
@@ -16,53 +39,41 @@
       </div>
     }
 
-    <div class="dashboard-content-wrapper">
-      <div class="testing-dashboard-nav">
-        @for (navItem of navigationConfig; track $index) {
-          <div
-            class="nav-item"
-            [class.active]="navItem.selected"
-            (click)="onTabChange(navigationItems[$index])"
-          >
-            <i [class]="navItem.icon"></i>
-            <span>{{ navItem.text }}</span>
-          </div>
-        }
-        <div class="nav-spacer"></div>
-        <app-evaluation-mode-toggle></app-evaluation-mode-toggle>
-      </div>
+    <div class="dashboard-content">
+      @if (activeTab === 'dashboard' && hasVisited('dashboard')) {
+        <app-testing-dashboard-tab
+          [initialState]="dashboardState"
+          [HideToolbar]="true"
+          (stateChange)="onDashboardStateChange($event)"
+        ></app-testing-dashboard-tab>
+      }
 
-      <div class="dashboard-content">
-        @if (activeTab === 'dashboard' && hasVisited('dashboard')) {
-          <app-testing-dashboard-tab
-            [initialState]="dashboardState"
-            (stateChange)="onDashboardStateChange($event)"
-          ></app-testing-dashboard-tab>
-        }
+      @if (activeTab === 'runs' && hasVisited('runs')) {
+        <app-testing-runs
+          [initialState]="runsState"
+          [HideToolbar]="true"
+          (stateChange)="onRunsStateChange($event)"
+        ></app-testing-runs>
+      }
 
-        @if (activeTab === 'runs' && hasVisited('runs')) {
-          <app-testing-runs
-            [initialState]="runsState"
-            (stateChange)="onRunsStateChange($event)"
-          ></app-testing-runs>
-        }
+      @if (activeTab === 'analytics' && hasVisited('analytics')) {
+        <app-testing-analytics
+          [initialState]="analyticsState"
+          [HideToolbar]="true"
+          (stateChange)="onAnalyticsStateChange($event)"
+        ></app-testing-analytics>
+      }
 
-        @if (activeTab === 'analytics' && hasVisited('analytics')) {
-          <app-testing-analytics
-            [initialState]="analyticsState"
-            (stateChange)="onAnalyticsStateChange($event)"
-          ></app-testing-analytics>
-        }
-
-        @if (activeTab === 'review' && hasVisited('review')) {
-          <app-testing-review
-            [initialState]="reviewState"
-            (stateChange)="onReviewStateChange($event)"
-          ></app-testing-review>
-        }
-      </div>
+      @if (activeTab === 'review' && hasVisited('review')) {
+        <app-testing-review
+          [initialState]="reviewState"
+          [HideToolbar]="true"
+          (stateChange)="onReviewStateChange($event)"
+        ></app-testing-review>
+      }
     </div>
   }
+  </mj-page-body>
 
   <!-- Slide Panel for Test Execution -->
   @if (testingDialogService.IsPanelOpen) {
@@ -80,4 +91,4 @@
       </app-test-run-dialog>
     </mj-slide-panel>
   }
-</div>
+</mj-page-layout>

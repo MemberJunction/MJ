@@ -46,33 +46,35 @@ interface VersionRow {
   selector: 'app-testing-analytics',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="testing-analytics">
-
-      <!-- ===== 1. Page Header ===== -->
-      <div class="page-header">
-        <div class="header-left">
-          <h2>
-            <i class="fa-solid fa-chart-bar"></i>
-            Testing Analytics
-          </h2>
-        </div>
-        <div class="header-actions">
-          <div class="time-range-pills">
+    @if (HideToolbar) {
+      <ng-container *ngTemplateOutlet="content"></ng-container>
+    } @else {
+      <mj-page-layout>
+        <mj-page-header
+          Title="Testing Analytics"
+          Icon="fa-solid fa-chart-bar"
+          Subtitle="Test trends, pass rates, and version metrics">
+          <div actions class="testing-header-actions">
             @for (range of TimeRanges; track range.days) {
-              <button
-                class="pill"
-                [class.active]="SelectedDays === range.days"
-                (click)="OnTimeRangeSelect(range.days)">
-                {{ range.label }}
-              </button>
+              <mj-filter-chip
+                [Label]="range.label"
+                [Active]="SelectedDays === range.days"
+                (Clicked)="OnTimeRangeSelect(range.days)">
+              </mj-filter-chip>
             }
+            <button mjButton variant="secondary" size="sm" (click)="Refresh()" title="Refresh">
+              <i class="fa-solid fa-arrows-rotate"></i> Refresh
+            </button>
           </div>
-          <button class="refresh-btn" (click)="Refresh()">
-            <i class="fa-solid fa-arrows-rotate"></i>
-            Refresh
-          </button>
-        </div>
-      </div>
+        </mj-page-header>
+        <mj-page-body>
+          <ng-container *ngTemplateOutlet="content"></ng-container>
+        </mj-page-body>
+      </mj-page-layout>
+    }
+
+    <ng-template #content>
+    <div class="testing-analytics">
 
       <!-- ===== 2. Trend Overview (2-column CSS charts) ===== -->
       <div class="section-title">
@@ -348,8 +350,13 @@ interface VersionRow {
         }
       </div>
     </div>
+    </ng-template>
   `,
   styles: [`
+    .testing-header-actions {
+      display: contents;
+    }
+
     /* ------------------------------------------------------------------ */
     /*  Layout & page                                                      */
     /* ------------------------------------------------------------------ */
@@ -780,6 +787,8 @@ export class TestingAnalyticsComponent implements OnInit, OnDestroy {
 
   // ------- Inputs / Outputs -------
   @Input() initialState: Record<string, unknown> | null = null;
+  /** When true, the inner bespoke .page-header is hidden — the parent shell owns the chrome. */
+  @Input() HideToolbar = false;
   @Output() stateChange = new EventEmitter<Record<string, unknown>>();
 
   // ------- Public state -------

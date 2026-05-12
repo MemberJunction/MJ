@@ -1,18 +1,33 @@
-<div class="overview-container">
-  @if (!HideToolbar) {
-    <!-- Standalone toolbar — hidden when the parent SchedulingDashboard owns the chrome. -->
-    <div class="overview-header">
-      <div class="header-controls">
-        <button mjButton variant="secondary" (click)="Refresh()">
+@if (HideToolbar) {
+  <ng-container *ngTemplateOutlet="content"></ng-container>
+} @else {
+  <mj-page-layout>
+    <mj-page-header
+      Title="Scheduling Dashboard"
+      Icon="fa-solid fa-gauge-high"
+      Subtitle="System health, KPIs, and alerts">
+      <div actions class="scheduling-header-actions">
+        <button mjButton variant="secondary" size="sm" (click)="Refresh()" title="Refresh">
           <i class="fa-solid fa-arrows-rotate"></i> Refresh
         </button>
-        <button mjButton [variant]="AutoRefreshEnabled ? 'primary' : 'secondary'" (click)="ToggleAutoRefresh()">
+        <button mjButton
+          [variant]="AutoRefreshEnabled ? 'primary' : 'secondary'"
+          size="sm"
+          (click)="ToggleAutoRefresh()"
+          title="Toggle auto-refresh">
           <i class="fa-solid fa-rotate"></i>
-          Auto-Refresh: {{AutoRefreshEnabled ? 'ON' : 'OFF'}}
+          Auto: {{AutoRefreshEnabled ? 'ON' : 'OFF'}}
         </button>
       </div>
-    </div>
-  }
+    </mj-page-header>
+    <mj-page-body>
+      <ng-container *ngTemplateOutlet="content"></ng-container>
+    </mj-page-body>
+  </mj-page-layout>
+}
+
+<ng-template #content>
+<div class="overview-container">
 
   @if (IsLoading) {
     <div class="loading-container">
@@ -244,3 +259,4 @@
     </div>
   }
 </div>
+</ng-template>

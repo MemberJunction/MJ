@@ -34,6 +34,27 @@ interface TestAlert {
   selector: 'app-testing-dashboard-tab',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
+    @if (HideToolbar) {
+      <ng-container *ngTemplateOutlet="content"></ng-container>
+    } @else {
+      <mj-page-layout>
+        <mj-page-header
+          Title="Testing Overview"
+          Icon="fa-solid fa-gauge-high"
+          Subtitle="Test health, recent activity, and KPIs">
+          <div actions class="testing-header-actions">
+            <button mjButton variant="secondary" size="sm" (click)="OnRefresh()" [disabled]="IsLoading" title="Refresh">
+              <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="IsLoading"></i> Refresh
+            </button>
+          </div>
+        </mj-page-header>
+        <mj-page-body>
+          <ng-container *ngTemplateOutlet="content"></ng-container>
+        </mj-page-body>
+      </mj-page-layout>
+    }
+
+    <ng-template #content>
     <!-- Full-page loading state -->
     @if (IsLoading) {
       <div class="full-page-loading">
@@ -41,18 +62,6 @@ interface TestAlert {
       </div>
     } @else {
       <div class="dashboard-container">
-
-        <!-- Page Header -->
-        <div class="page-header">
-          <h2 class="page-title">
-            <i class="fa-solid fa-gauge-high"></i>
-            Testing Dashboard
-          </h2>
-          <button class="refresh-btn" (click)="OnRefresh()" [disabled]="IsLoading">
-            <i class="fa-solid fa-refresh" [class.spinning]="IsLoading"></i>
-            Refresh
-          </button>
-        </div>
 
         <!-- KPI Row -->
         <div class="kpi-row">
@@ -193,8 +202,13 @@ interface TestAlert {
         </div>
       </div>
     }
+    </ng-template>
   `,
   styles: [`
+    .testing-header-actions {
+      display: contents;
+    }
+
     /* ===== Layout ===== */
     .full-page-loading {
       display: flex;
@@ -591,6 +605,8 @@ interface TestAlert {
 export class TestingDashboardTabComponent implements OnInit, OnDestroy {
 
   @Input() initialState: Record<string, unknown> | null = null;
+  /** When true, the inner bespoke .page-header is hidden — the parent shell owns the chrome. */
+  @Input() HideToolbar = false;
   @Output() stateChange = new EventEmitter<Record<string, unknown>>();
 
   private destroy$ = new Subject<void>();

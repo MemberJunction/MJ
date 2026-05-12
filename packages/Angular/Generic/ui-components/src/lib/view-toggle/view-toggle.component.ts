@@ -4,10 +4,12 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
 export interface ViewToggleOption {
   /** Unique key — emitted via (KeyChange) when clicked. */
   key: string;
-  /** Font Awesome icon class (e.g. 'fa-solid fa-grip'). */
-  icon: string;
-  /** Tooltip / aria-label (since there's no visible text). */
-  title: string;
+  /** Font Awesome icon class (e.g. 'fa-solid fa-grip'). Optional when `label` is provided. */
+  icon?: string;
+  /** Visible text label. Optional — when omitted the option is icon-only. */
+  label?: string;
+  /** Tooltip / aria-label. Required when `label` is omitted (icon-only mode). */
+  title?: string;
 }
 
 /**
@@ -41,11 +43,17 @@ export interface ViewToggleOption {
           type="button"
           class="mj-view-toggle-btn"
           [class.mj-view-toggle-btn--active]="opt.key === ActiveKey"
+          [class.mj-view-toggle-btn--text]="!!opt.label"
           [attr.aria-pressed]="opt.key === ActiveKey"
-          [attr.aria-label]="opt.title"
-          [title]="opt.title"
+          [attr.aria-label]="opt.title ?? opt.label"
+          [title]="opt.title ?? opt.label"
           (click)="KeyChange.emit(opt.key)">
-          <i [class]="opt.icon" aria-hidden="true"></i>
+          @if (opt.icon) {
+            <i [class]="opt.icon" aria-hidden="true"></i>
+          }
+          @if (opt.label) {
+            <span class="mj-view-toggle-label">{{ opt.label }}</span>
+          }
         </button>
       }
     </div>
@@ -66,6 +74,7 @@ export interface ViewToggleOption {
       display: inline-flex;
       align-items: center;
       justify-content: center;
+      gap: 6px;
       width: 28px;
       height: 28px;
       background: transparent;
@@ -76,6 +85,19 @@ export interface ViewToggleOption {
       line-height: 1;
       cursor: pointer;
       transition: background-color 0.15s ease, color 0.15s ease;
+    }
+
+    /* Text-label mode: wider button with padding for the label. */
+    .mj-view-toggle-btn--text {
+      width: auto;
+      padding: 0 12px;
+      font-weight: 600;
+    }
+
+    .mj-view-toggle-label {
+      font-size: 12px;
+      line-height: 1;
+      white-space: nowrap;
     }
 
     .mj-view-toggle-btn:hover:not(.mj-view-toggle-btn--active) {

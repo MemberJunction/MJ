@@ -4,6 +4,7 @@ import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import { CompositeKey } from '@memberjunction/core';
 import { UserInfoEngine } from '@memberjunction/core-entities';
 import { SharedService } from '@memberjunction/ng-shared';
+import { FilterFieldConfig } from '@memberjunction/ng-ui-components';
 import {
   SchedulingInstrumentationService,
   JobStatistics,
@@ -168,6 +169,64 @@ export class SchedulingJobsComponent implements OnInit, OnDestroy {
   public OnTypeFilterChange(type: string): void {
     this.TypeFilter = type;
     this.typeSubject.next(type);
+  }
+
+  public get JobsFilterFields(): FilterFieldConfig[] {
+    const statusOptions = this.StatusOptions.map(s => ({
+      text: s === '' ? 'All Statuses' : s,
+      value: s
+    }));
+    const typeOptions = this.TypeOptions.map(t => ({
+      text: t === '' ? 'All Types' : t,
+      value: t
+    }));
+    return [
+      {
+        key: 'statusFilter',
+        type: 'dropdown',
+        label: 'Status',
+        icon: 'fa-solid fa-circle-info',
+        placeholder: 'All Statuses',
+        options: statusOptions
+      },
+      {
+        key: 'typeFilter',
+        type: 'dropdown',
+        label: 'Type',
+        icon: 'fa-solid fa-shapes',
+        placeholder: 'All Types',
+        options: typeOptions
+      }
+    ];
+  }
+
+  public get JobsFilterValues(): Record<string, unknown> {
+    return {
+      statusFilter: this.StatusFilter,
+      typeFilter: this.TypeFilter
+    };
+  }
+
+  public get ActiveFilterCount(): number {
+    let count = 0;
+    if (this.StatusFilter) count++;
+    if (this.TypeFilter) count++;
+    return count;
+  }
+
+  public OnFilterValuesChange(values: Record<string, unknown>): void {
+    const next = (values ?? {}) as { statusFilter?: string; typeFilter?: string };
+    if ((next.statusFilter ?? '') !== this.StatusFilter) {
+      this.OnStatusFilterChange(next.statusFilter ?? '');
+    }
+    if ((next.typeFilter ?? '') !== this.TypeFilter) {
+      this.OnTypeFilterChange(next.typeFilter ?? '');
+    }
+  }
+
+  public ResetFilters(): void {
+    if (this.StatusFilter) this.OnStatusFilterChange('');
+    if (this.TypeFilter) this.OnTypeFilterChange('');
   }
 
   public Refresh(): void {

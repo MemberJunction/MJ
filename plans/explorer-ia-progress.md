@@ -8,7 +8,7 @@
 
 We're consolidating the dashboard header chrome of MJ Explorer into a small set of shared components in `@memberjunction/ng-ui-components`, then migrating each dashboard to use them. Per-page CSS for the header strip is being deleted as we go — the goal is that future drift is impossible because the styles live in exactly one place.
 
-So far: **6 shared components** built, **39 dashboards** fully migrated (MCP, 6 AI sub-pages, 3 Lists pages, all 5 Communication pages, Scheduling + 3 Scheduling resources, all 5 Credentials pages, File Browser, all 4 Version History pages, 8 Knowledge Hub pages, all 3 Actions pages). **Remaining bespoke headers** in Template A: APIKeys, Settings, Testing + the Template B group.
+So far: **6 shared components** built, **45 dashboards** fully migrated (MCP, 6 AI sub-pages, 3 Lists pages, all 5 Communication pages, Scheduling + 3 Scheduling resources, all 5 Credentials pages, File Browser, all 4 Version History pages, 8 Knowledge Hub pages, all 3 Actions pages, Testing parent + 5 Testing resources). **Remaining bespoke headers** in Template A: APIKeys, Settings + the Template B group.
 
 ## Shared components (lives in `@memberjunction/ng-ui-components`)
 
@@ -42,9 +42,9 @@ All 5 are standalone, design-token-only, PascalCase API.
 | Communication — Providers | ✅ | ✅ | n/a | n/a | n/a | Provider card grid; "Add Provider" primary action. |
 | Communication — Runs | ✅ | ✅ | n/a | n/a | n/a | Summary stat trio + run timeline; Refresh button. |
 | Scheduling (parent dashboard) | ✅ | ✅ | n/a | n/a | n/a | Sidebar dropped — converted to `<mj-tab-nav>` in `[actions]` slot like MCP. Healthy/Alerts pill in `[meta]`. Jobs tab badge bound to `ActiveJobCount`. |
-| Scheduling — Overview (resource) | ✅ | ✅ | n/a | n/a | n/a | Deep-link resource wrapper around `<app-scheduling-overview>`. |
-| Scheduling — Jobs (resource) | ✅ | ✅ | n/a | n/a | n/a | Deep-link resource wrapper around `<app-scheduling-jobs>`. |
-| Scheduling — Activity (resource) | ✅ | ✅ | n/a | n/a | n/a | Deep-link resource wrapper around `<app-scheduling-activity>`. |
+| Scheduling — Overview (resource) | ✅ | ✅ | n/a | n/a | n/a | **Inner-owns-chrome.** `<app-scheduling-overview>` renders its own `<mj-page-layout>` + `<mj-page-header>` when standalone, gated by `@if (HideToolbar)`. Refresh + Auto-refresh toggle in `[actions]`. Resource wrapper is a thin shim. |
+| Scheduling — Jobs (resource) | ✅ | ✅ | ✅ | ✅ | n/a | **Inner-owns-chrome.** Full chrome owned by `<app-scheduling-jobs>`: result-count in `[meta]`, Refresh + "New Job" in `[actions]`, search + 2 dropdowns (Status / Type) in `[toolbar]`. Resource wrapper is a thin shim. |
+| Scheduling — Activity (resource) | ✅ | ✅ | ✅ | ✅ | n/a | **Inner-owns-chrome.** Full chrome owned by `<app-scheduling-activity>`: Refresh in `[actions]`; search + Status + Job dropdowns + time-range `<mj-filter-chip>` group in `[toolbar]`. Resource wrapper is a thin shim. |
 | Credentials — Overview | ✅ | ✅ | n/a | n/a | n/a | Refresh + "New Credential" in `[actions]`. No filters. |
 | Credentials — List | ✅ | ✅ | ✅ | ✅ | ✅ | Popover for Type + Status; view-toggle (grid/list); result-count + expiring/expired pills in `[meta]`. |
 | Credentials — Types | ✅ | ✅ | ✅ | ✅ | ✅ | Popover for Category (filterable); result-count + neutral pills (categories / credentials) in `[meta]`. |
@@ -66,6 +66,12 @@ All 5 are standalone, design-token-only, PascalCase API.
 | Actions — Overview | ✅ | ✅ | ✅ | ✅ | ✅ | Result count in `[meta]`; popover for Status + Type; search in `[toolbar]`. |
 | Actions — Monitor | ✅ | ✅ | ✅ | ✅ | ✅ | Result count in `[meta]`; popover for Time range + Result + Action (filterable); Refresh in `[actions]`; search in `[toolbar]`. |
 | Actions — Explorer | ✅ | ✅ | ✅ | ✅ | ✅ | **FULLY HOISTED.** Page-header owns search + active-filter chips in `[toolbar]`, filter-popover + sort dropdown + view-toggle + Refresh + New Action in `[actions]`, result-count in `[meta]`. The `<mj-action-toolbar>` sub-component (HTML + CSS + TS) was deleted entirely — only used by action-explorer, all helpers consolidated onto the parent. Sort dropdown + active-filter chips kept bespoke (no shared equivalents yet). |
+| Testing (parent dashboard) | ✅ | ✅ | n/a | n/a | n/a | Sidebar dropped — converted to `<mj-tab-nav>` in `[actions]` like Scheduling/MCP. Active-runs pill in `[meta]` when there are running tests; Runs tab gets a warning-variant badge with the active count. Inner components rendered with `[HideToolbar]="true"` so their bespoke headers are gated off (no double-header). |
+| Testing — Overview (resource) | ✅ | ✅ | n/a | n/a | n/a | **Inner-owns-chrome.** `<app-testing-dashboard-tab>` renders its own `<mj-page-layout>` + `<mj-page-header>` when standalone (`@if (HideToolbar)` gate); Refresh in `[actions]`. Resource wrapper is a thin shim. |
+| Testing — Explorer (resource) | ✅ | ✅ | ✅ | ✅ | n/a | **Inner-owns-chrome.** Full chrome owned by `<app-testing-explorer>`: search in `[toolbar]`; status chips + view-toggle (card/list) + "New Suite" + "New Test" in `[actions]`; result-count in `[meta]`. Display-mode toggle (All / Suites / Tests) and sort indicator kept in body — they're sub-view controls, not page-level chrome. Resource wrapper is a thin shim. |
+| Testing — Runs (resource) | ✅ | ✅ | n/a | n/a | n/a | **Inner-owns-chrome.** `<app-testing-runs>` renders its own page-header; Refresh + "Run Test" primary in `[actions]`. Resource wrapper is a thin shim. |
+| Testing — Analytics (resource) | ✅ | ✅ | ✅ | n/a | n/a | **Inner-owns-chrome.** `<app-testing-analytics>` renders its own page-header; time-range `<mj-filter-chip>` group + Refresh in `[actions]`. Resource wrapper is a thin shim. |
+| Testing — Review (resource) | ✅ | ✅ | n/a | n/a | n/a | **Inner-owns-chrome.** `<app-testing-review>` renders its own page-header; pending-count warning pill in `[meta]`, Refresh in `[actions]`. Resource wrapper is a thin shim. |
 
 ## Pages NOT yet migrated
 

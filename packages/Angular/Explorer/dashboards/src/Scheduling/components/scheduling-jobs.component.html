@@ -1,39 +1,49 @@
-<div class="jobs-container">
-  @if (!HideToolbar) {
-    <!-- Standalone toolbar — hidden when the parent SchedulingDashboard owns the chrome. -->
-    <div class="jobs-toolbar">
-      <div class="toolbar-left">
-        <div class="search-box">
-          <i class="fa-solid fa-search"></i>
-          <input type="text"
-            placeholder="Search jobs..."
-            [value]="SearchTerm"
-            (input)="OnSearchChange($any($event.target).value)" />
-        </div>
-        <select class="filter-select" [value]="StatusFilter" (change)="OnStatusFilterChange($any($event.target).value)">
-          <option value="">All Statuses</option>
-          @for (s of StatusOptions.slice(1); track s) {
-            <option [value]="s">{{s}}</option>
-          }
-        </select>
-        <select class="filter-select" [value]="TypeFilter" (change)="OnTypeFilterChange($any($event.target).value)">
-          <option value="">All Types</option>
-          @for (t of TypeOptions.slice(1); track t) {
-            <option [value]="t">{{t}}</option>
-          }
-        </select>
+@if (HideToolbar) {
+  <ng-container *ngTemplateOutlet="content"></ng-container>
+} @else {
+  <mj-page-layout>
+    <mj-page-header
+      Title="Scheduled Jobs"
+      Icon="fa-solid fa-calendar-check"
+      Subtitle="Configure and manage scheduled jobs">
+      <div meta class="scheduling-header-meta">
+        <mj-result-count [Count]="FilteredJobs.length" [Total]="Jobs.length" Label="jobs"></mj-result-count>
       </div>
-      <div class="toolbar-right">
-        <span class="result-count">{{FilteredJobs.length}} of {{Jobs.length}} jobs</span>
-        <button mjButton variant="secondary" (click)="Refresh()">
+      <div actions class="scheduling-header-actions">
+        <mj-filter-popover
+          [ActiveCount]="ActiveFilterCount"
+          [ShowClearAll]="ActiveFilterCount > 0"
+          (ClearAllRequested)="ResetFilters()">
+          <mj-filter-panel
+            [Fields]="JobsFilterFields"
+            [Values]="JobsFilterValues"
+            (ValuesChange)="OnFilterValuesChange($event)"
+            (Reset)="ResetFilters()">
+          </mj-filter-panel>
+        </mj-filter-popover>
+        <button mjButton variant="secondary" size="sm" (click)="Refresh()" title="Refresh">
           <i class="fa-solid fa-arrows-rotate"></i> Refresh
         </button>
-        <button class="primary-btn" (click)="OpenCreateSlideout()">
+        <button mjButton variant="primary" size="sm" (click)="OpenCreateSlideout()">
           <i class="fa-solid fa-plus"></i> New Job
         </button>
       </div>
-    </div>
-  }
+      <div toolbar class="scheduling-header-toolbar">
+        <mj-page-search
+          Placeholder="Search jobs..."
+          [Value]="SearchTerm"
+          (ValueChange)="OnSearchChange($event)">
+        </mj-page-search>
+      </div>
+    </mj-page-header>
+    <mj-page-body>
+      <ng-container *ngTemplateOutlet="content"></ng-container>
+    </mj-page-body>
+  </mj-page-layout>
+}
+
+<ng-template #content>
+<div class="jobs-container">
 
   <!-- Loading -->
   @if (IsLoading) {
@@ -170,3 +180,4 @@
     (Deleted)="OnSlideoutSaved()">
   </mj-scheduled-job-slide-panel>
 </div>
+</ng-template>

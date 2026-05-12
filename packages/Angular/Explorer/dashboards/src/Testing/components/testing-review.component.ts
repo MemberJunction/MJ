@@ -33,26 +33,37 @@ interface ReviewFormState {
   selector: 'app-testing-review',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <!-- Page Header -->
+    @if (HideToolbar) {
+      <ng-container *ngTemplateOutlet="content"></ng-container>
+    } @else {
+      <mj-page-layout>
+        <mj-page-header
+          Title="Human Review"
+          Icon="fa-solid fa-clipboard-check"
+          Subtitle="Human-in-the-loop review for test outcomes">
+          <div meta class="testing-header-meta">
+            @if (PendingCount > 0) {
+              <span class="testing-pending-badge">
+                <i class="fa-solid fa-hourglass-half"></i>
+                {{ PendingCount }} pending
+              </span>
+            }
+          </div>
+          <div actions class="testing-header-actions">
+            <button mjButton variant="secondary" size="sm" (click)="Refresh()" [disabled]="IsRefreshing" title="Refresh">
+              <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="IsRefreshing"></i> Refresh
+            </button>
+          </div>
+        </mj-page-header>
+        <mj-page-body>
+          <ng-container *ngTemplateOutlet="content"></ng-container>
+        </mj-page-body>
+      </mj-page-layout>
+    }
+
+    <ng-template #content>
+    <!-- Inner page content -->
     <div class="review-page">
-      <div class="page-header">
-        <div class="header-left">
-          <h2>
-            <i class="fa-solid fa-clipboard-check"></i>
-            Human Review
-          </h2>
-          @if (PendingCount > 0) {
-            <div class="pending-badge">
-              <span class="badge-count">{{ PendingCount }}</span>
-              <span class="badge-text">pending</span>
-            </div>
-          }
-        </div>
-        <button class="refresh-btn" (click)="Refresh()" [disabled]="IsRefreshing">
-          <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="IsRefreshing"></i>
-          {{ IsRefreshing ? 'Refreshing...' : 'Refresh' }}
-        </button>
-      </div>
 
       <!-- KPI Summary Row -->
       @if (Metrics) {
@@ -331,11 +342,33 @@ interface ReviewFormState {
         </div>
       </div>
     </div>
+    </ng-template>
   `,
   styles: [`
     :host {
       display: block;
       height: 100%;
+    }
+
+    /* Slot wrappers — display:contents lets children become direct flex children
+       of <mj-page-header>'s slot so its gap applies between them. */
+    .testing-header-meta,
+    .testing-header-actions {
+      display: contents;
+    }
+
+    /* "X pending" badge in [meta]. */
+    .testing-pending-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 12px;
+      color: var(--mj-status-warning-text);
+      background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+      border: 1px solid color-mix(in srgb, var(--mj-status-warning) 30%, transparent);
     }
 
     .review-page {
@@ -1197,6 +1230,8 @@ interface ReviewFormState {
 })
 export class TestingReviewComponent implements OnInit, OnDestroy {
   @Input() initialState: Record<string, unknown> | null = null;
+  /** When true, the inner bespoke .page-header is hidden — the parent shell owns the chrome. */
+  @Input() HideToolbar = false;
   @Output() stateChange = new EventEmitter<Record<string, unknown>>();
 
   private destroy$ = new Subject<void>();
