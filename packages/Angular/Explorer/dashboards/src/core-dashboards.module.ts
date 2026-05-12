@@ -1,7 +1,22 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { MJButtonDirective, MJDatepickerComponent, MJWindowComponent, MJWindowTitlebarComponent, MJDropdownComponent, MJComboboxComponent } from '@memberjunction/ng-ui-components';
+import {
+  MJButtonDirective,
+  MJDatepickerComponent,
+  MJWindowComponent,
+  MJWindowTitlebarComponent,
+  MJDropdownComponent,
+  MJComboboxComponent,
+  MJPageHeaderComponent,
+  MJPageLayoutComponent,
+  MJPageSearchComponent,
+  MJFilterPopoverComponent,
+  MJFilterPanelComponent,
+  MJFilterChipComponent,
+  MJResultCountComponent,
+  MJViewToggleComponent
+} from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
@@ -116,6 +131,14 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     MJWindowTitlebarComponent,
     MJDropdownComponent,
     MJComboboxComponent,
+    MJPageHeaderComponent,
+    MJPageLayoutComponent,
+    MJPageSearchComponent,
+    MJFilterPopoverComponent,
+    MJFilterPanelComponent,
+    MJFilterChipComponent,
+    MJResultCountComponent,
+    MJViewToggleComponent,
     ContainerDirectivesModule,
     SharedGenericModule,
     CodeEditorModule,

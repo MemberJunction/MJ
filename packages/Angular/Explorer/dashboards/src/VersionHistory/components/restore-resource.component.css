@@ -1,51 +1,17 @@
-.restore-container {
-    padding: 24px;
-    height: 100%;
+/* Body wraps content below the shared <mj-page-header>. */
+.restore-body {
+    flex: 1;
+    min-height: 0;
+    padding: 0 24px 24px;
     overflow-y: auto;
 }
 
-/* Header */
-.page-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 24px;
-}
-
-.header-left { flex: 1; }
-
-.page-title {
-    font-size: 24px;
-    font-weight: 700;
-    color: var(--mj-text-primary);
-    margin: 0 0 4px 0;
-}
-
-.page-subtitle {
-    font-size: 14px;
-    color: var(--mj-text-secondary);
-    margin: 0;
-}
-
-.header-actions { display: flex; gap: 12px; }
-
-.btn-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    background: var(--mj-bg-surface-card);
-    border: 1px solid var(--mj-border-default);
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    color: var(--mj-text-secondary);
-}
-
-.btn-icon:hover {
-    background: var(--mj-bg-surface-sunken);
-    color: var(--mj-text-primary);
+/* Slot wrappers — display:contents lets children become direct flex children
+   of <mj-page-header>'s slot so its gap applies between them. */
+.vh-header-meta,
+.vh-header-actions,
+.vh-toolbar {
+    display: contents;
 }
 
 /* KPI Row */
@@ -88,38 +54,6 @@
     font-size: 13px;
     color: var(--mj-text-secondary);
     margin-top: 4px;
-}
-
-/* Filter Row */
-.filter-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-bottom: 20px;
-}
-
-.filter-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 14px;
-    background: var(--mj-bg-surface-card);
-    border: 1px solid var(--mj-border-default);
-    border-radius: 20px;
-    cursor: pointer;
-    font-size: 13px;
-    color: var(--mj-text-secondary);
-    transition: all 0.2s ease;
-}
-
-.filter-chip:hover {
-    background: var(--mj-bg-surface-sunken);
-}
-
-.filter-chip.active {
-    background: var(--mj-brand-primary);
-    border-color: var(--mj-brand-primary);
-    color: var(--mj-text-inverse);
 }
 
 /* Restore List */

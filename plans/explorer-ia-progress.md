@@ -8,7 +8,7 @@
 
 We're consolidating the dashboard header chrome of MJ Explorer into a small set of shared components in `@memberjunction/ng-ui-components`, then migrating each dashboard to use them. Per-page CSS for the header strip is being deleted as we go — the goal is that future drift is impossible because the styles live in exactly one place.
 
-So far: **6 shared components** built, **23 dashboards** fully migrated (MCP, 6 AI sub-pages, 3 Lists pages, all 5 Communication pages, Scheduling + 3 Scheduling resources, all 5 Credentials pages). **~4 dashboards still use bespoke headers** in Template A (APIKeys, Settings, Testing + remaining Template B group).
+So far: **6 shared components** built, **28 dashboards** fully migrated (MCP, 6 AI sub-pages, 3 Lists pages, all 5 Communication pages, Scheduling + 3 Scheduling resources, all 5 Credentials pages, File Browser, all 4 Version History pages). **Remaining bespoke headers** in Template A: APIKeys, Settings, Testing + the Template B group.
 
 ## Shared components (lives in `@memberjunction/ng-ui-components`)
 
@@ -50,6 +50,11 @@ All 5 are standalone, design-token-only, PascalCase API.
 | Credentials — Types | ✅ | ✅ | ✅ | ✅ | ✅ | Popover for Category (filterable); result-count + neutral pills (categories / credentials) in `[meta]`. |
 | Credentials — Categories | ✅ | ✅ | n/a | n/a | n/a | Expand/Collapse + Refresh + "New Category" in `[actions]`. Search in `[toolbar]`. |
 | Credentials — Audit Log | ✅ | ✅ | ✅ | ✅ | ✅ | Popover for Status + Operation + DateRange; view-toggle (timeline/table); Export + Refresh in `[actions]`. |
+| File Browser | ✅ | ✅ | n/a | n/a | n/a | Generic-package wrapper (`@memberjunction/ng-file-storage`). Resource component adds page-header chrome; inner `<mj-file-browser>` keeps its bespoke 2-panel layout + grid toolbar (shared with `file-browser-demo`). |
+| Version History — Labels | ✅ | ✅ | ✅ | ✅ | ✅ | Popover for Scope + Status; view-toggle (card/list); result-count in `[meta]`; Create Label + Refresh in `[actions]`. |
+| Version History — Diff Viewer | ✅ | ✅ | n/a | n/a | n/a | Minimal chrome — page is a configurator (mode selector + label dropdowns + Compare button), with results toolbar that lives in the body. |
+| Version History — Restore History | ✅ | ✅ | ✅ | n/a | n/a | result-count in `[meta]`; quick-filter chips (Complete / Error / Partial) in `[toolbar]`; Refresh in `[actions]`. |
+| Version History — Dependency Graph | ✅ | ✅ | n/a | n/a | n/a | Three stat badges (entities / with dependents / relationships) in `[meta]`; Refresh in `[actions]`. Entity list panel keeps its own search + schema chips since they scope to the panel. |
 
 ## Pages NOT yet migrated
 

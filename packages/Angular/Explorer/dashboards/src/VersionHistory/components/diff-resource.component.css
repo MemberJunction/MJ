@@ -1,25 +1,9 @@
-.diff-container {
-    padding: 24px;
-    height: 100%;
+/* Body wraps content below the shared <mj-page-header>. */
+.diff-body {
+    flex: 1;
+    min-height: 0;
+    padding: 0 24px 24px;
     overflow-y: auto;
-}
-
-/* Header */
-.page-header {
-    margin-bottom: 24px;
-}
-
-.page-title {
-    font-size: 24px;
-    font-weight: 700;
-    color: var(--mj-text-primary);
-    margin: 0 0 4px 0;
-}
-
-.page-subtitle {
-    font-size: 14px;
-    color: var(--mj-text-secondary);
-    margin: 0;
 }
 
 /* Config Panel */

@@ -1,21 +1,48 @@
-<div class="restore-container">
+<mj-page-layout>
+  <mj-page-header
+    Title="Restore History"
+    Icon="fa-solid fa-clock-rotate-left"
+    Subtitle="Track all restore operations and their outcomes">
+    <div meta class="vh-header-meta">
+      <mj-result-count
+        [Count]="FilteredRestores.length"
+        [Total]="Restores.length"
+        Label="restores">
+      </mj-result-count>
+    </div>
+    <div actions class="vh-header-actions">
+      <button mjButton variant="secondary" size="sm" (click)="Refresh()" [disabled]="IsLoading" title="Refresh">
+        <i class="fa-solid fa-arrows-rotate"></i> Refresh
+      </button>
+    </div>
+    <div toolbar class="vh-toolbar">
+      <mj-filter-chip
+        Label="Complete"
+        Icon="fa-solid fa-circle-check"
+        [Active]="StatusFilter === 'Complete'"
+        (Clicked)="OnStatusFilterChange('Complete')">
+      </mj-filter-chip>
+      <mj-filter-chip
+        Label="Error"
+        Icon="fa-solid fa-circle-xmark"
+        [Active]="StatusFilter === 'Error'"
+        (Clicked)="OnStatusFilterChange('Error')">
+      </mj-filter-chip>
+      <mj-filter-chip
+        Label="Partial"
+        Icon="fa-solid fa-circle-half-stroke"
+        [Active]="StatusFilter === 'Partial'"
+        (Clicked)="OnStatusFilterChange('Partial')">
+      </mj-filter-chip>
+    </div>
+  </mj-page-header>
+
+  <div class="restore-body">
   @if (IsLoading) {
     <mj-loading text="Loading restore history..."></mj-loading>
   }
 
   @if (!IsLoading) {
-    <!-- Header -->
-    <div class="page-header">
-      <div class="header-left">
-        <h2 class="page-title">Restore History</h2>
-        <p class="page-subtitle">Track all restore operations and their outcomes</p>
-      </div>
-      <div class="header-actions">
-        <button class="btn-icon" (click)="Refresh()" title="Refresh">
-          <i class="fa-solid fa-refresh"></i>
-        </button>
-      </div>
-    </div>
     <!-- KPI Cards -->
     <div class="kpi-row">
       <div class="kpi-card">
@@ -54,24 +81,6 @@
           <div class="kpi-label">Partial</div>
         </div>
       </div>
-    </div>
-    <!-- Filters -->
-    <div class="filter-row">
-      <button class="filter-chip"
-        [class.active]="StatusFilter === 'Complete'"
-        (click)="OnStatusFilterChange('Complete')">
-        <i class="fa-solid fa-circle-check"></i> Complete
-      </button>
-      <button class="filter-chip"
-        [class.active]="StatusFilter === 'Error'"
-        (click)="OnStatusFilterChange('Error')">
-        <i class="fa-solid fa-circle-xmark"></i> Error
-      </button>
-      <button class="filter-chip"
-        [class.active]="StatusFilter === 'Partial'"
-        (click)="OnStatusFilterChange('Partial')">
-        <i class="fa-solid fa-circle-half-stroke"></i> Partial
-      </button>
     </div>
     <!-- Restore List -->
     @if (FilteredRestores.length > 0) {
@@ -184,4 +193,5 @@
       </div>
     }
   }
-</div>
+  </div>
+</mj-page-layout>

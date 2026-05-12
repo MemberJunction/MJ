@@ -1,76 +1,36 @@
-.graph-container {
-    padding: 24px;
-    height: 100%;
+/* Body wraps content below the shared <mj-page-header>. */
+.graph-body {
+    flex: 1;
+    min-height: 0;
+    padding: 0 24px 24px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
 }
 
-/* Header */
-.page-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    margin-bottom: 20px;
+/* Slot wrappers — display:contents lets children become direct flex children
+   of <mj-page-header>'s slot so its gap applies between them. */
+.vh-header-meta,
+.vh-header-actions {
+    display: contents;
 }
 
-.header-left { flex: 1; }
-
-.page-title {
-    font-size: 24px;
-    font-weight: 700;
-    color: var(--mj-text-primary);
-    margin: 0 0 4px 0;
-}
-
-.page-subtitle {
-    font-size: 14px;
-    color: var(--mj-text-secondary);
-    margin: 0;
-}
-
-.header-actions { display: flex; gap: 12px; }
-
-.btn-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 40px;
-    height: 40px;
-    background: var(--mj-bg-surface-card);
-    border: 1px solid var(--mj-border-default);
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    color: var(--mj-text-secondary);
-}
-
-.btn-icon:hover {
-    background: var(--mj-bg-surface-sunken);
-    color: var(--mj-text-primary);
-}
-
-/* Stats Row */
-.stats-row {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 20px;
-}
-
-.stat-badge {
+/* Page-header [meta] stat badges. */
+.vh-stat-badge {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
-    padding: 8px 16px;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 10px;
+    color: var(--mj-text-secondary);
     background: var(--mj-bg-surface-card);
     border: 1px solid var(--mj-border-default);
-    border-radius: 20px;
-    font-size: 13px;
-    color: var(--mj-text-secondary);
+    border-radius: 12px;
 }
-
-.stat-badge i {
+.vh-stat-badge i {
     color: var(--mj-brand-primary);
+    font-size: 11px;
 }
 
 /* Main Layout */
