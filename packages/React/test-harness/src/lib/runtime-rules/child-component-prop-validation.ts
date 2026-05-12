@@ -5,7 +5,7 @@ import { BaseLintRule } from '../lint-rule';
 import { Violation } from '../component-linter';
 import { ComponentSpec } from '@memberjunction/interactive-component-types';
 import { ComponentProperty, ComponentEvent } from '@memberjunction/interactive-component-types';
-import { ComponentMetadataEngine } from '@memberjunction/core-entities';
+import { ComponentMetadataEngineServer } from '@memberjunction/core-entities-server';
 
 /**
  * Rule: child-component-prop-validation
@@ -158,11 +158,7 @@ function tryRegistryLookup(
   dep: ComponentSpec,
 ): { properties: ComponentProperty[]; events: ComponentEvent[] | undefined } | undefined {
   try {
-    const engine = ComponentMetadataEngine.Instance;
-    // Only attempt lookup if the engine has been initialized (Config() was called)
-    if (!engine.Components || engine.Components.length === 0) {
-      return undefined;
-    }
+    const engine = ComponentMetadataEngineServer.Instance;
 
     const registryComponent = engine.FindComponent(
       dep.name,

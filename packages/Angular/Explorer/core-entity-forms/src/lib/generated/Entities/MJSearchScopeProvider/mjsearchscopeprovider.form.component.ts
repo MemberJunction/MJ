@@ -15,9 +15,9 @@ export class MJSearchScopeProviderFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'searchConfiguration', sectionName: 'Search Configuration', isExpanded: true },
-            { sectionKey: 'operationalSettings', sectionName: 'Operational Settings', isExpanded: true },
-            { sectionKey: 'queryProcessing', sectionName: 'Query Processing', isExpanded: false },
+            { sectionKey: 'providerAssociation', sectionName: 'Provider Association', isExpanded: true },
+            { sectionKey: 'configurationSettings', sectionName: 'Configuration Settings', isExpanded: true },
+            { sectionKey: 'queryTransformation', sectionName: 'Query Transformation', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

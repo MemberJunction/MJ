@@ -545,8 +545,23 @@ export class EntityFieldInfo extends BaseInfo {
     UserSearchPredicateAPI: string = null
     IncludeInGeneratedForm: boolean = null
     GeneratedFormSection: string = null
-    IsVirtual: boolean = null 
-    IsNameField: boolean = null 
+    IsVirtual: boolean = null
+    /**
+     * When true, this field is a SQL Server computed column or PostgreSQL generated column —
+     * physically present in the base table but read-only at the SQL layer. Distinct from
+     * IsVirtual, which is also set to 1 for these fields (because they are read-only at the
+     * API layer) but is additionally set for view-only columns that don't exist in the base
+     * table at all (e.g., joined name lookups in the base view). Use the combination to
+     * disambiguate:
+     *   IsVirtual=0, IsComputed=0 → regular base-table column (writable)
+     *   IsVirtual=1, IsComputed=0 → view-only column (no physical storage)
+     *   IsVirtual=1, IsComputed=1 → computed/generated column (physical, read-only in SQL)
+     * Only relevant downstream consumer that branches on this is base-view JOIN target
+     * selection in CodeGen — when an FK's related Name Field is IsComputed=1, the join
+     * targets the related entity's base table (not its view).
+     */
+    IsComputed: boolean = null
+    IsNameField: boolean = null
     RelatedEntityID: string = null
     RelatedEntityFieldName: string = null
     IncludeRelatedEntityNameFieldInBaseView: boolean = null
@@ -801,6 +816,13 @@ export class EntityFieldInfo extends BaseInfo {
     IsFloat: boolean
     _RelatedEntityTableAlias: string
     _RelatedEntityNameFieldIsVirtual: boolean
+    /**
+     * Mirror of `IsComputed` on the related entity's Name Field. Tracked alongside
+     * `_RelatedEntityNameFieldIsVirtual` so that base-view JOIN-target selection can
+     * prefer the related entity's base table when the Name Field is a SQL computed/
+     * generated column (physically present in the base table even though IsVirtual=1).
+     */
+    _RelatedEntityNameFieldIsComputed: boolean
     private _rawEntityFieldValues: Record<string, unknown>[] | null = null;
     private _entityFieldValuesConstructed = false;
     _EntityFieldValues: EntityFieldValueInfo[];
@@ -812,6 +834,7 @@ export class EntityFieldInfo extends BaseInfo {
         sourceField: string;
         alias: string;
         isVirtual: boolean;
+        isComputed: boolean;
     }>;
 
     /**
@@ -1080,6 +1103,64 @@ export class EntityFieldInfo extends BaseInfo {
      */
     get NeedsClearCompanion(): boolean {
         return this.AllowsNull;
+    }
+
+    /**
+     * Returns true when this field appears as a parameter in the entity's
+     * `spCreate` (when `isUpdate=false`) or `spUpdate` (when `isUpdate=true`)
+     * stored procedure.
+     *
+     * This is the **single source of truth** for the SP parameter contract,
+     * consumed by both:
+     *
+     *   • **CodeGen**, when emitting the SP body (which `@params` to declare
+     *     and which columns to `INSERT`/`UPDATE`), and
+     *   • **Runtime data providers** (`SQLServerDataProvider.generateSPParams`,
+     *     `PostgreSQLDataProvider.getWritableFields`), when building the
+     *     EXEC / parameter list passed to the SP.
+     *
+     * Keeping both sides on the same predicate guarantees the SP signature
+     * and the call-site argument list always agree. Drift between them
+     * surfaces as a SQL Server "Procedure or function ... has too many
+     * arguments specified" error at save time (or its PG equivalent).
+     *
+     * **Exclusion rules** (in order):
+     *
+     *   • `IsVirtual` — view-only / joined columns. Not present in the base
+     *     table; the SP body never references them. Also covers IS-A parent
+     *     fields on child entities — those are saved via the parent's SP,
+     *     not the child's, so they must not appear in the child's SP params.
+     *   • `IsComputed` — SQL Server computed columns and PG generated
+     *     columns. Physically present in the base table but read-only at
+     *     the SQL layer (`INSERT`/`UPDATE` cannot target them). Today
+     *     `IsComputed=1` implies `IsVirtual=1`, but checking both is
+     *     defensive against future decoupling of the flags.
+     *   • `IsSpecialDateField` — `__mj_CreatedAt`, `__mj_UpdatedAt`,
+     *     `__mj_DeletedAt`. Set inside the SP body / trigger from
+     *     `GETUTCDATE()` rather than by the caller.
+     *   • Non-PK fields without `AllowUpdateAPI` — by definition not
+     *     callable via the SP signature.
+     *
+     * **PK handling**:
+     *
+     *   • On **update**, the PK is always a parameter (required to identify
+     *     the row).
+     *   • On **create**, the PK is a parameter only when it's NOT
+     *     auto-increment — the SP body declares it with a default so the
+     *     caller can either supply a value or let the database default fire
+     *     (e.g. `NEWSEQUENTIALID()`). For auto-increment PKs, the SP
+     *     intentionally doesn't expose the PK as a parameter.
+     *
+     * @param isUpdate `true` for `spUpdate`, `false` for `spCreate`.
+     */
+    public IsSPParameter(isUpdate: boolean): boolean {
+        if (this.IsVirtual) return false;
+        if (this.IsComputed) return false;
+        if (this.IsSpecialDateField) return false;
+        if (this.IsPrimaryKey) {
+            return isUpdate || !this.AutoIncrement;
+        }
+        return this.AllowUpdateAPI;
     }
 
     /**

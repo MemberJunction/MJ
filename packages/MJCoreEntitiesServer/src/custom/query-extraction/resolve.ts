@@ -250,6 +250,51 @@ export function MapQueryParamTypeToParserType(
 // ═══════════════════════════════════════════════════
 
 /**
+ * Builds ExtractedField[] deterministically from the parsed SELECT columns.
+ *
+ * This is the PRIMARY deterministic field extraction path, handling explicit
+ * column lists like `SELECT col1, col2 AS Alias, COUNT(*) AS Total`.
+ * For each parsed column, it creates an ExtractedField with:
+ *   - name: the output name (alias if present, otherwise source column)
+ *   - isComputed: true for expression columns (aggregates, calculations)
+ *   - sourceFieldName: the original column name (before AS alias)
+ *
+ * Returns null only if selectColumns is empty (e.g., a stored procedure call
+ * or non-SELECT statement).
+ */
+export function BuildFieldsFromSelectColumns(
+    selectColumns: SQLSelectColumn[]
+): ExtractedField[] | null {
+    if (selectColumns.length === 0) return null;
+
+    // Skip if ALL columns are wildcards — BuildFieldsForSelectStar handles that
+    if (selectColumns.every(col => col.SourceColumn === '*')) return null;
+
+    return selectColumns
+        .filter(col => col.SourceColumn !== '*')
+        .map(col => buildFieldFromSelectColumn(col));
+}
+
+/**
+ * Converts a single parsed SELECT column into an ExtractedField.
+ */
+function buildFieldFromSelectColumn(col: SQLSelectColumn): ExtractedField {
+    return {
+        name: col.OutputName,
+        description: col.IsExpression
+            ? `Computed column: ${col.SourceColumn}`
+            : col.OutputName !== col.SourceColumn
+                ? `${col.SourceColumn} (aliased as ${col.OutputName})`
+                : col.OutputName,
+        type: 'string', // default; enrichment stages refine this from entity/composition metadata
+        optional: false,
+        sourceFieldName: col.IsExpression ? null : col.SourceColumn,
+        isComputed: col.IsExpression,
+        isSummary: false,
+    };
+}
+
+/**
  * Detects SELECT * and builds the complete field list deterministically
  * from entity metadata and/or composition ref fields.
  * Returns null if the SQL doesn't use SELECT * or if entities can't be resolved.
