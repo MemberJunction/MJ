@@ -445,7 +445,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 // Register with the engine registry
                 BaseEngineRegistry.Instance.RegisterEngine(this);
 
-                await this.LoadConfigs(configs, contextUser);
+                await this.LoadConfigs(configs, contextUser, forceRefresh);
                 await this.AdditionalLoading(contextUser); // Call the additional loading method
                 await this.SetupGlobalEventListener();
                 this._loaded = true;
@@ -1213,15 +1213,15 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * @param configs - The metadata configurations to load
      * @param contextUser - The context user information
      */
-    protected async LoadConfigs(configs: Partial<BaseEnginePropertyConfig>[], contextUser: UserInfo): Promise<void> {
+    protected async LoadConfigs(configs: Partial<BaseEnginePropertyConfig>[], contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
         this._metadataConfigs = configs.map(c => this.UpgradeObjectToConfig(c));
 
         // now, break up the configs into two chunks, datasets and views of entities so we can load all the views in a single network call via RunViews()
         const entityConfigs = this._metadataConfigs.filter(c => c.Type === 'entity');
         const datasetConfigs = this._metadataConfigs.filter(c => c.Type === 'dataset');
 
-        await Promise.all([...datasetConfigs.map(c => this.LoadSingleDatasetConfig(c, contextUser)),
-                           this.LoadMultipleEntityConfigs(entityConfigs, contextUser)]);
+        await Promise.all([...datasetConfigs.map(c => this.LoadSingleDatasetConfig(c, contextUser, bypassCache)),
+                           this.LoadMultipleEntityConfigs(entityConfigs, contextUser, bypassCache)]);
 
         // Register cross-server cache change callbacks for entity configs
         this.RegisterCacheChangeCallbacks(entityConfigs);
@@ -1232,19 +1232,20 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * @param config - The metadata configuration to load
      * @param contextUser - The context user information
      */
-    protected async LoadSingleConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo): Promise<void> {
-        if (config.Type === 'dataset') 
-            return await this.LoadSingleDatasetConfig(config, contextUser);
+    protected async LoadSingleConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
+        if (config.Type === 'dataset')
+            return await this.LoadSingleDatasetConfig(config, contextUser, bypassCache);
         else
-            return await this.LoadSingleEntityConfig(config, contextUser);
-    }    
+            return await this.LoadSingleEntityConfig(config, contextUser, bypassCache);
+    }
 
     /**
      * Handles the process of loading a single config of type 'entity'.
      * @param config
      * @param contextUser
+     * @param bypassCache - When true, bypasses server-side cache to get fresh data from the database
      */
-    protected async LoadSingleEntityConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo): Promise<void> {
+    protected async LoadSingleEntityConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
         const p = this.RunViewProviderToUse;
         const rv = new RunView(p);
         const result = await rv.RunView({
@@ -1255,7 +1256,8 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             IgnoreMaxRows: true, // Engines always need ALL data — bypass entity-level UserViewMaxRows caps
             _fromEngine: true,  // Mark as engine-initiated to avoid false positive telemetry warnings
             CacheLocal: config.CacheLocal,
-            CacheLocalTTL: config.CacheLocalTTL
+            CacheLocalTTL: config.CacheLocalTTL,
+            BypassCache: bypassCache
         }, contextUser);
 
         this.HandleSingleViewResult(config, result);
@@ -1288,7 +1290,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * @param configs
      * @param contextUser
      */
-    protected async LoadMultipleEntityConfigs(configs: BaseEnginePropertyConfig[], contextUser: UserInfo): Promise<void> {
+    protected async LoadMultipleEntityConfigs(configs: BaseEnginePropertyConfig[], contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
         if (configs && configs.length > 0) {
             const p = this.RunViewProviderToUse;
             const rv = new RunView(p);
@@ -1301,7 +1303,8 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     IgnoreMaxRows: true, // Engines always need ALL data — bypass entity-level UserViewMaxRows caps
                     _fromEngine: true,  // Mark as engine-initiated to avoid false positive telemetry warnings
                     CacheLocal: c.CacheLocal,
-                    CacheLocalTTL: c.CacheLocalTTL
+                    CacheLocalTTL: c.CacheLocalTTL,
+                    BypassCache: bypassCache
                 };
             });
             const results = await rv.RunViews(viewConfigs, contextUser);
@@ -1330,9 +1333,18 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * @param config 
      * @param contextUser 
      */
-    protected async LoadSingleDatasetConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo): Promise<void> {
+    protected async LoadSingleDatasetConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
         const p = this.ProviderToUse;
-        const result: DatasetResultType = await p.GetAndCacheDatasetByName(config.DatasetName, config.DatasetItemFilters);
+        // When bypassing cache, use GetDatasetByName with forceRefresh to skip all cache reads,
+        // then CacheDataset to store the fresh results for subsequent non-forced calls.
+        // Otherwise, use GetAndCacheDatasetByName which validates staleness before returning cached data.
+        let result: DatasetResultType;
+        if (bypassCache) {
+            result = await p.GetDatasetByName(config.DatasetName, config.DatasetItemFilters, contextUser, undefined, true);
+            await p.CacheDataset(config.DatasetName, config.DatasetItemFilters, result);
+        } else {
+            result = await p.GetAndCacheDatasetByName(config.DatasetName, config.DatasetItemFilters);
+        }
         if (!result) {
             LogError(`LoadSingleDatasetConfig: GetAndCacheDatasetByName("${config.DatasetName}") returned undefined/null — provider: ${p?.constructor?.name}`);
             return;
