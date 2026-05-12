@@ -201,7 +201,14 @@ export abstract class BaseLLM extends BaseModel {
      */
     protected async handleStreamingChatCompletion(params: ChatParams): Promise<ChatResult> {
         const startTime = new Date();
-        
+        // Always reset streaming state at the START of each request — this is the
+        // primary defense. Provider singletons reuse the same instance across
+        // requests, so any state from a prior request would otherwise bleed
+        // through. We also call resetStreamingState() in `finally` below to
+        // release accumulated buffers (e.g., extended-thinking output that can
+        // grow to 100k+ chars) once the response is finalized. See audit R2-C5.
+        this.resetStreamingState();
+
         return new Promise<ChatResult>((resolve, reject) => {
             (async () => {
                 try {
@@ -277,15 +284,15 @@ export abstract class BaseLLM extends BaseModel {
                     if (params.streamingCallbacks?.OnComplete) {
                         params.streamingCallbacks.OnComplete(result);
                     }
-                    
+
                     resolve(result);
                 } catch (error) {
                     if (params.streamingCallbacks?.OnError) {
                         params.streamingCallbacks.OnError(error);
                     }
-                    
+
                     const endTime = new Date();
-                    
+
                     // Create a proper ChatResult by extending BaseResult
                     const errorResult = new ChatResult(false, startTime, endTime);
                     errorResult.data = {
@@ -300,11 +307,33 @@ export abstract class BaseLLM extends BaseModel {
                     errorResult.errorMessage = error?.message || 'Unknown error';
                     errorResult.exception = {exception: error};
                     errorResult.errorInfo = ErrorAnalyzer.analyzeError(error, this.constructor.name);
-                    
+
                     reject(errorResult);
+                } finally {
+                    // Release any accumulated streaming buffers (thinking-block
+                    // accumulators, pending content, etc.) so they don't pin
+                    // memory on the singleton until the next request arrives.
+                    try {
+                        this.resetStreamingState();
+                    } catch {
+                        // Defensive — must not interfere with the resolved/rejected result.
+                    }
                 }
             })();
         });
+    }
+
+    /**
+     * Hook invoked at the start AND end (in `finally`) of every streaming chat
+     * completion to reset per-request streaming state. Default is a no-op;
+     * providers that maintain instance-level streaming state (e.g., Anthropic /
+     * OpenAI thinking-block accumulators) MUST override this. See audit R2-C5
+     * for context — without this, state from a prior request bleeds into the
+     * next one and accumulated buffers grow unbounded across the singleton's
+     * lifetime.
+     */
+    protected resetStreamingState(): void {
+        // Default no-op. Providers override.
     }
     
     /**

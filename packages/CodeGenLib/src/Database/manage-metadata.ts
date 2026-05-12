@@ -1,6 +1,10 @@
 import { SQLDialect } from '@memberjunction/sql-dialect';
 import { CodeGenConnection, CodeGenTransaction, CodeGenQueryResult, CodeGenDatabaseProvider } from './codeGenDatabaseProvider';
-import { SQLServerCodeGenProvider } from './providers/sqlserver/SQLServerCodeGenProvider';
+// Side-effect import — registers `SQLServerCodeGenProvider` with `MJGlobal.ClassFactory`
+// under the `'sqlserver'` key via its `@RegisterClass` decorator. Without this import,
+// `ClassFactory.CreateInstance(CodeGenDatabaseProvider, 'sqlserver')` returns nothing
+// and the SS code path silently fails.
+import './providers/sqlserver/SQLServerCodeGenProvider';
 import { configInfo, currentWorkingDirectory, dbPlatform, getSettingValue, mj_core_schema, outputDir } from '../Config/config';
 import { ApplicationInfo, CodeNameFromString, EntityFieldExtendedType, EntityFieldInfo, EntityInfo, ExtractActualDefaultValue, FieldCategoryInfo, LogError, LogStatus, Metadata, SeverityType, UserInfo } from "@memberjunction/core";
 import { MJApplicationEntity, MJEntityFieldSchema } from "@memberjunction/core-entities";
@@ -247,26 +251,32 @@ export class ManageMetadataBase {
    /**
     * Returns the CodeGenDatabaseProvider for the current database platform.
     * Lazily initialized from dbPlatform() configuration.
+    *
+    * Lookup goes through `MJGlobal.ClassFactory` keyed by the platform string,
+    * which matches the `@RegisterClass(CodeGenDatabaseProvider, '<platform>')`
+    * decorators on the concrete providers (`'sqlserver'`, `'postgresql'`).
+    * Mismatched keys silently fall back to the abstract base class — fail loud
+    * with an explicit error so a misconfigured platform doesn't ship as a
+    * runtime breakage in dialect-specific methods.
     */
    protected get dbProvider(): CodeGenDatabaseProvider {
       if (!this._dbProvider) {
          const platform = dbPlatform();
-         if (platform === 'postgresql') {
-            const pgProvider = MJGlobal.Instance.ClassFactory.CreateInstance<CodeGenDatabaseProvider>(
-               CodeGenDatabaseProvider,
-               'PostgreSQLCodeGenProvider'
+         const provider = MJGlobal.Instance.ClassFactory.CreateInstance<CodeGenDatabaseProvider>(
+            CodeGenDatabaseProvider,
+            platform
+         );
+         // CreateInstance returns the abstract base class on a missed key (it
+         // doesn't throw), so disambiguate by constructor identity: anything
+         // that's still the bare base means lookup didn't resolve to a real
+         // dialect provider for this platform.
+         if (!provider || provider.constructor === CodeGenDatabaseProvider) {
+            throw new Error(
+               `CodeGen provider for dbPlatform='${platform}' not found. Ensure the corresponding ` +
+               `provider package is installed and registered via @RegisterClass(CodeGenDatabaseProvider, '${platform}').`
             );
-            if (pgProvider) {
-               this._dbProvider = pgProvider;
-            } else {
-               throw new Error(
-                  'PostgreSQL CodeGen provider not found. Ensure @memberjunction/postgresql-dataprovider ' +
-                  'is installed and its CodeGen provider is registered before running CodeGen.'
-               );
-            }
-         } else {
-            this._dbProvider = new SQLServerCodeGenProvider();
          }
+         this._dbProvider = provider;
       }
       return this._dbProvider;
    }
@@ -3203,6 +3213,7 @@ export class ManageMetadataBase {
             ${this.qi('AutoIncrement')},
             ${this.qi('AllowUpdateAPI')},
             ${this.qi('IsVirtual')},
+            ${this.qi('IsComputed')},
             ${this.qi('RelatedEntityID')},
             ${this.qi('RelatedEntityFieldName')},
             ${this.qi('IsNameField')},
@@ -3232,6 +3243,7 @@ export class ManageMetadataBase {
             ${this.boolLit(n.AutoIncrement)},
             ${this.boolLit(n.AllowUpdateAPI)},
             ${this.boolLit(n.IsVirtual)},
+            ${this.boolLit(n.IsComputed)},
             ${n.RelatedEntityID && n.RelatedEntityID.length > 0 ? `'${n.RelatedEntityID}'` : 'NULL'},
             ${n.RelatedEntityFieldName && n.RelatedEntityFieldName.length > 0 ? `'${n.RelatedEntityFieldName}'` : 'NULL'},
             ${this.boolLit(n.IsNameField !== null ? n.IsNameField : false)},

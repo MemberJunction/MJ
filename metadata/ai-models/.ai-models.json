@@ -12980,6 +12980,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "B25B6B52-78F3-4F78-A225-87273EC811EF"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:59.578Z",
+            "checksum": "db9988b1fb179ac0486cdcb4e12b30449b84028f060dab24f6d2084074045fe3"
           }
         },
         {
@@ -12996,6 +13003,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "47E05857-30C7-40B1-8A02-323A3DC6BA4F"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:59.713Z",
+            "checksum": "2d64466c727365f44ada09fb4540e5d4f5e904c74bbc778a6b3c0a2f921bf6b0"
           }
         },
         {
@@ -13012,6 +13026,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "3E9F33FF-32DC-48BE-B4B2-1A34557ED77C"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:59.730Z",
+            "checksum": "8da71d284ecdc7f1488e86f27f80fe63730ef112f2c2b26cb2b1137be3db40a7"
           }
         }
       ],
@@ -13024,11 +13045,18 @@
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
-            "InputPricePerUnit": 5.0,
-            "OutputPricePerUnit": 30.0,
+            "InputPricePerUnit": 5,
+            "OutputPricePerUnit": 30,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "GPT 5.5 standard pricing on OpenAI as of April 24, 2026 launch. $5.00/$30.00 per 1M tokens. Prompts >272K input tokens billed at 2x input and 1.5x output for the full session (standard, batch, and flex tiers). Batch and Flex APIs at 50% off; Priority at 2.5x standard. Regional data-residency endpoints carry a 10% uplift. Source: https://openai.com/index/introducing-gpt-5-5/"
+          },
+          "primaryKey": {
+            "ID": "E049A222-E24B-4C5E-AB27-7DA7FEDCC44A"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:59.746Z",
+            "checksum": "8a213692b538409d4bb2a9c0f61e0eb46d82899797fd10dd3026f08559049a02"
           }
         },
         {
@@ -13039,14 +13067,28 @@
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
-            "InputPricePerUnit": 5.0,
-            "OutputPricePerUnit": 30.0,
+            "InputPricePerUnit": 5,
+            "OutputPricePerUnit": 30,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "GPT 5.5 pricing on Azure OpenAI / Microsoft Foundry (Global Standard) as of April 24, 2026 launch. Source: https://azure.microsoft.com/en-us/blog/openais-gpt-5-5-in-microsoft-foundry-frontier-intelligence-on-an-enterprise-ready-platform/"
+          },
+          "primaryKey": {
+            "ID": "60686413-8D43-47BE-8C7A-401381B81CAC"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:59.761Z",
+            "checksum": "05f3886755eb2fdb92316531bf08752f5e9216419d73f7b8fbbfedda5c40e311"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "87C9417E-45E6-4C97-95B1-EC0482C7FE4D"
+    },
+    "sync": {
+      "lastModified": "2026-05-08T00:53:59.334Z",
+      "checksum": "a4200fe870f1601382573616b2c192aeb489f4bbe7175fa079287a3ab1e63aee"
     }
   },
   {
@@ -13073,6 +13115,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "0384DD43-314C-4DD1-81E6-FB1647D6F9F2"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:59.873Z",
+            "checksum": "db9988b1fb179ac0486cdcb4e12b30449b84028f060dab24f6d2084074045fe3"
           }
         },
         {
@@ -13089,6 +13138,13 @@
             "SupportsEffortLevel": true,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "9117FA4A-ED22-4934-BE56-5A81A9F7EB23"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:59.890Z",
+            "checksum": "78efdb747abc9b08a66d887876d7ac361a5c16cee23c87a3b1751ebe08019435"
           }
         }
       ],
@@ -13101,14 +13157,28 @@
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
-            "InputPricePerUnit": 30.0,
-            "OutputPricePerUnit": 180.0,
+            "InputPricePerUnit": 30,
+            "OutputPricePerUnit": 180,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "GPT 5.5 Pro pricing on OpenAI as of April 24, 2026 launch. $30.00/$180.00 per 1M tokens. Available via Responses API and Batch API. Batch and Flex at 50% off. Source: https://openai.com/index/introducing-gpt-5-5/"
+          },
+          "primaryKey": {
+            "ID": "3F248960-FDCF-4DDB-BF04-E187D5DC6CE6"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:59.904Z",
+            "checksum": "2181e292987374129053f79f6d73998eea3826c310e5fb34bb748a0adf684b4d"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "A19488EB-5168-4D47-BBCB-F94054E0B6A7"
+    },
+    "sync": {
+      "lastModified": "2026-05-08T00:53:59.776Z",
+      "checksum": "772945f38fe02d7fd74541577a6380ce44e5744196c95abc86fa9f88e3fb53ba"
     }
   },
   {
@@ -13135,6 +13205,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "9ED2B6DF-53B7-48D7-B528-F33431B65970"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:59.794Z",
+            "checksum": "aa7970023d655e03c422bfdbc8910b106fa41da0a3f93d2d51e598108e8a37bf"
           }
         },
         {
@@ -13151,6 +13228,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "42DBADF5-E1E6-4D27-8CEF-E20771C0B48D"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:59.811Z",
+            "checksum": "2e775e4295f9ffe47f4a698a4d932b8a97eefda427fd0f7732bcaf725cc7107a"
           }
         }
       ],
@@ -13164,13 +13248,27 @@
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
             "InputPricePerUnit": 1.25,
-            "OutputPricePerUnit": 2.50,
+            "OutputPricePerUnit": 2.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Grok 4.3 pricing on xAI direct API as of April 30, 2026 launch. $1.25/$2.50 per 1M tokens for requests up to 200,000 tokens; requests above 200K input billed at higher rates per xAI doc. Sources: https://docs.x.ai/developers/models/grok-4.3 ; https://venturebeat.com/technology/xai-launches-grok-4-3-at-an-aggressively-low-price-and-a-new-fast-powerful-voice-cloning-suite"
+          },
+          "primaryKey": {
+            "ID": "B0BC5332-1DFC-4164-AF29-7FA1057968E3"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:59.825Z",
+            "checksum": "e1ca3385fa1813ba220d6f0570912803e15fe0157f7128234cd5b3d51297fe22"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "0D5B7AC2-1130-4611-95D4-9A6FAE129569"
+    },
+    "sync": {
+      "lastModified": "2026-05-08T00:53:59.452Z",
+      "checksum": "55c543981ba3879e013b4fe022abdd705773be6465d2ce1dff32e5fa837f4108"
     }
   },
   {
@@ -13197,6 +13295,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "73A9CF79-08E2-4182-941D-47F3473F2980"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:59.469Z",
+            "checksum": "a5027c3113a898e0e6076d614cfffe2a125525d91d12553389522228640eac4e"
           }
         },
         {
@@ -13213,6 +13318,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "68FC8051-B204-4960-A113-33F448A68E66"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:59.487Z",
+            "checksum": "007d11e0639993894011ce33e2996e3937f90314067f6a3f92a6426f6844e824"
           }
         }
       ],
@@ -13225,14 +13337,28 @@
             "Status": "Active",
             "Currency": "USD",
             "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
-            "InputPricePerUnit": 0.60,
-            "OutputPricePerUnit": 2.50,
+            "InputPricePerUnit": 0.6,
+            "OutputPricePerUnit": 2.5,
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "Kimi K2.6 launch pricing on Moonshot direct API as of April 20, 2026: $0.60/$2.50 per 1M tokens. Some aggregator pages quote $0.74/$3.49 (likely a different SKU/tier or post-launch adjustment) - the official launch announcement quoted $0.60/$2.50. Verify on platform.moonshot.ai before relying on this price for billing. Sources: https://www.kimi.com/blog/kimi-k2-6 ; https://huggingface.co/moonshotai/Kimi-K2.6"
+          },
+          "primaryKey": {
+            "ID": "4AFC2907-E94D-40D9-9784-9ABD4604E0D7"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:59.501Z",
+            "checksum": "fb41bf54d89b76b6c0f3dff46fae173cb2f06d863fd6d75525fae6ecf48f9d2f"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "90456F5D-3603-4A93-ACB6-86F06A657AAA"
+    },
+    "sync": {
+      "lastModified": "2026-05-08T00:53:58.300Z",
+      "checksum": "bab5ea77e8e833c8aed50a67fcaedbef53a771532a68112648e1ce3b6524b9e3"
     }
   },
   {
@@ -13258,6 +13384,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "CCA4E253-2B87-4BFE-84F0-AE5013E3F2E2"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:58.355Z",
+            "checksum": "b8f38a4bc5d3a391015a854ecb25f51b689cc95c790da90694692a2eff7d9ae4"
           }
         },
         {
@@ -13274,6 +13407,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "567E9DE2-008F-424C-887F-55DA04873338"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:58.396Z",
+            "checksum": "b80893cc92f15ccce8434632fc04ce2703d6625a5aa88e364c8c90c7c1e27e2a"
           }
         }
       ],
@@ -13291,9 +13431,23 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "DeepSeek V4 Pro list pricing on DeepSeek direct API as of April 24, 2026 launch: $1.74/$3.48 per 1M tokens. A 75% promotional discount is in effect through 2026-05-31 15:59 UTC, bringing effective price to $0.435/$0.87 per 1M tokens. Cache-hit input pricing is 1/10 of launch price (effective from 2026-04-26). Sources: https://api-docs.deepseek.com/quick_start/pricing ; https://api-docs.deepseek.com/news/news260424"
+          },
+          "primaryKey": {
+            "ID": "702B44C3-0806-49EE-98DD-A457B5F0FF31"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:58.444Z",
+            "checksum": "1a23fc2a5167107300907202e6eb0c0e9cb508ac1b7fc8755bf343593b7cde5b"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "DCDD6683-779F-4B03-89B5-746F95BB5293"
+    },
+    "sync": {
+      "lastModified": "2026-05-08T00:53:51.530Z",
+      "checksum": "faadd61144eeeb90518a3a22f71003678fb806df7095d6ef807a5e3cfc1f0c27"
     }
   },
   {
@@ -13319,6 +13473,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": false,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "D71D9609-4DD5-442D-BBFF-76963132E5B8"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:58.378Z",
+            "checksum": "b8f38a4bc5d3a391015a854ecb25f51b689cc95c790da90694692a2eff7d9ae4"
           }
         },
         {
@@ -13335,6 +13496,13 @@
             "SupportsEffortLevel": false,
             "SupportsStreaming": true,
             "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "F874BA7C-C6DD-4281-9300-9B71F4C11416"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:58.411Z",
+            "checksum": "1ce544dd7134def09ed51420424bd85b5fb5064fa2424d351c725b4848c6be2e"
           }
         }
       ],
@@ -13352,9 +13520,23 @@
             "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
             "ProcessingType": "Realtime",
             "Comments": "DeepSeek V4 Flash pricing on DeepSeek direct API as of April 24, 2026 launch: $0.14/$0.28 per 1M tokens. Sources: https://api-docs.deepseek.com/quick_start/pricing ; https://api-docs.deepseek.com/news/news260424"
+          },
+          "primaryKey": {
+            "ID": "738963AB-9706-4DD5-87F0-B424BB87CBB0"
+          },
+          "sync": {
+            "lastModified": "2026-05-08T00:53:58.461Z",
+            "checksum": "ea5d8c681c5b62cf4a7e4e5b50e186f2cc2f1747ca121c4e01a6b4e7b4e25a68"
           }
         }
       ]
+    },
+    "primaryKey": {
+      "ID": "F69FA7A1-B8EF-463F-956D-54A9388BB70F"
+    },
+    "sync": {
+      "lastModified": "2026-05-08T00:53:51.673Z",
+      "checksum": "b87c76fc92e1cdd3523dc1337e88a1de3c5d0c33b0c63c51eefe0321bfe39208"
     }
   }
 ]

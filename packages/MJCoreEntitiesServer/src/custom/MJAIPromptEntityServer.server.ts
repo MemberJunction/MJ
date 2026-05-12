@@ -130,7 +130,7 @@ export class MJAIPromptEntityServer extends MJAIPromptEntityExtended {
                 const result = new BaseEntityResult();
                 result.Success = false;
                 result.Message = "Failed to create linked Template for the AI Prompt. Please check the logs for more details.";
-                this.ResultHistory.push(result);
+                this.RegisterResultHistoryEntry(result);
             }
         }
         else if (this.TemplateID && this.TemplateText?.trim().length > 0 && this.TemplateTextDirty) {
@@ -141,7 +141,7 @@ export class MJAIPromptEntityServer extends MJAIPromptEntityExtended {
                 const result = new BaseEntityResult();
                 result.Success = false;
                 result.Message = "Failed to update linked Template Contents for the AI Prompt. Please check the logs for more details.";
-                this.ResultHistory.push(result);
+                this.RegisterResultHistoryEntry(result);
             }
         }
         if (success) {

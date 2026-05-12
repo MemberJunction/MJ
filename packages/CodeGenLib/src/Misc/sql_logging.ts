@@ -133,9 +133,15 @@ export class SQLLogging {
             // Normalize: strip any trailing whitespace and ensure the content ends with `;`
             // before adding spacing. Multiple `;`s are harmless in both T-SQL and PG, so
             // call sites that already include a terminator pay nothing.
+            //
+            // EXCEPTION: T-SQL `GO` is a batch separator, not a statement — emitters like
+            // generateBaseView / generateCRUDCreate / generateRootIDFunction return strings
+            // ending in `GO`. Appending `;` produces `GO;`, which SSMS and sqlcmd reject
+            // ("Incorrect syntax near ';'"). Detect and skip the `;` append in that case.
             const trimmed = contents.replace(/[\s;]+$/g, '');
             if (trimmed.length > 0) {
-                contents = `${trimmed};`;
+                const endsWithBatchSeparator = /(^|\n)\s*GO\s*$/i.test(trimmed);
+                contents = endsWithBatchSeparator ? trimmed : `${trimmed};`;
             }
 
             contents = includeBatchSeparator

@@ -1338,6 +1338,7 @@ NumberedRows AS (
                                    sf.FieldName = '${EntityInfo.DeletedAtFieldName}' OR
                                    pk.ColumnName IS NOT NULL, 0, 1)) AllowUpdateAPI,
       sf.IsVirtual,
+      sf.IsComputed,
       e.RelationshipDefaultDisplayType,
       e.Name EntityName,
       re.ID RelatedEntityID,

@@ -974,7 +974,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * and must not be deduplicated.
      */
     private ShouldBypassDedup(params: RunViewParams[]): boolean {
-        return params.some(p => p.SaveViewResults === true);
+        // BypassCache:true MUST bypass the dedup-linger cache as well —
+        // otherwise the "skip the cache to see DB truth" contract leaks: a
+        // recent identical RunView (within DedupLingerMs) would return its
+        // cached result even when the caller explicitly asked for a fresh
+        // read. Permission resolvers and other security-critical paths rely
+        // on BypassCache being a hard cache bypass; without this, freshly
+        // revoked grants stay visible through the linger window.
+        // SaveViewResults bypasses for the original reason: it creates DB
+        // records and must not be deduplicated.
+        return params.some(p => p.SaveViewResults === true || p.BypassCache === true);
     }
 
     /**

@@ -65,6 +65,9 @@ import { MJTestRubricFormComponentExtended } from "./Tests/test-rubric-form.comp
 import { EntityLinkPillComponent } from "./Tests/entity-link-pill.component";
 import { MJListFormComponentExtended } from "./Lists/list-form.component";
 import { MJContentSourceFormComponentExtended } from "./ContentSources/content-source-form.component";
+import { MJSearchScopeFormComponentExtended } from "./SearchScopes/searchscope-form.component";
+import { MJSearchScopeProviderFormComponentExtended } from "./SearchScopes/searchscopeprovider-form.component";
+import { SearchModule } from "@memberjunction/ng-search";
 
 @NgModule({
     declarations: [
@@ -108,6 +111,8 @@ import { MJContentSourceFormComponentExtended } from "./ContentSources/content-s
         EntityLinkPillComponent,
         MJListFormComponentExtended,
         MJContentSourceFormComponentExtended,
+        MJSearchScopeFormComponentExtended,
+        MJSearchScopeProviderFormComponentExtended,
     ],
     imports: [
         CommonModule,
@@ -146,7 +151,8 @@ import { MJContentSourceFormComponentExtended } from "./ContentSources/content-s
         MarkdownModule,
         NgTreesModule,
         AngularSplitModule,
-        VersionsModule
+        VersionsModule,
+        SearchModule
     ],
     exports: [
         MJEntityFormComponentExtended,
@@ -174,6 +180,8 @@ import { MJContentSourceFormComponentExtended } from "./ContentSources/content-s
         EntityLinkPillComponent,
         MJListFormComponentExtended,
         MJContentSourceFormComponentExtended,
+        MJSearchScopeFormComponentExtended,
+        MJSearchScopeProviderFormComponentExtended,
         ActionsModule
     ],
     providers: [

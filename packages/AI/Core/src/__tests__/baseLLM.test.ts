@@ -236,4 +236,121 @@ describe('BaseLLM', () => {
             expect(result.thinking).toBe('My thinking');
         });
     });
+
+    describe('Streaming state reset (memory-leak fix R2-C5)', () => {
+        // Subclass that tracks resetStreamingState calls + accumulates buffer
+        // so we can assert the base orchestrator resets it on success AND error.
+        class StateTrackingLLM extends TestLLM {
+            public resetCallCount = 0;
+            public bufferAtFinalize: string | null = null;
+            public buffer = '';
+            public throwOnStream = false;
+
+            public override get SupportsStreaming(): boolean {
+                return true;
+            }
+
+            constructor() {
+                super('test-key');
+            }
+
+            protected resetStreamingState(): void {
+                this.resetCallCount++;
+                this.buffer = '';
+            }
+
+            protected processStreamingChunk(chunk: string): { content: string } {
+                this.buffer += chunk;
+                return { content: chunk };
+            }
+
+            protected async createStreamingRequest(): Promise<AsyncIterable<string>> {
+                if (this.throwOnStream) {
+                    throw new Error('boom');
+                }
+                const self = this;
+                return {
+                    async *[Symbol.asyncIterator]() {
+                        yield 'a';
+                        yield 'b';
+                    }
+                };
+            }
+
+            protected finalizeStreamingResponse(
+                accumulatedContent: string | null | undefined,
+                _lastChunk: string | null | undefined,
+                _usage: Record<string, number> | null | undefined
+            ): ChatResult {
+                // Capture the accumulated buffer BEFORE the finally clears it.
+                this.bufferAtFinalize = this.buffer;
+                const r = new ChatResult(true, new Date(), new Date());
+                r.data = {
+                    choices: [{ message: { role: 'assistant', content: accumulatedContent || '' }, finish_reason: 'stop', index: 0 }],
+                    usage: { promptTokens: 0, completionTokens: 0, totalTokens: 0 } as never
+                };
+                return r;
+            }
+        }
+
+        it('resets state at start AND in finally on success', async () => {
+            const trackingLlm = new StateTrackingLLM();
+            const params = new ChatParams();
+            params.model = 'test-model';
+            params.messages = [{ role: 'user', content: 'hi' }];
+            params.streaming = true;
+            params.streamingCallbacks = { OnContent: () => {} };
+
+            await trackingLlm.ChatCompletion(params);
+
+            // Two resets: one at the start, one in finally.
+            expect(trackingLlm.resetCallCount).toBe(2);
+            // finalizeStreamingResponse saw the accumulated buffer before the reset.
+            expect(trackingLlm.bufferAtFinalize).toBe('ab');
+            // After the request, the buffer is cleared.
+            expect(trackingLlm.buffer).toBe('');
+        });
+
+        it('resets state in finally even when the stream throws', async () => {
+            const trackingLlm = new StateTrackingLLM();
+            trackingLlm.throwOnStream = true;
+            const params = new ChatParams();
+            params.model = 'test-model';
+            params.messages = [{ role: 'user', content: 'hi' }];
+            params.streaming = true;
+            params.streamingCallbacks = { OnContent: () => {}, OnError: () => {} };
+
+            // handleStreamingChatCompletion rejects with a ChatResult on stream errors.
+            const result = await trackingLlm.ChatCompletion(params).catch((r: ChatResult) => r);
+
+            expect(result.success).toBe(false);
+            // Reset called both at start (before throw) and in finally.
+            expect(trackingLlm.resetCallCount).toBe(2);
+            expect(trackingLlm.buffer).toBe('');
+        });
+
+        it('does NOT bleed state across consecutive requests on the same instance', async () => {
+            const trackingLlm = new StateTrackingLLM();
+            const params = new ChatParams();
+            params.model = 'test-model';
+            params.messages = [{ role: 'user', content: 'hi' }];
+            params.streaming = true;
+            params.streamingCallbacks = { OnContent: () => {} };
+
+            await trackingLlm.ChatCompletion(params);
+            const bufferAfterFirst = trackingLlm.buffer;
+            await trackingLlm.ChatCompletion(params);
+
+            // Buffer was cleared between requests by the finally block.
+            expect(bufferAfterFirst).toBe('');
+            expect(trackingLlm.buffer).toBe('');
+            // 4 total resets across 2 requests (start + finally each).
+            expect(trackingLlm.resetCallCount).toBe(4);
+        });
+
+        it('default base-class resetStreamingState is a no-op', () => {
+            // Calling reset on a vanilla TestLLM doesn't throw and has no observable effect.
+            expect(() => (llm as unknown as { resetStreamingState(): void }).resetStreamingState()).not.toThrow();
+        });
+    });
 });

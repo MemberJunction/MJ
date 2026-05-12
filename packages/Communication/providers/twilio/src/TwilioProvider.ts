@@ -15,7 +15,7 @@ import {
   validateRequiredCredentials,
   ProviderOperation
 } from "@memberjunction/communication-types";
-import { RegisterClass } from "@memberjunction/global";
+import { RegisterClass, MJLruCache } from "@memberjunction/global";
 import { LogError, LogStatus } from "@memberjunction/core";
 import twilio, { Twilio } from 'twilio';
 import * as Config from "./config";
@@ -60,8 +60,16 @@ export class TwilioProvider extends BaseCommunicationProvider {
   /** Cached Twilio client for environment credentials */
   private envTwilioClient: Twilio | null = null;
 
-  /** Cache of Twilio clients for per-request credentials */
-  private clientCache: Map<string, Twilio> = new Map();
+  /**
+   * Cache of Twilio clients keyed by accountSid for per-request credentials.
+   * Bounded LRU(100) + 1-hour TTL — prior unbounded `Map` retained credential-
+   * derived clients indefinitely in multi-tenant deployments and effectively
+   * pinned secrets in memory past their useful life. See audit R2-C3.
+   */
+  private clientCache: MJLruCache<string, Twilio> = new MJLruCache<string, Twilio>({
+    maxSize: 100,
+    ttlMs: 60 * 60 * 1000,
+  });
 
   /**
    * Returns the list of operations supported by the Twilio provider.
@@ -125,11 +133,11 @@ export class TwilioProvider extends BaseCommunicationProvider {
 
     // For per-request credentials, use cached client by credential key
     const cacheKey = `${creds.accountSid}`;
-    let client = this.clientCache.get(cacheKey);
+    let client = this.clientCache.Get(cacheKey);
 
     if (!client) {
       client = twilio(creds.accountSid, creds.authToken);
-      this.clientCache.set(cacheKey, client);
+      this.clientCache.Set(cacheKey, client);
     }
 
     return client;

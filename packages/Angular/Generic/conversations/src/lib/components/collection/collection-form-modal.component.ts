@@ -239,20 +239,17 @@ export class CollectionFormModalComponent extends BaseAngularComponent implement
         // If creating new collection, set up permissions
         if (!this.collection) {
           if (this.parentCollection) {
-            // Child collection - copy all permissions from parent (including owner)
+            // Child collection - copy non-owner permissions from parent.
+            // (The owner gets implicit full access via OwnerID; no self-share row is written.)
             await this.permissionService.copyParentPermissions(
               this.parentCollection.ID,
               collection.ID,
               this.currentUser
             );
-          } else {
-            // Root collection - create owner permission for current user
-            await this.permissionService.createOwnerPermission(
-              collection.ID,
-              this.currentUser.ID,
-              this.currentUser
-            );
           }
+          // Root collection: nothing to do. CollectionPermissionProvider treats OwnerID as
+          // an implicit full-access grant — writing a self-share row was redundant and was
+          // failing server-side auth on freshly-created collections.
         }
 
         this.toastService.success(

@@ -259,6 +259,56 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Search Scope Providers Section -->
+    <mj-collapsible-panel
+        SectionKey="mJSearchScopeProviders"
+        SectionName="Search Scope Providers"
+        Icon="fa fa-search-plus"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJSearchScopeProviders')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope Providers','QueryTransformTemplateID')"
+                [NewRecordValues]="NewRecordValues('MJ: Search Scope Providers')"
+                [AllowLoad]="IsSectionExpanded('mJSearchScopeProviders')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJSearchScopeProviders', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- AI Agent Search Scopes Section -->
+    <mj-collapsible-panel
+        SectionKey="mJAIAgentSearchScopes"
+        SectionName="AI Agent Search Scopes"
+        Icon="fa fa-search-plus"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJAIAgentSearchScopes')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: AI Agent Search Scopes','QueryTemplateID')"
+                [NewRecordValues]="NewRecordValues('MJ: AI Agent Search Scopes')"
+                [AllowLoad]="IsSectionExpanded('mJAIAgentSearchScopes')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJAIAgentSearchScopes', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Entity Documents Section -->
     <mj-collapsible-panel
         SectionKey="mJEntityDocuments"

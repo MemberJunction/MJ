@@ -208,7 +208,7 @@
                 <i class="fa-solid fa-timeline"></i>
               </button>
             }
-            @if (selectedEntity?.SupportsGeoCoding) {
+            @if (selectedEntity.SupportsGeoCoding) {
               <button
                 class="toggle-btn"
                 [class.active]="state.viewMode === 'map'"
