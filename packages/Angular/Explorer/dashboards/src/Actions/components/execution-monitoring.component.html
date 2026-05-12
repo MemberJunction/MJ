@@ -1,54 +1,41 @@
-<div class="execution-monitoring" >
-  <!-- Header with filters -->
-  <div class="monitoring-header">
-    <div class="header-title">
-      <h3><i class="fa-solid fa-chart-line"></i> Execution Monitoring</h3>
-      <button mjButton variant="primary" (click)="refreshData()" class="refresh-btn">
-        <i class="fa-solid fa-refresh"></i> Refresh
+<mj-page-layout>
+  <mj-page-header
+    Title="Execution Monitor"
+    Icon="fa-solid fa-chart-line"
+    Subtitle="Action execution history, latency, and error rates">
+    <div meta class="actions-header-meta">
+      <mj-result-count
+        [Count]="metrics.totalExecutions"
+        Label="executions">
+      </mj-result-count>
+    </div>
+    <div actions class="actions-header-actions">
+      <mj-filter-popover
+        [ActiveCount]="ActiveFilterCount"
+        [ShowClearAll]="ActiveFilterCount > 0"
+        (ClearAllRequested)="resetFilters()">
+        <mj-filter-panel
+          [Fields]="FilterFields"
+          [Values]="FilterValues"
+          (ValuesChange)="onFilterValuesChange($event)"
+          (Reset)="resetFilters()">
+        </mj-filter-panel>
+      </mj-filter-popover>
+      <button mjButton variant="secondary" size="sm" (click)="refreshData()" title="Refresh">
+        <i class="fa-solid fa-arrows-rotate"></i> Refresh
       </button>
     </div>
-    
-    <div class="filters-row">
-      <div class="search-container">
-        <div class="search-input-wrapper">
-          <i class="fa-solid fa-search search-icon"></i>
-          <input type="text" class="mj-input"
-            placeholder="Search executions..."
-            [value]="searchTerm$.value"
-            (input)="onSearchChange($any($event.target).value)" />
-        </div>
-      </div>
-
-      <div class="filter-group">
-        <mj-dropdown
-          [Data]="timeRangeOptions"
-          TextField="text"
-          ValueField="value"
-          [ValuePrimitive]="true"
-          [ngModel]="selectedTimeRange$.value"
-          (ValueChange)="onTimeRangeChange($any($event))">
-        </mj-dropdown>
-
-        <mj-dropdown
-          [Data]="resultOptions"
-          TextField="text"
-          ValueField="value"
-          [ValuePrimitive]="true"
-          [ngModel]="selectedResult$.value"
-          (ValueChange)="onResultFilterChange($any($event))">
-        </mj-dropdown>
-
-        <mj-dropdown
-          [Data]="actionOptions"
-          TextField="text"
-          ValueField="value"
-          [ValuePrimitive]="true"
-          [ngModel]="selectedAction$.value"
-          (ValueChange)="onActionFilterChange($any($event))">
-        </mj-dropdown>
-      </div>
+    <div toolbar>
+      <mj-page-search
+        Placeholder="Search executions..."
+        [Value]="searchTerm$.value"
+        (ValueChange)="onSearchChange($event)">
+      </mj-page-search>
     </div>
-  </div>
+  </mj-page-header>
+
+  <div class="actions-body">
+  <div class="execution-monitoring" >
 
   <!-- Metrics Summary -->
   <div class="metrics-summary">
@@ -210,3 +197,5 @@
     </div>
   }
 </div>
+  </div>
+</mj-page-layout>

@@ -37,26 +37,41 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
       min-width: 220px;
     }
 
+    /* Compact toolbar density (32px) to match mjButton size="sm" and other
+       header widgets. White background + border-default for visual differentiation
+       on both the page-header (white) and body (sunken) surfaces.
+       Note: this is intentionally tighter than .mj-input (38px) because
+       mj-page-search is a toolbar widget, not a form field. */
     .mj-page-search {
       display: flex;
       align-items: center;
       gap: 8px;
       width: 100%;
-      padding: 6px 12px;
-      background: var(--mj-bg-surface-card);
+      padding: 4px 12px;
+      font-family: var(--mj-font-family);
+      font-size: var(--mj-text-sm);
+      line-height: 1.5;
+      color: var(--mj-text-primary);
+      background: var(--mj-bg-surface);
       border: 1px solid var(--mj-border-default);
-      border-radius: var(--mj-radius-md);
-      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+      border-radius: var(--mj-radius-sm);
+      transition: var(--mj-transition-colors), box-shadow var(--mj-transition-base);
+      min-height: 32px;
+      box-sizing: border-box;
+    }
+
+    .mj-page-search:hover {
+      border-color: var(--mj-border-strong);
     }
 
     .mj-page-search--focused {
       border-color: var(--mj-brand-primary);
-      box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
+      box-shadow: var(--mj-focus-ring);
     }
 
     .mj-page-search i {
       color: var(--mj-text-muted);
-      font-size: 12px;
+      font-size: 13px;
       flex-shrink: 0;
     }
 
@@ -66,13 +81,12 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
       outline: none;
       background: transparent;
       font: inherit;
-      font-size: 13px;
       color: var(--mj-text-primary);
       min-width: 0;
     }
 
     .mj-page-search input::placeholder {
-      color: var(--mj-text-muted);
+      color: var(--mj-text-disabled);
     }
   `]
 })

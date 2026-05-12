@@ -88,7 +88,6 @@ export {
   // Action Explorer components
   ActionExplorerComponent,
   ActionTreePanelComponent,
-  ActionToolbarComponent,
   ActionBreadcrumbComponent,
   ActionCardComponent,
   ActionListItemComponent,

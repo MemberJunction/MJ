@@ -1,7 +1,17 @@
 import { NgModule } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
-import { MJButtonDirective, MJDropdownComponent } from '@memberjunction/ng-ui-components';
+import {
+  MJButtonDirective,
+  MJDropdownComponent,
+  MJPageHeaderComponent,
+  MJPageLayoutComponent,
+  MJPageSearchComponent,
+  MJFilterPopoverComponent,
+  MJFilterPanelComponent,
+  MJResultCountComponent,
+  MJViewToggleComponent
+} from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
 import { ActionGalleryModule } from '@memberjunction/ng-action-gallery';
@@ -23,7 +33,6 @@ import { CategoriesListViewComponent } from './Actions/components/categories-lis
 import {
   ActionExplorerComponent,
   ActionTreePanelComponent,
-  ActionToolbarComponent,
   ActionBreadcrumbComponent,
   ActionCardComponent,
   ActionListItemComponent,
@@ -48,7 +57,6 @@ import {
     CategoriesListViewComponent,
     ActionExplorerComponent,
     ActionTreePanelComponent,
-    ActionToolbarComponent,
     ActionBreadcrumbComponent,
     ActionCardComponent,
     ActionListItemComponent,
@@ -61,6 +69,13 @@ import {
     ReactiveFormsModule,
     MJButtonDirective,
     MJDropdownComponent,
+    MJPageHeaderComponent,
+    MJPageLayoutComponent,
+    MJPageSearchComponent,
+    MJFilterPopoverComponent,
+    MJFilterPanelComponent,
+    MJResultCountComponent,
+    MJViewToggleComponent,
     ContainerDirectivesModule,
     CodeEditorModule,
     ActionGalleryModule,
@@ -77,7 +92,6 @@ import {
     SecurityPermissionsComponent,
     ActionExplorerComponent,
     ActionTreePanelComponent,
-    ActionToolbarComponent,
     ActionBreadcrumbComponent,
     ActionCardComponent,
     ActionListItemComponent,

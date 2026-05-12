@@ -8,7 +8,7 @@
 
 We're consolidating the dashboard header chrome of MJ Explorer into a small set of shared components in `@memberjunction/ng-ui-components`, then migrating each dashboard to use them. Per-page CSS for the header strip is being deleted as we go — the goal is that future drift is impossible because the styles live in exactly one place.
 
-So far: **6 shared components** built, **36 dashboards** fully migrated (MCP, 6 AI sub-pages, 3 Lists pages, all 5 Communication pages, Scheduling + 3 Scheduling resources, all 5 Credentials pages, File Browser, all 4 Version History pages, 8 Knowledge Hub pages). **Remaining bespoke headers** in Template A: APIKeys, Settings, Testing + the Template B group.
+So far: **6 shared components** built, **39 dashboards** fully migrated (MCP, 6 AI sub-pages, 3 Lists pages, all 5 Communication pages, Scheduling + 3 Scheduling resources, all 5 Credentials pages, File Browser, all 4 Version History pages, 8 Knowledge Hub pages, all 3 Actions pages). **Remaining bespoke headers** in Template A: APIKeys, Settings, Testing + the Template B group.
 
 ## Shared components (lives in `@memberjunction/ng-ui-components`)
 
@@ -63,6 +63,9 @@ All 5 are standalone, design-token-only, PascalCase API.
 | Knowledge Hub — Clusters | ✅ | ✅ | n/a | n/a | n/a | "New Analysis" in `[actions]`. Internal Saved-Clusters sidebar kept (selection-of-context pattern). |
 | Knowledge Hub — Analytics | ✅ | ✅ | n/a | n/a | n/a | Pipeline health pill in `[meta]`. Internal left-nav kept (multi-section page). |
 | Knowledge Hub — Pipelines (Scheduling) | ✅ | ✅ | ✅ | ✅ | n/a | Active/paused counts in `[meta]`; "New Schedule" in `[actions]`; search + status dropdown in `[toolbar]`. |
+| Actions — Overview | ✅ | ✅ | ✅ | ✅ | ✅ | Result count in `[meta]`; popover for Status + Type; search in `[toolbar]`. |
+| Actions — Monitor | ✅ | ✅ | ✅ | ✅ | ✅ | Result count in `[meta]`; popover for Time range + Result + Action (filterable); Refresh in `[actions]`; search in `[toolbar]`. |
+| Actions — Explorer | ✅ | ✅ | ✅ | ✅ | ✅ | **FULLY HOISTED.** Page-header owns search + active-filter chips in `[toolbar]`, filter-popover + sort dropdown + view-toggle + Refresh + New Action in `[actions]`, result-count in `[meta]`. The `<mj-action-toolbar>` sub-component (HTML + CSS + TS) was deleted entirely — only used by action-explorer, all helpers consolidated onto the parent. Sort dropdown + active-filter chips kept bespoke (no shared equivalents yet). |
 
 ## Pages NOT yet migrated
 
