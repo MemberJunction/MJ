@@ -1,11 +1,24 @@
-<!-- Tags Dashboard -->
-<div class="at-dashboard">
+<mj-page-layout>
+  <mj-page-header
+    Title="Tags"
+    Icon="fa-solid fa-sitemap"
+    Subtitle="Taxonomy management, health monitoring, and tag library">
+    <div actions class="kh-header-actions">
+      <button mjButton variant="secondary" size="sm" (click)="RunHealthNow()" [disabled]="HealthRunning">
+        @if (HealthRunning) {
+          <i class="fa-solid fa-spinner fa-spin"></i> Running…
+        } @else {
+          <i class="fa-solid fa-heart-pulse"></i> Run Tag Health
+        }
+      </button>
+    </div>
+  </mj-page-header>
+
+  <!-- Tags Dashboard -->
+  <div class="at-dashboard">
 
     <!-- ══════ LEFT NAV ══════ -->
     <div class="at-left-nav">
-        <div class="at-left-nav-header">
-            <h2><i class="fa-solid fa-sitemap"></i> Tags</h2>
-        </div>
         <div class="at-left-nav-items">
             @for (item of NavItems; track item.Tab) {
                 <div class="at-nav-item" [class.active]="ActiveTab === item.Tab" (click)="SwitchTab(item.Tab)">
@@ -15,15 +28,6 @@
                     }
                 </div>
             }
-        </div>
-        <div class="at-left-nav-footer">
-            <button class="at-run-pipeline-btn" (click)="RunHealthNow()" [disabled]="HealthRunning">
-                @if (HealthRunning) {
-                    <i class="fa-solid fa-spinner fa-spin"></i> Running…
-                } @else {
-                    <i class="fa-solid fa-heart-pulse"></i> Run Tag Health
-                }
-            </button>
         </div>
     </div>
 
@@ -1407,4 +1411,5 @@
         </div>
     }
 
-</div>
+  </div>
+</mj-page-layout>

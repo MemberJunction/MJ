@@ -23,6 +23,7 @@ import {
 } from '@memberjunction/core-entities';
 import { RegisterClass, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { BaseResourceComponent, NavigationService } from '@memberjunction/ng-shared';
+import { ViewToggleOption } from '@memberjunction/ng-ui-components';
 import { KPICardData } from '../widgets/kpi-card.component';
 import { GraphQLDataProvider, GraphQLAIClient } from '@memberjunction/graphql-dataprovider';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -76,6 +77,11 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
     /** View mode: 'index' = Option A (shared index as hero, entity docs as children),
      *  'operations' = Option C (operations monitoring with real-time sync status) */
     public ViewMode: 'index' | 'operations' = 'index';
+
+    public readonly VectorViewOptions: ViewToggleOption[] = [
+        { key: 'index', icon: 'fa-solid fa-cubes', title: 'Index View' },
+        { key: 'operations', icon: 'fa-solid fa-gauge-high', title: 'Operations View' }
+    ];
 
     /** Whether this component is embedded inside the Knowledge Hub shell */
     @Input() EmbeddedMode = false;

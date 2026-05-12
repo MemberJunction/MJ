@@ -1,20 +1,33 @@
+@if (!EmbeddedMode) {
+  <mj-page-layout>
+    <mj-page-header
+      Title="Vector Management"
+      Icon="fa-solid fa-cubes"
+      Subtitle="Vector index health, embeddings, and entity sync status">
+      <div actions class="kh-header-actions">
+        <mj-view-toggle
+          [Options]="VectorViewOptions"
+          [ActiveKey]="ViewMode"
+          (KeyChange)="ViewMode = $any($event)">
+        </mj-view-toggle>
+      </div>
+    </mj-page-header>
+    <div class="vector-body">
+      <ng-container *ngTemplateOutlet="vectorBody"></ng-container>
+    </div>
+  </mj-page-layout>
+}
+@if (EmbeddedMode) {
+  <ng-container *ngTemplateOutlet="vectorBody"></ng-container>
+}
+
+<ng-template #vectorBody>
 @if (IsLoading) {
   <div class="vector-loading">
     <mj-loading text="Loading vector management data..."></mj-loading>
   </div>
 } @else {
   <div class="vector-dashboard">
-    <!-- View Mode Toggle -->
-    @if (!EmbeddedMode) {
-      <div class="view-mode-toggle">
-        <button class="view-mode-btn" [class.view-mode-btn-active]="ViewMode === 'index'" (click)="ViewMode = 'index'">
-          <i class="fa-solid fa-cubes"></i> Index View
-        </button>
-        <button class="view-mode-btn" [class.view-mode-btn-active]="ViewMode === 'operations'" (click)="ViewMode = 'operations'">
-          <i class="fa-solid fa-gauge-high"></i> Operations
-        </button>
-      </div>
-    }
 
     <!-- KPI Cards Row -->
     <div class="kpi-row">
@@ -583,3 +596,4 @@
     </div>
   }
 }
+</ng-template>

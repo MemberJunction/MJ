@@ -8,7 +8,7 @@
 
 We're consolidating the dashboard header chrome of MJ Explorer into a small set of shared components in `@memberjunction/ng-ui-components`, then migrating each dashboard to use them. Per-page CSS for the header strip is being deleted as we go — the goal is that future drift is impossible because the styles live in exactly one place.
 
-So far: **6 shared components** built, **28 dashboards** fully migrated (MCP, 6 AI sub-pages, 3 Lists pages, all 5 Communication pages, Scheduling + 3 Scheduling resources, all 5 Credentials pages, File Browser, all 4 Version History pages). **Remaining bespoke headers** in Template A: APIKeys, Settings, Testing + the Template B group.
+So far: **6 shared components** built, **36 dashboards** fully migrated (MCP, 6 AI sub-pages, 3 Lists pages, all 5 Communication pages, Scheduling + 3 Scheduling resources, all 5 Credentials pages, File Browser, all 4 Version History pages, 8 Knowledge Hub pages). **Remaining bespoke headers** in Template A: APIKeys, Settings, Testing + the Template B group.
 
 ## Shared components (lives in `@memberjunction/ng-ui-components`)
 
@@ -54,7 +54,15 @@ All 5 are standalone, design-token-only, PascalCase API.
 | Version History — Labels | ✅ | ✅ | ✅ | ✅ | ✅ | Popover for Scope + Status; view-toggle (card/list); result-count in `[meta]`; Create Label + Refresh in `[actions]`. |
 | Version History — Diff Viewer | ✅ | ✅ | n/a | n/a | n/a | Minimal chrome — page is a configurator (mode selector + label dropdowns + Compare button), with results toolbar that lives in the body. |
 | Version History — Restore History | ✅ | ✅ | ✅ | n/a | n/a | result-count in `[meta]`; quick-filter chips (Complete / Error / Partial) in `[toolbar]`; Refresh in `[actions]`. |
-| Version History — Dependency Graph | ✅ | ✅ | n/a | n/a | n/a | Three stat badges (entities / with dependents / relationships) in `[meta]`; Refresh in `[actions]`. Entity list panel keeps its own search + schema chips since they scope to the panel. |
+| Version History — Dependency Graph | ✅ | ✅ | ✅ | ✅ | n/a | Three stat badges in `[meta]`; Refresh in `[actions]`; entity-list search + per-schema filter chips hoisted into `[toolbar]`. |
+| Knowledge Hub — Configuration | ✅ | ✅ | n/a | n/a | n/a | "Unsaved changes" pill in `[meta]`; Reset + Save in `[actions]` (only when dirty). Internal left config-nav kept (settings pattern). |
+| Knowledge Hub — Duplicates | ✅ | ✅ | n/a | n/a | n/a | Entity-document selector + "Run Detection" in `[actions]`. |
+| Knowledge Hub — Tags | ✅ | ✅ | n/a | n/a | n/a | "Run Tag Health" in `[actions]`. Internal tab-nav left-rail kept (multi-section page). |
+| Knowledge Hub — Classify | ✅ | ✅ | n/a | n/a | n/a | "Run Pipeline" in `[actions]`. Internal tab-nav left-rail kept. |
+| Knowledge Hub — Vectors | ✅ | ✅ | n/a | n/a | n/a | View-toggle (Index / Operations) in `[actions]` — only rendered when `!EmbeddedMode`; shared via `*ngTemplateOutlet` so embedded usage skips the page-header wrapper. |
+| Knowledge Hub — Clusters | ✅ | ✅ | n/a | n/a | n/a | "New Analysis" in `[actions]`. Internal Saved-Clusters sidebar kept (selection-of-context pattern). |
+| Knowledge Hub — Analytics | ✅ | ✅ | n/a | n/a | n/a | Pipeline health pill in `[meta]`. Internal left-nav kept (multi-section page). |
+| Knowledge Hub — Pipelines (Scheduling) | ✅ | ✅ | ✅ | ✅ | n/a | Active/paused counts in `[meta]`; "New Schedule" in `[actions]`; search + status dropdown in `[toolbar]`. |
 
 ## Pages NOT yet migrated
 

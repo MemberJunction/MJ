@@ -1,3 +1,28 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Knowledge Hub Configuration"
+    Icon="fa-solid fa-cogs"
+    Subtitle="Pipeline, vector store, search, and automation settings">
+    <div meta class="kh-header-meta">
+      @if (HasUnsavedChanges) {
+        <span class="kh-stat-badge warning">
+          <i class="fa-solid fa-circle-exclamation"></i> Unsaved changes
+        </span>
+      }
+    </div>
+    <div actions class="kh-header-actions">
+      @if (HasUnsavedChanges) {
+        <button mjButton variant="secondary" size="sm" (click)="ResetConfiguration()" [disabled]="IsSaving" title="Discard unsaved changes">
+          <i class="fa-solid fa-arrow-rotate-left"></i> Reset
+        </button>
+        <button mjButton variant="primary" size="sm" (click)="SaveConfiguration()" [disabled]="IsSaving" title="Save all settings">
+          <i class="fa-solid fa-floppy-disk"></i> {{IsSaving ? 'Saving…' : 'Save'}}
+        </button>
+      }
+    </div>
+  </mj-page-header>
+
+  <div class="config-body">
 @if (IsLoading) {
     <div class="config-loading">
         <mj-loading text="Loading configuration..." size="medium"></mj-loading>
@@ -824,3 +849,5 @@
         </div>
     </div>
 }
+  </div>
+</mj-page-layout>

@@ -19,6 +19,23 @@
         <i class="fa-solid fa-arrows-rotate"></i> Refresh
       </button>
     </div>
+    <div toolbar class="vh-toolbar">
+      <mj-page-search
+        Placeholder="Filter entities..."
+        [Value]="SearchText"
+        (ValueChange)="OnSearchChange($event)">
+      </mj-page-search>
+      @if (AvailableSchemas.length > 1) {
+        @for (schema of AvailableSchemas; track schema) {
+          <mj-filter-chip
+            [Label]="schema"
+            [Count]="GetSchemaEntityCount(schema)"
+            [Active]="SchemaFilter === schema"
+            (Clicked)="OnSchemaFilterChange(schema)">
+          </mj-filter-chip>
+        }
+      }
+    </div>
   </mj-page-header>
 
   <div class="graph-body">
@@ -29,32 +46,8 @@
   @if (!IsLoading) {
     <!-- Main Layout: Entity List + Detail -->
     <div class="graph-layout">
-      <!-- Entity List -->
+      <!-- Entity List — page-header [toolbar] owns search + schema chips -->
       <div class="entity-list-panel">
-        <div class="panel-header">
-          <h3 class="panel-title">Entities</h3>
-        </div>
-        <div class="search-bar">
-          <i class="fa-solid fa-search search-icon"></i>
-          <input type="text"
-            class="search-input"
-            placeholder="Filter entities..."
-            [ngModel]="SearchText"
-            (ngModelChange)="OnSearchChange($event)" />
-        </div>
-        <!-- Schema Filter Chips -->
-        @if (AvailableSchemas.length > 1) {
-          <div class="schema-chips">
-            @for (schema of AvailableSchemas; track schema) {
-              <button class="schema-chip"
-                [class.active]="SchemaFilter === schema"
-                (click)="OnSchemaFilterChange(schema)">
-                {{schema}}
-                <span class="schema-chip-count">{{GetSchemaEntityCount(schema)}}</span>
-              </button>
-            }
-          </div>
-        }
         <div class="entity-scroll-list">
           @for (entity of FilteredEntities; track entity) {
             <div class="entity-list-item"
