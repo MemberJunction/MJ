@@ -37,6 +37,8 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnIni
   public appDescription: string = ''
   public useGenericForm: boolean = false;
   public loading: boolean = true;
+  public errorTitle: string | null = null;
+  public errorDetail: string | null = null;
 
   // Track dynamically created components and entities for cleanup
   private _formComponentRef: ComponentRef<BaseFormComponent> | null = null;
@@ -52,10 +54,12 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnIni
   }
 
   public async LoadForm(primaryKey: CompositeKey, entityName: string) {
-    
     // Perform any necessary actions with the ViewID, such as fetching data
     if (!entityName || entityName.trim().length === 0) {
-      return; // not ready to load
+      // No entity yet — caller will re-invoke once it has one. Don't emit loadComplete;
+      // it would race the real load. The shell's recovery timer will surface the
+      // "taking longer than expected" reset if this is the terminal state.
+      return;
     }
 
     this.entityName = entityName;
@@ -69,56 +73,120 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnIni
     }
 
     const formReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormComponent, entityName);
-    
+
     const md = this.ProviderToUse;
-    const entity = md.Entities.find(e => {
-      return e.Name === entityName
-    });
+    const entity = md.EntityByName(entityName);
     const permissions = entity?.GetUserPermisions(md.CurrentUser);
 
-    if (formReg) {
-      const record = await md.GetEntityObject<BaseEntity>(entityName);
-      if (record) {
-        if (primaryKey.HasValue) {
-          await record.InnerLoad(primaryKey);
-          // Log access to existing record (fire-and-forget, don't await)
-          this.recentAccessService.logAccess(entityName, primaryKey, 'record');
-        }
-        else {
-          record.NewRecord();
-          this.SetNewRecordValues(record);
-        }
-
-        // CRITICAL: Track the event handler subscription for cleanup
-        this._eventHandlerSubscription = record.RegisterEventHandler((eventType: BaseEntityEvent) => {
-          if (eventType.type === 'save')
-            this.recordSaved.emit(record);
-        });
-        
-        const viewContainerRef = this.formContainer.viewContainerRef;
-        viewContainerRef.clear();
-
-        const componentRef = viewContainerRef.createComponent<typeof formReg.SubClass>(formReg.SubClass);
-        
-        // Track component and record for cleanup
-        this._formComponentRef = componentRef;
-        this._currentRecord = record;
-        
-        componentRef.instance.record = record
-        componentRef.instance.userPermissions = permissions
-        componentRef.instance.EditMode = !primaryKey.HasValue; // for new records go direct into edit mode
-
-        // Subscribe to form @Output events and map them to Explorer services
-        this.subscribeToFormEvents(componentRef.instance);
-
-        this.useGenericForm = false;
-        this.loadComplete.emit();
+    try {
+      if (!entity) {
+        this.failWithUserError(
+          `Entity not found: "${entityName}"`,
+          `This MemberJunction instance has no metadata for entity "${entityName}". Check that the entity name in the URL matches a row in __mj.Entity, and that the metadata cache is current.`
+        );
+        return;
       }
-      else
-        throw new Error(`Unable to load entity ${entityName} with primary key values: ${primaryKey.ToString()}`);
+
+      if (!formReg) {
+        this.failWithUserError(
+          `No form is registered for "${entityName}".`,
+          `MemberJunction could not find an Angular form component registered against BaseFormComponent for entity "${entityName}". This usually means CodeGen has not generated a form for this entity in the running build (forms live under packages/MJExplorer or your app's entity-form package). Run CodeGen, ensure the generated module is imported, or register a custom form via @RegisterClass(BaseFormComponent, '${entityName}').`,
+          { entityId: entity.ID, recordKey: primaryKey?.ToString?.() ?? '(none)' }
+        );
+        return;
+      }
+
+      const record = await md.GetEntityObject<BaseEntity>(entityName);
+      if (!record) {
+        throw new Error(`Unable to instantiate entity ${entityName} with primary key values: ${primaryKey.ToString()}`);
+      }
+
+      if (primaryKey.HasValue) {
+        const loadOk = await record.InnerLoad(primaryKey);
+        if (!loadOk) {
+          this.failWithUserError(
+            `Could not load ${entityName} record.`,
+            record.LatestResult?.Message
+              ? `Server error: ${record.LatestResult.Message}`
+              : `InnerLoad returned false for entity "${entityName}" with key ${primaryKey.ToString()}. The record may not exist, you may lack permission to view it, or the load may have been blocked server-side.`,
+            { recordKey: primaryKey.ToString() }
+          );
+          return;
+        }
+        // Log access to existing record (fire-and-forget, don't await)
+        this.recentAccessService.logAccess(entityName, primaryKey, 'record');
+      }
+      else {
+        record.NewRecord();
+        this.SetNewRecordValues(record);
+      }
+
+      // CRITICAL: Track the event handler subscription for cleanup
+      this._eventHandlerSubscription = record.RegisterEventHandler((eventType: BaseEntityEvent) => {
+        if (eventType.type === 'save')
+          this.recordSaved.emit(record);
+      });
+
+      const viewContainerRef = this.formContainer.viewContainerRef;
+      viewContainerRef.clear();
+
+      const componentRef = viewContainerRef.createComponent<typeof formReg.SubClass>(formReg.SubClass);
+
+      // Track component and record for cleanup
+      this._formComponentRef = componentRef;
+      this._currentRecord = record;
+
+      componentRef.instance.record = record
+      componentRef.instance.userPermissions = permissions
+      componentRef.instance.EditMode = !primaryKey.HasValue; // for new records go direct into edit mode
+
+      // Subscribe to form @Output events and map them to Explorer services
+      this.subscribeToFormEvents(componentRef.instance);
+
+      this.useGenericForm = false;
+      this.errorTitle = null;
+      this.errorDetail = null;
+      this.loadComplete.emit();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      this.failWithUserError(
+        `Failed to load ${entityName} record.`,
+        `An unexpected error occurred while loading this record: ${msg}`,
+        { error: err }
+      );
     }
 
     this.loading = false;
+    this.cdr.detectChanges();
+  }
+
+  /**
+   * Render a user-visible error state inside the record pane AND log a structured
+   * console.error for developers. Always emits `loadComplete` so the Explorer shell
+   * does not hang on its first-resource-load gate.
+   */
+  private failWithUserError(title: string, detail: string, context?: Record<string, unknown>): void {
+    this.errorTitle = title;
+    this.errorDetail = detail;
+    this.loading = false;
+
+    // Single structured console.error for devs — easy to grep, easy to read.
+    console.error(
+      `[SingleRecord] ${title}\n${detail}` +
+        (context ? `\nContext: ${JSON.stringify(context, null, 2)}` : '')
+    );
+
+    // Clear any prior form/component so the error UI is what shows.
+    if (this._formComponentRef) {
+      try { this._formComponentRef.destroy(); } catch { /* noop */ }
+      this._formComponentRef = null;
+    }
+    if (this.formContainer?.viewContainerRef) {
+      this.formContainer.viewContainerRef.clear();
+    }
+
+    // Always unblock the shell.
+    this.loadComplete.emit();
     this.cdr.detectChanges();
   }
 
@@ -220,7 +288,16 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnIni
         this.navigationService.OpenEntityRecord(event.EntityName, event.PrimaryKey, { forceNewTab: event.OpenInNewTab });
         break;
       case 'new-record':
-        this.navigationService.OpenNewEntityRecord(event.EntityName, { newRecordValues: event.DefaultValues });
+        // Creating a new related record from inside an open record form (e.g. + New
+        // on a related-entity grid). Force a new tab so the parent record stays
+        // intact — otherwise the new-record form silently replaces the parent in
+        // single-resource mode and the user loses their context. This is the
+        // original intent of dea32401ff, now stated explicitly at the call site
+        // instead of as a global navigation heuristic.
+        this.navigationService.OpenNewEntityRecord(event.EntityName, {
+          newRecordValues: event.DefaultValues,
+          forceNewTab: true,
+        });
         break;
       case 'entity-hierarchy':
         this.navigationService.OpenEntityRecord(event.EntityName, event.PrimaryKey);
