@@ -1106,6 +1106,64 @@ export class EntityFieldInfo extends BaseInfo {
     }
 
     /**
+     * Returns true when this field appears as a parameter in the entity's
+     * `spCreate` (when `isUpdate=false`) or `spUpdate` (when `isUpdate=true`)
+     * stored procedure.
+     *
+     * This is the **single source of truth** for the SP parameter contract,
+     * consumed by both:
+     *
+     *   • **CodeGen**, when emitting the SP body (which `@params` to declare
+     *     and which columns to `INSERT`/`UPDATE`), and
+     *   • **Runtime data providers** (`SQLServerDataProvider.generateSPParams`,
+     *     `PostgreSQLDataProvider.getWritableFields`), when building the
+     *     EXEC / parameter list passed to the SP.
+     *
+     * Keeping both sides on the same predicate guarantees the SP signature
+     * and the call-site argument list always agree. Drift between them
+     * surfaces as a SQL Server "Procedure or function ... has too many
+     * arguments specified" error at save time (or its PG equivalent).
+     *
+     * **Exclusion rules** (in order):
+     *
+     *   • `IsVirtual` — view-only / joined columns. Not present in the base
+     *     table; the SP body never references them. Also covers IS-A parent
+     *     fields on child entities — those are saved via the parent's SP,
+     *     not the child's, so they must not appear in the child's SP params.
+     *   • `IsComputed` — SQL Server computed columns and PG generated
+     *     columns. Physically present in the base table but read-only at
+     *     the SQL layer (`INSERT`/`UPDATE` cannot target them). Today
+     *     `IsComputed=1` implies `IsVirtual=1`, but checking both is
+     *     defensive against future decoupling of the flags.
+     *   • `IsSpecialDateField` — `__mj_CreatedAt`, `__mj_UpdatedAt`,
+     *     `__mj_DeletedAt`. Set inside the SP body / trigger from
+     *     `GETUTCDATE()` rather than by the caller.
+     *   • Non-PK fields without `AllowUpdateAPI` — by definition not
+     *     callable via the SP signature.
+     *
+     * **PK handling**:
+     *
+     *   • On **update**, the PK is always a parameter (required to identify
+     *     the row).
+     *   • On **create**, the PK is a parameter only when it's NOT
+     *     auto-increment — the SP body declares it with a default so the
+     *     caller can either supply a value or let the database default fire
+     *     (e.g. `NEWSEQUENTIALID()`). For auto-increment PKs, the SP
+     *     intentionally doesn't expose the PK as a parameter.
+     *
+     * @param isUpdate `true` for `spUpdate`, `false` for `spCreate`.
+     */
+    public IsSPParameter(isUpdate: boolean): boolean {
+        if (this.IsVirtual) return false;
+        if (this.IsComputed) return false;
+        if (this.IsSpecialDateField) return false;
+        if (this.IsPrimaryKey) {
+            return isUpdate || !this.AutoIncrement;
+        }
+        return this.AllowUpdateAPI;
+    }
+
+    /**
      * Returns true if the field is a "special" field (see list below) and is handled inside the DB layer and should be ignored in validation by the BaseEntity architecture
      * Also, we skip validation if we have a field that is:
      *  - the primary key
