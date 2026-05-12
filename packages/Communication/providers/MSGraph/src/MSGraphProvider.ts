@@ -39,7 +39,7 @@ import { Client } from '@microsoft/microsoft-graph-client';
 import { ClientSecretCredential } from '@azure/identity';
 import { TokenCredentialAuthenticationProvider } from "@microsoft/microsoft-graph-client/authProviders/azureTokenCredentials/index.js";
 import { Message } from "@microsoft/microsoft-graph-types";
-import { RegisterClass } from "@memberjunction/global";
+import { RegisterClass, MJLruCache } from "@memberjunction/global";
 import { LogError, LogStatus } from "@memberjunction/core";
 import { compile, compiledFunction } from 'html-to-text';
 import * as Auth from "./auth";
@@ -140,8 +140,15 @@ export class MSGraphProvider extends BaseCommunicationProvider {
 
     private HTMLConverter: compiledFunction;
 
-    // Cache clients by credential hash for performance with per-request credentials
-    private clientCache: Map<string, Client> = new Map();
+    /**
+     * Cache clients keyed by tenant + clientId. Bounded LRU(100) + 1-hour TTL —
+     * prior unbounded `Map` retained credential-derived Graph clients indefinitely
+     * in multi-tenant deployments. See audit R2-C3.
+     */
+    private clientCache: MJLruCache<string, Client> = new MJLruCache<string, Client>({
+        maxSize: 100,
+        ttlMs: 60 * 60 * 1000,
+    });
 
     constructor() {
         super();
@@ -195,7 +202,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
         // For per-request credentials, use cached client by credential key
         const cacheKey = `${creds.tenantId}:${creds.clientId}`;
 
-        let client = this.clientCache.get(cacheKey);
+        let client = this.clientCache.Get(cacheKey);
         if (!client) {
             const credential = new ClientSecretCredential(
                 creds.tenantId,
@@ -208,7 +215,7 @@ export class MSGraphProvider extends BaseCommunicationProvider {
             });
 
             client = Client.initWithMiddleware({ authProvider });
-            this.clientCache.set(cacheKey, client);
+            this.clientCache.Set(cacheKey, client);
         }
 
         return client;

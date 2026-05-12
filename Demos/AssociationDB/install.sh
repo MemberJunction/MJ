@@ -13,11 +13,15 @@ cd "$(dirname "$0")"
 # Load DB_* environment variables from .env file
 if [ -f .env ]; then
     while IFS='=' read -r key value; do
+        key="${key// /}"
         value="${value%$'\r'}"
+        value="${value#"${value%%[![:space:]]*}"}"
+        value="${value%"${value##*[![:space:]]}"}"
         value="${value#[\'\"]}"
         value="${value%[\'\"]}"
+        [ -z "$key" ] && continue
         export "$key"="$value"
-    done < <(grep -v '^\s*#' .env | grep -E '^(DB_|CODEGEN_DB_)')
+    done < <(grep -v '^\s*#' .env | grep -E '^\s*(DB_|CODEGEN_DB_)')
 else
     echo "Error: .env file not found!"
     echo "Please create a .env file with database credentials."

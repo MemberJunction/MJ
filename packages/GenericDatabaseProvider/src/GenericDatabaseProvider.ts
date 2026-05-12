@@ -74,6 +74,7 @@ import { SqlLoggingOptions, SqlLoggingSession } from './types.js';
 import { SQLDialect } from '@memberjunction/sql-dialect';
 // QueryCompositionEngine is now owned by RenderPipeline
 import { RenderPipeline } from './renderPipeline.js';
+import { CRUDSprocType, useJsonArgShape } from './crudSprocFieldRules.js';
 
 import {
     MJEntityAIActionEntity,
@@ -227,6 +228,7 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     public async CreateSqlLogger(filePath: string, options?: SqlLoggingOptions): Promise<SqlLoggingSession> {
         const sessionId = uuidv4();
         const mjCoreSchema = this.ConfigData.MJCoreSchemaName;
+        const dialect = this.getDialect();
         const session = new SqlLoggingSessionImpl(sessionId, filePath,
             {
                 defaultSchemaName: mjCoreSchema,
@@ -234,7 +236,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 // hardcode 'GO'. Callers can still override by passing batchSeparator explicitly.
                 batchSeparator: this.PlatformBatchSeparator || undefined,
                 ...options
-            });
+            },
+            // Pass the platform dialect through so SQL emission (Flyway placeholder escaping etc.)
+            // uses the right form for SQL Server vs. PostgreSQL. Falls back to the constructor's
+            // default (SQLServerDialect) when a subclass hasn't overridden getDialect().
+            dialect ?? undefined);
 
         // Initialize the session (create file, write header)
         await session.initialize();
@@ -897,6 +903,40 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      */
     protected get PlatformBatchSeparator(): string {
         return this.getDialect()?.BatchSeparator() ?? '';
+    }
+
+    /**
+     * Maximum number of parameters a CRUD stored procedure (`spCreate*`/`spUpdate*`/`spDelete*`)
+     * may declare on this database platform before CodeGen must emit a JSON-arg shape instead.
+     *
+     * - SQL Server: `Infinity` — SS supports up to 2,100 parameters per procedure, far beyond
+     *   any realistic CRUD sproc.
+     * - PostgreSQL: `90` — PG's hard `FUNC_MAX_ARGS` ceiling is 100 (compiled into the server,
+     *   not configurable on managed services like RDS/Aurora). 90 leaves headroom for column
+     *   adds without flipping sproc shape unexpectedly.
+     *
+     * Used by the shared `useJsonArgShape` predicate (CodeGen + provider call-site) to decide
+     * whether a given sproc should emit as typed-args + `_Clear` companions (today's shape) or
+     * as a single-JSONB-arg sproc with key-presence tri-state semantics. See
+     * [plans/json-arg-crud-sprocs.md](../../../plans/json-arg-crud-sprocs.md) and GitHub
+     * issue #2552.
+     */
+    public get ProcedureParamLimit(): number {
+        return Infinity;
+    }
+
+    /**
+     * Returns true when CRUD sproc generation and call-construction for the
+     * given entity + sproc verb should use a single JSON-arg shape (instead of
+     * typed args + `_Clear` companions).
+     *
+     * Convenience wrapper around the pure `useJsonArgShape` helper, applying
+     * this provider's `ProcedureParamLimit`. CodeGen and runtime call-sites
+     * can invoke this via the provider instance to keep sproc emit and sproc
+     * invocation in lockstep.
+     */
+    public UseJsonArgShape(entity: EntityInfo, sprocType: CRUDSprocType): boolean {
+        return useJsonArgShape(entity, sprocType, this.ProcedureParamLimit);
     }
 
     /**

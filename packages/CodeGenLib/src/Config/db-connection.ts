@@ -8,7 +8,7 @@ import mssql from 'mssql';
 import { configInfo } from './config';
 
 /** Extract database connection parameters from configuration */
-const { dbDatabase, dbHost, codeGenPassword, dbPort, codeGenLogin, dbInstanceName, dbTrustServerCertificate } = configInfo;
+const { dbDatabase, dbHost, codeGenPassword, dbPort, codeGenLogin, dbInstanceName, dbTrustServerCertificate, dbRequestTimeout } = configInfo;
 
 /**
  * SQL Server configuration object for mssql package.
@@ -27,8 +27,13 @@ export const sqlConfig: mssql.config = {
   /** Database server port (typically 1433) */
   port: dbPort,
   options: {
-    /** Extended timeout for long-running code generation queries */
-    requestTimeout: 120000,
+    /**
+     * Request timeout for long-running CodeGen queries. Defaults to 120000ms
+     * (2 min); override via `dbRequestTimeout` in mj.config.cjs or the
+     * MJ_CODEGEN_REQUEST_TIMEOUT environment variable when steps like
+     * spUpdateExistingEntityFieldsFromSchema run beyond the default.
+     */
+    requestTimeout: dbRequestTimeout ?? 120000,
     /** Enable encrypted connections */
     encrypt: true,
     /** SQL Server instance name if using named instances */

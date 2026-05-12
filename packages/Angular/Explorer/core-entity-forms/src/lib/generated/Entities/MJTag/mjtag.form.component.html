@@ -277,31 +277,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Tag Co Occurrences (Tag B ID) Section -->
-    <mj-collapsible-panel
-        SectionKey="mJTagCoOccurrencesTagBID"
-        SectionName="Tag Co Occurrences (Tag B ID)"
-        Icon="fa fa-project-diagram"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJTagCoOccurrencesTagBID')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Co Occurrences','TagBID')"
-                [NewRecordValues]="NewRecordValues('MJ: Tag Co Occurrences')"
-                [AllowLoad]="IsSectionExpanded('mJTagCoOccurrencesTagBID')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJTagCoOccurrencesTagBID', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Content Item Tags Section -->
     <mj-collapsible-panel
         SectionKey="mJContentItemTags"
@@ -321,6 +296,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJContentItemTags', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Tag Co Occurrences (Tag B ID) Section -->
+    <mj-collapsible-panel
+        SectionKey="mJTagCoOccurrencesTagBID"
+        SectionName="Tag Co Occurrences (Tag B ID)"
+        Icon="fa fa-project-diagram"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJTagCoOccurrencesTagBID')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Tag Co Occurrences','TagBID')"
+                [NewRecordValues]="NewRecordValues('MJ: Tag Co Occurrences')"
+                [AllowLoad]="IsSectionExpanded('mJTagCoOccurrencesTagBID')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJTagCoOccurrencesTagBID', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

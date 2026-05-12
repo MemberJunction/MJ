@@ -237,13 +237,22 @@ BEGIN
         END IF;
     END IF;
 
-    RETURN QUERY
-    WITH excluded AS (
-        SELECT TRIM(s) AS "SchemaName"
-        FROM unnest(string_to_array(COALESCE(p_ExcludedSchemaNames, ''), ',')) AS s
-        WHERE TRIM(s) <> ''
-    ),
-    filtered AS (
+    -- Materialize the filtered set into a temp table. Two reasons we can't
+    -- do this as a chained WITH ... data-modifying CTE on PG:
+    --   1. CTEs in a single WITH share one snapshot AND forbid updating the
+    --      same row twice, so Pass A's stage-to-negative + Pass B's write-
+    --      back-to-final collapses Pass B to a silent no-op.
+    --   2. The unique index on (EntityID, Sequence) is non-deferrable and
+    --      enforced per-row mid-statement. If a filtered row's *final*
+    --      Sequence collides with an *unfiltered* row in the same entity
+    --      that's stuck on the value the filtered row currently occupies,
+    --      a single UPDATE can't reorder them — we must transiently move
+    --      every row in an "affected" entity into negative space and then
+    --      write the SQL-derived sequences back.
+    -- Splitting into separate top-level statements + a "resequence everyone
+    -- in the entity" pass gives us correct ordering without constraint
+    -- collisions and matches the SS semantics functionally.
+    CREATE TEMP TABLE "_efs_filtered" ON COMMIT DROP AS
         SELECT
             e."ID"                                     AS "EntityID",
             e."Name"::VARCHAR                          AS "EntityName",
@@ -294,7 +303,11 @@ BEGIN
               ON e."BaseTable"  = uk."TableName"
              AND ef."Name"      = uk."ColumnName"
              AND e."SchemaName" = uk."SchemaName"
-        LEFT OUTER JOIN excluded x ON e."SchemaName" = x."SchemaName"
+        LEFT OUTER JOIN (
+            SELECT TRIM(s) AS "SchemaName"
+            FROM unnest(string_to_array(COALESCE(p_ExcludedSchemaNames, ''), ',')) AS s
+            WHERE TRIM(s) <> ''
+        ) x ON e."SchemaName" = x."SchemaName"
         WHERE
             e."VirtualEntity" = false
             AND x."SchemaName" IS NULL
@@ -327,68 +340,118 @@ BEGIN
                            ELSE false
                        END
                    )
-            )
-    ),
-    -- Pass A: stage all changing rows. Sequence is set to a unique negative
-    -- value so we can never collide with the (positive) existing Sequence
-    -- values OR with each other during this UPDATE. Every other column gets
-    -- its final value here.
-    staged AS (
-        UPDATE ${flyway:defaultSchema}."EntityField" ef
-        SET
-            "Description" = CASE WHEN fr."AutoUpdateDescription" = true THEN fr."SQLDescription" ELSE ef."Description" END,
-            "Type"          = fr."Type",
-            "Length"        = fr."Length",
-            "Precision"     = fr."Precision",
-            "Scale"         = fr."Scale",
-            "AllowsNull"    = fr."AllowsNull",
-            "DefaultValue"  = fr."DefaultValue",
-            "AutoIncrement" = fr."AutoIncrement",
-            "IsVirtual"     = fr."IsVirtual",
-            "Sequence"      = -fr."StageRow"::INTEGER,   -- transient negative
-            "RelatedEntityID" = CASE
-                WHEN ef."AutoUpdateRelatedEntityInfo" = true AND ef."IsSoftForeignKey" = false
-                    THEN fr."RelatedEntityID"
-                ELSE ef."RelatedEntityID"
-            END,
-            "RelatedEntityFieldName" = CASE
-                WHEN ef."AutoUpdateRelatedEntityInfo" = true AND ef."IsSoftForeignKey" = false
-                    THEN fr."RelatedEntityFieldName"
-                ELSE ef."RelatedEntityFieldName"
-            END,
-            "IsPrimaryKey"  = fr."IsPrimaryKey",
-            "IsUnique"      = fr."IsUnique"
-        FROM filtered fr
-        WHERE ef."ID" = fr."EntityFieldID"
-        RETURNING
-            ef."ID" AS "EntityFieldID",
-            fr."EntityID", fr."EntityName", fr."EntityFieldName",
-            fr."AutoUpdateDescription", fr."ExistingDescription",
-            fr."SQLDescription", fr."Type", fr."Length", fr."Precision",
-            fr."Scale", fr."AllowsNull",
-            fr."DefaultValue", fr."AutoIncrement", fr."IsVirtual",
-            fr."Sequence" AS "FinalSequence",   -- the desired positive value
-            fr."RelatedEntityID", fr."RelatedEntityFieldName",
-            fr."IsPrimaryKey", fr."IsUnique"
-    ),
-    -- Pass B: now that all changing rows have unique negative sequences,
-    -- write the desired positive sequence. No collision possible.
-    finalized AS (
-        UPDATE ${flyway:defaultSchema}."EntityField" ef
-        SET "Sequence" = s."FinalSequence"
-        FROM staged s
-        WHERE ef."ID" = s."EntityFieldID"
-        RETURNING s.*
-    )
+            );
+
+    -- Stage *every* row in any "affected" entity (any entity that has at
+    -- least one row in _efs_filtered) into negative-sequence space. We do
+    -- this with row_number() so each transient sequence is unique within
+    -- an entity, dodging the (EntityID, Sequence) unique index. This is
+    -- the only way to guarantee Pass C below can land filtered rows on
+    -- their final positions even when those positions are currently held
+    -- by *unfiltered* rows in the same entity.
+    CREATE TEMP TABLE "_efs_stage_seq" ON COMMIT DROP AS
+        SELECT
+            ef."ID"                                                  AS "EntityFieldID",
+            ef."EntityID"                                            AS "EntityID",
+            -ROW_NUMBER() OVER (PARTITION BY ef."EntityID"
+                                ORDER BY ef."ID")::INTEGER           AS "StagedNegativeSequence"
+        FROM ${flyway:defaultSchema}."EntityField" ef
+        WHERE ef."EntityID" IN (SELECT DISTINCT f2."EntityID" FROM "_efs_filtered" f2);
+
+    -- Pass A: stage every row of every affected entity into a unique
+    -- negative sequence. Standalone statement — its own snapshot. The
+    -- unique-per-entity negative values mean PG's per-row index check
+    -- never sees a duplicate during this UPDATE.
+    UPDATE ${flyway:defaultSchema}."EntityField" ef
+    SET "Sequence" = s."StagedNegativeSequence"
+    FROM "_efs_stage_seq" s
+    WHERE ef."ID" = s."EntityFieldID";
+
+    -- Pass B: write the full payload (Type/AllowsNull/DefaultValue/etc.)
+    -- ONLY for rows that actually changed. Sequence stays negative for
+    -- now — Pass C is responsible for putting every affected row back
+    -- on its final positive Sequence in one safe statement.
+    UPDATE ${flyway:defaultSchema}."EntityField" ef
+    SET
+        "Description" = CASE WHEN fr."AutoUpdateDescription" = true THEN fr."SQLDescription" ELSE ef."Description" END,
+        "Type"          = fr."Type",
+        "Length"        = fr."Length",
+        "Precision"     = fr."Precision",
+        "Scale"         = fr."Scale",
+        "AllowsNull"    = fr."AllowsNull",
+        "DefaultValue"  = fr."DefaultValue",
+        "AutoIncrement" = fr."AutoIncrement",
+        "IsVirtual"     = fr."IsVirtual",
+        "RelatedEntityID" = CASE
+            WHEN ef."AutoUpdateRelatedEntityInfo" = true AND ef."IsSoftForeignKey" = false
+                THEN fr."RelatedEntityID"
+            ELSE ef."RelatedEntityID"
+        END,
+        "RelatedEntityFieldName" = CASE
+            WHEN ef."AutoUpdateRelatedEntityInfo" = true AND ef."IsSoftForeignKey" = false
+                THEN fr."RelatedEntityFieldName"
+            ELSE ef."RelatedEntityFieldName"
+        END,
+        "IsPrimaryKey"  = fr."IsPrimaryKey",
+        "IsUnique"      = fr."IsUnique"
+    FROM "_efs_filtered" fr
+    WHERE ef."ID" = fr."EntityFieldID";
+
+    -- Pass C: resequence every row of every affected entity that has a
+    -- corresponding row in vwSQLColumnsAndEntityFields. Standalone
+    -- statement — gets a fresh snapshot where Pass A's negatives are
+    -- visible, so we never collide with another row's old positive
+    -- sequence.
+    UPDATE ${flyway:defaultSchema}."EntityField" ef
+    SET "Sequence" = fromSQL."Sequence"::INTEGER
+    FROM ${flyway:defaultSchema}."vwSQLColumnsAndEntityFields" fromSQL
+    WHERE ef."EntityID" = fromSQL."EntityID"
+      AND ef."Name"     = fromSQL."FieldName"
+      AND ef."EntityID" IN (SELECT DISTINCT f2."EntityID" FROM "_efs_filtered" f2);
+
+    -- Pass D: handle any rows in affected entities that are NOT in
+    -- vwSQLColumnsAndEntityFields (typically virtual relationship fields
+    -- like "Entity"/"User" lookups that have no SQL counterpart). Pass A
+    -- left them at a transient negative; Pass C couldn't touch them.
+    -- Place them after the last SQL-derived sequence in the same entity,
+    -- preserving their existing relative order via row_number(). Without
+    -- this pass, those rows are stuck on negatives and the next sproc
+    -- call diff-detects them again forever.
+    UPDATE ${flyway:defaultSchema}."EntityField" ef
+    SET "Sequence" = leftover."NewSequence"::INTEGER
+    FROM (
+        SELECT
+            stuck."ID" AS "EntityFieldID",
+            COALESCE(maxseq."MaxSeq", 0)
+                + ROW_NUMBER() OVER (PARTITION BY stuck."EntityID"
+                                     ORDER BY stuck."Sequence" DESC, stuck."ID")
+                AS "NewSequence"
+        FROM ${flyway:defaultSchema}."EntityField" stuck
+        LEFT JOIN (
+            SELECT vw."EntityID", MAX(vw."Sequence") AS "MaxSeq"
+            FROM ${flyway:defaultSchema}."vwSQLColumnsAndEntityFields" vw
+            GROUP BY vw."EntityID"
+        ) maxseq
+            ON maxseq."EntityID" = stuck."EntityID"
+        WHERE stuck."Sequence" < 0
+          AND stuck."EntityID" IN (SELECT DISTINCT f3."EntityID" FROM "_efs_filtered" f3)
+    ) leftover
+    WHERE ef."ID" = leftover."EntityFieldID";
+
+    -- Return the staged set so callers can discover which rows changed.
+    RETURN QUERY
     SELECT
         f."EntityID", f."EntityName", f."EntityFieldID", f."EntityFieldName",
         f."AutoUpdateDescription", f."ExistingDescription", f."SQLDescription",
         f."Type", f."Length", f."Precision", f."Scale", f."AllowsNull",
         f."DefaultValue", f."AutoIncrement", f."IsVirtual",
-        f."FinalSequence" AS "Sequence",
+        f."Sequence",
         f."RelatedEntityID", f."RelatedEntityFieldName",
         f."IsPrimaryKey", f."IsUnique"
-    FROM finalized f;
+    FROM "_efs_filtered" f;
+
+    DROP TABLE "_efs_filtered";
+    DROP TABLE "_efs_stage_seq";
 END;
 $func$;
 

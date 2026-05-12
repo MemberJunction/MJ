@@ -1,5 +1,11 @@
 # @memberjunction/ng-export-service
 
+## 5.33.0
+
+### Patch Changes
+
+- @memberjunction/export-engine@5.33.0
+
 ## 5.32.0
 
 ### Patch Changes

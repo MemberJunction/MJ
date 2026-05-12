@@ -13,16 +13,16 @@
 }
 
 .form-section {
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--mj-border-default);
     border-radius: 8px;
     padding: 16px;
-    background: #fff;
+    background: var(--mj-bg-surface);
 }
 
 .section-title {
     font-size: 14px;
     font-weight: 600;
-    color: #334155;
+    color: var(--mj-text-primary);
     margin-bottom: 12px;
     display: flex;
     align-items: center;
@@ -30,7 +30,7 @@
 }
 
 .section-title i {
-    color: #0076b6;
+    color: var(--mj-brand-primary);
     font-size: 14px;
 }
 
@@ -46,12 +46,12 @@
     display: block;
     font-size: 12px;
     font-weight: 500;
-    color: #64748b;
+    color: var(--mj-text-secondary);
     margin-bottom: 4px;
 }
 
 .required {
-    color: #ef4444;
+    color: var(--mj-status-error);
 }
 
 .form-group input,
@@ -59,11 +59,11 @@
 .form-group select {
     width: 100%;
     padding: 8px 10px;
-    border: 1px solid #cbd5e1;
+    border: 1px solid var(--mj-border-strong);
     border-radius: 6px;
     font-size: 13px;
-    color: #1e293b;
-    background: #fff;
+    color: var(--mj-text-primary);
+    background: var(--mj-bg-surface);
     box-sizing: border-box;
     transition: border-color 0.15s;
 }
@@ -72,8 +72,8 @@
 .form-group textarea:focus,
 .form-group select:focus {
     outline: none;
-    border-color: #0076b6;
-    box-shadow: 0 0 0 2px rgba(0, 118, 182, 0.15);
+    border-color: var(--mj-border-focus);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
 }
 
 .code-textarea {
@@ -84,7 +84,7 @@
 
 .hint {
     font-size: 11px;
-    color: #94a3b8;
+    color: var(--mj-text-muted);
     margin-top: 4px;
 }
 
@@ -97,7 +97,7 @@
     align-items: center;
     gap: 8px;
     font-size: 13px;
-    color: #334155;
+    color: var(--mj-text-primary);
     cursor: pointer;
 }
 
@@ -119,21 +119,21 @@
     display: block;
     font-size: 20px;
     font-weight: 700;
-    color: #334155;
+    color: var(--mj-text-primary);
 }
 
 .stat-value.success {
-    color: #10b981;
+    color: var(--mj-status-success);
 }
 
 .stat-value.error {
-    color: #ef4444;
+    color: var(--mj-status-error);
 }
 
 .stat-label {
     display: block;
     font-size: 11px;
-    color: #94a3b8;
+    color: var(--mj-text-muted);
     margin-top: 2px;
 }
 
@@ -142,7 +142,7 @@
     justify-content: space-between;
     align-items: center;
     padding-top: 8px;
-    border-top: 1px solid #e2e8f0;
+    border-top: 1px solid var(--mj-border-default);
 }
 
 .footer-right {
@@ -170,36 +170,36 @@
 }
 
 .btn-primary {
-    background: #0076b6;
-    color: #fff;
+    background: var(--mj-brand-primary);
+    color: var(--mj-text-inverse);
 }
 
 .btn-primary:hover:not(:disabled) {
-    background: #005a8c;
+    background: var(--mj-brand-primary-hover);
 }
 
 .btn-secondary {
-    background: #f1f5f9;
-    color: #334155;
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-primary);
 }
 
 .btn-secondary:hover:not(:disabled) {
-    background: #e2e8f0;
+    background: var(--mj-bg-surface-active);
 }
 
 .btn-danger {
-    background: #fee2e2;
-    color: #dc2626;
+    background: var(--mj-status-error-bg);
+    color: var(--mj-status-error-text);
 }
 
 .btn-danger:hover:not(:disabled) {
-    background: #fecaca;
+    background: color-mix(in srgb, var(--mj-status-error) 20%, var(--mj-bg-surface));
 }
 
 .confirm-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.4);
+    background: var(--mj-bg-overlay);
     z-index: 1100;
     display: flex;
     align-items: center;
@@ -207,17 +207,17 @@
 }
 
 .confirm-dialog {
-    background: #fff;
+    background: var(--mj-bg-surface);
     border-radius: 10px;
     padding: 24px;
     max-width: 360px;
     text-align: center;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    box-shadow: var(--mj-shadow-lg);
 }
 
 .confirm-dialog p {
     margin: 0 0 16px;
-    color: #334155;
+    color: var(--mj-text-primary);
     font-size: 14px;
 }
 

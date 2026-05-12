@@ -29,6 +29,35 @@
 
         <!-- Results area -->
         <div class="search-results-area">
+            @if (EnableStreaming && (IsSearching || StreamingProviders.length > 0)) {
+                <!-- Streaming status strip — one chip per provider that has reported -->
+                <div class="streaming-status-strip" aria-live="polite">
+                    @if (StreamingProviders.length === 0 && IsSearching) {
+                        <span class="streaming-chip streaming-chip-pending">
+                            <i class="fa-solid fa-circle-notch fa-spin"></i>
+                            <span>Searching…</span>
+                        </span>
+                    }
+                    @for (p of StreamingProviders; track p.Name) {
+                        <span class="streaming-chip"
+                              [class.streaming-chip-error]="p.State === 'Error'"
+                              [class.streaming-chip-completed]="p.State === 'Completed'">
+                            @if (p.State === 'Completed') {
+                                <i class="fa-solid fa-check"></i>
+                            } @else {
+                                <i class="fa-solid fa-triangle-exclamation"></i>
+                            }
+                            <span class="streaming-chip-name">{{ p.Name }}</span>
+                            @if (p.State === 'Completed') {
+                                <span class="streaming-chip-count">{{ p.Count }}</span>
+                                <span class="streaming-chip-time">{{ FormatElapsedTime(p.ElapsedMs) }}</span>
+                            } @else if (p.ErrorMessage) {
+                                <span class="streaming-chip-time">{{ p.ErrorMessage }}</span>
+                            }
+                        </span>
+                    }
+                </div>
+            }
             @if (ShowFilters && Filters.length > 0) {
                 <!-- Filter chips -->
                 <div class="search-filter-bar">

@@ -1,5 +1,28 @@
 # @memberjunction/ai-prompts
 
+## 5.33.0
+
+### Minor Changes
+
+- 7716c98: metadata
+
+### Patch Changes
+
+- Updated dependencies [95eb27e]
+- Updated dependencies [74b0be0]
+- Updated dependencies [5cc5326]
+- Updated dependencies [7e4957d]
+  - @memberjunction/core@5.33.0
+  - @memberjunction/global@5.33.0
+  - @memberjunction/ai-engine-base@5.33.0
+  - @memberjunction/ai-core-plus@5.33.0
+  - @memberjunction/aiengine@5.33.0
+  - @memberjunction/credentials@5.33.0
+  - @memberjunction/core-entities@5.33.0
+  - @memberjunction/templates-base-types@5.33.0
+  - @memberjunction/templates@5.33.0
+  - @memberjunction/ai@5.33.0
+
 ## 5.32.0
 
 ### Patch Changes

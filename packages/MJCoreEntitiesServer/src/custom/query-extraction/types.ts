@@ -103,8 +103,8 @@ export interface ResolveResult {
     allDeterministicParams: MJParameterInfo[];
     passthroughContext: Map<string, PassthroughParamContext>;
     entityMetadata: EntityMetadataEntry[];
-    /** Non-null if SELECT * was detected and fields were expanded deterministically */
-    selectStarFields: ExtractedField[] | null;
+    /** Fields resolved from the SQL — via SELECT * expansion against entity metadata, or parsed from explicit SELECT columns */
+    resolvedFields: ExtractedField[] | null;
 }
 
 /**

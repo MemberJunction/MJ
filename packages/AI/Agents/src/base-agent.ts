@@ -22,6 +22,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AgentContextInjector } from './agent-context-injector';
+import { AgentPreExecutionRAG, AgentPreExecutionRAGResult } from './agent-pre-execution-rag';
 import { RerankerService } from '@memberjunction/ai-reranker';
 import {
     AIPromptParams,
@@ -1326,6 +1327,17 @@ export class BaseAgent {
                     primaryScopeRecordId,
                     secondaryScopes,
                     scopeConfig
+                ),
+                this.InjectPreExecutionRAG(
+                    typeof inputText === 'string' ? inputText : '',
+                    params.agent,
+                    params.contextUser,
+                    wrappedParams.conversationMessages,
+                    params.conversationMessages,
+                    primaryScopeEntityId,
+                    primaryScopeRecordId,
+                    secondaryScopes,
+                    params.payload
                 )
             ]);
 
@@ -1536,6 +1548,15 @@ export class BaseAgent {
     private _injectedMemory: { notes: MJAIAgentNoteEntity[]; examples: MJAIAgentExampleEntity[] } = { notes: [], examples: [] };
 
     /**
+     * Storage for injected pre-execution RAG context (Phase 1C of search-scopes-rag-plus).
+     * Contains the formatted `<retrieved_context>` system-message block actually injected
+     * into `conversationMessages`, plus the structured per-scope / combined result detail
+     * for downstream observability and artifact persistence.
+     */
+    private _ragContext: string = '';
+    private _injectedRAG: AgentPreExecutionRAGResult | null = null;
+
+    /**
      * Determine the scope label for a note based on its scope fields.
      * Used for memory attribution logging to help identify which scope level
      * a note belongs to.
@@ -1678,6 +1699,81 @@ export class BaseAgent {
         this._injectedMemory = { notes, examples };
 
         return { notes, examples };
+    }
+
+    /**
+     * Inject pre-execution RAG context for this agent using scoped search.
+     *
+     * Runs in parallel with `InjectContextMemory` during Phase 2 of `Execute()`. Loads the
+     * agent's `AIAgentSearchScope` rows (Phase IN 'PreExecution'|'Both'), renders any per-scope
+     * query templates, calls `SearchEngine.Search()` per scope, cross-scope RRF fuses the
+     * results when multiple scopes contributed, and unshifts a `<retrieved_context>` system
+     * message onto `conversationMessages`.
+     *
+     * When the agent has no active pre-execution scopes (or all scopes returned zero results),
+     * this method is a no-op — no system message is injected and `_injectedRAG` stays null.
+     *
+     * See plans/search-scopes-rag-plus.md §4 (Agent Integration — Pre-Execution RAG).
+     *
+     * @param lastUserMessage - The most recent user message text.
+     * @param agent - The agent being executed.
+     * @param contextUser - Calling user (threaded to SearchEngine + Metadata).
+     * @param conversationMessages - The mutated message array that flows to the LLM (system msg is unshifted here).
+     * @param originalMessages - The unmodified messages array (for template `recentMessages`).
+     * @param primaryScopeEntityId - Multi-tenant primary scope entity ID.
+     * @param primaryScopeRecordId - Multi-tenant primary scope record ID.
+     * @param secondaryScopes - Multi-tenant secondary scope dimensions.
+     * @param payload - The agent's current payload (for template rendering).
+     * @returns The structured RAG result, or `null` if no scopes produced results.
+     */
+    protected async InjectPreExecutionRAG(
+        lastUserMessage: string,
+        agent: MJAIAgentEntityExtended,
+        contextUser: UserInfo | undefined,
+        conversationMessages: ChatMessage[] | undefined,
+        originalMessages: ChatMessage[] | undefined,
+        primaryScopeEntityId?: string,
+        primaryScopeRecordId?: string,
+        secondaryScopes?: Record<string, SecondaryScopeValue>,
+        payload?: unknown
+    ): Promise<AgentPreExecutionRAGResult | null> {
+        try {
+            if (!contextUser) return null;
+            if (!agent?.ID) return null;
+
+            const rag = new AgentPreExecutionRAG();
+            const result = await rag.Execute({
+                agent,
+                lastUserMessage,
+                recentMessages: originalMessages ? originalMessages.slice(-5) : undefined,
+                payload,
+                primaryScopeRecordId,
+                primaryScopeEntityId,
+                secondaryScopes,
+                contextUser
+            });
+
+            if (!result) return null;
+
+            if (conversationMessages && result.formattedSystemMessage) {
+                this._ragContext = result.formattedSystemMessage;
+                conversationMessages.unshift({ role: 'system', content: this._ragContext });
+                this.logStatus(
+                    `🔎 Injected pre-execution RAG context: ${result.combinedResults.length} result(s) from ${result.queriedScopeIDs.length} scope(s)`,
+                    true
+                );
+            }
+
+            this._injectedRAG = result;
+            return result;
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            this.logError(`InjectPreExecutionRAG failed — continuing without RAG context: ${msg}`, {
+                agent,
+                category: 'AgentPreExecutionRAG'
+            });
+            return null;
+        }
     }
 
     /**
@@ -4144,10 +4240,16 @@ The context is now within limits. Please retry your request with the recovered c
                 Type: 'Input' as const
             }));
 
-            // Build action context: preserve the agent's context and inject resolved storage account ID
-            const actionContext = this._resolvedStorageAccountId
-                ? { ...(typeof params.context === 'object' && params.context ? params.context : {}), __resolvedStorageAccountId: this._resolvedStorageAccountId }
-                : params.context;
+            // Build action context: preserve the agent's context, stamp the
+            // calling agent's identity so scope-aware actions (Scoped Search,
+            // future agent-aware tools) can attribute the call without the LLM
+            // needing to pass it explicitly, and inject resolved storage account ID.
+            const baseContext = typeof params.context === 'object' && params.context ? params.context : {};
+            const actionContext = {
+                ...baseContext,
+                AgentID: params.agent.ID,
+                ...(this._resolvedStorageAccountId ? { __resolvedStorageAccountId: this._resolvedStorageAccountId } : {}),
+            };
 
             // Execute the action and return the full ActionResult
             const result = await actionEngine.RunAction({

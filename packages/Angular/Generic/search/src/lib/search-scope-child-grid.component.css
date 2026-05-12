@@ -1,0 +1,129 @@
+.scope-grid {
+    width: 100%;
+    font-family: inherit;
+    color: var(--mj-text-primary);
+}
+
+.scope-grid.disabled {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.scope-grid-loading,
+.scope-grid-error,
+.scope-grid-empty {
+    padding: 16px;
+    text-align: center;
+    color: var(--mj-text-muted);
+    font-size: 0.875rem;
+}
+
+.scope-grid-error {
+    color: var(--mj-status-error-text);
+    background: var(--mj-status-error-bg);
+    border: 1px solid var(--mj-status-error-border);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.scope-grid-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.875rem;
+}
+
+.scope-grid-table thead th {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--mj-border-default);
+    color: var(--mj-text-secondary);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: var(--mj-bg-surface-card);
+}
+
+.scope-grid-table tbody td {
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--mj-border-subtle);
+    vertical-align: top;
+}
+
+.scope-grid-table tbody tr.saving {
+    opacity: 0.6;
+}
+
+.scope-grid-actions-col {
+    width: 40px;
+    text-align: right;
+}
+
+.scope-grid-input,
+.scope-grid-select {
+    width: 100%;
+    font-size: 0.85rem;
+}
+
+.scope-grid-textarea,
+.scope-grid-code {
+    width: 100%;
+    resize: vertical;
+    font-size: 0.85rem;
+}
+
+.scope-grid-code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    background: var(--mj-bg-surface-sunken);
+    color: var(--mj-text-primary);
+    border: 1px solid var(--mj-border-default);
+    border-radius: 4px;
+    padding: 6px 8px;
+}
+
+.scope-grid-icon-btn {
+    background: transparent;
+    border: none;
+    color: var(--mj-text-muted);
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 4px;
+}
+
+.scope-grid-icon-btn:hover:not(:disabled) {
+    color: var(--mj-status-error-text);
+    background: var(--mj-bg-surface-hover);
+}
+
+.scope-grid-icon-btn:disabled {
+    color: var(--mj-text-disabled);
+    cursor: not-allowed;
+}
+
+.scope-grid-footer {
+    padding: 10px 6px 2px;
+    display: flex;
+    justify-content: flex-start;
+}
+
+.scope-grid-add-btn {
+    background: transparent;
+    border: 1px dashed var(--mj-border-default);
+    color: var(--mj-text-link);
+    padding: 6px 14px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: background 120ms ease, border-color 120ms ease;
+}
+
+.scope-grid-add-btn:hover {
+    background: var(--mj-bg-surface-hover);
+    border-color: var(--mj-border-strong);
+    color: var(--mj-brand-primary);
+}

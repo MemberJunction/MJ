@@ -807,8 +807,18 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
   }
 
   /**
-   * Called by parent component after user selects collections in the picker.
-   * Saves the artifact to the selected collections.
+   * Reload the cached set of collections that contain the *current version* of this artifact.
+   * Called by the chat-area after the collection picker reports successful saves so the bookmark
+   * icon and "already saved" exclusion list refresh without a full artifact reload.
+   */
+  public async ReloadCollectionAssociations(): Promise<void> {
+    await this.loadCollectionAssociations();
+  }
+
+  /**
+   * @deprecated Writes are now owned by the picker modal so the dialog can render per-collection
+   * progress and partial-failure UI. Kept for any external consumer that still calls it; new code
+   * should pass `artifactVersionId` to the picker and listen for its `completed` event.
    */
   async saveToCollections(collectionIds: string[]): Promise<boolean> {
     if (!this.artifactId || collectionIds.length === 0) {

@@ -1,5 +1,17 @@
 # @memberjunction/interactive-component-types
 
+## 5.33.0
+
+### Patch Changes
+
+- 3e84676: Fix map-view regressions in Regions and Boundary modes, drop text-based location guessing in favor of pre-geocoded coordinates only, and auto-resolve lat/lng field names from EntityField.ExtendedType so entities like MJ: Countries / State Provinces use their direct Latitude/Longitude columns. Hides the Boundary toolbar button on entities without per-record GeoJSON, tears the map engine down on Entity change to fix blank-map regressions, and reloads data when crossing the grid ↔ map boundary.
+- Updated dependencies [95eb27e]
+- Updated dependencies [74b0be0]
+- Updated dependencies [5cc5326]
+- Updated dependencies [7e4957d]
+  - @memberjunction/core@5.33.0
+  - @memberjunction/ai-vectors-memory@5.33.0
+
 ## 5.32.0
 
 ### Patch Changes

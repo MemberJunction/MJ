@@ -805,10 +805,34 @@ export abstract class BaseEntity<T = unknown> {
     private _eventSubject: Subject<BaseEntityEvent>;
 
     /**
-     * Append-only log of `BaseEntityResult` objects from each Save/Delete attempt. The most
+     * Bounded ring of `BaseEntityResult` objects from each Save/Delete attempt. The most
      * recent entry is exposed via `LatestResult` for error inspection after a failure.
+     * Capped at `MAX_RESULT_HISTORY` (50) — older entries are dropped on overflow. This
+     * matters for entity instances held in long-lived engine arrays where every
+     * `Save()`/`Delete()` would otherwise leak one result object indefinitely.
      */
     private _resultHistory: BaseEntityResult[] = [];
+
+    /**
+     * Maximum number of `BaseEntityResult` entries retained in `_resultHistory` per entity
+     * instance. Set to 50 — enough for diagnostic context while bounding worst-case
+     * memory for entities that survive thousands of Save/Delete cycles.
+     */
+    public static readonly MAX_RESULT_HISTORY = 50;
+
+    /**
+     * Append a result to `_resultHistory`, trimming the oldest entries when over
+     * `MAX_RESULT_HISTORY`. All Save/Delete code paths route through this — both inside
+     * BaseEntity and in callers like `databaseProviderBase` and entity subclasses that
+     * record their own results.
+     */
+    public RegisterResultHistoryEntry(result: BaseEntityResult): void {
+        this._resultHistory.push(result);
+        const overflow = this._resultHistory.length - BaseEntity.MAX_RESULT_HISTORY;
+        if (overflow > 0) {
+            this._resultHistory.splice(0, overflow);
+        }
+    }
 
     /**
      * The `IEntityDataProvider` routing DB operations for this specific entity. Resolved lazily
@@ -2476,7 +2500,7 @@ export abstract class BaseEntity<T = unknown> {
                 newResult.Errors = e.Errors || [];
                 newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
                 newResult.EndedAt = new Date();
-                this.ResultHistory.push(newResult);
+                this.RegisterResultHistoryEntry(newResult);
             }
 
             return false;
@@ -3186,7 +3210,7 @@ export abstract class BaseEntity<T = unknown> {
                                 newResult.Errors = error.Errors || [];
                                 newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
                                 newResult.EndedAt = new Date();
-                                this.ResultHistory.push(newResult);
+                                this.RegisterResultHistoryEntry(newResult);
                             }
                         });
                     }
@@ -3210,7 +3234,7 @@ export abstract class BaseEntity<T = unknown> {
                 newResult.Errors = e.Errors || [];
                 newResult.OriginalValues = this.Fields.map(f => { return {FieldName: f.CodeName, Value: f.OldValue} });
                 newResult.EndedAt = new Date();
-                this.ResultHistory.push(newResult);
+                this.RegisterResultHistoryEntry(newResult);
             }
             return false;
         }

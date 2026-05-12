@@ -2003,6 +2003,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Search Scope Entities Section -->
+    <mj-collapsible-panel
+        SectionKey="mJSearchScopeEntities"
+        SectionName="Search Scope Entities"
+        Icon="fa fa-search"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJSearchScopeEntities')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope Entities','EntityID')"
+                [NewRecordValues]="NewRecordValues('MJ: Search Scope Entities')"
+                [AllowLoad]="IsSectionExpanded('mJSearchScopeEntities')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJSearchScopeEntities', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Resource Types (Category Entity ID) Section -->
     <mj-collapsible-panel
         SectionKey="mJResourceTypesCategoryEntityID"
