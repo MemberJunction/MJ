@@ -923,40 +923,61 @@ export class SQLServerDataProvider
 
     for (let i = 0; i < entity.EntityInfo.Fields.length; i++) {
       const f = entity.EntityInfo.Fields[i];
-      // For CREATE operations, include primary keys that are not auto-increment and have actual values
-      const includePrimaryKeyForCreate = !isUpdate && f.IsPrimaryKey && !f.AutoIncrement && entity.Get(f.Name) !== null && entity.Get(f.Name) !== undefined;
 
-      if (f.AllowUpdateAPI || includePrimaryKeyForCreate) {
-        if (!f.SkipValidation || includePrimaryKeyForCreate) {
-          // DO NOT INCLUDE any fields where we skip validation, these are fields that are not editable by the user/object
-          // model/api because they're special fields like ID, CreatedAt, etc. or they're virtual or auto-increment, etc.
-          // EXCEPTION: Include primary keys for CREATE when they have values and are not auto-increment
+      // Single source of truth for whether this field is even a parameter
+      // of the target SP (spCreate / spUpdate). Mirrors CodeGen's
+      // `shouldIncludeFieldInParams` — they MUST agree, or the SP body's
+      // declared parameter list and the EXEC argument list will drift and
+      // we'll hit a "Procedure or function has too many/few arguments
+      // specified" error. See EntityFieldInfo.IsSPParameter.
+      if (!f.IsSPParameter(isUpdate)) {
+        continue;
+      }
 
-          const theField = entity.Fields.find((field) => field.Name.trim().toLowerCase() === f.Name.trim().toLowerCase());
-          const tempStatus = theField.ActiveStatusAssertions;
-          theField.ActiveStatusAssertions = false; // turn off warnings for this operation
-          let value = theField.Value;// entity.Get(f.Name);
-          theField.ActiveStatusAssertions = tempStatus; // restore the status assertions
+      // PK-on-UPDATE special case: the SP signature DOES include the PK
+      // (caller needs it to identify the row), but in this provider it is
+      // appended at the end of the EXEC arg list by the post-loop block
+      // below (which sources its value from `entity.PrimaryKey.KeyValuePairs`
+      // — the loaded PK, including composite-key support). Skip it here
+      // to avoid a duplicate DECLARE/SET (which raises SQL Server "The
+      // variable name '@ID_xxx' has already been declared.")
+      if (isUpdate && f.IsPrimaryKey) {
+        continue;
+      }
 
-          if (value && f.Type.trim().toLowerCase() === 'datetimeoffset') {
-            // for non-null datetimeoffset fields, we need to convert the value to ISO format
-            value = new Date(value).toISOString();
-          } else if (!isUpdate && f.Type.trim().toLowerCase() === 'uniqueidentifier' && !includePrimaryKeyForCreate) {
-            // in the case of unique identifiers, for CREATE procs only,
-            // we need to check to see if the value we have in the entity object is a function like newid() or newsquentialid()
-            // in those cases we should just skip the parameter entirely because that means there is a default value that should be used
-            // and that will be handled by the database not by us
-            // instead of just checking for specific functions like newid(), we can instead check for any string that includes ()
-            // this way we can handle any function that the database might support in the future
-            // EXCEPTION: Don't skip if we're including a primary key for create
-            if (typeof value === 'string' && value.includes('()')) {
-              continue; // skip this field entirely by going to the next iteration of the loop
-            }
-          }
-
-          fieldValueMap.set(f, value);
+      // PK on CREATE is in the SP signature (declared with a default so the
+      // database can supply NEWSEQUENTIALID() etc.), but we only PASS it
+      // when the caller has actually set an explicit value. Without a real
+      // value, omit the param so the SP default fires.
+      const includePrimaryKeyForCreate = !isUpdate && f.IsPrimaryKey && !f.AutoIncrement;
+      if (includePrimaryKeyForCreate) {
+        const v = entity.Get(f.Name);
+        if (v === null || v === undefined) {
+          continue;
         }
       }
+
+      const theField = entity.Fields.find((field) => field.Name.trim().toLowerCase() === f.Name.trim().toLowerCase());
+      const tempStatus = theField.ActiveStatusAssertions;
+      theField.ActiveStatusAssertions = false; // turn off warnings for this operation
+      let value = theField.Value;
+      theField.ActiveStatusAssertions = tempStatus; // restore the status assertions
+
+      if (value && f.Type.trim().toLowerCase() === 'datetimeoffset') {
+        // for non-null datetimeoffset fields, we need to convert the value to ISO format
+        value = new Date(value).toISOString();
+      } else if (!isUpdate && f.Type.trim().toLowerCase() === 'uniqueidentifier' && !includePrimaryKeyForCreate) {
+        // For CREATE on a non-PK uniqueidentifier whose value looks like a SQL
+        // function call (e.g. newid() / newsequentialid()), skip the param so
+        // the database default fires instead of trying to insert the literal
+        // string. The check `.includes('()')` is intentionally generic so any
+        // future DB function name also works.
+        if (typeof value === 'string' && value.includes('()')) {
+          continue;
+        }
+      }
+
+      fieldValueMap.set(f, value);
     }
 
     // Encrypt field values using the generic method from GenericDatabaseProvider

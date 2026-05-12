@@ -1,4 +1,16 @@
 @if (loading) {
   <mj-loading [showText]="false" size="large"></mj-loading>
 }
+@if (errorTitle) {
+  <div class="single-record-error" role="alert">
+    <div class="single-record-error__icon">
+      <i class="fa-solid fa-triangle-exclamation"></i>
+    </div>
+    <h2 class="single-record-error__title">{{ errorTitle }}</h2>
+    @if (errorDetail) {
+      <p class="single-record-error__detail">{{ errorDetail }}</p>
+    }
+    <p class="single-record-error__hint">See browser console for technical details.</p>
+  </div>
+}
 <ng-template mjContainer></ng-template>

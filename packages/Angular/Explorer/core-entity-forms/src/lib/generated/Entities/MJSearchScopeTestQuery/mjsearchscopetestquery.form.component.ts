@@ -15,7 +15,10 @@ export class MJSearchScopeTestQueryFormComponent extends BaseFormComponent {
     override async ngOnInit() {
         await super.ngOnInit();
         this.initSections([
-            { sectionKey: 'details', sectionName: 'Details', isExpanded: true }
+            { sectionKey: 'searchConfiguration', sectionName: 'Search Configuration', isExpanded: true },
+            { sectionKey: 'queryDefinition', sectionName: 'Query Definition', isExpanded: true },
+            { sectionKey: 'validationCriteria', sectionName: 'Validation Criteria', isExpanded: false },
+            { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }
 }
