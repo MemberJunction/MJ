@@ -739,9 +739,28 @@ Each command and skill file gets a frontmatter line `mj-pack-version: 5.1.0`. `m
 - We touch only the **project-level** `<repo>/.claude/settings.json`, never `~/.claude/settings.json`.
 - The shipped `.claude/settings.local.json` is *not* created by us — that's the user's personal override file.
 
-### 10.4 The `check-pack-version.js` SessionStart helper
+### 10.4 The `check-pack-version.js` SessionStart helper (as shipped)
 
-Tiny self-contained script (~50 lines) committed to `templates/claude-pack/skills/_helpers/check-pack-version.js` and copied into `.claude/mj/`. Implements the §8.2 staleness check. No npm dependencies — just `https`, `fs`, `path`, `crypto`. Exits 0 always (warnings go to stderr; the hook prints them but never blocks).
+Self-contained Node CommonJS script committed to `templates/claude-pack/check-pack-version.js`
+and copied by `build-pack.mjs` into `.claude/mj/check-pack-version.js`. Implements
+the §8.2 staleness check. No npm dependencies — just `fs`, `path`, `https`, `http`.
+Exits 0 always; notices go to stderr.
+
+> **Source path note:** the plan originally suggested
+> `templates/claude-pack/skills/_helpers/`, but `skills/` is reserved for actual
+> Claude Code skill packages that the framework discovers and loads. Putting a
+> helper under there would either look like a skill (confusing) or require a
+> filtering convention. The helper lives at the pack source root instead, where
+> it sits alongside `build-pack.mjs` and the templates.
+
+Two escape hatches for restricted environments and tests:
+
+- `MJ_PACK_CHECK_DISABLE=1` — skip the check entirely (no FS or network work)
+- `MJ_PACK_CHECK_URL=<url>` — fetch from the given URL instead of the GitHub
+  raw URL. Accepts `http://` (for local mirrors / tests) or `https://`.
+
+The MJ major is derived at runtime from `.claude/mj/VERSION`, so the same helper
+ships across major versions without templating.
 
 ---
 
@@ -763,6 +782,7 @@ In `packages/MJCLI/src/__tests__/claude-pack/` (see §7.3 note for path):
 | `PackOutputFormatter.test.ts` | `formatJson` matches §7.5 schema; `formatPretty` success/failure banners, bucket listing, skipped-list truncation, warning rendering, "(check only)" + "no local MJ" labels |
 | `claude-commands.test.ts` | Static flag-set metadata for both commands; `mapFlagsToInstallOptions` exhaustive translation; end-to-end `Command.run([...argv])` with `--from --dry-run --json` against a real fixture pack (no network) |
 | `build-pack.test.ts` | The Milestone 1 build script (deferred from M1 per the user's "defer to M3" decision): determinism, output sanity, MANIFEST.json checksum integrity, error paths (missing PACK_VERSION, mismatched major, missing overlay, unknown `--major`), multi-major build with v6 fixture, commands/skills verbatim copy, .gitkeep exclusion |
+| `check-pack-version.test.ts` | The Milestone 4 SessionStart helper, tested via subprocess: `MJ_PACK_CHECK_DISABLE=1` short-circuit; absent / empty / non-semver VERSION cases; cache TTL (fresh skip + stale refetch); patch / minor / major bumps trigger notice; equal / older / numeric-vs-lex compare cases stay silent; cache touched defensively on connection refused and on 404 (no retry-loop) |
 
 ### 11.2 Integration tests
 

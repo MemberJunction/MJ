@@ -5,6 +5,7 @@
     "mjMajor": "{{MJ_MAJOR}}",
     "keys": [
       "permissions.allow",
+      "hooks.SessionStart",
       "env.MJ_CLAUDE_PACK"
     ]
   },
@@ -30,6 +31,19 @@
       "Bash(ls *)",
       "Bash(find *)",
       "Bash(grep *)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/mj/check-pack-version.js"
+          }
+        ]
+      }
     ]
   },
   "env": {

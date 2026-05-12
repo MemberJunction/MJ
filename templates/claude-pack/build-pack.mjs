@@ -175,6 +175,14 @@ async function writeMjBundle(distDir, ctx, coreMd, overlayMd) {
     await writeLfFile(path.join(mjDir, 'VERSION'), `${ctx.packVersion}\n`);
     await writeLfFile(path.join(mjDir, 'REMOTE.md'), makeRemoteMd(ctx));
     await writeLfFile(path.join(mjDir, 'README.md'), makeMjReadme(ctx));
+
+    // SessionStart hook helper — version-agnostic, reads major from VERSION at runtime.
+    // Sits in .claude/mj/ so it gets refreshed with the rest of the managed bundle.
+    const hookSrc = path.join(PACK_ROOT, 'check-pack-version.js');
+    if (await pathExists(hookSrc)) {
+        const hookBody = await fs.readFile(hookSrc, 'utf8');
+        await writeLfFile(path.join(mjDir, 'check-pack-version.js'), hookBody);
+    }
 }
 
 async function writeRootAndSettings(distDir, claudeMd, settingsJson) {

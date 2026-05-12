@@ -19,6 +19,11 @@
       "sha256": "c0eacacd7e27bbf341d21e7e0e2997a363840a210d8e358d4babaebd765b5bfd"
     },
     {
+      "path": ".claude/mj/check-pack-version.js",
+      "bytes": 4534,
+      "sha256": "474d5f43e45e85410e797fa3c9b4ed5fa966e9c9dc97e2dff8d2d3b59e61be01"
+    },
+    {
       "path": ".claude/mj/core.md",
       "bytes": 22508,
       "sha256": "e2e1e89fbf8877917479cab4825de4f1f15c447f4a094c0981b0dbd9884b5de8"
@@ -30,8 +35,8 @@
     },
     {
       "path": ".claude/settings.json",
-      "bytes": 856,
-      "sha256": "67f6bab6014e04277ed9d89119d5e8fe8a680a77b9a9be41807be119a6f1e5ed"
+      "bytes": 1117,
+      "sha256": "8f0c3193cfb644e15a21d58bce68718813f28bc77ef1bb37587f127f4f0c03a3"
     },
     {
       "path": "CLAUDE.md",
