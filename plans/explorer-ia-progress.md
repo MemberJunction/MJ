@@ -33,9 +33,9 @@ All 5 are standalone, design-token-only, PascalCase API.
 | Models | ✅ | ✅ | ✅ | ✅ | ✅ | `[actions]`: filter-popover → view-toggle → New Model. Body: `<mj-page-body [Flex]="true">`; `.main-content` + `.content-area` removed. |
 | AI Configuration | ✅ | ✅ | ✅ | ✅ | ✅ | `[actions]`: filter-popover → view-toggle. Body: `<mj-page-body [Flex]="true">`; `.main-content` + `.configurations-content` removed. |
 | Analytics | ✅ | ✅ | ✅ | ✅ | ✅ | Shell owns filter-bar in `[actions]`; `FilterBarConfig` getter switches Show flags per `ActiveSection` — every section including Model Performance (which contributes SortBy + Vendor filters) goes through the shared chrome now. NG8011 warnings fixed. Body wrapped in `<mj-page-body [Padding]="false" class="analytics-shell">` for flush sidebar layout (TBD on row-direction `mj-page-body`). |
-| Lists — Browse | ✅ | ✅ | ✅ | ✅ | ✅ | Config-driven `<mj-filter-panel>` (Category dropdown + Status chip group); `<mj-view-toggle>` for grid/list; mjButton "New List" in `[actions]`. Body container restored to `flex: 1; min-height: 0; padding: 0 24px 24px`. |
-| Lists — Operations | ✅ | ✅ | n/a | n/a | n/a | Header only; KPI grid + tables in body. |
-| Lists — Categories | ✅ | ✅ | n/a | n/a | n/a | Header only; tree/table content in body. |
+| Lists — Browse | ✅ | ✅ | ✅ | ✅ | ✅ | Config-driven `<mj-filter-panel>` (Category dropdown + Status chip group); `<mj-view-toggle>` for grid/list; mjButton "New List" in `[actions]`. Body: `<mj-page-body>`; removed `.lists-browse-container` wrapper + dead `.result-count` rule (count already lives in `[meta]`). Sort dropdown kept in body (sort UI is TBD in conventions). |
+| Lists — Operations | ✅ | ✅ | n/a | n/a | n/a | Conditional Clear button in `[actions]`. Body: `<mj-page-body>`; removed `.operations-container` wrapper. Inner split-pane (selection + result panels) preserved. |
+| Lists — Categories | ✅ | ✅ | n/a | n/a | n/a | "New Category" primary in `[actions]`. Body: `<mj-page-body>`; removed `.lists-categories-container` wrapper. Tree + detail-panel split inside body unchanged. |
 | Communication — Logs | ✅ | ✅ | ✅ | ✅ | ✅ | Earlier session — popover with date range + status chips. |
 | Communication — Templates | ✅ | ✅ | n/a | n/a | n/a | Earlier session — card grid + search. |
 | Communication — Monitor | ✅ | ✅ | n/a | n/a | n/a | KPI strip + content grids; `loadData()` refresh button in `[actions]`. |

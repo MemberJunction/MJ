@@ -27,7 +27,7 @@ interface CategoryViewModel {
         </div>
       </mj-page-header>
 
-      <div class="lists-categories-container">
+      <mj-page-body>
       <!-- Loading State -->
       @if (isLoading) {
         <div class="loading-container">
@@ -268,7 +268,7 @@ interface CategoryViewModel {
           </div>
         </div>
       }
-      </div>
+      </mj-page-body>
     </mj-page-layout>
     `,
   styles: [`
@@ -277,16 +277,6 @@ interface CategoryViewModel {
       flex-direction: column;
       width: 100%;
       height: 100%;
-    }
-
-    .lists-categories-container {
-      display: flex;
-      flex-direction: column;
-      flex: 1;
-      min-height: 0;
-      padding: 0 24px 24px;
-      background: var(--mj-bg-surface);
-      overflow: hidden;
     }
 
     /* Header */

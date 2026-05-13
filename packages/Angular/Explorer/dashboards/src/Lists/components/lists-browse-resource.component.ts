@@ -69,7 +69,7 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
         </div>
       </mj-page-header>
 
-      <div class="lists-browse-container">
+      <mj-page-body>
       <!-- Loading State -->
       @if (isLoading) {
         <div class="loading-container">
@@ -123,8 +123,9 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
       <!-- Results Content -->
       @if (!isLoading && filteredLists.length > 0) {
         <div class="browse-content">
+          <!-- Sort options — sort UI is undecided in the chrome conventions doc;
+               keeping it here in the body as a sub-view control until the doc takes a position. -->
           <div class="results-header">
-            <span class="result-count">{{filteredLists.length}} list{{filteredLists.length !== 1 ? 's' : ''}}</span>
             <div class="sort-options">
               <label>Sort:</label>
               <select
@@ -522,7 +523,7 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
           </div>
         </div>
       }
-      </div>
+      </mj-page-body>
     </mj-page-layout>
     `,
   styles: [`
@@ -537,16 +538,6 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
        children of <mj-page-header>'s slot so its gap applies between them. */
     .lists-header-actions {
       display: contents;
-    }
-
-    .lists-browse-container {
-      display: flex;
-      flex-direction: column;
-      flex: 1;
-      min-height: 0;
-      padding: 0 24px 24px;
-      background: var(--mj-bg-surface);
-      overflow: hidden;
     }
 
     /* Header */
@@ -851,11 +842,6 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
       justify-content: space-between;
       align-items: center;
       margin-bottom: 16px;
-    }
-
-    .result-count {
-      font-size: 14px;
-      color: var(--mj-text-secondary);
     }
 
     .sort-options {

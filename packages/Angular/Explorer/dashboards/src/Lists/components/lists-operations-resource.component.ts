@@ -51,7 +51,7 @@ interface EntityOption {
         }
       </mj-page-header>
 
-      <div class="operations-container">
+      <mj-page-body [Flex]="true" [Padding]="false">
       <!-- Main Content -->
       <div class="operations-content">
         <!-- Left Panel: List Selection -->
@@ -392,7 +392,7 @@ interface EntityOption {
           </div>
         </div>
       }
-      </div>
+      </mj-page-body>
     </mj-page-layout>
     `,
   styles: [`
@@ -400,15 +400,6 @@ interface EntityOption {
       display: block;
       width: 100%;
       height: 100%;
-    }
-
-    .operations-container {
-      display: flex;
-      flex-direction: column;
-      flex: 1;
-      min-height: 0;
-      padding: 0 24px 24px;
-      background: var(--mj-bg-surface);
     }
 
     .operations-header {
