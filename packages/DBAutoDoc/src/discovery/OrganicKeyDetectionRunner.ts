@@ -23,6 +23,7 @@ import { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
 import { DetectorInputColumn, OrganicKeyClusterDetector } from './OrganicKeyClusterDetector.js';
 import { OrganicKeyClusterRefiner } from './OrganicKeyClusterRefiner.js';
 import { createEmbeddingProvider } from './EmbeddingProvider.js';
+import { BusinessConceptProjector } from './BusinessConceptProjector.js';
 import { ValueOverlapSampler } from './ValueOverlapSampler.js';
 import { MinHashSignature } from './MinHashSketch.js';
 
@@ -265,8 +266,15 @@ export class OrganicKeyDetectionRunner {
 
     /**
      * Generate embeddings for each column's descriptor and attach to the column record.
-     * Uses the configured AI provider's embedding endpoint (Gemini / OpenAI). On failure,
-     * embeddings are simply not attached and the runner falls back to name + value signals.
+     *
+     * By default, embeddings are projected through business-concept anchors (per PR #2193
+     * organic key definition) before being attached to the column. This makes business-
+     * meaningful concepts dominate the clustering space and pushes non-business clusters
+     * (audit timestamps, replication GUIDs) into a region of the space where they don't
+     * resemble organic key candidates.
+     *
+     * Raw embeddings can be requested via `embedding.useBusinessProjection: false` for
+     * debugging or comparison runs.
      */
     private async attachEmbeddings(columns: DetectorInputColumn[]): Promise<void> {
         if (!this.aiConfig || !this.config.embedding?.enabled) return;
@@ -282,13 +290,30 @@ export class OrganicKeyDetectionRunner {
                 (c) =>
                     `Column ${c.schema}.${c.table}.${c.column}. ${c.description ?? ''}`.trim(),
             );
-            const vectors = await provider.embed(texts);
-            for (let i = 0; i < columns.length; i++) {
-                columns[i].embedding = vectors[i];
+            const rawVectors = await provider.embed(texts);
+
+            // Empirically, projection into a small business-concept space over-merges
+            // distinct business concepts (e.g. BusinessEntityID and ProductID both project
+            // similarly onto "business identifier" axis and collapse into one mega-cluster).
+            // Raw embeddings preserve cross-concept discrimination. Projection is kept as an
+            // opt-in (e.g. as a future post-filter / gate) but defaults to off.
+            // See validation results in tools/organic-key-cluster-poc/compare-projection-modes.mjs.
+            const useProjection = this.config.embedding.useBusinessProjection === true;
+            if (useProjection) {
+                const projector = await BusinessConceptProjector.build(provider, {
+                    anchors: this.config.embedding.customBusinessAnchors,
+                    additionalAnchors: this.config.embedding.additionalBusinessAnchors,
+                });
+                const projected = projector.projectAll(rawVectors);
+                for (let i = 0; i < columns.length; i++) {
+                    columns[i].embedding = projected[i];
+                }
+            } else {
+                for (let i = 0; i < columns.length; i++) {
+                    columns[i].embedding = rawVectors[i];
+                }
             }
         } catch (err) {
-            // Embedding failure is non-fatal — log via no-op (runner-level progress already announced this step)
-            // and continue with whichever signals remain.
             throw new Error(`Embedding generation failed: ${(err as Error).message}`);
         }
     }

@@ -203,6 +203,29 @@ export interface OrganicKeyDetectionConfig {
     dimensions?: number;
     /** Batch size for embedding requests (default: 100). */
     batchSize?: number;
+    /**
+     * Use business-concept projection (default: false).
+     *
+     * EXPERIMENTAL — defaults to off based on empirical validation. Projecting raw
+     * Gemini embeddings (1536-dim) into a small business-concept anchor space
+     * (~14-dim) over-merges distinct business concepts: BusinessEntityID and
+     * ProductID both project strongly onto the "business identifier" axis and
+     * collapse into one mega-cluster, losing the cross-concept discrimination
+     * that raw embeddings preserve. The projector is kept for experimentation
+     * (e.g. as a future post-filter gate on cluster-level business-ness) but
+     * the runtime path defaults to raw embeddings.
+     *
+     * See: tools/organic-key-cluster-poc/compare-projection-modes.mjs for
+     * the side-by-side numbers.
+     */
+    useBusinessProjection?: boolean;
+    /**
+     * Additional domain-specific anchor texts to append to the default business
+     * anchors (e.g., healthcare-specific or industry-specific concepts).
+     */
+    additionalBusinessAnchors?: string[];
+    /** Fully override the default business anchors (advanced). */
+    customBusinessAnchors?: string[];
   };
 
   /** LLM refinement configuration. Omit to skip refinement entirely. */
