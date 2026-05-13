@@ -609,6 +609,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Prompt Components Section -->
+    <mj-collapsible-panel
+        SectionKey="promptComponents"
+        SectionName="Prompt Components"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('promptComponents')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('Prompt Components','PromptID')"
+                [NewRecordValues]="NewRecordValues('Prompt Components')"
+                [AllowLoad]="IsSectionExpanded('promptComponents')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('promptComponents', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- AI Configurations (Default Prompt For Context Compression) Section -->
     <mj-collapsible-panel
         SectionKey="mJAIConfigurationsDefaultPromptForContextCompressionID"

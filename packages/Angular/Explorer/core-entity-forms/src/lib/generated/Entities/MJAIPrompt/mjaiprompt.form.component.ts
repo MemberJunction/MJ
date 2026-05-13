@@ -26,6 +26,7 @@ export class MJAIPromptFormComponent extends BaseFormComponent {
             { sectionKey: 'mJAIConfigurationsDefaultPromptForContextSummarizationID', sectionName: 'AI Configurations (Default Prompt For Context Summarization)', isExpanded: false },
             { sectionKey: 'mJAIAgentTypes', sectionName: 'AI Agent Types', isExpanded: false },
             { sectionKey: 'mJAIAgentActions', sectionName: 'AI Agent Actions', isExpanded: false },
+            { sectionKey: 'promptComponents', sectionName: 'Prompt Components', isExpanded: false },
             { sectionKey: 'mJAIConfigurationsDefaultPromptForContextCompressionID', sectionName: 'AI Configurations (Default Prompt For Context Compression)', isExpanded: false },
             { sectionKey: 'mJAIPrompts', sectionName: 'AI Prompts', isExpanded: false },
             { sectionKey: 'mJAIAgentPrompts', sectionName: 'AI Agent Prompts', isExpanded: false },

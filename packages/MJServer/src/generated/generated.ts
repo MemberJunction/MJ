@@ -67334,23 +67334,23 @@ export class MJSearchScope_ {
     @MaxLength(100)
     OwnerUser?: string;
         
-    @Field(() => [MJSearchScopeExternalIndex_])
-    MJSearchScopeExternalIndexes_SearchScopeIDArray: MJSearchScopeExternalIndex_[]; // Link to MJSearchScopeExternalIndexes
-    
     @Field(() => [MJSearchScopeEntity_])
     MJSearchScopeEntities_SearchScopeIDArray: MJSearchScopeEntity_[]; // Link to MJSearchScopeEntities
     
+    @Field(() => [MJSearchScopeExternalIndex_])
+    MJSearchScopeExternalIndexes_SearchScopeIDArray: MJSearchScopeExternalIndex_[]; // Link to MJSearchScopeExternalIndexes
+    
     @Field(() => [MJSearchScopePermission_])
     MJSearchScopePermissions_SearchScopeIDArray: MJSearchScopePermission_[]; // Link to MJSearchScopePermissions
-    
-    @Field(() => [MJSearchScopeTestQuery_])
-    MJSearchScopeTestQueries_SearchScopeIDArray: MJSearchScopeTestQuery_[]; // Link to MJSearchScopeTestQueries
     
     @Field(() => [MJSearchScopeProvider_])
     MJSearchScopeProviders_SearchScopeIDArray: MJSearchScopeProvider_[]; // Link to MJSearchScopeProviders
     
     @Field(() => [MJSearchScopeStorageAccount_])
     MJSearchScopeStorageAccounts_SearchScopeIDArray: MJSearchScopeStorageAccount_[]; // Link to MJSearchScopeStorageAccounts
+    
+    @Field(() => [MJSearchScopeTestQuery_])
+    MJSearchScopeTestQueries_SearchScopeIDArray: MJSearchScopeTestQuery_[]; // Link to MJSearchScopeTestQueries
     
     @Field(() => [MJAIAgentSearchScope_])
     MJAIAgentSearchScopes_SearchScopeIDArray: MJAIAgentSearchScope_[]; // Link to MJAIAgentSearchScopes
@@ -67517,16 +67517,6 @@ export class MJSearchScopeResolver extends ResolverBase {
         return result;
     }
     
-    @FieldResolver(() => [MJSearchScopeExternalIndex_])
-    async MJSearchScopeExternalIndexes_SearchScopeIDArray(@Root() mjsearchscope_: MJSearchScope_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Search Scope External Indexes', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSearchScopeExternalIndexes')} WHERE ${provider.QuoteIdentifier('SearchScopeID')}='${mjsearchscope_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Search Scope External Indexes', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Search Scope External Indexes', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJSearchScopeEntity_])
     async MJSearchScopeEntities_SearchScopeIDArray(@Root() mjsearchscope_: MJSearchScope_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Search Scope Entities', userPayload);
@@ -67537,6 +67527,16 @@ export class MJSearchScopeResolver extends ResolverBase {
         return result;
     }
         
+    @FieldResolver(() => [MJSearchScopeExternalIndex_])
+    async MJSearchScopeExternalIndexes_SearchScopeIDArray(@Root() mjsearchscope_: MJSearchScope_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Search Scope External Indexes', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSearchScopeExternalIndexes')} WHERE ${provider.QuoteIdentifier('SearchScopeID')}='${mjsearchscope_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Search Scope External Indexes', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Search Scope External Indexes', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
     @FieldResolver(() => [MJSearchScopePermission_])
     async MJSearchScopePermissions_SearchScopeIDArray(@Root() mjsearchscope_: MJSearchScope_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Search Scope Permissions', userPayload);
@@ -67544,16 +67544,6 @@ export class MJSearchScopeResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSearchScopePermissions')} WHERE ${provider.QuoteIdentifier('SearchScopeID')}='${mjsearchscope_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Search Scope Permissions', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Search Scope Permissions', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
-    @FieldResolver(() => [MJSearchScopeTestQuery_])
-    async MJSearchScopeTestQueries_SearchScopeIDArray(@Root() mjsearchscope_: MJSearchScope_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Search Scope Test Queries', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSearchScopeTestQueries')} WHERE ${provider.QuoteIdentifier('SearchScopeID')}='${mjsearchscope_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Search Scope Test Queries', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Search Scope Test Queries', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -67574,6 +67564,16 @@ export class MJSearchScopeResolver extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSearchScopeStorageAccounts')} WHERE ${provider.QuoteIdentifier('SearchScopeID')}='${mjsearchscope_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Search Scope Storage Accounts', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Search Scope Storage Accounts', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJSearchScopeTestQuery_])
+    async MJSearchScopeTestQueries_SearchScopeIDArray(@Root() mjsearchscope_: MJSearchScope_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Search Scope Test Queries', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSearchScopeTestQueries')} WHERE ${provider.QuoteIdentifier('SearchScopeID')}='${mjsearchscope_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Search Scope Test Queries', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Search Scope Test Queries', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         
@@ -77491,11 +77491,11 @@ export class MJUser_ {
     @Field(() => [MJRecordMergeLog_])
     MJRecordMergeLogs_InitiatedByUserIDArray: MJRecordMergeLog_[]; // Link to MJRecordMergeLogs
     
-    @Field(() => [MJSearchScopePermission_])
-    MJSearchScopePermissions_UserIDArray: MJSearchScopePermission_[]; // Link to MJSearchScopePermissions
-    
     @Field(() => [MJSearchExecutionLog_])
     MJSearchExecutionLogs_UserIDArray: MJSearchExecutionLog_[]; // Link to MJSearchExecutionLogs
+    
+    @Field(() => [MJSearchScopePermission_])
+    MJSearchScopePermissions_UserIDArray: MJSearchScopePermission_[]; // Link to MJSearchScopePermissions
     
     @Field(() => [MJTask_])
     MJTasks_UserIDArray: MJTask_[]; // Link to MJTasks
@@ -78591,16 +78591,6 @@ export class MJUserResolverBase extends ResolverBase {
         return result;
     }
         
-    @FieldResolver(() => [MJSearchScopePermission_])
-    async MJSearchScopePermissions_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
-        this.CheckUserReadPermissions('MJ: Search Scope Permissions', userPayload);
-        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
-        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSearchScopePermissions')} WHERE ${provider.QuoteIdentifier('UserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Search Scope Permissions', userPayload, EntityPermissionType.Read, 'AND');
-        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
-        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Search Scope Permissions', rows, this.GetUserFromPayload(userPayload));
-        return result;
-    }
-        
     @FieldResolver(() => [MJSearchExecutionLog_])
     async MJSearchExecutionLogs_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
         this.CheckUserReadPermissions('MJ: Search Execution Logs', userPayload);
@@ -78608,6 +78598,16 @@ export class MJUserResolverBase extends ResolverBase {
         const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSearchExecutionLogs')} WHERE ${provider.QuoteIdentifier('UserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Search Execution Logs', userPayload, EntityPermissionType.Read, 'AND');
         const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
         const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Search Execution Logs', rows, this.GetUserFromPayload(userPayload));
+        return result;
+    }
+        
+    @FieldResolver(() => [MJSearchScopePermission_])
+    async MJSearchScopePermissions_UserIDArray(@Root() mjuser_: MJUser_, @Ctx() { userPayload, providers }: AppContext, @PubSub() pubSub: PubSubEngine) {
+        this.CheckUserReadPermissions('MJ: Search Scope Permissions', userPayload);
+        const provider = GetReadOnlyProvider(providers, { allowFallbackToReadWrite: true });
+        const sSQL = `SELECT * FROM ${provider.QuoteSchemaAndView(Metadata.Provider.ConfigData.MJCoreSchemaName, 'vwSearchScopePermissions')} WHERE ${provider.QuoteIdentifier('UserID')}='${mjuser_.ID}' ` + this.getRowLevelSecurityWhereClause(provider, 'MJ: Search Scope Permissions', userPayload, EntityPermissionType.Read, 'AND');
+        const rows = await provider.ExecuteSQL(sSQL, undefined, undefined, this.GetUserFromPayload(userPayload));
+        const result = await this.ArrayMapFieldNamesToCodeNames('MJ: Search Scope Permissions', rows, this.GetUserFromPayload(userPayload));
         return result;
     }
         

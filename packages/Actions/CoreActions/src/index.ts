@@ -31,6 +31,12 @@ export * from './custom/utilities/address-services.action';
 // Geo Actions
 export * from './custom/geo/scheduled-geocoding.action';
 
+// BLA (Betty Layered Assembler) Flow Agent actions
+export * from './custom/bla/assemble-prompt.action';
+export * from './custom/bla/execute-prompt.action';
+export * from './custom/bla/services/BLAPromptAssembler';
+export * from './custom/bla/services/types';
+
 // Web Actions
 export * from './custom/web/web-search.action';
 export * from './custom/web/web-page-content.action';

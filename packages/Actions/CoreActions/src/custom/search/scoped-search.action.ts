@@ -14,6 +14,7 @@ import {
     MJSearchScopeEntity,
     MJAIAgentSearchScopeEntity
 } from "@memberjunction/core-entities";
+import type { SecondaryScopeValue } from "@memberjunction/ai-core-plus";
 
 /**
  * Formatted result item for serialization-safe output. Mirrors `SearchResultItem`
@@ -58,9 +59,41 @@ interface FormattedSearchResult {
  *       - If `ScopeID` supplied: used as-is.
  *       - If omitted: uses the Global scope.
  *
+ * Multi-tenant `SearchContext` (per-call):
+ *   Two optional inputs assemble a `SearchContext` that is threaded into
+ *   `SearchParams.SearchContext`. The engine renders the values into every
+ *   scope-level Nunjucks template (MetadataFilter, ExtraFilter, UserSearchString,
+ *   FolderPath) at search time — so one scope definition serves many tenants.
+ *
+ *   - `PrimaryScopeRecordID` (string) — primary tenant key (e.g. OrganizationID).
+ *     Available in templates as `{{ context.PrimaryScopeRecordID }}`.
+ *   - `SecondaryScopes` (JSON string) — flat object of additional dimensions.
+ *     Each value must be `string | number | boolean | string[]`. Available in
+ *     templates as `{{ context.SecondaryScopes.<key> }}`. Incompatible value
+ *     types are dropped with a log; malformed JSON falls back to undefined
+ *     rather than failing the call.
+ *
+ *   `SearchContext` is included only when at least one of the two inputs is
+ *   provided — omitting both preserves the original "no per-call tenant
+ *   filter" behavior. See `guides/SEARCH_SCOPES_AND_RAG_GUIDE.md` §10 for the
+ *   full multi-tenant model and template-rendering details.
+ *
  * @example Agent tool call
  * ```
  * { "tool": "Scoped Search", "params": { "Query": "refund policy", "AgentID": "<agent-uuid>" } }
+ * ```
+ *
+ * @example Per-tenant scoped call
+ * ```
+ * {
+ *   "tool": "Scoped Search",
+ *   "params": {
+ *     "Query":                "Q3 budget approval",
+ *     "AgentID":              "<agent-uuid>",
+ *     "PrimaryScopeRecordID": "<org-uuid>",
+ *     "SecondaryScopes":      "{\"Department\":\"Finance\",\"Tags\":[\"q3\",\"approved\"]}"
+ *   }
+ * }
  * ```
  */
 @RegisterClass(BaseAction, "__Scoped_Search")
@@ -91,10 +124,21 @@ export class ScopedSearchAction extends BaseAction {
             const maxResults = this.getNumericParam(params, "maxresults", 25);
             const minScore = this.getNumericParam(params, "minscore", 0);
             const streamingMode = (this.getStringParam(params, "streamingmode") ?? 'finalOnly').toLowerCase();
-            LogStatus(`ScopedSearchAction: Agent="${agent.Name}" scope="${scope?.Name ?? 'Global'}" query="${query}" streamingMode="${streamingMode}"`);
+            // Per-call multi-tenant context. PrimaryScopeRecordID is the
+            // primary tenant key (e.g. OrganizationID). SecondaryScopes is
+            // an opaque JSON object of additional dimensions; each key
+            // becomes `{{ context.SecondaryScopes.<key> }}` available to
+            // the scope's Nunjucks-rendered MetadataFilter / ExtraFilter /
+            // UserSearchString / FolderPath. Dimensions are fully dynamic
+            // here — validation against scope.SearchContextConfig.dimensions
+            // (if desired) is the engine's responsibility, not the action's.
+            const primaryScopeRecordID = this.getStringParam(params, "primaryscoperecordid");
+            const secondaryScopes = this.parseSecondaryScopes(params);
+            LogStatus(`ScopedSearchAction: Agent="${agent.Name}" scope="${scope?.Name ?? 'Global'}" query="${query}" streamingMode="${streamingMode}" primaryScopeRecordID="${primaryScopeRecordID ?? ''}" secondaryScopeKeys=[${Object.keys(secondaryScopes ?? {}).join(',')}]`);
             const exec = await this.runSearch({
                 query, maxResults, minScore, scopeID, agent,
                 contextUser: params.ContextUser, streamingMode,
+                primaryScopeRecordID, secondaryScopes,
             });
             if ('result' in exec) return exec.result;
 
@@ -254,7 +298,19 @@ export class ScopedSearchAction extends BaseAction {
         agent: MJAIAgentEntity;
         contextUser: UserInfo;
         streamingMode: string;
+        primaryScopeRecordID: string | undefined;
+        secondaryScopes: Record<string, SecondaryScopeValue> | undefined;
     }): Promise<{ ok: true; sr: SearchResult; progressEvents: Array<Record<string, unknown>> } | { ok: false; result: ActionResultSimple }> {
+        // Construct a SearchContext only when the caller supplied at least
+        // one runtime dimension. Leaving it undefined preserves the existing
+        // "no per-call tenant filter" behavior for callers that never pass
+        // these inputs.
+        const searchContext = (input.primaryScopeRecordID || (input.secondaryScopes && Object.keys(input.secondaryScopes).length > 0))
+            ? {
+                PrimaryScopeRecordID: input.primaryScopeRecordID,
+                SecondaryScopes: input.secondaryScopes,
+            }
+            : undefined;
         const baseParams = {
             Query: input.query,
             MaxResults: input.maxResults,
@@ -265,6 +321,11 @@ export class ScopedSearchAction extends BaseAction {
             // SearchExecutionLog.AIAgentID is populated. Mirror the pre-
             // execution RAG and Forbidden-path threading.
             AIAgentID: input.agent.ID,
+            // Multi-tenant runtime context. The engine renders this into the
+            // scope's Nunjucks MetadataFilter / ExtraFilter / UserSearchString
+            // / FolderPath fields at search time so a single scope definition
+            // can serve many tenants.
+            SearchContext: searchContext,
         };
         if (input.streamingMode !== 'partials') {
             const sr = await SearchEngine.Instance.Search(baseParams, input.contextUser);
@@ -508,6 +569,52 @@ export class ScopedSearchAction extends BaseAction {
         if (!param || param.Value === undefined || param.Value === null) return undefined;
         const value = String(param.Value).trim();
         return value.length > 0 ? value : undefined;
+    }
+
+    /**
+     * Parse the optional SecondaryScopes input. Accepts a JSON string
+     * containing a flat object of dimension keys to values. Values are
+     * passed through verbatim; the SearchEngine's Nunjucks render handles
+     * type coercion when interpolating into MetadataFilter / ExtraFilter
+     * templates. Malformed input is logged and treated as undefined rather
+     * than failing the whole search — a stray bad payload shouldn't kill
+     * an otherwise-valid query.
+     */
+    private parseSecondaryScopes(params: RunActionParams): Record<string, SecondaryScopeValue> | undefined {
+        const raw = this.getStringParam(params, "secondaryscopes");
+        if (!raw) return undefined;
+        let parsed: unknown;
+        try {
+            parsed = JSON.parse(raw);
+        } catch (e) {
+            LogError(`ScopedSearchAction: SecondaryScopes was not valid JSON; ignoring: ${e instanceof Error ? e.message : String(e)}`);
+            return undefined;
+        }
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+            LogError(`ScopedSearchAction: SecondaryScopes must be a JSON object, got ${Array.isArray(parsed) ? 'array' : typeof parsed} — ignoring.`);
+            return undefined;
+        }
+        // Validate each value against SecondaryScopeValue = string | number | boolean | string[].
+        // Drop incompatible entries (with a log) rather than failing the whole call — partial
+        // context is more useful than no context.
+        const cleaned: Record<string, SecondaryScopeValue> = {};
+        for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+            if (this.isSecondaryScopeValue(value)) {
+                cleaned[key] = value;
+            } else {
+                LogError(`ScopedSearchAction: SecondaryScopes key '${key}' has unsupported value type (${Array.isArray(value) ? 'mixed-array' : typeof value}); skipping.`);
+            }
+        }
+        return Object.keys(cleaned).length > 0 ? cleaned : undefined;
+    }
+
+    /** Type guard mirroring `SecondaryScopeValue` from @memberjunction/ai-core-plus. */
+    private isSecondaryScopeValue(value: unknown): value is SecondaryScopeValue {
+        if (value === null || value === undefined) return false;
+        const t = typeof value;
+        if (t === 'string' || t === 'number' || t === 'boolean') return true;
+        if (Array.isArray(value)) return value.every(v => typeof v === 'string');
+        return false;
     }
 
     private getNumericParam(params: RunActionParams, paramName: string, defaultValue: number): number {

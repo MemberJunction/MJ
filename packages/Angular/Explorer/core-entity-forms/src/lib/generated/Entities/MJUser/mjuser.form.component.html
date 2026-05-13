@@ -2508,31 +2508,6 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Search Scope Permissions Section -->
-    <mj-collapsible-panel
-        SectionKey="mJSearchScopePermissions"
-        SectionName="Search Scope Permissions"
-        Icon="fa fa-shield-alt"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJSearchScopePermissions')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope Permissions','UserID')"
-                [NewRecordValues]="NewRecordValues('MJ: Search Scope Permissions')"
-                [AllowLoad]="IsSectionExpanded('mJSearchScopePermissions')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJSearchScopePermissions', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Search Execution Logs Section -->
     <mj-collapsible-panel
         SectionKey="mJSearchExecutionLogs"
@@ -2552,6 +2527,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJSearchExecutionLogs', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Search Scope Permissions Section -->
+    <mj-collapsible-panel
+        SectionKey="mJSearchScopePermissions"
+        SectionName="Search Scope Permissions"
+        Icon="fa fa-shield-alt"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJSearchScopePermissions')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope Permissions','UserID')"
+                [NewRecordValues]="NewRecordValues('MJ: Search Scope Permissions')"
+                [AllowLoad]="IsSectionExpanded('mJSearchScopePermissions')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJSearchScopePermissions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

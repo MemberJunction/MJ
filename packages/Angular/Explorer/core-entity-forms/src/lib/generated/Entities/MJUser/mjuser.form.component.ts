@@ -112,8 +112,8 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJCollectionPermissionsSharedByUserID', sectionName: 'Collection Permissions (Shared By User ID)', isExpanded: false },
             { sectionKey: 'mJCollections', sectionName: 'Collections', isExpanded: false },
             { sectionKey: 'mJRecordMergeLogsInitiatedByUserID', sectionName: 'Record Merge Logs (Initiated By User)', isExpanded: false },
-            { sectionKey: 'mJSearchScopePermissions', sectionName: 'Search Scope Permissions', isExpanded: false },
             { sectionKey: 'mJSearchExecutionLogs', sectionName: 'Search Execution Logs', isExpanded: false },
+            { sectionKey: 'mJSearchScopePermissions', sectionName: 'Search Scope Permissions', isExpanded: false },
             { sectionKey: 'mJTasks', sectionName: 'Tasks', isExpanded: false },
             { sectionKey: 'mJAIAgentExamples', sectionName: 'AI Agent Examples', isExpanded: false },
             { sectionKey: 'mJAIAgents', sectionName: 'AI Agents', isExpanded: false }
