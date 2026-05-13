@@ -222,9 +222,23 @@ For each `core/*.md`:
 
 ### 4.5 Sizing guardrails
 
-- Total managed pack content target: **< 50 KB on disk** (markdown is dense; this is ~6,000 lines).
-- Per-file ceiling: **400 lines**. If a file exceeds that, split it.
-- The point is **focused, fast-loading context for Claude**, not an encyclopedia. Anything that doesn't directly help Claude write better MJ code on day 1 doesn't belong.
+- **Per-file ceiling: 400 lines.** If a file exceeds that, split it. Hard limit
+  per file — enforced during review.
+- **Total managed pack content: soft target ~150 KB on disk** (~3,500–5,000
+  lines of substantive prose-with-examples).
+
+  > **History on the target:** an earlier version of this plan said "< 50 KB
+  > on disk, ~6,000 lines" — that math implied ~8 bytes per line, which only
+  > holds for bullet lists and short code stubs, not the explanatory prose
+  > format we actually ship. After M5 P1–P3 (eleven files, ~2,200 lines of
+  > content) the pack was already at ~90 KB; the realistic budget at full
+  > 19-file coverage is ~150 KB. Adjusted accordingly; per-file ceiling stays.
+  > At 150 KB the pack still loads instantly in Claude Code — the real cost
+  > is reader-attention, not bytes.
+
+- The point is **focused, fast-loading context for Claude**, not an
+  encyclopedia. Anything that doesn't directly help Claude write better MJ
+  code on day 1 doesn't belong.
 
 ---
 

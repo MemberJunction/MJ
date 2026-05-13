@@ -2269,6 +2269,558 @@ MJ convention without exception.
 
 ---
 
+# Functional decomposition — small, focused functions
+
+MJ codebases tend toward long methods that do too much. The rule is simple
+and aggressive: **functions stay around 30–40 lines, and nesting stays
+shallow.** If a function is getting long, decompose it *now*, not after
+you've finished writing it.
+
+## The rule
+
+- **Maximum function length: ~30–40 lines** (excluding comments)
+- **Maximum nesting: 2 levels** of loops / conditionals
+- **If you need a comment to explain a section of a function, that section
+  should probably be its own function.**
+
+## Why
+
+Aggressive decomposition pays off in five ways:
+
+1. **Readability.** Each function has a single clear purpose. Reading the
+   parent function reads like prose — "first do X, then Y, then Z" — and
+   you can drill into a specific step when you need detail.
+
+2. **Testability.** Small functions are trivial to unit test. Long
+   functions force integration tests because the assertions span too many
+   side effects.
+
+3. **Maintainability.** When something breaks, the function it broke in
+   is small enough to read fully and understand. Stack traces with named
+   helpers (`buildColumnDefs`, `applyVisualConfig`) are far more useful
+   than stack traces full of anonymous arrow functions inside a 500-line
+   `ngOnInit`.
+
+4. **Reusability.** Small functions tend to be reusable; large functions
+   never are. Once you decompose, you find the pieces useful elsewhere.
+
+5. **Debugging.** Set a breakpoint on a helper and you see exactly what
+   it produces. A breakpoint in the middle of a long function gives you
+   a confusing local-variable soup.
+
+## Concrete example
+
+```typescript
+// ❌ BAD: 200-line function with deep nesting and "section comments"
+protected generateCascadeDeletes(entity: EntityInfo): string {
+    let result = '';
+    // Find all related entities
+    for (const rel of metadata.Relationships) {
+        if (rel.RelatedEntityID === entity.ID) {
+            // ... 30 lines determining which deletes apply
+            for (const op of operations) {
+                if (op.Type === 'delete') {
+                    // ... 50 lines generating one delete
+                } else if (op.Type === 'nullify') {
+                    // ... 50 lines generating one nullify
+                }
+            }
+        }
+    }
+    // Append cleanup
+    // ... 30 lines
+    return result;
+}
+
+// ✅ GOOD: decomposed into focused helpers
+protected generateCascadeDeletes(entity: EntityInfo): string {
+    const operations = this.findRelatedOperations(entity);
+    const sqlBlocks = operations.map(op => this.generateOperation(op));
+    const cleanup = this.generateCleanup(entity);
+    return [...sqlBlocks, cleanup].join('\n');
+}
+
+protected findRelatedOperations(entity: EntityInfo): Operation[] {
+    // 15 lines — finds related entities
+}
+
+protected generateOperation(operation: Operation): string {
+    switch (operation.Type) {
+        case 'delete':   return this.generateDelete(operation);
+        case 'nullify':  return this.generateNullify(operation);
+    }
+}
+
+protected generateDelete(operation: Operation): string {
+    // 20 lines — one specific case
+}
+
+protected generateNullify(operation: Operation): string {
+    // 20 lines — one specific case
+}
+
+protected generateCleanup(entity: EntityInfo): string {
+    // 15 lines — final cleanup SQL
+}
+```
+
+The decomposed version is longer in total lines but **shorter per
+function**, and any one piece can be understood and tested in isolation.
+
+## When to decompose
+
+Stop and refactor when **any one** of these is true:
+
+- Function exceeds ~30–40 lines (your editor scrolls)
+- You're about to write a comment that says "now we do X"
+- You have nested loops or conditionals beyond 2 levels
+- You're repeating similar code patterns within the function
+- The function name would need "And" to be accurate ("`loadAndValidate`",
+  "`fetchAndProcess`")
+- You're using local variables that act as "phase markers" (`isProcessing`,
+  `phaseTwoDone`)
+
+## When NOT to decompose
+
+Don't shred a coherent algorithm into a dozen one-line helpers just
+because the parent broke 30 lines. If a 50-line function is *one cohesive
+algorithm* with no obvious decomposition points (e.g. a custom hash
+function, a parser routine, a tight numeric loop), leave it.
+
+The rule is "stays around 30–40 lines"; "around" is the operative word.
+A 45-line function with three logical sections that resist splitting
+is fine. A 45-line function with seven distinct chunks is not.
+
+## Class-level decomposition: shared base classes
+
+The same principle applies one level up. **When you see three or more
+classes with similar structure, extract a shared base class.**
+
+Common patterns to watch for in MJ code:
+
+- Multiple Action subclasses with similar parameter extraction → extract
+  a `BaseAction` helper method
+- Multiple components with the same "load + transform + display" structure
+  → a base component with `protected async load()` hook
+- Multiple validators returning the same error shape → a `BaseValidator`
+  with shared error formatting
+
+Benefits of getting class-level decomposition right:
+
+- Fix a bug in one place, get it everywhere
+- New subclasses inherit the shared behavior automatically
+- Tests for the base class cover all subclasses
+- Clear "is-a" relationships in the type system
+
+When in doubt, make it a method first. Promote to a base class when the
+third copy of the same code appears — that's the inflection point.
+
+## The mental test before writing the next line
+
+When you're about to add code to a function and it's already 30 lines,
+stop. Ask:
+
+> "Does this new code belong **in this function**, or is it a different
+> step that this function should **call**?"
+
+If the answer is "different step", extract a helper *first*, then add the
+new code there. Doing this consistently keeps the codebase from sliding
+into 500-line `ngOnInit`s.
+
+---
+
+# Testing — vitest, no database, fast
+
+MJ standardizes on **Vitest** for unit tests across every package. Jest is
+deprecated and no longer in the workspace. Tests are unit-level by default:
+**no database connections**, **no network**, **no real filesystem** beyond
+temp dirs.
+
+## File layout
+
+```
+packages/YourPackage/
+├── src/
+│   ├── module.ts
+│   ├── service.ts
+│   └── __tests__/
+│       ├── module.test.ts        ← one test file per source file
+│       └── service.test.ts
+├── package.json                  ← "test": "vitest run"
+└── vitest.config.ts              ← extends root vitest.shared
+```
+
+One test file per source file is the default convention. For very small
+source files you can group multiple in one test file; for very large ones,
+split per-method or per-feature.
+
+## Naming
+
+- Test files end in `.test.ts` (not `.spec.ts`)
+- Tests live in `src/__tests__/` (mirrors the source's folder)
+- Test names read as specifications:
+
+```typescript
+describe('OrderService.calculateTotal', () => {
+    it('returns 0 for an empty order', () => { … });
+    it('sums line-item totals correctly', () => { … });
+    it('applies discount when promo code is valid', () => { … });
+    it('throws when negative quantities are present', () => { … });
+});
+```
+
+Good test names tell you what the code *guarantees* without reading the
+test body. "should work" is not a good name.
+
+## Imports
+
+```typescript
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+```
+
+All vitest helpers come from the `vitest` package. No `jest.*`, no `chai`,
+no `sinon` — the imports above plus standard node modules cover ~95% of
+what you need.
+
+## Running tests
+
+| Command | What it does |
+|---|---|
+| `npm test` (from repo root) | Runs every package's tests via Turbo |
+| `cd packages/Foo && npm run test` | Runs one package's tests |
+| `npm run test:watch` (per-package) | Watch mode |
+| `npm run test:coverage` (root) | Generates coverage reports |
+| `npx turbo run test --filter=...[HEAD~1]` | Tests packages changed since last commit |
+
+Turbo caches test results: unchanged packages skip test execution on
+re-runs, so the test suite stays fast even as it grows.
+
+## Adding tests to a new package
+
+There's a scaffold script:
+
+```bash
+node scripts/scaffold-tests.mjs packages/YourPackage
+```
+
+It creates `vitest.config.ts`, the `src/__tests__/` folder, a starter test,
+and wires `"test": "vitest run"` into `package.json`.
+
+## What unit tests must NOT do
+
+- **No database connections.** Mock metadata, mock entity providers, mock
+  RunView. `@memberjunction/test-utils` provides helpers — see below.
+- **No real network.** Mock `fetch` / `https.get` / Axios. Vitest's
+  `vi.fn()` is your friend.
+- **No real filesystem outside temp dirs.** Use `os.tmpdir()` + `mkdtempSync`
+  for cases that genuinely need FS; clean up in `afterEach`.
+- **No timing dependencies.** Don't `setTimeout(..., 100)` then expect
+  something. Use `vi.useFakeTimers()` and `vi.advanceTimersByTime(100)`.
+- **No environment-coupling.** `process.env` writes must restore in
+  `afterEach`.
+
+Unit tests must be **deterministic** and **fast** (target: < 5 seconds
+per file).
+
+## `@memberjunction/test-utils`
+
+Shared mocking helpers used across MJ packages:
+
+- **Singleton reset** — clear singleton state between tests
+- **Mock entity** — quick `BaseEntity`-shaped fakes
+- **Mock RunView** — returns canned `RunView` results without touching a
+  real provider
+
+```typescript
+import { createMockEntity, mockRunView } from '@memberjunction/test-utils';
+
+beforeEach(() => {
+    mockRunView({
+        'Orders': { Results: [createMockEntity({ ID: '1', Status: 'Open' })] }
+    });
+});
+```
+
+Reach for these instead of building one-off mocks. Consistency across the
+test suite makes mocks predictable.
+
+## Test structure
+
+```typescript
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+describe('OrderService', () => {
+    let service: OrderService;
+
+    beforeEach(() => {
+        // Reset state between tests — singletons especially
+        service = new OrderService();
+    });
+
+    describe('calculateTotal', () => {
+        it('handles the normal case', () => {
+            const order = makeOrder([
+                { sku: 'A', price: 10, qty: 2 },
+                { sku: 'B', price: 5,  qty: 1 },
+            ]);
+            expect(service.calculateTotal(order)).toBe(25);
+        });
+
+        it('handles edge case: empty order returns 0', () => {
+            expect(service.calculateTotal(makeOrder([]))).toBe(0);
+        });
+
+        it('throws on invalid input', () => {
+            expect(() => service.calculateTotal(null)).toThrow();
+        });
+    });
+});
+```
+
+Common patterns:
+
+- **Group related tests in nested `describe`**, named after the method
+- **Use a fresh instance in `beforeEach`** — don't share state across tests
+- **Each `it`** asserts ONE thing, not five
+
+## When tests fail after your change
+
+**Tests are part of the source code.** If you change a function's signature,
+return shape, or behavior, **you also update its tests** in the same
+commit. The same applies if a refactor renames things or moves them.
+
+The CLAUDE.md project rule:
+
+> When modifying ANY package's source code, you MUST run that package's
+> unit tests before considering the work complete.
+
+```bash
+cd packages/YourPackage
+npm run test
+```
+
+If tests fail because of your changes, **update them to match the new
+behavior**. If tests fail for unrelated reasons, **fix them** — never
+leave a broken test for someone else.
+
+Common things that drift if you don't watch for them:
+
+- Renamed functions tests still reference by old name
+- Changed return shapes test assertions still expect
+- New required parameters test mocks don't provide
+- Removed exports tests still import
+
+All YOUR responsibility when you make the change.
+
+## CI integration
+
+- **Every PR** must pass unit tests before merging (GitHub Actions
+  enforces this).
+- **Every release** runs the full-stack regression suite via Docker
+  Compose.
+- Turbo caches test results between PRs — unchanged packages skip
+  execution.
+
+## Mocking node modules
+
+When a test needs to mock a module:
+
+```typescript
+import { vi } from 'vitest';
+
+// Module-level mock — affects all imports in this test file
+vi.mock('node:https', () => ({
+    get: vi.fn((url, cb) => { /* … */ }),
+}));
+
+// Or pass a mock as a dependency parameter — usually cleaner
+function fetchSomething(httpGet: HttpGetter = realHttpGet) { … }
+// Test: fetchSomething(myFakeGetter)
+```
+
+**Prefer dependency injection over `vi.mock`** for new code. It's clearer
+to read, doesn't require module hoisting, and the production code path
+documents the seam.
+
+## The day-1 checklist
+
+- [ ] Test file lives in `src/__tests__/`, ends in `.test.ts`
+- [ ] Uses `import { describe, it, expect, vi } from 'vitest'`
+- [ ] Names read as specifications, not "should work"
+- [ ] No real database, network, or non-temp filesystem
+- [ ] `beforeEach` creates fresh state; `afterEach` cleans up
+- [ ] After modifying source, ran `npm run test` and the tests still pass
+- [ ] If tests now fail because of your changes, you updated them in the
+      same commit
+
+---
+
+# Performance & caching
+
+MJ's server-side cache is one of the framework's nicer surprises. Most of
+the performance work you'd otherwise do — batching, deduplication,
+freshness handling — is already done for you, *provided* you use the
+framework's primitives instead of fighting them.
+
+This file is the user-friendly summary. The deep version
+(invalidation semantics, multi-server pub-sub, eviction strategies) lives
+in [`guides/CACHING_AND_PUBSUB_GUIDE.md`](https://github.com/MemberJunction/MJ/blob/main/guides/CACHING_AND_PUBSUB_GUIDE.md).
+
+## The mental model
+
+When MJAPI processes a `RunView` or `RunViews` request, it consults an
+in-process cache before touching the database. Hits return immediately;
+misses run the query and store the result. Writes (`Save()`, `Delete()`)
+publish invalidation events that the cache subscribes to.
+
+Three things follow from this:
+
+1. **Repeated identical reads are nearly free.** If you load `Customers`
+   once and then again 200 ms later, the second call is a hashmap lookup.
+
+2. **You don't manage cache freshness yourself.** When a `CustomerEntity`
+   is saved or deleted, the cache invalidates affected entries
+   automatically.
+
+3. **The cache works without you doing anything.** No `CacheLocal: true`
+   flag required; the cache check happens by default. You only opt *out*
+   when you need to (see `BypassCache` below).
+
+## What gets cached
+
+The server checks the cache on **every** `RunView` and `RunViews` call.
+There are two tiers:
+
+| Tier | What it stores | Maintenance strategy |
+|---|---|---|
+| **Auto-cache** | Small (≤ 250 rows), **unfiltered**, **unsorted** result sets | Upsert on entity change (row added → cache row added; row removed → cache row removed) |
+| **General cache** | Everything else (filtered, sorted, joined) | Invalidate on entity change (drop the entry, recompute on next read) |
+
+Why the split:
+
+- **Auto-cache** can be maintained in-place because the framework knows
+  the result is "all rows of entity X". When entity X changes, it knows
+  exactly how the cached result should change.
+- **General cache** entries depend on SQL predicates (`ExtraFilter`,
+  `OrderBy`) that the cache can't evaluate in JavaScript, so it drops the
+  entry and lets the next read repopulate it.
+
+## What this means for you
+
+- **Small reference-data reads are nearly always cache hits** in steady
+  state. AI Models, AI Vendors, Roles, etc. — first load is the only
+  real DB query.
+
+- **Filtered or large reads** are cache hits within their lifetime, but
+  any save to the underlying entity drops them. That's fine: the next
+  read repopulates.
+
+- **You don't need to coordinate cache lifetimes.** Just write code as
+  if the cache didn't exist; it'll be fast anyway.
+
+## When to use `BypassCache`
+
+There's a per-call escape hatch:
+
+```typescript
+const result = await rv.RunView({
+    EntityName: 'Orders',
+    ExtraFilter: `Status='Open'`,
+    BypassCache: true,
+});
+```
+
+When `BypassCache: true`:
+
+- Cache lookup is skipped (always hits the DB)
+- The cache is **not updated** with the result (no write-through)
+
+Legitimate uses:
+
+- **Scheduled jobs** that run direct SQL outside the framework and need
+  to see the post-SQL state
+- **Maintenance Actions** that bulk-edit rows through raw queries
+- **Forensic / audit queries** that need true DB state regardless of cache freshness
+- **Tests** that explicitly want to bypass any cache effects
+
+If you find yourself reaching for `BypassCache` to "make sure the read is
+fresh", **don't** — the cache invalidation already handles that for
+normal `Save()` / `Delete()` flows. You only need it when you've bypassed
+the framework itself.
+
+## Don't query in loops
+
+Repeated. From `03-runview-patterns.md`: the cache makes N+1 fast, but
+*one batched query* beats *N cached hits* every time:
+
+- The cache hit still goes through the GraphQL layer (auth, serialization).
+- Batched queries `RunViews([...])` go in one round trip.
+
+Even with hot caches, batching wins. The cache is for when batching
+genuinely can't be done (e.g. one query depends on the previous result).
+
+## When you actually need to optimize
+
+You won't typically need to. The framework's defaults are good. But if a
+specific page or job is slow, the questions to ask in order:
+
+1. **Are you making N round trips when one would do?** Use `RunViews`
+   (plural) for independent queries.
+2. **Are you querying inside a loop?** Move the query outside; aggregate
+   in memory.
+3. **Are you using `ResultType: 'entity_object'` when you only need a
+   couple fields?** Switch to `'simple'` with `Fields: [...]`.
+4. **Is the cache being constantly invalidated by writes?** Look at
+   `BaseEntity.Save()` calls happening in tight loops — each one fires
+   an invalidation event.
+5. **Is the result genuinely huge (10k+ rows)?** Consider whether the
+   query can be narrowed with a tighter `ExtraFilter`, or whether
+   pagination (`MaxRows` + `StartRow`) is appropriate.
+
+Usually one of 1, 2, or 3 is the answer. Cache tuning (#4, #5) only
+becomes the bottleneck once those are handled.
+
+## Server vs client caching
+
+This whole file is about **server-side** caching (MJAPI). There's also a
+separate **client-side** cache in `GraphQLDataProvider` for browser
+contexts — it caches metadata so the browser doesn't re-fetch entity
+definitions on every page load.
+
+The client cache is durable across page reloads (uses IndexedDB). It can
+get stale when you switch the backend database, e.g. between SQL Server
+and PostgreSQL on the same port (one uppercases UUIDs, the other
+lowercases) — **clear the browser cache** when you do that. Otherwise
+you don't need to think about it.
+
+## ResultType isn't part of the cache key
+
+A subtle detail worth knowing: the cache **stores plain JSON** regardless
+of `ResultType`. When you ask for `'entity_object'`, the framework hits
+the cache, gets the JSON, and *then* transforms it into BaseEntity
+instances. So `'simple'` and `'entity_object'` share the same cache
+entry for identical queries.
+
+This means you can switch between `'simple'` and `'entity_object'` based
+on what each call site needs without worrying about cache fragmentation.
+
+## The day-1 checklist
+
+- [ ] You're not adding manual caching layers — the framework already caches
+- [ ] If you reached for `BypassCache: true`, you can name the specific
+      framework-bypass scenario it's compensating for
+- [ ] Independent queries use `RunViews` (plural); dependent queries
+      sequence cleanly
+- [ ] You're not querying inside a loop (even cached reads aren't free)
+- [ ] `'simple'` + `Fields` for read-only paths; `'entity_object'` only
+      when mutating
+
+If you can answer "yes" to all of these, you're getting ~95% of the
+performance the framework can give you. The remaining 5% is in the
+deep-dive guide linked at the top.
+
+---
+
 # Metadata Files & mj-sync — declarative reference data
 
 For reference data — lookup tables, AI Models, AI Vendors, Application
