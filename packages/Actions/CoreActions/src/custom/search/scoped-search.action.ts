@@ -1,7 +1,7 @@
 import { ActionResultSimple, RunActionParams, ActionParam } from "@memberjunction/actions-base";
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass, UUIDsEqual } from "@memberjunction/global";
-import { LogError, LogStatus, Metadata, UserInfo } from "@memberjunction/core";
+import { LogError, LogStatusEx, IsVerboseLoggingEnabled, Metadata, UserInfo } from "@memberjunction/core";
 import {
     SearchEngine,
     SearchResult,
@@ -134,7 +134,11 @@ export class ScopedSearchAction extends BaseAction {
             // (if desired) is the engine's responsibility, not the action's.
             const primaryScopeRecordID = this.getStringParam(params, "primaryscoperecordid");
             const secondaryScopes = this.parseSecondaryScopes(params);
-            LogStatus(`ScopedSearchAction: Agent="${agent.Name}" scope="${scope?.Name ?? 'Global'}" query="${query}" streamingMode="${streamingMode}" primaryScopeRecordID="${primaryScopeRecordID ?? ''}" secondaryScopeKeys=[${Object.keys(secondaryScopes ?? {}).join(',')}]`);
+            LogStatusEx({
+                message: `ScopedSearchAction: Agent="${agent.Name}" scope="${scope?.Name ?? 'Global'}" query="${query}" streamingMode="${streamingMode}" primaryScopeRecordID="${primaryScopeRecordID ?? ''}" secondaryScopeKeys=[${Object.keys(secondaryScopes ?? {}).join(',')}]`,
+                verboseOnly: true,
+                isVerboseEnabled: IsVerboseLoggingEnabled
+            });
             const exec = await this.runSearch({
                 query, maxResults, minScore, scopeID, agent,
                 contextUser: params.ContextUser, streamingMode,
@@ -248,7 +252,11 @@ export class ScopedSearchAction extends BaseAction {
             ContextUser: params.ContextUser,
         });
         if (!verdict.Allowed) {
-            LogStatus(`ScopedSearchAction denied: ${verdict.Reason} (scope=${scopeID}, source=${verdict.Source})`);
+            LogStatusEx({
+                message: `ScopedSearchAction denied: ${verdict.Reason} (scope=${scopeID}, source=${verdict.Source})`,
+                verboseOnly: true,
+                isVerboseEnabled: IsVerboseLoggingEnabled
+            });
             // ACCESS_DENIED is reserved for agent-side denials so calling code
             // can distinguish "the agent isn't permitted to use this scope"
             // from "the user isn't permitted".
@@ -270,7 +278,11 @@ export class ScopedSearchAction extends BaseAction {
         // Mirror the GraphQL resolvers' gate.
         if (verdict.Level === 'Read') {
             const reason = `User '${params.ContextUser.Name}' has Read-level access on this scope, which permits metadata visibility but not search execution. Search or Manage is required to run a query.`;
-            LogStatus(`ScopedSearchAction denied: ${reason} (scope=${scopeID}, source=${verdict.Source})`);
+            LogStatusEx({
+                message: `ScopedSearchAction denied: ${reason} (scope=${scopeID}, source=${verdict.Source})`,
+                verboseOnly: true,
+                isVerboseEnabled: IsVerboseLoggingEnabled
+            });
             await SearchEngine.Instance.LogForbiddenSearch({
                 Query: query,
                 ScopeIDs: [scopeID],

@@ -19,6 +19,7 @@ import { LazyArtifactInfo } from '../../models/lazy-artifact-info';
 import { MessageInputComponent } from '../message/message-input.component';
 import { PendingAttachment } from '../mention/mention-editor.component';
 import { ArtifactViewerPanelComponent, NavigationRequest, AnalyzeArtifactService } from '@memberjunction/ng-artifacts';
+import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ConversationEmptyStateComponent } from './conversation-empty-state.component';
 import { TestFeedbackDialogData, TestFeedbackDialogResult } from '@memberjunction/ng-testing';
 import { DialogService as ConversationsDialogService } from '../../services/dialog.service';
@@ -182,6 +183,9 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   public showCollectionPicker: boolean = false;
   public collectionPickerArtifactId: string | null = null;
   public collectionPickerExcludedIds: string[] = [];
+  public collectionPickerVersionId: string | null = null;
+  public collectionPickerArtifactName: string = '';
+  public collectionPickerVersionNumber: number | null = null;
 
   // Artifact permissions
   public canShareSelectedArtifact: boolean = false;
@@ -1874,28 +1878,43 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
   onSaveToCollectionRequested(event: {artifactId: string; excludedCollectionIds: string[]}): void {
     this.collectionPickerArtifactId = event.artifactId;
     this.collectionPickerExcludedIds = event.excludedCollectionIds;
+    // Snapshot version + name from the viewer so the picker's preview pane has real context
+    const viewer = this.artifactViewerComponent;
+    this.collectionPickerVersionId = viewer?.artifactVersion?.ID ?? null;
+    this.collectionPickerArtifactName = viewer?.displayName ?? '';
+    this.collectionPickerVersionNumber = viewer?.selectedVersionNumber ?? null;
     this.showCollectionPicker = true;
   }
 
-  async onCollectionPickerSaved(collectionIds: string[]): Promise<void> {
-    if (!this.collectionPickerArtifactId || !this.artifactViewerComponent) {
-      return;
+  async onCollectionPickerCompleted(event: { successIds: string[]; failedIds: string[] }): Promise<void> {
+    // Refresh the viewer's bookmark / "already saved" state if anything actually wrote
+    if (event.successIds.length > 0 && this.artifactViewerComponent) {
+      await this.artifactViewerComponent.ReloadCollectionAssociations();
     }
+    this.closeCollectionPicker();
 
-    // Call the artifact viewer's save method
-    const success = await this.artifactViewerComponent.saveToCollections(collectionIds);
-    if (success) {
-      this.showCollectionPicker = false;
-      this.collectionPickerArtifactId = null;
-      this.collectionPickerExcludedIds = [];
-      this.cdr.detectChanges();
+    if (event.failedIds.length === 0 && event.successIds.length > 0) {
+      const n = event.successIds.length;
+      MJNotificationService.Instance.CreateSimpleNotification(
+        `Saved to ${n} ${n === 1 ? 'collection' : 'collections'}`,
+        'success',
+        2500
+      );
     }
   }
 
   onCollectionPickerCancelled(): void {
+    this.closeCollectionPicker();
+  }
+
+  private closeCollectionPicker(): void {
     this.showCollectionPicker = false;
     this.collectionPickerArtifactId = null;
     this.collectionPickerExcludedIds = [];
+    this.collectionPickerVersionId = null;
+    this.collectionPickerArtifactName = '';
+    this.collectionPickerVersionNumber = null;
+    this.cdr.detectChanges();
   }
 
   /**

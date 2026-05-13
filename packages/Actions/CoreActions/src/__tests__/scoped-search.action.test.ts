@@ -57,7 +57,8 @@ const loadedAgentStub: { ID: string; Name: string; SearchScopeAccess: string; Lo
 
 vi.mock('@memberjunction/core', () => ({
     LogError: vi.fn(),
-    LogStatus: vi.fn(),
+    LogStatusEx: vi.fn(),
+    IsVerboseLoggingEnabled: () => false,
     Metadata: class {
         GetEntityObject = async () => loadedAgentStub;
     },
