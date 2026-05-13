@@ -26,6 +26,7 @@ export interface UserAppConfig {
   providedIn: 'root'
 })
 export class ApplicationManager {
+  private static _recoveryAttempted = false;
   private applications$ = new BehaviorSubject<BaseApplication[]>([]);
   private allApplications$ = new BehaviorSubject<BaseApplication[]>([]);
   private userAppConfigs$ = new BehaviorSubject<UserAppConfig[]>([]);
@@ -307,7 +308,8 @@ export class ApplicationManager {
       // Attempt one recovery by force-refreshing UserInfoEngine before giving up.
       const activeApps = this.applications$.value;
       const hasMetadataApps = md.Applications.some(a => a.Status === 'Active');
-      if (activeApps.length === 0 && hasMetadataApps) {
+      if (activeApps.length === 0 && hasMetadataApps && !ApplicationManager._recoveryAttempted) {
+        ApplicationManager._recoveryAttempted = true;
         LogStatus('ApplicationManager: No user apps loaded despite Active apps in metadata — attempting recovery');
         await this.attemptRecovery();
       }
