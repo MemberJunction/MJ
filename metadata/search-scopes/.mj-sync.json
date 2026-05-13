@@ -38,6 +38,10 @@
       "MJ: Search Scope Storage Accounts": {
         "entity": "MJ: Search Scope Storage Accounts",
         "foreignKey": "SearchScopeID"
+      },
+      "MJ: Search Scope Permissions": {
+        "entity": "MJ: Search Scope Permissions",
+        "foreignKey": "SearchScopeID"
       }
     }
   }

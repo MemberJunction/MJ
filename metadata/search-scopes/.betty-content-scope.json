@@ -74,6 +74,23 @@
             "checksum": "cc6704711f9308fa58779faf292f174e6f1614fcbdc7da2194008bcaf7b8e983"
           }
         }
+      ],
+      "MJ: Search Scope Permissions": [
+        {
+          "fields": {
+            "SearchScopeID": "@parent:ID",
+            "UserID": null,
+            "RoleID": "@lookup:MJ: Roles.Name=Developer",
+            "PermissionLevel": "Search"
+          },
+          "primaryKey": {
+            "ID": "81F2B477-9E99-497E-807B-5345436AD279"
+          },
+          "sync": {
+            "lastModified": "2026-05-13T15:07:05.810Z",
+            "checksum": "9282048ed9937447e20971bd7dee93c2133d9f7a8e5d19a8a3a476ecbe858f9b"
+          }
+        }
       ]
     },
     "primaryKey": {

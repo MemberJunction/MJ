@@ -205,36 +205,41 @@ server to report compilation success. Then open
 
 ### How BettyNext gets the OrganizationID
 
-BettyNext's system prompt reads `{{ data.OrganizationID }}` and tells the
-LLM to thread that value into `Scoped Search`'s `PrimaryScopeRecordID` on
-every call. **For testing right now, we're getting that conversationally** —
-i.e. you tell BettyNext which org you're asking about as part of the chat.
+For this test setup the `OrganizationID` is **hardcoded into the system
+prompt template** — single line near the top, in a section labeled
+*Operating Context*. The LLM uses it as `PrimaryScopeRecordID` on every
+`Scoped Search` call without the user having to type a UUID.
 
-In MJExplorer's conversation UI (or whichever surface you're invoking
-BettyNext from), pass the OrganizationID via the agent run's `data` payload.
-The hardcoded value for the Optica corpus is:
+The hardcoded value points at the Optica corpus seeded by the importer:
 
 ```
 A1B2C3D4-0000-4000-A000-000000000001
 ```
 
-If you're invoking BettyNext via the GraphQL `RunAIAgent` mutation directly,
-include it like:
+To **retarget at a different organization** (or a different corpus
+entirely):
 
-```graphql
-mutation {
-  RunAIAgent(input: {
-    AgentName: "BettyNext"
-    Messages: [{ Role: "user", Content: "What does the Applied Optics paper on radiative cooling using porous TiO say?" }]
-    Data: "{\"OrganizationID\":\"A1B2C3D4-0000-4000-A000-000000000001\"}"
-  }) { Success Output }
-}
+1. Edit `metadata/prompts/templates/BettyNext - System Prompt.template.md`
+   and change the single `**OrganizationID for this deployment**:` line.
+2. `npx mj sync push --dir=metadata --include="prompts"`
+3. Restart MJAPI so the AIEngine prompt cache reloads the new text.
+
+Open BettyNext in MJExplorer and just ask:
+
+```
+What does the Applied Optics paper on porous TiO radiative cooling say?
 ```
 
-> When you later add a real conversation surface, the right pattern is for
-> that surface to look up the user's OrganizationID server-side and inject
-> it as `data.OrganizationID` before invoking the agent — don't trust the
-> client to send the right OrgID.
+The agent will use the hardcoded OrganizationID and search against the
+Optica content. No UUID required from the user.
+
+> When you eventually want this to be **per-user** (the agent answers for
+> whichever org the authenticated user belongs to, not a global one), the
+> right next step is to replace the hardcoded line with a Nunjucks variable
+> (e.g. `{{ data.OrganizationID }}`) and update the invoking surface's
+> resolver to populate `ExecuteAgentParams.data.OrganizationID` from the
+> user's auth context server-side. Do not trust the client to send the
+> OrgID — resolve it from auth.
 
 ---
 
