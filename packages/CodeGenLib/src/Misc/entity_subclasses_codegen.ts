@@ -492,41 +492,48 @@ ${fields}
       if (!skipDBUpdate) {
         // only do the database update stuff if we are not skipping the DB update, of course the .justGenerated flag SHOULD be false in all of the records
         // we have in the ret.validators array but this is an explicit flag to ensure we don't even bother checking
+        // Build SQL through the dialect rather than hardcoding T-SQL syntax — `[brackets]` and
+        // `GETUTCDATE()` are SS-only and PG's strict parser rejects both.
+        const dialect = pool.Dialect;
+        const qi = (n: string) => dialect.QuoteIdentifier(n);
+        const lit = (v: string) => dialect.QuoteStringLiteral(v);
+        const utcNow = dialect.CurrentTimestampUTC();
+        const generatedCodeTbl = dialect.QuoteSchema(mj_core_schema(), 'GeneratedCode');
+        const generatedCodeCatsView = dialect.QuoteSchema(mj_core_schema(), 'vwGeneratedCodeCategories');
+        const validatorCodeCategoryID = `(SELECT ${qi('ID')} FROM ${generatedCodeCatsView} WHERE ${qi('Name')}=${lit('CodeGen: Validators')})`;
+
         let sSQL: string  = '';
         const justGenerated = ret.validators.filter((f) => f.wasGenerated);
         for (const v of justGenerated) {
           // only update the DB for the fields that were actually generated/regenerated, otherwise not needed
-          const f = entity.Fields.find((f) => f.Name.trim().toLowerCase() === v.fieldName?.trim().toLowerCase());   
+          const f = entity.Fields.find((f) => f.Name.trim().toLowerCase() === v.fieldName?.trim().toLowerCase());
           sSQL += `-- CHECK constraint for ${entity.Name}${f ? ': Field: ' + f.Name : ' @ Table Level'} was newly set or modified since the last generation of the validation function, the code was regenerated and updating the GeneratedCode table with the new generated validation function\n`
-          const code = v.functionText.replace(/'/g, "''");
-          const source = v.sourceCheckConstraint.replace(/'/g, "''");
-          const description = v.functionDescription.replace(/'/g, "''");
-          const name = v.functionName.replace(/'/g, "''");
-          const validatorCodeCategoryID = `(SELECT ID FROM ${mj_core_schema()}.vwGeneratedCodeCategories WHERE Name='CodeGen: Validators')`;
           if (v.generatedCodeId) {
             // need to update the existing record in the __mj.GeneratedCode table
-            sSQL += `UPDATE [${mj_core_schema()}].[GeneratedCode] SET
-                        Source='${source}',
-                        Code='${code}',
-                        Description='${description}',
-                        Name='${name}',
-                        GeneratedAt=GETUTCDATE(),
-                        GeneratedByModelID='${v.aiModelID}'
+            sSQL += `UPDATE ${generatedCodeTbl} SET
+                        ${qi('Source')}=${lit(v.sourceCheckConstraint)},
+                        ${qi('Code')}=${lit(v.functionText)},
+                        ${qi('Description')}=${lit(v.functionDescription)},
+                        ${qi('Name')}=${lit(v.functionName)},
+                        ${qi('GeneratedAt')}=${utcNow},
+                        ${qi('GeneratedByModelID')}=${lit(v.aiModelID)}
                      WHERE
-                        ID='${v.generatedCodeId}';`
+                        ${qi('ID')}=${lit(v.generatedCodeId)};`
           }
           else {
             // need to create a row inside the __mj.GeneratedCode table
-            sSQL += `INSERT INTO [${mj_core_schema()}].[GeneratedCode] (CategoryID, GeneratedByModelID, GeneratedAt, Language, Status, Source, Code, Description, Name, LinkedEntityID, LinkedRecordPrimaryKey)
-                      VALUES (${validatorCodeCategoryID}, '${v.aiModelID}', GETUTCDATE(), 'TypeScript','Approved', '${source}', '${code}', '${description}', '${name}', '${f ? entityFieldsEntityID : entitiesEntityID}', '${f ? f.ID : entity.ID}');
+            const linkedEntityID = f ? entityFieldsEntityID : entitiesEntityID;
+            const linkedRecordPK = f ? f.ID : entity.ID;
+            sSQL += `INSERT INTO ${generatedCodeTbl} (${qi('CategoryID')}, ${qi('GeneratedByModelID')}, ${qi('GeneratedAt')}, ${qi('Language')}, ${qi('Status')}, ${qi('Source')}, ${qi('Code')}, ${qi('Description')}, ${qi('Name')}, ${qi('LinkedEntityID')}, ${qi('LinkedRecordPrimaryKey')})
+                      VALUES (${validatorCodeCategoryID}, ${lit(v.aiModelID)}, ${utcNow}, ${lit('TypeScript')}, ${lit('Approved')}, ${lit(v.sourceCheckConstraint)}, ${lit(v.functionText)}, ${lit(v.functionDescription)}, ${lit(v.functionName)}, ${lit(linkedEntityID ?? '')}, ${lit(linkedRecordPK)});
 
             `
           }
         }
-  
+
         // now Log and Execute the SQL
         try {
-          await SQLLogging.LogSQLAndExecute(pool, sSQL, `Generated Validation Functions for ${entity.Name}`, false);  
+          await SQLLogging.LogSQLAndExecute(pool, sSQL, `Generated Validation Functions for ${entity.Name}`, false);
         }
         catch (e) {
           logError(`Error logging and executing SQL for ${entity.Name}: ${e}`);

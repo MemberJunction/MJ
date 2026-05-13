@@ -244,32 +244,27 @@ export class NavigationService implements OnDestroy {
   }
 
   /**
-   * Handle temporary tab preservation when forcing new tabs
-   * Rule: Only ONE tab should be temporary at a time
-   * When shift+clicking to force a new tab, pin the current active tab if it's temporary
+   * Returns whether the caller should use OpenTabForced (force-new path) or
+   * OpenTab (replace-temp path).
+   *
+   * Rule: only honor an explicit force-new request — from the user via
+   * shift+click, or from the caller via `options.forceNewTab`. We deliberately
+   * do NOT apply heuristics that auto-switch the workspace out of
+   * single-resource mode on cross-resource navigation. A previous version of
+   * this method tried to do that ("force new if single-resource + different
+   * resource") and it caused a regression: every plain hyperlink click on a
+   * record opened a new tab and dropped the user into multi-tab mode, even
+   * though they didn't ask for it. That violated the principle that mode
+   * transitions are user-driven (shift) or explicitly requested (options).
+   *
+   * If a particular caller really needs the parent context preserved when
+   * creating/navigating to a child resource (e.g. "+New" on a related-entity
+   * grid inside an open record), the caller should pass `forceNewTab: true`
+   * in `NavigationOptions`. That keeps intent explicit at the call site
+   * instead of buried in a global heuristic.
    */
-  private handleSingleResourceModeTransition(forceNew: boolean, newRequest: TabRequest): void {
-    if (!forceNew) {
-      return; // Normal navigation, not forcing new tab
-    }
-
-    const config = this.workspaceManager.GetConfiguration();
-
-    if (!config || !config.tabs || config.tabs.length === 0) {
-      return; // No tabs to preserve
-    }
-
-    // Find the currently active tab
-    const activeTab = config.tabs.find(tab => tab.id === config.activeTabId);
-    if (!activeTab) {
-      return; // No active tab
-    }
-
-    // If the active tab is NOT pinned (i.e., it's temporary), pin it to preserve it
-    // This maintains the "only one temporary tab" rule
-    if (!activeTab.isPinned) {
-      this.workspaceManager.TogglePin(activeTab.id);
-    }
+  private handleSingleResourceModeTransition(forceNew: boolean, _newRequest: TabRequest): boolean {
+    return forceNew;
   }
 
   /**
@@ -303,7 +298,7 @@ export class NavigationService implements OnDestroy {
    * Open a navigation item within an app
    */
   public OpenNavItem(appId: string, navItem: NavItem, appColor: string, options?: NavigationOptions): string {
-    const forceNew = this.shouldForceNewTab(options);
+    let forceNew = this.shouldForceNewTab(options);
 
     // Get the app to find its name
     const app = this.appManager.GetAppById(appId);
@@ -333,7 +328,7 @@ export class NavigationService implements OnDestroy {
     };
 
     // Handle transition from single-resource mode
-    this.handleSingleResourceModeTransition(forceNew, request);
+    forceNew = this.handleSingleResourceModeTransition(forceNew, request);
 
     let tabId: string;
     if (forceNew) {
@@ -364,7 +359,7 @@ export class NavigationService implements OnDestroy {
     const appId = this.getDefaultApplicationId();
     const appColor = this.getDefaultAppColor();
 
-    const forceNew = this.shouldForceNewTab(options);
+    let forceNew = this.shouldForceNewTab(options);
 
     const recordId = recordPkey.ToURLSegment();
     const request: TabRequest = {
@@ -380,7 +375,7 @@ export class NavigationService implements OnDestroy {
     };
 
     // Handle transition from single-resource mode
-    this.handleSingleResourceModeTransition(forceNew, request);
+    forceNew = this.handleSingleResourceModeTransition(forceNew, request);
 
     let tabId: string;
     if (forceNew) {
@@ -403,7 +398,7 @@ export class NavigationService implements OnDestroy {
   ): string {
     const appId = this.getDefaultApplicationId();
     const appColor = this.getDefaultAppColor();
-    const forceNew = this.shouldForceNewTab(options);
+    let forceNew = this.shouldForceNewTab(options);
 
     const request: TabRequest = {
       ApplicationId: appId,
@@ -418,7 +413,7 @@ export class NavigationService implements OnDestroy {
     };
 
     // Handle transition from single-resource mode
-    this.handleSingleResourceModeTransition(forceNew, request);
+    forceNew = this.handleSingleResourceModeTransition(forceNew, request);
 
     if (forceNew) {
       return this.workspaceManager.OpenTabForced(request, appColor);
@@ -438,7 +433,7 @@ export class NavigationService implements OnDestroy {
   ): string {
     const appId = this.getDefaultApplicationId();
     const appColor = this.getDefaultAppColor();
-    const forceNew = this.shouldForceNewTab(options);
+    let forceNew = this.shouldForceNewTab(options);
 
     const request: TabRequest = {
       ApplicationId: appId,
@@ -453,7 +448,7 @@ export class NavigationService implements OnDestroy {
     };
 
     // Handle transition from single-resource mode
-    this.handleSingleResourceModeTransition(forceNew, request);
+    forceNew = this.handleSingleResourceModeTransition(forceNew, request);
 
     if (forceNew) {
       return this.workspaceManager.OpenTabForced(request, appColor);
@@ -473,7 +468,7 @@ export class NavigationService implements OnDestroy {
   ): string {
     const appId = this.getDefaultApplicationId();
     const appColor = this.getDefaultAppColor();
-    const forceNew = this.shouldForceNewTab(options);
+    let forceNew = this.shouldForceNewTab(options);
 
     const request: TabRequest = {
       ApplicationId: appId,
@@ -488,7 +483,7 @@ export class NavigationService implements OnDestroy {
     };
 
     // Handle transition from single-resource mode
-    this.handleSingleResourceModeTransition(forceNew, request);
+    forceNew = this.handleSingleResourceModeTransition(forceNew, request);
 
     if (forceNew) {
       return this.workspaceManager.OpenTabForced(request, appColor);
@@ -509,7 +504,7 @@ export class NavigationService implements OnDestroy {
   ): string {
     const appId = this.getDefaultApplicationId();
     const appColor = this.getDefaultAppColor();
-    const forceNew = this.shouldForceNewTab(options);
+    let forceNew = this.shouldForceNewTab(options);
 
     const request: TabRequest = {
       ApplicationId: appId,
@@ -524,7 +519,7 @@ export class NavigationService implements OnDestroy {
     };
 
     // Handle transition from single-resource mode
-    this.handleSingleResourceModeTransition(forceNew, request);
+    forceNew = this.handleSingleResourceModeTransition(forceNew, request);
 
     if (forceNew) {
       return this.workspaceManager.OpenTabForced(request, appColor);
@@ -545,7 +540,7 @@ export class NavigationService implements OnDestroy {
   ): string {
     const appId = this.getDefaultApplicationId();
     const appColor = this.getDefaultAppColor();
-    const forceNew = this.shouldForceNewTab(options);
+    let forceNew = this.shouldForceNewTab(options);
 
     const filterSuffix = extraFilter ? ' (Filtered)' : '';
     const request: TabRequest = {
@@ -563,7 +558,7 @@ export class NavigationService implements OnDestroy {
     };
 
     // Handle transition from single-resource mode
-    this.handleSingleResourceModeTransition(forceNew, request);
+    forceNew = this.handleSingleResourceModeTransition(forceNew, request);
 
     if (forceNew) {
       return this.workspaceManager.OpenTabForced(request, appColor);
@@ -583,7 +578,7 @@ export class NavigationService implements OnDestroy {
   ): string {
     const appId = this.getDefaultApplicationId();
     const appColor = this.getDefaultAppColor();
-    const forceNew = this.shouldForceNewTab(options);
+    let forceNew = this.shouldForceNewTab(options);
 
     const request: TabRequest = {
       ApplicationId: appId,
@@ -598,7 +593,7 @@ export class NavigationService implements OnDestroy {
     };
 
     // Handle transition from single-resource mode
-    this.handleSingleResourceModeTransition(forceNew, request);
+    forceNew = this.handleSingleResourceModeTransition(forceNew, request);
 
     if (forceNew) {
       return this.workspaceManager.OpenTabForced(request, appColor);
@@ -620,7 +615,7 @@ export class NavigationService implements OnDestroy {
     const appId = this.getDefaultApplicationId();
     const appColor = this.getDefaultAppColor();
 
-    const forceNew = this.shouldForceNewTab(options);
+    let forceNew = this.shouldForceNewTab(options);
 
     const request: TabRequest = {
       ApplicationId: appId,
@@ -637,7 +632,7 @@ export class NavigationService implements OnDestroy {
     };
 
     // Handle transition from single-resource mode
-    this.handleSingleResourceModeTransition(forceNew, request);
+    forceNew = this.handleSingleResourceModeTransition(forceNew, request);
 
     if (forceNew) {
       return this.workspaceManager.OpenTabForced(request, appColor);
@@ -651,17 +646,17 @@ export class NavigationService implements OnDestroy {
    * This is the primary way to open search results from anywhere in the application.
    *
    * @param query The search query text
-   * @param searchOptions Optional search-specific options (e.g., minRelevance)
+   * @param searchOptions Optional search-specific options (e.g., minRelevance, scopeIDs)
    * @param options Navigation options
    */
   public OpenSearch(
     query: string,
-    searchOptions?: { minRelevance?: number },
+    searchOptions?: { minRelevance?: number; scopeIDs?: string[] },
     options?: NavigationOptions
   ): string {
     const appId = this.getDefaultApplicationId();
     const appColor = this.getDefaultAppColor();
-    const forceNew = this.shouldForceNewTab(options);
+    let forceNew = this.shouldForceNewTab(options);
 
     const config: Record<string, unknown> = {
       resourceType: 'Search Results',
@@ -671,6 +666,9 @@ export class NavigationService implements OnDestroy {
     };
     if (searchOptions?.minRelevance != null) {
       config['MinRelevance'] = searchOptions.minRelevance;
+    }
+    if (searchOptions?.scopeIDs && searchOptions.scopeIDs.length > 0) {
+      config['ScopeIDs'] = searchOptions.scopeIDs;
     }
 
     const request: TabRequest = {
@@ -682,7 +680,7 @@ export class NavigationService implements OnDestroy {
     };
 
     // Handle transition from single-resource mode
-    this.handleSingleResourceModeTransition(forceNew, request);
+    forceNew = this.handleSingleResourceModeTransition(forceNew, request);
 
     if (forceNew) {
       return this.workspaceManager.OpenTabForced(request, appColor);

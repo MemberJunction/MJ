@@ -1,15 +1,22 @@
 /**
  * @fileoverview Search result fusion using Reciprocal Rank Fusion (RRF).
  *
- * Takes ranked lists from vector, full-text, and entity search providers,
- * applies RRF to produce a unified ranking, deduplicates by EntityName+RecordID,
- * and normalizes scores when only a single source has results.
+ * Two fusion layers:
+ *   1. **Per-scope / per-source fusion** — `Fuse()` takes labeled lists from a single scope's
+ *      providers (vector, full-text, entity, storage) and produces a single ranked list for
+ *      that scope. Per-provider fusion weights are honored when supplied.
+ *   2. **Cross-scope fusion** — `CrossScopeFusion()` takes an already-per-scope-fused map
+ *      (`scopeID → results`) and combines them into a single ranked list across all scopes.
+ *
+ * Both layers use the shared `ComputeRRF()` from `@memberjunction/core`. Deduplication is
+ * handled separately via `Deduplicate()` so callers can control ordering of dedup vs.
+ * re-ranking vs. permission safety net.
  *
  * @module @memberjunction/search-engine
  */
 
 import { ComputeRRF, ScoredCandidate } from '@memberjunction/core';
-import { SearchResultItem, SearchSource, SearchScoreBreakdown } from './search.types';
+import { SearchResultItem, SearchSource, SearchScoreBreakdown, FusionWeightsByProvider } from './search.types';
 
 /**
  * A labeled list of search results from a single source.
@@ -36,11 +43,34 @@ export class SearchFusion {
      *
      * @param lists - Labeled result lists from each search source
      * @param maxResults - Maximum number of results to return
+     * @param fusionWeights - Optional per-provider weights applied during RRF.
+     *                       Keys match `SearchSource` values (plus any custom source types).
+     *                       Missing keys default to 1.0. Only applied when there are 2+ sources.
      * @returns Fused, deduplicated, and ranked results
      */
-    public Fuse(lists: LabeledResultList[], maxResults: number): SearchResultItem[] {
-        // Collect only lists that have results
-        const nonEmpty = lists.filter(l => l.Results.length > 0);
+    public Fuse(
+        lists: LabeledResultList[],
+        maxResults: number,
+        fusionWeights?: FusionWeightsByProvider
+    ): SearchResultItem[] {
+        // Defensive sanitation: reject items with non-finite Score or empty
+        // RecordID before fusion. A custom 3rd-party provider that returns
+        // `Score: NaN`, `Score: undefined`, or `RecordID: ''` would otherwise
+        // poison the RRF sort (NaN comparisons are always false → unstable
+        // ordering) or short-circuit dedup (empty key collisions). Filter
+        // here once rather than in three downstream places.
+        const sanitized: LabeledResultList[] = lists.map(l => ({
+            Source: l.Source,
+            Results: l.Results.filter(r =>
+                r != null
+                && typeof r.RecordID === 'string'
+                && r.RecordID.length > 0
+                && Number.isFinite(r.Score)
+            ),
+        }));
+
+        // Collect only lists that have (sanitized) results
+        const nonEmpty = sanitized.filter(l => l.Results.length > 0);
         if (nonEmpty.length === 0) return [];
 
         // Single source: return as-is (no normalization needed, scores are native to that source)
@@ -48,8 +78,66 @@ export class SearchFusion {
             return nonEmpty[0].Results.slice(0, maxResults);
         }
 
-        // Multiple sources: apply RRF
-        return this.applyRRF(nonEmpty, maxResults);
+        // Multiple sources: apply RRF with optional weights
+        return this.applyRRF(nonEmpty, maxResults, fusionWeights);
+    }
+
+    /**
+     * Fuse already-per-scope-fused result lists into a single cross-scope ranking.
+     *
+     * Each entry in `scopeResults` is a per-scope ranked list (already internally fused
+     * across its providers via `Fuse()`). Cross-scope RRF treats each scope's ranking as
+     * one input list to a new RRF computation, so records that appear in multiple scopes
+     * get boosted.
+     *
+     * @param scopeResults - Map of `scopeID → per-scope results`.
+     * @param maxResults - Maximum number of results to return.
+     * @param fusionWeights - Optional per-scope weights keyed by scope ID. Missing keys
+     *                       default to 1.0.
+     * @returns Fused, cross-scope-ranked results (not yet deduplicated).
+     */
+    public CrossScopeFusion(
+        scopeResults: Map<string, SearchResultItem[]>,
+        maxResults: number,
+        fusionWeights?: Record<string, number>
+    ): SearchResultItem[] {
+        // Filter empty scopes
+        const entries = Array.from(scopeResults.entries()).filter(([, list]) => list.length > 0);
+        if (entries.length === 0) return [];
+        if (entries.length === 1) return entries[0][1].slice(0, maxResults);
+
+        // Build per-scope ScoredCandidate lists (by-record-identity keyed on EntityName::RecordID
+        // so the same logical record across scopes merges properly). `Rank` is included as
+        // an excess property so test doubles that key off of it work while real ComputeRRF
+        // (which keys off array position) continues to behave correctly.
+        const rankedLists: ScoredCandidate[][] = entries.map(([, list]) =>
+            list.map((r, i) => ({
+                ID: `${r.EntityName}::${r.RecordID}`,
+                Score: r.Score,
+                Rank: i + 1
+            } as ScoredCandidate))
+        );
+        const weights = entries.map(([scopeID]) => fusionWeights?.[scopeID] ?? 1);
+
+        const fused = this.computeWeightedRRF(rankedLists, weights);
+
+        // Build a lookup from compound key to full result item (prefer best score)
+        const resultMap = new Map<string, SearchResultItem>();
+        for (const [, list] of entries) {
+            for (const r of list) {
+                const key = `${r.EntityName}::${r.RecordID}`;
+                const existing = resultMap.get(key);
+                if (!existing || r.Score > existing.Score) {
+                    resultMap.set(key, r);
+                }
+            }
+        }
+
+        return fused.slice(0, maxResults).map(candidate => {
+            const item = resultMap.get(candidate.ID);
+            if (item) return { ...item, Score: candidate.Score };
+            return this.createFallbackItem(candidate);
+        });
     }
 
     /**
@@ -94,27 +182,43 @@ export class SearchFusion {
 
     /**
      * Apply RRF across multiple result lists.
-     * Maps results to ScoredCandidate[], runs ComputeRRF, then maps back.
+     * Maps results to ScoredCandidate[], runs ComputeRRF (optionally weighted), then maps back.
      */
-    private applyRRF(lists: LabeledResultList[], maxResults: number): SearchResultItem[] {
-        // Build ScoredCandidate arrays for each source
+    private applyRRF(
+        lists: LabeledResultList[],
+        maxResults: number,
+        fusionWeights?: FusionWeightsByProvider
+    ): SearchResultItem[] {
+        // Build ScoredCandidate arrays for each source. `Rank` is carried as an excess
+        // property for test doubles that key off it; production ComputeRRF ignores it.
         const rankedLists: ScoredCandidate[][] = lists.map(list =>
             list.Results.map((r, i) => ({
                 ID: r.RecordID,
                 Score: r.Score,
                 Rank: i + 1
-            }))
+            } as ScoredCandidate))
         );
 
-        // Run RRF fusion
-        const fused = ComputeRRF(rankedLists);
+        const weights = lists.map(l => fusionWeights?.[l.Source] ?? 1);
+        const fused = this.computeWeightedRRF(rankedLists, weights);
 
-        // Build a lookup from RecordID to full result item (prefer first occurrence)
+        // Build a lookup from RecordID to full result item. When the same record
+        // appears in multiple provider lists, merge their `ScoreBreakdown`s so the
+        // multi-provider evidence isn't lost. Keeping only the first occurrence
+        // would silently drop the second provider's contribution — which then
+        // causes the downstream `Deduplicate.breakdownMax` post-processing to
+        // under-rank multi-provider hits (they'd look single-provider).
         const resultMap = new Map<string, SearchResultItem>();
         for (const list of lists) {
             for (const r of list.Results) {
-                if (!resultMap.has(r.RecordID)) {
+                const existing = resultMap.get(r.RecordID);
+                if (!existing) {
                     resultMap.set(r.RecordID, r);
+                } else {
+                    resultMap.set(r.RecordID, {
+                        ...existing,
+                        ScoreBreakdown: { ...existing.ScoreBreakdown, ...r.ScoreBreakdown },
+                    });
                 }
             }
         }
@@ -128,6 +232,39 @@ export class SearchFusion {
             // Fallback (shouldn't happen in practice)
             return this.createFallbackItem(candidate);
         });
+    }
+
+    /**
+     * RRF with optional per-list weights.
+     *
+     * When all weights are 1, falls back to the canonical `ComputeRRF()` from
+     * `@memberjunction/core` for identical behavior. When weights are non-uniform,
+     * computes `Σᵢ wᵢ / (k + rankᵢ(d))` per the standard weighted-RRF formulation and
+     * re-sorts candidates by the weighted fused score.
+     */
+    private computeWeightedRRF(
+        rankedLists: ScoredCandidate[][],
+        weights: number[],
+        k: number = 60
+    ): ScoredCandidate[] {
+        const uniform = weights.every(w => w === 1);
+        if (uniform) {
+            return ComputeRRF(rankedLists, k);
+        }
+
+        const scores = new Map<string, number>();
+        rankedLists.forEach((list, listIdx) => {
+            const w = weights[listIdx] ?? 1;
+            list.forEach((candidate, position) => {
+                const rank = position + 1;
+                const contribution = w / (k + rank);
+                scores.set(candidate.ID, (scores.get(candidate.ID) ?? 0) + contribution);
+            });
+        });
+
+        return Array.from(scores.entries())
+            .map(([ID, Score]) => ({ ID, Score } as ScoredCandidate))
+            .sort((a, b) => b.Score - a.Score);
     }
 
     /**
@@ -153,10 +290,19 @@ export class SearchFusion {
      * no matching full result item (defensive).
      */
     private createFallbackItem(candidate: ScoredCandidate): SearchResultItem {
+        // If the ID is a compound key (EntityName::RecordID) used by CrossScopeFusion,
+        // split it back out for readability.
+        let entityName = 'Unknown';
+        let recordID = candidate.ID;
+        const sep = candidate.ID.indexOf('::');
+        if (sep > 0) {
+            entityName = candidate.ID.substring(0, sep);
+            recordID = candidate.ID.substring(sep + 2);
+        }
         return {
-            ID: candidate.ID,
-            EntityName: 'Unknown',
-            RecordID: candidate.ID,
+            ID: recordID,
+            EntityName: entityName,
+            RecordID: recordID,
             SourceType: 'fused',
             ResultType: 'entity-record',
             Title: 'Unknown',

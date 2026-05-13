@@ -386,7 +386,10 @@
     [environmentId]="environmentId"
     [currentUser]="currentUser"
     [excludeCollectionIds]="collectionPickerExcludedIds"
-    (saved)="onCollectionPickerSaved($event)"
+    [artifactVersionId]="collectionPickerVersionId"
+    [artifactName]="collectionPickerArtifactName"
+    [artifactVersionNumber]="collectionPickerVersionNumber"
+    (completed)="onCollectionPickerCompleted($event)"
     (cancelled)="onCollectionPickerCancelled()">
   </mj-artifact-collection-picker-modal>
 }

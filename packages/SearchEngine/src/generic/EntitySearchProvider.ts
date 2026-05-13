@@ -8,10 +8,10 @@
  * @module @memberjunction/search-engine
  */
 
-import { IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, LogError, LogStatus, RunView, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSearchProvider } from './ISearchProvider';
-import { SearchSource, SearchFilters, SearchResultItem, SearchResultType } from './search.types';
+import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeConstraints, ScopeEntityConstraint } from './search.types';
 
 /**
  * Provides entity-level LIKE-based search using RunView + UserSearchString.
@@ -50,38 +50,74 @@ export class EntitySearchProvider extends BaseSearchProvider {
         query: string,
         topK: number,
         filters: SearchFilters | undefined,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        scopeConstraints?: ScopeConstraints
     ): Promise<SearchResultItem[]> {
         const trimmed = (query ?? '').trim();
         if (trimmed.length < EntitySearchProvider.MIN_TERM_LENGTH) return [];
         try {
-            const md = this.Provider;
-            const searchableEntities = this.getSearchableEntities(md, filters);
-
-            if (searchableEntities.length === 0) {
-                LogStatus('EntitySearchProvider: No searchable entities found');
+            // Honor per-provider query transform (e.g., FTS keyword extraction, AI rewrite)
+            const rawQuery = scopeConstraints?.QueryTransforms?.[this.SourceType] ?? query;
+            // Strip SQL LIKE wildcards (`%`, `_`, `[`, `]`) before passing through to
+            // RunView's UserSearchString. The downstream `GenericDatabaseProvider`
+            // builds `LIKE '%${input}%'` clauses with only single-quote escaping —
+            // unstripped `%` would silently match every row, and `[abc]` would
+            // become a LIKE character-class. We treat these characters as
+            // not-meaningful for entity LIKE search rather than offering a
+            // user-facing "match wildcard" feature.
+            const effectiveQuery = this.sanitizeUserSearchString(rawQuery);
+            if (!effectiveQuery) {
+                // Query was entirely wildcard chars — nothing meaningful to match
+                LogStatus('EntitySearchProvider: Query reduced to empty after wildcard strip — returning no results');
                 return [];
             }
 
-            // Debug: log searchable entities and their search fields
-            LogStatus(`EntitySearchProvider: Searching ${searchableEntities.length} entities for "${trimmed}"`);
-            for (const e of searchableEntities.slice(0, 3)) {
-                const entity = md.EntityByName(e.Name);
+            // Multi-provider migration (v5.31+): use `this.Provider` instead of
+            // `new Metadata()` so the search honors a non-default IMetadataProvider
+            // when the calling component supplies one. Falls back to the global
+            // default when unset.
+            const md = this.Provider;
+            // Build the scoped subset: if scopeConstraints.Entities is provided, use those
+            // verbatim (they already went through the scope's Nunjucks-rendered ExtraFilter +
+            // UserSearchString pipeline). Otherwise fall back to legacy AllowUserSearchAPI
+            // behavior with optional filters.EntityNames restriction.
+            const scoped = this.buildScopedEntityList(md, scopeConstraints, filters);
+
+            if (scoped.length === 0) {
+                LogStatus('EntitySearchProvider: No searchable entities (scope or metadata match empty)');
+                return [];
+            }
+
+            // Debug: log scoped entities and their search fields
+            LogStatus(`EntitySearchProvider: Searching ${scoped.length} entities for "${effectiveQuery}"${scopeConstraints ? ' (scoped)' : ''}`);
+            for (const e of scoped.slice(0, 3)) {
+                const entity = md.EntityByName(e.EntityName);
                 if (entity) {
                     const searchFields = entity.Fields.filter(f => f.IncludeInUserSearchAPI);
-                    LogStatus(`  Entity "${e.Name}": ${searchFields.length} searchable fields [${searchFields.slice(0, 5).map(f => f.Name).join(', ')}${searchFields.length > 5 ? '...' : ''}]`);
+                    LogStatus(`  Entity "${e.EntityName}": ${searchFields.length} searchable fields [${searchFields.slice(0, 5).map(f => f.Name).join(', ')}${searchFields.length > 5 ? '...' : ''}]`);
                 }
             }
 
             // Calculate per-entity limit: distribute topK across entities
-            const perEntityLimit = Math.max(3, Math.ceil(topK / Math.max(1, searchableEntities.length)));
+            const perEntityLimit = Math.max(3, Math.ceil(topK / Math.max(1, scoped.length)));
 
-            // Search all entities in parallel, each gated by a hard timeout
-            const searchPromises = searchableEntities.map(entity =>
-                this.searchOneEntity(entity.Name, trimmed, perEntityLimit, contextUser)
+            // Search all entities in parallel, threading per-entity ExtraFilter + UserSearchString
+            // override; each call is gated by a hard PER_ENTITY_TIMEOUT_MS timeout (next PR #2532)
+            // so a slow entity cannot hold up the whole fan-out — partial results from the other
+            // entities still land.
+            const searchPromises = scoped.map(item =>
+                this.searchOneEntity(
+                    item.EntityName,
+                    item.UserSearchString ?? effectiveQuery,
+                    perEntityLimit,
+                    contextUser,
+                    item.ExtraFilter
+                )
             );
 
             const results = await Promise.all(searchPromises);
+            // Re-score against the original query for field-match relevance (not the transform)
+            // to keep snippets/field-match semantics consistent with what the user typed.
             const allResults = results.flat();
 
             // Sort by score descending and limit to topK
@@ -92,6 +128,34 @@ export class EntitySearchProvider extends BaseSearchProvider {
             LogError(`EntitySearchProvider: Search failed: ${msg}`);
             return [];
         }
+    }
+
+    /**
+     * Resolve the entity list to actually search.
+     *
+     * - If `scopeConstraints.Entities` is provided, use those directly (each carries its own
+     *   rendered ExtraFilter + UserSearchString) — this is the "scoped" path.
+     * - Otherwise fall back to the legacy unscoped path (`AllowUserSearchAPI=true` with
+     *   optional `filters.EntityNames` restriction) and wrap each in a trivial constraint.
+     */
+    private buildScopedEntityList(
+        md: IMetadataProvider,
+        scopeConstraints: ScopeConstraints | undefined,
+        filters: SearchFilters | undefined
+    ): ScopeEntityConstraint[] {
+        if (scopeConstraints?.Entities?.length) {
+            // Honor the scope's explicit entity list verbatim.
+            return scopeConstraints.Entities;
+        }
+
+        const unscoped = this.getSearchableEntities(md, filters);
+        return unscoped.map(e => {
+            const info = md.EntityByName(e.Name);
+            return {
+                EntityID: info?.ID ?? '',
+                EntityName: e.Name,
+            } as ScopeEntityConstraint;
+        });
     }
 
     /**
@@ -113,16 +177,22 @@ export class EntitySearchProvider extends BaseSearchProvider {
 
     /**
      * Search a single entity using RunView with UserSearchString. Wraps the
-     * underlying RunView in a hard timeout so a slow entity cannot hold up
-     * the whole fan-out — partial results from the other entities still land.
+     * underlying RunView in a hard PER_ENTITY_TIMEOUT_MS timeout so a slow
+     * entity cannot hold up the whole fan-out — partial results from the
+     * other entities still land.
+     *
+     * Note: `contextUser` is passed to RunView so row-level security (RLS) is applied
+     * automatically — this is the Entity provider's permission push-down per Section 3.6
+     * of plans/search-scopes-rag-plus.md.
      */
     private async searchOneEntity(
         entityName: string,
-        query: string,
+        userSearchString: string,
         maxRows: number,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        extraFilter?: string
     ): Promise<SearchResultItem[]> {
-        const work = this.searchOneEntityRaw(entityName, query, maxRows, contextUser);
+        const work = this.searchOneEntityRaw(entityName, userSearchString, maxRows, contextUser, extraFilter);
         let timer: ReturnType<typeof setTimeout> | undefined;
         const timeout = new Promise<SearchResultItem[]>(resolve => {
             timer = setTimeout(() => {
@@ -139,15 +209,17 @@ export class EntitySearchProvider extends BaseSearchProvider {
 
     private async searchOneEntityRaw(
         entityName: string,
-        query: string,
+        userSearchString: string,
         maxRows: number,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        extraFilter?: string
     ): Promise<SearchResultItem[]> {
         try {
             const rv = new RunView();
             const result = await rv.RunView<Record<string, unknown>>({
                 EntityName: entityName,
-                UserSearchString: query,
+                UserSearchString: userSearchString,
+                ExtraFilter: extraFilter && extraFilter.trim() ? extraFilter : undefined,
                 MaxRows: maxRows,
                 ResultType: 'simple'
             }, contextUser);
@@ -157,7 +229,7 @@ export class EntitySearchProvider extends BaseSearchProvider {
                 return [];
             }
 
-            return this.convertResults(result.Results, entityName, query);
+            return this.convertResults(result.Results, entityName, userSearchString);
         } catch (error) {
             const msg = error instanceof Error ? error.message : String(error);
             LogError(`EntitySearchProvider: Error searching "${entityName}": ${msg}`);
@@ -281,5 +353,26 @@ export class EntitySearchProvider extends BaseSearchProvider {
         }
 
         return entityInfo ? `Matched in ${entityInfo.Name}` : 'Matched record';
+    }
+
+    /**
+     * Remove SQL LIKE wildcard characters from a user-supplied search string.
+     *
+     * The downstream `GenericDatabaseProvider.createViewUserSearchSQL`
+     * interpolates user input directly into `LIKE '%${input}%'`, only
+     * escaping single quotes. Unstripped LIKE wildcards (`%`, `_`, `[`, `]`)
+     * would either match too much (e.g. `Query="%"` matches every row) or
+     * trigger LIKE character-class parsing (`Query="[abc]"`).
+     *
+     * Behavior intent: these characters are treated as not-meaningful for
+     * entity LIKE search. A query containing literal `%` (e.g. `100%`) will
+     * not find records that contain `100%` — the trade-off is documented
+     * to keep the behavior predictable and safe.
+     *
+     * Trailing/leading whitespace is collapsed; an all-wildcard query
+     * returns empty and the caller short-circuits to zero results.
+     */
+    private sanitizeUserSearchString(input: string): string {
+        return input.replace(/[%_[\]]/g, '').trim();
     }
 }

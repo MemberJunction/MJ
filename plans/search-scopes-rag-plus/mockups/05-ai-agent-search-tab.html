@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Mockup: AI Agent — Search Tab</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    <link rel="stylesheet" href="_tokens.css" />
+    <style>
+        .agent-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--mj-border-default); margin-bottom: 16px; }
+        .agent-tab { padding: 8px 16px; font-size: 0.8125rem; color: var(--mj-text-secondary); cursor: pointer; border-bottom: 2px solid transparent; }
+        .agent-tab.active { color: var(--mj-brand-primary); border-bottom-color: var(--mj-brand-primary); font-weight: 600; }
+        .agent-tab i { margin-right: 4px; }
+        .access-card {
+            padding: 16px;
+            border-radius: 8px;
+            background: var(--mj-bg-surface-card);
+            border: 1px solid var(--mj-border-default);
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .access-option {
+            padding: 14px;
+            border-radius: 8px;
+            background: var(--mj-bg-surface);
+            border: 2px solid var(--mj-border-default);
+            cursor: pointer;
+            transition: border 120ms ease;
+        }
+        .access-option.selected {
+            border-color: var(--mj-brand-primary);
+            background: color-mix(in srgb, var(--mj-brand-primary) 6%, var(--mj-bg-surface));
+        }
+        .access-option h4 { margin: 0 0 4px; font-size: 0.9375rem; display: flex; align-items: center; gap: 6px; }
+        .access-option p { margin: 0; font-size: 0.8125rem; color: var(--mj-text-secondary); line-height: 1.4; }
+
+        .scope-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: var(--mj-bg-surface);
+            border: 1px solid var(--mj-border-default);
+            border-radius: 8px;
+            overflow: hidden;
+            font-size: 0.8125rem;
+        }
+        .scope-table th, .scope-table td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--mj-border-subtle);
+            vertical-align: middle;
+        }
+        .scope-table th {
+            background: var(--mj-bg-surface-card);
+            color: var(--mj-text-secondary);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            font-weight: 600;
+        }
+        .scope-table tr:last-child td { border-bottom: none; }
+        .scope-table select, .scope-table input[type="text"], .scope-table input[type="number"] { width: 100%; padding: 4px 6px; }
+        .phase-pill {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 0.6875rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .phase-pill.pre { background: color-mix(in srgb, #0369a1 14%, var(--mj-bg-surface)); color: #075985; }
+        .phase-pill.invoked { background: color-mix(in srgb, #059669 14%, var(--mj-bg-surface)); color: #047857; }
+        .phase-pill.both { background: color-mix(in srgb, var(--mj-brand-primary) 14%, var(--mj-bg-surface)); color: var(--mj-brand-primary); }
+
+        .add-btn {
+            margin-top: 12px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            border: 1px dashed var(--mj-border-strong);
+            background: var(--mj-bg-surface);
+            color: var(--mj-brand-primary);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.8125rem;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="mock-frame">
+        <div class="mock-header">
+            <h1>MJ: AI Agent — "Betty (People Ops)"</h1>
+            <span class="mock-breadcrumb">AI / Agents / Betty · Mockup 5/10</span>
+        </div>
+
+        <div class="card">
+            <div class="agent-tabs">
+                <div class="agent-tab"><i class="fa-solid fa-circle-info"></i>Overview</div>
+                <div class="agent-tab"><i class="fa-solid fa-comments"></i>Prompts</div>
+                <div class="agent-tab"><i class="fa-solid fa-wrench"></i>Actions</div>
+                <div class="agent-tab"><i class="fa-solid fa-lightbulb"></i>Notes &amp; Examples</div>
+                <div class="agent-tab"><i class="fa-solid fa-database"></i>Data Sources</div>
+                <div class="agent-tab active"><i class="fa-solid fa-magnifying-glass"></i>Search</div>
+                <div class="agent-tab"><i class="fa-solid fa-chart-line"></i>Runs</div>
+            </div>
+
+            <div class="label" style="margin-bottom:8px;">Search Scope Access</div>
+            <div class="access-card">
+                <div class="access-option">
+                    <h4><i class="fa-solid fa-globe"></i> All</h4>
+                    <p>Can use any scope including Global. No scope restriction.</p>
+                </div>
+                <div class="access-option selected">
+                    <h4><i class="fa-solid fa-user-check"></i> Assigned</h4>
+                    <p>Can use ONLY scopes listed below. Rejects any other scope with <code>ACCESS_DENIED</code>.</p>
+                </div>
+                <div class="access-option">
+                    <h4><i class="fa-solid fa-ban"></i> None</h4>
+                    <p>No search capability. <code>__Scoped_Search</code> is disabled for this agent.</p>
+                </div>
+            </div>
+
+            <div class="label" style="margin-bottom:8px;">Assigned Scopes</div>
+            <table class="scope-table">
+                <thead>
+                    <tr>
+                        <th style="width:20%;">Scope</th>
+                        <th>Phase</th>
+                        <th>Priority</th>
+                        <th>Status / Window</th>
+                        <th>Max Results</th>
+                        <th>Min Score</th>
+                        <th>Query Template</th>
+                        <th>Fusion Weights Override</th>
+                        <th>Default</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><i class="fa-solid fa-user-tie" style="color:var(--mj-brand-primary);"></i> HR Policies</td>
+                        <td><span class="phase-pill pre">PreExecution</span></td>
+                        <td><input type="number" value="10" /></td>
+                        <td>Active</td>
+                        <td><input type="number" value="10" /></td>
+                        <td><input type="number" value="0.35" step="0.05" /></td>
+                        <td><select><option>tmpl_hr_policy_rag</option><option>— none —</option></select></td>
+                        <td><code>{ "vector": 2.0, "fulltext": 1.0 }</code></td>
+                        <td><input type="radio" name="default" /></td>
+                        <td><button class="icon-btn"><i class="fa-solid fa-trash"></i></button></td>
+                    </tr>
+                    <tr>
+                        <td><i class="fa-solid fa-book" style="color:var(--mj-brand-primary);"></i> Customer Knowledge Base</td>
+                        <td><span class="phase-pill both">Both</span></td>
+                        <td><input type="number" value="20" /></td>
+                        <td>Active</td>
+                        <td><input type="number" value="15" /></td>
+                        <td><input type="number" value="0.35" step="0.05" /></td>
+                        <td><select><option>— none —</option></select></td>
+                        <td class="muted">— use scope defaults —</td>
+                        <td><input type="radio" name="default" checked /></td>
+                        <td><button class="icon-btn"><i class="fa-solid fa-trash"></i></button></td>
+                    </tr>
+                    <tr>
+                        <td><i class="fa-solid fa-file-contract" style="color:var(--mj-brand-primary);"></i> Q4 Financial Reports</td>
+                        <td><span class="phase-pill invoked">AgentInvoked</span></td>
+                        <td><input type="number" value="100" /></td>
+                        <td>Active · Oct 1 – Jan 31</td>
+                        <td><input type="number" value="10" /></td>
+                        <td><input type="number" value="0.45" step="0.05" /></td>
+                        <td><select><option>— none —</option></select></td>
+                        <td class="muted">—</td>
+                        <td><input type="radio" name="default" /></td>
+                        <td><button class="icon-btn"><i class="fa-solid fa-trash"></i></button></td>
+                    </tr>
+                </tbody>
+            </table>
+            <button class="add-btn"><i class="fa-solid fa-plus"></i> Assign another scope</button>
+
+            <div style="margin-top:24px;padding:12px;background:var(--mj-status-info-bg);border-radius:6px;color:var(--mj-status-info-text);font-size:0.8125rem;">
+                <i class="fa-solid fa-circle-info"></i>
+                <strong>PreExecution</strong> scopes are injected automatically before the first LLM call (free — runs in parallel with notes/data). <strong>AgentInvoked</strong> scopes are callable via the <code>__Scoped_Search</code> tool. <strong>Both</strong> covers both paths.
+            </div>
+        </div>
+    </div>
+</body>
+</html>

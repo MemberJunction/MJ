@@ -868,6 +868,115 @@
                 </div>
             </mj-accordion-panel>
           }
+          <!-- Search -->
+          @if (record.ID) {
+            <mj-accordion-panel id="search"
+              [Expanded]="GetSectionExpanded('search', false)">
+                <ng-template mjAccordionTitle>
+                    <i class="fa-solid fa-magnifying-glass"></i> Search
+                </ng-template>
+                <div class="panel-content">
+                  <div class="section-header">
+                    <div class="section-description">
+                      Control this agent's access to <strong>Scoped Search</strong> and assign the scopes it can use for pre-execution RAG or agent-invoked search.
+                    </div>
+                  </div>
+
+                  <!-- Scope Access mode -->
+                  <div class="agent-search-access">
+                    <label class="agent-search-access-option" [class.active]="record.SearchScopeAccess === 'All'">
+                      <input type="radio" name="SearchScopeAccess" value="All" [checked]="record.SearchScopeAccess === 'All'" [disabled]="!EditMode" (change)="record.SearchScopeAccess = 'All'">
+                      <i class="fa-solid fa-globe"></i>
+                      <div class="agent-search-access-text">
+                        <div class="agent-search-access-title">All</div>
+                        <div class="agent-search-access-desc">Can use any scope including Global. No scope restriction.</div>
+                      </div>
+                    </label>
+                    <label class="agent-search-access-option" [class.active]="record.SearchScopeAccess === 'Assigned'">
+                      <input type="radio" name="SearchScopeAccess" value="Assigned" [checked]="record.SearchScopeAccess === 'Assigned'" [disabled]="!EditMode" (change)="record.SearchScopeAccess = 'Assigned'">
+                      <i class="fa-solid fa-user-check"></i>
+                      <div class="agent-search-access-text">
+                        <div class="agent-search-access-title">Assigned</div>
+                        <div class="agent-search-access-desc">Can use ONLY scopes listed below. Other scopes are rejected with ACCESS_DENIED.</div>
+                      </div>
+                    </label>
+                    <label class="agent-search-access-option" [class.active]="record.SearchScopeAccess === 'None'">
+                      <input type="radio" name="SearchScopeAccess" value="None" [checked]="record.SearchScopeAccess === 'None'" [disabled]="!EditMode" (change)="record.SearchScopeAccess = 'None'">
+                      <i class="fa-solid fa-ban"></i>
+                      <div class="agent-search-access-text">
+                        <div class="agent-search-access-title">None</div>
+                        <div class="agent-search-access-desc">No search capability. The Scoped Search action is disabled for this agent.</div>
+                      </div>
+                    </label>
+                  </div>
+
+                  <!-- Assigned scopes grid -->
+                  @if (record.SearchScopeAccess !== 'None') {
+                    <div class="agent-search-grid-header">
+                      <h4>Assigned Scopes</h4>
+                      <p class="section-description">
+                        <strong>Pre-Execution</strong> scopes are injected automatically before the first LLM call.
+                        <strong>Agent-Invoked</strong> scopes are callable via the Scoped Search tool during execution.
+                        <strong>Both</strong> covers both paths.
+                      </p>
+                    </div>
+                    <mj-search-scope-child-grid
+                      [ParentID]="record.ID"
+                      ChildEntityName="MJ: AI Agent Search Scopes"
+                      ParentFieldName="AgentID"
+                      [Columns]="AgentSearchScopeColumns"
+                      [Disabled]="!EditMode"
+                      AddButtonLabel="+ Assign another scope"
+                      EmptyMessage="No scopes assigned yet. Assign at least one if this agent will use Scoped Search."
+                      (RowsChanged)="LoadPermissionSummary()">
+                    </mj-search-scope-child-grid>
+
+                    <!-- Phase 2A: read-only audit summary of who has
+                         permission on each of this agent's assigned scopes.
+                         Editing happens in the Knowledge Hub Config dashboard
+                         (see "Permissions" subtab under Search Scopes). -->
+                    <div class="agent-search-section" style="margin-top: 16px;">
+                      <h4 style="margin: 0 0 8px 0;">
+                        <i class="fa-solid fa-shield-halved"></i> Effective scope permissions
+                      </h4>
+                      <p class="section-description" style="margin-bottom: 8px;">
+                        Per-user / per-role grants on the scopes assigned above. Edit grants in
+                        <strong>Knowledge Hub Config &rarr; Search Scopes &rarr; Permissions</strong>.
+                      </p>
+                      @if (IsLoadingPermissions) {
+                        <div style="color: var(--mj-text-muted);">Loading permissions&hellip;</div>
+                      } @else if (PermissionSummary.length === 0) {
+                        <div style="color: var(--mj-text-muted); font-style: italic;">
+                          No scopes assigned yet — permissions will appear here once you add scopes above.
+                        </div>
+                      } @else {
+                        @for (s of PermissionSummary; track s.ScopeID) {
+                          <div style="margin-bottom: 12px; padding: 8px 12px; background: var(--mj-bg-surface-card); border: 1px solid var(--mj-border-subtle); border-radius: 4px;">
+                            <div style="font-weight: 600; margin-bottom: 4px;">{{ s.ScopeName }}</div>
+                            @if (s.Permissions.length === 0) {
+                              <div style="color: var(--mj-text-muted); font-size: 0.9em;">
+                                No explicit permissions. Access falls back to this agent's <code>SearchScopeAccess</code> setting.
+                              </div>
+                            } @else {
+                              <ul style="margin: 4px 0 0 16px; padding: 0;">
+                                @for (p of s.Permissions; track p.Principal + p.Level) {
+                                  <li style="font-size: 0.9em; padding: 2px 0;">
+                                    <i class="fa-solid" [class.fa-user]="p.PrincipalType === 'User'" [class.fa-users]="p.PrincipalType === 'Role'"></i>
+                                    <strong>{{ p.Principal }}</strong>
+                                    <span style="color: var(--mj-text-muted);">({{ p.PrincipalType }})</span>
+                                    &mdash; <span [style.color]="p.Level === 'None' ? 'var(--mj-status-error-text)' : 'var(--mj-text-primary)'">{{ p.Level }}</span>
+                                  </li>
+                                }
+                              </ul>
+                            }
+                          </div>
+                        }
+                      }
+                    </div>
+                  }
+                </div>
+            </mj-accordion-panel>
+          }
           <!-- Payload -->
           <mj-accordion-panel id="payload"
             [Expanded]="GetSectionExpanded('payload', false)">

@@ -253,7 +253,8 @@ function EntityBrowser({ utilities, styles, components, callbacks, savedUserSett
         flex: 1,
         display: 'flex',
         flexDirection: 'column',
-        overflow: 'hidden'
+        minWidth: 0,
+        minHeight: 0
       }}>
         {/* Header */}
         <div style={{

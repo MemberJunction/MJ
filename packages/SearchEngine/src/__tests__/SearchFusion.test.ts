@@ -284,4 +284,240 @@ describe('SearchFusion', () => {
             expect(deduped).toHaveLength(2);
         });
     });
+
+    // ────────────────────────────────────────────────────────────────
+    // Scope-aware fusion (Phase 1B.13 / 1B.19)
+    // ────────────────────────────────────────────────────────────────
+
+    describe('Fuse (weighted, non-uniform)', () => {
+        it('honors heavy-vector weight when records differ across sources', () => {
+            const vector: SearchResultItem[] = [
+                makeResult({ EntityName: 'E', RecordID: 'A', Score: 0.9, SourceType: 'vector' }),
+            ];
+            const entity: SearchResultItem[] = [
+                makeResult({ EntityName: 'E', RecordID: 'B', Score: 0.9, SourceType: 'entity' }),
+            ];
+            const lists: LabeledResultList[] = [
+                { Source: 'vector', Results: vector },
+                { Source: 'entity', Results: entity },
+            ];
+            const result = fusion.Fuse(lists, 10, { vector: 10, entity: 0.1 });
+            expect(result[0].RecordID).toBe('A');
+        });
+
+        it('uniform weights behave identically to unweighted fusion (uses mocked ComputeRRF)', () => {
+            const vector: SearchResultItem[] = [
+                makeResult({ EntityName: 'E', RecordID: 'A', Score: 0.9, SourceType: 'vector' }),
+                makeResult({ EntityName: 'E', RecordID: 'B', Score: 0.8, SourceType: 'vector' }),
+            ];
+            const entity: SearchResultItem[] = [
+                makeResult({ EntityName: 'E', RecordID: 'C', Score: 0.7, SourceType: 'entity' }),
+            ];
+            const lists: LabeledResultList[] = [
+                { Source: 'vector', Results: vector },
+                { Source: 'entity', Results: entity },
+            ];
+            const unweighted = fusion.Fuse(lists, 10);
+            const uniform = fusion.Fuse(lists, 10, { vector: 1, entity: 1 });
+            expect(uniform.map(r => r.RecordID)).toEqual(unweighted.map(r => r.RecordID));
+        });
+    });
+
+    describe('CrossScopeFusion', () => {
+        it('returns empty when all scopes are empty', () => {
+            expect(fusion.CrossScopeFusion(new Map(), 10)).toEqual([]);
+        });
+
+        it('returns the single scope as-is (no fusion needed)', () => {
+            const map = new Map<string, SearchResultItem[]>();
+            map.set('scope-a', [
+                makeResult({ EntityName: 'E', RecordID: '1', Score: 0.9 }),
+                makeResult({ EntityName: 'E', RecordID: '2', Score: 0.8 }),
+            ]);
+            const result = fusion.CrossScopeFusion(map, 10);
+            expect(result).toHaveLength(2);
+            expect(result[0].RecordID).toBe('1');
+        });
+
+        it('boosts records that appear in multiple scopes', () => {
+            const map = new Map<string, SearchResultItem[]>();
+            map.set('scope-a', [
+                makeResult({ EntityName: 'E', RecordID: 'A', Score: 0.9 }),
+                makeResult({ EntityName: 'E', RecordID: 'B', Score: 0.8 }),
+            ]);
+            map.set('scope-b', [
+                makeResult({ EntityName: 'E', RecordID: 'B', Score: 0.85 }),
+                makeResult({ EntityName: 'E', RecordID: 'C', Score: 0.7 }),
+            ]);
+            const result = fusion.CrossScopeFusion(map, 10);
+            // B appears in both → should rank first
+            expect(result[0].RecordID).toBe('B');
+            expect(result).toHaveLength(3);
+        });
+
+        it('honors per-scope weights (non-uniform path, bypasses ComputeRRF mock)', () => {
+            const map = new Map<string, SearchResultItem[]>();
+            map.set('scope-a', [makeResult({ EntityName: 'E', RecordID: 'A', Score: 0.9 })]);
+            map.set('scope-b', [makeResult({ EntityName: 'E', RecordID: 'B', Score: 0.9 })]);
+            const heavyB = fusion.CrossScopeFusion(map, 10, { 'scope-a': 0.1, 'scope-b': 10 });
+            expect(heavyB[0].RecordID).toBe('B');
+        });
+
+        it('truncates to maxResults', () => {
+            const map = new Map<string, SearchResultItem[]>();
+            map.set('scope-a', [
+                makeResult({ EntityName: 'E', RecordID: '1', Score: 0.9 }),
+                makeResult({ EntityName: 'E', RecordID: '2', Score: 0.8 }),
+                makeResult({ EntityName: 'E', RecordID: '3', Score: 0.7 }),
+            ]);
+            expect(fusion.CrossScopeFusion(map, 2)).toHaveLength(2);
+        });
+
+        it('retains EntityName for records that only live in one scope', () => {
+            const map = new Map<string, SearchResultItem[]>();
+            map.set('scope-a', [
+                makeResult({ EntityName: 'Articles', RecordID: 'r1', Score: 0.9 }),
+            ]);
+            map.set('scope-b', [
+                makeResult({ EntityName: 'Policies', RecordID: 'r2', Score: 0.8 }),
+            ]);
+            const result = fusion.CrossScopeFusion(map, 10);
+            const names = result.map(r => r.EntityName).sort();
+            expect(names).toEqual(['Articles', 'Policies']);
+        });
+    });
+
+    // ────────────────────────────────────────────────────────────────────
+    // Tier-1 search edge-case coverage (release-readiness audit)
+    // ────────────────────────────────────────────────────────────────────
+
+    describe('Defensive sanitation against malformed provider results', () => {
+        it('drops items with NaN Score before fusing', () => {
+            const lists: LabeledResultList[] = [
+                {
+                    Source: 'vector',
+                    Results: [
+                        makeResult({ EntityName: 'E', RecordID: 'good', Score: 0.6 }),
+                        makeResult({ EntityName: 'E', RecordID: 'nan', Score: NaN }),
+                    ],
+                },
+                {
+                    Source: 'entity',
+                    Results: [
+                        makeResult({ EntityName: 'E', RecordID: 'good', Score: 0.4 }),
+                    ],
+                },
+            ];
+            const result = fusion.Fuse(lists, 10);
+            const ids = result.map(r => r.RecordID);
+            expect(ids).toContain('good');
+            expect(ids).not.toContain('nan');
+        });
+
+        it('drops items with Infinity Score', () => {
+            const lists: LabeledResultList[] = [
+                {
+                    Source: 'vector',
+                    Results: [
+                        makeResult({ EntityName: 'E', RecordID: 'inf', Score: Infinity }),
+                        makeResult({ EntityName: 'E', RecordID: 'ok', Score: 0.5 }),
+                    ],
+                },
+                { Source: 'entity', Results: [] },
+            ];
+            const result = fusion.Fuse(lists, 10);
+            expect(result.map(r => r.RecordID)).toEqual(['ok']);
+        });
+
+        it('drops items with empty RecordID', () => {
+            const lists: LabeledResultList[] = [
+                {
+                    Source: 'vector',
+                    Results: [
+                        makeResult({ EntityName: 'E', RecordID: '', Score: 0.9 }),
+                        makeResult({ EntityName: 'E', RecordID: 'a', Score: 0.7 }),
+                    ],
+                },
+                { Source: 'entity', Results: [] },
+            ];
+            const result = fusion.Fuse(lists, 10);
+            expect(result.map(r => r.RecordID)).toEqual(['a']);
+        });
+
+        it('drops items with non-string RecordID', () => {
+            const lists: LabeledResultList[] = [
+                {
+                    Source: 'vector',
+                    Results: [
+                        // Cast through unknown to construct a type-incorrect runtime
+                        // payload that mirrors what a misbehaving 3rd-party
+                        // provider could emit.
+                        ({ ...makeResult({ EntityName: 'E', RecordID: 'x', Score: 0.8 }), RecordID: 42 as unknown as string }),
+                        makeResult({ EntityName: 'E', RecordID: 'b', Score: 0.5 }),
+                    ],
+                },
+                { Source: 'entity', Results: [] },
+            ];
+            const result = fusion.Fuse(lists, 10);
+            expect(result.map(r => r.RecordID)).toEqual(['b']);
+        });
+
+        it('survives a list with only malformed items by treating it as empty', () => {
+            const lists: LabeledResultList[] = [
+                {
+                    Source: 'vector',
+                    Results: [
+                        makeResult({ EntityName: 'E', RecordID: '', Score: NaN }),
+                    ],
+                },
+                {
+                    Source: 'entity',
+                    Results: [
+                        makeResult({ EntityName: 'E', RecordID: 'real', Score: 0.7 }),
+                    ],
+                },
+            ];
+            const result = fusion.Fuse(lists, 10);
+            // Only the entity list survives sanitation → single-source path
+            expect(result).toHaveLength(1);
+            expect(result[0].RecordID).toBe('real');
+        });
+    });
+
+    describe('Single-provider scope (post-fusion-fix regression guard)', () => {
+        it('returns vector results unchanged when only Vector contributes', () => {
+            // Common production setup: a scope wired only to the Vector
+            // provider. We just changed `applyRRF` to merge ScoreBreakdowns
+            // for multi-provider hits — verify the single-provider fast
+            // path (which doesn't go through applyRRF) still returns the
+            // provider's items verbatim.
+            const items: SearchResultItem[] = [
+                makeResult({ EntityName: 'E', RecordID: 'a', Score: 0.9, SourceType: 'vector', ScoreBreakdown: { Vector: 0.9 } as SearchScoreBreakdown }),
+                makeResult({ EntityName: 'E', RecordID: 'b', Score: 0.7, SourceType: 'vector', ScoreBreakdown: { Vector: 0.7 } as SearchScoreBreakdown }),
+                makeResult({ EntityName: 'E', RecordID: 'c', Score: 0.5, SourceType: 'vector', ScoreBreakdown: { Vector: 0.5 } as SearchScoreBreakdown }),
+            ];
+            const lists: LabeledResultList[] = [
+                { Source: 'vector', Results: items },
+                { Source: 'entity', Results: [] },
+            ];
+            const result = fusion.Fuse(lists, 10);
+            expect(result).toHaveLength(3);
+            expect(result.map(r => r.RecordID)).toEqual(['a', 'b', 'c']);
+            // Source type and breakdown preserved verbatim
+            expect(result[0].SourceType).toBe('vector');
+            expect((result[0].ScoreBreakdown as { Vector?: number }).Vector).toBe(0.9);
+        });
+
+        it('truncates to maxResults in single-provider mode', () => {
+            const items: SearchResultItem[] = Array.from({ length: 25 }, (_, i) =>
+                makeResult({ EntityName: 'E', RecordID: `r${i}`, Score: 1 - i * 0.01, SourceType: 'entity' })
+            );
+            const lists: LabeledResultList[] = [
+                { Source: 'entity', Results: items },
+            ];
+            const result = fusion.Fuse(lists, 5);
+            expect(result).toHaveLength(5);
+            expect(result.map(r => r.RecordID)).toEqual(['r0', 'r1', 'r2', 'r3', 'r4']);
+        });
+    });
 });

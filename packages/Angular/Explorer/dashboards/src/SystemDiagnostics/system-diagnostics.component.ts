@@ -1022,7 +1022,7 @@ export interface SystemDiagnosticsUserPreferences {
                         </div>
                       } @else {
                         <div class="empty-state">
-                          <i class="fa-solid fa-check-circle" style="color: #4caf50;"></i>
+                          <i class="fa-solid fa-check-circle" style="color: var(--mj-status-success);"></i>
                           <p>No optimization insights</p>
                           <span class="empty-hint">Insights will appear when potential optimizations are detected</span>
                         </div>

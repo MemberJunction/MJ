@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Mockup: Scope-Filtered Results</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    <link rel="stylesheet" href="_tokens.css" />
+    <style>
+        .results-layout {
+            display: grid;
+            grid-template-columns: 260px 1fr;
+            gap: 24px;
+        }
+        .sidebar {
+            padding: 16px;
+            background: var(--mj-bg-surface);
+            border: 1px solid var(--mj-border-default);
+            border-radius: 8px;
+            height: fit-content;
+        }
+        .sidebar h4 {
+            margin: 12px 0 8px;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            color: var(--mj-text-muted);
+            letter-spacing: 0.04em;
+        }
+        .facet {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.8125rem;
+            padding: 4px 0;
+            color: var(--mj-text-primary);
+        }
+        .facet input { accent-color: var(--mj-brand-primary); margin-right: 6px; }
+        .facet .count { color: var(--mj-text-muted); font-variant-numeric: tabular-nums; }
+
+        .results-main .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+            padding: 12px 16px;
+            background: var(--mj-bg-surface);
+            border: 1px solid var(--mj-border-default);
+            border-radius: 8px;
+        }
+        .toolbar .scope-tags { display: inline-flex; gap: 6px; }
+        .scope-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+            color: var(--mj-brand-primary);
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .scope-tag .remove { color: var(--mj-brand-primary); cursor: pointer; font-size: 0.75rem; }
+        .view-toggle { margin-left: auto; display: inline-flex; gap: 4px; background: var(--mj-bg-surface-sunken); padding: 4px; border-radius: 6px; }
+        .view-toggle button {
+            border: none;
+            background: transparent;
+            padding: 4px 10px;
+            font-size: 0.8125rem;
+            border-radius: 4px;
+            cursor: pointer;
+            color: var(--mj-text-secondary);
+        }
+        .view-toggle button.active {
+            background: var(--mj-bg-surface);
+            color: var(--mj-text-primary);
+            box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+        }
+
+        .result-group {
+            background: var(--mj-bg-surface);
+            border: 1px solid var(--mj-border-default);
+            border-radius: 8px;
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+        .group-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 16px;
+            background: var(--mj-bg-surface-card);
+            border-bottom: 1px solid var(--mj-border-default);
+        }
+        .group-header h3 { margin: 0; font-size: 0.9375rem; }
+        .group-header .pill {
+            font-size: 0.6875rem;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: var(--mj-bg-surface-sunken);
+            color: var(--mj-text-secondary);
+            font-weight: 600;
+        }
+
+        .result-item {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--mj-border-subtle);
+            display: grid;
+            grid-template-columns: 32px 1fr auto;
+            gap: 12px;
+        }
+        .result-item:last-child { border-bottom: none; }
+        .result-icon {
+            width: 32px;
+            height: 32px;
+            background: var(--mj-bg-surface-sunken);
+            color: var(--mj-brand-primary);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .result-title {
+            font-weight: 600;
+            color: var(--mj-text-primary);
+            margin-bottom: 2px;
+            font-size: 0.9375rem;
+        }
+        .result-snippet {
+            font-size: 0.8125rem;
+            color: var(--mj-text-secondary);
+            line-height: 1.4;
+            margin-bottom: 6px;
+        }
+        .result-meta {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            font-size: 0.75rem;
+            color: var(--mj-text-muted);
+        }
+        .source-chip {
+            display: inline-flex;
+            gap: 4px;
+            align-items: center;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: var(--mj-bg-surface-sunken);
+            color: var(--mj-text-secondary);
+            font-weight: 600;
+        }
+        .source-chip.vector { background: color-mix(in srgb, #8b5cf6 14%, var(--mj-bg-surface)); color: #6d28d9; }
+        .source-chip.fulltext { background: color-mix(in srgb, #059669 14%, var(--mj-bg-surface)); color: #047857; }
+        .source-chip.entity { background: color-mix(in srgb, #0284c7 14%, var(--mj-bg-surface)); color: #075985; }
+        .score {
+            font-size: 0.8125rem;
+            font-weight: 600;
+            color: var(--mj-text-primary);
+            font-variant-numeric: tabular-nums;
+        }
+        .score-label { display: block; font-size: 0.6875rem; color: var(--mj-text-muted); font-weight: 400; text-transform: uppercase; letter-spacing: 0.04em; }
+
+        .rerank-note {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.75rem;
+            color: var(--mj-status-info-text);
+            background: var(--mj-status-info-bg);
+            padding: 6px 10px;
+            border-radius: 6px;
+            margin: 0 16px 0 0;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 48px 16px;
+            color: var(--mj-text-muted);
+        }
+    </style>
+</head>
+<body>
+    <div class="mock-frame">
+        <div class="mock-header">
+            <h1>Scope-Filtered Results — query: "refund policy"</h1>
+            <span class="mock-breadcrumb">Mockup 2/10</span>
+        </div>
+
+        <div class="results-layout">
+            <aside class="sidebar">
+                <h4>Providers</h4>
+                <label class="facet"><span><input type="checkbox" checked> Semantic</span><span class="count">18</span></label>
+                <label class="facet"><span><input type="checkbox" checked> Full-text</span><span class="count">22</span></label>
+                <label class="facet"><span><input type="checkbox" checked> Database</span><span class="count">7</span></label>
+                <h4>Entities</h4>
+                <label class="facet"><span><input type="checkbox" checked> Knowledge Articles</span><span class="count">28</span></label>
+                <label class="facet"><span><input type="checkbox"> Documents</span><span class="count">12</span></label>
+                <label class="facet"><span><input type="checkbox"> Policies</span><span class="count">7</span></label>
+                <h4>Tags</h4>
+                <label class="facet"><span><input type="checkbox" checked> hr</span><span class="count">15</span></label>
+                <label class="facet"><span><input type="checkbox"> finance</span><span class="count">9</span></label>
+                <label class="facet"><span><input type="checkbox"> policy</span><span class="count">22</span></label>
+            </aside>
+
+            <section class="results-main">
+                <div class="toolbar">
+                    <span style="color:var(--mj-text-muted);font-size:0.8125rem;">Searching in:</span>
+                    <span class="scope-tags">
+                        <span class="scope-tag"><i class="fa-solid fa-user-tie"></i> HR Policies <i class="fa-solid fa-xmark remove"></i></span>
+                        <span class="scope-tag"><i class="fa-solid fa-book"></i> Customer Knowledge Base <i class="fa-solid fa-xmark remove"></i></span>
+                    </span>
+                    <div class="rerank-note">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> Results re-ranked (Cohere v3.5)
+                    </div>
+                    <div class="view-toggle">
+                        <button>All</button>
+                        <button class="active">Grouped by scope</button>
+                        <button>Provider</button>
+                    </div>
+                </div>
+
+                <div class="result-group">
+                    <div class="group-header">
+                        <i class="fa-solid fa-user-tie" style="color:var(--mj-brand-primary);"></i>
+                        <h3>HR Policies</h3>
+                        <span class="pill">27 results · top score 0.91</span>
+                        <div style="margin-left:auto;">
+                            <button class="icon-btn" title="Save as artifact"><i class="fa-solid fa-file-export"></i></button>
+                        </div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-icon"><i class="fa-solid fa-file-lines"></i></div>
+                        <div>
+                            <div class="result-title">Refund &amp; Reimbursement Policy — 2025 Update</div>
+                            <div class="result-snippet">"Expense refund requests must be submitted within 30 days of the transaction via the Concur portal. Managers approve within 5 business days…"</div>
+                            <div class="result-meta">
+                                <span class="source-chip vector">semantic</span>
+                                <span class="source-chip fulltext">fulltext</span>
+                                <span>Knowledge Articles</span>
+                                <span>· updated 6 days ago</span>
+                                <span>· tags: hr, policy, refund</span>
+                            </div>
+                        </div>
+                        <div class="score"><span class="score-label">Score</span>0.91</div>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-icon"><i class="fa-solid fa-file-contract"></i></div>
+                        <div>
+                            <div class="result-title">Employee Handbook §8.4 — Travel &amp; Reimbursement</div>
+                            <div class="result-snippet">"Travel-related refunds follow the same submission flow, with the addition of required receipts above $25 and traveler's pre-approval…"</div>
+                            <div class="result-meta">
+                                <span class="source-chip fulltext">fulltext</span>
+                                <span>Documents</span>
+                                <span>· updated 1 month ago</span>
+                                <span>· tags: hr, handbook</span>
+                            </div>
+                        </div>
+                        <div class="score"><span class="score-label">Score</span>0.84</div>
+                    </div>
+                </div>
+
+                <div class="result-group">
+                    <div class="group-header">
+                        <i class="fa-solid fa-book" style="color:var(--mj-brand-primary);"></i>
+                        <h3>Customer Knowledge Base</h3>
+                        <span class="pill">11 results · top score 0.79</span>
+                    </div>
+                    <div class="result-item">
+                        <div class="result-icon"><i class="fa-solid fa-file-lines"></i></div>
+                        <div>
+                            <div class="result-title">Customer Refund FAQ</div>
+                            <div class="result-snippet">"Returns are accepted within 60 days with original receipt. Refunds are issued to the original payment method within 5-7 business days…"</div>
+                            <div class="result-meta">
+                                <span class="source-chip vector">semantic</span>
+                                <span class="source-chip entity">database</span>
+                                <span>Knowledge Articles</span>
+                                <span>· updated 2 weeks ago</span>
+                                <span>· tags: customer, refund, faq</span>
+                            </div>
+                        </div>
+                        <div class="score"><span class="score-label">Score</span>0.79</div>
+                    </div>
+                </div>
+
+                <div class="card" style="margin-top:16px;text-align:center;">
+                    <button class="btn primary"><i class="fa-solid fa-file-export"></i> Save result set as artifact</button>
+                    <span class="muted" style="display:inline-block;margin-left:12px;font-size:0.8125rem;">Persist this exact query + scope combination for later inspection, sharing, or agent tool calls.</span>
+                </div>
+            </section>
+        </div>
+    </div>
+</body>
+</html>

@@ -17,6 +17,7 @@
   "author": "MemberJunction.com",
   "license": "ISC",
   "dependencies": {
+    "@memberjunction/ai-vectordb": "5.33.0",
     "@memberjunction/core": "5.33.0",
     "@memberjunction/global": "5.33.0"
   },
