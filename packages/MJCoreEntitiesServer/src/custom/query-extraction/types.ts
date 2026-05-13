@@ -119,4 +119,7 @@ export interface QuerySyncContext {
     contextUser: UserInfo;
     metadataProvider: IMetadataProvider;
     runViewProvider: IRunViewProvider;
+    /** Caller-provided tested parameter sample values (paramName → sampleValue).
+     *  When present, these take highest priority over LLM-generated or heuristic sampleValues. */
+    parameterHints?: Map<string, string>;
 }

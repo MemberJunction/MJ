@@ -44,6 +44,15 @@ export class QueryPermissionInputType {
 }
 
 @InputType()
+export class QueryParameterHintInput {
+    @Field(() => String)
+    Name!: string;
+
+    @Field(() => String)
+    Value!: string;
+}
+
+@InputType()
 export class CreateQuerySystemUserInput {
     @Field(() => String)
     Name!: string;
@@ -98,6 +107,9 @@ export class CreateQuerySystemUserInput {
 
     @Field(() => [QueryPermissionInputType], { nullable: true })
     Permissions?: QueryPermissionInputType[];
+
+    @Field(() => [QueryParameterHintInput], { nullable: true })
+    ParameterHints?: QueryParameterHintInput[];
 }
 
 @InputType()
@@ -158,6 +170,9 @@ export class UpdateQuerySystemUserInput {
 
     @Field(() => [QueryPermissionInputType], { nullable: true })
     Permissions?: QueryPermissionInputType[];
+
+    @Field(() => [QueryParameterHintInput], { nullable: true })
+    ParameterHints?: QueryParameterHintInput[];
 }
 
 /**
@@ -246,7 +261,7 @@ export class MJQueryResolverExtended extends MJQueryResolver {
             const record = await provider.GetEntityObject<MJQueryEntityServer>("MJ: Queries", context.userPayload.userRecord);
             
             // Destructure out non-database fields, keep only fields to persist
-            const { Permissions: _permissions, CategoryPath: _categoryPath, ...fieldsToSet } = {
+            const { Permissions: _permissions, CategoryPath: _categoryPath, ParameterHints: _parameterHints, ...fieldsToSet } = {
                 ...input,
                 CategoryID: finalCategoryID || input.CategoryID,
                 Status: input.Status || 'Approved',
@@ -259,6 +274,12 @@ export class MJQueryResolverExtended extends MJQueryResolver {
             };
 
             record.SetMany(fieldsToSet, true);
+
+            // Pass caller-provided parameter sample values to override LLM guesses
+            if (input.ParameterHints && input.ParameterHints.length > 0) {
+                record.ParameterHints = new Map(input.ParameterHints.map(h => [h.Name, h.Value]));
+            }
+
             this.ListenForEntityMessages(record, pubSub, context.userPayload.userRecord);
 
             // Attempt to save the query
@@ -479,6 +500,11 @@ export class MJQueryResolverExtended extends MJQueryResolver {
 
             // Use SetMany to update all fields at once
             queryEntity.SetMany(updateFields);
+
+            // Pass caller-provided parameter sample values to override LLM guesses
+            if (input.ParameterHints && input.ParameterHints.length > 0) {
+                queryEntity.ParameterHints = new Map(input.ParameterHints.map(h => [h.Name, h.Value]));
+            }
 
             // Save the updated query
             const saveResult = await queryEntity.Save();
