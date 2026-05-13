@@ -1664,6 +1664,611 @@ they had to update.
 
 ---
 
+# Angular — patterns that work in MJ
+
+MJExplorer (and your own MJ-based SPAs) ship Angular components alongside
+CodeGen-generated forms. The standard Angular guidance applies — plus a
+handful of MJ-specific patterns that, if you skip, lead to half-broken
+forms, missing toolbars, or hanging loading screens.
+
+## Component declaration — standalone or NgModule
+
+MJ supports both styles. **Use whichever the existing code in the package
+uses.** If a package's components are `standalone`, your new component
+should be too; if they're declared in an `NgModule`, yours should be too.
+Mixing in one package adds cognitive overhead with no upside.
+
+When to prefer **standalone** (the modern default):
+
+- New leaf components (dialogs, panels, small widgets)
+- Lazy-loaded route components — enables `loadComponent()` directly
+- Anything self-contained with explicit dependency list
+
+When to prefer **NgModule**:
+
+- Existing feature modules that already group many related components
+- Shared modules consumed by multiple feature areas
+- When the surrounding package is module-declared (don't migrate just to migrate)
+
+```typescript
+// ✅ Standalone — declare deps in imports[]
+@Component({
+    standalone: true,
+    imports: [MJDialogComponent, MJButtonDirective],
+    selector: 'my-thing',
+    template: `<mj-dialog>…</mj-dialog>`
+})
+export class MyThingComponent { … }
+
+// ✅ NgModule-declared — explicit standalone: false (Angular 21+ defaults to true)
+@Component({
+    standalone: false,
+    selector: 'my-thing',
+    template: `<mj-dialog>…</mj-dialog>`
+})
+export class MyThingComponent { … }
+```
+
+Never mix the two in one component. A component is either standalone or
+NgModule-declared.
+
+## Modern template syntax — required for new code
+
+Use the **block syntax** (`@if`, `@for`, `@switch`), not the legacy
+structural directives:
+
+```html
+<!-- ✅ Modern — works for standalone AND NgModule components -->
+@if (isLoading) {
+    <mj-loading text="Loading data..."/>
+} @else if (records.length === 0) {
+    <p>No records.</p>
+} @else {
+    @for (record of records; track record.ID) {
+        <my-record [data]="record"/>
+    }
+}
+
+<!-- ❌ Legacy — *ngIf / *ngFor are heading toward deprecation -->
+<mj-loading *ngIf="isLoading" text="Loading data..."/>
+<p *ngIf="!isLoading && records.length === 0">No records.</p>
+<my-record *ngFor="let record of records; trackBy: trackById" [data]="record"/>
+```
+
+`@for` has roughly **90% better runtime performance** than `*ngFor` and
+requires an explicit `track` expression. The block syntax works
+identically with both standalone and NgModule components.
+
+After migrating templates, you can typically drop the `CommonModule`
+import — it's only needed for the legacy directives.
+
+## Dependency injection — prefer `inject()`
+
+Angular's `inject()` function is now the recommended DI mechanism for new
+components, services, and directives:
+
+```typescript
+// ✅ inject() — Angular's official recommendation for new code
+import { Component, inject } from '@angular/core';
+import { Metadata } from '@memberjunction/core';
+
+@Component({ standalone: true, … })
+export class MyComponent {
+    private cdr = inject(ChangeDetectorRef);
+    private md = new Metadata();
+
+    async loadData() { … }
+}
+
+// ✅ Constructor DI — still works fine; don't migrate existing code just for the sake of it
+export class MyComponent {
+    constructor(private cdr: ChangeDetectorRef) {}
+}
+```
+
+`inject()` wins on:
+
+- Inheritance — no `super(...)` chains
+- Type inference — no string-typed tokens
+- Standard decorator compatibility
+
+But existing constructor-injected code doesn't need migration. Mix is fine
+across files (just not within one component).
+
+## Custom entity forms — extend the generated class
+
+The single most-important MJ-Angular pattern: **when you customize a form,
+you extend the generated form class** — you do not fork it.
+
+```typescript
+import { Component } from '@angular/core';
+import { RegisterClass } from '@memberjunction/global';
+import { BaseFormComponent } from '@memberjunction/ng-base-forms';
+// ✅ Import the generated class
+import { OrderFormComponent } from '../../generated/Entities/Order/order.form.component';
+
+@RegisterClass(BaseFormComponent, 'Orders')   // entity name
+@Component({
+    selector: 'mj-order-form-extended',
+    // ... your overrides here
+})
+export class OrderFormComponentExtended extends OrderFormComponent {
+    // override hooks, add tabs, embed custom panels, etc.
+}
+```
+
+Why extend rather than rewrite:
+
+1. **`@RegisterClass` resolves by registration order.** Your extension
+   file imports the generated file, so your class compiles AFTER the
+   generated one — `@RegisterClass(..., 'Orders')` then wins the
+   factory lookup over the parent registration.
+
+2. **You inherit every CodeGen improvement for free.** When the entity
+   schema gains a new field, the generated form gains a new control;
+   your extension picks it up automatically.
+
+3. **The generated file stays untouched.** No merge conflicts when
+   CodeGen regenerates after a schema change.
+
+## Toolbar pattern — `<mj-record-form-container>`, not `<mj-form-toolbar>` directly
+
+Entity form templates must wrap their content in **`<mj-record-form-container>`**.
+Using `<mj-form-toolbar>` alone looks identical at first but **silently
+breaks the History / Tags / Add-to-List panels** — the container owns the
+panels that those toolbar buttons open.
+
+```html
+<!-- ✅ CORRECT — container manages toolbar + panels -->
+<mj-record-form-container [record]="record">
+    <!-- toolbar is rendered by the container -->
+    <ng-container slot="content">
+        <my-tabs/>
+    </ng-container>
+</mj-record-form-container>
+
+<!-- ❌ WRONG — toolbar buttons fire events with nothing to handle them -->
+<mj-form-toolbar [record]="record"/>
+<my-tabs/>
+```
+
+If you cargo-culted a `<mj-form-toolbar>` from somewhere, the History
+button will visibly do nothing — no error, no console message, just dead
+buttons. The container pattern is mandatory.
+
+## Loading indicators — `<mj-loading>`, not custom spinners
+
+```html
+<!-- ✅ Use the standard component -->
+<mj-loading text="Loading records..."/>
+
+<!-- Variations -->
+<mj-loading></mj-loading>                              <!-- default text -->
+<mj-loading text="Please wait..." size="medium"/>
+<mj-loading [showText]="false"/>                       <!-- icon only -->
+
+<!-- ❌ Don't roll your own spinner -->
+<div class="my-spinner"><i class="fa fa-spinner fa-spin"/></div>
+```
+
+Sizes: `'small'` (40×22), `'medium'` (80×45), `'large'` (120×67), `'auto'`
+(fills container). Import via `SharedGenericModule` from
+`@memberjunction/ng-shared-generic`.
+
+The component displays the animated MJ logo with optional text below —
+gives every loading state in the app a consistent feel.
+
+## `BaseResourceComponent` — MUST call `NotifyLoadComplete()`
+
+Any class that extends `BaseResourceComponent` (which includes every
+`BaseDashboard` subclass) **must call `this.NotifyLoadComplete()` when its
+initial load finishes**. Without that call, the app's shell loading screen
+hangs forever on direct-URL navigation.
+
+```typescript
+// ✅ CORRECT — signal the shell to clear the loading screen
+export class MyResourceComponent extends BaseResourceComponent implements OnInit {
+    async ngOnInit(): Promise<void> {
+        await this.loadMyData();
+        this.NotifyLoadComplete();   // REQUIRED
+    }
+}
+
+// ❌ WRONG — silent permanent loading spinner on direct nav
+export class MyResourceComponent extends BaseResourceComponent implements OnInit {
+    async ngOnInit(): Promise<void> {
+        await this.loadMyData();
+        // (forgot to NotifyLoadComplete → shell stays loading forever)
+    }
+}
+```
+
+`BaseDashboard` subclasses get this for free — `BaseDashboard.ngOnInit()`
+calls `NotifyLoadComplete()` after `loadData()` finishes. For direct
+`BaseResourceComponent` subclasses, you must call it yourself, typically
+at the end of `ngOnInit()` or `ngAfterViewInit()`.
+
+## MJ UI components — use `@memberjunction/ng-ui-components`
+
+**All new UI components should use MJ's UI components package**, not Kendo,
+PrimeNG, or Angular Material.
+
+| Need | Use |
+|---|---|
+| Button | `mjButton` directive |
+| Dialog | `<mj-dialog>` + `MJDialogService` |
+| Window | `<mj-window>` |
+| Dropdown / combobox | `<mj-dropdown>` / `<mj-combobox>` |
+| Switch | `<mj-switch>` |
+| Numeric input | `<mj-numeric-input>` |
+| Date picker | `<mj-datepicker>` |
+| Progress bar | `<mj-progress-bar>` |
+| Accordion | `<mj-accordion-panel>` |
+| Splitters | `angular-split` (`as-split` + `as-split-area`) |
+| Grids | AG Grid (`ag-grid-angular`) |
+| Loading | `<mj-loading>` |
+
+Styled native form elements: `.mj-input`, `.mj-textarea`, `.mj-checkbox` CSS classes.
+
+All MJ components are standalone with `inject()` DI, `PascalCase` inputs /
+outputs, and `--mj-*` design tokens (see `11-design-tokens.md`).
+
+Import path: `import { MJButtonDirective, MJDialogComponent, … } from
+'@memberjunction/ng-ui-components';`
+
+## `@Input()` properties — use getter/setters for reactive ones
+
+For an `@Input()` that needs to react when it changes, prefer the
+getter/setter pattern over `ngOnChanges`. Setters fire immediately on each
+write — exact timing, easy to reason about.
+
+```typescript
+// ✅ Precise — react in the setter
+private _queryId: string | null = null;
+
+@Input()
+set queryId(value: string | null) {
+    const prev = this._queryId;
+    this._queryId = value;
+    if (value && value !== prev) {
+        this.onQueryIdChanged(value);
+    }
+}
+get queryId(): string | null {
+    return this._queryId;
+}
+
+// ❌ Less precise — ngOnChanges has timing surprises and harder debugging
+@Input() queryId: string | null = null;
+
+ngOnChanges(changes: SimpleChanges) {
+    if (changes['queryId']) { … }
+}
+```
+
+`ngOnChanges` is still fine for simple "react when any input changes"
+logic where ordering doesn't matter. For one specific input with derived
+state, the setter is cleaner.
+
+## Dialog button placement
+
+Per MJ design system: **confirm/submit buttons on the LEFT, cancel on
+the RIGHT**. Opposite of Windows convention, matches MJ's everywhere.
+
+```
+[Save] [Update]    [Cancel]      ← MJ convention
+```
+
+Apply to all dialogs, modals, and action button groups.
+
+## Change-detection: handling `ExpressionChangedAfterItHasBeenChecked`
+
+When you mutate state outside Angular's normal change-detection rhythm
+(e.g. focus management, clearing inputs programmatically, async fixes
+after view init), inject `ChangeDetectorRef` and call `cdr.detectChanges()`
+after the change. Prefer `Promise.resolve().then(() => ...)` over
+`setTimeout(..., 0)` for microtask-timing fixes.
+
+## The day-1 checklist
+
+- [ ] New component matches the existing standalone-vs-NgModule pattern of its package?
+- [ ] Template uses `@if`/`@for`/`@switch`, not `*ngIf`/`*ngFor`?
+- [ ] Custom entity form extends the generated class with `@RegisterClass`?
+- [ ] Form template wraps content in `<mj-record-form-container>` (not raw `<mj-form-toolbar>`)?
+- [ ] Loading states use `<mj-loading>` (no custom spinners)?
+- [ ] `BaseResourceComponent` subclass calls `this.NotifyLoadComplete()` after initial load?
+- [ ] UI built from `@memberjunction/ng-ui-components` (not Kendo/PrimeNG/Material)?
+
+---
+
+# Design Tokens — no hardcoded colors, ever
+
+MJ uses a comprehensive CSS-variable token system defined in
+`packages/Angular/Generic/shared/src/lib/_tokens.scss`. **Every color in
+component CSS must use a design token.** Hardcoded hex values
+(`#264FAF`, `#333`, `#f5f5f5`) break dark mode, prevent white-labeling,
+and pile up as maintenance debt.
+
+## The rule
+
+Never write hardcoded hex/rgb colors in component CSS. Always use the
+appropriate semantic token. Applies to **all** properties: `color`,
+`background`, `border`, `fill`, `box-shadow`, `outline`, etc.
+
+```css
+/* ❌ WRONG — hardcoded hex values */
+.my-component {
+    color: #333;
+    background: #f5f5f5;
+    border: 1px solid #e0e0e0;
+}
+
+/* ✅ CORRECT — semantic design tokens */
+.my-component {
+    color: var(--mj-text-primary);
+    background: var(--mj-bg-surface-card);
+    border: 1px solid var(--mj-border-default);
+}
+```
+
+## Semantic vs. primitive tokens
+
+Two layers exist in `_tokens.scss`:
+
+- **Primitive tokens** — raw color values, e.g. `--mj-color-neutral-300`,
+  `--mj-color-brand-500`. Don't use these in component CSS.
+- **Semantic tokens** — purpose-named, theme-aware, e.g. `--mj-text-primary`,
+  `--mj-bg-surface`. Use these.
+
+**Why not primitives in components:** primitives don't adapt to dark mode.
+`--mj-color-neutral-300` is a fixed light-gray everywhere; `--mj-text-muted`
+maps to the right gray for the active theme.
+
+## The semantic token catalog
+
+### Text colors
+
+| Token | Purpose |
+|---|---|
+| `--mj-text-primary` | Main body text, headings |
+| `--mj-text-secondary` | Supporting text, labels |
+| `--mj-text-muted` | De-emphasized text, captions |
+| `--mj-text-disabled` | Disabled / placeholder text |
+| `--mj-text-inverse` | Text on dark / colored backgrounds |
+| `--mj-text-link` | Clickable links |
+
+### Background colors
+
+| Token | Purpose |
+|---|---|
+| `--mj-bg-page` | Full-page background |
+| `--mj-bg-surface` | Cards, panels, modals |
+| `--mj-bg-surface-card` | Slightly tinted cards, secondary surfaces |
+| `--mj-bg-surface-sunken` | Inset areas, code backgrounds |
+| `--mj-bg-surface-elevated` | Elevated surfaces, dropdowns |
+| `--mj-bg-surface-hover` | Hover states on surfaces |
+| `--mj-bg-surface-active` | Active / pressed states |
+| `--mj-bg-overlay` | Modal / drawer backdrops |
+
+### Border colors
+
+| Token | Purpose |
+|---|---|
+| `--mj-border-default` | Standard borders |
+| `--mj-border-subtle` | Very light borders |
+| `--mj-border-strong` | Emphasized borders, scrollbar thumbs |
+| `--mj-border-focus` | Focus rings |
+
+### Brand colors
+
+| Token | Purpose |
+|---|---|
+| `--mj-brand-primary` | Primary buttons, active states, accents |
+| `--mj-brand-primary-hover` | Primary hover state |
+| `--mj-brand-primary-active` | Primary pressed state |
+
+### Status colors
+
+| Token | Purpose |
+|---|---|
+| `--mj-status-success` + `-bg` / `-text` / `-border` | Success states |
+| `--mj-status-warning` + variants | Warning states (orange) |
+| `--mj-status-error` + variants | Error states (red) |
+| `--mj-status-info` + variants | Informational states |
+
+Each status color also has `-bg`, `-text`, `-border` variants for full
+"alert box" recipes.
+
+### Logo tokens
+
+| Token | Purpose |
+|---|---|
+| `--mj-logo-mark` | Logo icon (auto-switches light/dark) |
+| `--mj-logo-mark-inverse` | Logo icon for dark backgrounds |
+| `--mj-logo-wordmark` | Full logo with text |
+| `--mj-logo-color` | Loading spinner fill color |
+
+## Common hex → token mappings
+
+When migrating an existing component or reviewing CSS, use these
+substitutions:
+
+| Hex | Token |
+|---|---|
+| `#333`, `#334155` | `--mj-text-primary` |
+| `#555`, `#475569`, `#666` | `--mj-text-secondary` |
+| `#757575`, `#888`, `#64748b` | `--mj-text-muted` |
+| `#999`, `#94a3b8`, `#aaa` | `--mj-text-disabled` |
+| `#fff` (on colored bg) | `--mj-text-inverse` |
+| `white` (background) | `--mj-bg-surface` |
+| `#f5f5f5`, `#f8f9fa`, `#f9f9f9`, `#fafafa` | `--mj-bg-surface-card` |
+| `#f0f0f0`, `#f1f1f1`, `#f1f5f9` | `--mj-bg-surface-sunken` |
+| `#e0e0e0`, `#e2e8f0`, `#d1d5db`, `#e5e7eb` | `--mj-border-default` |
+| `#ccc`, `#cbd5e1` | `--mj-border-strong` |
+| `#ef6c00`, `#ff6600` (warning / orange) | `--mj-status-warning` |
+| `#e65100` (dark orange) | `--mj-status-warning-text` |
+| `#e53e3e`, `#dc2626` (error / red) | `--mj-status-error` |
+| `#c53030`, `#b91c1c` (dark red) | `--mj-status-error-text` |
+| `#264FAF`, `#0076b6` (MJ blue) | `--mj-brand-primary` |
+
+## Translucency — use `color-mix()`
+
+For tinted backgrounds, focus rings, etc., compose a translucent variant
+from a token instead of using `rgba(..., 0.x)` with a hardcoded color:
+
+```css
+/* ✅ Tinted background from a token */
+background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+
+/* ✅ Focus ring from a token */
+box-shadow: 0 0 0 3px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
+
+/* ✅ Subtle warning background */
+background: color-mix(in srgb, var(--mj-status-warning) 8%, var(--mj-bg-surface));
+```
+
+The percentage-and-base form means the result adapts when the brand
+color changes (white-labeling) and when the theme switches (dark mode).
+
+## When hardcoded colors ARE acceptable
+
+A small set of cases where literal hex is fine:
+
+1. **SVG `data:` URIs** — CSS variables can't be used inside
+   `url("data:image/svg+xml,…")`. Use `%23` URL-encoded hex.
+
+2. **Code editor backgrounds** — dark-on-dark editors like CodeMirror
+   (`#1e1e1e`) are intentionally static.
+
+3. **Categorical / chart colors** — data-visualization colors that
+   must stay distinct regardless of theme.
+
+4. **`rgba()` alpha on white for overlays** — `rgba(255, 255, 255, 0.15)`
+   for translucent overlays on colored backgrounds is fine; it's
+   relative to whatever surface it sits on.
+
+5. **CSS variable fallbacks** — `var(--mj-text-inverse, white)` fallback
+   values are fine.
+
+## Pre-submit checklist
+
+Before submitting CSS:
+
+- [ ] Every `color:` / `background:` / `border-color:` / `fill:` uses a
+      token (no hex)?
+- [ ] You used a **semantic** token (not a primitive like
+      `--mj-color-neutral-300`)?
+- [ ] Will this look right in dark mode? (Semantic tokens auto-adapt.)
+- [ ] For `white` / `#fff` — is it text on a colored bg
+      (`--mj-text-inverse`) or a surface bg (`--mj-bg-surface`)?
+
+If you can't answer "yes" to all four, find the right semantic token
+before merging.
+
+---
+
+# Class member naming — PascalCase public, camelCase private
+
+MJ deviates from the standard TypeScript convention. **Public class members
+are PascalCase. Private/protected members are camelCase.** This is the
+convention across the entire codebase, including generated entity classes,
+so it's not something you can opt out of.
+
+## The rule
+
+```typescript
+export class MyComponent {
+    // ─── Public ── PascalCase ──────────────────────────────────
+    @Input() QueryId: string | null = null;
+    @Input() AutoRun: boolean = false;
+    @Output() EntityLinkClick = new EventEmitter<EntityLinkEvent>();
+
+    public IsLoading: boolean = false;
+    public SelectedRows: Record<string, unknown>[] = [];
+
+    // ─── Private / protected ── camelCase ──────────────────────
+    private destroy$ = new Subject<void>();
+    private _internalState: string = '';
+    protected cdr: ChangeDetectorRef;
+
+    // ─── Public methods ── PascalCase ──────────────────────────
+    public LoadData(): void { }
+    public OnGridReady(event: GridReadyEvent): void { }
+    public GetSelectedRows(): Record<string, unknown>[] { }
+
+    // ─── Private / protected methods ── camelCase ──────────────
+    private buildColumnDefs(): void { }
+    protected applyVisualConfig(): void { }
+}
+```
+
+## Why MJ does this
+
+Three reasons:
+
+1. **Consistency with generated entity classes.** CodeGen emits
+   `UserEntity.Email`, `UserEntity.LastLoginAt` — PascalCase. The whole
+   framework is built around that style. If user-authored classes used
+   `camelCase` for their public API, every code site that touches both
+   would jarringly switch styles.
+
+2. **Visual distinction between public API and internal implementation.**
+   At a glance, you can tell which members are part of the contract
+   (PascalCase) and which are wiring (camelCase). Useful when scanning
+   a large component class.
+
+3. **HTML template bindings match.** Angular template syntax preserves
+   case: `<my-comp [QueryId]="foo">` binds to a PascalCase `@Input()`.
+   Mixing case styles between TypeScript and templates is more confusing
+   than committing to the unusual convention everywhere.
+
+## What this overrides
+
+The default TypeScript / ESLint guidance is camelCase for all members.
+**Ignore that here.** MJ-specific tooling and code review expects the
+PascalCase-public convention. ESLint rules in the repo are configured to
+not fight it.
+
+## Existing camelCase public members
+
+Some older areas of the codebase still use camelCase for public members
+that pre-date the convention. **Don't migrate them just for style.**
+Convention applies to new code; mass renames break consumers without
+delivering value.
+
+## What stays camelCase regardless
+
+- **Local variables** inside method bodies — always camelCase
+- **Function parameters** — camelCase
+- **HTML attributes / event names** that aren't directly bound to a
+  `@Input()` / `@Output()` — kebab-case (HTML convention) or camelCase
+
+## The contrast
+
+```typescript
+// ❌ Standard TS convention (NOT used in MJ)
+export class MyComponent {
+    @Input() queryId: string | null = null;
+    public isLoading: boolean = false;
+    public loadData(): void { }
+    private buildColumnDefs(): void { }
+}
+
+// ✅ MJ convention
+export class MyComponent {
+    @Input() QueryId: string | null = null;
+    public IsLoading: boolean = false;
+    public LoadData(): void { }
+    private buildColumnDefs(): void { }
+}
+```
+
+The private member style (`buildColumnDefs`) is identical between the
+two — only the public-facing API differs. New code should follow the
+MJ convention without exception.
+
+---
+
 # Metadata Files & mj-sync — declarative reference data
 
 For reference data — lookup tables, AI Models, AI Vendors, Application
