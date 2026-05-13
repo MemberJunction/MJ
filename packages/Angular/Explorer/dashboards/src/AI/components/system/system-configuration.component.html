@@ -44,8 +44,7 @@
   </mj-page-header>
 
   <!-- Main Content (no sidebar — filters live in the popover above) -->
-  <div class="main-content">
-        <div class="configurations-content">
+  <mj-page-body [Flex]="true">
           <!-- Loading State -->
           @if (isLoading) {
             <div class="loading-container">
@@ -333,8 +332,7 @@
               }
             }
           }
-        </div>
-  </div>
+  </mj-page-body>
 
   <!-- Detail Panel Overlay -->
   @if (detailPanelVisible) {

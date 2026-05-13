@@ -26,13 +26,13 @@ All 5 are standalone, design-token-only, PascalCase API.
 
 | Page | Layout shell | Header | Filter button | Count pill | Filter popover | Notes |
 |---|---|---|---|---|---|---|
-| MCP | ✅ | ✅ | ✅ | ✅ | n/a (uses tabs) | Tabs + per-tab actions in `[actions]` slot. Action buttons set `size="sm"` to align with tab strip. |
-| Agents | ✅ | ✅ | ✅ | ✅ | ❌ (sidebar still) | Filter panel still in left sidebar via `as-split`. Eligible for popover migration. |
-| Agent Requests | ✅ | ✅ | n/a | n/a | n/a | Header has search input + pending-count badge in `[actions]`. |
-| Prompts | ✅ | ✅ | ✅ | ✅ | ❌ (sidebar still) | Same sidebar pattern as Agents. |
-| Models | ✅ | ✅ | ✅ | ✅ | ❌ (sidebar still) | Same sidebar pattern. |
-| AI Configuration | ✅ | ✅ | ✅ | ✅ | ❌ (sidebar still) | Same sidebar pattern. |
-| Analytics | ✅ | ✅ | n/a | n/a | ✅ (prototype) | Shell owns filter-bar in `[actions]`; `FilterBarConfig` getter switches Show flags per `ActiveSection`. ExportClicked / CompareToggled forwarded to active section via `@ViewChild`. Model Performance keeps its custom inline filter-bar (`ShowSharedFilterBar = false` carve-out). |
+| MCP | ✅ | ✅ | ✅ | ✅ | n/a (uses tabs) | Tabs + per-tab actions in `[actions]`. Body: `<mj-page-body [Flex]="true">` is sole wrapper; old `.main-content` / `.content-area` / `.content-body` and `.filter-panel-container` / `.resize-handle` CSS removed. Scale-mode toggle (Tools tab) hoisted from body to `[actions]`. |
+| Agents | ✅ | ✅ | ✅ | ✅ | ✅ | `[actions]`: filter-popover → view-toggle → New Agent (state→primary). Body: `<mj-page-body [Flex]="true">`; old `.main-content` + `.agents-content` wrappers and CSS removed. |
+| Agent Requests | ✅ | ✅ | n/a | n/a | n/a | filter-popover in `[actions]`, search in `[toolbar]`, pending-count pill in `[meta]`. Wrapped content in `<mj-page-body>` (previously had no body wrapper at all). |
+| Prompts | ✅ | ✅ | ✅ | ✅ | ✅ | `[actions]`: filter-popover → view-toggle → New Prompt (conditional). Body: `<mj-page-body [Flex]="true">`; `.main-content` + `.prompts-content` removed. |
+| Models | ✅ | ✅ | ✅ | ✅ | ✅ | `[actions]`: filter-popover → view-toggle → New Model. Body: `<mj-page-body [Flex]="true">`; `.main-content` + `.content-area` removed. |
+| AI Configuration | ✅ | ✅ | ✅ | ✅ | ✅ | `[actions]`: filter-popover → view-toggle. Body: `<mj-page-body [Flex]="true">`; `.main-content` + `.configurations-content` removed. |
+| Analytics | ✅ | ✅ | ✅ | ✅ | ✅ | Shell owns filter-bar in `[actions]`; `FilterBarConfig` getter switches Show flags per `ActiveSection` — every section including Model Performance (which contributes SortBy + Vendor filters) goes through the shared chrome now. NG8011 warnings fixed. Body wrapped in `<mj-page-body [Padding]="false" class="analytics-shell">` for flush sidebar layout (TBD on row-direction `mj-page-body`). |
 | Lists — Browse | ✅ | ✅ | ✅ | ✅ | ✅ | Config-driven `<mj-filter-panel>` (Category dropdown + Status chip group); `<mj-view-toggle>` for grid/list; mjButton "New List" in `[actions]`. Body container restored to `flex: 1; min-height: 0; padding: 0 24px 24px`. |
 | Lists — Operations | ✅ | ✅ | n/a | n/a | n/a | Header only; KPI grid + tables in body. |
 | Lists — Categories | ✅ | ✅ | n/a | n/a | n/a | Header only; tree/table content in body. |

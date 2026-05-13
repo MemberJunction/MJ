@@ -189,11 +189,18 @@ Defaults:
 - `overflow-y: auto`
 
 Escape hatches:
-- `[Padding]="false"` — pages whose inner content owns the gutter (File Browser).
-- `[Scroll]="false"` — pages managing their own scroll regions (split panes).
+- `[Padding]="false"` — pages whose inner content owns the gutter (File Browser,
+  AI Analytics shell sitting flush against the header).
 - `[Flex]="true"` — pages whose main content area uses `flex: 1` to fill remaining
   height (e.g., banner-above-content layouts like Testing Dashboard parent, Test
   Explorer's sidebar+main layout).
+
+**Note on overflow:** `mj-page-body` always has `overflow-y: auto` and this is
+not configurable. `mj-page-layout` already has `overflow: hidden`, so if the
+body didn't scroll, any overflow would be silently clipped. Pages with
+split-pane layouts whose children manage their own scroll regions should use
+`min-height: 0` + `flex: 1` on the inner panes — nothing overflows the body and
+the body's `auto` stays harmlessly inactive.
 
 **Never** inline the `flex: 1; min-height: 0; padding: 0 24px 24px; overflow-y: auto`
 recipe in a per-page CSS file. Use `<mj-page-body>`.
@@ -284,6 +291,27 @@ Things this document does NOT yet take a position on — flag here when you hit 
 - **Sort UI**: No canonical control yet. Most pages either don't sort, or sort via
   table headers. If a card-grid page needs explicit sort UI, the choice between
   small button + cycling label vs. dropdown vs. chip group is undecided.
+
+- **Row-direction bodies** (sidebar + content layouts): `<mj-page-body>` is
+  flex-column by default. Pages like AI Analytics that use a left-nav-plus-content
+  layout need flex-row instead. Today those keep a bespoke wrapper (`.analytics-shell`
+  in the analytics resource). If this pattern repeats (Knowledge Hub Analytics,
+  Vectors, etc. may have it), add a `[Direction]="row"` input to `mj-page-body`.
+
+## 10. Documented exceptions
+
+These pages do NOT follow the standard chrome and won't be migrated to it:
+
+- **AI Overview hub** (`AIMonitorResource`) — deliberate hero-landing layout: large
+  brand icon + hero typography + stats strip + card grid. No `<mj-page-header>`.
+- **AI Analytics** (`AIAnalyticsResource`) — uses chrome correctly but its body is a
+  sidebar + content (flex-row) layout, kept in a bespoke `.analytics-shell` wrapper
+  until `mj-page-body` gains a row-direction mode. The shared `FilterBarConfig` on
+  the resource component drives per-section filter UI for every section including
+  Model Performance (which contributes SortBy + Vendor filters to the popover).
+- **Home** (right-sidebar dashboard), **Component Studio** (toolbar-driven authoring
+  shell), **Data Explorer** (workspace), **Query Browser** (resizable left panel) —
+  documented exceptions in `plans/explorer-layout-templates.md`.
 
 ---
 

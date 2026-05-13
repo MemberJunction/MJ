@@ -63,6 +63,8 @@ interface NavItem {
                         </button>
                     }
                 </div>
+            }
+            @if (ShowSharedFilterBar && timeRangeChipOptions.length > 0) {
                 <div toolbar class="ai-header-toolbar time-range-chips">
                     @for (chip of timeRangeChipOptions; track chip.value) {
                         <mj-filter-chip
@@ -74,7 +76,7 @@ interface NavItem {
                 </div>
             }
         </mj-page-header>
-        <div class="analytics-shell">
+        <mj-page-body [Padding]="false" class="analytics-shell">
             <nav class="analytics-nav">
                 @for (item of NavItems; track item.Key) {
                     @if (item.Key === 'divider') {
@@ -117,6 +119,8 @@ interface NavItem {
                     @case ('model-performance') {
                         <app-analytics-model-performance
                             [TimeRange]="CurrentTimeRange"
+                            [SortBy]="CurrentSortBy"
+                            [SelectedVendor]="CurrentVendor"
                         ></app-analytics-model-performance>
                     }
                     @case ('cost-budget') {
@@ -138,13 +142,20 @@ interface NavItem {
                     }
                 }
             </div>
-        </div>
+        </mj-page-body>
       </mj-page-layout>
     `,
     styles: [`
         :host {
             display: block;
             height: 100%;
+        }
+
+        /* Slot wrappers pass through to <mj-page-header>'s flex rows so children
+           inherit its gap. */
+        .ai-header-actions,
+        .ai-header-toolbar {
+            display: contents;
         }
 
         .analytics-shell {
@@ -314,30 +325,54 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
         Prompts: [],
         Statuses: []
     };
+    /** Single-value SortBy used by Model Performance (lives on the shared chrome). */
+    public CurrentSortBy: string = 'cost-efficiency';
+    /** Single-value Vendor filter used by Model Performance (lives on the shared chrome). */
+    public CurrentVendor: string = '';
+
+    /** SortBy options for Model Performance leaderboard. */
+    public readonly sortByOptions = [
+        { text: 'By Performance', value: 'cost-efficiency' },
+        { text: 'By Cost',        value: 'cost' },
+        { text: 'By Speed',       value: 'speed' },
+        { text: 'By Reliability', value: 'reliability' },
+        { text: 'By Usage',       value: 'usage-volume' }
+    ];
+
+    /** Vendor options, lazily built from AIEngineBase for Model Performance leaderboard. */
+    public get vendorOptions(): { text: string; value: string }[] {
+        return AIEngineBase.Instance?.Vendors?.map(v => ({ text: v.Name ?? '', value: v.ID ?? '' }))
+            ?.sort((a, b) => a.text.localeCompare(b.text)) ?? [];
+    }
 
     /** Per-section filter-bar config — switched on ActiveSection. */
     public get FilterBarConfig() {
         switch (this.ActiveSection) {
             case 'executive-summary':
-                return { ShowModelFilter: false, ShowAgentFilter: false, ShowPromptFilter: false, ShowStatusFilter: false, ShowCompareToggle: true,  ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
+                return { ShowModelFilter: false, ShowAgentFilter: false, ShowPromptFilter: false, ShowStatusFilter: false, ShowSortBy: false, ShowVendor: false, ShowCompareToggle: true,  ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
             case 'prompt-runs':
-                return { ShowModelFilter: true,  ShowAgentFilter: true,  ShowPromptFilter: true,  ShowStatusFilter: true,  ShowCompareToggle: false, ShowExportButton: true,  TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
+                return { ShowModelFilter: true,  ShowAgentFilter: true,  ShowPromptFilter: true,  ShowStatusFilter: true,  ShowSortBy: false, ShowVendor: false, ShowCompareToggle: false, ShowExportButton: true,  TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
             case 'agent-runs':
-                return { ShowModelFilter: false, ShowAgentFilter: true,  ShowPromptFilter: false, ShowStatusFilter: true,  ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
+                return { ShowModelFilter: false, ShowAgentFilter: true,  ShowPromptFilter: false, ShowStatusFilter: true,  ShowSortBy: false, ShowVendor: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
+            case 'model-performance':
+                return { ShowModelFilter: false, ShowAgentFilter: false, ShowPromptFilter: false, ShowStatusFilter: false, ShowSortBy: true,  ShowVendor: true,  ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['24h', '7d', '30d'] };
             case 'cost-budget':
-                return { ShowModelFilter: true,  ShowAgentFilter: false, ShowPromptFilter: false, ShowStatusFilter: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['7d', '30d', '90d', 'MTD', 'YTD'] };
+                return { ShowModelFilter: true,  ShowAgentFilter: false, ShowPromptFilter: false, ShowStatusFilter: false, ShowSortBy: false, ShowVendor: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['7d', '30d', '90d', 'MTD', 'YTD'] };
             case 'error-analysis':
-                return { ShowModelFilter: true,  ShowAgentFilter: false, ShowPromptFilter: true,  ShowStatusFilter: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
+                return { ShowModelFilter: true,  ShowAgentFilter: false, ShowPromptFilter: true,  ShowStatusFilter: false, ShowSortBy: false, ShowVendor: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
             case 'usage-patterns':
-                return { ShowModelFilter: false, ShowAgentFilter: false, ShowPromptFilter: false, ShowStatusFilter: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
+                return { ShowModelFilter: false, ShowAgentFilter: false, ShowPromptFilter: false, ShowStatusFilter: false, ShowSortBy: false, ShowVendor: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
             default:
-                return { ShowModelFilter: false, ShowAgentFilter: false, ShowPromptFilter: false, ShowStatusFilter: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
+                return { ShowModelFilter: false, ShowAgentFilter: false, ShowPromptFilter: false, ShowStatusFilter: false, ShowSortBy: false, ShowVendor: false, ShowCompareToggle: false, ShowExportButton: false, TimeRangeOptions: ['1h', '6h', '24h', '7d', '30d'] };
         }
     }
 
-    /** Model Performance has its own custom filter UI inside the section, so the shared filter-bar is hidden there. */
+    /**
+     * Always true now — every section uses the shared chrome filter bar.
+     * Kept as a getter for future per-section carve-outs.
+     */
     public get ShowSharedFilterBar(): boolean {
-        return this.ActiveSection !== 'model-performance';
+        return true;
     }
 
     /** Status options used by the popover dropdown when the section has ShowStatusFilter. */
@@ -418,6 +453,25 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
                 options: [{ text: 'All Statuses', value: '' }, ...this.statusOptions],
             });
         }
+        if (cfg.ShowSortBy) {
+            fields.push({
+                key: 'SortBy',
+                type: 'dropdown',
+                label: 'Sort By',
+                icon: 'fa-solid fa-arrow-down-wide-short',
+                options: this.sortByOptions,
+            });
+        }
+        if (cfg.ShowVendor) {
+            fields.push({
+                key: 'Vendor',
+                type: 'dropdown',
+                label: 'Vendor',
+                icon: 'fa-solid fa-building',
+                filterable: this.vendorOptions.length > 10,
+                options: [{ text: 'All Vendors', value: '' }, ...this.vendorOptions],
+            });
+        }
         return fields;
     }
 
@@ -428,6 +482,8 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
             Agents:   this.CurrentFilters.Agents?.[0]   ?? '',
             Prompts:  this.CurrentFilters.Prompts?.[0]  ?? '',
             Statuses: this.CurrentFilters.Statuses?.[0] ?? '',
+            SortBy:   this.CurrentSortBy,
+            Vendor:   this.CurrentVendor,
         };
     }
 
@@ -440,17 +496,32 @@ export class AIAnalyticsResourceComponent extends BaseResourceComponent implemen
             Statuses: values['Statuses'] ? [values['Statuses'] as string] : [],
         };
         this.OnFiltersChange(next);
+        if ('SortBy' in values) {
+            this.CurrentSortBy = (values['SortBy'] as string) || 'cost-efficiency';
+        }
+        if ('Vendor' in values) {
+            this.CurrentVendor = (values['Vendor'] as string) || '';
+        }
     }
 
     /** Reset only the popover filters — leaves TimeRange and CompareActive alone. */
     public resetPopoverFilters(): void {
         this.OnFiltersChange({ Models: [], Agents: [], Prompts: [], Statuses: [] });
+        // SortBy + Vendor reset only when Model Performance is the active section.
+        if (this.ActiveSection === 'model-performance') {
+            this.CurrentSortBy = 'cost-efficiency';
+            this.CurrentVendor = '';
+        }
     }
 
     /** Active filter count for the popover badge. */
     public get ActiveFilterCount(): number {
         const f = this.CurrentFilters;
-        return (f.Models?.length ?? 0) + (f.Agents?.length ?? 0) + (f.Prompts?.length ?? 0) + (f.Statuses?.length ?? 0);
+        let count = (f.Models?.length ?? 0) + (f.Agents?.length ?? 0) + (f.Prompts?.length ?? 0) + (f.Statuses?.length ?? 0);
+        // SortBy counts as "active" when it differs from the default.
+        if (this.FilterBarConfig.ShowSortBy && this.CurrentSortBy && this.CurrentSortBy !== 'cost-efficiency') count++;
+        if (this.FilterBarConfig.ShowVendor && this.CurrentVendor) count++;
+        return count;
     }
 
     /** Toggle Compare mode — the mjButton directive owns the [(selected)] flip, so this handler only forwards the new value. */

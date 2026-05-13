@@ -47,13 +47,6 @@
   box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-brand-primary) 35%, transparent);
 }
 
-/* Main Content */
-.main-content {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
 
 .main-splitter {
   flex: 1;
@@ -293,13 +286,6 @@ as-split {
   background: var(--mj-text-disabled);
 }
 
-/* Prompts Content */
-.prompts-content {
-  height: 100%;
-  overflow-y: auto;
-  padding: 28px;
-  background: var(--mj-bg-surface-card);
-}
 
 /* Grid View */
 .prompts-grid {
@@ -859,10 +845,6 @@ as-split {
 
   .header-controls {
     justify-content: center;
-  }
-
-  .prompts-content {
-    padding: 16px;
   }
 
   .prompts-grid {

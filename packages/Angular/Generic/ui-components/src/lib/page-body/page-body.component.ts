@@ -7,13 +7,18 @@ import { Component, HostBinding, Input } from '@angular/core';
  * page body recipe: `flex: 1`, `min-height: 0`, padded gutters, vertical scroll.
  *
  * Escape hatches:
- *  - `[Padding]="false"` — remove the 24px horizontal/bottom gutter (e.g., pages
- *    whose inner content owns the gutter itself, like File Browser).
- *  - `[Scroll]="false"` — disable internal vertical scroll for pages that manage
- *    their own scroll regions (e.g., split-pane layouts).
+ *  - `[Padding]="false"` — remove the 24px gutter (e.g., pages whose inner
+ *    content owns the gutter itself, like File Browser or AI Analytics shell).
  *  - `[Flex]="true"` — switch the body to `flex; flex-direction: column;
  *    position: relative` so a child marked `flex: 1` (e.g., a main content area
  *    that should fill remaining height under a banner row) can grow correctly.
+ *
+ * Note: overflow-y is intentionally always `auto` and not configurable.
+ * `mj-page-layout` already has `overflow: hidden`, so any body content that
+ * exceeds the visible area would be silently clipped if the body itself didn't
+ * scroll. Pages with split-pane layouts whose children manage their own scroll
+ * regions should use `min-height: 0 + flex: 1` on the inner panes so nothing
+ * overflows the body — auto stays harmlessly inactive.
  *
  * Example:
  * ```html
@@ -34,15 +39,14 @@ import { Component, HostBinding, Input } from '@angular/core';
       display: block;
       flex: 1;
       min-height: 0;
-      padding: 0 24px 24px;
+      /* Top padding doubles as header-to-body spacing — <mj-page-header>
+         intentionally has no margin-bottom so [Padding]="false" yields a
+         truly flush layout (e.g. AI Analytics sidebar+content). */
+      padding: 24px;
       overflow-y: auto;
     }
     :host(.mj-page-body--no-padding) {
       padding: 0;
-    }
-    :host(.mj-page-body--no-scroll) {
-      overflow-y: visible;
-      min-height: auto;
     }
     :host(.mj-page-body--flex) {
       display: flex;
@@ -52,11 +56,8 @@ import { Component, HostBinding, Input } from '@angular/core';
   `]
 })
 export class MJPageBodyComponent {
-  /** When `false`, removes the default 24px horizontal/bottom gutter. Defaults to `true`. */
+  /** When `false`, removes the default 24px gutter. Defaults to `true`. */
   @Input() Padding: boolean = true;
-
-  /** When `false`, disables internal vertical scroll. Defaults to `true`. */
-  @Input() Scroll: boolean = true;
 
   /**
    * When `true`, switches the body to flex-column layout (with `position: relative`)
@@ -68,11 +69,6 @@ export class MJPageBodyComponent {
   @HostBinding('class.mj-page-body--no-padding')
   get NoPaddingClass(): boolean {
     return !this.Padding;
-  }
-
-  @HostBinding('class.mj-page-body--no-scroll')
-  get NoScrollClass(): boolean {
-    return !this.Scroll;
   }
 
   @HostBinding('class.mj-page-body--flex')

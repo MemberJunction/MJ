@@ -6,8 +6,9 @@
  */
 
 import {
-    Component, Input, Output, EventEmitter,
-    OnInit, OnDestroy, ChangeDetectorRef, inject
+    Component, Input,
+    OnInit, OnDestroy,
+    ChangeDetectorRef, inject
 } from '@angular/core';
 import { Subject } from 'rxjs';
 import { RunView } from '@memberjunction/core';
@@ -62,40 +63,6 @@ const FIELDS = [
     standalone: false,
     selector: 'app-analytics-model-performance',
     template: `
-        <!-- Filter Bar -->
-        <div class="filter-bar">
-            <div class="filter-controls">
-                <span class="filter-label">
-                    <i class="fa-solid fa-trophy"></i>
-                    Leaderboard
-                </span>
-
-                <select class="filter-select" [value]="SortBy" (change)="OnSortByChange($event)">
-                    @for (opt of SortByOptions; track opt.value) {
-                        <option [value]="opt.value">{{ opt.label }}</option>
-                    }
-                </select>
-
-                <select class="filter-select" [value]="SelectedVendor" (change)="OnVendorChange($event)">
-                    <option value="">All Vendors</option>
-                    @for (v of VendorOptions; track v.id) {
-                        <option [value]="v.id">{{ v.name }}</option>
-                    }
-                </select>
-            </div>
-
-            <div class="time-chips">
-                @for (opt of TimeRangeOptions; track opt) {
-                    <button
-                        class="time-chip"
-                        [class.active]="TimeRange === opt"
-                        (click)="OnTimeRangeSelect(opt)">
-                        {{ opt }}
-                    </button>
-                }
-            </div>
-        </div>
-
         @if (IsLoading) {
             <div class="loading-container">
                 <mj-loading text="Loading model performance..."></mj-loading>
@@ -169,90 +136,6 @@ const FIELDS = [
             justify-content: center;
             align-items: center;
             min-height: 300px;
-        }
-
-        /* ── Filter Bar ── */
-        .filter-bar {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            background: var(--mj-bg-surface);
-            border: 1px solid var(--mj-border-default);
-            border-radius: 10px;
-            padding: 12px 16px;
-            flex-wrap: wrap;
-            margin-bottom: 16px;
-        }
-
-        .filter-controls {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-
-        .filter-label {
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--mj-text-secondary);
-            white-space: nowrap;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .filter-label i {
-            font-size: 13px;
-            color: var(--mj-status-warning);
-        }
-
-        .filter-select {
-            padding: 5px 10px;
-            border: 1px solid var(--mj-border-default);
-            border-radius: 6px;
-            background: var(--mj-bg-surface);
-            color: var(--mj-text-primary);
-            font-size: 13px;
-            cursor: pointer;
-            min-width: 130px;
-            outline: none;
-        }
-
-        .filter-select:focus {
-            border-color: var(--mj-border-focus);
-            box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
-        }
-
-        .time-chips {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            margin-left: auto;
-        }
-
-        .time-chip {
-            padding: 5px 12px;
-            border: 1px solid var(--mj-border-default);
-            border-radius: 16px;
-            background: var(--mj-bg-surface);
-            color: var(--mj-text-secondary);
-            font-size: 12px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: background 0.15s, color 0.15s, border-color 0.15s;
-            white-space: nowrap;
-        }
-
-        .time-chip:hover {
-            background: var(--mj-bg-surface-hover);
-            color: var(--mj-text-primary);
-        }
-
-        .time-chip.active {
-            background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
-            color: var(--mj-brand-primary);
-            border-color: var(--mj-brand-primary);
-            font-weight: 600;
         }
 
         /* ── Leaderboard ── */
@@ -412,42 +295,48 @@ const FIELDS = [
             }
         }
 
-        @media (max-width: 768px) {
-            .filter-bar {
-                flex-direction: column;
-                align-items: stretch;
-            }
-
-            .time-chips {
-                margin-left: 0;
-                justify-content: flex-start;
-                flex-wrap: wrap;
-            }
-        }
     `]
 })
 export class AnalyticsModelPerformanceComponent extends BaseAngularComponent implements OnInit, OnDestroy {
-    @Input() TimeRange = '7d';
-    @Output() TimeRangeChange = new EventEmitter<string>();
+    private _timeRange = '7d';
+    @Input()
+    set TimeRange(value: string) {
+        const prev = this._timeRange;
+        this._timeRange = value;
+        if (prev !== value && this.initialized) this.LoadData();
+    }
+    get TimeRange(): string { return this._timeRange; }
+
+    private _sortBy: SortByOption = 'cost-efficiency';
+    @Input()
+    set SortBy(value: SortByOption | string) {
+        const prev = this._sortBy;
+        this._sortBy = (value || 'cost-efficiency') as SortByOption;
+        if (prev !== this._sortBy && this.initialized) {
+            this.buildRows();
+            this.cdr.markForCheck();
+        }
+    }
+    get SortBy(): SortByOption { return this._sortBy; }
+
+    private _selectedVendor = '';
+    @Input()
+    set SelectedVendor(value: string) {
+        const prev = this._selectedVendor;
+        this._selectedVendor = value ?? '';
+        if (prev !== this._selectedVendor && this.initialized) {
+            this.buildRows();
+            this.cdr.markForCheck();
+        }
+    }
+    get SelectedVendor(): string { return this._selectedVendor; }
 
     private cdr = inject(ChangeDetectorRef);
     private destroy$ = new Subject<void>();
+    private initialized = false;
 
     public IsLoading = false;
-    public SortBy: SortByOption = 'cost-efficiency';
-    public SelectedVendor = '';
     public Rows: ModelLeaderboardRow[] = [];
-
-    public TimeRangeOptions = ['24h', '7d', '30d'];
-
-    public SortByOptions: { value: SortByOption; label: string }[] = [
-        { value: 'cost-efficiency', label: 'Cost Efficiency' },
-        { value: 'speed', label: 'Speed' },
-        { value: 'reliability', label: 'Reliability' },
-        { value: 'usage-volume', label: 'Usage Volume' }
-    ];
-
-    public VendorOptions: { id: string; name: string }[] = [];
 
     private allRuns: PromptRunRecord[] = [];
 
@@ -455,33 +344,13 @@ export class AnalyticsModelPerformanceComponent extends BaseAngularComponent imp
         // AIEngineBase is deferred at startup — make sure it's loaded before
         // we read .Vendors / .Models from it.
         await AIEngineBase.Instance.EnsureLoaded();
-        this.loadVendorOptions();
+        this.initialized = true;
         this.LoadData();
     }
 
     ngOnDestroy(): void {
         this.destroy$.next();
         this.destroy$.complete();
-    }
-
-    // ── Public Handlers ──
-
-    public OnTimeRangeSelect(range: string): void {
-        this.TimeRange = range;
-        this.TimeRangeChange.emit(range);
-        this.LoadData();
-    }
-
-    public OnSortByChange(event: Event): void {
-        this.SortBy = (event.target as HTMLSelectElement).value as SortByOption;
-        this.buildRows();
-        this.cdr.detectChanges();
-    }
-
-    public OnVendorChange(event: Event): void {
-        this.SelectedVendor = (event.target as HTMLSelectElement).value;
-        this.buildRows();
-        this.cdr.detectChanges();
     }
 
     public FormatLatency(ms: number): string {
@@ -496,17 +365,6 @@ export class AnalyticsModelPerformanceComponent extends BaseAngularComponent imp
     }
 
     // ── Data Loading ──
-
-    private loadVendorOptions(): void {
-        try {
-            this.VendorOptions = AIEngineBase.Instance.Vendors.map(v => ({
-                id: v.ID,
-                name: v.Name
-            }));
-        } catch {
-            this.VendorOptions = [];
-        }
-    }
 
     private async LoadData(): Promise<void> {
         this.IsLoading = true;

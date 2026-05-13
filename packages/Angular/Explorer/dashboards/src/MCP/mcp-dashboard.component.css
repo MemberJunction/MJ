@@ -13,75 +13,13 @@
 /* ========================================
    Main Content Area
    ======================================== */
-.main-content {
-    display: flex;
-    flex-direction: row;
-    flex: 1;
-    overflow: hidden;
-    min-width: 0;
-}
-
-/* Filter Panel Container */
-.filter-panel-container {
-    display: flex;
-    flex-shrink: 0;
-    width: 280px;
-    min-width: 200px;
-    max-width: 400px;
-    background: var(--mj-bg-surface);
-    border-right: 1px solid var(--mj-border-default);
-    position: relative;
-    transition: width 0.2s ease, margin 0.2s ease;
-}
-
-.filter-panel-container.hidden {
-    width: 0;
-    min-width: 0;
-    margin-left: -1px;
-    overflow: hidden;
-}
-
-/* Resize Handle */
-.resize-handle {
-    position: absolute;
-    top: 0;
-    right: 0;
-    width: 4px;
-    height: 100%;
-    cursor: col-resize;
-    background: transparent;
-    transition: background 0.2s ease;
-    z-index: 10;
-}
-
-.resize-handle:hover,
-.resize-handle:active {
-    background: var(--mj-brand-primary);
-}
-
-/* Content Area */
-.content-area {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    overflow: hidden;
-    min-width: 0;
-}
-
-/* Content Body */
-.content-body {
-    flex: 1;
-    padding: 20px 24px;
-    overflow: auto;
-}
-
 /* Error Banner */
 .error-banner {
     display: flex;
     align-items: center;
     gap: 12px;
     padding: 12px 16px;
-    margin: 16px 24px 0 24px;
+    margin: 0 0 16px 0;
     background: color-mix(in srgb, var(--mj-status-error) 10%, var(--mj-bg-surface));
     border: 1px solid var(--mj-status-error);
     border-radius: 8px;

@@ -542,11 +542,34 @@ const COST_COLORS = [
     `]
 })
 export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements OnInit, OnDestroy {
-    @Input() TimeRange = '7d';
-    @Input() Filters: AgentRunFilters = { Agents: [], Statuses: [] };
+    private _timeRange = '7d';
+    @Input()
+    set TimeRange(value: string) {
+        const prev = this._timeRange;
+        this._timeRange = value;
+        if (prev !== value && this.initialized) this.LoadData();
+    }
+    get TimeRange(): string { return this._timeRange; }
+
+    private _filters: AgentRunFilters = { Agents: [], Statuses: [] };
+    @Input()
+    set Filters(value: AgentRunFilters) {
+        const next = value ?? { Agents: [], Statuses: [] };
+        const changed = !this.shallowFiltersEqual(this._filters, next);
+        this._filters = next;
+        if (changed && this.initialized) this.LoadData();
+    }
+    get Filters(): AgentRunFilters { return this._filters; }
+
+    private shallowFiltersEqual(a: AgentRunFilters, b: AgentRunFilters): boolean {
+        const sameArr = (x: string[], y: string[]) => x.length === y.length && x.every((v, i) => v === y[i]);
+        return sameArr(a.Agents, b.Agents) && sameArr(a.Statuses, b.Statuses);
+    }
 
     @Output() TimeRangeChange = new EventEmitter<string>();
     @Output() FiltersChange = new EventEmitter<AgentRunFilters>();
+
+    private initialized = false;
 
     private cdr = inject(ChangeDetectorRef);
     private destroy$ = new Subject<void>();
@@ -591,6 +614,7 @@ export class AnalyticsAgentRunsComponent extends BaseAngularComponent implements
     private promptRuns: PromptRunRecord[] = [];
 
     ngOnInit(): void {
+        this.initialized = true;
         this.LoadData();
     }
 

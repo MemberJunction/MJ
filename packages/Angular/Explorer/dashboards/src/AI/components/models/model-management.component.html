@@ -65,8 +65,7 @@
       </div>
     </mj-page-header>
 
-    <div class="main-content">
-        <div class="content-area">
+    <mj-page-body [Flex]="true">
           @if (filteredModels.length === 0) {
             <div class="empty-state">
               <i class="fa-solid fa-microchip fa-4x"></i>
@@ -289,8 +288,7 @@
               }
             }
           }
-        </div>
-    </div>
+    </mj-page-body>
 
     <!-- Detail Panel Overlay -->
     @if (detailPanelVisible) {

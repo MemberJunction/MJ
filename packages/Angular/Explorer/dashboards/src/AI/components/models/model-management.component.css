@@ -338,13 +338,6 @@ as-split {
   background: var(--mj-text-disabled);
 }
 
-/* Content Area */
-.content-area {
-  height: 100%;
-  padding: 28px;
-  overflow-y: auto;
-  background: var(--mj-bg-surface-card);
-}
 
 /* Empty State */
 .empty-state {
@@ -832,10 +825,6 @@ as-split {
 
   .header-controls {
     justify-content: center;
-  }
-
-  .content-area {
-    padding: 16px;
   }
 
   .model-grid {

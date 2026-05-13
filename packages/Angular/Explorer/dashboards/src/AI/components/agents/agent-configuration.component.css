@@ -50,13 +50,6 @@
   box-shadow: 0 4px 12px color-mix(in srgb, var(--mj-brand-primary) 35%, transparent);
 }
 
-/* Main Content */
-.main-content {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
 
 .main-splitter {
   flex: 1;
@@ -71,12 +64,6 @@ as-split {
 /* Filter Panel Styles - used by child component */
 
 /* Agents Content */
-.agents-content {
-  height: 100%;
-  overflow-y: auto;
-  padding: 28px;
-  background: var(--mj-bg-surface-card);
-}
 
 /* Grid View */
 .agents-grid {
@@ -684,10 +671,6 @@ as-split {
 
   .header-controls {
     justify-content: center;
-  }
-
-  .agents-content {
-    padding: 16px;
   }
 
   .agents-grid {
