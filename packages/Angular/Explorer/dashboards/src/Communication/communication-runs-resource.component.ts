@@ -20,7 +20,7 @@ import { RunView } from '@memberjunction/core';
         </div>
       </mj-page-header>
 
-      <div class="runs-body">
+      <mj-page-body>
         <div class="card">
           <!-- SUMMARY STATS -->
           <div class="runs-summary">
@@ -74,16 +74,10 @@ import { RunView } from '@memberjunction/core';
             }
           </div>
         </div>
-      </div>
+      </mj-page-body>
     </mj-page-layout>
     `,
     styles: [`
-    .runs-body {
-        flex: 1;
-        min-height: 0;
-        padding: 0 24px 24px;
-        overflow-y: auto;
-    }
     .card {
         background: var(--mj-bg-surface-card);
         border: 1px solid var(--mj-border-default);

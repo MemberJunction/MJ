@@ -29,7 +29,7 @@ interface ProviderCardData {
         </div>
       </mj-page-header>
 
-      <div class="providers-body">
+      <mj-page-body>
       @if (isLoading) {
         <div class="loading-state">
           <mj-loading text="Loading providers..."></mj-loading>
@@ -108,18 +108,10 @@ interface ProviderCardData {
           }
         </div>
       }
-      </div>
+      </mj-page-body>
     </mj-page-layout>
     `,
     styles: [`
-    .providers-body {
-        flex: 1;
-        min-height: 0;
-        padding: 0 24px 24px;
-        overflow-y: auto;
-    }
-    /* providers-wrapper / providers-header / tb-btn replaced by <mj-page-layout> + <mj-page-header> + mjButton. */
-
     .loading-state {
         display: flex;
         align-items: center;

@@ -26,7 +26,8 @@ import { RunView } from '@memberjunction/core';
           <mj-filter-chip Label="Pending" Icon="fa-solid fa-clock"         [Active]="statusFilter === 'Pending'"  (Clicked)="onStatusFilter('Pending')"></mj-filter-chip>
         </div>
       </mj-page-header>
-      <div class="logs-body">
+      <mj-page-body [Flex]="true">
+        <div class="logs-card">
         <div class="table-wrapper">
           <table class="log-table">
             <thead>
@@ -87,15 +88,15 @@ import { RunView } from '@memberjunction/core';
             </tbody>
           </table>
         </div>
-      </div>
+        </div>
+      </mj-page-body>
     </mj-page-layout>
     `,
     styles: [`
-    /* Body sits below <mj-page-header> inside <mj-page-layout>. */
-    .logs-body {
+    /* Card wrapper inside <mj-page-body>: the table sits in a tinted card. */
+    .logs-card {
         flex: 1;
         min-height: 0;
-        margin: 0 24px 24px;
         background: var(--mj-bg-surface-card);
         border: 1px solid var(--mj-border-default);
         border-radius: 12px;

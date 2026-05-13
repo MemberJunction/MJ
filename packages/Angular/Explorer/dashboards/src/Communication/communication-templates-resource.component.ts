@@ -46,7 +46,7 @@ interface TemplateCardData {
         </div>
       </mj-page-header>
 
-      <div class="templates-body">
+      <mj-page-body>
         @if (isLoading) {
           <div class="loading-state">
             <mj-loading text="Loading templates..."></mj-loading>
@@ -98,18 +98,10 @@ interface TemplateCardData {
             }
           </div>
         }
-      </div>
+      </mj-page-body>
     </mj-page-layout>
     `,
     styles: [`
-    /* Body sits below <mj-page-header> inside <mj-page-layout>. */
-    .templates-body {
-        flex: 1;
-        min-height: 0;
-        padding: 24px;
-        overflow-y: auto;
-    }
-
     /* Header slots projected into <mj-page-header> */
     .header-toolbar {
         display: flex;

@@ -3,7 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
-import { MJButtonDirective, MJPageHeaderComponent, MJPageLayoutComponent, MJPageSearchComponent, MJFilterChipComponent } from '@memberjunction/ng-ui-components';
+import { MJButtonDirective, MJPageHeaderComponent, MJPageLayoutComponent, MJPageBodyComponent, MJPageSearchComponent, MJFilterChipComponent } from '@memberjunction/ng-ui-components';
 import { SharedDashboardWidgetsModule } from './shared/shared-dashboard-widgets.module';
 
 // Communication Components
@@ -37,6 +37,7 @@ import { CommunicationTemplatesResourceComponent } from './Communication/communi
     MJButtonDirective,
     MJPageHeaderComponent,
     MJPageLayoutComponent,
+    MJPageBodyComponent,
     MJPageSearchComponent,
     MJFilterChipComponent
   ],

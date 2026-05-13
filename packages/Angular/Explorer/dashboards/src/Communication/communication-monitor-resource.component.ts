@@ -47,7 +47,7 @@ interface HourlyBucket {
         </div>
       </mj-page-header>
 
-      <div class="monitor-body">
+      <mj-page-body>
         <!-- KPI STRIP -->
         <div class="kpi-strip">
           <div class="kpi-card sent">
@@ -206,17 +206,10 @@ interface HourlyBucket {
             </div>
           </div>
         </div>
-      </div>
+      </mj-page-body>
     </mj-page-layout>
     `,
     styles: [`
-    .monitor-body {
-        flex: 1;
-        min-height: 0;
-        padding: 0 24px 24px;
-        overflow-y: auto;
-    }
-
     /* KPI STRIP */
     .kpi-strip {
         display: grid;

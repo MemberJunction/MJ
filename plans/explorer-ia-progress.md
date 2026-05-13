@@ -36,11 +36,11 @@ All 5 are standalone, design-token-only, PascalCase API.
 | Lists — Browse | ✅ | ✅ | ✅ | ✅ | ✅ | Config-driven `<mj-filter-panel>` (Category dropdown + Status chip group); `<mj-view-toggle>` for grid/list; mjButton "New List" in `[actions]`. Body: `<mj-page-body>`; removed `.lists-browse-container` wrapper + dead `.result-count` rule (count already lives in `[meta]`). Sort dropdown kept in body (sort UI is TBD in conventions). |
 | Lists — Operations | ✅ | ✅ | n/a | n/a | n/a | Conditional Clear button in `[actions]`. Body: `<mj-page-body>`; removed `.operations-container` wrapper. Inner split-pane (selection + result panels) preserved. |
 | Lists — Categories | ✅ | ✅ | n/a | n/a | n/a | "New Category" primary in `[actions]`. Body: `<mj-page-body>`; removed `.lists-categories-container` wrapper. Tree + detail-panel split inside body unchanged. |
-| Communication — Logs | ✅ | ✅ | ✅ | ✅ | ✅ | Earlier session — popover with date range + status chips. |
-| Communication — Templates | ✅ | ✅ | n/a | n/a | n/a | Earlier session — card grid + search. |
-| Communication — Monitor | ✅ | ✅ | n/a | n/a | n/a | KPI strip + content grids; `loadData()` refresh button in `[actions]`. |
-| Communication — Providers | ✅ | ✅ | n/a | n/a | n/a | Provider card grid; "Add Provider" primary action. |
-| Communication — Runs | ✅ | ✅ | n/a | n/a | n/a | Summary stat trio + run timeline; Refresh button. |
+| Communication — Logs | ✅ | ✅ | ✅ | ✅ | ✅ | Popover with date range + status chips. Body: `<mj-page-body [Flex]="true">` with inner `.logs-card` wrapper (renamed from `.logs-body`) so the table sits in a tinted card and fills available height. |
+| Communication — Templates | ✅ | ✅ | n/a | n/a | n/a | Card grid + search. Body: `<mj-page-body>`. |
+| Communication — Monitor | ✅ | ✅ | n/a | n/a | n/a | KPI strip + content grids; `loadData()` refresh button in `[actions]`. Body: `<mj-page-body>`. |
+| Communication — Providers | ✅ | ✅ | n/a | n/a | n/a | Provider card grid; "Add Provider" primary action. Body: `<mj-page-body>`. |
+| Communication — Runs | ✅ | ✅ | n/a | n/a | n/a | Summary stat trio + run timeline; Refresh button. Body: `<mj-page-body>`. |
 | Scheduling (parent dashboard) | ✅ | ✅ | n/a | n/a | n/a | Sidebar dropped — converted to `<mj-tab-nav>` in `[actions]` slot like MCP. Healthy/Alerts pill in `[meta]`. Jobs tab badge bound to `ActiveJobCount`. |
 | Scheduling — Overview (resource) | ✅ | ✅ | n/a | n/a | n/a | **Inner-owns-chrome.** `<app-scheduling-overview>` renders its own `<mj-page-layout>` + `<mj-page-header>` when standalone, gated by `@if (HideToolbar)`. Refresh + Auto-refresh toggle in `[actions]`. Resource wrapper is a thin shim. |
 | Scheduling — Jobs (resource) | ✅ | ✅ | ✅ | ✅ | n/a | **Inner-owns-chrome.** Full chrome owned by `<app-scheduling-jobs>`: result-count in `[meta]`, Refresh + "New Job" in `[actions]`, search + 2 dropdowns (Status / Type) in `[toolbar]`. Resource wrapper is a thin shim. |
