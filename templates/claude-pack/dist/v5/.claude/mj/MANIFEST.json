@@ -25,13 +25,13 @@
     },
     {
       "path": ".claude/mj/core.md",
-      "bytes": 110368,
-      "sha256": "d786e372ce41a6a92210d3ef61011919434283d4ebd894a84cc25bab8bd415e7"
+      "bytes": 123571,
+      "sha256": "5429ea8cb24b87ec73ee8a824a80d2afc14c0c7f2e3aea3ee87db1621e316875"
     },
     {
       "path": ".claude/mj/v5.md",
-      "bytes": 3739,
-      "sha256": "228c43599a2f6bbf1c58a17e7e7714574cdb37376b56e89d43b2311851cc2db7"
+      "bytes": 10881,
+      "sha256": "05272199938bd178db9ca8b0ce033024ab01ac996842532fa56ee89229a4c5b3"
     },
     {
       "path": ".claude/settings.json",
