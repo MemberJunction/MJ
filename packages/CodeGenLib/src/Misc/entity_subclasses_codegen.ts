@@ -333,7 +333,7 @@ export const loadModule = () => {
     * @memberof ${sClassName}
     * @throws {Error} - Delete is not allowed for ${entity.Name}, to enable it set AllowDeleteAPI to 1 in the database.
     */
-    public async Delete(): Promise<boolean> {
+    public override async Delete(): Promise<boolean> {
         throw new Error('Delete is not allowed for ${entity.Name}, to enable it set AllowDeleteAPI to 1 in the database.');
     }`;
       } else if (entity.CascadeDeletes) {
@@ -347,7 +347,7 @@ export const loadModule = () => {
     * @memberof ${sClassName}
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
-    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
             const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
