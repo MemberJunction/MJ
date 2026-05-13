@@ -187,13 +187,24 @@ export interface RemoteInvalidatePayload {
     recordData?: string;
 }
 
+/**
+ * Tracks the load state and data for a single engine property (entity or dataset config).
+ */
+export interface EngineDataMapEntry {
+    entityName?: string;
+    datasetName?: string;
+    data: unknown[];
+    loadedSuccessfully: boolean;
+    errorMessage?: string;
+}
+
 export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartupSink {
     private _loaded: boolean = false;
     private _loadingSubject: BehaviorSubject<boolean> = new BehaviorSubject<boolean>(false);
     private _contextUser: UserInfo;
     private _metadataConfigs: BaseEnginePropertyConfig[] = [];
     private _dynamicConfigs: Map<string, BaseEnginePropertyConfig> = new Map();
-    private _dataMap: Map<string, { entityName?: string, datasetName?: string, data: unknown[], loadedSuccessfully: boolean, errorMessage?: string }> = new Map();
+    private _dataMap: Map<string, EngineDataMapEntry> = new Map();
     private _expirationTimers: Map<string, number> = new Map();
     private _entityEventSubjects: Map<string, Subject<BaseEntityEvent>> = new Map();
     private _provider: IMetadataProvider;
@@ -1212,6 +1223,8 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * Loads the specified metadata configurations.
      * @param configs - The metadata configurations to load
      * @param contextUser - The context user information
+     * @param bypassCache - When true, bypasses all server-side caching (RunView and dataset) to fetch fresh data
+     *   directly from the database. Passed through from {@link Load} when `forceRefresh` is true (i.e., `Config(true)`).
      */
     protected async LoadConfigs(configs: Partial<BaseEnginePropertyConfig>[], contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
         this._metadataConfigs = configs.map(c => this.UpgradeObjectToConfig(c));
@@ -1231,6 +1244,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * Loads a single metadata configuration.
      * @param config - The metadata configuration to load
      * @param contextUser - The context user information
+     * @param bypassCache - When true, bypasses server-side cache to get fresh data from the database
      */
     protected async LoadSingleConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
         if (config.Type === 'dataset')
@@ -1298,6 +1312,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      * Handles the process of loading multiple entity configs in a single network call via RunViews()
      * @param configs
      * @param contextUser
+     * @param bypassCache - When true, bypasses server-side cache to get fresh data from the database
      */
     protected async LoadMultipleEntityConfigs(configs: BaseEnginePropertyConfig[], contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
         if (configs && configs.length > 0) {
@@ -1339,8 +1354,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
     /**
      * Handles the process of loading a single config of type 'dataset'.
-     * @param config 
-     * @param contextUser 
+     * @param config
+     * @param contextUser
+     * @param bypassCache - When true, bypasses server-side cache to get fresh data from the database.
+     *   Uses {@link IMetadataProvider.GetDatasetByName} with `forceRefresh` to skip all cache reads,
+     *   then {@link IMetadataProvider.CacheDataset} to store fresh results for subsequent non-forced calls.
      */
     protected async LoadSingleDatasetConfig(config: BaseEnginePropertyConfig, contextUser: UserInfo, bypassCache: boolean = false): Promise<void> {
         const p = this.ProviderToUse;
