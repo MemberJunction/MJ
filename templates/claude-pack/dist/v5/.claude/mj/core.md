@@ -1220,3 +1220,641 @@ to understand why. Don't try to "fix" the generated file — fix the input.
 - [ ] If a typed property is missing, run CodeGen instead of reaching for `.Set()`
 - [ ] Commit the `CodeGen_Run_*.sql` migration that follows from your schema change
 - [ ] When customizing forms, extend the generated class with `@RegisterClass` — don't fork the generated file
+
+---
+
+# Migrations — what to put in, what to leave out
+
+MJ migrations are Flyway-style SQL files. The bulk of writing one is plain
+SQL — but there are a handful of MJ-specific conventions that, if you skip,
+will trip CodeGen, break replay, or cause silent runtime bugs.
+
+## Where they live
+
+```
+migrations/v5/V<YYYYMMDDHHMM>__v[VERSION].x_<DESCRIPTION>.sql
+```
+
+- **`v5`** — the MJ major you're targeting. Always use the highest-numbered
+  `migrations/v*/` folder (check `ls migrations/v*/` if unsure).
+- **`V`** — Flyway requires a capital `V` prefix for versioned migrations.
+- **`<YYYYMMDDHHMM>`** — UTC timestamp, must be greater than every existing
+  migration's timestamp. CI enforces this; out-of-order timestamps break
+  replay on a fresh install.
+- **`__v[VERSION].x`** — the MJ minor version this migration ships in
+  (e.g. `__v5.34.x`).
+- **`<DESCRIPTION>`** — `Snake_Case_Words` describing what changes.
+
+Example:
+```
+migrations/v5/V202611150930__v5.34.x__Add_OrderPriority_To_Orders.sql
+```
+
+## The schema placeholder
+
+Never hardcode the `__mj` schema. Always use `${flyway:defaultSchema}`.
+
+```sql
+-- ❌ WRONG — breaks on customers who use a different default schema
+ALTER TABLE __mj.Entity ADD CustomColumn NVARCHAR(100) NULL;
+
+-- ✅ CORRECT
+ALTER TABLE ${flyway:defaultSchema}.Entity ADD CustomColumn NVARCHAR(100) NULL;
+```
+
+Flyway substitutes the customer's actual schema name at apply time. The
+default is `__mj` but many installs run on customized schema names.
+
+## Hardcoded UUIDs, always
+
+Any `INSERT` that creates a row with a UUID primary key must use a
+**hardcoded UUID literal** — never `NEWID()` or `NEWSEQUENTIALID()`.
+
+```sql
+-- ❌ WRONG — every customer ends up with a different ID for the same row,
+--    breaking cross-environment referential integrity.
+INSERT INTO ${flyway:defaultSchema}.SomeEntity (ID, Name)
+VALUES (NEWID(), 'My Reference Value');
+
+-- ✅ CORRECT — same row, same ID, everywhere.
+INSERT INTO ${flyway:defaultSchema}.SomeEntity (ID, Name)
+VALUES ('a1b2c3d4-1234-5678-90ab-cdef12345678', 'My Reference Value');
+```
+
+Use a UUID generator (e.g. `uuidgen` or any online tool) once when authoring
+the migration. The same UUID must apply on every install of that version.
+
+## Columns CodeGen owns — DON'T add these manually
+
+Every MJ table gets these automatically (or via existing CodeGen-emitted
+DDL). Never include them in your CREATE TABLE or ALTER TABLE:
+
+```sql
+-- ❌ WRONG — DON'T add these by hand
+CREATE TABLE ${flyway:defaultSchema}.NewEntity (
+    ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
+    Name NVARCHAR(100) NOT NULL,
+    __mj_CreatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE(),  -- ❌
+    __mj_UpdatedAt DATETIMEOFFSET NOT NULL DEFAULT GETUTCDATE(),  -- ❌
+    CONSTRAINT PK_NewEntity PRIMARY KEY (ID)
+);
+CREATE INDEX IDX_NewEntity_Name ON ...   -- ❌ FK indexes are CodeGen's job
+```
+
+```sql
+-- ✅ CORRECT — let CodeGen wire the timestamps and FK indexes
+CREATE TABLE ${flyway:defaultSchema}.NewEntity (
+    ID UNIQUEIDENTIFIER NOT NULL DEFAULT NEWSEQUENTIALID(),
+    Name NVARCHAR(100) NOT NULL,
+    SomeFK UNIQUEIDENTIFIER NOT NULL,
+    CONSTRAINT PK_NewEntity PRIMARY KEY (ID),
+    CONSTRAINT FK_NewEntity_SomeFK FOREIGN KEY (SomeFK)
+        REFERENCES ${flyway:defaultSchema}.OtherEntity(ID)
+);
+```
+
+CodeGen will:
+- Add `__mj_CreatedAt` / `__mj_UpdatedAt` with defaults and update triggers
+- Create the `IDX_AUTO_MJ_FKEY_NewEntity_SomeFK` index for the FK column
+- Generate `spCreate*`, `spUpdate*`, `spDelete*` stored procs
+- Add Entity / EntityField metadata rows
+
+Including any of the above manually duplicates CodeGen's work and conflicts
+when it re-runs.
+
+## Consolidate `ALTER TABLE` for the same table
+
+```sql
+-- ✅ CORRECT — one ALTER TABLE, multiple ADD clauses
+ALTER TABLE ${flyway:defaultSchema}.EntityField ADD
+    UserSearchPredicateAPI NVARCHAR(20) NOT NULL DEFAULT 'Contains',
+    AutoUpdateUserSearchPredicate BIT NOT NULL DEFAULT 1,
+    AutoUpdateFullTextSearch BIT NOT NULL DEFAULT 1;
+
+-- ❌ WRONG — three separate ALTER TABLEs for the same table
+ALTER TABLE ${flyway:defaultSchema}.EntityField ADD UserSearchPredicateAPI NVARCHAR(20) NOT NULL DEFAULT 'Contains';
+ALTER TABLE ${flyway:defaultSchema}.EntityField ADD AutoUpdateUserSearchPredicate BIT NOT NULL DEFAULT 1;
+ALTER TABLE ${flyway:defaultSchema}.EntityField ADD AutoUpdateFullTextSearch BIT NOT NULL DEFAULT 1;
+```
+
+Same end state, but consolidated form is faster (one table lock + one schema
+modification), reads better, and matches the convention CodeGen uses.
+
+## Always add `sp_addextendedproperty` for new columns
+
+For every new column you add (except primary keys and foreign keys — CodeGen
+handles those), emit a description. CodeGen pulls these descriptions into
+the typed entity property's JSDoc, into the Angular form's tooltip, and
+into the GraphQL schema description.
+
+```sql
+EXEC sp_addextendedproperty
+    @name = N'MS_Description',
+    @value = N'Priority level (1=highest, 5=lowest) for fulfillment ordering.',
+    @level0type = N'SCHEMA', @level0name = N'${flyway:defaultSchema}',
+    @level1type = N'TABLE',  @level1name = N'Orders',
+    @level2type = N'COLUMN', @level2name = N'Priority';
+```
+
+Without descriptions, the typed property exists but with no JSDoc, the
+Angular form labels read as raw column names, and the GraphQL schema is
+opaque. It costs four lines per column; spend them.
+
+## Don't seed lookup tables with SQL `INSERT`
+
+If you're adding a new lookup / reference table (e.g.
+`MJ: AI Agent Request Types`), don't seed it via SQL `INSERT` statements
+in the migration. Use mj-sync metadata files instead — see
+`16-metadata-files.md`.
+
+mj-sync is declarative, version-controlled, idempotent, supports `@lookup:`
+references that resolve entity-name → ID automatically, and is safe to
+re-run. SQL `INSERT` seeds are duplication-prone, brittle across environments,
+and have to be hand-coordinated with CodeGen-emitted ID changes.
+
+## The day-1 checklist
+
+Before committing any migration:
+
+- [ ] Filename matches `V<TIMESTAMP>__v[VERSION].x__<Snake_Case>.sql`?
+- [ ] Timestamp is newer than every existing migration?
+- [ ] No `__mj.` literal — use `${flyway:defaultSchema}` everywhere?
+- [ ] All `INSERT` UUIDs are hardcoded literals, no `NEWID()`?
+- [ ] No `__mj_CreatedAt` / `__mj_UpdatedAt` in CREATE TABLE?
+- [ ] No manual FK indexes — only the FK constraint itself?
+- [ ] Multiple ADDs to the same table consolidated into one `ALTER TABLE`?
+- [ ] Every non-PK / non-FK column has an `sp_addextendedproperty` description?
+- [ ] Reference-data seeds use mj-sync, not SQL `INSERT`?
+- [ ] Ran `mj migrate` + `mj codegen` locally and committed the resulting
+      `CodeGen_Run_*.sql` file?
+
+Get this right and migrations are boring — exactly what they should be.
+
+---
+
+# Singletons — always extend `BaseSingleton<T>`
+
+If a class needs to be a singleton in MJ, it must extend `BaseSingleton<T>`
+from `@memberjunction/global`. Rolling your own `static _instance` looks
+fine in unit tests and breaks in production for non-obvious reasons.
+
+## The rule
+
+```typescript
+// ✅ CORRECT
+import { BaseSingleton } from '@memberjunction/global';
+
+export class MyService extends BaseSingleton<MyService> {
+    // BaseSingleton requires a protected (or private) constructor
+    protected constructor() {
+        super();
+    }
+
+    // Expose a static accessor that calls the inherited getInstance()
+    public static get Instance(): MyService {
+        return MyService.getInstance<MyService>();
+    }
+
+    public DoThing() { /* ... */ }
+}
+
+// Usage:
+const s = MyService.Instance;
+s.DoThing();
+```
+
+```typescript
+// ❌ WRONG — looks identical, breaks under code splitting
+export class MyService {
+    private static _instance: MyService;
+    public static get Instance(): MyService {
+        if (!MyService._instance) {
+            MyService._instance = new MyService();
+        }
+        return MyService._instance;
+    }
+}
+```
+
+## Why `static _instance` is wrong
+
+Modern bundlers (ESBuild, Vite, Rollup, Webpack) do aggressive code
+splitting and inlining. A class can end up *duplicated* in the bundle —
+once in chunk A, once in chunk B — when:
+
+- The class is imported from multiple entry points
+- Re-exports cross package boundaries
+- A monorepo workspace package gets bundled differently in two consumers
+
+Each copy has its own `static _instance` field on its own class
+constructor. When two callers go through different copies, you get
+**two singletons** — silently, with diverging state. The bug shows up
+much later as a desync ("why is the cache empty here when I just wrote
+to it over there?").
+
+`BaseSingleton<T>` solves this by storing the instance in a **global
+object store** — a single `Map` keyed by class name, attached to
+`globalThis`. There's exactly one map across all duplicated copies of
+the code, so all callers get the same instance.
+
+## The two-line summary
+
+| Aspect | `BaseSingleton<T>` | Hand-rolled `static _instance` |
+|---|---|---|
+| One instance per process | Yes, guaranteed | Only when no code duplication |
+| Survives bundler quirks | Yes | No |
+| Constructor enforcement | Compile error if public | None |
+| Boilerplate | ~10 lines | ~6 lines |
+
+The savings on the hand-rolled version aren't worth the production foot­gun.
+
+## Common gotcha: `protected constructor()`
+
+`BaseSingleton<T>` requires a `protected` (or `private`) constructor.
+Forgetting this means callers can still do `new MyService()` directly,
+which bypasses the singleton and creates an unmanaged instance.
+
+```typescript
+export class MyService extends BaseSingleton<MyService> {
+    constructor() {  // ❌ public — defeats the singleton
+        super();
+    }
+}
+
+export class MyService extends BaseSingleton<MyService> {
+    protected constructor() {  // ✅ enforced singleton access
+        super();
+    }
+}
+```
+
+The TypeScript compiler will error if you try to `new MyService()` from
+outside the class hierarchy when the constructor is protected.
+
+## When NOT to use a singleton
+
+Singletons are a tool for "exactly one of this thing per process". Common
+legitimate uses:
+
+- A connection pool that wraps a shared resource
+- A registry that catalogs other singletons (e.g. `ClassFactory`)
+- A cache layer that needs cross-call coherence
+
+When in doubt, **don't** make it a singleton. Instead, pass instances as
+parameters or store them on whatever context object already exists.
+Singletons hide dependencies and make tests painful.
+
+## Provider classes — use `this`, not the global
+
+There's a related pitfall: any class instance that *is* an `IMetadataProvider`
+should use its own `this` rather than reaching for the global `Metadata`
+singleton. See `02-entity-essentials.md` for the full version. The short
+form:
+
+```typescript
+// ❌ Inside a class that owns a provider
+const md = new Metadata();  // ← global default; wrong in multi-provider setups
+md.EntityByName(name);
+
+// ✅ Use the instance's own provider
+this.EntityByName(name);   // 'this' IS an IMetadataProvider
+```
+
+`Metadata.Provider` / `new Metadata()` always returns the **default** provider.
+That's only correct in single-provider apps. Multi-provider clients (a
+front-end talking to two MJ servers in parallel) will silently use the wrong
+provider if internal code reaches for the global.
+
+---
+
+# Imports & dependencies — static imports, no re-exports
+
+Two MJ-specific rules about how your packages talk to each other:
+
+1. Use static `import ... from '...'` at the top of every file. **Dynamic
+   `import()` is forbidden** except in a narrow allowlist.
+2. **Never re-export** types or classes from another package. Consumers
+   import directly from the original source package.
+
+Both rules exist because of real shipping bugs that the easier alternative
+caused.
+
+## Rule 1 — Static imports only
+
+```typescript
+// ✅ CORRECT — static import at the top of the file
+import { AIPromptRunner } from '@memberjunction/ai-prompts';
+
+class MyService {
+    async run() {
+        return await new AIPromptRunner().ExecutePrompt(...);
+    }
+}
+```
+
+```typescript
+// ❌ WRONG — dynamic import as a "convenience"
+class MyService {
+    async run() {
+        const { AIPromptRunner } = await import('@memberjunction/ai-prompts');
+        return await new AIPromptRunner().ExecutePrompt(...);
+    }
+}
+```
+
+The dynamic version looks clever. It doesn't show the dependency in npm,
+doesn't show up in bundle analysis, and survives a missing entry in
+`package.json` until runtime. The day it ships and the dep IS missing,
+your command crashes with `ERR_MODULE_NOT_FOUND` for users — TypeScript
+never warned you.
+
+Static imports are checked at compile time. If the dep isn't declared,
+the build fails. Always.
+
+### The 5 narrow exceptions
+
+Dynamic `import()` is acceptable when:
+
+1. **Angular lazy-loaded routes / `loadComponent()`** — framework-required
+   for code splitting.
+
+2. **Optional peer dependencies** — cloud SDKs (`@aws-sdk/client-kms`,
+   `@azure/keyvault-keys`) loaded only when that provider is configured.
+   Must be declared in `optionalDependencies` or `peerDependenciesMeta`.
+
+3. **Genuine bundle-size deferral** — a single heavy module (e.g. `xlsx`
+   loaded only on Excel export). Must be measured: "this is too slow to
+   load up-front" is not a guess.
+
+4. **Breaking a hard circular dependency** — last resort. Add a comment
+   explaining the cycle.
+
+5. **Runtime plugin discovery** — loading user-supplied resolver/middleware
+   modules whose paths aren't known at build time.
+
+**If your reason isn't on this list, use a static import.** "It's only
+used in one method" is not a reason. "The package is big" is not a reason
+unless you've measured the startup cost.
+
+### When you must use dynamic import
+
+Add a comment explaining *which* category above it falls under. **Still
+declare the package in `dependencies`** (or `optionalDependencies` /
+`peerDependencies`) — dynamic import doesn't exempt you from the dep graph.
+Prefer a single top-of-module dynamic load behind a memoized promise over
+repeated `await import()` inside every method.
+
+## Rule 2 — No re-exports between packages
+
+```typescript
+// ❌ WRONG — re-exporting from another package
+// In @memberjunction/ng-export-service/src/public-api.ts:
+export { ExportFormat, ExportOptions } from '@memberjunction/export-engine';
+
+// ✅ CORRECT — only export what this package defines
+export * from './lib/module';
+export * from './lib/export.service';
+export * from './lib/export-dialog.component';
+// NOTE: For ExportFormat / ExportOptions, import directly from @memberjunction/export-engine
+```
+
+Why no re-exports:
+
+- **Obscures the source of types.** A reader sees `import { ExportFormat }
+  from '@memberjunction/ng-export-service'` and has no idea the type lives
+  in `export-engine`. Going to definition is now indirect.
+
+- **Confuses the dependency graph.** If `ng-export-service` re-exports
+  types from `export-engine`, any consumer that uses those types thinks
+  `ng-export-service` is the dependency. Eventually someone removes the
+  re-export, breaking every transitive consumer.
+
+- **Breaks tree-shaking.** The bundler can't tell that you only used the
+  re-exported symbol, not the rest of the re-exporting package.
+
+Each package's `public-api.ts` should only export **code defined within
+that package**. Consumers import types from their original source.
+
+If you find yourself reaching for a re-export to "make the import shorter"
+or "hide an implementation detail" — those benefits come at the cost of a
+much harder-to-debug dependency tangle later. Don't.
+
+## Why these rules exist (a real shipping bug)
+
+The dynamic-import rule was written after a shipping bug: MJCLI's `mj app *`
+commands used `await import('@memberjunction/open-app-engine')` inside the
+command body, without declaring the dep in `package.json`. The TypeScript
+build passed. `npm install -g @memberjunction/cli` succeeded. Every
+production `mj app` invocation crashed with `ERR_MODULE_NOT_FOUND`. Static
+imports would have failed the build immediately.
+
+The re-export rule comes from years of refactoring pain — every removed
+re-export broke a transitive consumer who didn't know they had a dependency
+they had to update.
+
+## The day-1 checklist
+
+- [ ] Every `import` at the top of the file, not inside a method?
+- [ ] If you used dynamic `import()`, can you point to one of the 5
+      categories above and write the one-line "why"?
+- [ ] Your `public-api.ts` / `index.ts` only exports things defined in
+      this package (no `export { … } from 'other-package'`)?
+- [ ] Every package you import from is declared in `package.json`
+      (dependencies / peerDependencies / optionalDependencies)?
+
+---
+
+# Metadata Files & mj-sync — declarative reference data
+
+For reference data — lookup tables, AI Models, AI Vendors, Application
+config, etc. — MJ has a declarative metadata system. You write JSON files
+under `metadata/`, run `mj sync push`, and the records land in the
+database. It's the idiomatic alternative to `INSERT` statements in
+migrations.
+
+## When to use mj-sync vs SQL
+
+| Use mj-sync for | Use SQL migrations for |
+|---|---|
+| Reference data (statuses, types, categories) | Schema changes (CREATE TABLE, ALTER) |
+| AI Models / AI Vendors / AI Configurations | New columns, indexes, constraints |
+| Application + nav config | Anything that changes table shape |
+| Default Roles, default Users | Stored procs (CodeGen emits these) |
+| Seed templates, sample data | Triggers, views, functions |
+
+If it's a **row in a table**, prefer mj-sync. If it's **the shape of the
+table itself**, that's a migration.
+
+## Why prefer mj-sync over SQL INSERT
+
+- **Version-controlled, human-readable** — diffs are JSON object changes,
+  not opaque SQL strings
+- **Idempotent** — `mj sync push` upserts; safe to re-run anywhere
+- **`@lookup:` resolves IDs automatically** — you don't need to hardcode
+  FK UUIDs that depend on what other rows exist
+- **Cross-environment safe** — same file produces the same logical row
+  on dev, staging, prod, customer installs
+- **Free preview** — `mj sync push --dry-run` shows what would change
+- **CodeGen-friendly** — runs alongside CodeGen, doesn't fight it for
+  ownership of the same rows
+
+The blanket SQL INSERT for reference data leads to:
+- Different IDs on different environments (because timestamps / sequence
+  values diverge)
+- Conflicts when CodeGen later wants to update the same rows
+- No safe re-run on a partially-applied state
+
+## Directory layout
+
+```
+metadata/
+├── .mj-sync.json                          (top-level config)
+├── ai-models/
+│   ├── .mj-sync.json                      (per-entity config)
+│   └── .ai-models.json                    (the data — JSON array of records)
+├── ai-vendors/
+│   ├── .mj-sync.json
+│   └── .ai-vendors.json
+└── applications/
+    └── .my-app-application.json
+```
+
+Each entity gets its own directory under `metadata/`. A `.mj-sync.json`
+in that directory tells mj-sync which entity these files describe and how
+to handle conflicts.
+
+## Record file structure
+
+Records are JSON arrays. Each entry has a `fields` object with the column
+values:
+
+```json
+[
+  {
+    "fields": {
+      "Name": "Production",
+      "Description": "Production-grade models",
+      "DisplayOrder": 1
+    }
+  },
+  {
+    "fields": {
+      "Name": "Development",
+      "Description": "Dev/test models",
+      "DisplayOrder": 2
+    }
+  }
+]
+```
+
+On first `push`, mj-sync assigns each record a UUID, writes a `primaryKey`
+field back into the source file, and records sync metadata. Don't add
+`primaryKey` or `sync` by hand — they appear automatically.
+
+## The four reference syntaxes
+
+mj-sync supports four `@`-prefixed reference forms inside `fields`:
+
+### `@file:relative/path.ext` — embed file contents
+
+```json
+{
+  "fields": {
+    "Name": "User Profile Form",
+    "TemplateText": "@file:templates/user-profile.hbs"
+  }
+}
+```
+
+The value is replaced with the file's contents at sync time. Useful for
+long Handlebars templates, JSON schemas, or anything multi-line that
+would be unreadable inline.
+
+### `@lookup:Entity Name.FieldName=Value` — resolve to another entity's ID
+
+```json
+{
+  "fields": {
+    "Name": "GPT-4 OpenAI",
+    "ModelID": "@lookup:AI Models.Name=GPT-4",
+    "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI"
+  }
+}
+```
+
+The value is replaced with the ID of the matching record at sync time.
+This means you can reference rows that *also* came from mj-sync without
+hardcoding UUIDs. The lookup runs after all records of the target entity
+are loaded, so order doesn't matter.
+
+If the lookup doesn't find a match, push errors out clearly.
+
+### `@template:relative/path.ext` — same as @file but treated as a template
+
+For template-engine content (Handlebars, Liquid, etc.) where you want the
+sync to validate or transform the content before insertion.
+
+### `@parent:FieldName` / `@root:FieldName` — reference enclosing record
+
+For nested / related-record sync structures, lets a child record reference
+a field on its parent.
+
+## Workflow
+
+```bash
+# 1. Edit JSON under metadata/
+vi metadata/ai-models/.ai-models.json
+
+# 2. Preview what would change
+mj sync push --dir metadata/ --dry-run
+
+# 3. Apply for real
+mj sync push --dir metadata/
+
+# 4. Commit BOTH the source file AND the auto-generated primaryKey/sync fields
+git add metadata/ai-models/.ai-models.json
+git commit
+```
+
+The `primaryKey` and `sync` fields that mj-sync writes back are part of
+the record's identity — commit them so other developers (and CI) keep
+upserting to the same row.
+
+## Pulling existing data into mj-sync
+
+If you have reference data already in the database that you want to
+manage via mj-sync going forward:
+
+```bash
+mj sync pull --dir metadata/ --entity 'AI Models'
+```
+
+This reads the rows out of the database and writes them as JSON under
+`metadata/ai-models/`. Commit the result; from then on, the JSON file is
+the source of truth.
+
+## Validation
+
+Before push, mj-sync runs a validation pass:
+
+- Required fields are present
+- `@lookup:` references resolve to actual rows
+- Field values match their type / value-list constraints
+- Foreign keys reference real entities
+
+You can run validation explicitly without pushing:
+
+```bash
+mj sync validate --dir metadata/
+```
+
+CI typically runs this on every PR that touches `metadata/`.
+
+## The day-1 checklist
+
+- [ ] Reference data goes in `metadata/<entity-dir>/`, not SQL `INSERT`
+- [ ] One directory per entity, with `.mj-sync.json` config + data file
+- [ ] FK references use `@lookup:` so IDs resolve automatically
+- [ ] Long content (templates, schemas) uses `@file:` instead of inline
+- [ ] You ran `mj sync push --dry-run` before applying
+- [ ] You committed the source file *with* the auto-written `primaryKey` and `sync` blocks
