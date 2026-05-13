@@ -310,7 +310,14 @@ export class ApplicationManager {
       const hasMetadataApps = md.Applications.some(a => a.Status === 'Active');
       if (activeApps.length === 0 && hasMetadataApps && !ApplicationManager._recoveryAttempted) {
         ApplicationManager._recoveryAttempted = true;
-        LogStatus('ApplicationManager: No user apps loaded despite Active apps in metadata — attempting recovery');
+        const activeAppCount = md.Applications.filter(a => a.Status === 'Active').length;
+        const engineHealthy = UserInfoEngine.Instance.AllPropertiesLoadedSuccessfully;
+        const userAppCount = UserInfoEngine.Instance.UserApplications?.length ?? 0;
+        LogStatus(
+          `ApplicationManager: Recovery triggered — ` +
+          `activeApps=0, metadataActiveApps=${activeAppCount}, ` +
+          `engineHealthy=${engineHealthy}, userAppRecords=${userAppCount}`
+        );
         await this.attemptRecovery();
       }
 
@@ -394,6 +401,14 @@ export class ApplicationManager {
       const engine = UserInfoEngine.Instance;
       await engine.Config(true);
       await this.loadUserApplicationConfig();
+
+      const recoveredCount = this.applications$.value.length;
+      const engineHealthy = engine.AllPropertiesLoadedSuccessfully;
+      if (recoveredCount > 0) {
+        LogStatus(`ApplicationManager: Recovery succeeded — ${recoveredCount} apps loaded, engineHealthy=${engineHealthy}`);
+      } else {
+        LogError(`ApplicationManager: Recovery completed but still 0 apps — engineHealthy=${engineHealthy}`);
+      }
     } catch (error) {
       LogError('ApplicationManager: Recovery attempt failed:', undefined, error instanceof Error ? error.message : String(error));
     }
