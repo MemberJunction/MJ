@@ -45,11 +45,11 @@ All 5 are standalone, design-token-only, PascalCase API.
 | Scheduling — Overview (resource) | ✅ | ✅ | n/a | n/a | n/a | **Inner-owns-chrome.** `<app-scheduling-overview>` renders its own `<mj-page-layout>` + `<mj-page-header>` when standalone, gated by `@if (HideToolbar)`. Refresh + Auto-refresh toggle in `[actions]`. Resource wrapper is a thin shim. |
 | Scheduling — Jobs (resource) | ✅ | ✅ | ✅ | ✅ | n/a | **Inner-owns-chrome.** Full chrome owned by `<app-scheduling-jobs>`: result-count in `[meta]`, Refresh + "New Job" in `[actions]`, search + 2 dropdowns (Status / Type) in `[toolbar]`. Resource wrapper is a thin shim. |
 | Scheduling — Activity (resource) | ✅ | ✅ | ✅ | ✅ | n/a | **Inner-owns-chrome.** Full chrome owned by `<app-scheduling-activity>`: Refresh in `[actions]`; search + Status + Job dropdowns + time-range `<mj-filter-chip>` group in `[toolbar]`. Resource wrapper is a thin shim. |
-| Credentials — Overview | ✅ | ✅ | n/a | n/a | n/a | Refresh + "New Credential" in `[actions]`. No filters. |
-| Credentials — List | ✅ | ✅ | ✅ | ✅ | ✅ | Popover for Type + Status; view-toggle (grid/list); result-count + expiring/expired pills in `[meta]`. |
-| Credentials — Types | ✅ | ✅ | ✅ | ✅ | ✅ | Popover for Category (filterable); result-count + neutral pills (categories / credentials) in `[meta]`. |
-| Credentials — Categories | ✅ | ✅ | n/a | n/a | n/a | Expand/Collapse + Refresh + "New Category" in `[actions]`. Search in `[toolbar]`. |
-| Credentials — Audit Log | ✅ | ✅ | ✅ | ✅ | ✅ | Popover for Status + Operation + DateRange; view-toggle (timeline/table); Export + Refresh in `[actions]`. |
+| Credentials — Overview | ✅ | ✅ | n/a | n/a | n/a | Refresh + "New Credential" in `[actions]`. No filters. Body: `<mj-page-body>`. |
+| Credentials — List | ✅ | ✅ | ✅ | ✅ | ✅ | Popover for Type + Status; view-toggle (grid/list); result-count + expiring/expired pills in `[meta]`. Body: `<mj-page-body>`. |
+| Credentials — Types | ✅ | ✅ | ✅ | ✅ | ✅ | Popover for Category (filterable); result-count + neutral pills in `[meta]`. Body: `<mj-page-body [Flex]="true">` — the inner `.types-layout` grid uses `flex: 1` to fill height, so needs flex-column parent. |
+| Credentials — Categories | ✅ | ✅ | n/a | n/a | n/a | Expand/Collapse + Refresh + "New Category" in `[actions]`. Search in `[toolbar]`. Body: `<mj-page-body>`. |
+| Credentials — Audit Log | ✅ | ✅ | ✅ | ✅ | ✅ | Popover for Status + Operation + DateRange; view-toggle (timeline/table); Export + Refresh in `[actions]`. Body: `<mj-page-body>`. |
 | File Browser | ✅ | ✅ | n/a | n/a | n/a | Generic-package wrapper (`@memberjunction/ng-file-storage`). Resource component adds page-header chrome; inner `<mj-file-browser>` keeps its bespoke 2-panel layout + grid toolbar (shared with `file-browser-demo`). |
 | Version History — Labels | ✅ | ✅ | ✅ | ✅ | ✅ | Popover for Scope + Status; view-toggle (card/list); result-count in `[meta]`; Create Label + Refresh in `[actions]`. |
 | Version History — Diff Viewer | ✅ | ✅ | n/a | n/a | n/a | Minimal chrome — page is a configurator (mode selector + label dropdowns + Compare button), with results toolbar that lives in the body. |
