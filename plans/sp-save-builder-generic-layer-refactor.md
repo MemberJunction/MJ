@@ -2,63 +2,53 @@
 
 ## Status
 
-Draft (rev 3) — proposed follow-up to the `IsSPParameter` consolidation
-that fixed the "Procedure or function spCreateArtifactVersion has too many
-arguments specified" regression. The runtime/CodeGen filter symmetry that
-bug exposed is now correct, but the **broader duplication** between
-`SQLServerDataProvider` and `PostgreSQLDataProvider` that allowed the
-asymmetry to exist in the first place is still on the table.
+Draft (rev 4) — supersedes rev 3 based on reviewer feedback that
+`SQLDialect` is intended to stay simple. Rev 3's architecture pivot
+(absorbing save-call composition into `SQLDialect`) was overreach. Rev 4
+returns to the rev 2 shape — abstract hooks on `GenericDatabaseProvider`,
+implemented by provider subclasses — with refinements informed by the
+rev 3 prototype that briefly landed locally (commit `4c5c56b`,
+reset before push).
 
-**Changes in rev 3** (for reviewers comparing against rev 2):
+The original goal stands: kill the duplication between
+`SQLServerDataProvider` and `PostgreSQLDataProvider` save builders that
+allowed the `spCreateArtifactVersion` "too many arguments" regression
+to exist in the first place. The corrected design achieves that goal
+without bloating `SQLDialect`.
 
-- **Architecture pivot: dialect grammar grows on `SQLDialect`, not three
-  new abstract methods on `GenericDatabaseProvider`.** MJ already has a
-  mature dialect-grammar descriptor (`SQLDialect`, 725 lines, 80+ methods
-  including `ProcedureCallSyntax`, `ParameterRef`, `ParameterPlaceholder`,
-  `BooleanLiteral`, `ReturnInsertedClause`, etc.). The save path is
-  currently the one major area that bypasses it and hand-rolls SQL inside
-  the data providers. Extending `SQLDialect` to absorb the save grammar
-  puts the override surface where MJ has already decided dialect-grammar
-  overrides go, instead of splitting it across two parallel hierarchies
-  (dialect descriptor + abstract methods on the data provider).
-- Consequence: the `TRendered` generic parameter and the `CoerceResult`
-  tagged-union sketched in rev 2 are dropped — they were artifacts of the
-  abstract-methods-on-provider approach. Each new `SQLDialect` method
-  returns its own concrete shape directly; the wrapper methods on the
-  same dialect pattern-match it.
-- Consequence: deprecation-shim concern collapses. Downstream extenders
-  override `SQLDialect` subclasses (the established pattern), not the
-  provider's save methods (which were already private/package-internal).
-- Consequence: `GenerateSaveSQL` on `GenericDatabaseProvider` becomes a
-  single concrete method with no abstract calls, delegating every
-  dialect-specific decision through `this.Dialect.X(...)`. Provider
-  subclasses (`SQLServerDataProvider`, `PostgreSQLDataProvider`) end up
-  with **zero save-related code** after the refactor — they contribute
-  their `SQLDialect` instance via the existing `getDialect()` and
-  nothing else for this path.
+## Changes in rev 4 (vs rev 3)
 
-**Changes carried over from rev 2** (still applies):
-
-- **Scar tissue** section enumerating recent fixes (PG 100-arg limit,
-  JSON-arg shape, savepoint wraps, `IsComputed`, bool→int) that the new
-  code must explicitly preserve. The table's "new home" column now
-  points at dialect methods rather than provider hooks.
-- JSON-arg shape for wide PG entities (commit `5ff75b96ae`) — second
-  parameter-binding mode, not a marginal variant. Lives in
-  `PostgreSQLDialect.RenderSaveCallBinding` as one branch of the
-  dialect-specific binding shape.
-- Sequencing: ship as **one PR**, gated by a **save-SQL snapshot
-  harness** that lands first. Cross-dialect SP-signature parity is
-  **not** in the harness — already covered by the existing pg-migrate
-  CI workflow. The harness is per-dialect before/after equivalence
-  for the rewrite only.
-- Acceptance criteria expanded into a breadth-explicit integration-test
-  checklist + a microbenchmark gate.
+- **Save-call composition moves to `GenericDatabaseProvider` abstract
+  hooks, not `SQLDialect` methods.** Template-method pattern: the
+  generic layer holds the orchestration (iteration, encryption, payload
+  diff); provider subclasses implement the dialect-specific composition
+  (`RenderSaveCallBinding`, `WrapSaveCallForResult`,
+  `WrapSaveCallWithRecordChange`).
+- **`SQLDialect` gains nothing in this refactor.** Strictest reading of
+  the reviewer's principle. Coercion rules (`datetimeoffset → ISO`,
+  `gen_random_uuid() → fresh UUID`) are deeply provider-specific
+  behavior; they live on the provider subclass alongside binding and
+  wrap. `useJsonArgShape` is already centralized in
+  `crudSprocFieldRules.useJsonArgShape` (one pure function, called by
+  both runtime and CodeGen) — no duplication to fix there.
+- **No structural shadow types in `sql-dialect`.** Rev 3 introduced
+  `SaveFieldDescriptor`, `SaveEntityContext`, `SaveRecordChangePayload`
+  etc. to work around the fact that sql-dialect can't import
+  `@memberjunction/core`. Those shadows were the strongest tell that
+  the logic was on the wrong side. With composition moved to the
+  provider layer, the methods can import `EntityFieldInfo` directly —
+  shadows go away.
+- **The two-issue distinction is preserved:** save-call composition is
+  runtime-path provider-specific behavior (belongs in provider
+  subclasses); AST-level T-SQL → PG conversion for migrations is
+  SQLGlot's responsibility (belongs in `@memberjunction/sqlglot-ts`).
+  `SQLDialect` straddles neither — it remains the "simple grammar
+  primitives" descriptor it was designed to be.
 
 ## Background — how we got here
 
-For each entity, the `spCreate` / `spUpdate` parameter list is decided in two
-independent places:
+For each entity, the `spCreate` / `spUpdate` parameter list is decided
+in two independent places:
 
 | Where | What it produces |
 |---|---|
@@ -66,28 +56,11 @@ independent places:
 | **Runtime** (`SQLServerDataProvider.generateSPParams`, `PostgreSQLDataProvider.getWritableFields`) | The argument list passed to `EXEC` / `SELECT FROM function()` at save time |
 
 These two need to agree. If they don't, SQL Server raises **"Procedure or
-function has too many arguments specified"** (or its PG equivalent) when a
-client tries to save.
+function has too many arguments specified"** (or its PG equivalent).
 
-Originally the two paths used different filter rules:
-
-- **CodeGen** filtered on `IsVirtual`, `IsSpecialDateField`, `IsPrimaryKey
-  + AutoIncrement`, and `AllowUpdateAPI`.
-- **SQL Server runtime** filtered on `AllowUpdateAPI` and `SkipValidation`.
-  `SkipValidation` happens to include `IsVirtual` in its checks, so virtual
-  fields were excluded **indirectly**. The contract was not stated locally.
-- **Postgres runtime** had its own filter list (`getWritableFields`).
-
-This worked **only as long as metadata flags stayed self-consistent**. The
-moment any agent produced an `EntityField` row where `IsVirtual=1` but
-`AllowUpdateAPI=1`, the SQL Server runtime included the field while the SP
-body didn't declare it → too many arguments.
-
-### The consolidation that just landed
-
-A new predicate `EntityFieldInfo.IsSPParameter(isUpdate: boolean)` is now the
-single source of truth. CodeGen, SQL Server runtime, and PostgreSQL runtime
-all delegate to it. Symmetry is now enforced at the predicate level.
+A new predicate `EntityFieldInfo.IsSPParameter(isUpdate: boolean)` is now
+the single source of truth. CodeGen, SQL Server runtime, and PostgreSQL
+runtime all delegate to it.
 
 ```ts
 public IsSPParameter(isUpdate: boolean): boolean {
@@ -99,215 +72,149 @@ public IsSPParameter(isUpdate: boolean): boolean {
 }
 ```
 
-This fixes the immediate class of bug. **But** the larger duplication remains:
-the SQL string template that calls the SP, the variable declaration / SET
-pattern, the EXEC argument list assembly, the wrapper for record-change
-tracking, the result-table boilerplate — all of it is hand-rolled twice (once
-per dialect provider). This plan addresses **that**.
+This fixes the immediate class of bug. **But** the larger duplication
+remains: the SQL string template that calls the SP, the variable
+declaration / SET pattern, the EXEC argument list assembly, the wrapper
+for record-change tracking, the result-table boilerplate — all of it is
+hand-rolled twice. This plan addresses that.
 
-## Why dialect, not provider hooks
+## Why provider hooks, not SQLDialect overrides
 
-`SQLDialect` (`packages/SQLDialect/src/sqlDialect.ts`) is MJ's existing
-single-place-for-dialect-grammar abstraction. It already covers:
+`SQLDialect` is MJ's simple-grammar-primitives descriptor — identifier
+quoting, parameter syntax, type maps, conditional expressions,
+`BooleanLiteral`, `IIF`. Its 80+ methods are intentionally small,
+returning single SQL fragments. The save path has different shape:
 
-- Identifier quoting (`QuoteIdentifier`, `QuoteSchema`, `QuoteColumnAlias`,
-  `QuoteStringLiteral`)
-- Parameter syntax (`ParameterRef` → `@Name` vs `p_name`,
-  `ParameterPlaceholder` → `@p0` vs `$1`, `ParameterDefault`)
-- Type-related grammar (`BooleanLiteral`, `BooleanParameterType`,
-  `CastToText`, `CastToUUID`, `CastToBoundedString`, `EmptyUUIDLiteral`,
-  full per-platform type-name sets, `TypeMap`)
-- UUID handling (`NewUUID`, `UUIDPKDefault`)
-- Null coalescing (`IsNull`, `Coalesce`, `IsNullLiteral`)
-- Conditional expressions (`IIF`)
-- DDL grammar (CREATE TABLE, ADD/ALTER COLUMN, COMMENT ON, GRANT,
-  CreateOrReplace, CreateSchema, trigger DDL, index DDL)
-- Result-return patterns (`ReturnInsertedClause` → `OUTPUT INSERTED.x` vs
-  `RETURNING x`, `AutoIncrementPKExpression`, `ScopeIdentityExpression`,
-  `RowCountExpression`)
-- CTE and recursion (`RecursiveCTESyntax`, `AllowsOrderByInCTE`)
-- Schema introspection queries
-- Full-text search (`FullTextSearchPredicate`, `FullTextIndexDDL`)
-- Date arithmetic (`DateAddExpression`, `CurrentTimestampUTC`)
-- Procedural control (`ConditionalBlock`, `RaiseSignalSQL`)
-- Migration emission (`EscapeFlywayStringInterpolation`, `BatchSeparator`)
-- Crucially: **`ProcedureCallSyntax(schema, name, params)`** — already
-  abstract at `sqlDialect.ts:569`, already implemented by
-  `SQLServerDialect.ProcedureCallSyntax` (`sqlServerDialect.ts:370`) and
-  `PostgreSQLDialect.ProcedureCallSyntax` (`postgresqlDialect.ts:446`).
+- **Multi-statement SQL templates.** SS: `DECLARE @ResultTable + INSERT
+  INTO @ResultTable EXEC + SELECT * FROM @ResultTable + inline
+  spCreateRecordChange_Internal EXEC`. PG: `WITH save_result AS (...),
+  record_change AS (INSERT ... RETURNING) SELECT * FROM save_result`.
+  These are full save-flow templates, not grammar primitives.
+- **Provider-state coupling.** The composition needs `entity.Fields`,
+  `entity.PrimaryKey.KeyValuePairs`, the configured MJ core schema name,
+  the record-changes entity metadata. Putting it on `SQLDialect` forces
+  the dialect to either import core types (creates a dep cycle) or
+  declare structural shadows (the rev 3 smell).
+- **Different mental model for extenders.** `SQLDialect` is "how does
+  this dialect quote / format / cast / parameterize a primitive?"
+  Downstream contributors expect small methods returning short strings.
+  Save composition is "given this entity and these field values, build
+  the multi-statement transaction." Different concern, different shape.
 
-The save path is the major remaining area that bypasses this descriptor:
+What stays on `SQLDialect`: the two new methods are predicate-shaped
+and primitive-sized, matching the existing surface:
 
-- SQL Server hardcodes `` `EXEC [${entity.EntityInfo.SchemaName}].${spName} ${spParams.execParams}` `` inline at five sites
-  (`SQLServerDataProvider.ts:646, 785, 829, 1213, 1267, 2079`). Never calls
-  `ProcedureCallSyntax`.
-- PostgreSQL hand-builds `` `SELECT * FROM ${this._schemaName}.${pgDialect.QuoteIdentifier(fnName)}(${paramPlaceholders})` ``
-  inline at `PostgreSQLDataProvider.ts:644`. Also never calls
-  `ProcedureCallSyntax`.
+- `UseJsonArgShape(entityFieldCount, sprocType) → boolean` — same shape
+  as `BooleanLiteral`. Both CodeGen and runtime call it so they agree
+  on shape selection.
+- `CoerceSaveFieldValue(field, value, isUpdate) → { kind: 'use', value }
+  | { kind: 'skip' }` — pure per-field transform. Same shape as
+  `IIF` or `CastToText` — small function, simple return.
 
-The natural completion is to **grow `SQLDialect` to cover the rest of the
-save grammar** (parameter binding, value coercion, result-capture wrapper,
-record-change wrapper, JSON-arg variant) and let `GenericDatabaseProvider`
-host one concrete `BuildSaveSQL` that delegates every grammar decision to
-`this.Dialect`.
-
-This matches AN-BC's stated end state ("subclasses do small overrides,
-generic layer holds flow and logic") more cleanly than three new abstract
-methods on the data provider, because:
-
-1. **One override surface, not two.** Today, contributors who want to
-   extend MJ for a new dialect have a clear answer: subclass `SQLDialect`.
-   Three new abstract methods on `GenericDatabaseProvider` would create a
-   second extension surface alongside the existing one, with arbitrary
-   partition between them (why does `RenderSPParams` live on the provider
-   when `ProcedureCallSyntax` lives on the dialect?).
-2. **Adding MySQL becomes mechanical.** With the dialect-driven approach:
-   write `MySQLDialect extends SQLDialect`, register it via
-   `dialectFactory`, done. With abstract-methods-on-provider: write
-   *both* a `MySQLDialect` AND a `MySQLDataProvider` overriding the three
-   hooks, and keep the two aligned across every future grammar addition.
-3. **Data-provider subclasses shrink.** `SQLServerDataProvider` (2295
-   lines) and `PostgreSQLDataProvider` (1459 lines) are already too
-   large. The hook approach keeps them as-large or grows them. The
-   dialect approach removes save code from them entirely.
-
-## Current shape (post-`IsSPParameter`)
-
-```
-SQLDialect (abstract, 725 lines, 80+ methods)
-├── QuoteIdentifier, QuoteSchema, BooleanLiteral, ParameterRef, ParameterPlaceholder
-├── ProcedureCallSyntax — DEFINED but unused by the save path
-├── ReturnInsertedClause, ScopeIdentityExpression, AutoIncrementPKExpression
-├── TypeMap, MapDataType, type-name sets
-└── ... (full DDL, CTE, full-text-search, index, trigger grammars)
-
-GenericDatabaseProvider / DatabaseProviderBase
-├── Save() — high-level orchestration (validation, hooks, encryption, record-change, transaction)
-├── EncryptFieldValuesForSave() — shared
-├── BuildRecordChangePayload() — shared (dialect-agnostic diff + restore lineage)
-└── BuildRecordChangeSQL() — abstract (dialect renders the actual INSERT/EXEC)
-
-SQLServerDataProvider                          PostgreSQLDataProvider
-├── GenerateSaveSQL() — override               ├── GenerateSaveSQL() — override
-├── GetSaveSQLWithDetails() — hand-rolled      ├── (parallel impl, hand-rolled)
-├── generateSPParams() — ~250 lines            ├── getWritableFields() + parallel
-│   ├── per-field iteration                    │       SQL-template glue
-│   ├── inline value coercion                  │   ├── per-field iteration
-│   ├── DECLARE/SET/EXEC fragments             │   ├── inline value coercion
-│   └── _Clear companion handling              │   ├── $1, $2 binding (or JSON-arg)
-├── generateSetStatementValue()                │   └── inline SELECT FROM function()
-└── getAllEntityColumnsSQL()                   └── inline CTE for record-change wrap
-```
-
-The duplicated parts (iteration, value coercion, SQL-text assembly)
-bypass `SQLDialect` entirely.
+For AST-level T-SQL → PG conversion (migration files): that's SQLGlot's
+job, not SQLDialect's. The dialect roadmap and the migration-conversion
+toolchain are separate concerns.
 
 ## Proposed shape
 
 ```
-SQLDialect (gains 5 new save-grammar methods)
-├── (existing 80+ methods unchanged)
-├── CoerceSaveFieldValue(field, value, isUpdate)         — NEW: per-type value transform
-├── UseJsonArgShape(entity, sprocType)                   — NEW: moves from crudSprocFieldRules.ts
-├── RenderSaveCallBinding(entity, fieldValues, isUpdate) — NEW: dialect's binding emitter
-├── WrapSaveCallForResult(binding, entityInfo, spName)   — NEW: dialect's result-capture wrapper
-└── WrapSaveCallWithRecordChange(saveSQL, payload, ...)  — NEW: dialect's audit-log wrapper
+SQLDialect — UNCHANGED (no new methods)
 
-GenericDatabaseProvider (gains one concrete method, no new abstracts)
-└── GenerateSaveSQL(entity, isNew, user) — NEW concrete, overrides DatabaseProviderBase.GenerateSaveSQL
-    ├── collectSaveFieldValues()       — shared loop: IsSPParameter + PK-on-create + CoerceSaveFieldValue
-    ├── EncryptFieldValuesForSave()    — existing shared (between coercion and rendering — Risks §1)
-    ├── this.Dialect.RenderSaveCallBinding(...)
-    ├── this.Dialect.WrapSaveCallForResult(...)
-    └── this.Dialect.WrapSaveCallWithRecordChange(...)  — only if entity tracks changes
+GenericDatabaseProvider (gains 4 abstracts + 1 concrete orchestrator)
+├── GenerateSaveSQL(entity, isNew, user) — NEW concrete orchestrator
+│   ├── 1. Iterate fields, apply IsSPParameter, this.CoerceSaveFieldValue
+│   ├── 2. EncryptFieldValuesForSave (existing shared)
+│   ├── 3. this.RenderSaveCallBinding(...)         — abstract
+│   ├── 4. this.WrapSaveCallForResult(...)         — abstract
+│   └── 5. this.WrapSaveCallWithRecordChange(...)  — abstract, only if tracked
+├── CoerceSaveFieldValue       — abstract
+├── RenderSaveCallBinding      — abstract
+├── WrapSaveCallForResult      — abstract
+└── WrapSaveCallWithRecordChange — abstract
 
-SQLServerDataProvider                          PostgreSQLDataProvider
-├── (no save-related code)                     ├── (no save-related code)
-└── getDialect() returns SQLServerDialect       └── getDialect() returns PostgreSQLDialect
-                                                  (already true today)
+SQLServerDataProvider                       PostgreSQLDataProvider
+├── CoerceSaveFieldValue (concrete)         ├── CoerceSaveFieldValue (concrete)
+│   datetimeoffset → ISO; newid() skip      │   gen_random_uuid() → UUID; NOW() → null
+├── RenderSaveCallBinding (concrete)        ├── RenderSaveCallBinding (concrete)
+│   DECLARE/SET/EXEC binding                │   positional OR pg-json-arg binding
+├── WrapSaveCallForResult (concrete)        ├── WrapSaveCallForResult (concrete)
+│   DECLARE @ResultTable + INSERT EXEC      │   bare SELECT * FROM fn(...)
+└── WrapSaveCallWithRecordChange (concrete) └── WrapSaveCallWithRecordChange (concrete)
+    inline spCreateRecordChange EXEC            WITH save_result AS … CTE chain
 ```
 
-### Dialect surface extensions (signatures)
+### Hook signatures
 
 ```ts
-// On SQLDialect (abstract base) — five new methods
+// On GenericDatabaseProvider
 
-// Per-field value transform applied before encryption + rendering.
-// "skip" covers cases like "the field value is a function literal
-// (newid()/gen_random_uuid()) — let the DB default fire instead of
-// inserting the literal string." Both dialects need this distinction;
-// living on SQLDialect keeps the rule in one place per dialect rather
-// than scattered in coerceFieldValue + resolveFieldValue + inline blocks
-// in generateSPParams.
-abstract CoerceSaveFieldValue(
-    field: EntityFieldInfo,
-    value: unknown,
-    isUpdate: boolean,
-): { kind: 'use'; value: unknown } | { kind: 'skip' };
-
-// Predicate moved from crudSprocFieldRules.ts. Each dialect owns its
-// threshold (SQL Server: Infinity = never; PostgreSQL: 90 today). Used
-// by this dialect's RenderSaveCallBinding *and* by CodeGen's matching
-// emitter — same predicate, two consumers.
-abstract UseJsonArgShape(entity: EntityInfo, sprocType: CRUDSprocType): boolean;
-
-// Returns a dialect-specific binding shape. The provider treats the
-// result as opaque and hands it to WrapSaveCallForResult / WrapSaveCall
-// WithRecordChange below — those methods (also on the same dialect)
-// know how to pattern-match it.
-//
-// SQLServerDialect emits:
-//   { kind: 'mssql-declare-exec'; preambleSQL: string; callArgsSQL: string;
-//     simpleParamsSQL: string }
-// PostgreSQLDialect emits one of:
-//   { kind: 'pg-positional'; callArgsSQL: string; values: unknown[] }
-//   { kind: 'pg-json-arg';   callArgsSQL: string; values: [string] }
-abstract RenderSaveCallBinding(
+/**
+ * Renders the dialect-specific parameter binding for a save call.
+ * The result is treated as opaque by GenerateSaveSQL and is handed
+ * back to the same provider's WrapSaveCallForResult /
+ * WrapSaveCallWithRecordChange — each provider knows the binding shape
+ * it just produced.
+ */
+protected abstract RenderSaveCallBinding(
     entity: BaseEntity,
     fieldValues: Map<EntityFieldInfo, unknown>,
     isUpdate: boolean,
+    spName: string,
 ): SaveCallBinding;
 
-// Wraps the bare SP call with the dialect's result-capture pattern.
-//   SS: DECLARE @ResultTable + INSERT INTO @ResultTable EXEC + SELECT @ResultTable
-//   PG: SELECT * FROM fn(...) returns the row directly
-abstract WrapSaveCallForResult(
+/**
+ * Wraps the bare SP-call binding with the dialect's result-capture
+ * pattern. SQL Server emits `DECLARE @ResultTable + INSERT INTO
+ * @ResultTable EXEC`; PostgreSQL emits the bare `SELECT * FROM fn(...)`.
+ */
+protected abstract WrapSaveCallForResult(
     binding: SaveCallBinding,
-    entityInfo: EntityInfo,
+    entity: BaseEntity,
     spName: string,
 ): SaveSQLFragment;
 
-// Wraps with the dialect's record-change emission.
-//   SS: inlines spCreateRecordChange_Internal EXEC after the result table
-//   PG: WITH save_result AS (...), record_change AS (INSERT INTO ... RETURNING)
-abstract WrapSaveCallWithRecordChange(
+/**
+ * Wraps the result-captured save SQL with the dialect's record-change
+ * emission. Only called when ShouldTrackRecordChanges(entity) and
+ * BuildRecordChangePayload returned non-null.
+ */
+protected abstract WrapSaveCallWithRecordChange(
     saveSQL: SaveSQLFragment,
+    binding: SaveCallBinding,
     payload: RecordChangePayload,
-    entityInfo: EntityInfo,
+    entity: BaseEntity,
 ): SaveSQLFragment;
 ```
 
-Types:
+`SaveCallBinding` and `SaveSQLFragment` are type aliases declared on
+`GenericDatabaseProvider` (or a sibling types file in
+`@memberjunction/generic-database-provider`). They use real
+`EntityFieldInfo` / core types — no shadows, no `unknown` casts. Each
+provider defines its own binding variant; the union is closed in the
+generic-database-provider package.
 
 ```ts
-type SaveCallBinding =
-    | { kind: 'mssql-declare-exec'; preambleSQL: string; callArgsSQL: string; simpleParamsSQL: string }
+// In @memberjunction/generic-database-provider/saveTypes.ts
+export type SaveCallBinding =
+    | { kind: 'mssql-declare-exec'; preambleSQL: string; setSQL: string; callArgsSQL: string; simpleParamsSQL: string }
     | { kind: 'pg-positional';      callArgsSQL: string; values: unknown[] }
     | { kind: 'pg-json-arg';        callArgsSQL: string; values: [string] };
 
-type SaveSQLFragment = { sql: string; parameters?: unknown[] };
+export interface SaveSQLFragment {
+    sql: string;
+    parameters?: unknown[];
+}
 ```
 
-The `SaveCallBinding` discriminated union lives in `sql-dialect`. Each
-variant is "owned" by its dialect, but the union exists so the wrapper
-methods can pattern-match without `any`. Adding MySQL adds a new variant
-to this union.
+Adding a new dialect adds a new variant in `saveTypes.ts` and a new
+provider subclass implementing the three hooks. No `SQLDialect` changes
+(beyond the two predicates if the new dialect's behavior differs).
 
-### The concrete provider method
+### The concrete orchestrator
 
 ```ts
-// On GenericDatabaseProvider (concrete — overrides DatabaseProviderBase.GenerateSaveSQL,
-// no abstract calls of its own)
+// On GenericDatabaseProvider — concrete, overrides DatabaseProviderBase
+// abstract; provider subclasses do NOT override this.
 
 protected override async GenerateSaveSQL(
     entity: BaseEntity,
@@ -316,374 +223,242 @@ protected override async GenerateSaveSQL(
 ): Promise<SaveSQLResult> {
     const isUpdate = !isNew;
     const spName = this.GetCreateUpdateSPName(entity, isNew);
+    const dialect = this.getDialect();
 
-    // 1. Iterate fields, apply IsSPParameter, coerce values
+    // 1. Iterate fields. Apply IsSPParameter, coerce via dialect.
     const fieldValueMap = new Map<EntityFieldInfo, unknown>();
     for (const f of entity.EntityInfo.Fields) {
         if (!f.IsSPParameter(isUpdate)) continue;
 
-        // PK-on-create: in the SP signature, but only pass when caller
-        // provided an explicit value — otherwise let the DB default fire.
+        // PK-on-UPDATE: tail-appended by the provider's binding renderer.
+        if (isUpdate && f.IsPrimaryKey) continue;
+
+        // PK-on-CREATE: omit when no explicit value, let DB default fire.
         if (!isUpdate && f.IsPrimaryKey && !f.AutoIncrement) {
             const v = entity.Get(f.Name);
             if (v === null || v === undefined) continue;
         }
 
         const raw = entity.Get(f.Name);
-        const coerced = this.Dialect.CoerceSaveFieldValue(f, raw, isUpdate);
+        const coerced = dialect.CoerceSaveFieldValue(f, raw, isUpdate);
         if (coerced.kind === 'skip') continue;
         fieldValueMap.set(f, coerced.value);
     }
 
-    // 2. Encrypt — runs AFTER coercion and BEFORE rendering (Risks §1)
+    // 2. Encrypt — between coercion and rendering.
     await this.EncryptFieldValuesForSave(entity, fieldValueMap, user);
 
-    // 3. Render dialect-specific parameter binding
-    const binding = this.Dialect.RenderSaveCallBinding(entity, fieldValueMap, isUpdate);
+    // 3. Dispatch to provider-specific binding + wrap.
+    const binding = this.RenderSaveCallBinding(entity, fieldValueMap, isUpdate, spName);
+    let saveSQL = this.WrapSaveCallForResult(binding, entity, spName);
 
-    // 4. Wrap with the dialect's result-capture pattern
-    let saveSQL = this.Dialect.WrapSaveCallForResult(binding, entity.EntityInfo, spName);
-
-    // 5. Optionally wrap with record-change
-    if (this.ShouldTrackRecordChanges(entity.EntityInfo) && isUpdate) {
+    // 4. Optional record-change wrap.
+    let overlappingChangeData: { changesJSON: string; changesDescription: string } | undefined;
+    if (this.ShouldTrackRecordChanges(entity.EntityInfo)) {
         const newData = entity.GetAll(false);
-        const oldData = entity.GetAll(true);
+        const oldData = isUpdate ? entity.GetAll(true) : null;
+
+        // ISA propagation hook (SS-only consumer reads this from extraData)
+        if (isUpdate && oldData) {
+            const diff = this.DiffObjects(oldData, newData, entity.EntityInfo, "'");
+            if (diff && Object.keys(diff).length > 0) {
+                overlappingChangeData = {
+                    changesJSON: JSON.stringify(diff),
+                    changesDescription: this.CreateUserDescriptionOfChanges(diff),
+                };
+            }
+        }
+
         const payload = this.BuildRecordChangePayload(
-            newData, oldData, /* recordID resolved by wrapper */ '',
-            entity.EntityInfo, isNew ? 'Create' : 'Update', user,
-            entity.RestoreContext, "'",
+            newData, oldData, '', entity.EntityInfo,
+            isNew ? 'Create' : 'Update', user, entity.RestoreContext, "'",
         );
         if (payload) {
-            saveSQL = this.Dialect.WrapSaveCallWithRecordChange(saveSQL, payload, entity.EntityInfo);
+            saveSQL = this.WrapSaveCallWithRecordChange(saveSQL, binding, payload, entity);
         }
     }
 
-    return {
+    const result: SaveSQLResult = {
         fullSQL: saveSQL.sql,
-        simpleSQL: binding.callArgsSQL,  // for TransactionGroup / logging
-        parameters: saveSQL.parameters,
+        simpleSQL: this.deriveSimpleSQL(binding, entity, spName),
+        parameters: saveSQL.parameters ?? null,
     };
+    if (overlappingChangeData) result.extraData = { overlappingChangeData };
+    return result;
 }
 ```
-
-Provider subclasses (`SQLServerDataProvider`, `PostgreSQLDataProvider`)
-delete their `GenerateSaveSQL` overrides entirely — this concrete one
-wins by polymorphism.
 
 ## What collapses, what stays
 
 ### Collapses into `GenericDatabaseProvider`
-- The field iteration loop
-- The `IsSPParameter` filter application
-- The PK-on-create "pass only if value provided" rule
-- The encryption integration point (already shared, just hoisted to
-  the new method)
-- The complete top-level `GenerateSaveSQL` orchestration
-- The record-change wrap decision (which payload, when to wrap)
+- The field iteration loop (one place, calls `IsSPParameter`)
+- PK-on-create "skip when no value" rule (one place)
+- Encryption integration point (already shared, hoisted into the new method)
+- Record-change payload + diff computation
+- `overlappingChangeData` ISA propagation plumbing
+- Top-level orchestration
 
-### Moves onto `SQLDialect`
-- Value coercion per type (was scattered: SS's `generateSetStatementValue`
-  + inline blocks in `generateSPParams`; PG's `resolveFieldValue`).
-- Parameter binding emission (SS's DECLARE/SET/EXEC fragments + simpleParams
-  for back-compat; PG's positional `$N` and JSON-arg variants).
-- Result-capture wrapper (SS's `DECLARE @ResultTable + INSERT INTO
-  @ResultTable EXEC`; PG's bare `SELECT * FROM fn(...)`).
-- Record-change wrap (SS's inline EXEC after the result table; PG's CTE
-  with RETURNING).
-- JSON-arg shape predicate (currently a pure function in
-  `crudSprocFieldRules.ts` — moves to the dialect as instance method so
-  PG owns its threshold; SS returns false unconditionally).
+### Moves onto provider abstract hooks
+- Per-dialect parameter binding (SS DECLARE/SET/EXEC; PG positional + JSON-arg)
+- Per-dialect result-capture template
+- Per-dialect record-change wrap (SS inline EXEC; PG CTE)
 
-### Stays on the provider
-- Connection pool, query execution, transaction management.
-- `BuildRecordChangePayload` (already shared on `DatabaseProviderBase`).
-- `EncryptFieldValuesForSave` (already shared on `GenericDatabaseProvider`).
-- Post-save row processing.
-- TransactionGroup integration (the existing entry point `GetSaveSQL`
-  keeps its current signature — it just routes through the new
-  `GenerateSaveSQL` under the hood).
+### Stays on `SQLDialect`
+- `ProcedureCallSyntax`, `ParameterRef`, `BooleanLiteral`, all existing 80+ methods
+- New: `UseJsonArgShape`, `CoerceSaveFieldValue`
+
+### Stays on provider subclasses (unrelated paths)
+- Connection pool, query execution, transaction management
+- Delete-SQL composition (separate refactor — see follow-up plan)
+- Query / view rendering
+- Post-save row processing
 
 ## Scar tissue — recent fixes the new code must preserve
 
-The current save pipeline has been patched repeatedly over the past two
-months. Every one of these patches lives inside the code paths this
-refactor is rewriting, so each one needs an explicit home in the new
-shape. Reviewers should sanity-check that the corresponding test exists.
-
 | Commit | What it fixed | New home |
 |---|---|---|
-| `c136d41f03` | Narrowed `_Clear` companion rule to stay under PG's 100-argument hard limit | `PostgreSQLDialect.RenderSaveCallBinding` — `_Clear` emission is part of binding |
-| `5ff75b96ae` | **JSON-arg sproc shape for wide entities** (AIAgent, AIPromptRun): one `_args jsonb` parameter instead of N positional. Second binding mode on PG | `PostgreSQLDialect.UseJsonArgShape` + `RenderSaveCallBinding` branches on it to emit `{ kind: 'pg-json-arg', ... }`. Coercion rules for binary fields (base64 inside JSON) live in `CoerceSaveFieldValue` or in a JSON-arg-specific helper called by `RenderSaveCallBinding` |
-| `7b1d9b5673` | PG savepoint-wrap around TemplateContent param extraction so PG matches SS semantics under failure | `PostgreSQLDialect.WrapSaveCallForResult` — savepoint wrapper around the SELECT-FROM-function call |
-| `da2e347d72` | DROP-overload guard + named-arg `PERFORM` in `CREATE OR REPLACE FUNCTION` output | CodeGen-side, not this refactor. But `PostgreSQLDialect.RenderSaveCallBinding` must continue to emit named args (`p_id => $1`) so the overload guard works |
-| `387d46728b` + `003317fa08` | `IsComputed` flag added to `EntityField`; included in `IsSPParameter`. Both dialects must skip computed columns | `GenericDatabaseProvider.GenerateSaveSQL`'s iteration uses `IsSPParameter`, which already excludes `IsComputed`. Verify no parallel filter remains in either dialect |
-| `aabaff858f` | Disable self-join view for virtual `NameField` on SQL Server | Adjacent to `CoerceSaveFieldValue` — virtual NameField filtered before value lookup via `IsSPParameter` (already covers `IsVirtual`) |
-| `adc8da9ea1` | Align codegen↔runtime contract + bool/INTEGER SQL coercions on PG | `PostgreSQLDialect.CoerceSaveFieldValue` — bool→int conversion lives here |
-
-If any of these are not reproduced in the new code, you will reintroduce
-the exact regression the commit fixed. Treat the table as a literal test
-checklist.
+| `c136d41f03` | PG `_Clear` companion narrowed to stay under 100-arg limit | `PostgreSQLDataProvider.RenderSaveCallBinding` |
+| `5ff75b96ae` | JSON-arg sproc shape for wide PG entities | `PostgreSQLDataProvider.RenderSaveCallBinding` branches on `SQLDialect.UseJsonArgShape` |
+| `7b1d9b5673` | PG savepoint wrap around TemplateContent param extraction | `PostgreSQLDataProvider.WrapSaveCallForResult` |
+| `da2e347d72` | DROP-overload guard + named-arg `PERFORM` in CodeGen output | CodeGen-side, not this refactor; PG provider must continue emitting named args |
+| `387d46728b` + `003317fa08` | `IsComputed` flag — both dialects must skip computed columns | `GenericDatabaseProvider.GenerateSaveSQL` iteration uses `IsSPParameter` (already covers `IsComputed`) |
+| `aabaff858f` | Disable self-join view for virtual `NameField` on SQL Server | Covered by `IsSPParameter` (already excludes `IsVirtual`) |
+| `adc8da9ea1` | bool/INTEGER coercions on PG | `PostgreSQLDataProvider.CoerceSaveFieldValue` impl on SQLDialect, called from binding renderer |
 
 ## Risks & migration concerns
 
-1. **Encryption ordering.** `EncryptFieldValuesForSave` mutates the
-   `fieldValueMap` after population but before SQL rendering. The new
-   flow preserves this — same call site, just moved up into the concrete
-   `GenerateSaveSQL`. Coercion runs *before* encryption; rendering runs
-   *after* encryption. A unit test that asserts the mutation order is
-   cheap insurance.
+1. **Encryption ordering.** `EncryptFieldValuesForSave` runs *after*
+   coercion and *before* rendering. Preserved — same call site, moved
+   into `GenerateSaveSQL`. A unit test asserting the order is cheap
+   insurance.
 
-2. **Variable name uniqueness in batched saves.** SQL Server's
+2. **Variable name uniqueness in batched saves.**
    `SQLServerTransactionGroup` batches multiple saves into one SQL
-   string, so each save's variables must be uniquely named to avoid
-   collisions — that's the `_<uuid-suffix>` we generate today.
-   `SQLServerDialect.RenderSaveCallBinding` owns the naming strategy.
-   PG uses positional parameters and sidesteps this entirely.
+   string; per-save variables must be uniquely named to avoid
+   collisions. `SQLServerDataProvider.RenderSaveCallBinding` owns the
+   uuid-suffix strategy. PG uses positional `$N` and sidesteps this.
 
-3. **`simpleParams` back-compat.** Some external callers (manifest-driven
-   tooling, the GraphQL test harness) consume the old-style
-   `EXEC sp @x='value'` one-line form. `SQLServerDialect.RenderSaveCallBinding`
-   returns it as `simpleParamsSQL` on the `mssql-declare-exec` binding
-   variant. Existing consumers keep working unchanged.
+3. **`simpleSQL` semantics.** SS produces a self-contained single-line
+   `EXEC [s].sp @x=N'v', ...`. PG produces `SELECT * FROM s."fn"(p_id
+   => $1, ...)` — references positional placeholders, not
+   self-contained. `SaveSQLResult.simpleSQL` JSDoc must explicitly call
+   out the per-dialect semantics so downstream consumers (manifest
+   tooling, GraphQL test harness) don't assume MSSQL semantics on PG.
 
-4. **Record-change inlining vs separate-statement.** SQL Server inlines
-   the record-change `EXEC` into the same SQL batch as the entity save
-   (one round trip). PG wraps in a CTE with RETURNING. Both styles flow
-   through `WrapSaveCallWithRecordChange` — same input, dialect-specific
-   output. `BuildRecordChangeSQL` (the standalone non-save path) stays
-   abstract and is unchanged by this refactor.
+4. **`getAllEntityColumnsSQL`** stays on `SQLServerDataProvider` because
+   the delete path uses it. The save path uses a new private helper on
+   the same provider (post-rev-4) — same implementation, but the delete
+   path's continued reliance on the old method is intentional out-of-scope.
+   A follow-up plan covers delete unification.
 
-5. **Snapshot tests.** Both `SQLServerDataProvider` and
-   `PostgreSQLDataProvider` have unit tests asserting against generated
-   SQL strings. Behavior is preserved but the exact line breaks /
-   whitespace may shift. Expect to re-bless ~10-20 snapshots. Each
-   snapshot diff should be a no-op semantically; that's part of the PR
-   review.
-
-6. **Downstream subclass extension surface.** Previously the concern was
-   that anyone subclassing `SQLServerDataProvider` to override
-   `generateSPParams` or `GetSaveSQLWithDetails` would break. Under the
-   dialect approach this concern shrinks: those provider methods become
-   private to `GenericDatabaseProvider`, but the override surface MJ
-   *publicly* documents — `SQLDialect` subclasses — is the natural place
-   for downstream customization. If a downstream consumer was overriding
-   the private provider methods, that was already off-contract; we can
-   add a one-release deprecation note rather than a shim.
-
-7. **TransactionGroup interaction.** `SQLServerTransactionGroup` calls
-   `GetSaveSQL` to regenerate per-item SQL when variables get rebound
-   from earlier items in the same batch. `GetSaveSQL` becomes a thin
-   wrapper that calls into the new concrete `GenerateSaveSQL`. Same
-   inputs, same `{ fullSQL, simpleSQL, parameters }` outputs.
-
-8. **PG JSON-arg shape for wide entities.** PG has a hard 100-argument
-   limit on functions, so wide entities (AIAgent, AIPromptRun, anything
-   with ≥90 fields after filtering) use a single `_args jsonb` parameter
-   instead of positional bindings (commit `5ff75b96ae`). This is NOT a
-   minor variant — different value-serialization rules (JSON-encoded,
-   not type-cast), different SP signature, different binary-field
-   handling (base64 inside JSON). Under the dialect approach it's a
-   second variant of the `SaveCallBinding` discriminated union:
-   ```ts
-   type SaveCallBinding =
-       | { kind: 'pg-positional'; callArgsSQL: string; values: unknown[] }
-       | { kind: 'pg-json-arg';   callArgsSQL: string; values: [string] }
-       | { kind: 'mssql-declare-exec'; ... };
-   ```
-   `PostgreSQLDialect.RenderSaveCallBinding` picks based on
-   `UseJsonArgShape(entity, sprocType)`. `WrapSaveCallForResult` and
-   `WrapSaveCallWithRecordChange` pattern-match the variant.
-   **Do not start the refactor without confirming the threshold and
-   coercion rules with whoever owns the JSON-arg work** — getting these
-   wrong silently breaks every wide entity on PG.
-
-9. **Dialect-shape leakage.** `SaveCallBinding` is a discriminated union
-   declared in `sql-dialect`. Each variant is "owned" by one dialect,
-   but the type lives in the shared package so wrapper methods can
-   pattern-match without `any`. This is a deliberate one-way coupling:
-   `sql-dialect` knows the set of variants (closed union); individual
-   dialect classes only produce/consume their own variant. Adding MySQL
-   means adding `mysql-positional` (or whatever) to this union — touches
-   the shared file once, no provider-side changes.
+5. **Snapshot tests.** Behavior is preserved; whitespace / line-break
+   formatting may shift. Re-bless ~10-20 snapshots, each diff explicitly
+   justified in the PR description.
 
 ## Sequencing — ship in one PR, gated by a parity harness
 
-The blast radius of this refactor is "every save in MJ" across both
-dialects, regardless of whether we ship in one PR or five. Phasing
-doesn't reduce the risk; it just smears it across multiple rebases
-against `next`, multiple rounds of snapshot re-blessing, and multiple
-context-loads for reviewers.
+### Step 0 — Save-SQL parity harness
 
-**The thing that actually de-risks this is a SQL parity harness, not
-phasing.** Build the harness first; ship the refactor as one PR; let
-the harness be the safety net.
-
-### What we get for free from pg-migrate (don't rebuild this)
-
-The existing pg-migrate toolchain already covers a slice of the parity
-story at the migration-file layer:
-
-- `generateParityReport(tsqlDir, pgDir)` from
-  `@memberjunction/sql-converter` — **filename-level** coverage: every
-  T-SQL migration in `migrations/v5/` has a `.pg.sql` counterpart in
-  `migrations-pg/v5/`. Emits gaps + coverage %.
-- `.github/workflows/pg-migrations.yml` — applies both dialects'
-  migrations to fresh DBs, runs the two-pass
-  `migrate → codegen → migrate` cycle, verifies schema counts.
-  End-to-end SP-signature agreement across dialects.
-- `mj migrate convert` — rule-based T-SQL → PG converter for SP bodies.
-
-**Cross-dialect SP-signature parity is already covered by this CI.**
-Don't duplicate it.
-
-**What pg-migrate does NOT cover for this refactor:** it compares SP
-*definitions* in migration files. The bug class we just patched — and
-the code this refactor is rewriting — lives one layer up, at the
-**runtime caller**: what `generateSPParams` / `getWritableFields` emit
-at save time. pg-migrate has no visibility into runtime-emitted SQL.
-
-So the parity check we still need is narrower: **per-dialect
-before/after equivalence for the rewrite**, not a fresh cross-dialect
-comparison.
-
-### Step 0 — Save-SQL snapshot harness (per-dialect before/after)
-
-A test helper that, for every entity in the fixture corpus and for each
-`{create, update} × {SQL Server, PG}`:
-
-1. Constructs a representative field-value payload (covering nulls,
-   default-eligible fields, encrypted fields, function-literal PKs,
-   wide entities that trigger PG's JSON-arg path).
-2. Calls the **current** `GenerateSaveSQL` and captures the exact
-   emitted SQL string (plus the `simpleSQL` and `parameters`).
-3. Normalizes the captured SQL — strips per-save uuid variable
-   suffixes, whitespace, line breaks — and writes it as a golden file.
-4. On subsequent runs, regenerates and diffs against the golden.
+For every entity in the fixture corpus, for `{create, update} × {SS, PG}`:
+1. Construct representative field-value payloads (nulls, default-eligible
+   fields, encrypted fields, function-literal PKs, wide PG entities for
+   JSON-arg path).
+2. Call current `GenerateSaveSQL`, capture emitted SQL string +
+   `simpleSQL` + parameters.
+3. Normalize (strip uuid suffixes, whitespace), write as golden files.
+4. After the refactor, regenerate and diff against goldens. Zero
+   unjustified diffs.
 
 Lands on `next` first. No code-under-test changes. The harness is the
-checkpoint; the goldens become the contract for the rewrite.
+contract for the rewrite.
 
-Cross-dialect SP-signature agreement remains the existing pg-migrate
-CI's job — this harness only proves "the SAME dialect emits the SAME
-runtime SQL before and after the refactor."
+### Step 1 — The refactor (one PR)
 
-### Step 1 (the actual refactor — one PR)
-
-Implements all of the architecture sections above at once:
-
-- Adds 5 new abstract methods to `SQLDialect`:
-  `CoerceSaveFieldValue`, `UseJsonArgShape`, `RenderSaveCallBinding`,
-  `WrapSaveCallForResult`, `WrapSaveCallWithRecordChange`.
-- Implements them in `SQLServerDialect` (DECLARE/SET/EXEC + result-table
-  pattern + inline record-change EXEC).
-- Implements them in `PostgreSQLDialect` (positional **and** JSON-arg
-  binding variants + bare SELECT FROM fn() result + CTE record-change
-  wrap).
-- Declares the `SaveCallBinding` discriminated union in `sql-dialect`.
-- Adds the concrete `GenerateSaveSQL` to `GenericDatabaseProvider`.
-- Deletes `generateSPParams`, `generateSetStatementValue`,
-  `getAllEntityColumnsSQL`, `GetSaveSQLWithDetails`, and the
-  `GenerateSaveSQL` override from `SQLServerDataProvider`.
-- Deletes `getWritableFields`, `buildCRUDParams`, `buildJsonArgCRUDParams`,
-  `resolveFieldValue`, and the `GenerateSaveSQL` override from
-  `PostgreSQLDataProvider`.
-- Migrates `crudSprocFieldRules.ts`'s `useJsonArgShape` to be the
-  dispatching impl of `SQLDialect.UseJsonArgShape` (the pure function
-  stays for CodeGen's separate consumption path).
-- Re-runs the parity harness — every diff is either zero or explicitly
-  justified in the PR description.
-
-### Step 2 (follow-up, optional)
-
-Drop the one-release deprecation note for any downstream consumer of
-the deleted private provider methods. Filed as a separate issue.
+- Two new methods on `SQLDialect`: `UseJsonArgShape`,
+  `CoerceSaveFieldValue`. Implemented by `SQLServerDialect` and
+  `PostgreSQLDialect`.
+- Three new abstract methods on `GenericDatabaseProvider`:
+  `RenderSaveCallBinding`, `WrapSaveCallForResult`,
+  `WrapSaveCallWithRecordChange`. Concrete in `SQLServerDataProvider`
+  and `PostgreSQLDataProvider`.
+- `SaveCallBinding` discriminated union + `SaveSQLFragment` declared in
+  `@memberjunction/generic-database-provider`.
+- Concrete `GenerateSaveSQL` on `GenericDatabaseProvider`. Override
+  removed from both providers.
+- Deletions from `SQLServerDataProvider`: `GetSaveSQLWithDetails`,
+  `generateSPParams`, `generateSetStatementValue`,
+  `generateSingleSPParam`, `packageSPParam`.
+- Deletions from `PostgreSQLDataProvider`: `buildCRUDParams`,
+  `buildJsonArgCRUDParams`, `resolveFieldValue`, `getWritableFields`
+  (`isBinaryField`, `encodeBinaryToBase64` stay — used by `WrapSaveCallForResult`).
+- Parity harness shows zero unjustified diffs.
 
 ## Out of scope
 
-- **Cross-dialect feature parity.** This refactor doesn't try to make
-  SQL Server and PG behave identically — only to share the orchestration
-  through a single dialect descriptor.
-- **`spDelete` consolidation.** Same pattern likely applies and the
-  dialect approach extends naturally (add `RenderDeleteCallBinding`,
-  `WrapDeleteCallForResult`), but it's its own refactor.
-- **Encryption refactor.** `EncryptFieldValuesForSave` is already shared
-  and works; left as-is.
-- **TransactionGroup overhaul.** PG and SQL Server have separate
-  transaction group classes today; that's a parallel concern, not
-  bundled here.
-- **CodeGen-side dialect-driven emission.** CodeGen has its own dialect
-  classes (`SQLServerCodeGenProvider`, `PostgreSQLCodeGenProvider`) that
-  also emit dialect-specific SQL. Unifying CodeGen through `SQLDialect`
-  is the next obvious extension, but separate from this PR.
+- **`spDelete` consolidation.** Same template-method pattern applies;
+  separate refactor.
+- **Cross-dialect feature parity.** This refactor doesn't try to make SS
+  and PG behave identically — only to share orchestration.
+- **CodeGen-side dialect-driven emission.** CodeGen's separate
+  `SQLServerCodeGenProvider` / `PostgreSQLCodeGenProvider` hierarchy is
+  a separate concern.
+- **Encryption refactor.** Already shared, works.
+- **TransactionGroup overhaul.** Separate refactor.
+- **Migration-file T-SQL → PG conversion.** SQLGlot's job (via
+  `@memberjunction/sqlglot-ts`), not `SQLDialect`'s.
 
 ## Acceptance criteria
 
-### Behavior-preservation (the decisive signal)
+### Behavior-preservation
+- Parity harness shows zero unjustified diffs across the full fixture
+  corpus on both dialects, for both create and update.
 
-- **Parity harness** (Step 0) shows **zero unjustified diffs** across
-  the full fixture corpus on both dialects, for both create and update.
-  Any diff is called out in the PR description with a one-line rationale
-  ("whitespace normalization", "deterministic ordering of SET statements
-  after Map→array conversion", etc.). Reviewer sign-off is on the diff
-  list, not on the code in isolation.
+### Round-trip integration tests
+Run against real SS and real PG.
 
-### Round-trip integration tests (the "SQL still actually works" signal)
-
-Run against a real SQL Server (docker workbench) AND a real PG instance.
-The parity harness only proves the string is the same; these prove the
-string still does the right thing.
-
-- [ ] **Regression: virtual field with mis-set `AllowUpdateAPI=1`**
-  saves cleanly. (The original bug class.)
-- [ ] **Value-coercion edges**: `datetimeoffset` with non-null value;
-  `uniqueidentifier` set to literal `"newid()"`; bool→INTEGER on PG;
-  bytea/binary field through both positional and JSON-arg paths.
-- [ ] **Encrypted field**: save with a field marked for encryption,
-  verify the stored value is the encrypted form (encryption must run
-  AFTER coercion and BEFORE rendering — Risks §1).
-- [ ] **`SQLServerTransactionGroup` batch save**: 5+ saves in one batch,
-  verify no `@variable` name collisions and all rows land.
-- [ ] **Wide PG entity (AIAgent or AIPromptRun)**: must hit the JSON-arg
-  path, not positional. Verify the persisted row matches the input
-  field-by-field (Risks §8).
-- [ ] **PG `_Clear` companion**: entity that triggers `_Clear` columns
-  on PG, verify the total argument count stays under 100 (commit
-  `c136d41f03`).
-- [ ] **PK-on-create with value provided** vs **PK-on-create with
-  function literal `"newid()"`**: both code paths in the iteration loop,
-  verify the first uses the user-supplied UUID and the second lets the
-  DB default fire.
-- [ ] **Record-change row**: save with record-change tracking enabled on
-  both dialects (inlined on SQL Server, CTE on PG).
-- [ ] **`IsComputed` field**: entity with a computed column saves
-  successfully and the computed column is read back correctly.
-- [ ] **The original repro**: a fresh agent run that produces an
-  artifact payload completes with the artifact + version + junction all
-  persisted.
+- [ ] **Regression: virtual field with mis-set `AllowUpdateAPI=1`** saves cleanly.
+- [ ] **Value-coercion edges**: `datetimeoffset` non-null; `uniqueidentifier` set to `"newid()"`; bool→INTEGER on PG; bytea through positional and JSON-arg paths.
+- [ ] **Encrypted field**: encryption runs after coercion, before rendering.
+- [ ] **`SQLServerTransactionGroup` batch save**: 5+ saves, no variable name collisions.
+- [ ] **Wide PG entity (AIAgent or AIPromptRun)**: must hit JSON-arg path.
+- [ ] **PG `_Clear` companion**: argument count stays under 100.
+- [ ] **PK-on-create with explicit value vs function literal**: both paths.
+- [ ] **Record-change**: SS inlined, PG CTE.
+- [ ] **`IsComputed` field**: round-trip succeeds.
+- [ ] **The original repro**: agent run that produces artifact + version + junction.
 
 ### Code-quality bars
-
 - All existing unit tests pass.
-- New unit tests for each of the 5 new `SQLDialect` methods, per
-  dialect (10 test groups), exercising the relevant paths in isolation
-  against fixture data. The tests live alongside the existing
-  `sqlDialect`-package tests, not inside the data-provider packages —
-  this is a `sql-dialect` extension, not a provider-package change.
-- No new `any` types introduced. TS `strict` remains clean.
-- `SQLServerDataProvider` line count drops by ~300 lines.
-  `PostgreSQLDataProvider` line count drops by ~150 lines. Net
-  generic-layer / dialect line count rises by ~200 lines (one concrete
-  method + 10 dialect-method implementations).
-- Microbenchmark: save throughput on a 50-field test entity (1000
-  rows, both dialects) is within ±5% of the pre-refactor baseline.
-  Map iteration allocates differently than the parallel-array
-  approach; this check catches an accidental N² or hot-path
-  allocation regression.
+- New unit tests for `UseJsonArgShape` + `CoerceSaveFieldValue` per
+  dialect (4 test groups) in `SQLDialect`.
+- New unit tests for `RenderSaveCallBinding` + `WrapSaveCallForResult`
+  + `WrapSaveCallWithRecordChange` per provider (6 test groups) in the
+  respective provider packages.
+- No new `any` types. `unknown` only at boundaries; narrowed within.
+- No structural shadow types in `sql-dialect`.
+- `SQLServerDataProvider` line count drops by ~400 lines.
+  `PostgreSQLDataProvider` drops by ~200 lines.
+- `GenericDatabaseProvider` grows by ~150 lines (the concrete orchestrator
+  + helper).
 
-### Out of scope for this PR (filed as separate issues)
-
-- `spDelete` consolidation (apply the same dialect-method pattern).
-- Cross-dialect feature parity (e.g. unifying `OUTPUT INTO @ResultTable`
-  with `RETURNING` semantics).
-- TransactionGroup overhaul.
+### Out of scope for this PR (separate plans)
+- `spDelete` consolidation.
 - CodeGen-side dialect-driven emission.
+- `useJsonArgShape` predicate de-duplication (3 copies after this PR).
+- Metadata-primitives package extraction.
+
+## Lessons from rev 3 (preserved here for the next refactor)
+
+The rev 3 prototype (commit `4c5c56b`, reset before push) absorbed
+save-call composition into `SQLDialect` via five new methods. Reviewer
+feedback (`SQLDialect is intended to stay simple; provider-specific
+stuff in subclasses; SQLGlot owns AST-level conversion`) flagged this
+as overreach. The strongest tell was the seven structural shadow types
+that had to be added to `sql-dialect` to avoid a dep cycle with
+`@memberjunction/core` — they existed *because* the logic was in the
+wrong place.
+
+Rule of thumb for future dialect refactors: if you have to add
+shadow types to a package to make the refactor compile, the refactor
+is probably putting logic on the wrong side of a dep boundary.
+Step back and put the logic where it can see the real types.

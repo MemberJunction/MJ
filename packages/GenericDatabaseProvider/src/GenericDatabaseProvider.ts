@@ -75,6 +75,8 @@ import { SQLDialect } from '@memberjunction/sql-dialect';
 // QueryCompositionEngine is now owned by RenderPipeline
 import { RenderPipeline } from './renderPipeline.js';
 import { CRUDSprocType, useJsonArgShape } from './crudSprocFieldRules.js';
+import { SaveCoercedValue, SaveCallBinding, SaveSQLFragment } from './saveTypes.js';
+import type { RecordChangePayload } from '@memberjunction/core';
 
 import {
     MJEntityAIActionEntity,
@@ -937,6 +939,185 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
      */
     public UseJsonArgShape(entity: EntityInfo, sprocType: CRUDSprocType): boolean {
         return useJsonArgShape(entity, sprocType, this.ProcedureParamLimit);
+    }
+
+    /**************************************************************************/
+    // GenerateSaveSQL — Concrete Dialect-Driven Save Builder
+    /**************************************************************************/
+
+    /**
+     * Per-field value transform applied before encryption + rendering. Each
+     * provider owns its type-coercion rules:
+     *
+     * - SQL Server: `datetimeoffset → ISO string`; non-PK `uniqueidentifier`
+     *   with `()` function-literal → `skip` (let DB default fire).
+     * - PostgreSQL: `gen_random_uuid()`/`uuid_generate_v4()` → fresh UUID;
+     *   `NOW()`/`CURRENT_TIMESTAMP` → `null` (let DB default fire); bool /
+     *   binary / Date pass-throughs handled here.
+     *
+     * Returns `{ kind: 'use', value }` to bind the (possibly transformed)
+     * value, or `{ kind: 'skip' }` to omit the field entirely.
+     *
+     * Runs in `GenerateSaveSQL` *before* `EncryptFieldValuesForSave` and
+     * *before* `RenderSaveCallBinding`.
+     */
+    protected abstract CoerceSaveFieldValue(
+        field: EntityFieldInfo,
+        value: unknown,
+        isUpdate: boolean,
+    ): SaveCoercedValue;
+
+    /**
+     * Renders the dialect-specific parameter binding for a save call.
+     * Returns a discriminated `SaveCallBinding` the orchestrator treats as
+     * opaque — the same provider's `WrapSaveCallForResult` /
+     * `WrapSaveCallWithRecordChange` pattern-match the variant.
+     *
+     * `fieldValues` is the post-coercion, post-encryption map from
+     * `GenerateSaveSQL`. Iteration order matters for PostgreSQL positional
+     * binding — Map iteration follows insertion order, which the
+     * orchestrator preserves.
+     */
+    protected abstract RenderSaveCallBinding(
+        entity: BaseEntity,
+        fieldValues: Map<EntityFieldInfo, unknown>,
+        isUpdate: boolean,
+        spName: string,
+    ): SaveCallBinding;
+
+    /**
+     * Wraps the bare SP-call binding with the dialect's result-capture
+     * pattern. SQL Server emits `DECLARE @ResultTable + INSERT INTO @ResultTable EXEC + SELECT * FROM @ResultTable`;
+     * PostgreSQL emits the bare `SELECT * FROM schema."fn"(...)`.
+     */
+    protected abstract WrapSaveCallForResult(
+        binding: SaveCallBinding,
+        entity: BaseEntity,
+        spName: string,
+    ): SaveSQLFragment;
+
+    /**
+     * Wraps an already-result-captured save SQL with the dialect's
+     * record-change emission. SQL Server inlines `EXEC spCreateRecordChange_Internal`
+     * after the result table; PostgreSQL emits a CTE chain with
+     * `INSERT INTO "RecordChange" ... RETURNING`.
+     *
+     * Orchestrator only calls this when `ShouldTrackRecordChanges` is true
+     * and `BuildRecordChangePayload` returned a non-null payload.
+     */
+    protected abstract WrapSaveCallWithRecordChange(
+        saveSQL: SaveSQLFragment,
+        binding: SaveCallBinding,
+        payload: RecordChangePayload,
+        entity: BaseEntity,
+    ): SaveSQLFragment;
+
+    /**
+     * Concrete implementation of the abstract save-SQL builder defined on
+     * `DatabaseProviderBase`. Iterates fields via the single `IsSPParameter`
+     * predicate, applies provider-specific value coercion, encrypts, then
+     * delegates parameter binding, result-capture wrapping, and record-change
+     * wrapping to abstract hooks the provider subclass implements.
+     *
+     * See `plans/sp-save-builder-generic-layer-refactor.md` (rev 4) for
+     * the design and the rev-3 lesson that motivated this shape.
+     */
+    protected override async GenerateSaveSQL(
+        entity: BaseEntity,
+        isNew: boolean,
+        user: UserInfo,
+    ): Promise<SaveSQLResult> {
+        const isUpdate = !isNew;
+        const spName = this.GetCreateUpdateSPName(entity, isNew);
+
+        // 1. Iterate fields, apply IsSPParameter + PK rules, coerce values.
+        const fieldValueMap = new Map<EntityFieldInfo, unknown>();
+        for (const f of entity.EntityInfo.Fields) {
+            if (!f.IsSPParameter(isUpdate)) continue;
+
+            // PK-on-UPDATE: SP signature includes the PK, but the provider's
+            // binding renderer tail-appends it from `entity.PrimaryKey.KeyValuePairs`
+            // to avoid duplicate DECLARE/SET. Skip here.
+            if (isUpdate && f.IsPrimaryKey) continue;
+
+            // PK-on-CREATE with no explicit value: omit so the SP default fires.
+            const isPKOnCreate = !isUpdate && f.IsPrimaryKey && !f.AutoIncrement;
+            if (isPKOnCreate) {
+                const v = entity.Get(f.Name);
+                if (v === null || v === undefined) continue;
+            }
+
+            // Read with ActiveStatusAssertions temporarily disabled — matches
+            // the prior SS path which silenced warnings for this lookup.
+            const theField = entity.Fields.find(
+                (field) => field.Name.trim().toLowerCase() === f.Name.trim().toLowerCase(),
+            );
+            const tempStatus = theField?.ActiveStatusAssertions;
+            if (theField) theField.ActiveStatusAssertions = false;
+            const rawValue = theField?.Value;
+            if (theField && tempStatus !== undefined) theField.ActiveStatusAssertions = tempStatus;
+
+            const coerced = this.CoerceSaveFieldValue(f, rawValue, isUpdate);
+            if (coerced.kind === 'skip') continue;
+            fieldValueMap.set(f, coerced.value);
+        }
+
+        // 2. Encrypt — between coercion and rendering, mutates the map in place.
+        await this.EncryptFieldValuesForSave(entity, fieldValueMap, user);
+
+        // 3. Render the provider-specific binding.
+        const binding = this.RenderSaveCallBinding(entity, fieldValueMap, isUpdate, spName);
+
+        // 4. Wrap with result capture. This is the "no-record-change" save
+        //    shape; we also keep it as simpleSQL so consumers (e.g.
+        //    DatabaseProviderBase's `simpleSQLFallback` flow) have a
+        //    record-change-free form to fall back to.
+        const baseSaveSQL = this.WrapSaveCallForResult(binding, entity, spName);
+        let saveSQL = baseSaveSQL;
+        const simpleSQL = baseSaveSQL.sql;
+
+        // 5. Optionally wrap with record-change emission.
+        let overlappingChangeData: { changesJSON: string; changesDescription: string } | undefined;
+        if (this.ShouldTrackRecordChanges(entity.EntityInfo)) {
+            const newData = entity.GetAll(false);
+            const oldData = isUpdate ? entity.GetAll(true) : null;
+
+            // ISA propagation hook: capture the diff for SS subtype propagation.
+            // Returned via `extraData` so the SS subclass can consume it without re-diffing.
+            if (isUpdate && oldData) {
+                const diffChanges = this.DiffObjects(oldData, newData, entity.EntityInfo, "'");
+                if (diffChanges && Object.keys(diffChanges).length > 0) {
+                    overlappingChangeData = {
+                        changesJSON: JSON.stringify(diffChanges),
+                        changesDescription: this.CreateUserDescriptionOfChanges(diffChanges),
+                    };
+                }
+            }
+
+            const payload = this.BuildRecordChangePayload(
+                newData,
+                oldData,
+                '',
+                entity.EntityInfo,
+                isNew ? 'Create' : 'Update',
+                user,
+                entity.RestoreContext,
+                "'",
+            );
+            if (payload) {
+                saveSQL = this.WrapSaveCallWithRecordChange(saveSQL, binding, payload, entity);
+            }
+        }
+
+        const result: SaveSQLResult = {
+            fullSQL: saveSQL.sql,
+            simpleSQL,
+            parameters: saveSQL.parameters ?? null,
+        };
+        if (overlappingChangeData) {
+            (result as unknown as { extraData: Record<string, unknown> }).extraData = { overlappingChangeData };
+        }
+        return result;
     }
 
     /**
