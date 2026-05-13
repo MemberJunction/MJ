@@ -2197,7 +2197,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }
         }
 
-        return maxDate ? maxDate.toISOString() : new Date().toISOString();
+        // Return empty string for empty/timestamp-less results instead of current server time.
+        // Using current time would make empty result sets perpetually "stale" — each smart-cache-check
+        // would see a different timestamp and force an unnecessary DB refresh.
+        return maxDate ? maxDate.toISOString() : '';
     }
 
     /**
