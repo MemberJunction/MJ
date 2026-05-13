@@ -1,0 +1,31 @@
+{
+  "entity": "MJ: Vector Indexes",
+  "filePattern": "**/.*.json",
+  "defaults": {},
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".vector-indexes.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [],
+    "excludeFields": [],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "",
+    "externalizeFields": [],
+    "ignoreNullFields": true,
+    "ignoreVirtualFields": true,
+    "lookupFields": {
+      "VectorDatabaseID": {
+        "entity": "MJ: Vector Databases",
+        "field": "Name"
+      },
+      "EmbeddingModelID": {
+        "entity": "MJ: AI Models",
+        "field": "Name"
+      }
+    },
+    "relatedEntities": {}
+  }
+}

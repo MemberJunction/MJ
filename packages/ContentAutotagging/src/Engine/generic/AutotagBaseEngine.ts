@@ -287,31 +287,87 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         }
     }
 
-    /** Update embedding status for a batch of content items */
+    /**
+     * Update embedding status for a batch of content items.
+     *
+     * Status updates are pure internal bookkeeping — they don't affect the
+     * vectors themselves or downstream consumers. They also have to be fast:
+     * 10K-item runs spend ~16 minutes per phase if we round-trip BaseEntity.Save()
+     * for every row sequentially. To keep both invariants — fast AND robust to
+     * IS-A child entities that cause BaseEntity.Save() to silently abort
+     * (LatestResult left null when the loaded entity got polluted by child-view
+     * columns the parent's spUpdate doesn't accept) — we issue a single bulk
+     * UPDATE against __mj.ContentItem directly through the provider's
+     * ExecuteSQL path. The in-memory entity objects are kept in sync with
+     * the new status so callers reading from them still see the right value.
+     *
+     * If the provider doesn't expose ExecuteSQL (no SQL-Server-backed runtime),
+     * we fall back to the per-item Save loop, with the same best-effort logging
+     * as before.
+     */
     private async updateEmbeddingStatusBatch(
         items: MJContentItemEntity[],
         status: 'Processing' | 'Complete' | 'Failed',
         contextUser: UserInfo,
         embeddingModelID?: string
     ): Promise<void> {
+        if (items.length === 0) return;
+
+        // Mirror the new state onto the in-memory entities so any downstream
+        // reads inside this run see the up-to-date status.
+        const lastEmbeddedAt = status === 'Complete' ? new Date() : undefined;
         for (const item of items) {
             item.EmbeddingStatus = status;
-            if (status === 'Complete') {
-                item.LastEmbeddedAt = new Date();
+            if (lastEmbeddedAt) {
+                item.LastEmbeddedAt = lastEmbeddedAt;
                 if (embeddingModelID) item.EmbeddingModelID = embeddingModelID;
             }
-            // Status updates are best-effort relative to the vectorization itself: the vectors
-            // are already (or are about to be) in the vector DB, so a status-save failure on a
-            // single row must not abort the rest of the pipeline. We log on both logical failure
-            // (Save returns false) and infrastructure failure (Save throws) so the gap is visible.
-            try {
-                const saved = await item.Save();
-                if (!saved) {
-                    LogError(`updateEmbeddingStatusBatch: Save returned false for item ${item.ID} (status='${status}'): ${item.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+        }
+
+        const provider = this.ProviderToUse as unknown as {
+            ExecuteSQL?: (sql: string, params: unknown, options: unknown, contextUser?: UserInfo) => Promise<unknown>;
+        };
+        if (typeof provider.ExecuteSQL !== 'function') {
+            // Non-SQL-Server runtime — fall back to the per-row path. Same
+            // best-effort behavior as before.
+            for (const item of items) {
+                try {
+                    const saved = await item.Save();
+                    if (!saved) {
+                        LogError(`updateEmbeddingStatusBatch: Save returned false for item ${item.ID} (status='${status}'): ${item.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                    }
+                } catch (e) {
+                    const msg = e instanceof Error ? e.message : String(e);
+                    LogError(`updateEmbeddingStatusBatch: infrastructure error saving item ${item.ID} (status='${status}'): ${msg}`);
                 }
+            }
+            return;
+        }
+
+        // Bulk update directly against __mj.ContentItem. UUIDs come from MJ's
+        // own generated rows, so quoting them inline is safe; we still chunk
+        // to keep individual IN-lists bounded and avoid query-plan compile
+        // costs on the server.
+        const chunkSize = 500;
+        const lastEmbeddedAtSql = lastEmbeddedAt ? `'${lastEmbeddedAt.toISOString()}'` : 'NULL';
+        const setClauses: string[] = [`[EmbeddingStatus] = '${status}'`];
+        if (status === 'Complete') {
+            setClauses.push(`[LastEmbeddedAt] = ${lastEmbeddedAtSql}`);
+            if (embeddingModelID) {
+                setClauses.push(`[EmbeddingModelID] = '${embeddingModelID}'`);
+            }
+        }
+        const setSql = setClauses.join(', ');
+
+        for (let i = 0; i < items.length; i += chunkSize) {
+            const chunk = items.slice(i, i + chunkSize);
+            const ids = chunk.map(it => `'${String(it.ID).replace(/'/g, "''")}'`).join(',');
+            const sql = `UPDATE [__mj].[ContentItem] SET ${setSql} WHERE [ID] IN (${ids});`;
+            try {
+                await provider.ExecuteSQL(sql, null, { description: `updateEmbeddingStatusBatch(${status})`, isMutation: true }, contextUser);
             } catch (e) {
                 const msg = e instanceof Error ? e.message : String(e);
-                LogError(`updateEmbeddingStatusBatch: infrastructure error saving item ${item.ID} (status='${status}'): ${msg}`);
+                LogError(`updateEmbeddingStatusBatch: bulk UPDATE failed for ${chunk.length} items (status='${status}'): ${msg}`);
             }
         }
     }

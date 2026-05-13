@@ -51,7 +51,8 @@
     "tests",
     "test-suites",
     "entities",
-    "entity-settings"
+    "entity-settings",
+    "vector-indexesß"
   ],
   "sqlLogging": {
     "enabled": true,

@@ -1,0 +1,18 @@
+[
+  {
+    "fields": {
+      "Name": "tasio-chat-dev",
+      "Description": "Knowledge Hub vector index created 5/11/2026",
+      "VectorDatabaseID": "@lookup:MJ: Vector Databases.Name=Pinecone",
+      "EmbeddingModelID": "@lookup:MJ: AI Models.Name=text-embedding-3-small",
+      "SkipEmbeddings": false
+    },
+    "primaryKey": {
+      "ID": "CFA60242-7214-481E-9F95-01F66764512A"
+    },
+    "sync": {
+      "lastModified": "2026-05-13T14:52:18.850Z",
+      "checksum": "e962354a29beb5356d65d946d5c9be425501f63ed2b3365524549eae70528217"
+    }
+  }
+]
