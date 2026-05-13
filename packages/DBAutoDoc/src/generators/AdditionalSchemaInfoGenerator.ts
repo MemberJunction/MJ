@@ -19,6 +19,7 @@
 
 import { DatabaseDocumentation, SchemaDefinition, TableDefinition, ColumnDefinition } from '../types/state.js';
 import { PKCandidate, FKCandidate } from '../types/discovery.js';
+import { OrganicKeyCluster } from '../types/organic-keys.js';
 
 export interface AdditionalSchemaInfoOptions {
   /** Only include AI-discovered keys, not keys already present in the database schema */
@@ -74,10 +75,29 @@ interface SchemaNameInfo {
   description?: string;
 }
 
+/** One organic key cluster as serialized in additionalSchemaInfo.json. */
+export interface OrganicKeyClusterInfo {
+  Concept: string;
+  Normalization: 'LowerCaseTrim' | 'Trim' | 'ExactMatch' | 'Custom';
+  CustomNormalizationExpression?: string;
+  Confidence: number;
+  Reasoning: string;
+  Tags: string[];
+  Members: Array<{
+    Schema: string;
+    Table: string;
+    Column: string;
+    ParticipatesInFK: boolean;
+    FKTarget?: { Schema: string; Table: string; Column: string } | null;
+  }>;
+}
+
 /** Schema-keyed output format matching CodeGen's additionalSchemaInfo.json */
 interface AdditionalSchemaInfoOutput {
   Schemas: SchemaNameInfo[];
-  [schemaName: string]: TableSchemaInfo[] | SchemaNameInfo[];
+  /** Organic key clusters detected via cluster-based analysis (may be absent if detection didn't run). */
+  OrganicKeyClusters?: OrganicKeyClusterInfo[];
+  [schemaName: string]: TableSchemaInfo[] | SchemaNameInfo[] | OrganicKeyClusterInfo[] | undefined;
 }
 
 export class AdditionalSchemaInfoGenerator {
@@ -137,7 +157,35 @@ export class AdditionalSchemaInfoGenerator {
       }
     }
 
+    // Emit organic key clusters as a top-level array. Clusters span multiple schemas
+    // by design, so they don't fit the per-schema bucket — they get their own section
+    // parallel to "Schemas".
+    if (state.organicKeyClusters && state.organicKeyClusters.length > 0) {
+      result.OrganicKeyClusters = state.organicKeyClusters.map((c) => this.serializeCluster(c));
+    }
+
     return JSON.stringify(result, null, 4);
+  }
+
+  /** Convert an internal OrganicKeyCluster into the additionalSchemaInfo wire format. */
+  private serializeCluster(cluster: OrganicKeyCluster): OrganicKeyClusterInfo {
+    return {
+      Concept: cluster.concept,
+      Normalization: cluster.normalization,
+      CustomNormalizationExpression: cluster.customNormalizationExpression,
+      Confidence: cluster.confidence,
+      Reasoning: cluster.reasoning,
+      Tags: cluster.tags,
+      Members: cluster.members.map((m) => ({
+        Schema: m.schema,
+        Table: m.table,
+        Column: m.column,
+        ParticipatesInFK: m.participatesInFK,
+        FKTarget: m.fkTarget
+          ? { Schema: m.fkTarget.schema, Table: m.fkTarget.table, Column: m.fkTarget.column }
+          : null,
+      })),
+    };
   }
 
   /**

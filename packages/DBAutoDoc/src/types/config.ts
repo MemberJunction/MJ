@@ -157,6 +157,73 @@ export interface AnalysisConfig {
   guardrails?: GuardrailsConfig;
   relationshipDiscovery?: RelationshipDiscoveryConfig;
   sampleQueryGeneration?: SampleQueryGenerationConfig;
+  organicKeyDetection?: OrganicKeyDetectionConfig;
+}
+
+/**
+ * Configuration for cluster-based organic key detection.
+ * Baseline runs with name + value signals only (no external API).
+ * Embedding and LLM refinement layer on top when an AI provider is configured.
+ */
+export interface OrganicKeyDetectionConfig {
+  /** Enable organic key detection pass (default: false). */
+  enabled: boolean;
+
+  /** Weights for the hybrid distance metric. Setting any weight to 0 disables that signal. */
+  weights?: {
+    /** Weight for name-token Jaccard similarity (deps-free, default: 1.0). */
+    nameSimilarity?: number;
+    /** Weight for embedding cosine distance (requires AI provider, default: 1.0 when available, 0 otherwise). */
+    embeddingDistance?: number;
+    /** Weight for MinHash value-overlap (requires column sampling, default: 0.5). */
+    valueOverlap?: number;
+  };
+
+  /** Tunable clustering thresholds. */
+  thresholds?: {
+    /** Edges with hybrid distance > this are not merge candidates (default: 0.5). */
+    candidateEdgeMax?: number;
+    /** Complete-linkage cut — max intra-cluster pairwise distance after merge (default: 0.4). */
+    mergeMax?: number;
+    /** Top-K nearest neighbors per column retained as candidate edges (default: 20). */
+    topKNeighbors?: number;
+    /** Minimum cluster size to report (default: 2). */
+    minClusterSize?: number;
+    /** Minimum distinct tables a cluster must span (default: 2). */
+    minDistinctTables?: number;
+  };
+
+  /** Embedding configuration. Omit to skip embedding-based clustering. */
+  embedding?: {
+    /** Whether to compute embeddings for column descriptions (default: false). */
+    enabled: boolean;
+    /** Model identifier (default: 'gemini-embedding-001'). */
+    model?: string;
+    /** Embedding dimensions (default: 1536). */
+    dimensions?: number;
+    /** Batch size for embedding requests (default: 100). */
+    batchSize?: number;
+  };
+
+  /** LLM refinement configuration. Omit to skip refinement entirely. */
+  refinement?: {
+    /** Whether to run LLM refinement on candidate clusters (default: true when AI provider configured). */
+    enabled: boolean;
+    /** Override model for refinement; falls back to AIConfig.model if absent. */
+    model?: string;
+    /** Concurrency for refinement calls (default: 4). */
+    concurrency?: number;
+  };
+
+  /** MinHash signatures for value-overlap verification. */
+  minHash?: {
+    /** Whether to compute MinHash sketches during column sampling (default: false). */
+    enabled: boolean;
+    /** Number of hash functions (default: 128). */
+    numHashes?: number;
+    /** Sample size per column for sketching (default: reuses relationshipDiscovery.sampling.maxRowsPerTable). */
+    sampleSize?: number;
+  };
 }
 
 export interface SampleQueryGenerationConfig {

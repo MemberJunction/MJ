@@ -24,6 +24,7 @@ import { DBAutoDocConfig } from '../types/config.js';
 import { DatabaseDocumentation, AnalysisRun } from '../types/state.js';
 import { DiscoveryTriggerAnalyzer } from '../discovery/DiscoveryTriggerAnalyzer.js';
 import { DiscoveryEngine } from '../discovery/DiscoveryEngine.js';
+import { OrganicKeyDetectionRunner } from '../discovery/OrganicKeyDetectionRunner.js';
 
 export interface AnalysisOptions {
   config: DBAutoDocConfig;
@@ -393,6 +394,42 @@ export class AnalysisOrchestrator {
         await this.generateSampleQueries(state, promptEngine, db.getDriver(), stateManager);
         stateManager.updateSummary(state);
         await stateManager.save(state);
+      }
+
+      // Organic Key Cluster Detection (if enabled)
+      if (this.config.analysis.organicKeyDetection?.enabled) {
+        this.onProgress('Detecting organic key clusters');
+        try {
+          const runner = new OrganicKeyDetectionRunner(
+            this.config.analysis.organicKeyDetection,
+            this.config.ai,
+            db.getDriver()
+          );
+          await runner.run(state, { onProgress: (msg) => this.onProgress(msg) });
+          stateManager.updateSummary(state);
+          await stateManager.save(state);
+        } catch (err) {
+          this.onProgress(`Organic key detection failed: ${(err as Error).message}`);
+          if (!state.phases.organicKeyDetection) {
+            state.phases.organicKeyDetection = {
+              triggered: true,
+              startedAt: new Date().toISOString(),
+              completedAt: new Date().toISOString(),
+              status: 'failed',
+              candidateClusterCount: 0,
+              confirmedClusterCount: 0,
+              rejectedClusterCount: 0,
+              splitClusterCount: 0,
+              tokensUsed: 0,
+              inputTokens: 0,
+              outputTokens: 0,
+              estimatedCost: 0,
+              weights: { nameSimilarity: 1, embeddingDistance: 0, valueOverlap: 0 },
+              thresholds: { candidateEdgeMax: 0.5, mergeMax: 0.4, topKNeighbors: 20, minClusterSize: 2, minDistinctTables: 2 },
+              errorMessage: (err as Error).message,
+            };
+          }
+        }
       }
 
       // Final state update
