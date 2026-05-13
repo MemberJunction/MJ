@@ -343,6 +343,51 @@ export class ManageMetadataBase {
    }
 
    /**
+    * Returns a sequence value safe to use for an EntityField INSERT under the given
+    * EntityID, defaulting to `candidate` when it doesn't collide. Otherwise returns
+    * `MAX(Sequence) + 1` for that entity.
+    *
+    * Why this exists: several insert paths (virtual-entity field sync, IS-A parent
+    * field sync, schema-derived field creation) compute a deterministic sequence
+    * up-front, but a partial prior run can leave rows at that exact ordinal under
+    * the target EntityID. SS hides the collision because retried runs typically
+    * succeed before failing; PG raises UQ_EntityField_EntityID_Sequence (~4 errors
+    * per advanced-generation run). The values are temporary anyway —
+    * spUpdateExistingEntityFieldsFromSchema renumbers them on the next pass.
+    */
+   protected async nextAvailableEntityFieldSequence(
+      pool: CodeGenConnection,
+      entityId: string,
+      candidate: number
+   ): Promise<number> {
+      const schema = mj_core_schema();
+      const tbl = this.qs(schema, 'EntityField');
+      const seqCol = this.qi('Sequence');
+      const entityIdCol = this.qi('EntityID');
+      const sql = `SELECT
+                      ${this.coalesce(`MAX(${seqCol})`, '0')} AS ${this.qi('MaxSeq')},
+                      ${this.coalesce(`MAX(CASE WHEN ${seqCol} = @Candidate THEN 1 ELSE 0 END)`, '0')} AS ${this.qi('Hit')}
+                   FROM ${tbl}
+                   WHERE ${entityIdCol} = @EntityID`;
+      try {
+         const result = await this.runQueryWithParams(pool, sql, {
+            EntityID: entityId,
+            Candidate: candidate,
+         });
+         const row = result.recordset?.[0];
+         if (!row) return candidate;
+         const hit = Number(row.Hit ?? 0) > 0;
+         if (!hit) return candidate;
+         const maxSeq = Number(row.MaxSeq ?? 0);
+         return maxSeq + 1;
+      } catch {
+         // If the lookup itself fails, fall back to the candidate. The downstream
+         // INSERT will surface the real error if there's a true collision.
+         return candidate;
+      }
+   }
+
+   /**
     * Wraps a SELECT query with a row limit.
     * SQL Server: SELECT TOP N ... , PostgreSQL: SELECT ... LIMIT N
     */
@@ -1365,6 +1410,11 @@ export class ManageMetadataBase {
          else {
             // this means that we do NOT have a match so the field does not exist in the entity definition, so we need to add it
             newEntityFieldUUID = this.createNewUUID();
+            // Compute a non-colliding sequence by querying MAX(Sequence) for this entity. The
+            // ordinal `fieldSequence` (column index in the view) is correct for stable ordering
+            // when nothing exists yet, but a partial prior run could have left rows at the same
+            // ordinal under this EntityID — UQ_EntityField_EntityID_Sequence then fires on PG.
+            const safeSequence = await this.nextAvailableEntityFieldSequence(pool, entity.ID, fieldSequence);
             const q = (n: string) => this.qi(n);
             const sqlAdd = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityField')} (
                                       ${q('ID')}, ${q('EntityID')}, ${q('Name')}, ${q('Type')}, ${q('AllowsNull')},
@@ -1373,7 +1423,7 @@ export class ManageMetadataBase {
                                       ${q('__mj_CreatedAt')}, ${q('__mj_UpdatedAt')} )
                             VALUES (  '${newEntityFieldUUID}', '${entity.ID}', '${veField.FieldName}', '${veField.Type}', ${this.boolLit(veField.AllowsNull)},
                                        ${veField.Length}, ${veField.Precision}, ${veField.Scale},
-                                       ${fieldSequence}, ${this.boolLit(makePrimaryKey)}, ${this.boolLit(makePrimaryKey)},
+                                       ${safeSequence}, ${this.boolLit(makePrimaryKey)}, ${this.boolLit(makePrimaryKey)},
                                        ${this.utcNow()}, ${this.utcNow()}
                                     )`;
             await this.LogSQLAndExecute(pool, sqlAdd, `SQL text to add virtual entity field ${veField.FieldName} for entity ${virtualEntity.Name}`);
@@ -1690,7 +1740,7 @@ export class ManageMetadataBase {
          logStatus(`         ✓ Set PK for ${entity.Name}.${pk} (LLM-identified)`);
       }
 
-      await this.LogSQLAndExecute(pool, sqlStatements.join('\n'), `Set LLM-identified PKs for ${entity.Name}: ${validPKs.join(', ')}`);
+      await this.LogSQLBatchAndExecute(pool, sqlStatements, `Set LLM-identified PKs for ${entity.Name}: ${validPKs.join(', ')}`);
       return true;
    }
 
@@ -1749,7 +1799,7 @@ export class ManageMetadataBase {
          return false;
       }
 
-      await this.LogSQLAndExecute(pool, sqlStatements.join('\n'), `Set LLM-identified FKs for ${entity.Name}`);
+      await this.LogSQLBatchAndExecute(pool, sqlStatements, `Set LLM-identified FKs for ${entity.Name}`);
       return true;
    }
 
@@ -1800,7 +1850,7 @@ export class ManageMetadataBase {
          return false;
       }
 
-      await this.LogSQLAndExecute(pool, sqlStatements.join('\n'), `Set LLM-generated descriptions for ${entity.Name} (${sqlStatements.length} fields)`);
+      await this.LogSQLBatchAndExecute(pool, sqlStatements, `Set LLM-generated descriptions for ${entity.Name} (${sqlStatements.length} fields)`);
       return true;
    }
 
@@ -1964,8 +2014,12 @@ export class ManageMetadataBase {
          } else {
             // Create new virtual field record for this parent field
             const newFieldID = this.createNewUUID();
-            // Use high sequence — will be reordered by updateExistingEntityFieldsFromSchema
-            const sequence = 100000 + parentFields.indexOf(parentField);
+            // Use high sequence — will be reordered by updateExistingEntityFieldsFromSchema.
+            // Query MAX(Sequence) at insert time so we never collide with an existing row
+            // (e.g. partial prior run left a record at the candidate ordinal under this
+            // EntityID — UQ_EntityField_EntityID_Sequence then fires on PG).
+            const candidate = 100000 + parentFields.indexOf(parentField);
+            const sequence = await this.nextAvailableEntityFieldSequence(pool, childEntity.ID, candidate);
 
             const q = (n: string) => this.qi(n);
             const sqlInsert = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityField')} (
@@ -4918,9 +4972,8 @@ export class ManageMetadataBase {
 
       // Execute all updates in one batch
       if (sqlStatements.length > 0) {
-         const combinedSQL = sqlStatements.join('\n');
          try {
-            await this.LogSQLAndExecute(pool, combinedSQL, `Set field properties for entity`, false);
+            await this.LogSQLBatchAndExecute(pool, sqlStatements, `Set field properties for entity`, false);
          }
          catch (ex) {
             logError('Error executing combined smart field SQL: ', ex)
@@ -5414,7 +5467,7 @@ WHERE
 
       if (sqlStatements.length > 0) {
          try {
-            await this.LogSQLAndExecute(pool, sqlStatements.join('\n'), `Set categories for ${sqlStatements.length} fields`, false);
+            await this.LogSQLBatchAndExecute(pool, sqlStatements, `Set categories for ${sqlStatements.length} fields`, false);
          }
          catch (ex) {
             logError('Error Applying Field Categories', ex)
@@ -5441,8 +5494,8 @@ WHERE
             const escapedIcon = entityIcon.replace(/'/g, "''");
             const updateSQL = `
                UPDATE ${this.qs(mj_core_schema(), 'Entity')}
-               SET Icon = '${escapedIcon}', __mj_UpdatedAt = ${this.utcNow()}
-               WHERE ID = '${entityId}'
+               SET ${this.qi('Icon')} = '${escapedIcon}', ${this.qi(EntityInfo.UpdatedAtFieldName)} = ${this.utcNow()}
+               WHERE ${this.qi('ID')} = '${entityId}'
             `;
             try {
                await this.LogSQLAndExecute(pool, updateSQL, `Set entity icon to ${entityIcon}`, false);
@@ -5468,15 +5521,15 @@ WHERE
       const infoJSON = JSON.stringify(categoryInfo).replace(/'/g, "''");
 
       // Upsert FieldCategoryInfo (new format)
-      const checkNewSQL = `SELECT ID FROM ${this.qs(mj_core_schema(), 'EntitySetting')} WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryInfo'`;
+      const checkNewSQL = `SELECT ${this.qi('ID')} FROM ${this.qs(mj_core_schema(), 'EntitySetting')} WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = 'FieldCategoryInfo'`;
       const existingNew = await this.runQuery(pool, checkNewSQL);
 
       if (existingNew.recordset.length > 0) {
          try {
             await this.LogSQLAndExecute(pool, `
                UPDATE ${this.qs(mj_core_schema(), 'EntitySetting')}
-               SET Value = '${infoJSON}', __mj_UpdatedAt = ${this.utcNow()}
-               WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryInfo'
+               SET ${this.qi('Value')} = '${infoJSON}', ${this.qi(EntityInfo.UpdatedAtFieldName)} = ${this.utcNow()}
+               WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = 'FieldCategoryInfo'
             `, `Update FieldCategoryInfo setting for entity`, false);
          }
          catch (ex) {
@@ -5486,7 +5539,7 @@ WHERE
          const newId = uuidv4();
          try {
             await this.LogSQLAndExecute(pool, `
-               INSERT INTO ${this.qs(mj_core_schema(), 'EntitySetting')} (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+               INSERT INTO ${this.qs(mj_core_schema(), 'EntitySetting')} (${this.qi('ID')}, ${this.qi('EntityID')}, ${this.qi('Name')}, ${this.qi('Value')}, ${this.qi(EntityInfo.CreatedAtFieldName)}, ${this.qi(EntityInfo.UpdatedAtFieldName)})
                VALUES ('${newId}', '${entityId}', 'FieldCategoryInfo', '${infoJSON}', ${this.utcNow()}, ${this.utcNow()})
             `, `Insert FieldCategoryInfo setting for entity`, false);
          }
@@ -5504,15 +5557,15 @@ WHERE
       }
       const iconsJSON = JSON.stringify(iconsOnly).replace(/'/g, "''");
 
-      const checkLegacySQL = `SELECT ID FROM ${this.qs(mj_core_schema(), 'EntitySetting')} WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryIcons'`;
+      const checkLegacySQL = `SELECT ${this.qi('ID')} FROM ${this.qs(mj_core_schema(), 'EntitySetting')} WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = 'FieldCategoryIcons'`;
       const existingLegacy = await this.runQuery(pool, checkLegacySQL);
 
       if (existingLegacy.recordset.length > 0) {
          try {
             await this.LogSQLAndExecute(pool, `
                UPDATE ${this.qs(mj_core_schema(), 'EntitySetting')}
-               SET Value = '${iconsJSON}', __mj_UpdatedAt = ${this.utcNow()}
-               WHERE EntityID = '${entityId}' AND Name = 'FieldCategoryIcons'
+               SET ${this.qi('Value')} = '${iconsJSON}', ${this.qi(EntityInfo.UpdatedAtFieldName)} = ${this.utcNow()}
+               WHERE ${this.qi('EntityID')} = '${entityId}' AND ${this.qi('Name')} = 'FieldCategoryIcons'
             `, `Update FieldCategoryIcons setting (legacy)`, false);
          }
          catch (ex) {
@@ -5522,7 +5575,7 @@ WHERE
          const newId = uuidv4();
          try {
             await this.LogSQLAndExecute(pool, `
-               INSERT INTO ${this.qs(mj_core_schema(), 'EntitySetting')} (ID, EntityID, Name, Value, __mj_CreatedAt, __mj_UpdatedAt)
+               INSERT INTO ${this.qs(mj_core_schema(), 'EntitySetting')} (${this.qi('ID')}, ${this.qi('EntityID')}, ${this.qi('Name')}, ${this.qi('Value')}, ${this.qi(EntityInfo.CreatedAtFieldName)}, ${this.qi(EntityInfo.UpdatedAtFieldName)})
                VALUES ('${newId}', '${entityId}', 'FieldCategoryIcons', '${iconsJSON}', ${this.utcNow()}, ${this.utcNow()})
             `, `Insert FieldCategoryIcons setting (legacy)`, false);
          }
@@ -5543,8 +5596,8 @@ WHERE
    ): Promise<void> {
       const updateSQL = `
          UPDATE ${this.qs(mj_core_schema(), 'ApplicationEntity')}
-         SET DefaultForNewUser = ${this.boolLit(importance.defaultForNewUser)}, __mj_UpdatedAt = ${this.utcNow()}
-         WHERE EntityID = '${entityId}'
+         SET ${this.qi('DefaultForNewUser')} = ${this.boolLit(importance.defaultForNewUser)}, ${this.qi(EntityInfo.UpdatedAtFieldName)} = ${this.utcNow()}
+         WHERE ${this.qi('EntityID')} = '${entityId}'
       `;
 
       try {
@@ -5571,5 +5624,39 @@ WHERE
     */
    private async LogSQLAndExecute(pool: CodeGenConnection, query: string, description?: string, isRecurringScript: boolean = false, includeBatchSeparator: boolean = false, batchSeparator: string = 'GO'): Promise<any> {
       return await SQLLogging.LogSQLAndExecute(pool, this.qsql(query), description, isRecurringScript, includeBatchSeparator, batchSeparator);
+   }
+
+   /**
+    * Logs and executes a sequence of SQL statements as a single batch.
+    *
+    * Each statement is dialect-quoted (via `qsql`), has its trailing
+    * whitespace/`;` trimmed, then gets a single `;` re-appended. Statements
+    * are joined with `\n` and sent through `LogSQLAndExecute` so PG's strict
+    * parser sees properly-terminated boundaries between statements.
+    *
+    * Use this instead of `statements.join('\n')` followed by
+    * `LogSQLAndExecute(...)`. SQL Server tolerated the unterminated form;
+    * PG does not. SS still accepts the explicitly-terminated batch, so
+    * this is a no-cost upgrade for both dialects.
+    *
+    * Empty / whitespace-only statements are filtered out. Returns
+    * `undefined` (no execution) when nothing remains.
+    */
+   private async LogSQLBatchAndExecute(
+      pool: CodeGenConnection,
+      statements: string[],
+      description?: string,
+      isRecurringScript: boolean = false,
+      includeBatchSeparator: boolean = false,
+      batchSeparator: string = 'GO'
+   ): Promise<any> {
+      const terminated: string[] = [];
+      for (const s of statements) {
+         const trimmed = (s ?? '').replace(/[\s;]+$/g, '');
+         if (trimmed.length === 0) continue;
+         terminated.push(`${trimmed};`);
+      }
+      if (terminated.length === 0) return undefined;
+      return await this.LogSQLAndExecute(pool, terminated.join('\n'), description, isRecurringScript, includeBatchSeparator, batchSeparator);
    }
 }
