@@ -1,0 +1,542 @@
+[
+  {
+    "fields": {
+      "Name": "BLA - Assemble Prompt",
+      "Description": "BLA (Betty Layered Assembler) step 1: resolve a __mj.AIPrompt by Name, pick the most specific betty.PromptComponent rows for the given Organization/Instance, and assemble them (plus caller-supplied conversation history) into a structured ChatMessage[] for handoff to the BLA - Execute Prompt action.",
+      "DriverClass": "__BLA_AssemblePrompt",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-layer-group",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=AI"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PromptName",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Required. Name of the __mj.AIPrompt row whose components should be assembled. Used to derive PromptID for the betty.PromptComponent lookup.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "A5BE4036-88EA-499E-87E5-945298548B9A"
+          },
+          "sync": {
+            "lastModified": "2026-05-12T18:43:39.585Z",
+            "checksum": "fb5c0d1e15674baf16b6a07fe3e2613a69be2b65f6933b08fac2d1e5ef17e6ac"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "OrganizationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional UUID of the betty.Organization scoping the lookup. When non-empty, components with this OrganizationID outrank components with NULL OrganizationID.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "92AD5054-E815-42CD-BC61-1C9A96F5EBD6"
+          },
+          "sync": {
+            "lastModified": "2026-05-12T18:43:39.625Z",
+            "checksum": "bf97705f4443ce990ac52acb8648a4889bff9f078672b1c4b62c4784187a0dd5"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "InstanceID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional UUID of the betty.Instance scoping the lookup. When non-empty, components matching both this InstanceID and the resolving OrganizationID outrank all other tiers.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "191B1D3E-C332-4AEC-B238-6E140F2CFF60"
+          },
+          "sync": {
+            "lastModified": "2026-05-12T18:43:39.657Z",
+            "checksum": "6f12b697726161e2eecb97ade5274a77840ff627a594cde48a7de37c8f0ae5ee"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConversationHistory",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional JSON string of ChatMessage[] (e.g. '[{\"role\":\"user\",\"content\":\"...\"}]'). Rendered first in the final AssembledMessages, before any static components.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "3848840F-683A-4381-9757-C4093A87D264"
+          },
+          "sync": {
+            "lastModified": "2026-05-12T18:43:39.690Z",
+            "checksum": "613b2b6bfeb2aafa6c23279b407bf159b7285efc664c61b7510b88c654ba513c"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ResolvedPromptID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the __mj.AIPrompt row resolved from PromptName. Passed downstream to BLA - Execute Prompt.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "8245882B-7029-4E07-AC93-C6D7A5666B84"
+          },
+          "sync": {
+            "lastModified": "2026-05-12T18:43:39.730Z",
+            "checksum": "58b296aaf914e302b452e0855b6f4b19ad357f8f24441e4aa0b521390c203059"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AssembledSystemText",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "All Role='System' components concatenated by Sort with '\\n\\n' separators. Used as data.BettyPrompt for the seed Template's {{BettyPrompt}} placeholder (audit-text only — not injected as a chat message).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "B1A87209-6E8A-4DCE-A65D-0057592773CD"
+          },
+          "sync": {
+            "lastModified": "2026-05-12T18:43:39.761Z",
+            "checksum": "7db696254d73e97b2504abc6f953708cc4f3b340e42c7b243fd41d33f2d1e821"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AssembledMessages",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "JSON string of ChatMessage[] containing the conversation history followed by every winning component in Sort order, each keeping its original role (system / user / assistant). Passed to AIPromptParams.conversationMessages by the Execute action.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "09F6182E-B86B-4CF6-8CA2-C30248365DFF"
+          },
+          "sync": {
+            "lastModified": "2026-05-12T18:43:39.795Z",
+            "checksum": "73265f41745c48bf33763870024ae1c027c47dc8aa5bc54b47715df05c931df3"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SelectedComponentCount",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of distinct (Name) PromptComponent rows that won the specificity cascade. Surfaced for telemetry / debugging.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BBD5B94F-F945-464B-BBD1-46C39ED76444"
+          },
+          "sync": {
+            "lastModified": "2026-05-12T18:43:39.824Z",
+            "checksum": "0e27a71c23fd01102028dd35963027b501ecb027a6b7909397364d427ff24b40"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Prompt resolved and components assembled successfully."
+          },
+          "primaryKey": {
+            "ID": "C86380F1-CDBF-4BE0-BDC0-B6F7A4833977"
+          },
+          "sync": {
+            "lastModified": "2026-05-12T18:43:39.857Z",
+            "checksum": "d444960c835df9f72cf03c01a0cd632589495ee05627a281ff48d5e838c1f8fd"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PROMPT_NAME",
+            "IsSuccess": false,
+            "Description": "Required input parameter PromptName was not provided or was empty."
+          },
+          "primaryKey": {
+            "ID": "DD881751-F6D2-4FFF-A534-383856F21E04"
+          },
+          "sync": {
+            "lastModified": "2026-05-12T18:43:39.876Z",
+            "checksum": "0c503503b4b8c2ae0ca2fbf43ae45699bbdfc5450a36432507420e1e3e09ce0b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROMPT_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "No active __mj.AIPrompt row exists with the provided Name."
+          },
+          "primaryKey": {
+            "ID": "0B262BD2-B2BA-406B-9A67-67CB6BC50477"
+          },
+          "sync": {
+            "lastModified": "2026-05-12T18:43:39.905Z",
+            "checksum": "fe1d4842b9d8f879bbe3eb8ec5d61c601e167523a4406d28af0bd23603b5378e"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred during assembly. Inspect Message for details."
+          },
+          "primaryKey": {
+            "ID": "8E5C2685-2899-43AB-A5A3-A9F970156368"
+          },
+          "sync": {
+            "lastModified": "2026-05-12T18:43:39.924Z",
+            "checksum": "94547928490bbe7be430fe23965c5ed84980f169b0c5c81ce2ecdc56c907c364"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "44475F58-6C76-41E4-B6D2-DE7DE16DB2D7"
+    },
+    "sync": {
+      "lastModified": "2026-05-12T18:43:39.517Z",
+      "checksum": "eee865108fe753235801a73f90199dc9be1664f3abbafdcb3651dbff5d699867"
+    }
+  },
+  {
+    "fields": {
+      "Name": "BLA - Execute Prompt",
+      "Description": "BLA (Betty Layered Assembler) step 2: load the resolved AIPrompt entity, hand the pre-assembled ChatMessage[] to AIPromptRunner.ExecutePrompt with templateMessageRole='none' so the structured messages drive the call (not the rendered template), and return the response text + run metadata.",
+      "DriverClass": "__BLA_ExecutePrompt",
+      "Type": "Custom",
+      "Status": "Active",
+      "IconClass": "fa-solid fa-play",
+      "CategoryID": "@lookup:MJ: Action Categories.Name=AI"
+    },
+    "relatedEntities": {
+      "MJ: Action Params": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ResolvedPromptID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Required. UUID of the __mj.AIPrompt to execute. Typically the ResolvedPromptID output from BLA - Assemble Prompt, wired through the Flow agent payload.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "A0A63355-532A-44FB-8F50-AA38B5AAF7F5"
+          },
+          "sync": {
+            "lastModified": "2026-05-12T18:43:39.949Z",
+            "checksum": "2b3c854345bc148f19e45dedacaf52f4d73c18c869e35297ad4e8d947b1add69"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AssembledSystemText",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Required. Text that fills the seed Template's {{BettyPrompt}} placeholder for the audit-text snapshot. Typically the AssembledSystemText output from BLA - Assemble Prompt.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "35561FF1-25AB-4064-938B-FD15605F28FE"
+          },
+          "sync": {
+            "lastModified": "2026-05-12T18:43:39.983Z",
+            "checksum": "1401a08f924d48493b4962c4a98cf1032c1363f68e00924a9e3f0a630e3064a9"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "AssembledMessages",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Required. JSON string of ChatMessage[] passed to AIPromptParams.conversationMessages. Typically the AssembledMessages output from BLA - Assemble Prompt.",
+            "IsRequired": true
+          },
+          "primaryKey": {
+            "ID": "F30EA131-889E-41D1-BF26-13598A7193C5"
+          },
+          "sync": {
+            "lastModified": "2026-05-12T18:43:40.013Z",
+            "checksum": "7c5ef210deacafe68b37faf20bf0528cd95a6302093ac18993c72a98c7026016"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ConfigurationID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional UUID of an AI Configuration override. Forwarded to AIPromptParams.configurationId.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "95294237-ADBA-412A-A0C6-CCD0CD27A3E2"
+          },
+          "sync": {
+            "lastModified": "2026-05-12T18:43:40.045Z",
+            "checksum": "001d36462d50bf1a4e124a28732a9b8c0efc804d8bfd4a7abad62a06c3f91a98"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ResponseText",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "The raw text response from the AI model (AIPromptRunResult.rawResult).",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "C04DAE96-AECE-4968-B969-2CC764DC2406"
+          },
+          "sync": {
+            "lastModified": "2026-05-12T18:43:40.075Z",
+            "checksum": "0aaaf07ac0e12e93b43eed172d7db4ef362a738509d45d536ecbab0b83ee33d8"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PromptRunID",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "UUID of the __mj.AIPromptRun record created for this execution — use it to look up token usage, full chat history, audit trail.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "77C040F3-1E81-4893-A320-741211C93DCC"
+          },
+          "sync": {
+            "lastModified": "2026-05-12T18:43:40.105Z",
+            "checksum": "f5a38f0ea18a2b7be5c5caaf7f784d1eb1013394baa1039fd6d43dd739129bd0"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "PromptTokens",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of input tokens reported by the model vendor for this call.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "CFDA9D31-5D8E-46B9-9FB2-DA0C5E49DC9A"
+          },
+          "sync": {
+            "lastModified": "2026-05-12T18:43:40.138Z",
+            "checksum": "b68f352c96cf52ebbd9c6a944020559e76af6925680fdb065b53999df18d5700"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "CompletionTokens",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Number of output tokens reported by the model vendor for this call.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "70EE5841-B3E8-4AE4-BCD0-049097B633F1"
+          },
+          "sync": {
+            "lastModified": "2026-05-12T18:43:40.169Z",
+            "checksum": "32bd7520d47b1e21c6a3f84ac50b1063b8e41454152b05c8960ab1c50891b663"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "TokensUsed",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total tokens (prompt + completion) reported by the model vendor for this call.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "34C7897E-016C-449B-A41E-412A411CCC33"
+          },
+          "sync": {
+            "lastModified": "2026-05-12T18:43:40.206Z",
+            "checksum": "37c6ac51c0e9a26fdfec7ebbbd2bf8c8d1b9f2daf04a24c2674c6fd677ff05ff"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "Cost",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Cost (in the vendor's reported currency) if provided by the model vendor.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "5DA37FAA-2113-404D-82F2-024C7F93B5D9"
+          },
+          "sync": {
+            "lastModified": "2026-05-12T18:43:40.234Z",
+            "checksum": "a1c13bd39ed8fdc462c95efd393780d2224a0ebd085ae02a6fe9892da2c0e307"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "ExecutionTimeMs",
+            "Type": "Output",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Total execution time in milliseconds.",
+            "IsRequired": false
+          },
+          "primaryKey": {
+            "ID": "BE7122FB-DDEF-4764-A992-ADF5875E045C"
+          },
+          "sync": {
+            "lastModified": "2026-05-12T18:43:40.262Z",
+            "checksum": "356a04faf99955c08f3395c4209dacbe5475766b5f4a8d0b8e04f6484f7a6ad7"
+          }
+        }
+      ],
+      "MJ: Action Result Codes": [
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "SUCCESS",
+            "IsSuccess": true,
+            "Description": "Prompt executed and response returned successfully."
+          },
+          "primaryKey": {
+            "ID": "4DA2007C-C6C8-4922-A391-2C9E53B5A48D"
+          },
+          "sync": {
+            "lastModified": "2026-05-12T18:43:40.287Z",
+            "checksum": "67e0cb74c501c2a4cdad1c6637e6b8df65cfc2fc9921629831714576ab319031"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_PROMPT_ID",
+            "IsSuccess": false,
+            "Description": "Required input parameter ResolvedPromptID was not provided or was empty."
+          },
+          "primaryKey": {
+            "ID": "85FC8AAE-8BA6-43E8-9FA4-859FA5E264BC"
+          },
+          "sync": {
+            "lastModified": "2026-05-12T18:43:40.305Z",
+            "checksum": "5d465210e56c8493aef7ded6738dc402e37a9acd3cce405bdc231d65d80b68f2"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "MISSING_USER_CONTEXT",
+            "IsSuccess": false,
+            "Description": "ContextUser was not provided to the action; required to execute a prompt."
+          },
+          "primaryKey": {
+            "ID": "124704A4-E68B-45E6-AB68-59A3E094A7D8"
+          },
+          "sync": {
+            "lastModified": "2026-05-12T18:43:40.324Z",
+            "checksum": "584f1b5ef352ac815c83ef4e6bc5193bf341b72dc8d47b19dbd14e4dcc6d861b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "PROMPT_NOT_FOUND",
+            "IsSuccess": false,
+            "Description": "The resolved AIPrompt ID was not present in AIEngine.Instance.Prompts (likely Status != 'Active' or not yet cached)."
+          },
+          "primaryKey": {
+            "ID": "B415A777-73AA-434C-86A3-D17AEFE71B04"
+          },
+          "sync": {
+            "lastModified": "2026-05-12T18:43:40.342Z",
+            "checksum": "95514d60e9cd589e0cbeeaef232e997f3a27452ef15d517d7ec43e7cd05fa10b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "EXECUTION_FAILED",
+            "IsSuccess": false,
+            "Description": "AIPromptRunner.ExecutePrompt returned success=false. Inspect Message for details."
+          },
+          "primaryKey": {
+            "ID": "A7EBA704-7C08-49D8-818B-F8944FFCA4C5"
+          },
+          "sync": {
+            "lastModified": "2026-05-12T18:43:40.359Z",
+            "checksum": "6485d17c2a75985557cfad3e51eeaf50dd1c97c955acd1fda2e9e7d7ac0e4f3b"
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "ResultCode": "UNEXPECTED_ERROR",
+            "IsSuccess": false,
+            "Description": "An unexpected error occurred during execution. Inspect Message for details."
+          },
+          "primaryKey": {
+            "ID": "F46318E5-0931-4387-BB0B-D9473E90B979"
+          },
+          "sync": {
+            "lastModified": "2026-05-12T18:43:40.376Z",
+            "checksum": "0f28f110d94949ff53a37279d4fb89786a20a532c030e209a72b8d26d1ed0c8d"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "9DA57F14-FD25-48A7-BB76-87A8CB04B4F1"
+    },
+    "sync": {
+      "lastModified": "2026-05-12T18:43:39.537Z",
+      "checksum": "c07ed5f8546f47c666e084561cb64259f1bf29c1532de9975b01d4797694e3ff"
+    }
+  }
+]

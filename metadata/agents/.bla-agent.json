@@ -1,0 +1,145 @@
+[
+  {
+    "fields": {
+      "Name": "BLA",
+      "CategoryID": "@lookup:MJ: AI Agent Categories.Name=Assistant",
+      "Description": "BLA (Betty Layered Assembler). Flow Agent that assembles a multi-block, multi-role chat-style prompt by selecting the most specific betty.PromptComponent rows for a given AIPrompt + Organization + Instance, then hands the assembled ChatMessage[] to AIPromptRunner.ExecutePrompt and returns the response. Inputs (via initial agent payload): PromptName (string), OrganizationID (UUID, optional), InstanceID (UUID, optional), ConversationHistory (JSON ChatMessage[], optional). Outputs (on payload): ResponseText, PromptRunID, TokensUsed, Cost.",
+      "TypeID": "@lookup:MJ: AI Agent Types.Name=Flow",
+      "Status": "Active",
+      "ExecutionOrder": 0,
+      "ExposeAsAction": false,
+      "IconClass": "fa-solid fa-layer-group",
+      "ArtifactCreationMode": "Never",
+      "PayloadDownstreamPaths": "*",
+      "PayloadUpstreamPaths": "*",
+      "EnableContextCompression": false,
+      "ModelSelectionMode": "Agent Type"
+    },
+    "relatedEntities": {
+      "MJ: AI Agent Actions": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=BLA - Assemble Prompt",
+            "Status": "Active",
+            "ResultExpirationMode": "None"
+          },
+          "primaryKey": {
+            "ID": "19057A02-D738-4D32-A06B-4694C65F7E29"
+          },
+          "sync": {
+            "lastModified": "2026-05-12T18:44:39.681Z",
+            "checksum": "8ebe9b80fa2eee2b69e9406e6e982dba6be7568c9c5b61e15c11be36015cbc91"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "ActionID": "@lookup:MJ: Actions.Name=BLA - Execute Prompt",
+            "Status": "Active",
+            "ResultExpirationMode": "None"
+          },
+          "primaryKey": {
+            "ID": "07C31562-ED7F-4DA4-BA26-1EF82907F7BC"
+          },
+          "sync": {
+            "lastModified": "2026-05-12T18:44:39.725Z",
+            "checksum": "5dde9890fe5cd38d34361fdb0877e895065b7c8a16ff1dd5ef982dd0c599cc1a"
+          }
+        }
+      ],
+      "MJ: AI Agent Steps": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Assemble Prompt",
+            "Description": "Resolves PromptName to an AIPrompt.ID, selects matching betty.PromptComponent rows by specificity cascade, and emits the assembled ChatMessage[] plus an audit-text snapshot.",
+            "StepType": "Action",
+            "StartingStep": true,
+            "ActionID": "@lookup:MJ: Actions.Name=BLA - Assemble Prompt",
+            "ActionInputMapping": {
+              "PromptName": "payload.PromptName",
+              "OrganizationID": "payload.OrganizationID",
+              "InstanceID": "payload.InstanceID",
+              "ConversationHistory": "payload.ConversationHistory"
+            },
+            "ActionOutputMapping": {
+              "ResolvedPromptID": "ResolvedPromptID",
+              "AssembledSystemText": "AssembledSystemText",
+              "AssembledMessages": "AssembledMessages",
+              "SelectedComponentCount": "SelectedComponentCount"
+            },
+            "Status": "Active",
+            "PositionX": 100,
+            "PositionY": 100
+          },
+          "primaryKey": {
+            "ID": "A9A7F5B8-577A-444D-A567-4CBF33B71B3F"
+          },
+          "sync": {
+            "lastModified": "2026-05-12T19:17:34.361Z",
+            "checksum": "b2ec8f06ba9022aaae3d84a3d0244e80c9718b5e0f5078f8d79a1dc1dce84e7d"
+          }
+        },
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "Name": "Execute Prompt",
+            "Description": "Loads the resolved AIPrompt entity and calls AIPromptRunner.ExecutePrompt with the pre-assembled ChatMessage[]. templateMessageRole='none' so the structured messages drive the LLM call; the rendered template stays on the AIPromptRun as an audit-text snapshot.",
+            "StepType": "Action",
+            "StartingStep": false,
+            "ActionID": "@lookup:MJ: Actions.Name=BLA - Execute Prompt",
+            "ActionInputMapping": {
+              "ResolvedPromptID": "payload.ResolvedPromptID",
+              "AssembledSystemText": "payload.AssembledSystemText",
+              "AssembledMessages": "payload.AssembledMessages"
+            },
+            "ActionOutputMapping": {
+              "ResponseText": "ResponseText",
+              "PromptRunID": "PromptRunID",
+              "PromptTokens": "PromptTokens",
+              "CompletionTokens": "CompletionTokens",
+              "TokensUsed": "TokensUsed",
+              "Cost": "Cost",
+              "ExecutionTimeMs": "ExecutionTimeMs"
+            },
+            "Status": "Active",
+            "PositionX": 400,
+            "PositionY": 100
+          },
+          "primaryKey": {
+            "ID": "9A60FE06-9CEA-4B31-8EE4-8E9EF418C6A5"
+          },
+          "sync": {
+            "lastModified": "2026-05-12T19:17:34.378Z",
+            "checksum": "f216b90e18a6fa3e34b158a1278a3ff02a7334bdcd921b61a0fed1e369c5421a"
+          }
+        }
+      ],
+      "MJ: AI Agent Step Paths": [
+        {
+          "fields": {
+            "OriginStepID": "@lookup:MJ: AI Agent Steps.Name=Assemble Prompt&AgentID=@parent:ID",
+            "DestinationStepID": "@lookup:MJ: AI Agent Steps.Name=Execute Prompt&AgentID=@parent:ID",
+            "Priority": 1,
+            "Description": "Unconditional handoff from prompt assembly to prompt execution."
+          },
+          "primaryKey": {
+            "ID": "F06E8430-9FF3-4101-834F-B30FC2211202"
+          },
+          "sync": {
+            "lastModified": "2026-05-12T18:44:39.764Z",
+            "checksum": "6e9f6872b688b4c6addf8177d4e988fd7887bc198bbc66f562e2cb442d56ea49"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "798BBC46-86CA-4D4D-B431-FCE35C255B5F"
+    },
+    "sync": {
+      "lastModified": "2026-05-12T18:44:39.626Z",
+      "checksum": "42b14de651761990b0007a9e348b05c7d13b3366dacd44c4446dd1a45c43afb2"
+    }
+  }
+]

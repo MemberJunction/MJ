@@ -1,0 +1,39 @@
+{
+  "fields": {
+    "Name": "BLA Assembled Prompt",
+    "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+    "TemplateText": "{{BettyPrompt}}",
+    "ResponseFormat": "Any",
+    "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System",
+    "Status": "Active",
+    "Description": "Seed prompt for the BLA (Betty Layered Assembler) Flow Agent. The single-placeholder template ({{BettyPrompt}}) is intentionally minimal — the BLA Execute Prompt action uses templateMessageRole='none' so the rendered template never enters the conversation, instead supplying a structured ChatMessage[] via conversationMessages assembled from betty.PromptComponent rows. The rendered template still appears on the AIPromptRun record as an audit-text snapshot of the System-role components that were selected.",
+    "PromptRole": "System",
+    "PromptPosition": "First"
+  },
+  "relatedEntities": {
+    "MJ: AI Prompt Models": [
+      {
+        "fields": {
+          "PromptID": "@parent:ID",
+          "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3.1 Flash Lite",
+          "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+          "Priority": 1
+        },
+        "primaryKey": {
+          "ID": "85A14CB9-F967-45A4-BCA4-0502986F84BF"
+        },
+        "sync": {
+          "lastModified": "2026-05-12T18:44:32.050Z",
+          "checksum": "7b9baa8ee75fdf67cdfaad9d636391d872a8dc02222edeeb994eaa982881fdff"
+        }
+      }
+    ]
+  },
+  "primaryKey": {
+    "ID": "2128CA6F-BB07-4B83-BA5F-1B7AE3EDD7A2"
+  },
+  "sync": {
+    "lastModified": "2026-05-12T18:44:32.016Z",
+    "checksum": "ba7bdb84871d2d8da5a4b5ad0747c8b51c2ac8f79c95e482746287630af2db70"
+  }
+}

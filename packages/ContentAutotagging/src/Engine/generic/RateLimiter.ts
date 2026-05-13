@@ -66,15 +66,23 @@ export class RateLimiter {
             this.requestTimestamps = this.requestTimestamps.filter(t => t > Date.now() - 60000);
         }
 
-        // Check token rate
+        // Check token rate. Recompute currentTokens on every iteration —
+        // computing it once outside the loop combined with the filter at the
+        // bottom can leave currentTokens stale after timestamps expire,
+        // which loops forever and eventually crashes on
+        // `this.tokenTimestamps[0].time` once the array is emptied by filter.
         if (tokenCost > 0) {
-            const currentTokens = this.tokenTimestamps.reduce((sum, t) => sum + t.tokens, 0);
-            while (currentTokens + tokenCost > this.tokensPerMinute) {
+            while (true) {
+                this.tokenTimestamps = this.tokenTimestamps.filter(t => t.time > Date.now() - 60000);
+                const currentTokens = this.tokenTimestamps.reduce((sum, t) => sum + t.tokens, 0);
+                if (currentTokens + tokenCost <= this.tokensPerMinute) break;
+                // Always safe to dereference [0] here because the only way
+                // currentTokens > limit is if at least one timestamp survived
+                // the filter above.
                 const waitUntil = this.tokenTimestamps[0].time + 60000;
                 const waitMs = Math.max(100, waitUntil - Date.now());
                 LogStatus(`[${this.name}] Token rate limit hit (${this.tokensPerMinute}/min), waiting ${waitMs}ms`);
                 await this.delay(waitMs);
-                this.tokenTimestamps = this.tokenTimestamps.filter(t => t.time > Date.now() - 60000);
             }
         }
 

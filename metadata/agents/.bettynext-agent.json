@@ -12,7 +12,8 @@
       "ExposeAsAction": false,
       "IconClass": "fa-solid fa-magnifying-glass-arrow-right",
       "InjectNotes": false,
-      "InjectExamples": false
+      "InjectExamples": false,
+      "SearchScopeAccess": "Assigned"
     },
     "relatedEntities": {
       "MJ: AI Agent Modalities": [
@@ -68,15 +69,34 @@
         {
           "fields": {
             "AgentID": "@parent:ID",
-            "ActionID": "@lookup:MJ: Actions.Name=Search",
+            "ActionID": "@lookup:MJ: Actions.Name=Scoped Search",
             "Status": "Active"
           },
           "primaryKey": {
             "ID": "167C202C-62B1-40B8-AE7C-5A652ADF4291"
           },
           "sync": {
-            "lastModified": "2026-05-11T21:59:22.257Z",
-            "checksum": "a92448fc0cc93928d77e50184cd3d57029d0de07f765db104ea5e2c9574b16c2"
+            "lastModified": "2026-05-13T12:36:29.825Z",
+            "checksum": "a3551e0d0bd09cc54d7b74086cc6945b3ef1761f9e3e071ba38c01489bf24c4d"
+          }
+        }
+      ],
+      "MJ: AI Agent Search Scopes": [
+        {
+          "fields": {
+            "AgentID": "@parent:ID",
+            "SearchScopeID": "@lookup:MJ: Search Scopes.Name=Betty Content",
+            "Phase": "AgentInvoked",
+            "Status": "Active",
+            "Priority": 100,
+            "IsDefault": true
+          },
+          "primaryKey": {
+            "ID": "4E0C7A1E-4C85-4960-A4C0-A54CB87839F5"
+          },
+          "sync": {
+            "lastModified": "2026-05-13T12:36:29.767Z",
+            "checksum": "b4a9d80b2033f809ef0bbbe8d917a3b307de61789ce8c5b2a217294a1edf09db"
           }
         }
       ]
@@ -85,8 +105,8 @@
       "ID": "028384F0-0C59-4926-8B7A-54ADA2AEAC3D"
     },
     "sync": {
-      "lastModified": "2026-05-11T21:59:22.172Z",
-      "checksum": "1ef8452c513999810e4c92eb3401458c347459bde0e9b60109080f920defc93b"
+      "lastModified": "2026-05-13T12:36:29.688Z",
+      "checksum": "361bf02a16696a99247bc43fb8dd55f13333a14a4026c048096ea0b3ff203b44"
     }
   }
 ]

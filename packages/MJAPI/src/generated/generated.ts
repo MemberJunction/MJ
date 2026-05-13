@@ -56,14 +56,6 @@ export class bettyContentItem_ {
     _mj__UpdatedAt: Date;
         
     @Field() 
-    @MaxLength(255)
-    Organization: string;
-        
-    @Field({nullable: true}) 
-    @MaxLength(36)
-    RootParentID?: string;
-        
-    @Field() 
     @MaxLength(36)
     ContentSourceID: string;
         
@@ -118,6 +110,14 @@ export class bettyContentItem_ {
         
     @Field({nullable: true}) 
     LastTaggedAt?: Date;
+        
+    @Field() 
+    @MaxLength(255)
+    Organization: string;
+        
+    @Field({nullable: true}) 
+    @MaxLength(36)
+    RootParentID?: string;
         
     @Field(() => [bettyContentItem_])
     bettyContentItems_ParentIDArray: bettyContentItem_[]; // Link to bettyContentItems

@@ -1,0 +1,87 @@
+[
+  {
+    "fields": {
+      "Name": "Betty Content",
+      "Description": "Tenant-scoped search across Betty ingested content. Combines Pinecone semantic search (vector embeddings of __mj.ContentItem.Text) with SQL Server Full-Text Search on betty.ContentItem.Decorator and __mj.ContentItem.Text. The OrganizationID filter is applied via ExtraFilter on the betty Content Items entity using {{ context.PrimaryScopeRecordID }} from the caller-supplied SearchContext.",
+      "Icon": "fa-solid fa-comments-question",
+      "IsGlobal": false,
+      "IsDefault": false,
+      "Status": "Active"
+    },
+    "relatedEntities": {
+      "MJ: Search Scope Providers": [
+        {
+          "fields": {
+            "SearchScopeID": "@parent:ID",
+            "SearchProviderID": "@lookup:MJ: Search Providers.Name=Semantic",
+            "Enabled": true
+          },
+          "primaryKey": {
+            "ID": "7A114CA7-4361-4814-9EAD-3CA02D05770F"
+          },
+          "sync": {
+            "lastModified": "2026-05-13T12:36:19.594Z",
+            "checksum": "6363d5fa3e9ada7373dd253bc6f1db12838dab6695d7311dc70e86133567b3e7"
+          }
+        },
+        {
+          "fields": {
+            "SearchScopeID": "@parent:ID",
+            "SearchProviderID": "@lookup:MJ: Search Providers.Name=Database Full-Text",
+            "Enabled": true
+          },
+          "primaryKey": {
+            "ID": "C6814389-C58E-4337-900C-22F4B5D12C72"
+          },
+          "sync": {
+            "lastModified": "2026-05-13T12:36:19.611Z",
+            "checksum": "fd85344ee62d0cf22f04b01e1f3f59ce31e2bea94dbff344a3f9ffed633e2952"
+          }
+        }
+      ],
+      "MJ: Search Scope External Indexes": [
+        {
+          "fields": {
+            "SearchScopeID": "@parent:ID",
+            "IndexType": "Vector",
+            "VectorIndexID": "@lookup:MJ: Vector Indexes.Name=tasio-chat-dev",
+            "ExternalIndexName": null,
+            "ExternalIndexConfig": null,
+            "MetadataFilter": null
+          },
+          "primaryKey": {
+            "ID": "16898001-2E49-4B5E-B8CA-3992897E569B"
+          },
+          "sync": {
+            "lastModified": "2026-05-13T12:36:19.679Z",
+            "checksum": "f8873d80d4bec2fafd0aab0a35a23411cadaa78d856cbb2daae59e1a507d9296"
+          }
+        }
+      ],
+      "MJ: Search Scope Entities": [
+        {
+          "fields": {
+            "SearchScopeID": "@parent:ID",
+            "EntityID": "@lookup:MJ: Entities.Name=Content Items&SchemaName=betty",
+            "ExtraFilter": "OrganizationID = '{{ context.PrimaryScopeRecordID }}'",
+            "UserSearchString": null
+          },
+          "primaryKey": {
+            "ID": "DAB716F0-EEA0-4C5E-B68D-1E81D52C56C0"
+          },
+          "sync": {
+            "lastModified": "2026-05-13T12:36:19.710Z",
+            "checksum": "cc6704711f9308fa58779faf292f174e6f1614fcbdc7da2194008bcaf7b8e983"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "5FA72F3C-7958-490D-9805-0E9F1341E65B"
+    },
+    "sync": {
+      "lastModified": "2026-05-13T12:36:19.434Z",
+      "checksum": "0133a3e5104cc1c3e523d49a4f33764c1866c13261092668a3081d305a935068"
+    }
+  }
+]

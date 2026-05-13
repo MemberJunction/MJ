@@ -55,14 +55,6 @@ export const bettyContentItemSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
-    Organization: z.string().describe(`
-        * * Field Name: Organization
-        * * Display Name: Organization
-        * * SQL Data Type: nvarchar(255)`),
-    RootParentID: z.string().nullable().describe(`
-        * * Field Name: RootParentID
-        * * Display Name: Root Parent ID
-        * * SQL Data Type: uniqueidentifier`),
     ContentSourceID: z.string().describe(`
         * * Field Name: ContentSourceID
         * * Display Name: Content Source
@@ -118,6 +110,14 @@ export const bettyContentItemSchema = z.object({
         * * Field Name: LastTaggedAt
         * * Display Name: Last Tagged At
         * * SQL Data Type: datetimeoffset`),
+    Organization: z.string().describe(`
+        * * Field Name: Organization
+        * * Display Name: Organization
+        * * SQL Data Type: nvarchar(255)`),
+    RootParentID: z.string().nullable().describe(`
+        * * Field Name: RootParentID
+        * * Display Name: Root Parent ID
+        * * SQL Data Type: uniqueidentifier`),
 });
 
 export type bettyContentItemEntityType = z.infer<typeof bettyContentItemSchema>;
@@ -417,24 +417,6 @@ export class bettyContentItemEntity extends BaseEntity<bettyContentItemEntityTyp
     }
 
     /**
-    * * Field Name: Organization
-    * * Display Name: Organization
-    * * SQL Data Type: nvarchar(255)
-    */
-    get Organization(): string {
-        return this.Get('Organization');
-    }
-
-    /**
-    * * Field Name: RootParentID
-    * * Display Name: Root Parent ID
-    * * SQL Data Type: uniqueidentifier
-    */
-    get RootParentID(): string | null {
-        return this.Get('RootParentID');
-    }
-
-    /**
     * * Field Name: ContentSourceID
     * * Display Name: Content Source
     * * SQL Data Type: uniqueidentifier
@@ -622,6 +604,24 @@ export class bettyContentItemEntity extends BaseEntity<bettyContentItemEntityTyp
     }
     set LastTaggedAt(value: Date | null) {
         this.Set('LastTaggedAt', value);
+    }
+
+    /**
+    * * Field Name: Organization
+    * * Display Name: Organization
+    * * SQL Data Type: nvarchar(255)
+    */
+    get Organization(): string {
+        return this.Get('Organization');
+    }
+
+    /**
+    * * Field Name: RootParentID
+    * * Display Name: Root Parent ID
+    * * SQL Data Type: uniqueidentifier
+    */
+    get RootParentID(): string | null {
+        return this.Get('RootParentID');
     }
 }
 
