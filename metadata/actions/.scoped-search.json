@@ -106,6 +106,28 @@
         {
           "fields": {
             "ActionID": "@parent:ID",
+            "Name": "PrimaryScopeRecordID",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional primary tenant identifier (e.g. OrganizationID) supplied per call. Threaded into SearchParams.SearchContext.PrimaryScopeRecordID so the engine can render `{{ context.PrimaryScopeRecordID }}` into the scope's MetadataFilter / ExtraFilter / UserSearchString / FolderPath templates at search time. One scope definition serves many tenants when this is populated.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
+            "Name": "SecondaryScopes",
+            "Type": "Input",
+            "ValueType": "Scalar",
+            "IsArray": false,
+            "Description": "Optional JSON string of additional runtime dimensions as key/value pairs, e.g. `{\"Department\":\"Finance\",\"Region\":\"US\",\"Tags\":[\"audit\"]}`. Each key becomes `{{ context.SecondaryScopes.<key> }}` available to the scope's Nunjucks-rendered templates. Values must be string, number, boolean, or string[] — incompatible entries are skipped with a log. Dimensions are fully dynamic at this layer; the engine handles any per-scope dimension validation.",
+            "IsRequired": false
+          }
+        },
+        {
+          "fields": {
+            "ActionID": "@parent:ID",
             "Name": "Results",
             "Type": "Output",
             "ValueType": "Simple Object",
