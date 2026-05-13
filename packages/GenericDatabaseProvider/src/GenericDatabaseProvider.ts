@@ -1559,12 +1559,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         serverStatus: { maxUpdatedAt?: string; rowCount?: number },
     ): boolean {
         if (clientStatus.rowCount !== serverStatus.rowCount) return false;
+
+        // Handle empty result sets: if both sides report no timestamp, matching row count is sufficient
+        const clientEmpty = !clientStatus.maxUpdatedAt || clientStatus.maxUpdatedAt === '';
+        const serverEmpty = !serverStatus.maxUpdatedAt || serverStatus.maxUpdatedAt === '';
+        if (clientEmpty && serverEmpty) return true;
+
         const clientDate = this.parseClientTimestamp(clientStatus.maxUpdatedAt);
         if (!clientDate) return false;
         const serverDate = serverStatus.maxUpdatedAt ? new Date(serverStatus.maxUpdatedAt) : null;
+        // Server has no timestamp (e.g., empty table) — current if row counts match (already checked above)
         if (!serverDate) return clientStatus.rowCount === 0;
         if (isNaN(serverDate.getTime())) return false;
-        return clientDate.toISOString() === serverDate.toISOString();
+
+        // Compare as epoch milliseconds with 1-second tolerance to handle timestamp
+        // precision differences between SQL Server and JavaScript Date.toISOString()
+        return Math.abs(clientDate.getTime() - serverDate.getTime()) < 1000;
     }
 
     /**************************************************************************/

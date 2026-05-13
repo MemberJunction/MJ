@@ -109,7 +109,7 @@ function merge(
 
     // Parameters: merge deterministic + LLM
     const finalParams = resolveResult.allDeterministicParams.length > 0
-        ? MergeParametersWithLLM(resolveResult.allDeterministicParams, llmResult, resolveResult.passthroughContext)
+        ? MergeParametersWithLLM(resolveResult.allDeterministicParams, llmResult, resolveResult.passthroughContext, ctx.parameterHints)
         : null;
 
     // Fields priority: deterministic (SELECT * or explicit columns) → LLM selectClause

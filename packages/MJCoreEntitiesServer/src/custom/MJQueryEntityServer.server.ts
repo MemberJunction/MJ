@@ -29,6 +29,12 @@ export class MJQueryEntityServer extends MJQueryEntity {
     private _queryParameters: QueryParameterInfo[] = [];
     private _queryPermissions: QueryPermissionInfo[] = [];
 
+    /** Optional caller-provided parameter sample values. When set, these override
+     *  LLM-generated sampleValues during the extraction pipeline. Use this to pass
+     *  tested/validated values from the calling system.
+     *  Keys are parameter names, values are the tested sample values. */
+    public ParameterHints?: Map<string, string>;
+
     public get QueryEntities(): QueryEntityInfo[] {
         return this._queryEntities;
     }
@@ -173,6 +179,7 @@ export class MJQueryEntityServer extends MJQueryEntity {
             contextUser: this.ContextCurrentUser,
             metadataProvider: this.ProviderToUse as unknown as IMetadataProvider,
             runViewProvider: this.RunViewProviderToUse,
+            parameterHints: this.ParameterHints,
         };
     }
 
