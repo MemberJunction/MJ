@@ -193,7 +193,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     private _contextUser: UserInfo;
     private _metadataConfigs: BaseEnginePropertyConfig[] = [];
     private _dynamicConfigs: Map<string, BaseEnginePropertyConfig> = new Map();
-    private _dataMap: Map<string, { entityName?: string, datasetName?: string, data: unknown[] }> = new Map();
+    private _dataMap: Map<string, { entityName?: string, datasetName?: string, data: unknown[], loadedSuccessfully: boolean, errorMessage?: string }> = new Map();
     private _expirationTimers: Map<string, number> = new Map();
     private _entityEventSubjects: Map<string, Subject<BaseEntityEvent>> = new Map();
     private _provider: IMetadataProvider;
@@ -711,11 +711,11 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 const index = this.findEntityIndexByPrimaryKeys(currentData, entity);
                 if (index >= 0) {
                     currentData[index] = entity;
-                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                     this.NotifyDataChange(config, currentData, 'update', entity);
                 } else {
                     currentData.push(entity);
-                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                     this.NotifyDataChange(config, currentData, 'add', entity);
                 }
                 this.emitPropertyChange(config.PropertyName);
@@ -759,7 +759,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                 if (index >= 0) {
                     const removed = currentData[index];
                     currentData.splice(index, 1);
-                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                    this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                     this.NotifyDataChange(config, currentData, 'delete', removed);
                     this.emitPropertyChange(config.PropertyName);
                 }
@@ -1035,12 +1035,12 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     if (indexByKey >= 0) {
                         // Already exists by key, treat as update
                         currentData[indexByKey] = entity;
-                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                         this.NotifyDataChange(config, currentData, 'update', entity);
                     } else {
                         // Add the new entity to the array
                         currentData.push(entity);
-                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                         this.NotifyDataChange(config, currentData, 'add', entity);
                     }
                 }
@@ -1054,13 +1054,13 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     const index = this.findEntityIndexByPrimaryKeys(currentData, entity);
                     if (index >= 0) {
                         currentData[index] = entity;
-                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                         this.NotifyDataChange(config, currentData, 'update', entity);
                     } else {
                         // Entity not found in array - this shouldn't happen normally,
                         // but if it does, add it (might have been created before we started listening)
                         currentData.push(entity);
-                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                        this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                         this.NotifyDataChange(config, currentData, 'add', entity);
                     }
                 }
@@ -1075,7 +1075,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
 
             if (index >= 0) {
                 currentData.splice(index, 1);
-                this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData });
+                this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: currentData, loadedSuccessfully: true });
                 this.NotifyDataChange(config, currentData, 'delete', entity);
             }
         }
@@ -1274,7 +1274,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             if (config.AddToObject !== false) {
                 (this as any)[config.PropertyName] = result.Results;
             }
-            this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: result.Results });
+            this._dataMap.set(config.PropertyName, { entityName: config.EntityName, data: result.Results, loadedSuccessfully: true });
 
             // Notify listeners that this property's data has changed
             this.NotifyDataChange(config, result.Results);
@@ -1282,6 +1282,15 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
             if (config.Expiration) {
                 this.SetExpirationTimer(config.PropertyName, config.Expiration);
             }
+        } else {
+            // Track the failure so consumers can detect partial load failures
+            this._dataMap.set(config.PropertyName, {
+                entityName: config.EntityName,
+                data: [],
+                loadedSuccessfully: false,
+                errorMessage: result.ErrorMessage
+            });
+            LogError(`BaseEngine: Failed to load ${config.EntityName} into ${config.PropertyName}: ${result.ErrorMessage}`);
         }
     }
 
@@ -1374,7 +1383,7 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
                     }
                 }
             }
-            this._dataMap.set(config.PropertyName, { datasetName: config.DatasetName, data: result.Results });
+            this._dataMap.set(config.PropertyName, { datasetName: config.DatasetName, data: result.Results, loadedSuccessfully: true });
 
             if (config.Expiration) {
                 this.SetExpirationTimer(config.PropertyName, config.Expiration);
@@ -1534,6 +1543,28 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
      */
     public get Loaded(): boolean {
         return this._loaded;
+    }
+
+    /**
+     * Returns true if the specified property loaded successfully during engine startup.
+     * Returns false if the property failed to load (e.g., RunView error) or was never loaded.
+     * Consumers can use this to detect partial load failures and trigger recovery.
+     */
+    public PropertyLoadedSuccessfully(propertyName: string): boolean {
+        const entry = this._dataMap.get(propertyName);
+        return entry?.loadedSuccessfully ?? false;
+    }
+
+    /**
+     * Returns true if ALL configured properties loaded successfully.
+     * Useful as a quick health check after engine startup.
+     */
+    public get AllPropertiesLoadedSuccessfully(): boolean {
+        if (this._dataMap.size === 0) return false;
+        for (const entry of this._dataMap.values()) {
+            if (!entry.loadedSuccessfully) return false;
+        }
+        return true;
     }
 
     /**
