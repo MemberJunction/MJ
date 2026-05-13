@@ -232,17 +232,21 @@ export class GroqLLM extends BaseLLM {
         
         // Groq provides detailed timing in the usage object
         const groqUsage = chatResponse.usage;
+        // Convert from seconds to milliseconds and truncate to integer.
+        // Groq returns sub-second precision (e.g. 0.07161... s) which becomes
+        // 71.610... ms after the multiply — those fractional ms reach
+        // AIPromptRun.QueueTime/PromptTime/CompletionTime (declared INT4) and
+        // PG strict typing rejects the float. Truncation (vs. rounding) keeps
+        // PG behavior identical to SQL Server, whose documented FLOAT→INT
+        // implicit conversion truncates toward zero.
         if (groqUsage.queue_time !== undefined) {
-            // Convert from seconds to milliseconds
-            usage.queueTime = groqUsage.queue_time * 1000;
+            usage.queueTime = Math.trunc(groqUsage.queue_time * 1000);
         }
         if (groqUsage.prompt_time !== undefined) {
-            // Convert from seconds to milliseconds
-            usage.promptTime = groqUsage.prompt_time * 1000;
+            usage.promptTime = Math.trunc(groqUsage.prompt_time * 1000);
         }
         if (groqUsage.completion_time !== undefined) {
-            // Convert from seconds to milliseconds
-            usage.completionTime = groqUsage.completion_time * 1000;
+            usage.completionTime = Math.trunc(groqUsage.completion_time * 1000);
         }
         
         const result = {
