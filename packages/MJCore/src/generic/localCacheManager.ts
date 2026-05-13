@@ -498,6 +498,30 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         return this._entityFingerprintIndex.get(entityName) ?? new Set();
     }
 
+    /**
+     * Resolves cached fingerprints for an entity, checking the local in-memory
+     * index first and falling back to the shared storage provider (e.g., Redis)
+     * when the local index is empty. This handles cross-server scenarios where
+     * Server A cached RunView results and Server B saves a record — Server B's
+     * local index is empty but Redis still has the stale cached entries.
+     */
+    private async resolveFingerprintsForEntity(entityName: string): Promise<Set<string> | undefined> {
+        const local = this._entityFingerprintIndex.get(entityName);
+        if (local && local.size > 0) return local;
+
+        if (!this._storageProvider?.GetCategoryKeys) return undefined;
+
+        const allKeys = await this._storageProvider.GetCategoryKeys(CacheCategory.RunViewCache);
+        const entityPrefix = entityName + '|';
+        const remoteFingerprints = allKeys.filter(k => k.startsWith(entityPrefix));
+        if (remoteFingerprints.length > 0) {
+            LogStatusVerbose(`LocalCacheManager: found ${remoteFingerprints.length} remote cached fingerprint(s) for "${entityName}" via storage provider`);
+            return new Set(remoteFingerprints);
+        }
+
+        return undefined;
+    }
+
     // ========================================================================
     // UNIVERSAL CACHE INVALIDATION (BaseEntity Events)
     // ========================================================================
@@ -551,7 +575,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         // Short-circuit: if caching is disabled for this entity, skip the fingerprint scan
         if (!this.IsCachingEnabledForEntity(baseEntity.EntityInfo)) return;
 
-        const fingerprints = this._entityFingerprintIndex.get(entityName);
+        const fingerprints = await this.resolveFingerprintsForEntity(entityName);
         if (!fingerprints || fingerprints.size === 0) return;
 
         const primaryKeys = baseEntity.EntityInfo.PrimaryKeys;
@@ -602,7 +626,7 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
         const entityInfo = md.EntityByName(entityName);
         if (entityInfo && !this.IsCachingEnabledForEntity(entityInfo)) return;
 
-        const fingerprints = this._entityFingerprintIndex.get(entityName);
+        const fingerprints = await this.resolveFingerprintsForEntity(entityName);
         if (!fingerprints || fingerprints.size === 0) return;
 
         const action = payload?.action;
