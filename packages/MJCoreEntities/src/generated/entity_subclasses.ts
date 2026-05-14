@@ -20786,19 +20786,21 @@ export const MJRecordGeoCodeSchema = z.object({
         * * Display Name: Geocoded At
         * * SQL Data Type: datetimeoffset
         * * Description: Timestamp of when geocoding was last attempted (success or failure).`),
-    GeocodingSource: z.union([z.literal('google'), z.literal('ip_geolocation'), z.literal('manual'), z.literal('native'), z.literal('reference_data'), z.literal('reverse')]).nullable().describe(`
+    GeocodingSource: z.union([z.literal('geocodio'), z.literal('google'), z.literal('here'), z.literal('ip_geolocation'), z.literal('manual'), z.literal('native'), z.literal('reference_data'), z.literal('reverse')]).nullable().describe(`
         * * Field Name: GeocodingSource
         * * Display Name: Geocoding Source
         * * SQL Data Type: nvarchar(30)
     * * Value List Type: List
     * * Possible Values 
+    *   * geocodio
     *   * google
+    *   * here
     *   * ip_geolocation
     *   * manual
     *   * native
     *   * reference_data
     *   * reverse
-        * * Description: How this geocode was produced: google (Google Geocoding API), reference_data (resolved via Country/StateProvince tables), manual (user-entered), ip_geolocation (IP lookup), native (copied from entity lat/lng fields), reverse (reverse geocode from coordinates).`),
+        * * Description: Source that produced this geocode. One of: google, geocodio, here, reference_data, manual, ip_geolocation, native, reverse.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
@@ -81138,18 +81140,20 @@ export class MJRecordGeoCodeEntity extends BaseEntity<MJRecordGeoCodeEntityType>
     * * SQL Data Type: nvarchar(30)
     * * Value List Type: List
     * * Possible Values 
+    *   * geocodio
     *   * google
+    *   * here
     *   * ip_geolocation
     *   * manual
     *   * native
     *   * reference_data
     *   * reverse
-    * * Description: How this geocode was produced: google (Google Geocoding API), reference_data (resolved via Country/StateProvince tables), manual (user-entered), ip_geolocation (IP lookup), native (copied from entity lat/lng fields), reverse (reverse geocode from coordinates).
+    * * Description: Source that produced this geocode. One of: google, geocodio, here, reference_data, manual, ip_geolocation, native, reverse.
     */
-    get GeocodingSource(): 'google' | 'ip_geolocation' | 'manual' | 'native' | 'reference_data' | 'reverse' | null {
+    get GeocodingSource(): 'geocodio' | 'google' | 'here' | 'ip_geolocation' | 'manual' | 'native' | 'reference_data' | 'reverse' | null {
         return this.Get('GeocodingSource');
     }
-    set GeocodingSource(value: 'google' | 'ip_geolocation' | 'manual' | 'native' | 'reference_data' | 'reverse' | null) {
+    set GeocodingSource(value: 'geocodio' | 'google' | 'here' | 'ip_geolocation' | 'manual' | 'native' | 'reference_data' | 'reverse' | null) {
         this.Set('GeocodingSource', value);
     }
 

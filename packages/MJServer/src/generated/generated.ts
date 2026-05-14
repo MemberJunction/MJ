@@ -60908,7 +60908,7 @@ export class MJRecordGeoCode_ {
     @Field({nullable: true, description: `Timestamp of when geocoding was last attempted (success or failure).`}) 
     GeocodedAt?: Date;
         
-    @Field({nullable: true, description: `How this geocode was produced: google (Google Geocoding API), reference_data (resolved via Country/StateProvince tables), manual (user-entered), ip_geolocation (IP lookup), native (copied from entity lat/lng fields), reverse (reverse geocode from coordinates).`}) 
+    @Field({nullable: true, description: `Source that produced this geocode. One of: google, geocodio, here, reference_data, manual, ip_geolocation, native, reverse.`}) 
     @MaxLength(30)
     GeocodingSource?: string;
         
