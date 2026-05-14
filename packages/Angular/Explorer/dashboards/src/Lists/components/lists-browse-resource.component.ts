@@ -37,7 +37,7 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
         <div meta>
           <mj-result-count [Count]="filteredLists.length" Label="lists"></mj-result-count>
         </div>
-        <div actions class="lists-header-actions">
+        <div actions>
           <mj-filter-popover
             [ActiveCount]="ActiveFilterCount"
             [ShowClearAll]="ActiveFilterCount > 0"
@@ -532,12 +532,6 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
       flex-direction: column;
       width: 100%;
       height: 100%;
-    }
-
-    /* Header projection wrappers — display:contents lets children become direct flex
-       children of <mj-page-header>'s slot so its gap applies between them. */
-    .lists-header-actions {
-      display: contents;
     }
 
     /* Header */
