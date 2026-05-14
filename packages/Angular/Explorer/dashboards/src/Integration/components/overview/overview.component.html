@@ -3,17 +3,13 @@
     Title="Integration Overview"
     Icon="fa-solid fa-gauge-high"
     Subtitle="Health, throughput, and activity across all integrations">
-    <div meta class="integration-header-meta">
-      @if (Summaries.length > 0) {
-        <span class="integration-stat-badge">
-          <strong>{{ KPIs.TotalIntegrations }}</strong> integrations
-        </span>
-      }
-    </div>
-    <div actions class="integration-header-actions">
-      <button mjButton variant="secondary" size="sm" (click)="Refresh()" [disabled]="IsLoading" title="Refresh">
-        <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="IsLoading"></i> Refresh
-      </button>
+    @if (Summaries.length > 0) {
+      <div meta>
+        <mj-stat-badge [Count]="KPIs.TotalIntegrations" Label="integrations"></mj-stat-badge>
+      </div>
+    }
+    <div actions>
+      <mj-refresh-button [Loading]="IsLoading" (Clicked)="Refresh()"></mj-refresh-button>
     </div>
   </mj-page-header>
 

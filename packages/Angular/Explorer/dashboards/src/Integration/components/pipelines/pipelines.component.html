@@ -3,28 +3,22 @@
     Title="Integration Pipelines"
     Icon="fa-solid fa-diagram-project"
     Subtitle="Data transformation and routing pipelines">
-    <div meta class="integration-header-meta">
-      @if (IntegrationCount > 0) {
-        <span class="integration-stat-badge">
-          <strong>{{ IntegrationCount }}</strong> pipelines
-        </span>
-        <span class="integration-stat-badge">
-          <strong>{{ TotalMapCount }}</strong> entity maps
-        </span>
-      }
-    </div>
-    <div actions class="integration-header-actions">
+    @if (IntegrationCount > 0) {
+      <div meta>
+        <mj-stat-badge [Count]="IntegrationCount" Label="pipelines"></mj-stat-badge>
+        <mj-stat-badge [Count]="TotalMapCount" Label="entity maps"></mj-stat-badge>
+      </div>
+    }
+    <div actions>
       <button mjButton variant="secondary" size="sm" (click)="ExpandAll()" title="Expand All">
         <i class="fa-solid fa-angles-down"></i>
       </button>
       <button mjButton variant="secondary" size="sm" (click)="CollapseAll()" title="Collapse All">
         <i class="fa-solid fa-angles-up"></i>
       </button>
-      <button mjButton variant="secondary" size="sm" (click)="LoadData()" [disabled]="IsLoading" title="Refresh">
-        <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="IsLoading"></i> Refresh
-      </button>
+      <mj-refresh-button [Loading]="IsLoading" (Clicked)="LoadData()"></mj-refresh-button>
     </div>
-    <div toolbar class="integration-header-toolbar">
+    <div toolbar>
       <mj-page-search
         Placeholder="Search integrations or entities..."
         [Value]="GlobalSearch"

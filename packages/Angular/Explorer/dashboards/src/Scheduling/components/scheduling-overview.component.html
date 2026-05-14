@@ -6,10 +6,8 @@
       Title="Scheduling Dashboard"
       Icon="fa-solid fa-gauge-high"
       Subtitle="System health, KPIs, and alerts">
-      <div actions class="scheduling-header-actions">
-        <button mjButton variant="secondary" size="sm" (click)="Refresh()" title="Refresh">
-          <i class="fa-solid fa-arrows-rotate"></i> Refresh
-        </button>
+      <div actions>
+        <mj-refresh-button (Clicked)="Refresh()"></mj-refresh-button>
         <button mjButton
           [variant]="AutoRefreshEnabled ? 'primary' : 'secondary'"
           size="sm"

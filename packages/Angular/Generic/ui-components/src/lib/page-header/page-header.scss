@@ -14,6 +14,18 @@
   margin-bottom: 0;
 }
 
+/* Slot-wrapper passthrough — any element a consumer projects with the `meta`,
+   `actions`, or `toolbar` attribute (regardless of class name) becomes a
+   transparent container so its children become direct flex children of the
+   page-header row and inherit the row's gap. Eliminates the per-page
+   `.{section}-header-meta { display: contents }` rules that pages had to
+   declare in their own CSS files. */
+:host ::ng-deep [meta],
+:host ::ng-deep [actions],
+:host ::ng-deep [toolbar] {
+  display: contents;
+}
+
 .mj-page-header {
   display: flex;
   flex-direction: column;

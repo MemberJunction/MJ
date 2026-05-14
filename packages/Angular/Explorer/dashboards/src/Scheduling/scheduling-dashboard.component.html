@@ -3,18 +3,20 @@
     Title="Scheduling"
     Icon="fa-solid fa-calendar-check"
     Subtitle="Background jobs, executions, and system health">
-    <div meta class="scheduling-header-meta">
+    <div meta>
       @if (AlertCount > 0) {
-        <span class="scheduling-status-badge alert">
-          <i class="fa-solid fa-triangle-exclamation"></i>
-          <span>{{AlertCount}} Alert{{AlertCount !== 1 ? 's' : ''}}</span>
-        </span>
-      }
-      @if (AlertCount === 0) {
-        <span class="scheduling-status-badge healthy">
-          <i class="fa-solid fa-circle-check"></i>
-          <span>Healthy</span>
-        </span>
+        <mj-stat-badge
+          Icon="fa-solid fa-triangle-exclamation"
+          [Count]="AlertCount"
+          [Label]="AlertCount === 1 ? 'Alert' : 'Alerts'"
+          Variant="error">
+        </mj-stat-badge>
+      } @else {
+        <mj-stat-badge
+          Icon="fa-solid fa-circle-check"
+          Label="Healthy"
+          Variant="success">
+        </mj-stat-badge>
       }
       @if (ActiveTab === 'jobs') {
         <mj-result-count
@@ -24,7 +26,7 @@
         </mj-result-count>
       }
     </div>
-    <div actions class="scheduling-header-actions">
+    <div actions>
       <mj-tab-nav
         [Tabs]="Tabs"
         [ActiveKey]="ActiveTab"
@@ -33,9 +35,7 @@
 
       @switch (ActiveTab) {
         @case ('dashboard') {
-          <button mjButton variant="secondary" size="sm" (click)="overviewCmp?.Refresh()" title="Refresh">
-            <i class="fa-solid fa-arrows-rotate"></i> Refresh
-          </button>
+          <mj-refresh-button (Clicked)="overviewCmp?.Refresh()"></mj-refresh-button>
           <button mjButton
             [variant]="overviewCmp?.AutoRefreshEnabled ? 'primary' : 'secondary'"
             size="sm"
@@ -57,9 +57,7 @@
               (Reset)="resetJobsFilters()">
             </mj-filter-panel>
           </mj-filter-popover>
-          <button mjButton variant="secondary" size="sm" (click)="jobsCmp?.Refresh()" title="Refresh">
-            <i class="fa-solid fa-arrows-rotate"></i> Refresh
-          </button>
+          <mj-refresh-button (Clicked)="jobsCmp?.Refresh()"></mj-refresh-button>
           <button mjButton variant="primary" size="sm" (click)="jobsCmp?.OpenCreateSlideout()">
             <i class="fa-solid fa-plus"></i> New Job
           </button>
@@ -76,9 +74,7 @@
               (Reset)="resetActivityFilters()">
             </mj-filter-panel>
           </mj-filter-popover>
-          <button mjButton variant="secondary" size="sm" (click)="activityCmp?.Refresh()" title="Refresh">
-            <i class="fa-solid fa-arrows-rotate"></i> Refresh
-          </button>
+          <mj-refresh-button (Clicked)="activityCmp?.Refresh()"></mj-refresh-button>
         }
       }
     </div>

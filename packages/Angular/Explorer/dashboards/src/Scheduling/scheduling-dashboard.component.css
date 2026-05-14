@@ -1,35 +1,7 @@
-/* Header projection wrappers — display:contents lets children become direct flex
-   children of <mj-page-header>'s slot so its gap applies between them. */
-.scheduling-header-meta,
-.scheduling-header-actions {
-    display: contents;
-}
-
 /* Per-tab toolbar rendered in the [toolbar] slot of <mj-page-header>. */
 .scheduling-toolbar {
     display: flex;
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
-}
-
-/* Status badge — small "Healthy" / "X Alerts" pill in the [meta] slot. */
-.scheduling-status-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    padding: 4px 10px;
-    border-radius: 20px;
-}
-.scheduling-status-badge.healthy {
-    color: var(--mj-status-success);
-    background: color-mix(in srgb, var(--mj-status-success) 12%, var(--mj-bg-surface));
-    border: 1px solid color-mix(in srgb, var(--mj-status-success) 25%, transparent);
-}
-.scheduling-status-badge.alert {
-    color: var(--mj-status-warning-text);
-    background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
-    border: 1px solid color-mix(in srgb, var(--mj-status-warning) 30%, transparent);
 }

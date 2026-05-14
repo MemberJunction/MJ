@@ -4,25 +4,24 @@
     Icon="fa-solid fa-calendar-check"
     Subtitle="When and how often integrations sync">
     @if (!IsLoading && Schedules.length > 0) {
-      <div meta class="integration-header-meta">
-        <span class="integration-stat-badge">
-          <strong>{{ Schedules.length }}</strong> integration{{ Schedules.length === 1 ? '' : 's' }}
-        </span>
-        <span class="integration-stat-badge">
-          <strong>{{ ScheduledCount }}</strong> scheduled
-        </span>
+      <div meta>
+        <mj-stat-badge
+          [Count]="Schedules.length"
+          [Label]="Schedules.length === 1 ? 'integration' : 'integrations'">
+        </mj-stat-badge>
+        <mj-stat-badge [Count]="ScheduledCount" Label="scheduled"></mj-stat-badge>
         @if (LockedCount > 0) {
-          <span class="integration-stat-badge integration-stat-badge--running">
-            <i class="fa-solid fa-spinner fa-spin"></i>
-            <strong>{{ LockedCount }}</strong> running
-          </span>
+          <mj-stat-badge
+            Icon="fa-solid fa-spinner fa-spin"
+            [Count]="LockedCount"
+            Label="running"
+            Variant="running">
+          </mj-stat-badge>
         }
       </div>
     }
-    <div actions class="integration-header-actions">
-      <button mjButton variant="secondary" size="sm" (click)="LoadData()" [disabled]="IsLoading" title="Refresh">
-        <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="IsLoading"></i> Refresh
-      </button>
+    <div actions>
+      <mj-refresh-button [Loading]="IsLoading" (Clicked)="LoadData()"></mj-refresh-button>
     </div>
   </mj-page-header>
 

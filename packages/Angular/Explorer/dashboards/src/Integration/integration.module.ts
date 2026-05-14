@@ -12,7 +12,9 @@ import {
   MJPageSearchComponent,
   MJFilterChipComponent,
   MJFilterPopoverComponent,
-  MJFilterPanelComponent
+  MJFilterPanelComponent,
+  MJStatBadgeComponent,
+  MJRefreshButtonComponent
 } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CredentialsModule } from '@memberjunction/ng-credentials';
@@ -56,6 +58,8 @@ import { IntegrationDataService } from './services/integration-data.service';
     MJFilterChipComponent,
     MJFilterPopoverComponent,
     MJFilterPanelComponent,
+    MJStatBadgeComponent,
+    MJRefreshButtonComponent,
     SharedGenericModule,
     CredentialsModule,
     NgTreesModule,

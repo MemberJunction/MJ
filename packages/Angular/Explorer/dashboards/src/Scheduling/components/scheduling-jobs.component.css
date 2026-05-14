@@ -1,9 +1,3 @@
-.scheduling-header-meta,
-.scheduling-header-actions,
-.scheduling-header-toolbar {
-    display: contents;
-}
-
 .jobs-container {
     display: flex;
     flex-direction: column;

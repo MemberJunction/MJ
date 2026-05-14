@@ -4,16 +4,15 @@
     Icon="fa-solid fa-plug"
     Subtitle="Connected systems and data sources">
     @if (!WizardOpen && !SelectedSummary && Connections.length > 0) {
-      <div meta class="integration-header-meta">
-        <span class="integration-stat-badge">
-          <strong>{{ Connections.length }}</strong> integration{{ Connections.length === 1 ? '' : 's' }}
-        </span>
+      <div meta>
+        <mj-stat-badge
+          [Count]="Connections.length"
+          [Label]="Connections.length === 1 ? 'integration' : 'integrations'">
+        </mj-stat-badge>
       </div>
     }
-    <div actions class="integration-header-actions">
-      <button mjButton variant="secondary" size="sm" (click)="LoadData()" [disabled]="IsLoading" title="Refresh">
-        <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="IsLoading"></i> Refresh
-      </button>
+    <div actions>
+      <mj-refresh-button [Loading]="IsLoading" (Clicked)="LoadData()"></mj-refresh-button>
       @if (!WizardOpen && !SelectedSummary) {
         <button mjButton variant="primary" size="sm" (click)="OpenWizard()">
           <i class="fa-solid fa-plus"></i> Add Integration

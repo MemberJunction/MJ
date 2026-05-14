@@ -11,7 +11,9 @@ import {
   MJFilterChipComponent,
   MJResultCountComponent,
   MJFilterPopoverComponent,
-  MJFilterPanelComponent
+  MJFilterPanelComponent,
+  MJStatBadgeComponent,
+  MJRefreshButtonComponent
 } from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
@@ -56,6 +58,8 @@ import { SchedulingInstrumentationService } from './Scheduling/services/scheduli
     MJResultCountComponent,
     MJFilterPopoverComponent,
     MJFilterPanelComponent,
+    MJStatBadgeComponent,
+    MJRefreshButtonComponent,
     ContainerDirectivesModule,
     SharedGenericModule,
     CodeEditorModule,

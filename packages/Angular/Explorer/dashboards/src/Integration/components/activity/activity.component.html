@@ -4,22 +4,14 @@
     Icon="fa-solid fa-clock-rotate-left"
     Subtitle="Sync run history and outcomes">
     @if (!IsLoading && AllRuns.length > 0) {
-      <div meta class="integration-header-meta">
-        <span class="integration-stat-badge">
-          <strong>{{ TotalRuns }}</strong> total
-        </span>
-        <span class="integration-stat-badge integration-stat-badge--success">
-          <strong>{{ SuccessfulRuns }}</strong> succeeded
-        </span>
-        <span class="integration-stat-badge integration-stat-badge--error">
-          <strong>{{ FailedRuns }}</strong> failed
-        </span>
-        <span class="integration-stat-badge">
-          <strong>{{ TotalRecordsProcessed | number }}</strong> records
-        </span>
+      <div meta>
+        <mj-stat-badge [Count]="TotalRuns" Label="total"></mj-stat-badge>
+        <mj-stat-badge [Count]="SuccessfulRuns" Label="succeeded" Variant="success"></mj-stat-badge>
+        <mj-stat-badge [Count]="FailedRuns" Label="failed" Variant="error"></mj-stat-badge>
+        <mj-stat-badge [Count]="TotalRecordsProcessed | number" Label="records"></mj-stat-badge>
       </div>
     }
-    <div actions class="integration-header-actions">
+    <div actions>
       <mj-filter-popover
         [ActiveCount]="ActiveFilterCount"
         [ShowClearAll]="ActiveFilterCount > 0"
@@ -31,11 +23,9 @@
           (Reset)="ResetIntegrationFilter()">
         </mj-filter-panel>
       </mj-filter-popover>
-      <button mjButton variant="secondary" size="sm" (click)="Refresh()" [disabled]="IsLoading" title="Refresh">
-        <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="IsLoading"></i> Refresh
-      </button>
+      <mj-refresh-button [Loading]="IsLoading" (Clicked)="Refresh()"></mj-refresh-button>
     </div>
-    <div toolbar class="integration-header-toolbar">
+    <div toolbar>
       <mj-page-search
         Placeholder="Search integrations..."
         [Value]="SearchQuery"

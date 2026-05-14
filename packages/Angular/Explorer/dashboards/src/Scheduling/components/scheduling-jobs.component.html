@@ -6,10 +6,10 @@
       Title="Scheduled Jobs"
       Icon="fa-solid fa-calendar-check"
       Subtitle="Configure and manage scheduled jobs">
-      <div meta class="scheduling-header-meta">
+      <div meta>
         <mj-result-count [Count]="FilteredJobs.length" [Total]="Jobs.length" Label="jobs"></mj-result-count>
       </div>
-      <div actions class="scheduling-header-actions">
+      <div actions>
         <mj-filter-popover
           [ActiveCount]="ActiveFilterCount"
           [ShowClearAll]="ActiveFilterCount > 0"
@@ -21,14 +21,12 @@
             (Reset)="ResetFilters()">
           </mj-filter-panel>
         </mj-filter-popover>
-        <button mjButton variant="secondary" size="sm" (click)="Refresh()" title="Refresh">
-          <i class="fa-solid fa-arrows-rotate"></i> Refresh
-        </button>
+        <mj-refresh-button (Clicked)="Refresh()"></mj-refresh-button>
         <button mjButton variant="primary" size="sm" (click)="OpenCreateSlideout()">
           <i class="fa-solid fa-plus"></i> New Job
         </button>
       </div>
-      <div toolbar class="scheduling-header-toolbar">
+      <div toolbar>
         <mj-page-search
           Placeholder="Search jobs..."
           [Value]="SearchTerm"

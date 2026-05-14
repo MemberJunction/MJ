@@ -4,12 +4,6 @@
     gap: 20px;
 }
 
-/* Slot wrappers — pass through to <mj-page-header> slots. */
-.scheduling-header-actions,
-.scheduling-header-toolbar {
-    display: contents;
-}
-
 /* ── Toolbar ─────────────────────────────────────────────── */
 .activity-toolbar {
     display: flex;

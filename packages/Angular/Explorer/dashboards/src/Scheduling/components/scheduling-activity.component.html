@@ -6,7 +6,7 @@
       Title="Scheduling Activity"
       Icon="fa-solid fa-clock-rotate-left"
       Subtitle="Execution history, trends, and job type statistics">
-      <div actions class="scheduling-header-actions">
+      <div actions>
         <mj-filter-popover
           [ActiveCount]="ActiveFilterCount"
           [ShowClearAll]="ActiveFilterCount > 0"
@@ -18,11 +18,9 @@
             (Reset)="ResetFilters()">
           </mj-filter-panel>
         </mj-filter-popover>
-        <button mjButton variant="secondary" size="sm" (click)="Refresh()" title="Refresh">
-          <i class="fa-solid fa-arrows-rotate"></i> Refresh
-        </button>
+        <mj-refresh-button (Clicked)="Refresh()"></mj-refresh-button>
       </div>
-      <div toolbar class="scheduling-header-toolbar">
+      <div toolbar>
         <mj-page-search
           Placeholder="Search executions..."
           [Value]="SearchTerm"
