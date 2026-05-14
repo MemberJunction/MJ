@@ -94,6 +94,7 @@
     "@memberjunction/doc-utils": "5.34.0",
     "@memberjunction/encryption": "5.34.0",
     "@memberjunction/entity-communications-base": "5.34.0",
+    "@memberjunction/geo-core": "5.34.0",
     "@memberjunction/integration-actions": "5.34.0",
     "@memberjunction/integration-connectors": "5.34.0",
     "@memberjunction/integration-engine": "5.34.0",

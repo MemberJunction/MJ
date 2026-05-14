@@ -53,6 +53,17 @@ vi.mock('@memberjunction/global', () => ({
     BaseSingleton: class {
         static getInstance() { return new this(); }
     },
+    // RegisterClass is a class decorator used by the geocoding providers.
+    // We don't exercise the MJ class-factory registry in these tests, so a no-op
+    // factory that returns the original class is sufficient.
+    RegisterClass: () => (target: unknown) => target,
+    MJGlobal: {
+        Instance: {
+            ClassFactory: {
+                CreateInstance: () => null,
+            },
+        },
+    },
 }));
 
 const mockResolveCountry = vi.fn();
@@ -268,54 +279,55 @@ describe('GeoCodeSyncService', () => {
         });
     });
 
-    describe('geocodeViaGoogle', () => {
-        it('should call Google API and return result', async () => {
+    describe('GoogleGeocodingProvider', () => {
+        // Note: Google-specific logic now lives in GoogleGeocodingProvider.
+        // These tests exercise it directly and replace the prior private-method
+        // tests against GeoCodeSyncService.geocodeViaGoogle().
+        beforeEach(() => {
+            process.env.GOOGLE_GEOCODING_API_KEY = 'test-api-key';
+        });
+        afterEach(() => {
+            delete process.env.GOOGLE_GEOCODING_API_KEY;
+        });
+
+        it('should call Google API and return result with ROOFTOP precision', async () => {
             mockFetch.mockResolvedValue({
                 ok: true,
                 json: () => Promise.resolve({
                     status: 'OK',
                     results: [{
-                        geometry: {
-                            location: { lat: 39.7392, lng: -104.9903 },
-                            location_type: 'ROOFTOP',
-                        },
+                        geometry: { location: { lat: 39.7392, lng: -104.9903 }, location_type: 'ROOFTOP' },
                         address_components: [],
                         formatted_address: 'Denver, CO, USA',
                     }],
                 }),
             });
-
-            const service = GeoCodeSyncService.Instance;
-            const result = await (service as Record<string, Function>)['geocodeViaGoogle']('Denver, CO', 'test-api-key');
-
+            const { GoogleGeocodingProvider } = await import('../providers/GoogleGeocodingProvider');
+            const provider = new GoogleGeocodingProvider();
+            const result = await provider.Geocode({ AddressString: 'Denver, CO' });
             expect(result).not.toBeNull();
-            expect(result.Latitude).toBe(39.7392);
-            expect(result.Longitude).toBe(-104.9903);
-            expect(result.Precision).toBe('exact');
-            expect(result.Source).toBe('google');
+            expect(result!.Latitude).toBe(39.7392);
+            expect(result!.Longitude).toBe(-104.9903);
+            expect(result!.Precision).toBe('exact');
+            expect(result!.Confidence).toBe(1.0);
         });
 
-        it('should return null on Google API error', async () => {
+        it('should return null on ZERO_RESULTS', async () => {
             mockFetch.mockResolvedValue({
                 ok: true,
-                json: () => Promise.resolve({
-                    status: 'ZERO_RESULTS',
-                    results: [],
-                }),
+                json: () => Promise.resolve({ status: 'ZERO_RESULTS', results: [] }),
             });
-
-            const service = GeoCodeSyncService.Instance;
-            const result = await (service as Record<string, Function>)['geocodeViaGoogle']('nonexistent place', 'test-api-key');
-
+            const { GoogleGeocodingProvider } = await import('../providers/GoogleGeocodingProvider');
+            const provider = new GoogleGeocodingProvider();
+            const result = await provider.Geocode({ AddressString: 'nonexistent' });
             expect(result).toBeNull();
         });
 
         it('should return null on HTTP failure', async () => {
-            mockFetch.mockResolvedValue({ ok: false, status: 500 });
-
-            const service = GeoCodeSyncService.Instance;
-            const result = await (service as Record<string, Function>)['geocodeViaGoogle']('Denver', 'test-api-key');
-
+            mockFetch.mockResolvedValue({ ok: false, status: 500, statusText: 'Server Error' });
+            const { GoogleGeocodingProvider } = await import('../providers/GoogleGeocodingProvider');
+            const provider = new GoogleGeocodingProvider();
+            const result = await provider.Geocode({ AddressString: 'Denver' });
             expect(result).toBeNull();
         });
 
@@ -325,20 +337,16 @@ describe('GeoCodeSyncService', () => {
                 json: () => Promise.resolve({
                     status: 'OK',
                     results: [{
-                        geometry: {
-                            location: { lat: 39.5, lng: -105.5 },
-                            location_type: 'APPROXIMATE',
-                        },
+                        geometry: { location: { lat: 39.5, lng: -105.5 }, location_type: 'APPROXIMATE' },
                         address_components: [],
                         formatted_address: 'Colorado, USA',
                     }],
                 }),
             });
-
-            const service = GeoCodeSyncService.Instance;
-            const result = await (service as Record<string, Function>)['geocodeViaGoogle']('Colorado', 'test-api-key');
-
-            expect(result.Precision).toBe('state_province');
+            const { GoogleGeocodingProvider } = await import('../providers/GoogleGeocodingProvider');
+            const provider = new GoogleGeocodingProvider();
+            const result = await provider.Geocode({ AddressString: 'Colorado' });
+            expect(result!.Precision).toBe('state_province');
         });
     });
 
@@ -388,7 +396,9 @@ describe('GeoCodeSyncService', () => {
         });
     });
 
-    describe('getGoogleApiKey', () => {
+    describe('Google credential resolution', () => {
+        // Credential resolution now lives in BaseGeocodingProvider.resolveCredential(),
+        // exercised here through GoogleGeocodingProvider.IsConfigured().
         const originalEnv = process.env;
 
         beforeEach(() => {
@@ -397,24 +407,24 @@ describe('GeoCodeSyncService', () => {
             delete process.env.GOOGLE_MAPS_API_KEY;
         });
 
-        it('should return GOOGLE_GEOCODING_API_KEY if set', () => {
+        it('should be configured when GOOGLE_GEOCODING_API_KEY is set', async () => {
             process.env.GOOGLE_GEOCODING_API_KEY = 'test-key-1';
-            const service = GeoCodeSyncService.Instance;
-            const key = (service as Record<string, Function>)['getGoogleApiKey']();
-            expect(key).toBe('test-key-1');
+            const { GoogleGeocodingProvider } = await import('../providers/GoogleGeocodingProvider');
+            const provider = new GoogleGeocodingProvider();
+            expect(provider.IsConfigured()).toBe(true);
         });
 
-        it('should fall back to GOOGLE_MAPS_API_KEY', () => {
+        it('should fall back to GOOGLE_MAPS_API_KEY', async () => {
             process.env.GOOGLE_MAPS_API_KEY = 'test-key-2';
-            const service = GeoCodeSyncService.Instance;
-            const key = (service as Record<string, Function>)['getGoogleApiKey']();
-            expect(key).toBe('test-key-2');
+            const { GoogleGeocodingProvider } = await import('../providers/GoogleGeocodingProvider');
+            const provider = new GoogleGeocodingProvider();
+            expect(provider.IsConfigured()).toBe(true);
         });
 
-        it('should return null when no env var set', () => {
-            const service = GeoCodeSyncService.Instance;
-            const key = (service as Record<string, Function>)['getGoogleApiKey']();
-            expect(key).toBeNull();
+        it('should not be configured when no env var set', async () => {
+            const { GoogleGeocodingProvider } = await import('../providers/GoogleGeocodingProvider');
+            const provider = new GoogleGeocodingProvider();
+            expect(provider.IsConfigured()).toBe(false);
         });
 
         afterEach(() => {
