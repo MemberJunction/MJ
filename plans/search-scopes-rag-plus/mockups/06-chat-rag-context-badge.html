@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Mockup: Chat — Pre-Execution RAG Badge</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    <link rel="stylesheet" href="_tokens.css" />
+    <style>
+        .chat-layout { max-width: 840px; margin: 0 auto; }
+
+        .msg {
+            display: flex;
+            gap: 12px;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+        }
+        .msg.user { background: var(--mj-bg-surface-card); }
+        .msg.assistant { background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); }
+        .avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--mj-brand-primary);
+            color: var(--mj-text-inverse);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            font-weight: 600;
+            font-size: 0.8125rem;
+        }
+        .msg.user .avatar { background: var(--mj-bg-surface-active); color: var(--mj-text-primary); }
+        .msg-body { flex: 1; }
+        .msg-author { font-weight: 600; font-size: 0.875rem; margin-bottom: 4px; color: var(--mj-text-primary); }
+        .msg-content { color: var(--mj-text-primary); font-size: 0.9375rem; line-height: 1.5; }
+
+        .rag-badge {
+            margin-bottom: 10px;
+            border: 1px solid var(--mj-status-info-bg);
+            border-radius: 8px;
+            overflow: hidden;
+            background: color-mix(in srgb, var(--mj-status-info-bg) 40%, var(--mj-bg-surface));
+        }
+        .rag-badge-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 14px;
+            font-size: 0.8125rem;
+            color: var(--mj-status-info-text);
+            cursor: pointer;
+        }
+        .rag-badge-header .rag-chip {
+            padding: 2px 8px;
+            background: var(--mj-status-info-text);
+            color: var(--mj-bg-surface);
+            border-radius: 999px;
+            font-size: 0.6875rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+        .rag-badge-header .summary { flex: 1; }
+        .rag-badge-body {
+            padding: 12px 14px;
+            background: var(--mj-bg-surface);
+            border-top: 1px solid var(--mj-status-info-bg);
+            font-size: 0.8125rem;
+        }
+        .rag-scope-group { margin-bottom: 10px; }
+        .rag-scope-title { font-weight: 600; color: var(--mj-text-primary); margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+        .rag-result { padding-left: 16px; margin-bottom: 6px; color: var(--mj-text-secondary); }
+        .rag-result strong { color: var(--mj-text-primary); }
+
+        .tool-call {
+            margin: 0 0 10px 44px;
+            padding: 8px 12px;
+            border-left: 3px solid var(--mj-brand-primary);
+            background: var(--mj-bg-surface-card);
+            border-radius: 0 6px 6px 0;
+            font-size: 0.8125rem;
+            color: var(--mj-text-secondary);
+        }
+        .tool-call .tool-name { font-weight: 600; color: var(--mj-brand-primary); }
+
+        .composer {
+            margin-top: 16px;
+            display: flex;
+            gap: 8px;
+            padding: 10px;
+            background: var(--mj-bg-surface);
+            border: 1px solid var(--mj-border-default);
+            border-radius: 8px;
+        }
+        .composer input {
+            flex: 1;
+            border: none;
+            outline: none;
+            font-size: 0.9375rem;
+            background: transparent;
+        }
+    </style>
+</head>
+<body>
+    <div class="mock-frame">
+        <div class="mock-header">
+            <h1>Agent Chat — Pre-Execution RAG Context Badge</h1>
+            <span class="mock-breadcrumb">Mockup 6/10 · How the LLM's retrieved context surfaces in the UI</span>
+        </div>
+
+        <div class="chat-layout">
+            <div class="msg user">
+                <div class="avatar">AM</div>
+                <div class="msg-body">
+                    <div class="msg-author">Amith</div>
+                    <div class="msg-content">Hey Betty — what's our refund policy for travel-related expenses? My report was rejected.</div>
+                </div>
+            </div>
+
+            <div class="msg assistant">
+                <div class="avatar">B</div>
+                <div class="msg-body">
+                    <div class="msg-author">Betty (People Ops)</div>
+
+                    <div class="rag-badge">
+                        <div class="rag-badge-header">
+                            <span class="rag-chip">RAG</span>
+                            <span class="summary"><strong>7 results</strong> from 2 scopes — HR Policies (4), Customer Knowledge Base (3) · top score 0.91</span>
+                            <i class="fa-solid fa-chevron-up"></i>
+                        </div>
+                        <div class="rag-badge-body">
+                            <div class="rag-scope-group">
+                                <div class="rag-scope-title"><i class="fa-solid fa-user-tie" style="color:var(--mj-brand-primary);"></i> HR Policies <span class="muted" style="font-weight:400;">· 4 results</span></div>
+                                <div class="rag-result">1. <strong>Refund &amp; Reimbursement Policy — 2025 Update</strong> (0.91) <span class="muted">semantic · Knowledge Articles · tags: hr, policy, refund</span><br/>"Expense refund requests must be submitted within 30 days of the transaction via the Concur portal…"</div>
+                                <div class="rag-result">2. <strong>Employee Handbook §8.4 — Travel &amp; Reimbursement</strong> (0.84) <span class="muted">fulltext · Documents</span><br/>"Travel-related refunds follow the same submission flow, with the addition of required receipts above $25…"</div>
+                            </div>
+                            <div class="rag-scope-group">
+                                <div class="rag-scope-title"><i class="fa-solid fa-book" style="color:var(--mj-brand-primary);"></i> Customer Knowledge Base <span class="muted" style="font-weight:400;">· 3 results</span></div>
+                                <div class="rag-result">3. <strong>Travel Expense FAQ</strong> (0.72) <span class="muted">semantic · Knowledge Articles · tags: finance, travel</span></div>
+                            </div>
+                            <div style="text-align:right;">
+                                <button class="btn" style="font-size:0.75rem;padding:4px 10px;"><i class="fa-solid fa-external-link"></i> Open full result set</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="msg-content">
+                        Based on the 2025 Refund &amp; Reimbursement Policy (§4.2) and the Travel &amp; Reimbursement section of the Employee Handbook (§8.4), travel-related expenses must be submitted within <strong>30 days</strong> of the transaction via Concur, along with receipts for any item over $25. If your report was rejected, the most common reasons are (a) missing receipts above the $25 threshold, or (b) late submission past the 30-day window.
+                        <br/><br/>
+                        Would you like me to pull up your specific Concur submission so we can see which rule triggered the rejection?
+                    </div>
+                </div>
+            </div>
+
+            <div class="tool-call">
+                <span class="tool-name">🔎 Scoped Search</span> · <code>scope="HR Policies"</code> · query: "Amith travel expense report rejection reason"
+                <br/>→ 1 result · opened as artifact → <a href="#" style="color:var(--mj-text-link);">Concur Submission #48219</a>
+            </div>
+
+            <div class="composer">
+                <input type="text" placeholder="Reply to Betty…" />
+                <button class="btn primary"><i class="fa-solid fa-paper-plane"></i></button>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top:24px;">
+            <h3 style="margin-top:0;">What this shows</h3>
+            <ul style="color:var(--mj-text-secondary);line-height:1.6;font-size:0.875rem;">
+                <li><strong>RAG badge</strong> — collapsible panel above the first assistant reply showing the scopes + results the agent saw before generating.</li>
+                <li><strong>Per-scope grouping</strong> — each scope block is expandable; each result shows score, source, entity, tags.</li>
+                <li><strong>Tool-call surfaces</strong> — mid-turn <code>Scoped Search</code> invocations get their own styled strip so the user can trace the agent's reasoning.</li>
+                <li><strong>Open as artifact</strong> — one-click persists the full result set to the artifact system (using the `Search Result Set` artifact type).</li>
+                <li><strong>No hardcoded colors</strong> — the RAG badge uses <code>--mj-status-info-*</code> tokens; dark mode inherits automatically.</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>

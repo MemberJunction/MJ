@@ -117,7 +117,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   @ViewChild('searchInput') searchInput!: ElementRef<HTMLInputElement>;
 
   // Universal search bar
-  @ViewChild('shellSearchComposite') shellSearchComposite: { Focus?(): void; MinRelevancePercent?: number } | undefined;
+  @ViewChild('shellSearchComposite') shellSearchComposite: {
+    Focus?(): void;
+    MinRelevancePercent?: number;
+    SelectedScopeIDs?: string[];
+  } | undefined;
 
   // Instance configuration feature flags
   get ShowSearchBar(): boolean {
@@ -2567,7 +2571,11 @@ export class ShellComponent extends BaseAngularComponent implements OnInit, OnDe
   OnSearchSubmitted(query: string): void {
       if (query && query.trim().length >= 2) {
           const minRelevance = this.shellSearchComposite?.MinRelevancePercent;
-          this.navigationService.OpenSearch(query, minRelevance ? { minRelevance } : undefined);
+          const scopeIDs = this.shellSearchComposite?.SelectedScopeIDs;
+          const opts: { minRelevance?: number; scopeIDs?: string[] } = {};
+          if (minRelevance) opts.minRelevance = minRelevance;
+          if (scopeIDs && scopeIDs.length > 0) opts.scopeIDs = scopeIDs;
+          this.navigationService.OpenSearch(query, Object.keys(opts).length > 0 ? opts : undefined);
       }
   }
 

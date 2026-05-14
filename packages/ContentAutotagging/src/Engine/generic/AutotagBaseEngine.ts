@@ -295,15 +295,23 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         embeddingModelID?: string
     ): Promise<void> {
         for (const item of items) {
+            item.EmbeddingStatus = status;
+            if (status === 'Complete') {
+                item.LastEmbeddedAt = new Date();
+                if (embeddingModelID) item.EmbeddingModelID = embeddingModelID;
+            }
+            // Status updates are best-effort relative to the vectorization itself: the vectors
+            // are already (or are about to be) in the vector DB, so a status-save failure on a
+            // single row must not abort the rest of the pipeline. We log on both logical failure
+            // (Save returns false) and infrastructure failure (Save throws) so the gap is visible.
             try {
-                item.EmbeddingStatus = status;
-                if (status === 'Complete') {
-                    item.LastEmbeddedAt = new Date();
-                    if (embeddingModelID) item.EmbeddingModelID = embeddingModelID;
+                const saved = await item.Save();
+                if (!saved) {
+                    LogError(`updateEmbeddingStatusBatch: Save returned false for item ${item.ID} (status='${status}'): ${item.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                 }
-                await item.Save();
-            } catch {
-                // Non-critical
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                LogError(`updateEmbeddingStatusBatch: infrastructure error saving item ${item.ID} (status='${status}'): ${msg}`);
             }
         }
     }
@@ -1329,6 +1337,11 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const promptRunIDs: string[] = [];
         const modelRunner = new AIModelRunner();
 
+        // Mark every item in this infra group as Processing up front so dashboards
+        // reflect in-flight state. Each batch will transition its items to Complete
+        // or Failed as outcomes are known.
+        await this.updateEmbeddingStatusBatch(items, 'Processing', contextUser);
+
         // Resolve the "Content Embedding" prompt ID for tracking
         const embeddingPromptID = this.resolveEmbeddingPromptID();
 
@@ -1353,6 +1366,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
             if (!runResult.Success || runResult.Vectors.length !== allChunks.length) {
                 LogError(`VectorizeContentItems: embedding returned ${runResult.Vectors.length} vectors for ${allChunks.length} texts — ${runResult.ErrorMessage ?? 'unknown error'}`);
+                await this.updateEmbeddingStatusBatch(batch, 'Failed', contextUser);
                 onBatchComplete(batch.length);
                 continue;
             }
@@ -1367,6 +1381,9 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             const batchSuccess = await this.upsertVectorRecords(records, infra);
             if (batchSuccess) {
                 vectorized += batch.length;
+                await this.updateEmbeddingStatusBatch(batch, 'Complete', contextUser, infra.embeddingModelID);
+            } else {
+                await this.updateEmbeddingStatusBatch(batch, 'Failed', contextUser);
             }
 
             onBatchComplete(batch.length);

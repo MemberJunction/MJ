@@ -8,6 +8,7 @@
     "@memberjunction/actions-base",
     "@memberjunction/ai-core-plus",
     "@memberjunction/ai-engine-base",
+    "@memberjunction/ai-vectors-memory",
     "@memberjunction/communication-types",
     "@memberjunction/core",
     "@memberjunction/core-entities",

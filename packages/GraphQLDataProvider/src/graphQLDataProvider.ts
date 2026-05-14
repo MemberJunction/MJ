@@ -995,6 +995,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         innerParam.MaxRows = param.MaxRows;
                     if (param.StartRow !== undefined)
                         innerParam.StartRow = param.StartRow; // Add StartRow parameter
+                    if (param.AfterKey) {
+                        // Keyset (seek) pagination cursor. Server validates and throws
+                        // AfterKeyNotSupportedError on composite-PK / unsupported types.
+                        innerParam.AfterKey = { KeyValuePairs: param.AfterKey.KeyValuePairs };
+                    }
                     innerParam.ForceAuditLog = param.ForceAuditLog || false;
                     innerParam.ResultType = param.ResultType || 'simple';
                     if (param.AuditLogDescription && param.AuditLogDescription.length > 0){
@@ -1112,6 +1117,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     IgnoreMaxRows: item.params.IgnoreMaxRows || false,
                     MaxRows: item.params.MaxRows,
                     StartRow: item.params.StartRow,
+                    AfterKey: item.params.AfterKey ? { KeyValuePairs: item.params.AfterKey.KeyValuePairs } : null,
                     ForceAuditLog: item.params.ForceAuditLog || false,
                     AuditLogDescription: item.params.AuditLogDescription || '',
                     ResultType: item.params.ResultType || 'simple',
@@ -1525,7 +1531,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             result.Type = entity.IsSaved ? 'update' : 'create';
             result.Success = true;
             result.NewValues = entity.GetAll();
-            entity.ResultHistory.push(result);
+            entity.RegisterResultHistoryEntry(result);
             return result.NewValues;
         }
 
@@ -1539,7 +1545,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             result.StartedAt = new Date();
             result.Type = entity.IsSaved ? 'update' : 'create';
             result.OriginalValues = entity.Fields.map(f => { return {FieldName: f.CodeName, Value: f.Value} });
-            entity.ResultHistory.push(result); // push the new result as we have started a process
+            entity.RegisterResultHistoryEntry(result); // push the new result as we have started a process
 
             // Create the query for the mutation first, we will provide the specific
             // input values later in the loop below. Here we are just setting up the mutation
@@ -1811,7 +1817,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
             result.StartedAt = new Date();
             result.Type = 'delete';
             result.OriginalValues = entity.Fields.map(f => { return {FieldName: f.CodeName, Value: f.Value} });
-            entity.ResultHistory.push(result); // push the new result as we have started a process
+            entity.RegisterResultHistoryEntry(result); // push the new result as we have started a process
 
             const vars = {};
             const mutationInputTypes = [];

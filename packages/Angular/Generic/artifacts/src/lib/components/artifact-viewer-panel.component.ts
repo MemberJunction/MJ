@@ -223,15 +223,22 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
       });
     }
 
-    // Load artifact with specified version if provided
-    await this.loadArtifact(this.versionNumber);
+    // Defer the initial load past Angular's first stable CD cycle so that the inner
+    // awaits in loadArtifact can't mutate `this.artifact`/`this.artifactVersion` between
+    // the main CD pass and dev-mode's verifyNoChanges pass (the classic NG0100
+    // "ExpressionChangedAfterItHasBeenCheckedError" we used to hit on the title).
+    // Using setTimeout(0) instead of Promise.resolve() because we need a fresh
+    // macrotask boundary — microtasks can still drain inside Angular's CD cycle.
+    setTimeout(async () => {
+      await this.loadArtifact(this.versionNumber);
 
-    // Track that user viewed this artifact
-    if (this.artifactVersion?.ID && this.currentUser) {
-      this.trackArtifactUsage('Viewed');
-      // Also log to User Record Logs for recents feature (fire-and-forget)
-      this.recentAccessService.logAccess('MJ: Artifacts', this.artifactId, 'artifact');
-    }
+      // Track that user viewed this artifact (deferred so it runs after the load)
+      if (this.artifactVersion?.ID && this.currentUser) {
+        this.trackArtifactUsage('Viewed');
+        // Also log to User Record Logs for recents feature (fire-and-forget)
+        this.recentAccessService.logAccess('MJ: Artifacts', this.artifactId, 'artifact');
+      }
+    }, 0);
   }
 
   async ngOnChanges(changes: SimpleChanges) {
@@ -807,8 +814,18 @@ export class ArtifactViewerPanelComponent extends BaseAngularComponent implement
   }
 
   /**
-   * Called by parent component after user selects collections in the picker.
-   * Saves the artifact to the selected collections.
+   * Reload the cached set of collections that contain the *current version* of this artifact.
+   * Called by the chat-area after the collection picker reports successful saves so the bookmark
+   * icon and "already saved" exclusion list refresh without a full artifact reload.
+   */
+  public async ReloadCollectionAssociations(): Promise<void> {
+    await this.loadCollectionAssociations();
+  }
+
+  /**
+   * @deprecated Writes are now owned by the picker modal so the dialog can render per-collection
+   * progress and partial-failure UI. Kept for any external consumer that still calls it; new code
+   * should pass `artifactVersionId` to the picker and listen for its `completed` event.
    */
   async saveToCollections(collectionIds: string[]): Promise<boolean> {
     if (!this.artifactId || collectionIds.length === 0) {

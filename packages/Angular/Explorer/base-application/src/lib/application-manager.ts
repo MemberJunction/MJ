@@ -26,6 +26,7 @@ export interface UserAppConfig {
   providedIn: 'root'
 })
 export class ApplicationManager {
+  private static _recoveryAttempted = false;
   private applications$ = new BehaviorSubject<BaseApplication[]>([]);
   private allApplications$ = new BehaviorSubject<BaseApplication[]>([]);
   private userAppConfigs$ = new BehaviorSubject<UserAppConfig[]>([]);
@@ -302,6 +303,17 @@ export class ApplicationManager {
       // Load and apply user's app configuration
       await this.loadUserApplicationConfig();
 
+      // Recovery check: if no active apps but metadata has Active applications,
+      // the engine may have failed to load UserApplications (e.g., cache corruption).
+      // Attempt one recovery by force-refreshing UserInfoEngine before giving up.
+      const activeApps = this.applications$.value;
+      const hasMetadataApps = md.Applications.some(a => a.Status === 'Active');
+      if (activeApps.length === 0 && hasMetadataApps && !ApplicationManager._recoveryAttempted) {
+        ApplicationManager._recoveryAttempted = true;
+        LogStatus('ApplicationManager: No user apps loaded despite Active apps in metadata — attempting recovery');
+        await this.attemptRecovery();
+      }
+
       this.initialized = true;
       this._readyResolve();
 
@@ -369,6 +381,22 @@ export class ApplicationManager {
   private async createDefaultUserApplications(): Promise<MJUserApplicationEntity[]> {
     const engine = UserInfoEngine.Instance;
     return await engine.CreateDefaultApplications();
+  }
+
+  /**
+   * One-shot recovery attempt when the initial load produces zero apps despite
+   * Active applications existing in metadata. Force-refreshes UserInfoEngine
+   * to bypass any corrupted cache, then re-runs the user app configuration
+   * (which includes the self-healing path for new users).
+   */
+  private async attemptRecovery(): Promise<void> {
+    try {
+      const engine = UserInfoEngine.Instance;
+      await engine.Config(true);
+      await this.loadUserApplicationConfig();
+    } catch (error) {
+      LogError('ApplicationManager: Recovery attempt failed:', undefined, error instanceof Error ? error.message : String(error));
+    }
   }
 
   /**

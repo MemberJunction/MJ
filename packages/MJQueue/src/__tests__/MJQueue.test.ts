@@ -184,4 +184,51 @@ describe('QueueBase', () => {
   it('QueueTypeID should return the type ID', () => {
     expect(queue.QueueTypeID).toBe('type-1');
   });
+
+  describe('Stop / Shutdown (memory-leak fix C4)', () => {
+    it('IsStopped is false by default and true after Stop()', () => {
+      expect(queue.IsStopped).toBe(false);
+      queue.Stop();
+      expect(queue.IsStopped).toBe(true);
+    });
+
+    it('Stop() is idempotent', () => {
+      queue.Stop();
+      queue.Stop();
+      expect(queue.IsStopped).toBe(true);
+    });
+
+    it('Shutdown() is an alias for Stop()', () => {
+      queue.Shutdown();
+      expect(queue.IsStopped).toBe(true);
+    });
+
+    it('AddTask returns false once stopped (no further work scheduled)', () => {
+      queue.Stop();
+      const taskRecord = { ID: 't', Status: 'Pending', Save: vi.fn() } as unknown as MJQueueTaskEntity;
+      const result = queue.AddTask(new TaskBase(taskRecord, {}, {}));
+      expect(result).toBe(false);
+    });
+
+    it('Stop() cancels the pending ProcessTasks timer', async () => {
+      vi.useFakeTimers();
+      try {
+        const taskRecord = { ID: 't', Status: 'Pending', Save: vi.fn() } as unknown as MJQueueTaskEntity;
+        queue.AddTask(new TaskBase(taskRecord, {}, {}));
+        // The first AddTask runs ProcessTasks once and schedules the next via setTimeout.
+        const before = vi.getTimerCount();
+        expect(before).toBeGreaterThan(0);
+        queue.Stop();
+        // After Stop, no timers remain pending.
+        expect(vi.getTimerCount()).toBe(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('exposes a ShutdownName containing the queue identity', () => {
+      expect(queue.ShutdownName).toContain('QueueBase');
+      expect(queue.ShutdownName).toContain('type-1');
+    });
+  });
 });

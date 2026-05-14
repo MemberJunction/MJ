@@ -484,7 +484,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @returns The view results
      */
     public async RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
-        if (this.TrustLocalCacheCompletely && !params.BypassCache) {
+        // Keyset (AfterKey) queries always bypass the server cache: each call uses a
+        // different seek key, so a cached entry would never be reusable. Treat them like
+        // explicit BypassCache=true requests.
+        if (this.TrustLocalCacheCompletely && !params.BypassCache && !params.AfterKey) {
             // Server-side: use direct Pre → Internal → Post pipeline.
             // Cache is kept in sync via BaseEntity events + Redis pub/sub,
             // so PreRunView cache hits are returned immediately with no DB round-trip.
@@ -974,7 +977,16 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * and must not be deduplicated.
      */
     private ShouldBypassDedup(params: RunViewParams[]): boolean {
-        return params.some(p => p.SaveViewResults === true);
+        // BypassCache:true MUST bypass the dedup-linger cache as well —
+        // otherwise the "skip the cache to see DB truth" contract leaks: a
+        // recent identical RunView (within DedupLingerMs) would return its
+        // cached result even when the caller explicitly asked for a fresh
+        // read. Permission resolvers and other security-critical paths rely
+        // on BypassCache being a hard cache bypass; without this, freshly
+        // revoked grants stay visible through the linger window.
+        // SaveViewResults bypasses for the original reason: it creates DB
+        // records and must not be deduplicated.
+        return params.some(p => p.SaveViewResults === true || p.BypassCache === true);
     }
 
     /**
@@ -1250,8 +1262,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // end-to-end — there's no cache-coherence concern to preserve.
         const entity = params.EntityName ? this.EntityByName(params.EntityName) : null;
         const entityCacheAllowed = this.IsServerCacheAllowedForEntity(params);
+        // Keyset (AfterKey) queries are inherently single-use, so we never read from or
+        // write to the cache for them. See RunViewParams.AfterKey JSDoc for rationale.
         const willCache =
             !params.BypassCache &&
+            !params.AfterKey &&
             (params.CacheLocal || this.TrustLocalCacheCompletely) &&
             entityCacheAllowed;
         if (entity && willCache) {
@@ -1391,8 +1406,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // end-to-end — there's no cache-coherence concern to preserve.
             const batchEntity = param.EntityName ? this.EntityByName(param.EntityName) : null;
             const batchEntityCacheAllowed = this.IsServerCacheAllowedForEntity(param);
+            // Keyset (AfterKey) queries are inherently single-use; never use the cache for them.
             const batchWillCache =
                 !param.BypassCache &&
+                !param.AfterKey &&
                 (param.CacheLocal || this.TrustLocalCacheCompletely) &&
                 batchEntityCacheAllowed;
             if (batchEntity && batchWillCache) {
@@ -2197,7 +2214,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             }
         }
 
-        return maxDate ? maxDate.toISOString() : new Date().toISOString();
+        // Return empty string for empty/timestamp-less results instead of current server time.
+        // Using current time would make empty result sets perpetually "stale" — each smart-cache-check
+        // would see a different timestamp and force an unnecessary DB refresh.
+        return maxDate ? maxDate.toISOString() : '';
     }
 
     /**

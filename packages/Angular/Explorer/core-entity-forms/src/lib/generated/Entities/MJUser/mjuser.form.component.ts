@@ -89,6 +89,7 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJMCPToolFavorites', sectionName: 'MCP Tool Favorites', isExpanded: false },
             { sectionKey: 'mJResourcePermissionsSharedByUserID', sectionName: 'Resource Permissions (Shared By User ID)', isExpanded: false },
             { sectionKey: 'mJTagSuggestions', sectionName: 'Tag Suggestions', isExpanded: false },
+            { sectionKey: 'mJSearchScopes', sectionName: 'Search Scopes', isExpanded: false },
             { sectionKey: 'mJResourcePermissionsUserID', sectionName: 'Resource Permissions', isExpanded: false },
             { sectionKey: 'mJAIAgentRequestsResponseByUserID', sectionName: 'AI Agent Requests', isExpanded: false },
             { sectionKey: 'mJConversationDetails', sectionName: 'Conversation Details', isExpanded: false },
@@ -111,6 +112,8 @@ export class MJUserFormComponent extends BaseFormComponent {
             { sectionKey: 'mJCollectionPermissionsSharedByUserID', sectionName: 'Collection Permissions (Shared By User ID)', isExpanded: false },
             { sectionKey: 'mJCollections', sectionName: 'Collections', isExpanded: false },
             { sectionKey: 'mJRecordMergeLogsInitiatedByUserID', sectionName: 'Record Merge Logs (Initiated By User)', isExpanded: false },
+            { sectionKey: 'mJSearchScopePermissions', sectionName: 'Search Scope Permissions', isExpanded: false },
+            { sectionKey: 'mJSearchExecutionLogs', sectionName: 'Search Execution Logs', isExpanded: false },
             { sectionKey: 'mJTasks', sectionName: 'Tasks', isExpanded: false },
             { sectionKey: 'mJAIAgentExamples', sectionName: 'AI Agent Examples', isExpanded: false },
             { sectionKey: 'mJAIAgents', sectionName: 'AI Agents', isExpanded: false }

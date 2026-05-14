@@ -69,7 +69,7 @@ graph TB
 
 - **Full CRUD Operations** -- Create, Read, Update, Delete for all MemberJunction entities via generated stored procedures
 - **Transaction Support** -- Both transaction groups (multi-entity atomic operations) and instance-level transactions with nested savepoint support
-- **View Execution** -- Run database views with filtering, sorting, pagination, and aggregation
+- **View Execution** -- Run database views with filtering, sorting, pagination (both OFFSET-based `StartRow` and keyset-based `AfterKey` — see [KEYSET_PAGINATION_GUIDE.md](../../guides/KEYSET_PAGINATION_GUIDE.md)), and aggregation
 - **Report and Query Execution** -- Execute reports and parameterized queries with Nunjucks template processing
 - **Connection Pooling** -- Efficient shared connection pool management with configurable sizing
 - **SQL Logging** -- Real-time SQL statement capture to files with session management, pattern filtering, and Flyway migration formatting (inherited from `GenericDatabaseProvider`)

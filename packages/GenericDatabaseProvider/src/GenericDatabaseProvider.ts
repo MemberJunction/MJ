@@ -63,6 +63,8 @@ import {
     SaveContext,
     SaveContextField,
     SaveSQLResult,
+    AfterKeyNotSupportedError,
+    IsKeysetPaginationOrderableType,
 } from '@memberjunction/core';
 
 import { MJGlobal, SQLExpressionValidator, UUIDsEqual } from '@memberjunction/global';
@@ -999,6 +1001,193 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
     }
 
     /**
+     * Validates that the entity and RunViewParams are compatible with keyset (AfterKey) pagination,
+     * then returns the SQL predicate (`<pk> > 'value'` or `<pk> < 'value'`) and the resolved
+     * order-by direction.
+     *
+     * See {@link AfterKeyNotSupportedError} for the validation rules and {@link RunViewParams.AfterKey}
+     * for the API contract.
+     *
+     * @throws AfterKeyNotSupportedError on validation failure
+     */
+    protected BuildKeysetSeekClause(
+        entityInfo: EntityInfo,
+        params: RunViewParams
+    ): { seekPredicate: string; direction: 'ASC' | 'DESC'; pkColumnName: string } {
+        const afterKey = params.AfterKey!;
+
+        // 1. Single-column PK requirement
+        const pkFields = entityInfo.PrimaryKeys;
+        if (!pkFields || pkFields.length === 0) {
+            throw new AfterKeyNotSupportedError(
+                entityInfo.Name, 'CompositePK',
+                `AfterKey requires a primary key on entity "${entityInfo.Name}", but none is defined.`
+            );
+        }
+        if (pkFields.length > 1) {
+            throw new AfterKeyNotSupportedError(
+                entityInfo.Name, 'CompositePK',
+                `AfterKey requires a single-column primary key. Entity "${entityInfo.Name}" has a composite PK (${pkFields.length} columns: ${pkFields.map(f => f.Name).join(', ')}). Use StartRow-based pagination for composite-PK entities, or restructure the workload.`
+            );
+        }
+        const pkField = pkFields[0];
+
+        // 2. Orderable PK type
+        if (!IsKeysetPaginationOrderableType(pkField.Type)) {
+            throw new AfterKeyNotSupportedError(
+                entityInfo.Name, 'UnsupportedPKType',
+                `AfterKey is not supported for entity "${entityInfo.Name}" because its PK column "${pkField.Name}" has type "${pkField.Type}", which is not in the keyset-orderable allowlist.`
+            );
+        }
+
+        // 3. StartRow conflict
+        if (params.StartRow !== undefined && params.StartRow > 0) {
+            throw new AfterKeyNotSupportedError(
+                entityInfo.Name, 'StartRowConflict',
+                `AfterKey cannot be combined with StartRow > 0. Use one or the other.`
+            );
+        }
+
+        // 4. AfterKey shape — must contain exactly one key matching the PK column
+        const pairs = afterKey.KeyValuePairs ?? [];
+        if (pairs.length !== 1) {
+            throw new AfterKeyNotSupportedError(
+                entityInfo.Name, 'AfterKeyShape',
+                `AfterKey must contain exactly one key/value pair matching the entity's PK column "${pkField.Name}". Got ${pairs.length} pairs.`
+            );
+        }
+        const pair = pairs[0];
+        if (pair.FieldName?.toLowerCase().trim() !== pkField.Name.toLowerCase().trim()) {
+            throw new AfterKeyNotSupportedError(
+                entityInfo.Name, 'AfterKeyShape',
+                `AfterKey key name "${pair.FieldName}" does not match the entity's PK column "${pkField.Name}".`
+            );
+        }
+        if (pair.Value === null || pair.Value === undefined || pair.Value === '') {
+            throw new AfterKeyNotSupportedError(
+                entityInfo.Name, 'AfterKeyShape',
+                `AfterKey value for "${pkField.Name}" is null/empty. To request the first page, omit AfterKey entirely.`
+            );
+        }
+
+        // 5. OrderBy compatibility — must be empty, or reference only the PK column
+        let direction: 'ASC' | 'DESC' = 'ASC';
+        const rawOrderBy = (params.OrderBy as string | undefined)?.trim() ?? '';
+        if (rawOrderBy.length > 0) {
+            // Accept: "ID", "ID ASC", "ID DESC", "[ID]", "[ID] DESC", '"ID"', etc.
+            // Strip quoting characters and split on whitespace.
+            const stripped = rawOrderBy.replace(/[\[\]"`]/g, '').trim();
+            const tokens = stripped.split(/\s+/);
+            const colName = tokens[0]?.trim();
+            const dirToken = tokens[1]?.toUpperCase().trim();
+            if (!colName || colName.toLowerCase() !== pkField.Name.toLowerCase()) {
+                throw new AfterKeyNotSupportedError(
+                    entityInfo.Name, 'IncompatibleOrderBy',
+                    `When AfterKey is set, OrderBy must reference only the PK column "${pkField.Name}". Got "${rawOrderBy}".`
+                );
+            }
+            if (tokens.length > 2 || (dirToken && dirToken !== 'ASC' && dirToken !== 'DESC')) {
+                throw new AfterKeyNotSupportedError(
+                    entityInfo.Name, 'IncompatibleOrderBy',
+                    `When AfterKey is set, OrderBy may only specify a direction (ASC/DESC). Got "${rawOrderBy}".`
+                );
+            }
+            if (dirToken === 'DESC') direction = 'DESC';
+        }
+
+        // 6. Build the seek predicate. Comparison operator depends on direction.
+        const op = direction === 'ASC' ? '>' : '<';
+        const pkColumnName = this.QuoteIdentifier(pkField.Name);
+        const literalValue = this.formatKeysetSeekValue(pair.Value, pkField.Type);
+        const seekPredicate = `${pkColumnName} ${op} ${literalValue}`;
+
+        return { seekPredicate, direction, pkColumnName };
+    }
+
+    /**
+     * Formats a CompositeKey value as a SQL literal for use in a keyset seek predicate.
+     *
+     * This bypasses parameter binding because the entire WHERE clause is built as a string
+     * elsewhere in this provider (consistent with ExtraFilter / OrderBy handling). The seek
+     * value comes from server-side application code, not raw user input — but we still type-
+     * check and escape to defend against any caller passing a tainted value.
+     *
+     * Strategy:
+     * - UUID types: validate strict UUID format, wrap in single quotes
+     * - Numeric types: validate finite number, output bare
+     * - Boolean: output 0/1 (SQL Server) or TRUE/FALSE (caller can override if needed)
+     * - Date/time types: validate ISO-ish string, wrap in single quotes
+     * - String types: escape single quotes by doubling, wrap in single quotes
+     *
+     * @throws AfterKeyNotSupportedError if the value fails type-specific validation
+     */
+    protected formatKeysetSeekValue(value: unknown, sqlType: string): string {
+        const t = (sqlType || '').replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
+        const asStr = String(value);
+
+        // UUIDs — validate format strictly
+        if (t === 'uniqueidentifier' || t === 'uuid') {
+            const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+            if (!uuidPattern.test(asStr)) {
+                throw new AfterKeyNotSupportedError(
+                    '', 'AfterKeyShape',
+                    `AfterKey value "${asStr}" is not a valid UUID for ${sqlType} primary key.`
+                );
+            }
+            return `'${asStr}'`;
+        }
+
+        // Numeric types
+        const numericTypes = new Set([
+            'int', 'bigint', 'smallint', 'tinyint', 'integer', 'bigserial', 'serial',
+            'decimal', 'numeric', 'money', 'smallmoney', 'float', 'real', 'double precision'
+        ]);
+        if (numericTypes.has(t)) {
+            const n = typeof value === 'number' ? value : Number(asStr);
+            if (!Number.isFinite(n)) {
+                throw new AfterKeyNotSupportedError(
+                    '', 'AfterKeyShape',
+                    `AfterKey value "${asStr}" is not a valid numeric value for ${sqlType} primary key.`
+                );
+            }
+            return String(n);
+        }
+
+        // Boolean / bit
+        if (t === 'bit' || t === 'boolean') {
+            const v = value === true || asStr === 'true' || asStr === '1';
+            return v ? '1' : '0';
+        }
+
+        // Date / time — accept anything ISO-ish; quote and escape single quotes
+        const dateTypes = new Set([
+            'date', 'datetime', 'datetime2', 'datetimeoffset', 'smalldatetime', 'time',
+            'timestamp', 'timestamp with time zone', 'timestamp without time zone'
+        ]);
+        if (dateTypes.has(t)) {
+            const escaped = asStr.replace(/'/g, "''");
+            // Reject anything containing semicolons or comment markers as a defense-in-depth check
+            if (/;|--|\/\*|\*\//.test(escaped)) {
+                throw new AfterKeyNotSupportedError(
+                    '', 'AfterKeyShape',
+                    `AfterKey value for ${sqlType} primary key contains disallowed characters.`
+                );
+            }
+            return `'${escaped}'`;
+        }
+
+        // String types (default)
+        const escaped = asStr.replace(/'/g, "''");
+        if (/;|--|\/\*|\*\//.test(escaped)) {
+            throw new AfterKeyNotSupportedError(
+                '', 'AfterKeyShape',
+                `AfterKey value contains disallowed characters.`
+            );
+        }
+        return `'${escaped}'`;
+    }
+
+    /**
      * Transforms a user-provided SQL clause (ExtraFilter, OrderBy, etc.) for platform compatibility.
      * PostgreSQL overrides to quote mixed-case identifiers and convert bracket notation.
      * Default: returns the clause unchanged.
@@ -1067,7 +1256,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             const saveViewResults: boolean = params.SaveViewResults ?? false;
 
             // ── TOP / pagination mode ──
-            const usingPagination = !!(params.MaxRows && params.MaxRows > 0 && params.StartRow !== undefined && params.StartRow >= 0);
+            // Keyset (AfterKey) takes precedence: validate now so failures are early, predictable,
+            // and never silently degrade to OFFSET. Throws AfterKeyNotSupportedError if invalid.
+            const usingKeyset = !!params.AfterKey;
+            let keysetSeekPredicate = '';
+            let keysetDirection: 'ASC' | 'DESC' = 'ASC';
+            let keysetPkColumnName = '';
+            if (usingKeyset) {
+                const seek = this.BuildKeysetSeekClause(entityInfo, params);
+                keysetSeekPredicate = seek.seekPredicate;
+                keysetDirection = seek.direction;
+                keysetPkColumnName = seek.pkColumnName;
+            }
+
+            // usingPagination is the OFFSET-based path; keyset uses TOP/LIMIT semantics like a
+            // non-paginated query, so we never set usingPagination=true when AfterKey is present.
+            const usingPagination = !usingKeyset && !!(params.MaxRows && params.MaxRows > 0 && params.StartRow !== undefined && params.StartRow >= 0);
             let topSQL = '';
             let maxRowsForQuery = 0;
             if (params.IgnoreMaxRows === true) {
@@ -1075,6 +1279,12 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
             } else if (usingPagination) {
                 // pagination — no TOP, will add OFFSET/FETCH or LIMIT/OFFSET later
                 maxRowsForQuery = params.MaxRows!;
+            } else if (usingKeyset) {
+                // Keyset uses TOP/LIMIT like a non-paginated query — bounded by MaxRows.
+                // MaxRows is required for keyset to make sense (otherwise return whole table).
+                const keysetMaxRows = params.MaxRows && params.MaxRows > 0 ? params.MaxRows : (entityInfo.UserViewMaxRows && entityInfo.UserViewMaxRows > 0 ? entityInfo.UserViewMaxRows : 1000);
+                topSQL = this.BuildTopClause(keysetMaxRows);
+                maxRowsForQuery = keysetMaxRows;
             } else if (params.MaxRows && params.MaxRows > 0) {
                 topSQL = this.BuildTopClause(params.MaxRows);
                 maxRowsForQuery = params.MaxRows;
@@ -1147,14 +1357,32 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 }
             }
 
+            // 6. Keyset (AfterKey) seek predicate — only on the data query, NOT the count query.
+            //    The count is the total matching the user-visible filters; the seek predicate is
+            //    a pagination cursor, conceptually distinct from "how many records match overall".
+            const seekPredicateForData = usingKeyset ? keysetSeekPredicate : '';
+
             if (bHasWhere) {
                 viewSQL += ` WHERE ${whereSQL}`;
                 if (countSQL) countSQL += ` WHERE ${whereSQL}`;
             }
+            if (seekPredicateForData) {
+                viewSQL += bHasWhere ? ` AND (${seekPredicateForData})` : ` WHERE (${seekPredicateForData})`;
+            }
 
             // ── ORDER BY (transform user-provided clause for platform compatibility) ──
-            const rawOrderBy: string = params.OrderBy ? (params.OrderBy as string) : (viewEntity ? viewEntity.OrderByClause ?? '' : '');
-            const orderBy: string = rawOrderBy.length > 0 ? this.TransformExternalSQLClause(rawOrderBy, entityInfo) : '';
+            // For keyset (AfterKey) mode, we force ORDER BY <pk> <direction> regardless of the
+            // caller's OrderBy — BuildKeysetSeekClause already validated that any caller-provided
+            // OrderBy referenced the PK and we use the resolved direction.
+            let rawOrderBy: string;
+            if (usingKeyset) {
+                rawOrderBy = `${keysetPkColumnName} ${keysetDirection}`;
+            } else {
+                rawOrderBy = params.OrderBy ? (params.OrderBy as string) : (viewEntity ? viewEntity.OrderByClause ?? '' : '');
+            }
+            const orderBy: string = rawOrderBy.length > 0
+                ? (usingKeyset ? rawOrderBy : this.TransformExternalSQLClause(rawOrderBy, entityInfo))
+                : '';
 
             // View run logging (SQL Server-specific, others return null)
             let userViewRunID = '';
@@ -1166,11 +1394,11 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                     viewSQL = logResult.executeViewSQL;
                     userViewRunID = logResult.runID;
                 } else if (orderBy.length > 0) {
-                    if (!this.ValidateUserProvidedSQLClause(orderBy)) throw new Error(`Invalid Order By clause: ${orderBy}, contains one more for forbidden keywords`);
+                    if (!usingKeyset && !this.ValidateUserProvidedSQLClause(orderBy)) throw new Error(`Invalid Order By clause: ${orderBy}, contains one more for forbidden keywords`);
                     viewSQL += ` ORDER BY ${orderBy}`;
                 }
             } else if (orderBy.length > 0) {
-                if (!this.ValidateUserProvidedSQLClause(orderBy)) throw new Error(`Invalid Order By clause: ${orderBy}, contains one more for forbidden keywords`);
+                if (!usingKeyset && !this.ValidateUserProvidedSQLClause(orderBy)) throw new Error(`Invalid Order By clause: ${orderBy}, contains one more for forbidden keywords`);
                 viewSQL += ` ORDER BY ${orderBy}`;
             }
 
@@ -1181,7 +1409,9 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
                 }
                 viewSQL += ' ' + this.BuildPaginationSQL(params.MaxRows!, params.StartRow!);
             } else if (!topSQL && maxRowsForQuery > 0) {
-                // Platform doesn't use TOP (e.g., PG uses LIMIT at end of query)
+                // Platform doesn't use TOP (e.g., PG uses LIMIT at end of query).
+                // This also covers the usingKeyset case on PG: topSQL is set to empty by PG's
+                // BuildTopClause, so we fall here and emit LIMIT N at the end.
                 const limitSQL = this.BuildNonPaginatedLimitSQL(maxRowsForQuery);
                 if (limitSQL) viewSQL += ' ' + limitSQL;
             }
@@ -1559,12 +1789,22 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
         serverStatus: { maxUpdatedAt?: string; rowCount?: number },
     ): boolean {
         if (clientStatus.rowCount !== serverStatus.rowCount) return false;
+
+        // Handle empty result sets: if both sides report no timestamp, matching row count is sufficient
+        const clientEmpty = !clientStatus.maxUpdatedAt || clientStatus.maxUpdatedAt === '';
+        const serverEmpty = !serverStatus.maxUpdatedAt || serverStatus.maxUpdatedAt === '';
+        if (clientEmpty && serverEmpty) return true;
+
         const clientDate = this.parseClientTimestamp(clientStatus.maxUpdatedAt);
         if (!clientDate) return false;
         const serverDate = serverStatus.maxUpdatedAt ? new Date(serverStatus.maxUpdatedAt) : null;
+        // Server has no timestamp (e.g., empty table) — current if row counts match (already checked above)
         if (!serverDate) return clientStatus.rowCount === 0;
         if (isNaN(serverDate.getTime())) return false;
-        return clientDate.toISOString() === serverDate.toISOString();
+
+        // Compare as epoch milliseconds with 1-second tolerance to handle timestamp
+        // precision differences between SQL Server and JavaScript Date.toISOString()
+        return Math.abs(clientDate.getTime() - serverDate.getTime()) < 1000;
     }
 
     /**************************************************************************/
@@ -1595,7 +1835,10 @@ export abstract class GenericDatabaseProvider extends DatabaseProviderBase {
 
             for (let i = 0; i < params.length; i++) {
                 const item = params[i];
-                if (!item.cacheStatus) {
+                // Keyset queries bypass the cache entirely (per the AfterKey API contract):
+                // each call uses a different seek key, so cached entries would never be
+                // reusable. Route directly to standard execution path.
+                if (!item.cacheStatus || item.params.AfterKey) {
                     itemsWithoutCacheCheck.push({ index: i, item });
                     continue;
                 }

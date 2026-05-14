@@ -9,6 +9,8 @@ import { EntityOperations, OperationResult } from './EntityOperations.js';
 import { AgentOperations } from './AgentOperations.js';
 import { AIEngine } from "@memberjunction/aiengine";
 import { MJAIAgentEntityExtended } from "@memberjunction/ai-core-plus";
+import { ShutdownRegistry } from "@memberjunction/global";
+import { TaskStore, Task, TaskStatus, Message, Artifact, Part } from "./TaskStore.js";
 
 // A2A Server Configuration
 const a2aServerPort = a2aServerSettings?.port || 3200;
@@ -33,40 +35,8 @@ if (dbInstanceName !== null && dbInstanceName !== undefined && dbInstanceName.tr
     poolConfig.options!.instanceName = dbInstanceName;
 }
 
-// A2A Server Classes and Types
-type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled' | 'failed';
-
-interface Task {
-    id: string;
-    status: TaskStatus;
-    messages: Message[];
-    artifacts: Artifact[];
-    created: Date;
-    updated: Date;
-}
-
-interface Message {
-    id: string;
-    taskId: string;
-    role: 'user' | 'agent';
-    parts: Part[];
-    created: Date;
-}
-
-interface Part {
-    id: string;
-    type: 'text' | 'file' | 'data';
-    content: string | object;
-    metadata?: object;
-}
-
-interface Artifact {
-    id: string;
-    taskId: string;
-    name: string;
-    parts: Part[];
-    created: Date;
-}
+// A2A Server Classes and Types — `TaskStatus`, `Task`, `Message`, `Part`, `Artifact`
+// are imported from `./TaskStore.js` (extracted for testability).
 
 interface AgentCard {
     name: string;
@@ -96,8 +66,15 @@ interface AgentCard {
     };
 }
 
-// In-memory storage for tasks (in production, this would use a database)
-const tasks = new Map<string, Task>();
+// In-memory storage for tasks. Bounded by the periodic sweep started below;
+// in production you'd swap in a database-backed store. See `./TaskStore.ts`
+// for the implementation; the module-level `tasks` reference is kept for
+// drop-in compatibility with the rest of this file (which uses `tasks.set`
+// / `tasks.get` directly).
+const taskStore = new TaskStore();
+taskStore.Start();
+ShutdownRegistry.Instance.Register(taskStore);
+const tasks = taskStore;
 
 // Express application
 const app = express();

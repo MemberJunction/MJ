@@ -1,6 +1,6 @@
 import { UserInfo, BaseEntity } from '@memberjunction/core';
 import { MJQueueEntity, MJQueueTaskEntity } from '@memberjunction/core-entities';
-import { UUIDsEqual } from '@memberjunction/global';
+import { UUIDsEqual, IShutdownable } from '@memberjunction/global';
 //import { MJQueueTaskEntity, MJQueueEntity } from 'mj_generatedentities';
 
 export class TaskResult {
@@ -63,20 +63,22 @@ export class TaskBase {
 }
 
 
-export abstract class QueueBase  {  
+export abstract class QueueBase implements IShutdownable {
   private _queue: TaskBase[] = [];
   private _queueTypeId: string;
   protected _contextUser: UserInfo
   private _maxTasks: number = 3; // move to metadata or config param
   private _checkInterval: number = 250; // move to metadata or config param
   private _queueRecord: MJQueueEntity
+  private _stopped: boolean = false;
+  private _pendingTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(QueueRecord: MJQueueEntity, QueueTypeID: string, ContextUser: UserInfo) {
     this._queueRecord = QueueRecord;
     this._queueTypeId = QueueTypeID;
     this._contextUser = ContextUser;
   }
- 
+
   public get QueueID(): string {
     return this._queueRecord.ID;
   }
@@ -85,8 +87,47 @@ export abstract class QueueBase  {
     return this._queueTypeId;
   }
 
+  /**
+   * `IShutdownable` identity, surfaced in shutdown logs.
+   */
+  public get ShutdownName(): string {
+    return `QueueBase[${this._queueRecord?.Name ?? this._queueTypeId}]`;
+  }
+
+  /**
+   * Whether `Stop()` has been invoked. Once stopped, no further `ProcessTasks`
+   * iterations are scheduled and `AddTask` is rejected.
+   */
+  public get IsStopped(): boolean {
+    return this._stopped;
+  }
+
+  /**
+   * Stops the recursive `ProcessTasks` loop, cancels any pending timer, and
+   * marks the queue as stopped so subsequent `AddTask` calls fail-fast. Idempotent.
+   * Implements `IShutdownable.Shutdown` so `ShutdownRegistry.ShutdownAll()` can
+   * drain queues during graceful shutdown.
+   */
+  public Stop(): void {
+    this._stopped = true;
+    if (this._pendingTimer) {
+      clearTimeout(this._pendingTimer);
+      this._pendingTimer = null;
+    }
+  }
+
+  /**
+   * `IShutdownable` entry point. Aliased to `Stop()`.
+   */
+  public Shutdown(): void {
+    this.Stop();
+  }
+
   private _processing: boolean = false;
   protected ProcessTasks() {
+    if (this._stopped) {
+      return; // Don't reschedule once stopped.
+    }
     if (!this._processing) {
       try {
         this._processing = true;
@@ -102,21 +143,27 @@ export abstract class QueueBase  {
             let task = pending.shift();
             this.StartTask(task, this._contextUser); // INTENTIONAL - do not await as we want to fire off all the tasks we can do, and then move on
           }
-        }  
+        }
       }
       catch (e) {
         console.log(e);
       }
       finally {
         this._processing = false;
-        setTimeout(() => {
-          this.ProcessTasks()
-        }, this._checkInterval); // setup the next check
+        if (!this._stopped) {
+          this._pendingTimer = setTimeout(() => {
+            this._pendingTimer = null;
+            this.ProcessTasks();
+          }, this._checkInterval); // setup the next check
+        }
       }
     }
   }
 
   AddTask(task: TaskBase): boolean {
+    if (this._stopped) {
+      return false;
+    }
     try {
       // Add a task to the queue
       this._queue.push(task);
@@ -126,7 +173,7 @@ export abstract class QueueBase  {
 
       return true;
     }
-    catch (e) { 
+    catch (e) {
       return false;
     }
   }
