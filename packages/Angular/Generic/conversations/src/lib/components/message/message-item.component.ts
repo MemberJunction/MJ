@@ -1155,40 +1155,55 @@ export class MessageItemComponent extends BaseAngularComponent implements OnInit
   /**
    * Get agent response form from message
    * Uses ResponseForm property from MJConversationDetailEntity
+   *
+   * Cached against the raw JSON string so the getter returns a stable object reference
+   * for the same input. Without caching, `JSON.parse` produces a new object every call,
+   * which makes Angular's `@if (responseForm)` template index churn between CD passes —
+   * the classic NG0100 "ExpressionChangedAfterItHasBeenCheckedError" we used to hit here.
    */
+  private _responseFormRaw: string | null | undefined = undefined;
+  private _responseFormCache: AgentResponseForm | null = null;
   public get responseForm(): AgentResponseForm | null {
-    try {
-      const rawData = this.message.ResponseForm;
-      if (!rawData) {
-        return null;
-      }
-
-      // Parse JSON string to AgentResponseForm object
-      const form = JSON.parse(rawData);
-
-      return form || null;
-    } catch (error) {
-      console.error('Failed to parse response form:', error, 'Raw data:', this.message.ResponseForm);
+    const rawData = this.message.ResponseForm ?? null;
+    if (rawData === this._responseFormRaw) return this._responseFormCache;
+    this._responseFormRaw = rawData;
+    if (!rawData) {
+      this._responseFormCache = null;
       return null;
     }
+    try {
+      this._responseFormCache = (JSON.parse(rawData) as AgentResponseForm) || null;
+    } catch (error) {
+      console.error('Failed to parse response form:', error, 'Raw data:', rawData);
+      this._responseFormCache = null;
+    }
+    return this._responseFormCache;
   }
 
   /**
    * Get actionable commands from message
    * Uses ActionableCommands property from MJConversationDetailEntity
+   *
+   * Cached against the raw JSON string (see {@link responseForm} for rationale).
    */
+  private _actionableCommandsRaw: string | null | undefined = undefined;
+  private _actionableCommandsCache: ActionableCommand[] = [];
   public get actionableCommands(): ActionableCommand[] {
+    const rawData = this.message.ActionableCommands ?? null;
+    if (rawData === this._actionableCommandsRaw) return this._actionableCommandsCache;
+    this._actionableCommandsRaw = rawData;
+    if (!rawData) {
+      this._actionableCommandsCache = [];
+      return this._actionableCommandsCache;
+    }
     try {
-      const rawData = this.message.ActionableCommands;
-      if (!rawData) return [];
-
-      // Parse JSON string to array of ActionableCommand objects
       const commands = JSON.parse(rawData);
-      return Array.isArray(commands) ? commands : [];
+      this._actionableCommandsCache = Array.isArray(commands) ? commands : [];
     } catch (error) {
       console.error('Failed to parse actionable commands:', error);
-      return [];
+      this._actionableCommandsCache = [];
     }
+    return this._actionableCommandsCache;
   }
 
   /**
