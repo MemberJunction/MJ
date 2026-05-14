@@ -425,11 +425,15 @@ export class ComponentManager {
       }
       
       // Load dependencies
-      // Prefer the input spec's dependencies over the cached result's dependencies.
-      // When a parent component is served from cache, result.spec contains stale
-      // dependency code. The input spec has the latest dependency code from the caller.
-      // Each dependency still gets its own individual cache check via loadComponent.
-      const dependencies = spec.dependencies || result.spec?.dependencies;
+      // Prefer the fetched result's dependencies when they contain code (e.g.,
+      // registry-populated hierarchies from Skip where the full spec tree is
+      // returned in one response). Fall back to the input spec's dependencies
+      // otherwise (e.g., when the input spec is the latest from a caller that
+      // already has the dependency code).
+      const fetchedDeps = result.spec?.dependencies;
+      const inputDeps = spec.dependencies;
+      const fetchedHasCode = fetchedDeps?.some(d => !!d.code);
+      const dependencies = (fetchedHasCode ? fetchedDeps : inputDeps) || fetchedDeps || inputDeps;
       if (dependencies) {
         for (const dep of dependencies) {
           // Normalize dependency spec for local registry lookup
