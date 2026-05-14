@@ -424,16 +424,7 @@ export class ComponentManager {
         }
       }
       
-      // Load dependencies
-      // Prefer the fetched result's dependencies when they contain code (e.g.,
-      // registry-populated hierarchies from Skip where the full spec tree is
-      // returned in one response). Fall back to the input spec's dependencies
-      // otherwise (e.g., when the input spec is the latest from a caller that
-      // already has the dependency code).
-      const fetchedDeps = result.spec?.dependencies;
-      const inputDeps = spec.dependencies;
-      const fetchedHasCode = fetchedDeps?.some(d => !!d.code);
-      const dependencies = (fetchedHasCode ? fetchedDeps : inputDeps) || fetchedDeps || inputDeps;
+      const dependencies = this.resolveDependencies(spec.dependencies, result.spec?.dependencies);
       if (dependencies) {
         for (const dep of dependencies) {
           // Normalize dependency spec for local registry lookup
@@ -493,6 +484,29 @@ export class ComponentManager {
     return results;
   }
   
+  /**
+   * Determines which dependency list to use when loading a component's children.
+   *
+   * - Input deps with code take priority (caller has the latest version).
+   * - When input has no deps at all, fall back to fetched/cached deps
+   *   (e.g., a registry reference spec with no dependency list).
+   * - When input has only stubs (no code), prefer fetched deps if they
+   *   contain code (registry-populated hierarchies from Skip where the
+   *   full tree is returned in one response).
+   */
+  private resolveDependencies(
+      inputDeps: ComponentSpec[] | undefined,
+      fetchedDeps: ComponentSpec[] | undefined
+  ): ComponentSpec[] | undefined {
+      const inputHasDeps = inputDeps && inputDeps.length > 0;
+      const inputHasCode = inputHasDeps && inputDeps.some(d => !!d.code);
+
+      if (inputHasCode) return inputDeps;
+      if (!inputHasDeps) return fetchedDeps || inputDeps;
+      if (fetchedDeps?.some(d => !!d.code)) return fetchedDeps;
+      return inputDeps;
+  }
+
   /**
    * Check if a component needs to be fetched from a registry
    */
