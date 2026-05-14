@@ -72,6 +72,10 @@ All 5 are standalone, design-token-only, PascalCase API.
 | Testing — Runs (resource) | ✅ | ✅ | n/a | n/a | n/a | **Inner-owns-chrome.** `<app-testing-runs>` renders its own page-header; Refresh + "Run Test" primary in `[actions]`. Resource wrapper is a thin shim. |
 | Testing — Analytics (resource) | ✅ | ✅ | ✅ | n/a | n/a | **Inner-owns-chrome.** `<app-testing-analytics>` renders its own page-header; time-range `<mj-filter-chip>` group + Refresh in `[actions]`. Resource wrapper is a thin shim. |
 | Testing — Review (resource) | ✅ | ✅ | n/a | n/a | n/a | **Inner-owns-chrome.** `<app-testing-review>` renders its own page-header; pending-count warning pill in `[meta]`, Refresh in `[actions]`. Resource wrapper is a thin shim. |
+| Admin — Identity & Access | ✅ | ✅ | n/a | n/a | n/a | All 4 admin pages share one template (`admin-container.component.html`) via `BaseAdminContainerComponent`. Single template migration ripples to all 4. Body: `<mj-page-body [Flex]="true" [Padding]="false">` wrapping a sidebar+content layout. Deleted bespoke `.admin-container__header*` CSS including a hardcoded `linear-gradient(135deg, #264FAF 0%, #0076b6 100%)` design-token violation. |
+| Admin — Data & Schema | ✅ | ✅ | n/a | n/a | n/a | Same shared template as Identity & Access. |
+| Admin — Monitoring | ✅ | ✅ | n/a | n/a | n/a | Same shared template as Identity & Access. |
+| Admin — Developer Tools | ✅ | ✅ | n/a | n/a | n/a | Same shared template as Identity & Access. |
 
 ## Pages NOT yet migrated
 

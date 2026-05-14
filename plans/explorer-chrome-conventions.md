@@ -313,6 +313,57 @@ These pages do NOT follow the standard chrome and won't be migrated to it:
   shell), **Data Explorer** (workspace), **Query Browser** (resizable left panel) —
   documented exceptions in `plans/explorer-layout-templates.md`.
 
+## 11. TBD: shell-with-left-nav + dynamically-loaded sub-pages
+
+A pattern emerged during the chrome migration that the conventions doc does
+NOT yet take a position on: an outer "shell" resource page (`<mj-page-layout>` +
+`<mj-page-header>` + `<mj-page-body>`) whose body contains a left section-nav,
+and whose content area dynamically loads a different complete sub-component
+per active section.
+
+**Examples in the codebase today:**
+- **Admin** section (Identity & Access, Data & Schema, Monitoring, Developer
+  Tools) — single shared `admin-container.component.html` template,
+  sub-sections loaded into a `ViewContainerRef` based on the active selection.
+  Sub-sections are full `BaseResourceComponent` / `BaseDashboard` instances
+  with their own complete `<mj-page-header>` + `<mj-page-body>` chrome.
+- **Knowledge Hub Configuration** — left config-nav, internal `@if`-switched
+  sections (less dynamic than Admin but conceptually similar).
+- **AI Analytics** — left nav-rail with `@switch (ActiveSection)` rendering
+  per-section sub-components inline. Shared `FilterBarConfig` lets the outer
+  resource project per-section filter chrome up into its own header.
+
+**The unsolved problem:** when the sub-component carries its own
+`<mj-page-header>`, the user sees a "double header" — the shell's title above,
+the sub-component's title below. Today, each example handles this differently:
+
+- Admin: lives with the doubled header (each sub-section reads as a complete
+  page-within-a-page, hierarchy reads correctly: "Identity & Access > Users").
+- KH Configuration: sub-sections are inline templates inside the parent
+  component, not loaded sub-components, so there's only one header.
+- AI Analytics: sub-sections are inline components without their own
+  `<mj-page-header>`, and the shell's header dynamically projects per-section
+  filter chrome via `FilterBarConfig`.
+
+**Future direction:** to be decided on a future branch. Likely candidates:
+
+1. **Header projection** — each sub-component exposes its filter/action
+   chrome via a contract (e.g., `IHasHeaderChrome.GetActions()` /
+   `.GetToolbar()`), and the shell projects them into its own
+   `<mj-page-header>` slots. Eliminates the double-header but couples each
+   sub-component to the shell pattern.
+2. **Collapsing shell header** — when a section is active, the shell's
+   `<mj-page-header>` hides; the sub-component's chrome becomes primary.
+   Light-touch fix.
+3. **Compact breadcrumb shell** — replace the shell's full
+   `<mj-page-header>` with a thin breadcrumb row ("Admin > Identity & Access
+   > Users") that preserves orientation without competing visually.
+4. **Workspace exception** — treat shell-with-left-nav as its own template,
+   similar to Data Explorer. Each sub-component keeps full chrome.
+
+Until this is decided, **keep the shell-with-left-nav pattern as a
+documented exception**. Treat the doubled chrome as intentional hierarchy.
+
 ---
 
 ## 9. Migration progress
