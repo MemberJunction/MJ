@@ -13548,7 +13548,8 @@
       "IsActive": true,
       "SpeedRank": 7,
       "CostRank": 8,
-      "InheritTypeModalities": true
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GPT 4.o Image 1.5"
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -13608,7 +13609,8 @@
       "IsActive": true,
       "SpeedRank": 9,
       "CostRank": 10,
-      "InheritTypeModalities": true
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GPT 5.5"
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -13729,7 +13731,8 @@
       "IsActive": true,
       "SpeedRank": 7,
       "CostRank": 5,
-      "InheritTypeModalities": true
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GLM 5.1"
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
@@ -13790,7 +13793,8 @@
       "IsActive": true,
       "SpeedRank": 7,
       "CostRank": 7,
-      "InheritTypeModalities": true
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Mistral Medium 3.1"
     },
     "relatedEntities": {
       "MJ: AI Model Vendors": [
