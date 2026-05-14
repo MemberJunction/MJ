@@ -995,6 +995,11 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                         innerParam.MaxRows = param.MaxRows;
                     if (param.StartRow !== undefined)
                         innerParam.StartRow = param.StartRow; // Add StartRow parameter
+                    if (param.AfterKey) {
+                        // Keyset (seek) pagination cursor. Server validates and throws
+                        // AfterKeyNotSupportedError on composite-PK / unsupported types.
+                        innerParam.AfterKey = { KeyValuePairs: param.AfterKey.KeyValuePairs };
+                    }
                     innerParam.ForceAuditLog = param.ForceAuditLog || false;
                     innerParam.ResultType = param.ResultType || 'simple';
                     if (param.AuditLogDescription && param.AuditLogDescription.length > 0){
@@ -1112,6 +1117,7 @@ export class GraphQLDataProvider extends ProviderBase implements IEntityDataProv
                     IgnoreMaxRows: item.params.IgnoreMaxRows || false,
                     MaxRows: item.params.MaxRows,
                     StartRow: item.params.StartRow,
+                    AfterKey: item.params.AfterKey ? { KeyValuePairs: item.params.AfterKey.KeyValuePairs } : null,
                     ForceAuditLog: item.params.ForceAuditLog || false,
                     AuditLogDescription: item.params.AuditLogDescription || '',
                     ResultType: item.params.ResultType || 'simple',

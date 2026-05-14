@@ -818,6 +818,36 @@ Key principles:
 - Group related queries together in a single batch operation
 - Example: Load all dashboard data in 2-3 calls instead of 30+
 
+### Deep Pagination — Use Keyset (`AfterKey`), not `StartRow`
+
+For background jobs, scheduled actions, or bulk processing that iterates through *all* records of a large entity, use **`RunViewParams.AfterKey`** (keyset / seek pagination) instead of `StartRow`. Keyset stays O(log N) per page regardless of depth — `StartRow` becomes progressively expensive as the offset grows (each page must enumerate and discard the skipped rows).
+
+```typescript
+import { CompositeKey } from '@memberjunction/core';
+
+let lastSeenKey: CompositeKey | undefined;
+while (true) {
+    const result = await rv.RunView({
+        EntityName: 'Tax Returns',
+        ExtraFilter: 'AddressLine1 IS NOT NULL',
+        AfterKey: lastSeenKey,
+        MaxRows: 500,
+        ResultType: 'entity_object'
+    }, contextUser);
+
+    if (!result.Success || result.Results.length === 0) break;
+    for (const r of result.Results) { /* process */ }
+    if (result.Results.length < 500) break;
+
+    const last = result.Results[result.Results.length - 1];
+    lastSeenKey = CompositeKey.FromID(last.ID);
+}
+```
+
+**Constraints**: single-column PK only; throws `AfterKeyNotSupportedError` for composite-PK entities (fall back to `StartRow`). UI grid pagination (a few hundred pages of a few hundred rows) should stay on `StartRow` — keyset isn't necessary there.
+
+See **[guides/KEYSET_PAGINATION_GUIDE.md](guides/KEYSET_PAGINATION_GUIDE.md)** for full details, examples, and the reference implementations (`ScheduledGeocodingAction`, `VectorBase`, `EntityVectorSyncer`).
+
 ### Client-Side Data Aggregation
 - Load raw data once, aggregate in memory
 - More efficient than multiple filtered queries

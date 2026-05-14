@@ -226,19 +226,19 @@ import { UUIDsEqual } from '@memberjunction/global';
   styles: [`
     :host { display: block; height: 100%; }
     .conversation-list { display: flex; flex-direction: column; height: 100%; background: var(--mj-brand-secondary); }
-    .list-header { padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+    .list-header { padding: 8px; border-bottom: 1px solid color-mix(in srgb, var(--mj-brand-on-secondary) 10%, transparent); }
     .search-input {
       width: 100%;
       padding: 8px 12px;
-      background: rgba(255,255,255,0.1);
-      border: 1px solid rgba(255,255,255,0.2);
+      background: color-mix(in srgb, var(--mj-brand-on-secondary) 10%, transparent);
+      border: 1px solid color-mix(in srgb, var(--mj-brand-on-secondary) 20%, transparent);
       border-radius: 6px;
-      color: white;
+      color: var(--mj-brand-on-secondary);
       font-size: 13px;
       transition: all 0.2s;
     }
-    .search-input::placeholder { color: rgba(255,255,255,0.5); }
-    .search-input:focus { outline: none; background: rgba(255,255,255,0.15); border-color: var(--mj-brand-primary); }
+    .search-input::placeholder { color: color-mix(in srgb, var(--mj-brand-on-secondary) 50%, transparent); }
+    .search-input:focus { outline: none; background: color-mix(in srgb, var(--mj-brand-on-secondary) 15%, transparent); border-color: var(--mj-brand-primary); }
     .btn-new-conversation {
       width: calc(100% - 16px);
       margin: 8px;
@@ -263,11 +263,6 @@ import { UUIDsEqual } from '@memberjunction/global';
 
     /* Collapsible Sections */
     .sidebar-section { margin-bottom: 20px; }
-    .pinned-section .section-header {
-      background: rgba(255, 193, 7, 0.08);
-      border-radius: 4px;
-      margin: 0 4px;
-    }
     .pinned-section .section-title .section-icon {
       color: var(--mj-status-warning);
       font-size: 11px;
@@ -279,13 +274,13 @@ import { UUIDsEqual } from '@memberjunction/global';
       align-items: center;
       justify-content: space-between;
       cursor: pointer;
-      color: rgba(255, 255, 255, 0.7);
+      color: var(--mj-brand-on-secondary);
       font-size: 13px;
       font-weight: 500;
-      transition: color 0.2s;
+      transition: background 0.2s;
       user-select: none;
     }
-    .section-header:hover { color: white; }
+    .section-header:hover { background: color-mix(in srgb, var(--mj-brand-on-secondary) 8%, transparent); }
     .section-title {
       display: flex;
       align-items: center;
@@ -293,9 +288,11 @@ import { UUIDsEqual } from '@memberjunction/global';
     }
     .section-title i {
       font-size: 10px;
+    }
+    .section-title i:not(.section-icon) {
       transition: transform 0.2s;
     }
-    .section-header.expanded .section-title i { transform: rotate(90deg); }
+    .section-header.expanded .section-title i:not(.section-icon) { transform: rotate(90deg); }
     .chat-list {
       padding: 4px 0;
       display: none;
@@ -310,23 +307,23 @@ import { UUIDsEqual } from '@memberjunction/global';
       align-items: center;
       transition: all 0.2s;
       position: relative;
-      color: rgba(255,255,255,0.7);
+      color: color-mix(in srgb, var(--mj-brand-on-secondary) 70%, transparent);
       font-size: 14px;
       min-height: 45px;
     }
-    .conversation-item:hover { background: rgba(255,255,255,0.08); color: white; }
+    .conversation-item:hover { background: color-mix(in srgb, var(--mj-brand-on-secondary) 8%, transparent); color: var(--mj-brand-on-secondary); }
     .conversation-item:hover .conversation-actions { opacity: 1; }
-    .conversation-item.active { background: var(--mj-brand-primary); color: white; }
+    .conversation-item.active { background: var(--mj-brand-primary); color: var(--mj-brand-on-secondary); }
     .conversation-icon-wrapper { position: relative; flex-shrink: 0; }
     .conversation-icon { font-size: 12px; width: 16px; text-align: center; }
     .conversation-icon.has-tasks { color: var(--mj-status-warning); }
     .badge-overlay { position: absolute; top: -4px; right: -4px; }
     .conversation-info { flex: 1; min-width: 0; }
     .conversation-name { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; align-items: center; gap: 6px; }
-    .shared-indicator { font-size: 10px; color: rgba(255, 255, 255, 0.55); flex-shrink: 0; }
-    .conversation-item.active .shared-indicator { color: rgba(255, 255, 255, 0.85); }
-    .conversation-preview { font-size: 12px; color: rgba(255,255,255,0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .conversation-item.active .conversation-preview { color: rgba(255,255,255,0.8); }
+    .shared-indicator { font-size: 10px; color: color-mix(in srgb, var(--mj-brand-on-secondary) 55%, transparent); flex-shrink: 0; }
+    .conversation-item.active .shared-indicator { color: color-mix(in srgb, var(--mj-brand-on-secondary) 85%, transparent); }
+    .conversation-preview { font-size: 12px; color: color-mix(in srgb, var(--mj-brand-on-secondary) 50%, transparent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .conversation-item.active .conversation-preview { color: color-mix(in srgb, var(--mj-brand-on-secondary) 80%, transparent); }
     .conversation-meta { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
 
     /* Project Badge */
@@ -337,20 +334,20 @@ import { UUIDsEqual } from '@memberjunction/global';
       font-size: 10px;
       font-weight: 600;
       margin-left: auto;
-      background-color: rgba(255, 255, 255, 0.1);
-      color: rgba(255, 255, 255, 0.6);
+      background-color: color-mix(in srgb, var(--mj-brand-on-secondary) 10%, transparent);
+      color: color-mix(in srgb, var(--mj-brand-on-secondary) 60%, transparent);
       white-space: nowrap;
       max-width: 80px;
       overflow: hidden;
       text-overflow: ellipsis;
     }
     .conversation-item:hover .project-badge {
-      background-color: rgba(255, 255, 255, 0.15);
-      color: rgba(255, 255, 255, 0.8);
+      background-color: color-mix(in srgb, var(--mj-brand-on-secondary) 15%, transparent);
+      color: color-mix(in srgb, var(--mj-brand-on-secondary) 80%, transparent);
     }
     .conversation-item.active .project-badge {
-      background-color: rgba(255, 255, 255, 0.2);
-      color: white;
+      background-color: color-mix(in srgb, var(--mj-brand-on-secondary) 20%, transparent);
+      color: var(--mj-brand-on-secondary);
     }
 
     .conversation-actions {
@@ -381,11 +378,11 @@ import { UUIDsEqual } from '@memberjunction/global';
     @keyframes pulse-glow {
       0%, 100% {
         opacity: 1;
-        filter: drop-shadow(0 0 2px #fb923c);
+        filter: drop-shadow(0 0 2px var(--mj-status-warning));
       }
       50% {
         opacity: 0.6;
-        filter: drop-shadow(0 0 4px #fb923c);
+        filter: drop-shadow(0 0 4px var(--mj-status-warning));
       }
     }
     .conversation-item.active .task-indicator {
@@ -399,19 +396,19 @@ import { UUIDsEqual } from '@memberjunction/global';
       align-items: center;
       justify-content: center;
       border-radius: 6px;
-      color: rgba(255,255,255,0.7);
+      color: color-mix(in srgb, var(--mj-brand-on-secondary) 70%, transparent);
       background: var(--mj-brand-secondary) !important;
       border: none;
       cursor: pointer;
       transition: all 0.2s;
     }
     .menu-btn:hover {
-      background: rgba(255,255,255,0.15) !important;
-      color: white;
+      background: color-mix(in srgb, var(--mj-brand-on-secondary) 15%, transparent) !important;
+      color: var(--mj-brand-on-secondary);
     }
     .conversation-item.active .menu-btn {
       background: var(--mj-brand-primary-hover) !important;
-      color: white;
+      color: var(--mj-brand-on-secondary);
     }
     .menu-btn i { font-size: 14px; }
 
@@ -422,9 +419,9 @@ import { UUIDsEqual } from '@memberjunction/global';
       margin-top: 4px;
       min-width: 160px;
       background: var(--mj-brand-secondary);
-      border: 1px solid rgba(255,255,255,0.15);
+      border: 1px solid color-mix(in srgb, var(--mj-brand-on-secondary) 15%, transparent);
       border-radius: 8px;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      box-shadow: var(--mj-shadow-lg);
       z-index: 1001;
       overflow: hidden;
       pointer-events: auto;
@@ -438,7 +435,7 @@ import { UUIDsEqual } from '@memberjunction/global';
       padding: 10px 14px;
       background: transparent;
       border: none;
-      color: rgba(255,255,255,0.85);
+      color: color-mix(in srgb, var(--mj-brand-on-secondary) 85%, transparent);
       font-size: 14px;
       text-align: left;
       cursor: pointer;
@@ -446,40 +443,40 @@ import { UUIDsEqual } from '@memberjunction/global';
     }
 
     .menu-item:hover {
-      background: rgba(255,255,255,0.1);
-      color: white;
+      background: color-mix(in srgb, var(--mj-brand-on-secondary) 10%, transparent);
+      color: var(--mj-brand-on-secondary);
     }
 
     .menu-item i {
       width: 16px;
       font-size: 13px;
-      color: rgba(255,255,255,0.6);
+      color: color-mix(in srgb, var(--mj-brand-on-secondary) 60%, transparent);
     }
 
     .menu-item:hover i {
-      color: white;
+      color: var(--mj-brand-on-secondary);
     }
 
     .menu-item.danger {
-      color: rgba(239, 68, 68, 0.9);
+      color: var(--mj-status-error);
     }
 
     .menu-item.danger:hover {
-      background: rgba(239, 68, 68, 0.15);
-      color: #ff6b6b;
+      background: color-mix(in srgb, var(--mj-status-error) 15%, transparent);
+      color: var(--mj-status-error);
     }
 
     .menu-item.danger i {
-      color: rgba(239, 68, 68, 0.8);
+      color: var(--mj-status-error);
     }
 
     .menu-item.danger:hover i {
-      color: #ff6b6b;
+      color: var(--mj-status-error);
     }
 
     .menu-divider {
       height: 1px;
-      background: rgba(255,255,255,0.1);
+      background: color-mix(in srgb, var(--mj-brand-on-secondary) 10%, transparent);
       margin: 4px 0;
     }
 
@@ -534,17 +531,17 @@ import { UUIDsEqual } from '@memberjunction/global';
       align-items: center;
       justify-content: center;
       background: transparent;
-      border: 1px solid rgba(255,255,255,0.2);
+      border: 1px solid color-mix(in srgb, var(--mj-brand-on-secondary) 20%, transparent);
       border-radius: 6px;
-      color: rgba(255,255,255,0.7);
+      color: color-mix(in srgb, var(--mj-brand-on-secondary) 70%, transparent);
       cursor: pointer;
       transition: all 0.2s;
     }
 
     .btn-menu:hover {
-      background: rgba(255,255,255,0.1);
-      color: white;
-      border-color: rgba(255,255,255,0.3);
+      background: color-mix(in srgb, var(--mj-brand-on-secondary) 10%, transparent);
+      color: var(--mj-brand-on-secondary);
+      border-color: color-mix(in srgb, var(--mj-brand-on-secondary) 30%, transparent);
     }
 
     .header-dropdown-menu {
@@ -553,9 +550,9 @@ import { UUIDsEqual } from '@memberjunction/global';
       right: 0;
       min-width: 200px;
       background: var(--mj-brand-secondary);
-      border: 1px solid rgba(255,255,255,0.15);
+      border: 1px solid color-mix(in srgb, var(--mj-brand-on-secondary) 15%, transparent);
       border-radius: 8px;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      box-shadow: var(--mj-shadow-lg);
       z-index: 1001;
       overflow: hidden;
       padding: 4px 0;
@@ -569,7 +566,7 @@ import { UUIDsEqual } from '@memberjunction/global';
       padding: 10px 14px;
       background: transparent;
       border: none;
-      color: rgba(255,255,255,0.85);
+      color: color-mix(in srgb, var(--mj-brand-on-secondary) 85%, transparent);
       font-size: 13px;
       text-align: left;
       cursor: pointer;
@@ -577,33 +574,33 @@ import { UUIDsEqual } from '@memberjunction/global';
     }
 
     .header-dropdown-menu .dropdown-item:hover {
-      background: rgba(255,255,255,0.1);
-      color: white;
+      background: color-mix(in srgb, var(--mj-brand-on-secondary) 10%, transparent);
+      color: var(--mj-brand-on-secondary);
     }
 
     .header-dropdown-menu .dropdown-item i {
       width: 16px;
       font-size: 13px;
-      color: rgba(255,255,255,0.6);
+      color: color-mix(in srgb, var(--mj-brand-on-secondary) 60%, transparent);
     }
 
     .header-dropdown-menu .dropdown-item:hover i {
-      color: white;
+      color: var(--mj-brand-on-secondary);
     }
 
     .header-dropdown-menu .dropdown-item .shortcut {
       margin-left: auto;
       font-size: 11px;
-      color: rgba(255,255,255,0.4);
+      color: color-mix(in srgb, var(--mj-brand-on-secondary) 40%, transparent);
       font-family: system-ui, -apple-system, sans-serif;
     }
 
     .btn-select {
       padding: 8px 12px;
       background: transparent;
-      border: 1px solid rgba(255,255,255,0.2);
+      border: 1px solid color-mix(in srgb, var(--mj-brand-on-secondary) 20%, transparent);
       border-radius: 6px;
-      color: rgba(255,255,255,0.7);
+      color: color-mix(in srgb, var(--mj-brand-on-secondary) 70%, transparent);
       font-size: 13px;
       font-weight: 500;
       display: flex;
@@ -616,9 +613,9 @@ import { UUIDsEqual } from '@memberjunction/global';
     }
 
     .btn-select:hover {
-      background: rgba(255,255,255,0.1);
-      color: white;
-      border-color: rgba(255,255,255,0.3);
+      background: color-mix(in srgb, var(--mj-brand-on-secondary) 10%, transparent);
+      color: var(--mj-brand-on-secondary);
+      border-color: color-mix(in srgb, var(--mj-brand-on-secondary) 30%, transparent);
     }
 
     .conversation-checkbox {
@@ -643,7 +640,7 @@ import { UUIDsEqual } from '@memberjunction/global';
       align-items: center;
       padding: 12px 16px;
       background: var(--mj-brand-secondary);
-      border-top: 1px solid rgba(255,255,255,0.15);
+      border-top: 1px solid color-mix(in srgb, var(--mj-brand-on-secondary) 15%, transparent);
       gap: 12px;
       flex-wrap: wrap;
       flex-shrink: 0;
@@ -653,7 +650,7 @@ import { UUIDsEqual } from '@memberjunction/global';
       display: flex;
       align-items: center;
       gap: 12px;
-      color: rgba(255,255,255,0.9);
+      color: color-mix(in srgb, var(--mj-brand-on-secondary) 90%, transparent);
       font-size: 14px;
       font-weight: 500;
       flex: 1 1 auto;
@@ -661,7 +658,7 @@ import { UUIDsEqual } from '@memberjunction/global';
     }
 
     .selection-count {
-      color: white;
+      color: var(--mj-brand-on-secondary);
     }
 
     .link-btn {
@@ -676,7 +673,7 @@ import { UUIDsEqual } from '@memberjunction/global';
     }
 
     .link-btn:hover {
-      color: white;
+      color: var(--mj-brand-on-secondary);
     }
 
     .selection-actions {
@@ -688,9 +685,9 @@ import { UUIDsEqual } from '@memberjunction/global';
     .btn-cancel {
       padding: 8px 16px;
       background: transparent;
-      border: 1px solid rgba(255,255,255,0.2);
+      border: 1px solid color-mix(in srgb, var(--mj-brand-on-secondary) 20%, transparent);
       border-radius: 6px;
-      color: rgba(255,255,255,0.7);
+      color: color-mix(in srgb, var(--mj-brand-on-secondary) 70%, transparent);
       cursor: pointer;
       font-size: 13px;
       font-weight: 500;
@@ -698,8 +695,8 @@ import { UUIDsEqual } from '@memberjunction/global';
     }
 
     .btn-cancel:hover {
-      background: rgba(255,255,255,0.1);
-      color: white;
+      background: color-mix(in srgb, var(--mj-brand-on-secondary) 10%, transparent);
+      color: var(--mj-brand-on-secondary);
     }
 
     .btn-delete-bulk {
@@ -710,7 +707,7 @@ import { UUIDsEqual } from '@memberjunction/global';
       background: var(--mj-status-error);
       border: none;
       border-radius: 6px;
-      color: white;
+      color: var(--mj-brand-on-secondary);
       cursor: pointer;
       font-size: 13px;
       font-weight: 600;
