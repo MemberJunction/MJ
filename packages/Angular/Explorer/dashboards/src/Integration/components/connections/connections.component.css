@@ -10,6 +10,30 @@
   overflow: hidden;
 }
 
+/* Slot wrappers — display:contents lets children become direct flex children
+   of <mj-page-header>'s slot so its gap applies between them. */
+.integration-header-meta,
+.integration-header-actions {
+  display: contents;
+}
+
+.integration-stat-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 999px;
+  font-size: 12px;
+  color: var(--mj-text-secondary);
+}
+
+.integration-stat-badge strong {
+  color: var(--mj-text-primary);
+  font-weight: 600;
+}
+
 .connections-container {
   padding: 24px;
   max-width: 1400px;
@@ -28,35 +52,6 @@
 .connections-container.detail-active,
 .connections-container.editor-active {
   overflow: hidden;
-}
-
-.connections-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 24px;
-}
-
-.header-left {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-}
-
-.header-title {
-  font-size: 24px;
-  font-weight: 700;
-  margin: 0;
-  color: var(--mj-text-primary);
-}
-
-.header-count {
-  font-size: 14px;
-  color: var(--mj-text-disabled);
-}
-
-.add-connection-btn i {
-  margin-right: 6px;
 }
 
 /* ---------------------------------------------------------------------------

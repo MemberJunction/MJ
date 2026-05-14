@@ -1,3 +1,32 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Integration Schedules"
+    Icon="fa-solid fa-calendar-check"
+    Subtitle="When and how often integrations sync">
+    @if (!IsLoading && Schedules.length > 0) {
+      <div meta class="integration-header-meta">
+        <span class="integration-stat-badge">
+          <strong>{{ Schedules.length }}</strong> integration{{ Schedules.length === 1 ? '' : 's' }}
+        </span>
+        <span class="integration-stat-badge">
+          <strong>{{ ScheduledCount }}</strong> scheduled
+        </span>
+        @if (LockedCount > 0) {
+          <span class="integration-stat-badge integration-stat-badge--running">
+            <i class="fa-solid fa-spinner fa-spin"></i>
+            <strong>{{ LockedCount }}</strong> running
+          </span>
+        }
+      </div>
+    }
+    <div actions class="integration-header-actions">
+      <button mjButton variant="secondary" size="sm" (click)="LoadData()" [disabled]="IsLoading" title="Refresh">
+        <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="IsLoading"></i> Refresh
+      </button>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body>
 <!-- Loading state -->
 @if (IsLoading) {
   <div class="loading-container">
@@ -6,29 +35,6 @@
 } @else {
   <div class="schedules-root">
 
-    <!-- ================================================================= -->
-    <!-- HEADER -->
-    <!-- ================================================================= -->
-    <div class="section-header">
-      <div class="header-left">
-        <h2 class="section-title">
-          <i class="fa-solid fa-calendar-check"></i>
-          Sync Schedules
-        </h2>
-        <span class="header-meta">{{ Schedules.length }} integration{{ Schedules.length === 1 ? '' : 's' }}</span>
-        <span class="header-meta">{{ ScheduledCount }} scheduled</span>
-        @if (LockedCount > 0) {
-          <span class="header-meta running-badge">
-            <i class="fa-solid fa-spinner fa-spin"></i>
-            {{ LockedCount }} running
-          </span>
-        }
-      </div>
-      <button class="btn btn-outline" (click)="LoadData()">
-        <i class="fa-solid fa-arrows-rotate"></i>
-        Refresh
-      </button>
-    </div>
 
     <!-- ================================================================= -->
     <!-- TIMELINE (24-hour visual) -->
@@ -284,3 +290,5 @@
     </div>
   </div>
 }
+  </mj-page-body>
+</mj-page-layout>

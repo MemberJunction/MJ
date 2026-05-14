@@ -76,6 +76,12 @@ All 5 are standalone, design-token-only, PascalCase API.
 | Admin — Data & Schema | ✅ | ✅ | n/a | n/a | n/a | Same shared template as Identity & Access. |
 | Admin — Monitoring | ✅ | ✅ | n/a | n/a | n/a | Same shared template as Identity & Access. |
 | Admin — Developer Tools | ✅ | ✅ | n/a | n/a | n/a | Same shared template as Identity & Access. |
+| Integration — Overview | ✅ | ✅ | ✅ | n/a | n/a | KPI metrics dashboard. Total-integrations pill in `[meta]`; Refresh in `[actions]`. Body: `<mj-page-body>`, kept `max-width: 1440px` on the inner `.overview` for wide-monitor comfort. |
+| Integration — Connections (Integrations) | ✅ | ✅ | n/a | n/a | n/a | Refresh in `[actions]`. Body: `<mj-page-body [Flex]="true" [Padding]="false">` — connections grid + detail panel + wizard own their own internal layout. |
+| Integration — Schedules | ✅ | ✅ | ✅ | n/a | n/a | Refresh in `[actions]`. Body: `<mj-page-body>`. Removed the duplicated bespoke `.section-header` row that had its own title + Refresh; kept the stat row (counts + locked badge) as `.section-stats` since it's contextual sub-info. |
+| Integration — Pipelines | ✅ | ✅ | ✅ | ✅ | ✅ | Pipeline + entity-map counts in `[meta]`; Expand All / Collapse All / Refresh in `[actions]`; `<mj-page-search>` in `[toolbar]`. Body: `<mj-page-body [Flex]="true" [Padding]="false">`. Bespoke `.pipelines-toolbar` row deleted; bridge method `OnGlobalSearchValue(value: string)` added for the `<mj-page-search>` string signal. |
+| Integration — Mapping Workspace | ✅ | ✅ | n/a | n/a | n/a | Title + subtitle only (no controls in chrome — all interactions live in the workspace). Body: `<mj-page-body [Flex]="true" [Padding]="false">`. |
+| Integration — Activity | ✅ | ✅ | ✅ | ✅ | ✅ | Full chrome: 4 stat badges in `[meta]` (Total / Succeeded / Failed / Records) with success/error color variants. `[actions]`: `<mj-filter-popover>` (Integration filter dropdown) + Refresh. `[toolbar]`: `<mj-page-search>` + StatusFilter chips + DateFilter chips (all single-select segmented). Body: `<mj-page-body [Flex]="true">`. Deleted bespoke `.filter-bar` + `.summary-strip` rows + their CSS. Added bridge `OnSearchValueChange(value: string)` for `<mj-page-search>` and filter-popover helpers (`ActivityFilterFields`, `ActivityFilterValues`, `ActiveFilterCount`, `OnFilterValuesChange`, `ResetIntegrationFilter`). |
 
 ## Pages NOT yet migrated
 
