@@ -415,7 +415,7 @@ The server includes resolvers for the following domains:
 | Resolver | Operations |
 |----------|------------|
 | `EntityResolver` | CRUD operations for all entities |
-| `RunViewResolver` | RunView by ID, name, or dynamic entity |
+| `RunViewResolver` | RunView by ID, name, or dynamic entity. All four input types (`RunViewByIDInput`, `RunViewByNameInput`, `RunDynamicViewInput`, `RunViewGenericInput`) expose an optional `AfterKey: CompositeKeyInputType` for keyset (seek) pagination — see [KEYSET_PAGINATION_GUIDE.md](../../guides/KEYSET_PAGINATION_GUIDE.md). |
 | `RunAIPromptResolver` | Execute AI prompts, simple prompts, text embeddings |
 | `RunAIAgentResolver` | Execute AI agents with session and streaming support |
 | `ActionResolver` | Execute MJ Actions |
@@ -482,6 +482,7 @@ All built-in resolvers extend `ResolverBase`, which provides:
 | `RunViewByNameGeneric()` | Execute a saved view by name |
 | `RunDynamicViewGeneric()` | Execute an ad-hoc view on an entity |
 | `RunViewsGeneric()` | Batch-execute multiple views |
+| `RunViewGenericInternal()` | Shared internal: extracts and forwards all RunView params including `AfterKey` (keyset pagination — see [KEYSET_PAGINATION_GUIDE.md](../../guides/KEYSET_PAGINATION_GUIDE.md)) |
 | `CheckUserReadPermissions()` | Validate entity-level read access |
 | `CheckAPIKeyScopeAuthorization()` | Validate API key scope |
 | `MapFieldNamesToCodeNames()` | Map field names for GraphQL transport |

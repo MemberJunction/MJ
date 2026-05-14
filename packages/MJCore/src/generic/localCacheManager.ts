@@ -1226,6 +1226,14 @@ export class LocalCacheManager extends BaseSingleton<LocalCacheManager> {
     ): Promise<void> {
         if (!this._storageProvider || !this._config.enabled) return;
 
+        // Keyset (AfterKey) queries are inherently single-use — each call uses a different
+        // seek key, so a cached entry would never be reusable by a subsequent caller.
+        // Skip the cache write entirely to avoid polluting the cache with one-shot entries.
+        if (params.AfterKey) {
+            LogStatusEx({ message: `[CACHE-WRITE-GATE] Skipping cache write for keyset (AfterKey) query on "${params.EntityName}"`, verboseOnly: true });
+            return;
+        }
+
         // Short-circuit: if the entity has AllowCaching = false, do not write to the cache.
         // The invalidation path (HandleBaseEntityEvent line 552) already short-circuits for
         // these entities, so any entry we write here would never be invalidated and would
