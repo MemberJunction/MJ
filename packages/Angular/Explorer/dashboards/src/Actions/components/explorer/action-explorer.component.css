@@ -1,12 +1,3 @@
-/* Body wraps content below the shared <mj-page-header>. */
-.actions-body {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
 /* Slot wrappers — display:contents lets children become direct flex
    children of <mj-page-header>'s slot so its gap applies between them. */
 .actions-header-meta,

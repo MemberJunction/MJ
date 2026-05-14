@@ -116,7 +116,7 @@
     </div>
   </mj-page-header>
 
-  <div class="actions-body">
+  <mj-page-body [Flex]="true" [Padding]="false">
 <div class="action-explorer">
   <!-- Full-page Loading Overlay -->
   @if (IsLoading) {
@@ -256,5 +256,5 @@
     </mj-action-test-harness-dialog>
   }
 </div>
-  </div>
+  </mj-page-body>
 </mj-page-layout>
