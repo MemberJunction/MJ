@@ -12,9 +12,9 @@
         </mj-view-toggle>
       </div>
     </mj-page-header>
-    <div class="vector-body">
+    <mj-page-body [Flex]="true">
       <ng-container *ngTemplateOutlet="vectorBody"></ng-container>
-    </div>
+    </mj-page-body>
   </mj-page-layout>
 }
 @if (EmbeddedMode) {

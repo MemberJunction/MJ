@@ -24,7 +24,7 @@
     </div>
   </mj-page-header>
 
-  <div class="duplicate-body">
+  <mj-page-body [Flex]="true">
     <!-- Detection Progress (visible during run) -->
     @if (IsDetecting) {
         <div class="detection-progress-section">
@@ -787,5 +787,5 @@
         </div>
     }
 
-  </div>
+  </mj-page-body>
 </mj-page-layout>

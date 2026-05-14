@@ -10,16 +10,6 @@ app-duplicate-detection-resource {
     height: 100%;
 }
 
-/* Body wraps content below the shared <mj-page-header>. */
-.duplicate-body {
-    flex: 1;
-    min-height: 0;
-    padding: 0 24px 24px;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    background: var(--mj-bg-page);
-}
 
 /* Slot wrappers — display:contents lets children become direct flex
    children of <mj-page-header>'s slot so its gap applies between them. */

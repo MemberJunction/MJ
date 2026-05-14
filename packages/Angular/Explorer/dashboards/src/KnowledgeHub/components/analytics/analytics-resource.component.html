@@ -11,7 +11,7 @@
     </div>
   </mj-page-header>
 
-  <div class="analytics-body">
+  <mj-page-body [Flex]="true" [Padding]="false">
 @if (IsLoading) {
     <div class="analytics-loading">
         <mj-loading text="Loading analytics data..." size="medium"></mj-loading>
@@ -1190,5 +1190,5 @@
         </div><!-- /main-content -->
     </div><!-- /analytics-layout -->
 }
-  </div>
+  </mj-page-body>
 </mj-page-layout>

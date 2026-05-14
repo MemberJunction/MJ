@@ -4,14 +4,6 @@
     height: 100%;
 }
 
-/* Body wraps content below the shared <mj-page-header>. */
-.cluster-body {
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
-    display: flex;
-}
-
 /* Slot wrapper — display:contents lets children become direct flex
    children of <mj-page-header>'s slot so its gap applies between them. */
 .kh-header-actions {

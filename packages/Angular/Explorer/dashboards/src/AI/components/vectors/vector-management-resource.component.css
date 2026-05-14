@@ -3,15 +3,6 @@
    All colors use MJ design tokens from _tokens.scss
    ================================================================ */
 
-/* Body wraps content below the shared <mj-page-header>. */
-.vector-body {
-    flex: 1;
-    min-height: 0;
-    padding: 0 24px 24px;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-}
 
 /* Slot wrapper — display:contents lets children become direct flex
    children of <mj-page-header>'s slot so its gap applies between them. */
