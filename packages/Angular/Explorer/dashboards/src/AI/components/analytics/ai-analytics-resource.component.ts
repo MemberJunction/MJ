@@ -38,7 +38,7 @@ interface NavItem {
             Title="Analytics"
             Icon="fa-solid fa-chart-line">
             @if (ShowSharedFilterBar) {
-                <div actions class="ai-header-actions">
+                <div actions>
                     @if (analyticsFilterFields.length > 0) {
                         <mj-filter-popover
                             [ActiveCount]="ActiveFilterCount"
@@ -65,7 +65,7 @@ interface NavItem {
                 </div>
             }
             @if (ShowSharedFilterBar && timeRangeChipOptions.length > 0) {
-                <div toolbar class="ai-header-toolbar time-range-chips">
+                <div toolbar class="time-range-chips">
                     @for (chip of timeRangeChipOptions; track chip.value) {
                         <mj-filter-chip
                             [Label]="chip.text"
@@ -149,13 +149,6 @@ interface NavItem {
         :host {
             display: block;
             height: 100%;
-        }
-
-        /* Slot wrappers pass through to <mj-page-header>'s flex rows so children
-           inherit its gap. */
-        .ai-header-actions,
-        .ai-header-toolbar {
-            display: contents;
         }
 
         .analytics-shell {

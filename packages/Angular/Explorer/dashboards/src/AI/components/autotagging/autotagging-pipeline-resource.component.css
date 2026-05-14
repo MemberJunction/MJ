@@ -4,12 +4,6 @@
    All classes prefixed with at- to prevent leaking (ViewEncapsulation.None).
    ============================================================ */
 
-/* Slot wrapper — display:contents lets children become direct flex
-   children of <mj-page-header>'s slot so its gap applies between them. */
-.kh-header-actions {
-    display: contents;
-}
-
 /* ── Root layout ── */
 
 .at-dashboard {

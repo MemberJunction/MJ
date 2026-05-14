@@ -1,24 +1,5 @@
 /* Container is now provided by <mj-page-layout>; body padding moved to .filter-bar / list sections below */
 
-/* Header content (projected into <mj-page-header>) */
-.ai-header-actions {
-    display: contents;
-}
-
-.pending-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 22px;
-    height: 22px;
-    padding: 0 6px;
-    border-radius: 11px;
-    font-size: 12px;
-    font-weight: 700;
-    background: var(--mj-status-warning);
-    color: var(--mj-text-inverse);
-}
-
 /* Search & filters now live in <mj-page-header>'s toolbar/actions via shared components. */
 
 .clear-filters-btn {

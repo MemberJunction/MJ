@@ -3,7 +3,7 @@
     Title="Tags"
     Icon="fa-solid fa-sitemap"
     Subtitle="Taxonomy management, health monitoring, and tag library">
-    <div actions class="kh-header-actions">
+    <div actions>
       <button mjButton variant="secondary" size="sm" (click)="RunHealthNow()" [disabled]="HealthRunning">
         @if (HealthRunning) {
           <i class="fa-solid fa-spinner fa-spin"></i> Running…

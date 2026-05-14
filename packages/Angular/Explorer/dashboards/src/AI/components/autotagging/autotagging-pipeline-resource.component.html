@@ -3,7 +3,7 @@
     Title="Classify"
     Icon="fa-solid fa-tags"
     Subtitle="Content classification, taxonomy, and autotagging pipeline">
-    <div actions class="kh-header-actions">
+    <div actions>
       <button mjButton variant="primary" size="sm" (click)="RunPipeline()" [disabled]="IsRunning">
         @if (IsRunning) {
           <i class="fa-solid fa-spinner fa-spin"></i> Running…

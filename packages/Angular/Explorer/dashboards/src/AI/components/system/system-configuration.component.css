@@ -2,14 +2,6 @@
 
 /* Container is now provided by <mj-page-layout> */
 
-/* ============================================================================
-   HEADER content (projected into <mj-page-header>)
-   ============================================================================ */
-.ai-header-meta,
-.ai-header-actions {
-  display: contents;
-}
-
 /* Tinted card background on the body — matches Agents / Prompts / Models for
    AI-section visual consistency (the original .configurations-content was
    transparent; this is a deliberate harmonization). */

@@ -3,10 +3,10 @@
   <mj-page-header
     Title="Prompts"
     Icon="fa-solid fa-comment-dots">
-    <div meta class="ai-header-meta">
+    <div meta>
       <mj-result-count [Count]="filteredPrompts.length" Label="prompts"></mj-result-count>
     </div>
-    <div actions class="ai-header-actions">
+    <div actions>
       <mj-filter-popover
         [ActiveCount]="ActiveFilterCount"
         [ShowClearAll]="ActiveFilterCount > 0"
@@ -32,7 +32,7 @@
         </button>
       }
     </div>
-    <div toolbar class="ai-header-toolbar">
+    <div toolbar>
       <mj-page-search
         Placeholder="Search prompts..."
         [Value]="searchTerm"

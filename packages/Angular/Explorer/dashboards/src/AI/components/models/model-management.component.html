@@ -7,10 +7,10 @@
     <mj-page-header
       Title="Models"
       Icon="fa-solid fa-microchip">
-      <div meta class="ai-header-meta">
+      <div meta>
         <mj-result-count [Count]="filteredModels.length" Label="models"></mj-result-count>
       </div>
-      <div actions class="ai-header-actions">
+      <div actions>
         <mj-filter-popover
           [ActiveCount]="ActiveFilterCount"
           [ShowClearAll]="ActiveFilterCount > 0"
@@ -56,7 +56,7 @@
           New Model
         </button>
       </div>
-      <div toolbar class="ai-header-toolbar">
+      <div toolbar>
         <mj-page-search
           Placeholder="Search models..."
           [Value]="searchTerm"

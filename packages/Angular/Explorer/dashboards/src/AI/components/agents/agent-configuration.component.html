@@ -3,10 +3,10 @@
   <mj-page-header
     Title="Agents"
     Icon="fa-solid fa-robot">
-    <div meta class="ai-header-meta">
+    <div meta>
       <mj-result-count [Count]="filteredAgents.length" Label="agents"></mj-result-count>
     </div>
-    <div actions class="ai-header-actions">
+    <div actions>
       <mj-filter-popover
         [ActiveCount]="ActiveFilterCount"
         [ShowClearAll]="ActiveFilterCount > 0"
@@ -43,7 +43,7 @@
         New Agent
       </button>
     </div>
-    <div toolbar class="ai-header-toolbar">
+    <div toolbar>
       <mj-page-search
         Placeholder="Search agents..."
         [Value]="currentFilters.searchTerm"

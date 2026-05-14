@@ -14,12 +14,6 @@
   background: var(--mj-bg-surface-card);
 }
 
-/* Header content (projected into <mj-page-header>) */
-.ai-header-meta,
-.ai-header-actions {
-  display: contents;
-}
-
 /* Tinted card background on the body — matches the original .content-area
    surface treatment so model cards sit on a lightly-tinted surface. */
 :host mj-page-body {

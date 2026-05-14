@@ -5,12 +5,6 @@
 
 /* Container is now provided by <mj-page-layout> */
 
-/* Header content (projected into <mj-page-header>) */
-.ai-header-meta,
-.ai-header-actions {
-  display: contents;
-}
-
 /* Tinted card background on the body — matches the original .agents-content
    surface treatment so cards/lists sit on a lightly-tinted surface rather
    than the page background. */

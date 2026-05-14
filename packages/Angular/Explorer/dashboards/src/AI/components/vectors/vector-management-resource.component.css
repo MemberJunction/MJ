@@ -4,12 +4,6 @@
    ================================================================ */
 
 
-/* Slot wrapper — display:contents lets children become direct flex
-   children of <mj-page-header>'s slot so its gap applies between them. */
-.kh-header-actions {
-    display: contents;
-}
-
 /* --- Loading state --- */
 .vector-loading {
     display: flex;

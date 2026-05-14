@@ -3,14 +3,14 @@
   <mj-page-header
     Title="Configuration"
     Icon="fa-solid fa-cogs">
-    <div meta class="ai-header-meta">
+    <div meta>
       <mj-result-count
         [Count]="filteredConfigurations.length"
         [Total]="configurations.length"
         Label="configurations">
       </mj-result-count>
     </div>
-    <div actions class="ai-header-actions">
+    <div actions>
       <mj-filter-popover
         [ActiveCount]="ActiveFilterCount"
         [ShowClearAll]="ActiveFilterCount > 0"
@@ -29,12 +29,9 @@
         (KeyChange)="setViewMode($any($event))">
       </mj-view-toggle>
 
-      <button mjButton variant="secondary" size="sm" (click)="loadData()" [disabled]="isLoading" title="Refresh">
-        <i class="fa-solid fa-refresh" [class.fa-spin]="isLoading"></i>
-        Refresh
-      </button>
+      <mj-refresh-button [Loading]="isLoading" (Clicked)="loadData()"></mj-refresh-button>
     </div>
-    <div toolbar class="ai-header-toolbar">
+    <div toolbar>
       <mj-page-search
         Placeholder="Search configurations..."
         [Value]="currentFilters.searchTerm"
