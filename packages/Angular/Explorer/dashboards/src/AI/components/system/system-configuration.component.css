@@ -10,6 +10,12 @@
   display: contents;
 }
 
+/* Tinted card background on the body — matches Agents / Prompts / Models for
+   AI-section visual consistency (the original .configurations-content was
+   transparent; this is a deliberate harmonization). */
+:host mj-page-body {
+  background: var(--mj-bg-surface-card);
+}
 
 /* View toggle now provided by <mj-view-toggle>. */
 

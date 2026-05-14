@@ -11,6 +11,12 @@
   display: contents;
 }
 
+/* Tinted card background on the body — matches the original .prompts-content
+   surface treatment so prompt cards sit on a lightly-tinted surface. */
+:host mj-page-body {
+  background: var(--mj-bg-surface-card);
+}
+
 /* View toggle now provided by <mj-view-toggle>. */
 
 .control-btn {

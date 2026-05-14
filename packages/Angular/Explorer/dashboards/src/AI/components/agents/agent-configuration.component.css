@@ -11,6 +11,13 @@
   display: contents;
 }
 
+/* Tinted card background on the body — matches the original .agents-content
+   surface treatment so cards/lists sit on a lightly-tinted surface rather
+   than the page background. */
+:host mj-page-body {
+  background: var(--mj-bg-surface-card);
+}
+
 /* View toggle now provided by <mj-view-toggle>. */
 
 .control-btn {

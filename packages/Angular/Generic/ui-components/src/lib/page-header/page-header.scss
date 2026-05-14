@@ -1,8 +1,17 @@
 :host {
   display: block;
-  /* Spacing between header and body lives on <mj-page-body>'s padding-top,
-     so pages that opt out via [Padding]="false" (e.g. AI Analytics with a
-     flush sidebar) can render truly flush against the header. */
+  /* External consumers using <mj-page-header> outside <mj-page-layout> get a
+     24px bottom margin so the header has breathing room from whatever follows.
+     This preserves backward compatibility with the published v5.x contract. */
+  margin-bottom: var(--mj-space-6);
+}
+
+/* When nested inside <mj-page-layout>, the spacing between header and body is
+   owned by <mj-page-body>'s padding-top — so the header sits flush against the
+   body. This lets pages using <mj-page-body [Padding]="false"> (e.g. AI
+   Analytics flush sidebar) render truly flush against the header. */
+:host-context(mj-page-layout) {
+  margin-bottom: 0;
 }
 
 .mj-page-header {

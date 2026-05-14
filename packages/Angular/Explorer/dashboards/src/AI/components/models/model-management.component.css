@@ -20,6 +20,12 @@
   display: contents;
 }
 
+/* Tinted card background on the body — matches the original .content-area
+   surface treatment so model cards sit on a lightly-tinted surface. */
+:host mj-page-body {
+  background: var(--mj-bg-surface-card);
+}
+
 /* View toggle now provided by <mj-view-toggle>. */
 
 .control-btn {
