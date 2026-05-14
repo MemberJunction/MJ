@@ -484,7 +484,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
      * @returns The view results
      */
     public async RunView<T = any>(params: RunViewParams, contextUser?: UserInfo): Promise<RunViewResult<T>> {
-        if (this.TrustLocalCacheCompletely && !params.BypassCache) {
+        // Keyset (AfterKey) queries always bypass the server cache: each call uses a
+        // different seek key, so a cached entry would never be reusable. Treat them like
+        // explicit BypassCache=true requests.
+        if (this.TrustLocalCacheCompletely && !params.BypassCache && !params.AfterKey) {
             // Server-side: use direct Pre → Internal → Post pipeline.
             // Cache is kept in sync via BaseEntity events + Redis pub/sub,
             // so PreRunView cache hits are returned immediately with no DB round-trip.
@@ -1259,8 +1262,11 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
         // end-to-end — there's no cache-coherence concern to preserve.
         const entity = params.EntityName ? this.EntityByName(params.EntityName) : null;
         const entityCacheAllowed = this.IsServerCacheAllowedForEntity(params);
+        // Keyset (AfterKey) queries are inherently single-use, so we never read from or
+        // write to the cache for them. See RunViewParams.AfterKey JSDoc for rationale.
         const willCache =
             !params.BypassCache &&
+            !params.AfterKey &&
             (params.CacheLocal || this.TrustLocalCacheCompletely) &&
             entityCacheAllowed;
         if (entity && willCache) {
@@ -1400,8 +1406,10 @@ export abstract class ProviderBase implements IMetadataProvider, IRunViewProvide
             // end-to-end — there's no cache-coherence concern to preserve.
             const batchEntity = param.EntityName ? this.EntityByName(param.EntityName) : null;
             const batchEntityCacheAllowed = this.IsServerCacheAllowedForEntity(param);
+            // Keyset (AfterKey) queries are inherently single-use; never use the cache for them.
             const batchWillCache =
                 !param.BypassCache &&
+                !param.AfterKey &&
                 (param.CacheLocal || this.TrustLocalCacheCompletely) &&
                 batchEntityCacheAllowed;
             if (batchEntity && batchWillCache) {
