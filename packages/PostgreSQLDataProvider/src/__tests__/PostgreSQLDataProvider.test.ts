@@ -703,5 +703,65 @@ describe('PostgreSQLDataProvider', () => {
             const parsed = JSON.parse(result.values[0]) as Record<string, unknown>;
             expect(parsed.Blob).toBeNull();
         });
+
+        // Regression: the orchestrator (GenericDatabaseProvider.GenerateSaveSQL)
+        // skips PK fields on UPDATE and expects the binding renderer to
+        // tail-append them. Without this, JSON-arg sproc bodies raise
+        // `RAISE EXCEPTION 'sp*: p_data must include "ID"'` against every
+        // update on a wide entity. SQL Server's renderer already does this.
+        it('tail-appends primary keys to the JSON payload on UPDATE', () => {
+            const map = new Map<unknown, unknown>([
+                [field('Status'), 'Failed'],
+                [field('ErrorMessage'), 'boom'],
+            ]);
+            const hook = provider as unknown as WithSaveHook;
+            const originalUseJsonArg = hook.UseJsonArgShape.bind(provider);
+            hook.UseJsonArgShape = () => true;
+            try {
+                const entityWithPK = {
+                    EntityInfo: { Name: 'WideEntity', SchemaName: '__mj', Fields: [] },
+                    PrimaryKey: {
+                        KeyValuePairs: [{ FieldName: 'ID', Value: 'pk-uuid-here' }],
+                    },
+                };
+                const binding = hook.RenderSaveCallBinding(entityWithPK, map, true, 'spUpdateWideEntity');
+                expect(binding.kind).toBe('pg-json-arg');
+                const parsed = JSON.parse((binding.values as [string])[0]) as Record<string, unknown>;
+                expect(parsed).toMatchObject({
+                    Status: 'Failed',
+                    ErrorMessage: 'boom',
+                    ID: 'pk-uuid-here',
+                });
+            } finally {
+                hook.UseJsonArgShape = originalUseJsonArg;
+            }
+        });
+
+        // Same regression on the positional path. PG sprocs use named-arg
+        // syntax (`p_id => $N`) — without tail-appending the PK arg, the
+        // SP's `WHERE "ID" = p_id` matches nothing on update (or errors on
+        // missing required arg, depending on default-clause shape).
+        it('tail-appends primary keys to positional named args on UPDATE', () => {
+            const map = new Map<unknown, unknown>([
+                [field('Status'), 'Failed'],
+            ]);
+            const hook = provider as unknown as WithSaveHook;
+            const originalUseJsonArg = hook.UseJsonArgShape.bind(provider);
+            hook.UseJsonArgShape = () => false;
+            try {
+                const entityWithPK = {
+                    EntityInfo: { Name: 'NarrowEntity', SchemaName: '__mj', Fields: [] },
+                    PrimaryKey: {
+                        KeyValuePairs: [{ FieldName: 'ID', Value: 'pk-uuid-here' }],
+                    },
+                };
+                const binding = hook.RenderSaveCallBinding(entityWithPK, map, true, 'spUpdateNarrowEntity');
+                expect(binding.kind).toBe('pg-positional');
+                expect(binding.callArgsSQL).toContain('p_id => $');
+                expect(binding.values).toContain('pk-uuid-here');
+            } finally {
+                hook.UseJsonArgShape = originalUseJsonArg;
+            }
+        });
     });
 });

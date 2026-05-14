@@ -685,6 +685,14 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
                     payload[field.Name] = processed;
                 }
             }
+            // UPDATE: orchestrator skips PK fields (see GenericDatabaseProvider.GenerateSaveSQL),
+            // so we append them from the loaded entity. JSON-arg sproc bodies hard-check
+            // `RAISE EXCEPTION 'sp*: p_data must include "<PK>"'` when the key is absent.
+            if (isUpdate) {
+                for (const pkv of entity.PrimaryKey.KeyValuePairs) {
+                    payload[pkv.FieldName] = pkv.Value;
+                }
+            }
             return {
                 kind: 'pg-json-arg',
                 callArgsSQL: 'p_data => $1::jsonb',
@@ -706,6 +714,16 @@ export class PostgreSQLDataProvider extends GenericDatabaseProvider {
             if ((value === null || value === undefined) && field.NeedsClearCompanion) {
                 values.push(true);
                 placeholders.push(`${pgDialect.ParameterRef(field.CodeName + '_Clear')} => $${paramIndex + 1}`);
+                paramIndex++;
+            }
+        }
+        // UPDATE: tail-append PK named-args from the loaded entity. Matches the
+        // SQL Server renderer's tail-append pattern; required because the
+        // orchestrator skips PK fields in the main fieldValues iteration.
+        if (isUpdate) {
+            for (const pkv of entity.PrimaryKey.KeyValuePairs) {
+                values.push(PGQueryParameterProcessor.ProcessParameterValue(pkv.Value));
+                placeholders.push(`p_${pkv.FieldName.toLowerCase()} => $${paramIndex + 1}`);
                 paramIndex++;
             }
         }

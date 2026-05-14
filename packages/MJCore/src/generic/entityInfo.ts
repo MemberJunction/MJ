@@ -1115,9 +1115,10 @@ export class EntityFieldInfo extends BaseInfo {
      *
      *   • **CodeGen**, when emitting the SP body (which `@params` to declare
      *     and which columns to `INSERT`/`UPDATE`), and
-     *   • **Runtime data providers** (`SQLServerDataProvider.generateSPParams`,
-     *     `PostgreSQLDataProvider.getWritableFields`), when building the
-     *     EXEC / parameter list passed to the SP.
+     *   • **Runtime data providers**, via the `RenderSaveCallBinding` hook
+     *     implemented by `SQLServerDataProvider` and `PostgreSQLDataProvider`
+     *     (orchestrated by `GenericDatabaseProvider.GenerateSaveSQL`), when
+     *     building the EXEC / parameter list passed to the SP.
      *
      * Keeping both sides on the same predicate guarantees the SP signature
      * and the call-site argument list always agree. Drift between them
