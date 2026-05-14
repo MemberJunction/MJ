@@ -1586,6 +1586,16 @@ export abstract class BaseEngine<T> extends BaseSingleton<T> implements IStartup
     }
 
     /**
+     * Returns a read-only snapshot of all engine property load states.
+     * Each entry maps a property name to its load status, including entity/dataset name,
+     * row count, success/failure flag, and error message if applicable.
+     * Used by dev tools for diagnostics and health monitoring.
+     */
+    public get DataMapEntries(): ReadonlyMap<string, EngineDataMapEntry> {
+        return this._dataMap;
+    }
+
+    /**
      * Returns the loading subject. You can call await Config() and after Config() comes back as true that means you're loaded. However you can also directly subscribe to this subject to get updates on the loading status.
      */
     public get LoadingSubject(): BehaviorSubject<boolean> {
