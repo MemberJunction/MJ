@@ -1,11 +1,3 @@
-/* Slot wrappers — display:contents lets children become direct flex children
-   of <mj-page-header>'s slot so its gap applies between them. */
-.vh-header-meta,
-.vh-header-actions,
-.vh-toolbar {
-    display: contents;
-}
-
 /* KPI Row */
 .kpi-row {
     display: grid;

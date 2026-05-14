@@ -10,12 +10,10 @@ import { RunView } from '@memberjunction/core';
     template: `
     <mj-page-layout>
       <mj-page-header Title="Logs" Icon="fa-solid fa-list-ul">
-        <div actions class="header-actions">
-          <button mjButton variant="secondary" size="sm" (click)="loadData()" [disabled]="isLoading" title="Refresh">
-            <i class="fa-solid fa-rotate" [class.spinning]="isLoading"></i> Refresh
-          </button>
+        <div actions>
+          <mj-refresh-button [Loading]="isLoading" (Clicked)="loadData()"></mj-refresh-button>
         </div>
-        <div toolbar class="header-toolbar">
+        <div toolbar>
           <mj-page-search
             Placeholder="Search messages, providers, recipients..."
             (ValueChange)="onSearchValue($event)">
@@ -104,24 +102,6 @@ import { RunView } from '@memberjunction/core';
         display: flex;
         flex-direction: column;
     }
-
-    /* Header toolbar slot — projected into <mj-page-header>'s [toolbar] row */
-    .header-toolbar {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: wrap;
-        width: 100%;
-    }
-
-    .header-actions {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-
-    @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-    .spinning { animation: spin 1s linear infinite; }
 
     /* TABLE */
     .table-wrapper { flex: 1; overflow-y: auto; }

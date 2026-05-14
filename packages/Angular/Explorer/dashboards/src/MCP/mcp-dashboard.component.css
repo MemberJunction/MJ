@@ -1,13 +1,5 @@
 /* MCP Dashboard - Header + Filter Panel Layout (outer shell now provided by <mj-page-layout>) */
 
-/* ========================================
-   Header content (projected into <mj-page-header>)
-   ======================================== */
-.mcp-header-meta,
-.mcp-header-actions {
-    display: contents;
-}
-
 /* Tab navigation now provided by <mj-tab-nav>. */
 
 /* ========================================

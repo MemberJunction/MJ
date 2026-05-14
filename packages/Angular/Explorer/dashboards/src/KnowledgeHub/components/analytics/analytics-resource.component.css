@@ -2,41 +2,6 @@
    Analytics & Insights Resource Component
    ================================================================= */
 
-/* Slot wrappers — display:contents lets children become direct flex
-   children of <mj-page-header>'s slot so its gap applies between them. */
-.kh-header-meta {
-    display: contents;
-}
-
-/* Stat badge in [meta] showing pipeline health. */
-.kh-stat-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    font-weight: 600;
-    padding: 3px 10px;
-    border-radius: 12px;
-    color: var(--mj-text-secondary);
-    background: var(--mj-bg-surface-card);
-    border: 1px solid var(--mj-border-default);
-}
-.kh-stat-badge.warning {
-    color: var(--mj-status-error-text);
-    background: color-mix(in srgb, var(--mj-status-error) 12%, var(--mj-bg-surface));
-    border-color: color-mix(in srgb, var(--mj-status-error) 30%, transparent);
-}
-.kh-status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: var(--mj-status-success);
-    display: inline-block;
-}
-.kh-status-dot.kh-status-dot-error {
-    background: var(--mj-status-error);
-}
-
 .analytics-loading {
     display: flex;
     justify-content: center;

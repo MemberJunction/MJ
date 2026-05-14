@@ -3,13 +3,13 @@
     Title="Actions Overview"
     Icon="fa-solid fa-bolt"
     Subtitle="Health and activity for all configured actions">
-    <div meta class="actions-header-meta">
+    <div meta>
       <mj-result-count
         [Count]="metrics.totalActions"
         Label="actions">
       </mj-result-count>
     </div>
-    <div actions class="actions-header-actions">
+    <div actions>
       <mj-filter-popover
         [ActiveCount]="ActiveFilterCount"
         [ShowClearAll]="ActiveFilterCount > 0"

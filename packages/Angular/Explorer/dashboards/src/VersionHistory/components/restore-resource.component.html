@@ -3,19 +3,17 @@
     Title="Restore History"
     Icon="fa-solid fa-clock-rotate-left"
     Subtitle="Track all restore operations and their outcomes">
-    <div meta class="vh-header-meta">
+    <div meta>
       <mj-result-count
         [Count]="FilteredRestores.length"
         [Total]="Restores.length"
         Label="restores">
       </mj-result-count>
     </div>
-    <div actions class="vh-header-actions">
-      <button mjButton variant="secondary" size="sm" (click)="Refresh()" [disabled]="IsLoading" title="Refresh">
-        <i class="fa-solid fa-arrows-rotate"></i> Refresh
-      </button>
+    <div actions>
+      <mj-refresh-button [Loading]="IsLoading" (Clicked)="Refresh()"></mj-refresh-button>
     </div>
-    <div toolbar class="vh-toolbar">
+    <div toolbar>
       <mj-filter-chip
         Label="Complete"
         Icon="fa-solid fa-circle-check"

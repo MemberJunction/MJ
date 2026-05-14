@@ -3,23 +3,15 @@
     Title="Entity Dependency Graph"
     Icon="fa-solid fa-diagram-project"
     Subtitle="Explore entity relationships used by the version history system">
-    <div meta class="vh-header-meta">
-      <span class="vh-stat-badge">
-        <i class="fa-solid fa-table"></i> {{TotalEntities}} entities
-      </span>
-      <span class="vh-stat-badge">
-        <i class="fa-solid fa-diagram-project"></i> {{EntitiesWithDependents}} with dependents
-      </span>
-      <span class="vh-stat-badge">
-        <i class="fa-solid fa-arrow-right-arrow-left"></i> {{TotalRelationships}} relationships
-      </span>
+    <div meta>
+      <mj-stat-badge Icon="fa-solid fa-table" [Count]="TotalEntities" Label="entities"></mj-stat-badge>
+      <mj-stat-badge Icon="fa-solid fa-diagram-project" [Count]="EntitiesWithDependents" Label="with dependents"></mj-stat-badge>
+      <mj-stat-badge Icon="fa-solid fa-arrow-right-arrow-left" [Count]="TotalRelationships" Label="relationships"></mj-stat-badge>
     </div>
-    <div actions class="vh-header-actions">
-      <button mjButton variant="secondary" size="sm" (click)="Refresh()" [disabled]="IsLoading" title="Refresh">
-        <i class="fa-solid fa-arrows-rotate"></i> Refresh
-      </button>
+    <div actions>
+      <mj-refresh-button [Loading]="IsLoading" (Clicked)="Refresh()"></mj-refresh-button>
     </div>
-    <div toolbar class="vh-toolbar">
+    <div toolbar>
       <mj-page-search
         Placeholder="Filter entities..."
         [Value]="SearchText"

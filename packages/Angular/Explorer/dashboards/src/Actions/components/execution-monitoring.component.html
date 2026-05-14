@@ -3,13 +3,13 @@
     Title="Execution Monitor"
     Icon="fa-solid fa-chart-line"
     Subtitle="Action execution history, latency, and error rates">
-    <div meta class="actions-header-meta">
+    <div meta>
       <mj-result-count
         [Count]="metrics.totalExecutions"
         Label="executions">
       </mj-result-count>
     </div>
-    <div actions class="actions-header-actions">
+    <div actions>
       <mj-filter-popover
         [ActiveCount]="ActiveFilterCount"
         [ShowClearAll]="ActiveFilterCount > 0"
@@ -21,9 +21,7 @@
           (Reset)="resetFilters()">
         </mj-filter-panel>
       </mj-filter-popover>
-      <button mjButton variant="secondary" size="sm" (click)="refreshData()" title="Refresh">
-        <i class="fa-solid fa-arrows-rotate"></i> Refresh
-      </button>
+      <mj-refresh-button (Clicked)="refreshData()"></mj-refresh-button>
     </div>
     <div toolbar>
       <mj-page-search

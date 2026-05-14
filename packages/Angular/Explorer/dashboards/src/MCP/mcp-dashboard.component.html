@@ -3,10 +3,10 @@
     <mj-page-header
         Title="MCP Dashboard"
         Icon="fa-solid fa-plug-circle-bolt">
-        <div meta class="mcp-header-meta">
+        <div meta>
             <mj-result-count [Count]="CurrentFilteredCount" [Total]="CurrentTotalCount" Label="items"></mj-result-count>
         </div>
-        <div actions class="mcp-header-actions">
+        <div actions>
             <mj-filter-popover
                 [ActiveCount]="ActiveFilterCount"
                 [ShowClearAll]="ActiveFilterCount > 0"
@@ -58,14 +58,11 @@
                     </button>
                 }
                 @case ('logs') {
-                    <button mjButton variant="secondary" size="sm" (click)="loadAllData()" [disabled]="IsLoading" title="Refresh">
-                        <i class="fa-solid fa-sync" [class.fa-spin]="IsLoading"></i>
-                        Refresh
-                    </button>
+                    <mj-refresh-button [Loading]="IsLoading" (Clicked)="loadAllData()"></mj-refresh-button>
                 }
             }
         </div>
-        <div toolbar class="mcp-header-toolbar">
+        <div toolbar>
             <mj-page-search
                 Placeholder="Search…"
                 [Value]="CurrentFilters.searchTerm"

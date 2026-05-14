@@ -1,29 +1,3 @@
-/* Slot wrappers — display:contents lets children become direct flex children
-   of <mj-page-header>'s slot so its gap applies between them. */
-.vh-header-meta,
-.vh-header-actions,
-.vh-toolbar {
-    display: contents;
-}
-
-/* Page-header [meta] stat badges. */
-.vh-stat-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    font-weight: 600;
-    padding: 3px 10px;
-    color: var(--mj-text-secondary);
-    background: var(--mj-bg-surface-card);
-    border: 1px solid var(--mj-border-default);
-    border-radius: 12px;
-}
-.vh-stat-badge i {
-    color: var(--mj-brand-primary);
-    font-size: 11px;
-}
-
 /* Main Layout */
 .graph-layout {
     display: grid;

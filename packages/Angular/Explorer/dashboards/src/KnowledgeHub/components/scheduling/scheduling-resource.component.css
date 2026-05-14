@@ -23,28 +23,6 @@
     flex: 1;
 }
 
-/* Slot wrappers — display:contents lets children become direct flex
-   children of <mj-page-header>'s slot so its gap applies between them. */
-.kh-header-meta,
-.kh-header-actions,
-.kh-toolbar {
-    display: contents;
-}
-
-/* Stat badge in [meta]. */
-.kh-stat-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    font-weight: 600;
-    padding: 3px 10px;
-    border-radius: 12px;
-    color: var(--mj-text-secondary);
-    background: var(--mj-bg-surface-card);
-    border: 1px solid var(--mj-border-default);
-}
-
 /* Status select used in the [toolbar] slot. */
 .kh-toolbar-select {
     width: auto;

@@ -27,7 +27,8 @@ import {
     MJFilterFieldComponent,
     MJPageSearchComponent,
     MJTabNavComponent,
-    MJViewToggleComponent
+    MJViewToggleComponent,
+    MJRefreshButtonComponent
 } from '@memberjunction/ng-ui-components';
 
 // MemberJunction Modules
@@ -78,6 +79,7 @@ import { MCPLogDetailPanelComponent } from './components/mcp-log-detail-panel.co
         MJPageSearchComponent,
         MJTabNavComponent,
         MJViewToggleComponent,
+        MJRefreshButtonComponent,
         SharedGenericModule,
         CredentialsModule,
         CodeEditorModule,

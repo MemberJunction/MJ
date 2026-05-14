@@ -3,14 +3,14 @@
     Title="Action Explorer"
     Icon="fa-solid fa-folder-tree"
     Subtitle="Browse, organize, and run all configured actions">
-    <div meta class="actions-header-meta">
+    <div meta>
       <mj-result-count
         [Count]="FilteredActions.length"
         [Total]="Actions.length"
         Label="actions">
       </mj-result-count>
     </div>
-    <div actions class="actions-header-actions">
+    <div actions>
       <!-- Filters popover (shared trigger + popover chrome; multi-select checkbox content stays bespoke) -->
       <mj-filter-popover
         [ActiveCount]="StatusTypeFilterCount"
@@ -85,15 +85,13 @@
         (KeyChange)="setViewMode($any($event))">
       </mj-view-toggle>
 
-      <button mjButton variant="secondary" size="sm" title="Refresh" (click)="onRefresh()">
-        <i class="fa-solid fa-arrows-rotate"></i> Refresh
-      </button>
+      <mj-refresh-button (Clicked)="onRefresh()"></mj-refresh-button>
 
       <button mjButton variant="primary" size="sm" (click)="onNewAction()">
         <i class="fa-solid fa-plus"></i> New Action
       </button>
     </div>
-    <div toolbar class="actions-header-toolbar">
+    <div toolbar>
       <mj-page-search
         Placeholder="Search actions..."
         [Value]="Filters.searchTerm"

@@ -11,7 +11,9 @@ import {
   MJFilterPopoverComponent,
   MJFilterPanelComponent,
   MJResultCountComponent,
-  MJViewToggleComponent
+  MJViewToggleComponent,
+  MJStatBadgeComponent,
+  MJRefreshButtonComponent
 } from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { CodeEditorModule } from '@memberjunction/ng-code-editor';
@@ -78,6 +80,8 @@ import {
     MJFilterPanelComponent,
     MJResultCountComponent,
     MJViewToggleComponent,
+    MJStatBadgeComponent,
+    MJRefreshButtonComponent,
     ContainerDirectivesModule,
     CodeEditorModule,
     ActionGalleryModule,

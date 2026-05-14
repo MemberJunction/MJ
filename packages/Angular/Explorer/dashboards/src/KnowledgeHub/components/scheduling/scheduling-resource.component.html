@@ -4,20 +4,20 @@
     Title="Knowledge Pipelines"
     Icon="fa-solid fa-calendar-check"
     Subtitle="Scheduled knowledge ingestion, autotagging, and embedding pipelines">
-    <div meta class="kh-header-meta">
+    <div meta>
       @if (ActiveCount > 0) {
-        <span class="kh-stat-badge"><strong>{{ ActiveCount }}</strong> active</span>
+        <mj-stat-badge [Count]="ActiveCount" Label="active" Variant="success"></mj-stat-badge>
       }
       @if (PausedCount > 0) {
-        <span class="kh-stat-badge"><strong>{{ PausedCount }}</strong> paused</span>
+        <mj-stat-badge [Count]="PausedCount" Label="paused" Variant="warning"></mj-stat-badge>
       }
     </div>
-    <div actions class="kh-header-actions">
+    <div actions>
       <button mjButton variant="primary" size="sm" (click)="OnNewSchedule()">
         <i class="fa-solid fa-plus"></i> New Schedule
       </button>
     </div>
-    <div toolbar class="kh-toolbar">
+    <div toolbar>
       <mj-page-search
         Placeholder="Search pipelines..."
         [Value]="SearchQuery"

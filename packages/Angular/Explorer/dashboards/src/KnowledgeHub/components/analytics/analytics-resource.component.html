@@ -3,11 +3,11 @@
     Title="Knowledge Hub Analytics"
     Icon="fa-solid fa-chart-line"
     Subtitle="Pipeline health, trending tags, and content insights">
-    <div meta class="kh-header-meta">
-      <span class="kh-stat-badge" [class.warning]="!PipelineStatusOk">
-        <span class="kh-status-dot" [class.kh-status-dot-error]="!PipelineStatusOk"></span>
-        {{ PipelineStatusText }}
-      </span>
+    <div meta>
+      <mj-stat-badge
+        [Label]="PipelineStatusText"
+        [Variant]="PipelineStatusOk ? 'success' : 'error'">
+      </mj-stat-badge>
     </div>
   </mj-page-header>
 

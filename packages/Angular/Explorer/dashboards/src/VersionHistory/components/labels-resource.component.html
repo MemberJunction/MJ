@@ -3,14 +3,14 @@
     Title="Version Labels"
     Icon="fa-solid fa-tags"
     Subtitle="Manage versioning snapshots across your system">
-    <div meta class="vh-header-meta">
+    <div meta>
       <mj-result-count
         [Count]="FilteredLabels.length"
         [Total]="Labels.length"
         Label="labels">
       </mj-result-count>
     </div>
-    <div actions class="vh-header-actions">
+    <div actions>
       <mj-filter-popover
         [ActiveCount]="ActiveFilterCount"
         [ShowClearAll]="ActiveFilterCount > 0"
@@ -27,9 +27,7 @@
         [ActiveKey]="ViewMode"
         (KeyChange)="SetViewMode($any($event))">
       </mj-view-toggle>
-      <button mjButton variant="secondary" size="sm" (click)="Refresh()" [disabled]="IsLoading" title="Refresh">
-        <i class="fa-solid fa-arrows-rotate"></i> Refresh
-      </button>
+      <mj-refresh-button [Loading]="IsLoading" (Clicked)="Refresh()"></mj-refresh-button>
       <button mjButton variant="primary" size="sm" (click)="OpenCreateDialog()">
         <i class="fa-solid fa-plus"></i> Create Label
       </button>

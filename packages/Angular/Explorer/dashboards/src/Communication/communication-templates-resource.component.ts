@@ -17,12 +17,12 @@ interface TemplateCardData {
     template: `
     <mj-page-layout>
       <mj-page-header Title="Templates" Icon="fa-solid fa-file-lines" Subtitle="Manage reusable message templates">
-        <div actions class="header-actions">
+        <div actions>
           <button mjButton variant="primary" size="sm" (click)="addNewTemplate()">
             <i class="fa-solid fa-plus"></i> New Template
           </button>
         </div>
-        <div toolbar class="header-toolbar">
+        <div toolbar>
           <mj-page-search
             Placeholder="Search templates..."
             (ValueChange)="onSearchValue($event)">
@@ -102,20 +102,6 @@ interface TemplateCardData {
     </mj-page-layout>
     `,
     styles: [`
-    /* Header slots projected into <mj-page-header> */
-    .header-toolbar {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: wrap;
-        width: 100%;
-    }
-    .header-actions {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-
     .loading-state {
         display: flex;
         align-items: center;

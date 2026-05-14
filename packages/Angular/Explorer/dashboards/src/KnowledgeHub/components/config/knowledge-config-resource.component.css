@@ -1,29 +1,6 @@
 /* Knowledge Configuration - Settings Page with Left Nav */
 
 
-/* Slot wrappers — display:contents lets children become direct flex
-   children of <mj-page-header>'s slot so its gap applies between them. */
-.kh-header-meta,
-.kh-header-actions {
-    display: contents;
-}
-
-/* Stat badge in the [meta] slot. */
-.kh-stat-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    font-weight: 600;
-    padding: 3px 10px;
-    border-radius: 12px;
-}
-.kh-stat-badge.warning {
-    color: var(--mj-status-warning-text);
-    background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
-    border: 1px solid color-mix(in srgb, var(--mj-status-warning) 30%, transparent);
-}
-
 .config-loading {
     display: flex;
     justify-content: center;

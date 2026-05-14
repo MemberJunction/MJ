@@ -3,14 +3,16 @@
     Title="Knowledge Hub Configuration"
     Icon="fa-solid fa-cogs"
     Subtitle="Pipeline, vector store, search, and automation settings">
-    <div meta class="kh-header-meta">
+    <div meta>
       @if (HasUnsavedChanges) {
-        <span class="kh-stat-badge warning">
-          <i class="fa-solid fa-circle-exclamation"></i> Unsaved changes
-        </span>
+        <mj-stat-badge
+          Icon="fa-solid fa-circle-exclamation"
+          Label="Unsaved changes"
+          Variant="warning">
+        </mj-stat-badge>
       }
     </div>
-    <div actions class="kh-header-actions">
+    <div actions>
       @if (HasUnsavedChanges) {
         <button mjButton variant="secondary" size="sm" (click)="ResetConfiguration()" [disabled]="IsSaving" title="Discard unsaved changes">
           <i class="fa-solid fa-arrow-rotate-left"></i> Reset
