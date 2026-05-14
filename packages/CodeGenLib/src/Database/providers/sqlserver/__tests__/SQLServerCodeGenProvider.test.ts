@@ -313,6 +313,113 @@ describe('SQLServerCodeGenProvider — tolerant SP signatures', () => {
         });
     });
 
+    describe('generateCRUDCreate — end-to-end INSERT must not list any column twice', () => {
+        // Regression: in v5.34.0, commit 55032adaff added an `isCallerSuppliedPK` exception
+        // to generateInsertFieldString so composite-PK and single-non-UUID-PK INSERTs would
+        // include their PK columns. The exception was correct in isolation, but generateCRUDCreate
+        // was historically built around the OPPOSITE assumption — it ALSO appends PKs to the INSERT
+        // via additionalFieldList and was calling generateInsertFieldString WITHOUT
+        // excludePrimaryKey=true at the bottom-template call sites. Net effect: every PK column
+        // appeared TWICE in the generated INSERT, SQL Server raised "The column name 'ID' is
+        // specified more than once", the spCreate failed to install, and the GRANT EXECUTE step
+        // aborted CodeGen before TypeScript emission. Hit production for entities like
+        // MJ: AI Vendor Type Definitions and MJ: Artifact Types whose ID columns lack a
+        // NEWSEQUENTIALID() default in the v5.0 baseline. Composite-PK entities likely affected too.
+
+        function assertNoDuplicateInsertColumns(sql: string): void {
+            // Extract `INSERT INTO ... ( column-list ) VALUES` block
+            const match = sql.match(/INSERT INTO[^(]*\(([^)]*)\)\s*(?:OUTPUT[^V]*)?\s*VALUES/i);
+            expect(match, 'Expected an INSERT INTO ... VALUES block in the generated SP').toBeTruthy();
+            const columnList = match![1];
+            const columnNames = columnList
+                .split(',')
+                .map(c => c.trim().replace(/^\[|\]$/g, ''))
+                .filter(c => c.length > 0);
+            const seen = new Map<string, number>();
+            for (const name of columnNames) {
+                seen.set(name, (seen.get(name) || 0) + 1);
+            }
+            const duplicates = [...seen.entries()].filter(([, count]) => count > 1);
+            expect(
+                duplicates,
+                `INSERT column list contains duplicates: ${duplicates.map(([n, c]) => `${n}×${c}`).join(', ')}\nFull column list: ${columnList.trim()}`,
+            ).toEqual([]);
+        }
+
+        it('single UUID PK without DB default (e.g. ArtifactType, AIVendorTypeDefinition)', () => {
+            // The exact shape that broke v5.34.0 codegen on a clean install: single UUID PK,
+            // NO `DEFAULT NEWSEQUENTIALID()`. Hits the "uniqueidentifier without default" branch.
+            const entity = createMockEntity(
+                { Name: 'ArtifactType', BaseTable: 'ArtifactType', BaseTableCodeName: 'ArtifactType' },
+                [
+                    { ID: 'pk1', Name: 'ID', Type: 'uniqueidentifier', Length: 16, IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                    { ID: 'f2', Name: 'Name', Type: 'nvarchar', Length: 200, IsPrimaryKey: false, AllowsNull: false, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                    { ID: 'f3', Name: 'Description', Type: 'nvarchar', Length: -1, IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                ],
+            );
+            const sql = provider.generateCRUDCreate(entity);
+            assertNoDuplicateInsertColumns(sql);
+            // And the @ActualID coalesce path is still in place
+            expect(sql).toContain('DECLARE @ActualID UNIQUEIDENTIFIER = ISNULL(@ID, NEWID())');
+            expect(sql).toContain('@ActualID');
+        });
+
+        it('single UUID PK WITH DB default (regression canary — already worked, must keep working)', () => {
+            const entity = createMockEntity(); // default field has DefaultValue: 'newsequentialid()'
+            const sql = provider.generateCRUDCreate(entity);
+            assertNoDuplicateInsertColumns(sql);
+            // hasDefaultValue branch uses @InsertedRow + IF/ELSE
+            expect(sql).toContain('DECLARE @InsertedRow TABLE');
+        });
+
+        it('composite PK (e.g. junction table)', () => {
+            const entity = createMockEntity(
+                { Name: 'JunctionTable', BaseTable: 'JunctionTable', BaseTableCodeName: 'JunctionTable' },
+                [
+                    { ID: 'pk1', Name: 'AID', Type: 'uniqueidentifier', Length: 16, IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                    { ID: 'pk2', Name: 'BID', Type: 'uniqueidentifier', Length: 16, IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                    { ID: 'f3', Name: 'Note', Type: 'nvarchar', Length: 510, IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                ],
+            );
+            const sql = provider.generateCRUDCreate(entity);
+            assertNoDuplicateInsertColumns(sql);
+            // Both PKs must be present in the INSERT
+            expect(sql).toMatch(/INSERT INTO[^(]*\([^)]*\[AID\]/);
+            expect(sql).toMatch(/INSERT INTO[^(]*\([^)]*\[BID\]/);
+        });
+
+        it('single non-UUID PK (e.g. string `Code` key)', () => {
+            const entity = createMockEntity(
+                { Name: 'CountryRef', BaseTable: 'CountryRef', BaseTableCodeName: 'CountryRef' },
+                [
+                    { ID: 'pk1', Name: 'Code', Type: 'nvarchar', Length: 40, IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                    { ID: 'f2', Name: 'DisplayName', Type: 'nvarchar', Length: 510, IsPrimaryKey: false, AllowsNull: false, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                ],
+            );
+            const sql = provider.generateCRUDCreate(entity);
+            assertNoDuplicateInsertColumns(sql);
+            expect(sql).toMatch(/INSERT INTO[^(]*\([^)]*\[Code\]/);
+        });
+
+        it('IDENTITY PK (regression canary — INSERT must NOT list the PK)', () => {
+            const entity = createMockEntity(
+                { Name: 'IntPkTable', BaseTable: 'IntPkTable', BaseTableCodeName: 'IntPkTable' },
+                [
+                    { ID: 'pk1', Name: 'ID', Type: 'int', Length: 4, IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, AutoIncrement: true, DefaultValue: '' },
+                    { ID: 'f2', Name: 'Name', Type: 'nvarchar', Length: 510, IsPrimaryKey: false, AllowsNull: false, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                ],
+            );
+            const sql = provider.generateCRUDCreate(entity);
+            assertNoDuplicateInsertColumns(sql);
+            // IDENTITY column must not appear in the column list
+            const insertBlock = sql.match(/INSERT INTO[^(]*\(([^)]*)\)/)![1];
+            expect(insertBlock).not.toContain('[ID]');
+            expect(insertBlock).toContain('[Name]');
+            // Recovery is via SCOPE_IDENTITY()
+            expect(sql).toContain('SCOPE_IDENTITY()');
+        });
+    });
+
     describe('generateSingleCascadeOperation — _Clear flag for nullable FK', () => {
         it('cascade update emits _Clear = 1 for the nullable FK field being NULLed', () => {
             // Parent entity (Conversation) being deleted
