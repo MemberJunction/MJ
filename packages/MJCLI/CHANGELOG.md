@@ -1,5 +1,35 @@
 # Change Log - @memberjunction/cli
 
+## 5.34.0
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [003317f]
+- Updated dependencies [5d6110f]
+- Updated dependencies [0caffca]
+- Updated dependencies [cfffb6d]
+- Updated dependencies [1b258e6]
+- Updated dependencies [e999e0d]
+- Updated dependencies [ae5cfbd]
+- Updated dependencies [6d8ee1a]
+- Updated dependencies [72cb92e]
+  - @memberjunction/ai-cli@5.34.0
+  - @memberjunction/codegen-lib@5.34.0
+  - @memberjunction/config@5.34.0
+  - @memberjunction/db-auto-doc@5.34.0
+  - @memberjunction/generic-database-provider@5.34.0
+  - @memberjunction/installer@5.34.0
+  - @memberjunction/metadata-sync@5.34.0
+  - @memberjunction/open-app-engine@5.34.0
+  - @memberjunction/query-gen@5.34.0
+  - @memberjunction/sql-converter@5.34.0
+  - @memberjunction/sqlserver-dataprovider@5.34.0
+  - @memberjunction/server-bootstrap-lite@5.34.0
+  - @memberjunction/testing-cli@5.34.0
+  - @memberjunction/core@5.34.0
+
 ## 5.33.0
 
 ### Minor Changes

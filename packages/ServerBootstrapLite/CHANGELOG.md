@@ -1,5 +1,83 @@
 # @memberjunction/server-bootstrap-lite
 
+## 5.34.0
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- Updated dependencies [4b8d9ed]
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [003317f]
+- Updated dependencies [0caffca]
+- Updated dependencies [cfffb6d]
+- Updated dependencies [e999e0d]
+- Updated dependencies [7ccaf70]
+- Updated dependencies [ae5cfbd]
+- Updated dependencies [6d8ee1a]
+- Updated dependencies [8dad9c5]
+- Updated dependencies [72cb92e]
+  - @memberjunction/core-entities-server@5.34.0
+  - @memberjunction/ai-agent-manager@5.34.0
+  - @memberjunction/ai-agents@5.34.0
+  - @memberjunction/ai-engine-base@5.34.0
+  - @memberjunction/ai-core-plus@5.34.0
+  - @memberjunction/tag-engine-base@5.34.0
+  - @memberjunction/ai-azure@5.34.0
+  - @memberjunction/ai-bedrock@5.34.0
+  - @memberjunction/ai-betty-bot@5.34.0
+  - @memberjunction/ai-blackforestlabs@5.34.0
+  - @memberjunction/ai-provider-bundle@5.34.0
+  - @memberjunction/ai-cerebras@5.34.0
+  - @memberjunction/ai-cohere@5.34.0
+  - @memberjunction/ai-elevenlabs@5.34.0
+  - @memberjunction/ai-fireworks@5.34.0
+  - @memberjunction/ai-groq@5.34.0
+  - @memberjunction/ai-heygen@5.34.0
+  - @memberjunction/ai-inception@5.34.0
+  - @memberjunction/ai-lmstudio@5.34.0
+  - @memberjunction/ai-llamacpp@5.34.0
+  - @memberjunction/ai-local-embeddings@5.34.0
+  - @memberjunction/ai-minimax@5.34.0
+  - @memberjunction/ai-ollama@5.34.0
+  - @memberjunction/ai-openrouter@5.34.0
+  - @memberjunction/ai-recommendations-rex@5.34.0
+  - @memberjunction/ai-vertex@5.34.0
+  - @memberjunction/ai-zhipu@5.34.0
+  - @memberjunction/ai-xai@5.34.0
+  - @memberjunction/ai-reranker@5.34.0
+  - @memberjunction/ai-vectors-memory@5.34.0
+  - @memberjunction/ai-vectors-pinecone@5.34.0
+  - @memberjunction/ai-vectors-qdrant@5.34.0
+  - @memberjunction/ai-vectors-pgvector@5.34.0
+  - @memberjunction/actions-apollo@5.34.0
+  - @memberjunction/actions-base@5.34.0
+  - @memberjunction/actions-bizapps-accounting@5.34.0
+  - @memberjunction/actions-bizapps-crm@5.34.0
+  - @memberjunction/actions-bizapps-formbuilders@5.34.0
+  - @memberjunction/actions-bizapps-lms@5.34.0
+  - @memberjunction/actions-bizapps-social@5.34.0
+  - @memberjunction/core-actions@5.34.0
+  - @memberjunction/actions@5.34.0
+  - @memberjunction/communication-types@5.34.0
+  - @memberjunction/content-autotagging@5.34.0
+  - @memberjunction/doc-utils@5.34.0
+  - @memberjunction/encryption@5.34.0
+  - @memberjunction/data-context-server@5.34.0
+  - @memberjunction/storage@5.34.0
+  - @memberjunction/scheduling-actions@5.34.0
+  - @memberjunction/scheduling-engine-base@5.34.0
+  - @memberjunction/scheduling-engine@5.34.0
+  - @memberjunction/search-engine@5.34.0
+  - @memberjunction/templates@5.34.0
+  - @memberjunction/testing-engine@5.34.0
+  - @memberjunction/core@5.34.0
+  - @memberjunction/core-entities@5.34.0
+  - @memberjunction/queue@5.34.0
+  - @memberjunction/ai-anthropic@5.34.0
+  - @memberjunction/ai-gemini@5.34.0
+  - @memberjunction/ai-mistral@5.34.0
+  - @memberjunction/ai-openai@5.34.0
+
 ## 5.33.0
 
 ### Patch Changes

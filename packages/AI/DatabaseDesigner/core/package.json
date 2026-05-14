@@ -1,7 +1,7 @@
 {
   "name": "@memberjunction/database-designer-core",
   "type": "module",
-  "version": "5.33.0",
+  "version": "5.34.0",
   "description": "Database Designer Agent — conversational AI for creating and modifying database entities via natural language",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -13,13 +13,13 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@memberjunction/ai-agents": "5.33.0",
-    "@memberjunction/ai-core-plus": "5.33.0",
-    "@memberjunction/ai-engine-base": "5.33.0",
-    "@memberjunction/core": "5.33.0",
-    "@memberjunction/core-entities": "5.33.0",
-    "@memberjunction/global": "5.33.0",
-    "@memberjunction/schema-engine": "5.33.0"
+    "@memberjunction/ai-agents": "5.34.0",
+    "@memberjunction/ai-core-plus": "5.34.0",
+    "@memberjunction/ai-engine-base": "5.34.0",
+    "@memberjunction/core": "5.34.0",
+    "@memberjunction/core-entities": "5.34.0",
+    "@memberjunction/global": "5.34.0",
+    "@memberjunction/schema-engine": "5.34.0"
   },
   "devDependencies": {
     "@types/node": "^24.10.11",
