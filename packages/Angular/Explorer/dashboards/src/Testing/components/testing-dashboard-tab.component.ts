@@ -42,10 +42,8 @@ interface TestAlert {
           Title="Testing Overview"
           Icon="fa-solid fa-gauge-high"
           Subtitle="Test health, recent activity, and KPIs">
-          <div actions class="testing-header-actions">
-            <button mjButton variant="secondary" size="sm" (click)="OnRefresh()" [disabled]="IsLoading" title="Refresh">
-              <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="IsLoading"></i> Refresh
-            </button>
+          <div actions>
+            <mj-refresh-button [Loading]="IsLoading" (Clicked)="OnRefresh()"></mj-refresh-button>
           </div>
         </mj-page-header>
         <mj-page-body>
@@ -205,10 +203,6 @@ interface TestAlert {
     </ng-template>
   `,
   styles: [`
-    .testing-header-actions {
-      display: contents;
-    }
-
     /* ===== Layout ===== */
     .full-page-loading {
       display: flex;

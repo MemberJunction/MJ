@@ -3,15 +3,17 @@
     Title="Testing"
     Icon="fa-solid fa-vial-circle-check"
     Subtitle="Evaluate AI agents, workflows, and system components">
-    <div meta class="testing-header-meta">
+    <div meta>
       @if (ActiveRuns.length > 0) {
-        <span class="testing-running-badge">
-          <i class="fa-solid fa-spinner fa-spin"></i>
-          {{ ActiveRuns.length }} running
-        </span>
+        <mj-stat-badge
+          Icon="fa-solid fa-spinner fa-spin"
+          [Count]="ActiveRuns.length"
+          Label="running"
+          Variant="running">
+        </mj-stat-badge>
       }
     </div>
-    <div actions class="testing-header-actions">
+    <div actions>
       <mj-tab-nav
         [Tabs]="Tabs"
         [ActiveKey]="activeTab"

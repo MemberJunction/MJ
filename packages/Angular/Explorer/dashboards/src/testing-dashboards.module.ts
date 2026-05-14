@@ -10,7 +10,9 @@ import {
   MJFilterChipComponent,
   MJPageSearchComponent,
   MJResultCountComponent,
-  MJViewToggleComponent
+  MJViewToggleComponent,
+  MJStatBadgeComponent,
+  MJRefreshButtonComponent
 } from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { TestingModule } from '@memberjunction/ng-testing';
@@ -71,6 +73,8 @@ import { TestingInstrumentationService } from './Testing/services/testing-instru
     MJPageSearchComponent,
     MJResultCountComponent,
     MJViewToggleComponent,
+    MJStatBadgeComponent,
+    MJRefreshButtonComponent,
     ContainerDirectivesModule,
     TestingModule,
     VersionsModule,

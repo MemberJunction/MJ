@@ -106,10 +106,10 @@ interface TestRunStatRow {
           Title="Test Explorer"
           Icon="fa-solid fa-compass"
           Subtitle="Browse tests and test suites">
-          <div meta class="testing-header-meta">
+          <div meta>
             <mj-result-count [Count]="FilteredResultCount" Label="results"></mj-result-count>
           </div>
-          <div actions class="testing-header-actions">
+          <div actions>
             <mj-view-toggle
               [Options]="HeaderViewOptions"
               [ActiveKey]="ViewMode"
@@ -127,7 +127,7 @@ interface TestRunStatRow {
               <i class="fa-solid fa-plus"></i> New Test
             </button>
           </div>
-          <div toolbar class="testing-header-toolbar">
+          <div toolbar>
             <mj-page-search
               Placeholder="Search tests and suites..."
               [Value]="SearchTerm"
@@ -635,12 +635,6 @@ interface TestRunStatRow {
     </ng-template>
   `,
   styles: [`
-    .testing-header-meta,
-    .testing-header-actions,
-    .testing-header-toolbar {
-      display: contents;
-    }
-
     /* ==========================================
        Testing Explorer Component
        ========================================== */

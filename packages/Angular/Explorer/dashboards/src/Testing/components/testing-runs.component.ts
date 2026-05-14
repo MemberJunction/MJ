@@ -51,10 +51,8 @@ interface FilteredStats {
           Title="Test Runs"
           Icon="fa-solid fa-list-check"
           Subtitle="Test execution history and monitoring">
-          <div actions class="testing-header-actions">
-            <button mjButton variant="secondary" size="sm" (click)="Refresh()" [disabled]="IsRefreshing" title="Refresh">
-              <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="IsRefreshing"></i> Refresh
-            </button>
+          <div actions>
+            <mj-refresh-button [Loading]="IsRefreshing" (Clicked)="Refresh()"></mj-refresh-button>
             <button mjButton variant="primary" size="sm" (click)="StartNewTest()">
               <i class="fa-solid fa-play"></i> Run Test
             </button>
@@ -366,10 +364,6 @@ interface FilteredStats {
     </ng-template>
   `,
   styles: [`
-    .testing-header-actions {
-      display: contents;
-    }
-
     /* ==========================================
        Testing Runs Component
        ========================================== */

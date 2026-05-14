@@ -54,7 +54,7 @@ interface VersionRow {
           Title="Testing Analytics"
           Icon="fa-solid fa-chart-bar"
           Subtitle="Test trends, pass rates, and version metrics">
-          <div actions class="testing-header-actions">
+          <div actions>
             @for (range of TimeRanges; track range.days) {
               <mj-filter-chip
                 [Label]="range.label"
@@ -62,9 +62,7 @@ interface VersionRow {
                 (Clicked)="OnTimeRangeSelect(range.days)">
               </mj-filter-chip>
             }
-            <button mjButton variant="secondary" size="sm" (click)="Refresh()" title="Refresh">
-              <i class="fa-solid fa-arrows-rotate"></i> Refresh
-            </button>
+            <mj-refresh-button (Clicked)="Refresh()"></mj-refresh-button>
           </div>
         </mj-page-header>
         <mj-page-body>
@@ -353,10 +351,6 @@ interface VersionRow {
     </ng-template>
   `,
   styles: [`
-    .testing-header-actions {
-      display: contents;
-    }
-
     /* ------------------------------------------------------------------ */
     /*  Layout & page                                                      */
     /* ------------------------------------------------------------------ */

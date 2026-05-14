@@ -41,18 +41,18 @@ interface ReviewFormState {
           Title="Human Review"
           Icon="fa-solid fa-clipboard-check"
           Subtitle="Human-in-the-loop review for test outcomes">
-          <div meta class="testing-header-meta">
+          <div meta>
             @if (PendingCount > 0) {
-              <span class="testing-pending-badge">
-                <i class="fa-solid fa-hourglass-half"></i>
-                {{ PendingCount }} pending
-              </span>
+              <mj-stat-badge
+                Icon="fa-solid fa-hourglass-half"
+                [Count]="PendingCount"
+                Label="pending"
+                Variant="warning">
+              </mj-stat-badge>
             }
           </div>
-          <div actions class="testing-header-actions">
-            <button mjButton variant="secondary" size="sm" (click)="Refresh()" [disabled]="IsRefreshing" title="Refresh">
-              <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="IsRefreshing"></i> Refresh
-            </button>
+          <div actions>
+            <mj-refresh-button [Loading]="IsRefreshing" (Clicked)="Refresh()"></mj-refresh-button>
           </div>
         </mj-page-header>
         <mj-page-body>
@@ -348,27 +348,6 @@ interface ReviewFormState {
     :host {
       display: block;
       height: 100%;
-    }
-
-    /* Slot wrappers — display:contents lets children become direct flex children
-       of <mj-page-header>'s slot so its gap applies between them. */
-    .testing-header-meta,
-    .testing-header-actions {
-      display: contents;
-    }
-
-    /* "X pending" badge in [meta]. */
-    .testing-pending-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      font-size: 12px;
-      font-weight: 600;
-      padding: 3px 10px;
-      border-radius: 12px;
-      color: var(--mj-status-warning-text);
-      background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
-      border: 1px solid color-mix(in srgb, var(--mj-status-warning) 30%, transparent);
     }
 
     .review-page {
