@@ -251,9 +251,9 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     // DashboardEngine and QueryEngine already auto-start; UserViewEngine and ActionEngineBase
     // don't, so kick them off in the background (fire-and-forget — Config(false) is idempotent
     // and they cache their results, so a subsequent OpenAddPinPanel() call will be a no-op).
-    UserViewEngine.Instance.Config(false, undefined, this.ProviderToUse)
+    UserViewEngine.Instance.Config(false, this.ProviderToUse.CurrentUser, this.ProviderToUse)
       .catch(err => console.warn('[Home] UserViewEngine pre-warm failed', err));
-    ActionEngineBase.Instance.Config(false, undefined, this.ProviderToUse)
+    ActionEngineBase.Instance.Config(false, this.ProviderToUse.CurrentUser, this.ProviderToUse)
       .catch(err => console.warn('[Home] ActionEngineBase pre-warm failed', err));
   }
 
@@ -1160,10 +1160,10 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     // and ActionEngineBase initialize on first call. Running them in parallel means whichever
     // ones still need to load do so concurrently, and the already-initialized ones return immediately.
     await Promise.all([
-      DashboardEngine.Instance.Config(false, undefined, this.ProviderToUse),
-      UserViewEngine.Instance.Config(false, undefined, this.ProviderToUse),
-      QueryEngine.Instance.Config(false, undefined, this.ProviderToUse),
-      ActionEngineBase.Instance.Config(false, undefined, this.ProviderToUse)
+      DashboardEngine.Instance.Config(false, this.ProviderToUse.CurrentUser, this.ProviderToUse),
+      UserViewEngine.Instance.Config(false, this.ProviderToUse.CurrentUser, this.ProviderToUse),
+      QueryEngine.Instance.Config(false, this.ProviderToUse.CurrentUser, this.ProviderToUse),
+      ActionEngineBase.Instance.Config(false, this.ProviderToUse.CurrentUser, this.ProviderToUse)
     ]);
 
     const cachedDashboards = DashboardEngine.Instance.Dashboards
