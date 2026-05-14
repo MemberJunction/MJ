@@ -313,6 +313,84 @@ describe('SQLServerCodeGenProvider — tolerant SP signatures', () => {
         });
     });
 
+    describe('generateCRUDCreate — INSERT column list has each PK column exactly once', () => {
+        // Regression coverage for the duplicate-PK-column bug in spCreate.
+        //
+        // Trigger shape: single UUID PK with NO database default — e.g. ISA child
+        // entities (table-per-type inheritance) where `ID` is both PK and FK to
+        // the parent, with no DB-level default because the parent (or
+        // BaseEntity.NewRecord()) mints the UUID.
+        //
+        // Before fix: the fallback INSERT block called
+        //   generateInsertFieldString(entity, entity.Fields, '')  // excludePrimaryKey omitted (defaults false)
+        // The PK's `AllowUpdateAPI=false` no longer suppressed it because
+        // `isCallerSuppliedPK` evaluated true. The PK then also came in via
+        // `additionalFieldList` (intended to be the sole source). Result:
+        // `[ID]` appeared twice in the column list, `@ID` and `@ActualID` both
+        // appeared in the VALUES list, and SQL Server rejected the SP with:
+        //   Msg 264: The column name 'ID' is specified more than once...
+        //
+        // The fix passes `excludePrimaryKey=true` to the two field-iteration
+        // calls in the fallback INSERT block (mirroring the hasDefaultValue
+        // and composite-PK branches), so the iteration suppresses the PK and
+        // `additionalFieldList`/`additionalValueList` inject it exactly once.
+        it('single UUID PK, no DB default (ISA-child shape): [ID] appears exactly once in INSERT column list', () => {
+            const entity = createMockEntity(
+                { Name: 'IsaChild', BaseTable: 'IsaChild', BaseTableCodeName: 'IsaChild', SchemaName: 'app' },
+                [
+                    // PK that triggers the bug: UUID, no DB default, AllowUpdateAPI=false
+                    // (matches what buildPendingFieldsMainQuery hardcodes for every PK row).
+                    { ID: 'pk1', Name: 'ID', Type: 'uniqueidentifier', Length: 16, IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                    { ID: 'f2', Name: 'HeaderID', Type: 'int', Length: 4, IsPrimaryKey: false, AllowsNull: false, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                    { ID: 'f3', Name: 'Status', Type: 'nvarchar', Length: 510, IsPrimaryKey: false, AllowsNull: true, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                ],
+            );
+
+            const sp = provider.generateCRUDCreate(entity);
+
+            // Slice out the INSERT column list (between `INSERT INTO` and the first `VALUES`).
+            const insertStart = sp.indexOf('INSERT INTO');
+            const valuesStart = sp.indexOf('VALUES', insertStart);
+            expect(insertStart).toBeGreaterThanOrEqual(0);
+            expect(valuesStart).toBeGreaterThan(insertStart);
+
+            const insertColumnList = sp.substring(insertStart, valuesStart);
+            const idOccurrences = (insertColumnList.match(/\[ID\]/g) || []).length;
+
+            // PK appears exactly once via additionalFieldList; field iteration must not also emit it.
+            expect(idOccurrences).toBe(1);
+
+            // Sanity: the other columns are still present.
+            expect(insertColumnList).toContain('[HeaderID]');
+            expect(insertColumnList).toContain('[Status]');
+        });
+
+        it('single UUID PK, no DB default: VALUES list uses @ActualID, not raw @ID', () => {
+            // Symmetric assertion — the bug manifested in both the column list and
+            // the VALUES list. A future template change that fixed one but not the
+            // other would still produce an invalid SP; this catches that.
+            const entity = createMockEntity(
+                { Name: 'IsaChild', BaseTable: 'IsaChild', BaseTableCodeName: 'IsaChild', SchemaName: 'app' },
+                [
+                    { ID: 'pk1', Name: 'ID', Type: 'uniqueidentifier', Length: 16, IsPrimaryKey: true, AllowsNull: false, AllowUpdateAPI: false, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                    { ID: 'f2', Name: 'HeaderID', Type: 'int', Length: 4, IsPrimaryKey: false, AllowsNull: false, AllowUpdateAPI: true, IsVirtual: false, AutoIncrement: false, DefaultValue: '' },
+                ],
+            );
+
+            const sp = provider.generateCRUDCreate(entity);
+
+            // Look only AFTER `INSERT INTO` so we don't false-positive on the
+            // CREATE PROCEDURE param `@ID uniqueidentifier = NULL,` above it
+            // or the `DECLARE @ActualID = ISNULL(@ID, NEWID())` line.
+            const sliceAfterInsert = sp.substring(sp.indexOf('INSERT INTO'));
+
+            // `@ID,` (with trailing comma — the way it would appear as a VALUES-list
+            // element) must not appear. Only `@ActualID` should write to the PK.
+            expect(sliceAfterInsert).not.toMatch(/@ID,/);
+            expect(sliceAfterInsert).toContain('@ActualID');
+        });
+    });
+
     describe('generateSingleCascadeOperation — _Clear flag for nullable FK', () => {
         it('cascade update emits _Clear = 1 for the nullable FK field being NULLed', () => {
             // Parent entity (Conversation) being deleted

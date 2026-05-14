@@ -212,11 +212,11 @@ BEGIN
     INSERT INTO
     [${entity.SchemaName}].[${entity.BaseTable}]
         (
-            ${this.generateInsertFieldString(entity, entity.Fields, '')}${additionalFieldList}
+            ${this.generateInsertFieldString(entity, entity.Fields, '', true)}${additionalFieldList}
         )
     ${outputCode}VALUES
         (
-            ${this.generateInsertFieldString(entity, entity.Fields, '@')}${additionalValueList}
+            ${this.generateInsertFieldString(entity, entity.Fields, '@', true)}${additionalValueList}
         )`}
     -- return the new record from the base view, which might have some calculated fields
     ${selectInsertedRecord}
