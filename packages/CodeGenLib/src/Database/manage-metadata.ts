@@ -2206,13 +2206,23 @@ export class ManageMetadataBase {
          logError(`      > buildInsertRelationshipSQL: parent entity not found in metadata — RelatedEntityID=${f.RelatedEntityID}, child entity=${e.Name}, field=${f.Name}. Skipping relationship creation.`);
          return '';
       }
-      const relCount = relationshipCountMap.get(f.EntityID as number) || 0;
+      // Sequence numbers siblings under the SAME parent — the new EntityRelationship row's
+      // EntityID is f.RelatedEntityID (the parent / "one" side of the FK). Earlier code keyed
+      // the count map on f.EntityID (the child / FK-owning side), which made every newly
+      // created sibling collide on Sequence=1. That, combined with the old timestamp-based
+      // sort tiebreaker in sortRelatedEntities, was the root cause of the cross-environment
+      // "flip-flop" in generated.ts. Key on the parent so Sequence is unique per parent and
+      // carries real ordering meaning. The seed counts in relationshipCountMap (built at
+      // line ~2129) are already grouped by EntityRelationship.EntityID (parent), so this
+      // aligns the read/write side with the seed side.
+      const parentEntityID = f.RelatedEntityID as number;
+      const relCount = relationshipCountMap.get(parentEntityID) || 0;
       const sequence = relCount + 1;
       const newEntityRelationshipUUID = this.createNewUUID();
       const checkQuery = `SELECT 1 FROM ${this.qs(mj_core_schema(), 'EntityRelationship')} WHERE ${this.qi('ID')} = '${newEntityRelationshipUUID}'`;
       const insertSQL = `INSERT INTO ${this.qs(mj_core_schema(), 'EntityRelationship')} (${this.qi('ID')}, ${this.qi('EntityID')}, ${this.qi('RelatedEntityID')}, ${this.qi('RelatedEntityJoinField')}, ${this.qi('Type')}, ${this.qi('BundleInAPI')}, ${this.qi('DisplayInForm')}, ${this.qi('Sequence')}, ${this.qi('__mj_CreatedAt')}, ${this.qi('__mj_UpdatedAt')})
                     VALUES ('${newEntityRelationshipUUID}', '${f.RelatedEntityID}', '${f.EntityID}', '${f.Name}', 'One To Many', ${this.boolLit(true)}, ${this.boolLit(true)}, ${sequence}, ${this.utcNow()}, ${this.utcNow()})`;
-      relationshipCountMap.set(f.EntityID as number, sequence);
+      relationshipCountMap.set(parentEntityID, sequence);
       return `
 /* Create Entity Relationship: ${parentEntity.Name} -> ${e.Name} (One To Many via ${f.Name}) */
    ${this.dbProvider.conditionalInsertSQL(checkQuery, insertSQL)};
