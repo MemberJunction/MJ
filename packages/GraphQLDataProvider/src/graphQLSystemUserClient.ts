@@ -2262,6 +2262,12 @@ export interface CreateQueryInput {
      * parameter name to a tested/validated sample value.
      */
     ParameterHints?: QueryParameterHintInput[];
+    /**
+     * When true, the server will automatically resolve name collisions by appending
+     * sequential numeric suffixes (e.g., "Name (1)", "Name (2)") instead of returning an error.
+     * The resolved name is returned in the result's Query.Name field.
+     */
+    AutoResolveCollision?: boolean;
 }
 
 /**
