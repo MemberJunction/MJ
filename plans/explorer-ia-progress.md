@@ -51,10 +51,10 @@ All 5 are standalone, design-token-only, PascalCase API.
 | Credentials — Categories | ✅ | ✅ | n/a | n/a | n/a | Expand/Collapse + Refresh + "New Category" in `[actions]`. Search in `[toolbar]`. Body: `<mj-page-body>`. |
 | Credentials — Audit Log | ✅ | ✅ | ✅ | ✅ | ✅ | Popover for Status + Operation + DateRange; view-toggle (timeline/table); Export + Refresh in `[actions]`. Body: `<mj-page-body>`. |
 | File Browser | ✅ | ✅ | n/a | n/a | n/a | Generic-package wrapper (`@memberjunction/ng-file-storage`). Resource component adds page-header chrome; inner `<mj-file-browser>` keeps its bespoke 2-panel layout + grid toolbar (shared with `file-browser-demo`). |
-| Version History — Labels | ✅ | ✅ | ✅ | ✅ | ✅ | Popover for Scope + Status; view-toggle (card/list); result-count in `[meta]`; Create Label + Refresh in `[actions]`. |
-| Version History — Diff Viewer | ✅ | ✅ | n/a | n/a | n/a | Minimal chrome — page is a configurator (mode selector + label dropdowns + Compare button), with results toolbar that lives in the body. |
-| Version History — Restore History | ✅ | ✅ | ✅ | n/a | n/a | result-count in `[meta]`; quick-filter chips (Complete / Error / Partial) in `[toolbar]`; Refresh in `[actions]`. |
-| Version History — Dependency Graph | ✅ | ✅ | ✅ | ✅ | n/a | Three stat badges in `[meta]`; Refresh in `[actions]`; entity-list search + per-schema filter chips hoisted into `[toolbar]`. |
+| Version History — Labels | ✅ | ✅ | ✅ | ✅ | ✅ | Popover for Scope + Status; view-toggle (card/list); result-count in `[meta]`; Create Label + Refresh in `[actions]`. Body: `<mj-page-body>`. |
+| Version History — Diff Viewer | ✅ | ✅ | n/a | n/a | n/a | Minimal chrome — page is a configurator (mode selector + label dropdowns + Compare button), with results toolbar that lives in the body. Body: `<mj-page-body>`. |
+| Version History — Restore History | ✅ | ✅ | ✅ | n/a | n/a | result-count in `[meta]`; quick-filter chips (Complete / Error / Partial) in `[toolbar]`; Refresh in `[actions]`. Body: `<mj-page-body>`. |
+| Version History — Dependency Graph | ✅ | ✅ | ✅ | ✅ | n/a | Three stat badges in `[meta]`; Refresh in `[actions]`; entity-list search + per-schema filter chips hoisted into `[toolbar]`. Body: `<mj-page-body [Flex]="true">` — inner `.graph-layout` grid uses `flex: 1` to fill height. |
 | Knowledge Hub — Configuration | ✅ | ✅ | n/a | n/a | n/a | "Unsaved changes" pill in `[meta]`; Reset + Save in `[actions]` (only when dirty). Internal left config-nav kept (settings pattern). |
 | Knowledge Hub — Duplicates | ✅ | ✅ | n/a | n/a | n/a | Entity-document selector + "Run Detection" in `[actions]`. |
 | Knowledge Hub — Tags | ✅ | ✅ | n/a | n/a | n/a | "Run Tag Health" in `[actions]`. Internal tab-nav left-rail kept (multi-section page). |

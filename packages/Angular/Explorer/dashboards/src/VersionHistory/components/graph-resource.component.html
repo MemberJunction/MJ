@@ -38,7 +38,7 @@
     </div>
   </mj-page-header>
 
-  <div class="graph-body">
+  <mj-page-body [Flex]="true">
   @if (IsLoading) {
     <mj-loading text="Loading dependency graph..."></mj-loading>
   }
@@ -160,5 +160,5 @@
       </div>
     </div>
   }
-  </div>
+  </mj-page-body>
 </mj-page-layout>
