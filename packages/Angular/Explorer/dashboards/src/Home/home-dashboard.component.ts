@@ -4,7 +4,7 @@ import { takeUntil } from 'rxjs/operators';
 import { BaseResourceComponent, NavigationService, RecentAccessService, RecentAccessItem, HomeAppPinService, HomeAppPinnedItem, HomeAppPinInput, ActionPinConfiguration } from '@memberjunction/ng-shared';
 import { RegisterClass } from '@memberjunction/global';
 import { Metadata, CompositeKey, EntityRecordNameInput, RunView } from '@memberjunction/core';
-import { ResourceData, MJUserFavoriteEntity, MJUserNotificationEntity, UserInfoEngine } from '@memberjunction/core-entities';
+import { ResourceData, MJUserFavoriteEntity, MJUserNotificationEntity, UserInfoEngine, DashboardEngine, UserViewEngine, QueryEngine } from '@memberjunction/core-entities';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { ApplicationManager, BaseApplication } from '@memberjunction/ng-base-application';
 import { UserAppConfigComponent } from '@memberjunction/ng-explorer-settings';
@@ -69,6 +69,9 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
 
   // Sidebar state - default closed on all screen sizes
   public sidebarOpen = false;
+
+  // Pin empty-state dismissal preference (persisted in UserSettings via UserInfoEngine)
+  public HidePinEmptyState = false;
 
   // Pin state
   public PinnedItems: HomeAppPinnedItem[] = [];
@@ -223,6 +226,10 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
     this.loadFavorites();
     this.loadRecents();
 
+    // Load pin empty-state dismissal preference
+    const hideSetting = UserInfoEngine.Instance.GetSetting('HomeApp.HidePinEmptyState');
+    this.HidePinEmptyState = hideSetting === 'true';
+
     // Load pinned items
     await this.pinService.LoadPins();
     this.pinService.Pins$
@@ -239,6 +246,15 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
 
     // Resolve missing icons for Custom pins
     this.resolveCustomPinIcons();
+
+    // Pre-warm engines used by the Add Pin panel so the first click feels instant.
+    // DashboardEngine and QueryEngine already auto-start; UserViewEngine and ActionEngineBase
+    // don't, so kick them off in the background (fire-and-forget — Config(false) is idempotent
+    // and they cache their results, so a subsequent OpenAddPinPanel() call will be a no-op).
+    UserViewEngine.Instance.Config(false, undefined, this.ProviderToUse)
+      .catch(err => console.warn('[Home] UserViewEngine pre-warm failed', err));
+    ActionEngineBase.Instance.Config(false, undefined, this.ProviderToUse)
+      .catch(err => console.warn('[Home] ActionEngineBase pre-warm failed', err));
   }
 
   ngOnDestroy(): void {
@@ -819,6 +835,16 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   }
 
   /**
+   * Permanently hide the "No pinned items yet" empty state for this user.
+   * Persisted in UserSettings via UserInfoEngine.
+   */
+  DismissPinEmptyState(): void {
+    this.HidePinEmptyState = true;
+    UserInfoEngine.Instance.SetSettingDebounced('HomeApp.HidePinEmptyState', 'true');
+    this.cdr.markForCheck();
+  }
+
+  /**
    * Remove a pin
    */
   RemovePin(pinId: string): void {
@@ -1129,50 +1155,44 @@ export class HomeDashboardComponent extends BaseResourceComponent implements Aft
   }
 
   private async loadAvailableResources(): Promise<void> {
-    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-
-    // Actions come from ActionEngineBase's cache — no RunView needed. Config() is idempotent,
-    // so calling it in parallel with the remaining RunViews is cheap on repeat loads and avoids
-    // a redundant DB round trip when the engine is already primed.
-    const [dashboards, views, queries] = await Promise.all([
-      rv.RunView<{ID: string; Name: string}>({
-        EntityName: 'MJ: Dashboards',
-        Fields: ['ID', 'Name'],
-        ExtraFilter: `Type='Config'`,
-        OrderBy: 'Name',
-        ResultType: 'simple'
-      }),
-      rv.RunView<{ID: string; Name: string; Entity: string}>({
-        EntityName: 'MJ: User Views',
-        Fields: ['ID', 'Name', 'Entity'],
-        ExtraFilter: `UserID='${this.metadata.CurrentUser.ID}'`,
-        OrderBy: 'Name',
-        ResultType: 'simple'
-      }),
-      rv.RunView<{ID: string; Name: string}>({
-        EntityName: 'MJ: Queries',
-        Fields: ['ID', 'Name'],
-        OrderBy: 'Name',
-        ResultType: 'simple'
-      }),
-      ActionEngineBase.Instance.Config()
+    // All four engines are singletons that cache their data in memory. Config(false) is a no-op
+    // after first init — DashboardEngine and QueryEngine auto-start at app startup, UserViewEngine
+    // and ActionEngineBase initialize on first call. Running them in parallel means whichever
+    // ones still need to load do so concurrently, and the already-initialized ones return immediately.
+    await Promise.all([
+      DashboardEngine.Instance.Config(false, undefined, this.ProviderToUse),
+      UserViewEngine.Instance.Config(false, undefined, this.ProviderToUse),
+      QueryEngine.Instance.Config(false, undefined, this.ProviderToUse),
+      ActionEngineBase.Instance.Config(false, undefined, this.ProviderToUse)
     ]);
+
+    const cachedDashboards = DashboardEngine.Instance.Dashboards
+      .filter(d => d.Type === 'Config')
+      .sort((a, b) => a.Name.localeCompare(b.Name));
+
+    const cachedViews = UserViewEngine.Instance.GetViewsForCurrentUser()
+      .slice()
+      .sort((a, b) => a.Name.localeCompare(b.Name));
+
+    const cachedQueries = QueryEngine.Instance.Queries
+      .slice()
+      .sort((a, b) => a.Name.localeCompare(b.Name));
 
     const cachedActions = ActionEngineBase.Instance.Actions
       .filter(a => a.Status === 'Active')
       .sort((a, b) => a.Name.localeCompare(b.Name));
 
-    this.AvailableDashboards = (dashboards.Results || []).map(d => ({
+    this.AvailableDashboards = cachedDashboards.map(d => ({
       id: d.ID, name: d.Name,
       pinned: this.pinService.IsPinned('Dashboards', { dashboardId: d.ID })
     }));
 
-    this.AvailableViews = (views.Results || []).map(v => ({
+    this.AvailableViews = cachedViews.map(v => ({
       id: v.ID, name: v.Name, entityName: v.Entity || '',
       pinned: this.pinService.IsPinned('User Views', { viewId: v.ID })
     }));
 
-    this.AvailableQueries = (queries.Results || []).map(q => ({
+    this.AvailableQueries = cachedQueries.map(q => ({
       id: q.ID, name: q.Name,
       pinned: this.pinService.IsPinned('Queries', { queryId: q.ID })
     }));
