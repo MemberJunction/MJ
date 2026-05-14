@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MemberJunction — Documentation</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="proto-banner">
+    PROTOTYPE — Demonstrates IA only. Final site will be built with Astro Starlight. See <a href="plan.md">plan.md</a>.
+</div>
+
+<header class="site-header">
+    <div class="site-header-inner">
+        <a href="index.html" class="site-brand">
+            <span class="site-brand-mark">MJ</span>
+            <span>MemberJunction</span>
+        </a>
+        <nav class="site-nav">
+            <a href="getting-started.html">Getting Started</a>
+            <a href="architecture.html">Architecture</a>
+            <a href="guides.html">Guides</a>
+            <a href="packages.html">Packages</a>
+            <a href="ai-and-agents.html">AI &amp; Agents</a>
+            <a href="ecosystem.html">Ecosystem</a>
+        </nav>
+        <div class="site-nav-right">
+            <a href="https://github.com/MemberJunction/MJ" class="btn btn-outline">GitHub</a>
+        </div>
+    </div>
+</header>
+
+<section class="site-hero">
+    <div class="site-hero-inner">
+        <h1>Documentation</h1>
+        <p class="tagline">The open-source, AI-native data platform. Unify your data. Add intelligence. Ship faster.</p>
+        <div class="site-hero-actions">
+            <a href="getting-started.html" class="btn btn-primary">Get started →</a>
+            <a href="architecture.html" class="btn btn-secondary">Read the architecture</a>
+        </div>
+    </div>
+</section>
+
+<main>
+    <section class="section">
+        <h2 class="mt-0">What is MemberJunction?</h2>
+        <p class="lead">MemberJunction is a metadata-driven application platform that turns your database into a fully functional application — complete with auto-generated APIs, forms, security, and deep AI integration. Define your schema, and MJ generates everything else: typed entity classes, GraphQL endpoints, Angular UI components, validation, and audit trails.</p>
+        <p>What makes it different: <strong>175 modular TypeScript packages</strong> that work together or independently, <strong>15+ AI providers</strong> behind a single abstraction layer, and an <strong>agent framework</strong> for building autonomous workflows — all driven by metadata, not boilerplate.</p>
+    </section>
+
+    <section class="section">
+        <h2>Choose your path</h2>
+        <div class="path-grid">
+            <div class="path-card">
+                <div class="step">1</div>
+                <h3>I'm new here</h3>
+                <p class="muted">Install MJ, run the API and Explorer, build your first entity.</p>
+                <a href="getting-started.html" class="btn btn-outline">Getting Started →</a>
+            </div>
+            <div class="path-card">
+                <div class="step">2</div>
+                <h3>I want to understand the system</h3>
+                <p class="muted">Layers, design philosophy, metadata-driven approach.</p>
+                <a href="architecture.html" class="btn btn-outline">Architecture →</a>
+            </div>
+            <div class="path-card">
+                <div class="step">3</div>
+                <h3>I'm building on MJ</h3>
+                <p class="muted">Custom apps, dashboards, lazy-loading, theming.</p>
+                <a href="custom-apps.html" class="btn btn-outline">Custom Apps →</a>
+            </div>
+            <div class="path-card">
+                <div class="step">4</div>
+                <h3>I'm working with AI</h3>
+                <p class="muted">Providers, agents, MCP, prompts, vectors.</p>
+                <a href="ai-and-agents.html" class="btn btn-outline">AI &amp; Agents →</a>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <h2>Featured guides</h2>
+        <p class="muted small">All guides are rendered live from <code>MJ/guides/*.md</code>. Edit the markdown — the site updates.</p>
+        <div class="card-grid">
+            <div class="card">
+                <div class="card-icon">🔄</div>
+                <a href="guides.html#caching" class="card-title-link">Caching &amp; Pub/Sub</a>
+                <p>Multi-tier cache architecture, BaseEntity event-driven invalidation, and the auto-cache rules that keep RunView fast at scale.</p>
+                <div class="card-meta">Source: <code>MJ/guides/CACHING_AND_PUBSUB_GUIDE.md</code></div>
+            </div>
+            <div class="card">
+                <div class="card-icon">📊</div>
+                <a href="guides.html#dashboards" class="card-title-link">Dashboard Best Practices</a>
+                <p>Architecture, naming conventions, state management with getter/setters, engine class patterns, user preferences, and layout.</p>
+                <div class="card-meta">Source: <code>MJ/guides/DASHBOARD_BEST_PRACTICES.md</code></div>
+            </div>
+            <div class="card">
+                <div class="card-icon">⚡</div>
+                <a href="guides.html#lazy-loading" class="card-title-link">Lazy Loading</a>
+                <p>How MJExplorer's code-split lazy loading works, adding new dashboard components, and making packages lazy-loadable.</p>
+                <div class="card-meta">Source: <code>MJ/guides/LAZY_LOADING_GUIDE.md</code></div>
+            </div>
+            <div class="card">
+                <div class="card-icon">🔑</div>
+                <a href="guides.html#uuid" class="card-title-link">UUID Comparison</a>
+                <p>Critical patterns for comparing UUIDs across SQL Server (uppercase) and PostgreSQL (lowercase). Always use <code>UUIDsEqual()</code>.</p>
+                <div class="card-meta">Source: <code>MJ/guides/UUID_COMPARISON_GUIDE.md</code></div>
+            </div>
+        </div>
+        <p><a href="guides.html">See all guides →</a></p>
+    </section>
+
+    <section class="section">
+        <h2>AI Providers</h2>
+        <p>Connect to any major AI service through a unified API — swap providers with zero code changes.</p>
+        <div class="card-grid">
+            <div class="card">
+                <a href="ai-and-agents.html#llm-providers" class="card-title-link">LLM Providers</a>
+                <p>OpenAI, Anthropic, Google Gemini, Mistral, Groq, xAI, plus inference routers (OpenRouter, Fireworks).</p>
+            </div>
+            <div class="card">
+                <a href="ai-and-agents.html#cloud-platforms" class="card-title-link">Cloud Platforms</a>
+                <p>Azure OpenAI, Amazon Bedrock, Google Vertex — enterprise-hosted access through the same interface.</p>
+            </div>
+            <div class="card">
+                <a href="ai-and-agents.html#local" class="card-title-link">Local Inference</a>
+                <p>Ollama, LM Studio, and local embeddings via Xenova/Transformers — no API keys, no cloud round-trip.</p>
+            </div>
+            <div class="card">
+                <a href="ai-and-agents.html#specialized" class="card-title-link">Specialized</a>
+                <p>ElevenLabs (TTS), HeyGen (video), BlackForestLabs (image gen), Pinecone (vectors), Cohere (rerank).</p>
+            </div>
+        </div>
+        <p><a href="ai-and-agents.html">Explore AI &amp; Agents →</a></p>
+    </section>
+
+    <section class="section">
+        <h2>The MemberJunction ecosystem</h2>
+        <p>Beyond the main monorepo, several focused projects share the same metadata model and tooling.</p>
+        <div class="card-grid">
+            <div class="card">
+                <a href="ecosystem.html#skyway" class="card-title-link">Skyway</a>
+                <p>TypeScript implementation of Flyway-compatible database migrations.</p>
+            </div>
+            <div class="card">
+                <a href="ecosystem.html#forge" class="card-title-link">Forge</a>
+                <p>Open-source SQL Server GUI for Mac.</p>
+            </div>
+            <div class="card">
+                <a href="ecosystem.html#vscode" class="card-title-link">VSCode Extension</a>
+                <p>VSCode tooling for MJ developers.</p>
+            </div>
+            <div class="card">
+                <a href="ecosystem.html#bizapps" class="card-title-link">BizApps</a>
+                <p>Reusable business application building blocks (tasks, common entities).</p>
+            </div>
+        </div>
+        <p><a href="ecosystem.html">See the full ecosystem →</a></p>
+    </section>
+
+    <section class="section">
+        <h2>Quick start</h2>
+        <pre><code># Clone and install
+git clone https://github.com/MemberJunction/MJ.git &amp;&amp; cd MJ
+npm install
+
+# Configure your database and auth
+cp install.config.json.example install.config.json
+
+# Initialize the database
+node InstallMJ.js
+
+# Start the platform
+npm run start:api        # GraphQL API on port 4000
+npm run start:explorer   # Angular UI on port 4200</code></pre>
+        <div class="callout">
+            <p><strong>Prerequisites:</strong> Node.js 20+, npm 9+, SQL Server 2019+ (or Azure SQL), Angular CLI 21+. Full walkthrough on the <a href="getting-started.html">Getting Started</a> page.</p>
+        </div>
+    </section>
+</main>
+
+<footer class="site-footer">
+    <div class="site-footer-inner">
+        <div>
+            <strong>MemberJunction</strong>
+            <p class="muted small">The open-source, AI-native data platform.</p>
+        </div>
+        <div>
+            <h4>Docs</h4>
+            <ul>
+                <li><a href="getting-started.html">Getting Started</a></li>
+                <li><a href="architecture.html">Architecture</a></li>
+                <li><a href="guides.html">Guides</a></li>
+                <li><a href="api/">API Reference</a></li>
+            </ul>
+        </div>
+        <div>
+            <h4>Community</h4>
+            <ul>
+                <li><a href="https://github.com/MemberJunction/MJ/discussions">Discussions</a></li>
+                <li><a href="https://github.com/MemberJunction/MJ/issues">Issues</a></li>
+                <li><a href="https://github.com/MemberJunction/MJ/releases">Releases</a></li>
+            </ul>
+        </div>
+        <div>
+            <h4>Project</h4>
+            <ul>
+                <li><a href="https://github.com/MemberJunction">GitHub Org</a></li>
+                <li><a href="https://www.npmjs.com/org/memberjunction">npm</a></li>
+                <li><a href="https://github.com/MemberJunction/MJ/blob/main/LICENSE">License (ISC)</a></li>
+            </ul>
+        </div>
+    </div>
+    <div class="site-footer-bottom">
+        Built with TypeScript · Angular 21 · SQL Server · Open source under ISC License
+    </div>
+</footer>
+
+</body>
+</html>

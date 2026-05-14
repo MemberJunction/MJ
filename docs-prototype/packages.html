@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Packages — MemberJunction</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="proto-banner">
+    PROTOTYPE — Demonstrates IA only. Final site will be built with Astro Starlight. See <a href="plan.md">plan.md</a>.
+</div>
+
+<header class="site-header">
+    <div class="site-header-inner">
+        <a href="index.html" class="site-brand">
+            <span class="site-brand-mark">MJ</span>
+            <span>MemberJunction</span>
+        </a>
+        <nav class="site-nav">
+            <a href="getting-started.html">Getting Started</a>
+            <a href="architecture.html">Architecture</a>
+            <a href="guides.html">Guides</a>
+            <a href="packages.html" class="active">Packages</a>
+            <a href="ai-and-agents.html">AI &amp; Agents</a>
+            <a href="ecosystem.html">Ecosystem</a>
+        </nav>
+        <div class="site-nav-right">
+            <a href="https://github.com/MemberJunction/MJ" class="btn btn-outline">GitHub</a>
+        </div>
+    </div>
+</header>
+
+<main>
+    <div class="breadcrumb"><a href="index.html">Home</a> / Packages</div>
+    <h1 class="page-title">Packages</h1>
+    <p class="page-subtitle">175 modular TypeScript packages — use the whole platform or just the pieces you need.</p>
+
+    <div class="callout">
+        <p><strong>Auto-generated.</strong> This page is parsed at build time from the package directory in <code>MJ/README.md</code>. New packages added there appear here on the next site build. Click any package to jump to its README on GitHub.</p>
+    </div>
+
+    <section class="section">
+        <h2 class="mt-0">Core Framework</h2>
+        <table class="pkg-table">
+            <thead><tr><th>Package</th><th>npm</th><th>Description</th></tr></thead>
+            <tbody>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/MJGlobal/README.md">MJGlobal</a></td><td><code>@memberjunction/global</code></td><td>Global class factory and event system — required by all other MJ components</td></tr>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/MJCore/README.md">MJCore</a></td><td><code>@memberjunction/core</code></td><td>Core metadata engine, entity framework, and utilities</td></tr>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/MJCoreEntities/README.md">MJCoreEntities</a></td><td><code>@memberjunction/core-entities</code></td><td>Entity subclasses for the MJ metadata layer (core schema)</td></tr>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/MJCoreEntitiesServer/README.md">MJCoreEntitiesServer</a></td><td><code>@memberjunction/core-entities-server</code></td><td>Server-only entity subclasses for the MJ metadata layer</td></tr>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/Config/README.md">Config</a></td><td><code>@memberjunction/config</code></td><td>Central configuration with default configs and merge utilities</td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="section">
+        <h2>Data Layer</h2>
+        <table class="pkg-table">
+            <thead><tr><th>Package</th><th>npm</th><th>Description</th></tr></thead>
+            <tbody>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/SQLServerDataProvider/README.md">SQLServerDataProvider</a></td><td><code>@memberjunction/sqlserver-dataprovider</code></td><td>SQL Server data provider</td></tr>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/GraphQLDataProvider/README.md">GraphQLDataProvider</a></td><td><code>@memberjunction/graphql-dataprovider</code></td><td>GraphQL client data provider</td></tr>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/PostgreSQLDataProvider/README.md">PostgreSQLDataProvider</a></td><td><code>@memberjunction/postgresql-dataprovider</code></td><td>PostgreSQL data provider</td></tr>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/MJDataContext/README.md">MJDataContext</a></td><td><code>@memberjunction/data-context</code></td><td>Runtime data context loading and cross-tier interaction types</td></tr>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/MJStorage/README.md">MJStorage</a></td><td><code>@memberjunction/storage</code></td><td>Cloud storage provider interface for server-side API integration</td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="section">
+        <h2>AI</h2>
+        <p>42 packages across LLM/embedding providers, vector ops, agent management, and protocol servers. <a href="ai-and-agents.html">See the AI &amp; Agents page →</a></p>
+        <h3>Core AI Packages</h3>
+        <table class="pkg-table">
+            <thead><tr><th>Package</th><th>npm</th><th>Description</th></tr></thead>
+            <tbody>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/Core/README.md">Core</a></td><td><code>@memberjunction/ai</code></td><td>Base AI abstractions and interfaces for LLMs, embeddings, audio/video</td></tr>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/Engine/README.md">Engine</a></td><td><code>@memberjunction/aiengine</code></td><td>AI orchestration engine handling automatic execution of Entity AI Actions</td></tr>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/Prompts/README.md">Prompts</a></td><td><code>@memberjunction/ai-prompts</code></td><td>Prompt execution engine with hierarchical templates, parallel execution, output validation</td></tr>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/Agents/README.md">Agents</a></td><td><code>@memberjunction/ai-agents</code></td><td>AI agent execution and management with metadata-driven agent types</td></tr>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/MCPServer/README.md">MCPServer</a></td><td><code>@memberjunction/ai-mcp-server</code></td><td>Model Context Protocol server providing entity CRUD and AI agent execution to MCP-compatible clients</td></tr>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/A2AServer/README.md">A2AServer</a></td><td><code>@memberjunction/a2aserver</code></td><td>Agent-to-Agent (A2A) protocol server</td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="section">
+        <h2>Server</h2>
+        <table class="pkg-table">
+            <thead><tr><th>Package</th><th>npm</th><th>Description</th></tr></thead>
+            <tbody>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/MJServer/README.md">MJServer</a></td><td><code>@memberjunction/server</code></td><td>GraphQL API access to the MemberJunction data store</td></tr>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/ServerBootstrap/README.md">ServerBootstrap</a></td><td><code>@memberjunction/server-bootstrap</code></td><td>Server initialization logic and class registration manifests</td></tr>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/MJAPI/README.md">MJAPI</a></td><td><code>mj_api</code></td><td>MemberJunction API server application</td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="section">
+        <h2>Angular</h2>
+        <p>61 packages — the Bootstrap package, Explorer application components, and a comprehensive library of reusable generic components.</p>
+        <h3>Explorer Core</h3>
+        <table class="pkg-table">
+            <thead><tr><th>Package</th><th>npm</th><th>Description</th></tr></thead>
+            <tbody>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/Angular/Explorer/explorer-app/README.md">explorer-app</a></td><td><code>@memberjunction/ng-explorer-app</code></td><td>Complete branded entry point for Explorer-style applications</td></tr>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/Angular/Explorer/explorer-core/README.md">explorer-core</a></td><td><code>@memberjunction/ng-explorer-core</code></td><td>Core Explorer framework: shell, routing, resource containers, navigation</td></tr>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/Angular/Explorer/auth-services/README.md">auth-services</a></td><td><code>@memberjunction/ng-auth-services</code></td><td>Authentication services with Auth0, MSAL, and Okta provider support</td></tr>
+            </tbody>
+        </table>
+        <h3>Generic UI Components</h3>
+        <table class="pkg-table">
+            <thead><tr><th>Package</th><th>npm</th><th>Description</th></tr></thead>
+            <tbody>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/Angular/Generic/ui-components/README.md">ui-components</a></td><td><code>@memberjunction/ng-ui-components</code></td><td>Reusable standalone UI components (buttons, dialogs, windows, dropdowns, inputs)</td></tr>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/Angular/Generic/conversations/README.md">conversations</a></td><td><code>@memberjunction/ng-conversations</code></td><td>Conversation, collection, and artifact management components</td></tr>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/Angular/Generic/dashboard-viewer/README.md">dashboard-viewer</a></td><td><code>@memberjunction/ng-dashboard-viewer</code></td><td>Metadata-driven dashboards with Golden Layout panels</td></tr>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/Angular/Generic/markdown/README.md">markdown</a></td><td><code>@memberjunction/ng-markdown</code></td><td>Lightweight markdown component with Prism.js highlighting and Mermaid diagrams</td></tr>
+            </tbody>
+        </table>
+        <p><a href="https://github.com/MemberJunction/MJ/blob/main/packages/Angular/README.md">Full Angular package list →</a></p>
+    </section>
+
+    <section class="section">
+        <h2>Actions</h2>
+        <p>13 packages for the metadata-driven action framework. <a href="https://github.com/MemberJunction/MJ/blob/main/packages/Actions/README.md">Full list →</a></p>
+        <table class="pkg-table">
+            <thead><tr><th>Package</th><th>npm</th><th>Description</th></tr></thead>
+            <tbody>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/Actions/Engine/README.md">Engine</a></td><td><code>@memberjunction/actions</code></td><td>Main library for MemberJunction Actions (server-side)</td></tr>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/Actions/Base/README.md">Base</a></td><td><code>@memberjunction/actions-base</code></td><td>Base classes and interfaces for the Actions framework</td></tr>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/Actions/CoreActions/README.md">CoreActions</a></td><td><code>@memberjunction/core-actions</code></td><td>Library of generated and custom actions for the core framework</td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="section">
+        <h2>Communication</h2>
+        <p>10 packages — multi-channel messaging with Email (SendGrid, Gmail, MSGraph) and SMS (Twilio).</p>
+        <table class="pkg-table">
+            <thead><tr><th>Package</th><th>npm</th><th>Description</th></tr></thead>
+            <tbody>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/Communication/engine/README.md">engine</a></td><td><code>@memberjunction/communication-engine</code></td><td>Provider management, template rendering, message orchestration</td></tr>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/Communication/providers/sendgrid/README.md">sendgrid</a></td><td><code>@memberjunction/communication-sendgrid</code></td><td>SendGrid provider</td></tr>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/Communication/providers/twilio/README.md">twilio</a></td><td><code>@memberjunction/communication-twilio</code></td><td>Twilio provider</td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="section">
+        <h2>Tooling</h2>
+        <table class="pkg-table">
+            <thead><tr><th>Package</th><th>npm</th><th>Description</th></tr></thead>
+            <tbody>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/MJCLI/README.md">MJCLI</a></td><td><code>@memberjunction/cli</code></td><td>MemberJunction command-line tools</td></tr>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/CodeGenLib/README.md">CodeGenLib</a></td><td><code>@memberjunction/codegen-lib</code></td><td>Reusable code generation library for the MJ platform</td></tr>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/MetadataSync/README.md">MetadataSync</a></td><td><code>@memberjunction/metadata-sync</code></td><td>Metadata synchronization CLI tool</td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="section">
+        <h2>Looking for the rest?</h2>
+        <p>The full directory of all 175 packages — including BizApps actions, AI vectors, scheduling, templates, testing framework, recommendations, and more — lives in the MJ root README and is mirrored here on every build:</p>
+        <p><a href="https://github.com/MemberJunction/MJ#-full-package-directory" class="btn btn-outline">View full directory on GitHub →</a></p>
+    </section>
+</main>
+
+<footer class="site-footer">
+    <div class="site-footer-inner">
+        <div>
+            <strong>MemberJunction</strong>
+            <p class="muted small">The open-source, AI-native data platform.</p>
+        </div>
+        <div>
+            <h4>Docs</h4>
+            <ul>
+                <li><a href="getting-started.html">Getting Started</a></li>
+                <li><a href="architecture.html">Architecture</a></li>
+                <li><a href="guides.html">Guides</a></li>
+                <li><a href="api/">API Reference</a></li>
+            </ul>
+        </div>
+        <div>
+            <h4>Community</h4>
+            <ul>
+                <li><a href="https://github.com/MemberJunction/MJ/discussions">Discussions</a></li>
+                <li><a href="https://github.com/MemberJunction/MJ/issues">Issues</a></li>
+                <li><a href="https://github.com/MemberJunction/MJ/releases">Releases</a></li>
+            </ul>
+        </div>
+        <div>
+            <h4>Project</h4>
+            <ul>
+                <li><a href="https://github.com/MemberJunction">GitHub Org</a></li>
+                <li><a href="https://www.npmjs.com/org/memberjunction">npm</a></li>
+                <li><a href="https://github.com/MemberJunction/MJ/blob/main/LICENSE">License (ISC)</a></li>
+            </ul>
+        </div>
+    </div>
+    <div class="site-footer-bottom">
+        Built with TypeScript · Angular 21 · SQL Server · Open source under ISC License
+    </div>
+</footer>
+
+</body>
+</html>

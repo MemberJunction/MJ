@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI &amp; Agents — MemberJunction</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="proto-banner">
+    PROTOTYPE — Demonstrates IA only. Final site will be built with Astro Starlight. See <a href="plan.md">plan.md</a>.
+</div>
+
+<header class="site-header">
+    <div class="site-header-inner">
+        <a href="index.html" class="site-brand">
+            <span class="site-brand-mark">MJ</span>
+            <span>MemberJunction</span>
+        </a>
+        <nav class="site-nav">
+            <a href="getting-started.html">Getting Started</a>
+            <a href="architecture.html">Architecture</a>
+            <a href="guides.html">Guides</a>
+            <a href="packages.html">Packages</a>
+            <a href="ai-and-agents.html" class="active">AI &amp; Agents</a>
+            <a href="ecosystem.html">Ecosystem</a>
+        </nav>
+        <div class="site-nav-right">
+            <a href="https://github.com/MemberJunction/MJ" class="btn btn-outline">GitHub</a>
+        </div>
+    </div>
+</header>
+
+<main>
+    <div class="breadcrumb"><a href="index.html">Home</a> / AI &amp; Agents</div>
+    <h1 class="page-title">AI &amp; Agents</h1>
+    <p class="page-subtitle">15+ providers behind one interface. Agents that can call your data. MCP and A2A for interop.</p>
+
+    <section class="section">
+        <h2 class="mt-0">The unified AI engine</h2>
+        <p>Every AI capability in MJ — chat, embeddings, image generation, audio, video, reranking — is exposed through provider-agnostic interfaces. Switching from OpenAI to Anthropic to a self-hosted Ollama model is a config change, not a code change.</p>
+        <pre><code>const ai = new AIEngine();
+const result = await ai.ChatCompletion({
+  model: 'gpt-4o',          // or 'claude-sonnet-4-5', 'gemini-pro', 'llama-3', ...
+  messages: [{ role: 'user', content: 'Summarize this quarter\'s metrics' }],
+  data: await rv.RunView({ EntityName: 'Quarterly Reports', ResultType: 'simple' })
+});</code></pre>
+    </section>
+
+    <section class="section" id="llm-providers">
+        <h2>LLM Providers</h2>
+        <table class="pkg-table">
+            <thead><tr><th>Provider</th><th>Capabilities</th><th>Package</th></tr></thead>
+            <tbody>
+                <tr><td><strong>OpenAI</strong></td><td>GPT-4o, o1/o3 reasoning, DALL-E, Whisper, embeddings</td><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/Providers/OpenAI/README.md"><code>@memberjunction/ai-openai</code></a></td></tr>
+                <tr><td><strong>Anthropic</strong></td><td>Claude 4 family, streaming, prompt caching, extended thinking</td><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/Providers/Anthropic/README.md"><code>@memberjunction/ai-anthropic</code></a></td></tr>
+                <tr><td><strong>Google Gemini</strong></td><td>Gemini Pro/Flash, native multimodal, long context</td><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/Providers/Gemini/README.md"><code>@memberjunction/ai-gemini</code></a></td></tr>
+                <tr><td><strong>Mistral</strong></td><td>Open-source and commercial models, embeddings</td><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/Providers/Mistral/README.md"><code>@memberjunction/ai-mistral</code></a></td></tr>
+                <tr><td><strong>Groq</strong></td><td>Ultra-fast LPU inference</td><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/Providers/Groq/README.md"><code>@memberjunction/ai-groq</code></a></td></tr>
+                <tr><td><strong>xAI</strong></td><td>Grok models</td><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/Providers/xAI/README.md"><code>@memberjunction/ai-xai</code></a></td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="section" id="cloud-platforms">
+        <h2>Cloud Platforms</h2>
+        <table class="pkg-table">
+            <thead><tr><th>Provider</th><th>Capabilities</th><th>Package</th></tr></thead>
+            <tbody>
+                <tr><td><strong>Azure OpenAI</strong></td><td>Enterprise Azure-hosted models</td><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/Providers/Azure/README.md"><code>@memberjunction/ai-azure</code></a></td></tr>
+                <tr><td><strong>Amazon Bedrock</strong></td><td>Multi-model access via AWS</td><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/Providers/Bedrock/README.md"><code>@memberjunction/ai-bedrock</code></a></td></tr>
+                <tr><td><strong>Google Vertex</strong></td><td>Vertex AI platform integration</td><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/Providers/Vertex/README.md"><code>@memberjunction/ai-vertex</code></a></td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="section" id="local">
+        <h2>Local Inference &amp; Aggregators</h2>
+        <table class="pkg-table">
+            <thead><tr><th>Provider</th><th>Capabilities</th><th>Package</th></tr></thead>
+            <tbody>
+                <tr><td><strong>Ollama</strong></td><td>Local inference, no API keys</td><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/Providers/Ollama/README.md"><code>@memberjunction/ai-ollama</code></a></td></tr>
+                <tr><td><strong>LM Studio</strong></td><td>Local inference engine</td><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/Providers/LMStudio/README.md"><code>@memberjunction/ai-lmstudio</code></a></td></tr>
+                <tr><td><strong>Cerebras</strong></td><td>Cerebras inference engine</td><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/Providers/Cerebras/README.md"><code>@memberjunction/ai-cerebras</code></a></td></tr>
+                <tr><td><strong>Fireworks</strong></td><td>Fireworks.ai inference</td><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/Providers/Fireworks/README.md"><code>@memberjunction/ai-fireworks</code></a></td></tr>
+                <tr><td><strong>OpenRouter</strong></td><td>OpenRouter inference services</td><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/Providers/OpenRouter/README.md"><code>@memberjunction/ai-openrouter</code></a></td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="section" id="specialized">
+        <h2>Specialized Providers</h2>
+        <table class="pkg-table">
+            <thead><tr><th>Provider</th><th>Capabilities</th><th>Package</th></tr></thead>
+            <tbody>
+                <tr><td><strong>ElevenLabs</strong></td><td>Text-to-speech</td><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/Providers/ElevenLabs/README.md"><code>@memberjunction/ai-elevenlabs</code></a></td></tr>
+                <tr><td><strong>HeyGen</strong></td><td>Video generation</td><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/Providers/HeyGen/README.md"><code>@memberjunction/ai-heygen</code></a></td></tr>
+                <tr><td><strong>BlackForestLabs</strong></td><td>FLUX image generation</td><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/Providers/BlackForestLabs/README.md"><code>@memberjunction/ai-blackforestlabs</code></a></td></tr>
+                <tr><td><strong>Cohere</strong></td><td>Semantic reranking</td><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/Providers/Cohere/README.md"><code>@memberjunction/ai-cohere</code></a></td></tr>
+                <tr><td><strong>Pinecone</strong></td><td>Vector database</td><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/Providers/Vectors-Pinecone/README.md"><code>@memberjunction/ai-vectors-pinecone</code></a></td></tr>
+                <tr><td><strong>Local Embeddings</strong></td><td>Xenova/Transformers in-process</td><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/Providers/LocalEmbeddings/README.md"><code>@memberjunction/ai-local-embeddings</code></a></td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="section">
+        <h2>Agent Framework</h2>
+        <p>Build autonomous agents that orchestrate multi-step workflows with sub-agent delegation, automatic context compression, and pluggable agent types.</p>
+        <div class="card-grid">
+            <div class="card">
+                <a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/Agents/README.md" class="card-title-link">AI Agents</a>
+                <p>Core execution engine with hierarchical prompt composition, sub-agent delegation, and automatic context compression.</p>
+            </div>
+            <div class="card">
+                <a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/Agents/README.md" class="card-title-link">LoopAgentType</a>
+                <p>Iterative agents with ForEach/While operations — 90% token reduction for batch tasks.</p>
+            </div>
+            <div class="card">
+                <a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/Agents/README.md" class="card-title-link">FlowAgentType</a>
+                <p>Deterministic workflow graphs with conditional branching and parallel execution.</p>
+            </div>
+            <div class="card">
+                <a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/AgentManager/core/README.md" class="card-title-link">Agent Manager</a>
+                <p>Meta-agent system for creating, managing, and orchestrating other agents.</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <h2>Protocols: MCP &amp; A2A</h2>
+        <div class="two-col">
+            <div>
+                <h3 class="mt-0">MCP Server</h3>
+                <p>Expose every MJ entity (CRUD) and every AI agent (execution) as a tool to any MCP-compatible client — Claude Desktop, Cursor, Zed, custom builds.</p>
+                <p><a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/MCPServer/README.md">@memberjunction/ai-mcp-server →</a></p>
+            </div>
+            <div>
+                <h3 class="mt-0">A2A Server</h3>
+                <p>Google's Agent-to-Agent protocol for cross-platform agent interop. Lets MJ agents collaborate with agents built on different platforms.</p>
+                <p><a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/A2AServer/README.md">@memberjunction/a2aserver →</a></p>
+            </div>
+        </div>
+    </section>
+
+    <section class="section">
+        <h2>Prompt Engine</h2>
+        <p>Hierarchical prompt templates with system placeholders, model selection, effort-level control, parallel execution, and execution tracking. Every prompt run is recorded as an entity for audit, replay, and analysis.</p>
+        <p><a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/Prompts/README.md">@memberjunction/ai-prompts →</a></p>
+    </section>
+
+    <section class="section">
+        <h2>Vectors</h2>
+        <table class="pkg-table">
+            <thead><tr><th>Package</th><th>Purpose</th></tr></thead>
+            <tbody>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/Vectors/Core/README.md"><code>@memberjunction/ai-vectors</code></a></td><td>Core vector operations and abstractions for entity vectorization</td></tr>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/Vectors/Database/README.md"><code>@memberjunction/ai-vectordb</code></a></td><td>Vector database abstraction (index management, queries)</td></tr>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/Vectors/Dupe/README.md"><code>@memberjunction/ai-vector-dupe</code></a></td><td>Duplicate record detection using vector similarity</td></tr>
+                <tr><td><a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/Vectors/Sync/README.md"><code>@memberjunction/ai-vector-sync</code></a></td><td>Sync between MJ entities and vector databases</td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section class="section">
+        <h2>CLI</h2>
+        <p>The MJ AI CLI lets you run agents, prompts, and actions from the command line — handy for scripting, evals, and CI integration.</p>
+        <p><a href="https://github.com/MemberJunction/MJ/blob/main/packages/AI/AICLI/README.md">@memberjunction/ai-cli →</a></p>
+    </section>
+</main>
+
+<footer class="site-footer">
+    <div class="site-footer-inner">
+        <div>
+            <strong>MemberJunction</strong>
+            <p class="muted small">The open-source, AI-native data platform.</p>
+        </div>
+        <div>
+            <h4>Docs</h4>
+            <ul>
+                <li><a href="getting-started.html">Getting Started</a></li>
+                <li><a href="architecture.html">Architecture</a></li>
+                <li><a href="guides.html">Guides</a></li>
+                <li><a href="api/">API Reference</a></li>
+            </ul>
+        </div>
+        <div>
+            <h4>Community</h4>
+            <ul>
+                <li><a href="https://github.com/MemberJunction/MJ/discussions">Discussions</a></li>
+                <li><a href="https://github.com/MemberJunction/MJ/issues">Issues</a></li>
+                <li><a href="https://github.com/MemberJunction/MJ/releases">Releases</a></li>
+            </ul>
+        </div>
+        <div>
+            <h4>Project</h4>
+            <ul>
+                <li><a href="https://github.com/MemberJunction">GitHub Org</a></li>
+                <li><a href="https://www.npmjs.com/org/memberjunction">npm</a></li>
+                <li><a href="https://github.com/MemberJunction/MJ/blob/main/LICENSE">License (ISC)</a></li>
+            </ul>
+        </div>
+    </div>
+    <div class="site-footer-bottom">
+        Built with TypeScript · Angular 21 · SQL Server · Open source under ISC License
+    </div>
+</footer>
+
+</body>
+</html>
