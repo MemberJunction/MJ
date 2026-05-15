@@ -8,11 +8,11 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Search Configuration Section -->
+    <!-- Provider Association Section -->
     <mj-collapsible-panel
-        SectionKey="searchConfiguration"
-        SectionName="Search Configuration"
-        Icon="fa fa-search"
+        SectionKey="providerAssociation"
+        SectionName="Provider Association"
+        Icon="fa fa-link"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -36,10 +36,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- Operational Settings Section -->
+    <!-- Configuration Settings Section -->
     <mj-collapsible-panel
-        SectionKey="operationalSettings"
-        SectionName="Operational Settings"
+        SectionKey="configurationSettings"
+        SectionName="Configuration Settings"
         Icon="fa fa-sliders-h"
         [Form]="this"
         [FormContext]="formContext">
@@ -70,10 +70,10 @@
 
     </mj-collapsible-panel>
 
-    <!-- Query Processing Section -->
+    <!-- Query Transformation Section -->
     <mj-collapsible-panel
-        SectionKey="queryProcessing"
-        SectionName="Query Processing"
+        SectionKey="queryTransformation"
+        SectionName="Query Transformation"
         Icon="fa fa-magic"
         [Form]="this"
         [FormContext]="formContext">

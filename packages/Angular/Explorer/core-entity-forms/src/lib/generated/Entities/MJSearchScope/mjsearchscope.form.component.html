@@ -8,10 +8,10 @@
     <!-- ========================================
          FIELD PANELS
          ======================================== -->
-    <!-- Scope Definition Section -->
+    <!-- General Information Section -->
     <mj-collapsible-panel
-        SectionKey="scopeDefinition"
-        SectionName="Scope Definition"
+        SectionKey="generalInformation"
+        SectionName="General Information"
         Icon="fa fa-info-circle"
         [Form]="this"
         [FormContext]="formContext">
@@ -42,11 +42,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Scope Configuration Section -->
+    <!-- Scope Behavior Section -->
     <mj-collapsible-panel
-        SectionKey="scopeConfiguration"
-        SectionName="Scope Configuration"
-        Icon="fa fa-sliders-h"
+        SectionKey="scopeBehavior"
+        SectionName="Scope Behavior"
+        Icon="fa fa-toggle-on"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -87,11 +87,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Lifecycle Management Section -->
+    <!-- Lifecycle and Availability Section -->
     <mj-collapsible-panel
-        SectionKey="lifecycleManagement"
-        SectionName="Lifecycle Management"
-        Icon="fa fa-clock"
+        SectionKey="lifecycleAndAvailability"
+        SectionName="Lifecycle and Availability"
+        Icon="fa fa-calendar-alt"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -121,11 +121,11 @@
 
     </mj-collapsible-panel>
 
-    <!-- Technical Configuration Section -->
+    <!-- Configuration Section -->
     <mj-collapsible-panel
-        SectionKey="technicalConfiguration"
-        SectionName="Technical Configuration"
-        Icon="fa fa-code"
+        SectionKey="configuration"
+        SectionName="Configuration"
+        Icon="fa fa-cogs"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -144,19 +144,9 @@
             [EditMode]="EditMode"
             [FormContext]="formContext"
         ></mj-form-field>
-
-    </mj-collapsible-panel>
-
-    <!-- Details Section -->
-    <mj-collapsible-panel
-        SectionKey="details"
-        SectionName="Details"
-        Icon="fa fa-align-left"
-        [Form]="this"
-        [FormContext]="formContext">
         <mj-form-field 
             [Record]="record"
-            [ShowLabel]="false"
+            [ShowLabel]="true"
             FieldName="RerankerBudgetCents"
             Type="number"
             [EditMode]="EditMode"
@@ -169,7 +159,7 @@
     <mj-collapsible-panel
         SectionKey="systemMetadata"
         SectionName="System Metadata"
-        Icon="fa fa-cog"
+        Icon="fa fa-database"
         [Form]="this"
         [FormContext]="formContext">
         <mj-form-field 
@@ -194,56 +184,6 @@
     <!-- ========================================
          RELATED ENTITY PANELS
          ======================================== -->
-
-    <!-- Search Scope Storage Accounts Section -->
-    <mj-collapsible-panel
-        SectionKey="mJSearchScopeStorageAccounts"
-        SectionName="Search Scope Storage Accounts"
-        Icon="fa fa-folder-open"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJSearchScopeStorageAccounts')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope Storage Accounts','SearchScopeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Search Scope Storage Accounts')"
-                [AllowLoad]="IsSectionExpanded('mJSearchScopeStorageAccounts')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJSearchScopeStorageAccounts', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- Search Scope Test Queries Section -->
-    <mj-collapsible-panel
-        SectionKey="mJSearchScopeTestQueries"
-        SectionName="Search Scope Test Queries"
-        Icon="fa fa-table"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJSearchScopeTestQueries')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope Test Queries','SearchScopeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Search Scope Test Queries')"
-                [AllowLoad]="IsSectionExpanded('mJSearchScopeTestQueries')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJSearchScopeTestQueries', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
 
     <!-- Search Scope Entities Section -->
     <mj-collapsible-panel
@@ -295,6 +235,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- Search Scope Permissions Section -->
+    <mj-collapsible-panel
+        SectionKey="mJSearchScopePermissions"
+        SectionName="Search Scope Permissions"
+        Icon="fa fa-shield-alt"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJSearchScopePermissions')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope Permissions','SearchScopeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Search Scope Permissions')"
+                [AllowLoad]="IsSectionExpanded('mJSearchScopePermissions')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJSearchScopePermissions', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- Search Scope Providers Section -->
     <mj-collapsible-panel
         SectionKey="mJSearchScopeProviders"
@@ -314,6 +279,56 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJSearchScopeProviders', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Search Scope Storage Accounts Section -->
+    <mj-collapsible-panel
+        SectionKey="mJSearchScopeStorageAccounts"
+        SectionName="Search Scope Storage Accounts"
+        Icon="fa fa-folder-open"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJSearchScopeStorageAccounts')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope Storage Accounts','SearchScopeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Search Scope Storage Accounts')"
+                [AllowLoad]="IsSectionExpanded('mJSearchScopeStorageAccounts')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJSearchScopeStorageAccounts', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- Search Scope Test Queries Section -->
+    <mj-collapsible-panel
+        SectionKey="mJSearchScopeTestQueries"
+        SectionName="Search Scope Test Queries"
+        Icon="fa fa-search"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJSearchScopeTestQueries')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope Test Queries','SearchScopeID')"
+                [NewRecordValues]="NewRecordValues('MJ: Search Scope Test Queries')"
+                [AllowLoad]="IsSectionExpanded('mJSearchScopeTestQueries')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJSearchScopeTestQueries', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -345,36 +360,11 @@
         }
     </mj-collapsible-panel>
 
-    <!-- Search Scope Permissions Section -->
-    <mj-collapsible-panel
-        SectionKey="mJSearchScopePermissions"
-        SectionName="Search Scope Permissions"
-        Icon="fa fa-table"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJSearchScopePermissions')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope Permissions','SearchScopeID')"
-                [NewRecordValues]="NewRecordValues('MJ: Search Scope Permissions')"
-                [AllowLoad]="IsSectionExpanded('mJSearchScopePermissions')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJSearchScopePermissions', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Search Execution Logs Section -->
     <mj-collapsible-panel
         SectionKey="mJSearchExecutionLogs"
         SectionName="Search Execution Logs"
-        Icon="fa fa-table"
+        Icon="fa fa-search"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"

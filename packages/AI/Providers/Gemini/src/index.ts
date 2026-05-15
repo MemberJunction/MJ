@@ -453,7 +453,7 @@ export class GeminiLLM extends BaseLLM {
     /**
      * Reset streaming state for a new request
      */
-    private resetStreamingState(): void {
+    protected resetStreamingState(): void {
         this._streamingState = {
             accumulatedThinking: '',
             inThinkingBlock: false,

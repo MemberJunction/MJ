@@ -2256,6 +2256,26 @@ export interface CreateQueryInput {
      * Optional array of permissions to create for the query
      */
     Permissions?: QueryPermissionInput[];
+    /**
+     * Optional caller-provided parameter sample values. When provided, these override
+     * LLM-generated sampleValues during the extraction pipeline. Each entry maps a
+     * parameter name to a tested/validated sample value.
+     */
+    ParameterHints?: QueryParameterHintInput[];
+    /**
+     * When true, the server will automatically resolve name collisions by appending
+     * sequential numeric suffixes (e.g., "Name (1)", "Name (2)") instead of returning an error.
+     * The resolved name is returned in the result's Query.Name field.
+     */
+    AutoResolveCollision?: boolean;
+}
+
+/**
+ * A single parameter hint entry mapping a parameter name to a tested sample value.
+ */
+export interface QueryParameterHintInput {
+    Name: string;
+    Value: string;
 }
 
 /**
@@ -2431,6 +2451,11 @@ export interface UpdateQueryInput {
      * Optional array of permissions to update for the query (replaces existing permissions)
      */
     Permissions?: QueryPermissionInput[];
+    /**
+     * Optional caller-provided parameter sample values. When provided, these override
+     * LLM-generated sampleValues during the extraction pipeline.
+     */
+    ParameterHints?: QueryParameterHintInput[];
 }
 
 /** @deprecated Use QueryMutationResult instead */

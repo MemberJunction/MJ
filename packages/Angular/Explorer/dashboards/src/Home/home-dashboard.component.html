@@ -43,14 +43,24 @@
         }
 
         <!-- Empty State -->
-        @if (PinnedItems.length === 0 && !EditMode) {
+        @if (PinnedItems.length === 0 && (EditMode || !HidePinEmptyState)) {
           <div class="pin-empty-state">
+            @if (!EditMode) {
+              <button type="button" class="pin-empty-close" (click)="DismissPinEmptyState()" title="Hide this">
+                <i class="fa-solid fa-xmark"></i>
+              </button>
+            }
             <i class="fa-solid fa-thumbtack"></i>
             <h3>No pinned items yet</h3>
             <p>Pin your favorite dashboards, views, queries, and reports for quick access.</p>
             <button class="pin-action-btn primary" (click)="OpenAddPinPanel()">
               <i class="fa-solid fa-plus"></i> Add your first pin
             </button>
+            @if (!EditMode && !HidePinEmptyState) {
+              <button type="button" class="pin-empty-dismiss" (click)="DismissPinEmptyState()">
+                Don't show this again
+              </button>
+            }
           </div>
         }
 

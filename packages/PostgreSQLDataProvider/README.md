@@ -34,7 +34,7 @@ CodeGenDatabaseProvider (@memberjunction/codegen-lib)
 
 | File | Purpose |
 |------|---------|
-| `PostgreSQLDataProvider.ts` | Main provider: CRUD, queries, view execution, dataset handling, caching |
+| `PostgreSQLDataProvider.ts` | Main provider: CRUD, queries, view execution (supports both OFFSET `StartRow` and keyset `AfterKey` pagination — see [KEYSET_PAGINATION_GUIDE.md](../../guides/KEYSET_PAGINATION_GUIDE.md)), dataset handling, caching |
 | `pgConnectionManager.ts` | Connection pool lifecycle with `pg.Pool`, shared pool support |
 | `queryParameterProcessor.ts` | Boolean, date, UUID, number, and binary type conversion |
 | `types.ts` | `PostgreSQLProviderConfigData` and `PostgreSQLProviderConfigOptions` interfaces |

@@ -156,6 +156,13 @@
             "AgentID": "@parent:ID",
             "ActionID": "@lookup:MJ: Actions.Name=Scoped Search",
             "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "C2F2D516-D2F4-4513-B58B-14ED249955D3"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:09:03.955Z",
+            "checksum": "a3551e0d0bd09cc54d7b74086cc6945b3ef1761f9e3e071ba38c01489bf24c4d"
           }
         }
       ],
@@ -310,6 +317,13 @@
             "AgentID": "@parent:ID",
             "ActionID": "@lookup:MJ: Actions.Name=Scoped Search",
             "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "7089B4C7-9192-4DFF-82EB-4505D9242E64"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:09:04.019Z",
+            "checksum": "a3551e0d0bd09cc54d7b74086cc6945b3ef1761f9e3e071ba38c01489bf24c4d"
           }
         }
       ],
@@ -483,6 +497,13 @@
             "AgentID": "@parent:ID",
             "ActionID": "@lookup:MJ: Actions.Name=Scoped Search",
             "Status": "Active"
+          },
+          "primaryKey": {
+            "ID": "130B65AE-DC36-4D8B-92DC-653830C0AE54"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:09:04.184Z",
+            "checksum": "a3551e0d0bd09cc54d7b74086cc6945b3ef1761f9e3e071ba38c01489bf24c4d"
           }
         }
       ],

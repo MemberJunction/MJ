@@ -15,7 +15,7 @@ mj-flow-agent-editor.mj-flow-agent-editor--fullscreen {
   border-radius: var(--mj-radius-lg);
   height: auto !important;
   min-height: unset !important;
-  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--mj-shadow-2xl);
 }
 
 mj-flow-agent-editor.mj-flow-agent-editor--fullscreen .mj-agent-editor {
@@ -44,7 +44,7 @@ mj-flow-agent-editor.mj-flow-agent-editor--fullscreen .mj-agent-editor {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--mj-bg-overlay);
   z-index: 9999;
 }
 
@@ -63,8 +63,8 @@ mj-flow-agent-editor.mj-flow-agent-editor--fullscreen .mj-agent-editor {
 }
 
 .mj-agent-editor-toolbar--editing {
-  background: var(--mj-status-success-subtle);
-  border-bottom-color: #bbf7d0;
+  background: var(--mj-status-success-bg);
+  border-bottom-color: var(--mj-status-success-border);
 }
 
 .mj-flow-agent-editor--fullscreen .mj-agent-editor-toolbar {
@@ -75,8 +75,8 @@ mj-flow-agent-editor.mj-flow-agent-editor--fullscreen .mj-agent-editor {
 }
 
 .mj-flow-agent-editor--fullscreen .mj-agent-editor-toolbar--editing {
-  background: var(--mj-status-success-subtle);
-  border-bottom-color: #bbf7d0;
+  background: var(--mj-status-success-bg);
+  border-bottom-color: var(--mj-status-success-border);
 }
 
 .mj-agent-editor-toolbar-left,
@@ -115,7 +115,7 @@ mj-flow-agent-editor.mj-flow-agent-editor--fullscreen .mj-agent-editor {
 .mj-agent-editor-btn--primary {
   background: var(--mj-brand-primary);
   border-color: var(--mj-brand-primary);
-  color: white;
+  color: var(--mj-text-inverse);
 }
 
 .mj-agent-editor-btn--primary:hover:not(:disabled) { background: var(--mj-brand-primary-hover); border-color: var(--mj-brand-primary-hover); }
@@ -129,12 +129,16 @@ mj-flow-agent-editor.mj-flow-agent-editor--fullscreen .mj-agent-editor {
 .mj-agent-editor-btn--expand:hover:not(:disabled) { background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface)); border-color: color-mix(in srgb, var(--mj-brand-primary) 40%, var(--mj-bg-surface)); color: var(--mj-brand-primary-hover); }
 
 .mj-agent-editor-btn--close {
-  background: var(--mj-status-error-subtle);
-  border-color: #fecaca;
+  background: var(--mj-status-error-bg);
+  border-color: var(--mj-status-error-border);
   color: var(--mj-status-error);
 }
 
-.mj-agent-editor-btn--close:hover:not(:disabled) { background: var(--mj-status-error-subtle); border-color: #fca5a5; color: #b91c1c; }
+.mj-agent-editor-btn--close:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--mj-status-error) 15%, var(--mj-bg-surface));
+  border-color: var(--mj-status-error);
+  color: var(--mj-status-error-text);
+}
 
 .mj-agent-editor-btn-divider {
   width: 1px;
@@ -171,7 +175,7 @@ mj-flow-agent-editor.mj-flow-agent-editor--fullscreen .mj-agent-editor {
 .mj-agent-editor-view-btn:not(:last-child) { border-right: 1px solid var(--mj-border-default); }
 
 .mj-agent-editor-view-btn--active {
-  background: var(--mj-brand-primary-subtle);
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
   color: var(--mj-brand-primary);
 }
 
@@ -228,9 +232,9 @@ mj-flow-agent-editor.mj-flow-agent-editor--fullscreen .mj-agent-editor {
   justify-content: center;
   width: 30px;
   height: 30px;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid color-mix(in srgb, var(--mj-text-primary) 12%, transparent);
   border-radius: var(--mj-radius-md);
-  background: rgba(255, 255, 255, 0.85);
+  background: color-mix(in srgb, var(--mj-bg-surface) 85%, transparent);
   color: var(--mj-text-secondary);
   font-size: var(--mj-text-xs);
   cursor: pointer;
@@ -252,7 +256,8 @@ mj-flow-agent-editor.mj-flow-agent-editor--fullscreen .mj-agent-editor {
   height: 8px;
   border-radius: var(--mj-radius-full);
   background: var(--mj-status-warning);
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.9), 0 0 6px rgba(245, 158, 11, 0.4);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mj-bg-surface) 90%, transparent),
+              0 0 6px color-mix(in srgb, var(--mj-status-warning) 40%, transparent);
   animation: mj-inline-dot-pulse 2s ease-in-out infinite;
 }
 
@@ -346,8 +351,8 @@ mj-flow-agent-editor.mj-flow-agent-editor--fullscreen .mj-agent-editor {
 .mj-agent-editor-mode-badge i { font-size: 10px; }
 
 .mj-agent-editor-mode-badge--editing {
-  background: #ecfdf5;
-  color: #059669;
+  background: var(--mj-status-success-bg);
+  color: var(--mj-status-success-text);
 }
 
 .mj-agent-editor-mode-badge--readonly {
@@ -358,28 +363,28 @@ mj-flow-agent-editor.mj-flow-agent-editor--fullscreen .mj-agent-editor {
 /* ── Edit Button ──────────────────────────────────────────── */
 
 .mj-agent-editor-btn--edit {
-  background: #ecfdf5;
-  border-color: #a7f3d0;
-  color: #059669;
+  background: var(--mj-status-success-bg);
+  border-color: var(--mj-status-success-border);
+  color: var(--mj-status-success-text);
 }
 
 .mj-agent-editor-btn--edit:hover:not(:disabled) {
-  background: #d1fae5;
-  border-color: #6ee7b7;
-  color: #047857;
+  background: color-mix(in srgb, var(--mj-status-success) 18%, var(--mj-bg-surface));
+  border-color: var(--mj-status-success);
+  color: var(--mj-status-success-text);
 }
 
 /* ── Danger Outline Button ────────────────────────────────── */
 
 .mj-agent-editor-btn--danger-outline {
-  border-color: #fecaca;
+  border-color: var(--mj-status-error-border);
   color: var(--mj-status-error);
   background: var(--mj-bg-surface);
 }
 
 .mj-agent-editor-btn--danger-outline:hover:not(:disabled) {
-  background: var(--mj-status-error-subtle);
-  border-color: #fca5a5;
+  background: var(--mj-status-error-bg);
+  border-color: var(--mj-status-error);
 }
 
 /* ── Unsaved Changes Dialog ───────────────────────────────── */
@@ -390,7 +395,7 @@ mj-flow-agent-editor.mj-flow-agent-editor--fullscreen .mj-agent-editor {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.4);
+  background: var(--mj-bg-overlay);
   display: flex;
   align-items: center;
   justify-content: center;

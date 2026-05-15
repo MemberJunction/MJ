@@ -118,31 +118,6 @@
          RELATED ENTITY PANELS
          ======================================== -->
 
-    <!-- Details Section -->
-    <mj-collapsible-panel
-        SectionKey="mJListDetails"
-        SectionName="Details"
-        Icon="fa fa-list"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJListDetails')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: List Details','ListID')"
-                [NewRecordValues]="NewRecordValues('MJ: List Details')"
-                [AllowLoad]="IsSectionExpanded('mJListDetails')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJListDetails', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
     <!-- Duplicate Runs Section -->
     <mj-collapsible-panel
         SectionKey="mJDuplicateRuns"
@@ -168,25 +143,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- List Shares Section -->
+    <!-- Details Section -->
     <mj-collapsible-panel
-        SectionKey="mJListShares"
-        SectionName="List Shares"
-        Icon="fa fa-share-alt"
+        SectionKey="mJListDetails"
+        SectionName="Details"
+        Icon="fa fa-list"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJListShares')"
+        [BadgeCount]="GetSectionRowCount('mJListDetails')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: List Shares','ListID')"
-                [NewRecordValues]="NewRecordValues('MJ: List Shares')"
-                [AllowLoad]="IsSectionExpanded('mJListShares')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: List Details','ListID')"
+                [NewRecordValues]="NewRecordValues('MJ: List Details')"
+                [AllowLoad]="IsSectionExpanded('mJListDetails')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJListShares', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJListDetails', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -212,6 +187,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJListInvitations', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- List Shares Section -->
+    <mj-collapsible-panel
+        SectionKey="mJListShares"
+        SectionName="List Shares"
+        Icon="fa fa-share-alt"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJListShares')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: List Shares','ListID')"
+                [NewRecordValues]="NewRecordValues('MJ: List Shares')"
+                [AllowLoad]="IsSectionExpanded('mJListShares')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJListShares', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

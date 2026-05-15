@@ -1642,7 +1642,13 @@ export class SQLCodeGenBase {
                 sOutput += sOutput == '' ? '' : '\n';
                 const qi = this._dbProvider.Dialect.QuoteIdentifier.bind(this._dbProvider.Dialect);
                 const qs = this._dbProvider.Dialect.QuoteSchema.bind(this._dbProvider.Dialect);
-                const relatedTable = ef._RelatedEntityNameFieldIsVirtual ? ef.RelatedEntityBaseView : ef.RelatedEntityBaseTable;
+                // Computed/generated columns are physically present in the base table, so we
+                // can join directly to the base table even when IsVirtual=1. Only route
+                // through the view for genuinely view-only columns (IsVirtual=1, IsComputed=0).
+                // Joining to the base table avoids unnecessary view materialization and
+                // sidesteps the self-reference problem when the FK is a self-FK.
+                const useView = ef._RelatedEntityNameFieldIsVirtual && !ef._RelatedEntityNameFieldIsComputed;
+                const relatedTable = useView ? ef.RelatedEntityBaseView : ef.RelatedEntityBaseTable;
                 sOutput += `${ef.AllowsNull ? 'LEFT OUTER' : 'INNER' } JOIN\n    ${qs(ef.RelatedEntitySchemaName, relatedTable)} AS ${ef._RelatedEntityTableAlias}\n  ON\n    ${qi(classNameFirstChar)}.${qi(ef.Name)} = ${ef._RelatedEntityTableAlias}.${qi(ef.RelatedEntityFieldName)}`;
             }
         }
@@ -1765,23 +1771,28 @@ export class SQLCodeGenBase {
 
             ef._RelatedEntityJoinFieldMappings = [];
             let anyFieldIsVirtual = false;
+            let anyFieldIsComputed = false;
 
             // 1. Handle NameField (if not overridden)
             // In 'extend' mode: include the NameField (backward compatible with IncludeRelatedEntityNameFieldInBaseView)
             // In 'override' mode: skip the NameField, only use explicitly configured fields
             if (config.mode !== 'override' && ef.IncludeRelatedEntityNameFieldInBaseView) {
-                const { nameField, nameFieldIsVirtual } = this.getIsNameFieldForSingleEntity(ef.RelatedEntity);
+                const { nameField, nameFieldIsVirtual, nameFieldIsComputed } = this.getIsNameFieldForSingleEntity(ef.RelatedEntity);
 
-                // Self-FK + virtual NameField + dialect that can't handle self-join → skip.
-                // PG's strict `CREATE OR REPLACE VIEW` parser raises 42P01 on a body that
-                // LEFT-JOINs the view-being-created to itself, and the stub-recovery path
-                // hits column-type incompat. The cleanest fix is to not emit the join at
-                // all for this combination; the related virtual column is dropped from
-                // the view (matches baseline behaviour for entities like RecordChange).
+                // Self-FK + view-only NameField + dialect that can't handle self-join → skip.
+                // A view-only column (IsVirtual=1, IsComputed=0) can only be read from the
+                // view, so the join must target the view; but PG's strict `CREATE OR REPLACE
+                // VIEW` parser raises 42P01 on a body that LEFT-JOINs the view-being-created
+                // to itself, and SQL Server's parse-time name resolution fails the same way
+                // post-DROP. Skipping drops the virtual lookup column from the view.
+                //
+                // For computed/generated columns (IsVirtual=1, IsComputed=1), the column is
+                // physically in the base table — the join target is the base table (not the
+                // view) — so the self-reference issue doesn't apply and we DON'T skip.
                 const isSelfFK = ef.RelatedEntityID && ef.EntityID && ef.RelatedEntityID.toLowerCase() === ef.EntityID.toLowerCase();
-                if (nameField !== '' && nameFieldIsVirtual && isSelfFK && !this._dbProvider.canSelfJoinViewForVirtualNameField()) {
+                if (nameField !== '' && nameFieldIsVirtual && !nameFieldIsComputed && isSelfFK && !this._dbProvider.canSelfJoinViewForVirtualNameField()) {
                     const owningEntity = md.Entities.find(e => UUIDsEqual(e.ID, ef.EntityID));
-                    logStatus(`  Skipping self-referential virtual NameField join for ${owningEntity?.Name ?? ef.EntityID}.${ef.Name} (dialect: ${this._dbProvider.PlatformKey})`);
+                    logStatus(`  Skipping self-referential view-only NameField join for ${owningEntity?.Name ?? ef.EntityID}.${ef.Name} (dialect: ${this._dbProvider.PlatformKey})`);
                     continue;
                 }
 
@@ -1809,10 +1820,12 @@ export class SQLCodeGenBase {
                         ef._RelatedEntityJoinFieldMappings.push({
                             sourceField: nameField,
                             alias: safeAlias,
-                            isVirtual: nameFieldIsVirtual
+                            isVirtual: nameFieldIsVirtual,
+                            isComputed: nameFieldIsComputed
                         });
                         allGeneratedAliases.push(safeAlias);
                         if (nameFieldIsVirtual) anyFieldIsVirtual = true;
+                        if (nameFieldIsComputed) anyFieldIsComputed = true;
 
                         // check to see if the database already knows about the RelatedEntityNameFieldMap or not
                         if (ef.RelatedEntityNameFieldMap === null ||
@@ -1848,18 +1861,21 @@ export class SQLCodeGenBase {
                         continue;
                     }
 
-                    // Get field metadata from related entity to check if virtual
+                    // Get field metadata from related entity to check if virtual / computed
                     const relatedEntity = md.EntityByName(ef.RelatedEntity);
                     const relatedField = relatedEntity?.Fields.find(f => f.Name.toLowerCase() === fieldName.toLowerCase());
                     const isVirtual = relatedField?.IsVirtual || false;
+                    const isComputed = relatedField?.IsComputed || false;
 
                     ef._RelatedEntityJoinFieldMappings.push({
                         sourceField: fieldName,
                         alias: alias,
-                        isVirtual: isVirtual
+                        isVirtual: isVirtual,
+                        isComputed: isComputed
                     });
                     allGeneratedAliases.push(alias);
                     if (isVirtual) anyFieldIsVirtual = true;
+                    if (isComputed) anyFieldIsComputed = true;
                 }
             }
 
@@ -1867,6 +1883,7 @@ export class SQLCodeGenBase {
             if (ef._RelatedEntityJoinFieldMappings.length > 0) {
                 ef._RelatedEntityTableAlias = ef.RelatedEntityClassName + '_' + ef.Name;
                 ef._RelatedEntityNameFieldIsVirtual = anyFieldIsVirtual;
+                ef._RelatedEntityNameFieldIsComputed = anyFieldIsComputed;
 
                 for (const mapping of ef._RelatedEntityJoinFieldMappings) {
                     const qi = this._dbProvider.Dialect.QuoteIdentifier.bind(this._dbProvider.Dialect);
@@ -1878,18 +1895,18 @@ export class SQLCodeGenBase {
         return sOutput;
     }
 
-    protected getIsNameFieldForSingleEntity(entityName: string): {nameField: string, nameFieldIsVirtual: boolean} {
+    protected getIsNameFieldForSingleEntity(entityName: string): {nameField: string, nameFieldIsVirtual: boolean, nameFieldIsComputed: boolean} {
         const md: Metadata = new Metadata(); // use the full metadata entity list, not the filtered version that we receive // global-provider-ok: codegen runs offline against a single provider
         const e: EntityInfo = md.EntityByName(entityName)!;
         if (e) {
             const ef: EntityFieldInfo = e.NameField!;
             if (e.NameField)
-                return {nameField: ef.Name, nameFieldIsVirtual: ef.IsVirtual};
+                return {nameField: ef.Name, nameFieldIsVirtual: ef.IsVirtual, nameFieldIsComputed: ef.IsComputed === true};
         }
         else
             logStatus(`ERROR: Could not find entity with name ${entityName}`);
 
-        return {nameField: '', nameFieldIsVirtual: false}
+        return {nameField: '', nameFieldIsVirtual: false, nameFieldIsComputed: false}
     }
 
     protected stripID(name: string): string {

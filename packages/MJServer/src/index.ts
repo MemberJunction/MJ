@@ -6,7 +6,7 @@ import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
 import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView } from '@memberjunction/core';
 import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
-import { MJGlobal, MJEventType, UUIDsEqual } from '@memberjunction/global';
+import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
 import { default as BodyParser } from 'body-parser';
@@ -424,7 +424,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       url: process.env.REDIS_URL,
       keyPrefix: process.env.REDIS_KEY_PREFIX || 'mj',
       enablePubSub: true,
-      enableLogging: true,
+      enableLogging: configInfo.cacheSettings?.verboseLogging ?? false,
     });
     (Metadata.Provider as GenericDatabaseProvider).SetLocalStorageProvider(redisProvider); // global-provider-ok: bootstrap (Redis cache wiring)
     await redisProvider.StartListening();
@@ -906,6 +906,19 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       } catch (error) {
         console.error('❌ Error stopping scheduled jobs service:', error);
       }
+    }
+
+    // Drain anything self-registered with ShutdownRegistry — QueueManager,
+    // future engines/services with timers/intervals/listeners. Each is
+    // responsible for being idempotent and not throwing.
+    try {
+      const count = ShutdownRegistry.Instance.Count;
+      if (count > 0) {
+        await ShutdownRegistry.Instance.ShutdownAll();
+        console.log(`✅ ShutdownRegistry drained ${count} registered service(s)`);
+      }
+    } catch (error) {
+      console.error('❌ Error draining ShutdownRegistry:', error);
     }
 
     // Close server

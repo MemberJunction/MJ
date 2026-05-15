@@ -14,7 +14,14 @@
     "no-unused-vars": "off",
     "object-shorthand": "error",
     "prettier/prettier": "error",
-    "spaced-comment": "off"
+    "spaced-comment": "off",
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "CallExpression[callee.property.name='subscribe'][callee.object.callee.property.name='GetEventListener']",
+        "message": "MJGlobal.Instance.GetEventListener(...).subscribe(...) without an intervening .pipe(takeUntil(this.destroy$)) leaks for the lifetime of the listener subject. Pipe through takeUntil and ensure your component implements OnDestroy. See memory-leak audit C1."
+      }
+    ]
   },
   "settings": {
     "import/resolver": {

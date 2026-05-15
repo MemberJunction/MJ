@@ -14,6 +14,7 @@
     "packages/MJExplorer/",
     "packages/AngularElements/mj-angular-elements-demo/",
     "packages/MJCodeGenAPI/",
+    "packages/React/test-harness/react-test-example/",
     "**/*.spec.ts",
     "**/*.d.ts",
     "node_modules"

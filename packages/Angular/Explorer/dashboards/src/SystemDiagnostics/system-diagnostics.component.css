@@ -1922,26 +1922,43 @@
     font-weight: 500;
 }
 
-/* PerfMon Chart Styles */
+/* PerfMon Chart Styles
+ * ====================
+ * Chrome (background, borders, text, controls) is mapped to MJ semantic tokens
+ * so the panel adapts to the active theme and is white-labelable. Series colors
+ * (cyan / magenta / neon-green / orange) are categorical chart data — they must
+ * stay distinct across themes and are exempt by the same rule that exempts
+ * other chart-data palettes.
+ *
+ * The accent (--perfmon-accent) is intentionally kept as the same neon green as
+ * the engine series so the "live signal" indicators (header icon, footer count,
+ * chart strokes) read as part of the chart palette rather than the app's brand.
+ *
+ * Overlays are derived via color-mix() from --mj-text-primary so they invert
+ * automatically: dark tints over light surfaces in light mode, light tints over
+ * dark surfaces in dark mode.
+ */
 .perfmon-section {
-    /* Scoped terminal theme variables */
-    --perfmon-bg: #1a1a2e;
-    --perfmon-bg-deep: #0d0d1a;
+    /* Chrome — adapts to theme */
+    --perfmon-bg: var(--mj-bg-surface-card);
+    --perfmon-bg-deep: var(--mj-bg-surface-sunken);
+    --perfmon-border: var(--mj-border-default);
+    --perfmon-border-medium: var(--mj-border-strong);
+    --perfmon-border-light: var(--mj-border-strong);
+    --perfmon-text-faint: var(--mj-text-disabled);
+    --perfmon-text-muted: var(--mj-text-muted);
+    --perfmon-text-secondary: var(--mj-text-secondary);
+    --perfmon-control-bg: var(--mj-bg-surface-sunken);
+    --perfmon-control-bg-hover: var(--mj-bg-surface-hover);
+    --perfmon-mode-bg: var(--mj-bg-surface-sunken);
+    --perfmon-overlay-light: color-mix(in srgb, var(--mj-text-primary) 5%, transparent);
+    --perfmon-overlay-medium: color-mix(in srgb, var(--mj-text-primary) 15%, transparent);
+    --perfmon-overlay-strong: color-mix(in srgb, var(--mj-text-primary) 25%, transparent);
+    --perfmon-tooltip-bg: var(--mj-bg-overlay);
+
+    /* Categorical series colors and live-signal accent — exempt */
     --perfmon-accent: #00ff88;
     --perfmon-accent-dim: #00cc6a;
-    --perfmon-border: #333;
-    --perfmon-border-medium: #444;
-    --perfmon-border-light: #555;
-    --perfmon-text-faint: #666;
-    --perfmon-text-muted: #888;
-    --perfmon-text-secondary: #aaa;
-    --perfmon-control-bg: #2a2a2a;
-    --perfmon-control-bg-hover: #333;
-    --perfmon-mode-bg: #1a1a1a;
-    --perfmon-overlay-light: rgba(255, 255, 255, 0.05);
-    --perfmon-overlay-medium: rgba(255, 255, 255, 0.15);
-    --perfmon-overlay-strong: rgba(255, 255, 255, 0.25);
-    --perfmon-tooltip-bg: rgba(0, 0, 0, 0.9);
     --perfmon-series-runview: #00bcd4;
     --perfmon-series-runquery: #e040fb;
     --perfmon-series-engine: #00ff88;
@@ -2972,6 +2989,29 @@
     padding: 2px 6px;
     border-radius: 4px;
     word-break: break-all;
+}
+
+/* Health status indicators for config items */
+.config-health-icon {
+    font-size: 12px;
+    flex-shrink: 0;
+}
+.config-health-icon.health-success {
+    color: var(--mj-status-success);
+}
+.config-health-icon.health-failure {
+    color: var(--mj-status-error);
+}
+.config-detail-row--error {
+    background: color-mix(in srgb, var(--mj-status-error) 6%, transparent);
+    border-radius: 4px;
+    padding: 4px 8px;
+}
+.detail-value--error {
+    color: var(--mj-status-error-text) !important;
+    background: none !important;
+    font-family: inherit !important;
+    word-break: break-word;
 }
 
 /* Sample Data Section */
