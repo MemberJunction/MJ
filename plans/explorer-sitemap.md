@@ -1,7 +1,7 @@
 # MJ Explorer · Application Sitemap
 
 > **Source:** generated from `metadata/applications/*.json` on 2026-05-08.
-> **Companion to:** [`plans/explorer-layout-templates.md`](explorer-layout-templates.md) (structural inventory), [`plans/explorer-ia-progress.md`](explorer-ia-progress.md) (current consolidation work).
+> **Companion to:** [`plans/explorer-chrome-conventions.md`](explorer-chrome-conventions.md) (the chrome rules), [`plans/explorer-ia-progress.md`](explorer-ia-progress.md) (migration progress).
 >
 > **Reading order:** start with the at-a-glance map below, then the table, then drill into any group that matters for your task. Cross-cutting paths (record viewer, settings, search) live at the bottom because they don't appear in nav metadata.
 
@@ -231,7 +231,7 @@ When you look at the screenshot run side-by-side with this sitemap:
 
 1. **Sequence ≠ importance.** Apps with `DefaultSequence > 1000` are admin/internal; the four defaults (Home/Chat/Data Explorer/Lists/Testing/Actions/Scheduling) are what most users actually live in.
 2. **Each app has its own color** (per `metadata.Color`), but the **page-header icon color is unified to `--mj-brand-primary`** — that's intentional, per the IA work.
-3. **The 4 documented layout exceptions** (Home / Component Studio / Data Explorer / Query Browser) are deliberately structurally different — see [`plans/explorer-layout-templates.md`](explorer-layout-templates.md). Don't try to force them into Template A/B.
+3. **Documented chrome exceptions** are deliberately structurally different — see [`plans/explorer-chrome-conventions.md`](explorer-chrome-conventions.md#9-documented-exceptions) for the canonical list. Single-page exceptions include Home / Component Studio / Data Explorer / Query Browser / AI Overview / AI Analytics body. Shell-with-left-nav sub-pages (explorer-settings, APIKeys' internal tabs) are deferred pending the Section 10 decision.
 4. **Admin's 4 nav items aggregate further sub-tabs internally** — when we audit Admin, each landing screen will show its own internal navigation. Drilling in would yield more screenshots than what the metadata suggests.
 5. **MCP appears under AI** in this metadata, but its actual code lives in `dashboards/src/MCP/` (separate from the rest of AI under `dashboards/src/AI/`). The audit will show them visually adjacent because they share the AI app shell.
 

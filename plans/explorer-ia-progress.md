@@ -1,14 +1,14 @@
 # MJ Explorer · IA Standardization Progress
 
-> **Branch:** `information-architecture` · **Status:** Phase 2.3 in progress · **Last update:** 2026-05-11
+> **Branch:** `explorer-header-consolidation` (active) · **Status:** Phase 2.3 mostly complete · **Last update:** 2026-05-15
 
-> Companion doc to [`plans/explorer-layout-templates.md`](explorer-layout-templates.md) (the layout inventory) and [`plans/phase-2-kendo-removal.md`](phase-2-kendo-removal.md) (the parent plan).
+> Companion doc to [`plans/explorer-chrome-conventions.md`](explorer-chrome-conventions.md) (the rules) and [`plans/phase-2-kendo-removal.md`](phase-2-kendo-removal.md) (the parent plan).
 
 ## TL;DR
 
-We're consolidating the dashboard header chrome of MJ Explorer into a small set of shared components in `@memberjunction/ng-ui-components`, then migrating each dashboard to use them. Per-page CSS for the header strip is being deleted as we go — the goal is that future drift is impossible because the styles live in exactly one place.
+We're consolidating the dashboard header chrome of MJ Explorer into a small set of shared components in `@memberjunction/ng-ui-components`, then migrating each dashboard to use them. Per-page CSS for the header strip is deleted as we go — the goal is that future drift is impossible because the styles live in exactly one place.
 
-So far: **6 shared components** built, **45 dashboards** fully migrated (MCP, 6 AI sub-pages, 3 Lists pages, all 5 Communication pages, Scheduling + 3 Scheduling resources, all 5 Credentials pages, File Browser, all 4 Version History pages, 8 Knowledge Hub pages, all 3 Actions pages, Testing parent + 5 Testing resources). **Remaining bespoke headers** in Template A: APIKeys, Settings + the Template B group.
+So far: **14 shared chrome components** built (page-layout, page-header, page-body, page-search, tab-nav, view-toggle, filter-popover, filter-panel, filter-field, filter-chip, filter-toggle, result-count, stat-badge, refresh-button) — all in `@memberjunction/ng-ui-components`. **~65 dashboards** fully migrated. **Remaining unmigrated pages are documented exceptions** — see Section 9 of [chrome-conventions.md](explorer-chrome-conventions.md) for the canonical list (single-page exceptions like Home / Component Studio / Data Explorer / Query Browser / AI Overview, plus shell-with-left-nav sub-pages like the 5 explorer-settings components and APIKeys' internal tabs which are deferred pending the Section 10 decision).
 
 ## Shared components (lives in `@memberjunction/ng-ui-components`)
 
@@ -87,15 +87,12 @@ All 5 are standalone, design-token-only, PascalCase API.
 
 ## Pages NOT yet migrated
 
-Per [`plans/explorer-layout-templates.md`](explorer-layout-templates.md):
+See **[chrome-conventions.md Section 9](explorer-chrome-conventions.md#9-documented-exceptions)** for the canonical exception list. In summary:
 
-- **Template A** (sidebar + content): APIKeys, Settings, Testing
-- **Template B** (no sidebar): ApplicationRoles, DashboardBrowser, DatabaseDesigner, EntityAdmin, Permissions
-- **Documented exceptions** (will NOT be migrated as-is): Home (right-sidebar dashboard), Component Studio (toolbar-driven authoring shell), Data Explorer (workspace), Query Browser (resizable left panel)
+- **Single-page exceptions** (deliberately different chrome — will NOT be migrated as-is): AI Overview (hero-landing layout), Home (right-sidebar dashboard), Component Studio (toolbar-driven authoring shell), Data Explorer (workspace), Query Browser (resizable left panel), AI Analytics' Model Performance section (custom leaderboard filter, not shared).
+- **Shell-with-left-nav sub-pages** (deferred pending Section 10 decision): the 5 explorer-settings components (Users / Roles / Apps / Permissions / SQL Logging) and the APIKeys app's internal tabs (Keys / Applications / Scopes / Usage Analytics). Migrating these piecemeal would produce doubled headers; they will be migrated together once Section 10 picks a pattern.
 
-The 4 AI exceptions inside the AI app:
-- **AI Overview** — hero-section landing layout (large icon + hero typography + stats strip + card grid). Decision to keep deliberate; not a horizontal-bar header.
-- **Model Performance** — has its own custom inline filter-bar (sort-by + leaderboard controls), not the shared `app-analytics-filter-bar`.
+Everything else with a `BaseResourceComponent` registration is migrated.
 
 ## Architecture decisions
 
@@ -135,20 +132,16 @@ MJExplorer's running Vite dev server caches compiled bundles in memory. When you
 
 **Workaround:** kill and restart MJExplorer after rebuilding `ng-ui-components` or `ng-dashboards`. Hard-refresh alone is not enough.
 
-### Projected-slot wrappers need `display: contents`
-This bites every page migration. `mj-page-header`'s `[meta]` / `[actions]` / `[toolbar]` slots each apply `display: flex; gap: var(--mj-space-3)` so the projected children sit side by side with proper spacing. But if you wrap your projection in a `<div meta>` / `<div actions>` / `<div toolbar>` for code organization, that wrapper becomes the SINGLE flex child of the slot — the gap is consumed by the wrapper itself, not the buttons/popover/inputs inside it. They render squished together.
+### ~~Projected-slot wrappers need `display: contents`~~ (resolved — built into `mj-page-header`)
+This used to bite every migration. The fix shipped as a built-in slot-passthrough rule in `page-header.scss`:
 
-**Fix:** every wrapper div used as a slot marker must have `display: contents` so it disappears from the box tree and its children become direct flex children of the slot:
-
-```css
-.ai-header-actions,
-.lists-header-actions,
-.mcp-header-actions {
+```scss
+:host ::ng-deep [meta], [actions], [toolbar] {
   display: contents;
 }
 ```
 
-Pattern used in MCP / Agents / Prompts / Lists / etc. **Always add this CSS when introducing a new wrapped projection.**
+The selector matches by `meta` / `actions` / `toolbar` attribute, regardless of class name — so any `<div meta>` (or any element projected with one of those attributes) automatically becomes a transparent wrapper. **No bespoke `.X-header-meta { display: contents }` rule is needed; if you find one in an old page, delete it.** Migrations across Integration / Scheduling / Testing / AI / etc. have already deleted these.
 
 ### Old per-page header padding doesn't carry forward
 The old bespoke `.X-header` divs typically carried `padding: 16px 24px`, giving the page horizontal breathing room. `<mj-page-header>` only pads ITS OWN card — content below the header has no padding by default. After removing the old header, content (cards, empty states, lists) ends up flush against the viewport edges.
@@ -186,7 +179,7 @@ Run this against every page you migrate. Items 1–4 are the structural swap; 5�
    - `[toolbar]` → `<mj-page-search>` + quick-filter chips **adjacent to search** (no `flex: 1` spacer between them — chips share the search's logical scope)
    - Dense dropdown filters live in `<mj-filter-popover>` in `[actions]`, NOT flat in `[toolbar]`
 4. **Config-driven filter panel** — define `xxxFilterFields: FilterFieldConfig[]`, `xxxFilterValues: Record<string, unknown>`, `onFilterValuesChange(values)`, `resetPopoverFilters()`, and `ActiveFilterCount` getter (excluding searchTerm). For custom widgets (tree-dropdown, range inputs), use projected `<mj-filter-field>` as escape hatch.
-5. **`display: contents`** on every wrapper div used as a slot marker (`.xxx-header-actions`, `.xxx-header-meta`, `.xxx-header-toolbar`). Without this, gap between projected children is consumed by the wrapper.
+5. ~~`display: contents` on slot wrappers~~ — no longer needed; `<mj-page-header>` has built-in slot-passthrough via attribute selectors. Drop any pre-existing `.X-header-meta/actions/toolbar { display: contents }` rules when you encounter them.
 6. **Body container needs padding restored.** Add `padding: 0 24px 24px` (or the equivalent) to absorb what the old `.x-header` used to carry. Change `height: 100%` → `flex: 1; min-height: 0` so it fills remaining flex space.
 7. **Module imports** — add the shared components to the dashboards module's `imports:` array. Common omissions: `MJButtonDirective`, `MJPageSearchComponent`, `MJFilterPanelComponent`, `MJFilterFieldComponent`, `MJViewToggleComponent`.
 8. **Delete orphan CSS** — bespoke `.X-header`, `.filter-toggle-btn`, `.item-count`, `.view-toggle`, `.view-btn`, `.tab-nav`, `.tab-btn`, `.search-box`, `.search-input-wrapper`, `.filter-chip`, `.filter-bar`, `.filter-group`, `.filter-select` rules should all go.
@@ -249,5 +242,7 @@ Not part of header chrome, but adjacent:
 ## References
 
 - [`plans/phase-2-kendo-removal.md`](phase-2-kendo-removal.md) — parent plan; this work is Phase 2.3
-- [`plans/explorer-layout-templates.md`](explorer-layout-templates.md) — layout inventory (Templates A/B + 4 documented exceptions)
+- [`plans/explorer-chrome-conventions.md`](explorer-chrome-conventions.md) — chrome rules + canonical exception list
+- [`plans/explorer-sitemap.md`](explorer-sitemap.md) — app + nav-item inventory
+- ~~[`plans/explorer-layout-templates.md`](explorer-layout-templates.md)~~ — RETIRED. Superseded by chrome-conventions.md
 - [`plans/complete/design-mockups/`](complete/design-mockups/) — canonical design system reference

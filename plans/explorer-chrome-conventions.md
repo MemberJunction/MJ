@@ -17,9 +17,9 @@ Every migrated page wraps its content in three shared components from
 ```html
 <mj-page-layout>
   <mj-page-header Title="…" Icon="fa-solid fa-…" Subtitle="…">
-    <div meta    class="…-header-meta">…</div>
-    <div actions class="…-header-actions">…</div>
-    <div toolbar class="…-header-toolbar">…</div>
+    <div meta>…</div>
+    <div actions>…</div>
+    <div toolbar>…</div>
   </mj-page-header>
 
   <mj-page-body>
@@ -33,8 +33,13 @@ Every migrated page wraps its content in three shared components from
 - `<mj-page-body>` provides the standard padded scroll region (escape hatches:
   `[Padding]="false"`, `[Scroll]="false"`, `[Flex]="true"`).
 
-Slot wrappers should use `class="…-header-X"` with `display: contents` so children
-become direct flex children of the page-header slot (gap applies correctly).
+**Slot wrappers need NO bespoke class.** `<mj-page-header>` has built-in
+slot-passthrough — any element projected with the `meta` / `actions` / `toolbar`
+attribute automatically gets `display: contents` via an attribute selector in
+`page-header.scss`, so its children become direct flex children of the slot row
+and inherit the row's gap. Earlier migrations used per-page wrapper classes
+(`.X-header-meta { display: contents }`); those are now redundant and were
+deleted across all migrated pages.
 
 ---
 
@@ -268,6 +273,8 @@ import {
   MJPageBodyComponent,
   MJPageSearchComponent,        // if [toolbar] has search
   MJResultCountComponent,        // if [meta] has a count
+  MJStatBadgeComponent,          // if [meta] has stat badges (Variant: success/error/warning/running/info)
+  MJRefreshButtonComponent,      // if [actions] has a Refresh button
   MJFilterChipComponent,         // if filter chips used
   MJFilterPopoverComponent,      // if filter popover used
   MJFilterPanelComponent,        // if filter popover used
@@ -298,64 +305,61 @@ Things this document does NOT yet take a position on — flag here when you hit 
   in the analytics resource). If this pattern repeats (Knowledge Hub Analytics,
   Vectors, etc. may have it), add a `[Direction]="row"` input to `mj-page-body`.
 
-## 10. Documented exceptions
+## 9. Documented exceptions
 
-These pages do NOT follow the standard chrome and won't be migrated to it:
+The following pages do NOT use the standard `<mj-page-layout>` chrome — either
+because their layout is intentionally different (single-page exceptions) or
+because they're deferred pending the Section 10 decision (shell-with-left-nav
+sub-pages). Add to this list rather than improvising new exceptions in code.
 
-- **AI Overview hub** (`AIMonitorResource`) — deliberate hero-landing layout: large
-  brand icon + hero typography + stats strip + card grid. No `<mj-page-header>`.
-- **AI Analytics** (`AIAnalyticsResource`) — uses chrome correctly but its body is a
-  sidebar + content (flex-row) layout, kept in a bespoke `.analytics-shell` wrapper
-  until `mj-page-body` gains a row-direction mode. The shared `FilterBarConfig` on
-  the resource component drives per-section filter UI for every section including
-  Model Performance (which contributes SortBy + Vendor filters to the popover).
-- **Home** (right-sidebar dashboard), **Component Studio** (toolbar-driven authoring
-  shell), **Data Explorer** (workspace), **Query Browser** (resizable left panel) —
-  documented exceptions in `plans/explorer-layout-templates.md`.
+### 9a. Single-page exceptions (intentionally different chrome)
 
-## 11. TBD: shell-with-left-nav + dynamically-loaded sub-pages
+| Page | Driver class | Reason |
+|---|---|---|
+| **AI Overview hub** | `AIMonitorResource` | Hero-landing layout: large brand icon + hero typography + stats strip + card grid. No `<mj-page-header>` — the title IS the hero. |
+| **AI Analytics body** | `AIAnalyticsResource` | Uses standard chrome correctly, but its body is a sidebar+content (flex-row) layout kept in a bespoke `.analytics-shell` wrapper until `mj-page-body` gains a row-direction mode. The shared `FilterBarConfig` drives per-section filter UI for every section including Model Performance (which contributes SortBy + Vendor filters to the popover). |
+| **Home** | `HomeDashboard` | Right-sidebar dashboard with Quick Access / Notifications / Favorites / Recents — purpose-built landing layout. |
+| **Component Studio** | (no nav items) | Toolbar-driven authoring shell — top toolbar + togglable left browser + right AI pane. |
+| **Data Explorer** | `DataExplorerResource` | Workspace with animated auto-hiding nav + dual right panels. |
+| **Query Browser** | `QueryBrowserResource` | Resizable left tree panel + content. Workspace pattern shared with Data Explorer. |
 
-A pattern emerged during the chrome migration that the conventions doc does
-NOT yet take a position on: an outer "shell" resource page (`<mj-page-layout>` +
-`<mj-page-header>` + `<mj-page-body>`) whose body contains a left section-nav,
-and whose content area dynamically loads a different complete sub-component
-per active section.
+### 9b. Shell-with-left-nav sub-pages (deferred — see Section 10)
 
-**Examples in the codebase today:**
-- **Admin** section (Identity & Access, Data & Schema, Monitoring, Developer
-  Tools) — single shared `admin-container.component.html` template,
-  sub-sections loaded into a `ViewContainerRef` based on the active selection.
-  Sub-sections include:
-  - The 5 explorer-settings components: `UserManagementComponent`,
-    `RoleManagementComponent`, `ApplicationManagementComponent`,
-    `EntityPermissionsComponent`, `SqlLoggingComponent` (in `@memberjunction/ng-explorer-settings`).
-    Today these have a bespoke `.sticky-header` action-buttons row only — no
-    `<mj-page-header>`. **Do NOT migrate them in isolation** — they live as
-    the right-pane content within the Admin shell's left-nav and adding
-    `<mj-page-header>` produces a doubled header. Migrate as part of the
-    Section 11 decision below, not as part of any per-page audit.
-  - `ApplicationRolesResource`, `SystemDiagnosticsResource`,
-    `DatabaseDesignerDashboard` — these DO have full `<mj-page-header>` chrome
-    today and intentionally read as page-within-a-page (the doubled header is
-    accepted as hierarchy).
-- **APIKeys** — same shell-with-left-nav pattern but the whole app is one
-  resource component with internal tab switching (Keys / Applications / Scopes /
-  Usage Analytics). Skipped in chrome audits for the same reason.
-- **Knowledge Hub Configuration** — left config-nav, internal `@if`-switched
-  sections (less dynamic than Admin but conceptually similar).
-- **AI Analytics** — left nav-rail with `@switch (ActiveSection)` rendering
-  per-section sub-components inline. Shared `FilterBarConfig` lets the outer
-  resource project per-section filter chrome up into its own header.
+These pages render INSIDE another resource's left-nav shell. Adding `<mj-page-header>` to them produces a doubled header, which is the unsolved problem Section 10 below defers. Until that decision is made:
 
-**The unsolved problem:** when the sub-component carries its own
-`<mj-page-header>`, the user sees a "double header" — the shell's title above,
-the sub-component's title below. Today, each example handles this differently:
+| Sub-page group | Where it lives | Status |
+|---|---|---|
+| The 5 **explorer-settings** components — `UserManagementComponent`, `RoleManagementComponent`, `ApplicationManagementComponent`, `EntityPermissionsComponent`, `SqlLoggingComponent` (in `@memberjunction/ng-explorer-settings`) | Loaded into Admin's `admin-container` via `ViewContainerRef` based on left-nav selection | **Do NOT migrate piecemeal.** Two attempts have been reverted (the second on 2026-05-15). They will be migrated together once Section 10 picks a pattern. |
+| **APIKeys app** — internal Keys / Applications / Scopes / Usage Analytics tabs | One resource component with internal tab switching | Same pattern; same deferral. |
+| **Knowledge Hub Configuration** internal sections | Inline `@if`-switched templates inside the parent component | Only one header total today, so no migration debt. |
+| **AI Analytics** sub-sections (Executive Summary / Prompt Runs / Agent Runs / Model Performance / Cost & Budget / Error Analysis / Usage Patterns) | Inline components inside `<app-ai-analytics-resource>`, no own `<mj-page-header>` | The shell projects per-section filter chrome via `FilterBarConfig`. Pattern used as a candidate solution for the broader Section 10 question. |
 
-- Admin: lives with the doubled header (each sub-section reads as a complete
-  page-within-a-page, hierarchy reads correctly: "Identity & Access > Users").
-- KH Configuration: sub-sections are inline templates inside the parent
+The **sibling** Admin sub-sections that DO have full `<mj-page-header>` chrome
+today and read as intentional page-within-a-page hierarchy (the doubled header
+is accepted): `ApplicationRolesResource`, `SystemDiagnosticsResource`,
+`DatabaseDesignerDashboard`, `EntityAdmin`. These four are correctly migrated
+and not exceptions.
+
+---
+
+## 10. TBD: shell-with-left-nav + dynamically-loaded sub-pages
+
+This section captures the unsolved problem that motivates Section 9b. An outer
+"shell" resource page (`<mj-page-layout>` + `<mj-page-header>` + `<mj-page-body>`)
+hosts a left section-nav whose content area dynamically loads a different
+complete sub-component per active section. When the sub-component carries its
+own `<mj-page-header>`, the user sees a "double header" — the shell's title
+above, the sub-component's title below.
+
+Today, each example handles this differently:
+
+- **Admin** — lives with the doubled header (each sub-section reads as a
+  complete page-within-a-page, hierarchy reads correctly: "Identity & Access >
+  Users"). Used by `ApplicationRolesResource` / `SystemDiagnostics` /
+  `DatabaseDesignerDashboard` / `EntityAdmin`.
+- **KH Configuration** — sub-sections are inline templates inside the parent
   component, not loaded sub-components, so there's only one header.
-- AI Analytics: sub-sections are inline components without their own
+- **AI Analytics** — sub-sections are inline components without their own
   `<mj-page-header>`, and the shell's header dynamically projects per-section
   filter chrome via `FilterBarConfig`.
 
@@ -375,23 +379,14 @@ the sub-component's title below. Today, each example handles this differently:
 4. **Workspace exception** — treat shell-with-left-nav as its own template,
    similar to Data Explorer. Each sub-component keeps full chrome.
 
-Until this is decided, **keep the shell-with-left-nav pattern as a
-documented exception**. Treat the doubled chrome as intentional hierarchy.
-
-**Concretely, the following pages are documented Section 11 exceptions and
-should NOT be migrated to `<mj-page-layout>` chrome individually:**
-- The 5 explorer-settings sub-pages (Users, Roles, Apps, Permissions, SQL
-  Logging) — they live inside Admin's left-nav shell.
-- APIKeys — its internal tab switcher fits the same pattern.
-
-Two attempts to migrate the explorer-settings pages have been reverted (the
-second on 2026-05-15 — context: PR `explorer-header-consolidation`). When the
-Section 11 decision is made, all shell-with-left-nav sub-pages should be
-migrated together with whatever pattern is chosen, NOT piecemeal.
+Until this is decided, the explorer-settings sub-pages and APIKeys are kept
+on bespoke chrome (see Section 9b). When the decision IS made, all
+shell-with-left-nav sub-pages should be migrated together with whatever
+pattern is chosen, NOT piecemeal.
 
 ---
 
-## 9. Migration progress
+## 11. Migration progress
 
 See [`plans/explorer-ia-progress.md`](explorer-ia-progress.md) for the per-page
 migration status.
