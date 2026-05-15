@@ -160,7 +160,12 @@ The pattern:
    it renders `<mj-page-layout>` + `<mj-page-header>` + `<mj-page-body>` when used
    standalone.
 2. The inner component accepts `@Input() HideToolbar = false`. When `true`, it
-   renders content only — no chrome.
+   renders content only — no chrome. **Use this exact name** (`HideToolbar`) — do
+   **not** invent alternatives like `EmbeddedMode`, `Embedded`, or `HideChrome`.
+   The name is narrower than the actual behavior (it suppresses the entire
+   `mj-page-layout` + `mj-page-header`, not just a toolbar) but it is the
+   cross-section convention and must be consistent so parent shells can pass
+   `[HideToolbar]="true"` uniformly regardless of which inner they host.
 3. The parent dashboard renders its own shared chrome (tab-nav in `[actions]`, plus
    tab-specific filter chrome from `@switch (ActiveTab)`), and passes
    `[HideToolbar]="true"` to whichever inner is the active tab.
@@ -325,20 +330,33 @@ sub-pages). Add to this list rather than improvising new exceptions in code.
 
 ### 9b. Shell-with-left-nav sub-pages (deferred — see Section 10)
 
-These pages render INSIDE another resource's left-nav shell. Adding `<mj-page-header>` to them produces a doubled header, which is the unsolved problem Section 10 below defers. Until that decision is made:
+**The rule:** if a page is dynamically loaded into another resource's left-nav
+shell (i.e. a parent shell renders it into its content area via
+`ViewContainerRef` or equivalent), do **NOT** wrap it in `<mj-page-layout>` /
+`<mj-page-header>` / `<mj-page-body>`. The parent shell already owns the page
+chrome; adding it again produces a doubled-header that has been twice rejected
+in user testing (most recently 2026-05-15). Sub-pages should use a local
+`.sticky-header` action row pattern (see `UserManagementComponent` or
+`ApplicationRolesResource` for reference) until Section 10 settles the
+long-term pattern.
+
+The rule does **NOT** apply to pages that merely have an internal left-rail of
+their own (Knowledge Hub Tags / Classify / Clusters, AI Analytics' outer
+shell, etc.) — those get the standard outer chrome wrapped around a
+`[Flex]="true" [Padding]="false"` body. The distinguishing factor is "loaded
+into someone else's shell" vs. "has its own rail."
 
 | Sub-page group | Where it lives | Status |
 |---|---|---|
 | The 5 **explorer-settings** components — `UserManagementComponent`, `RoleManagementComponent`, `ApplicationManagementComponent`, `EntityPermissionsComponent`, `SqlLoggingComponent` (in `@memberjunction/ng-explorer-settings`) | Loaded into Admin's `admin-container` via `ViewContainerRef` based on left-nav selection | **Do NOT migrate piecemeal.** Two attempts have been reverted (the second on 2026-05-15). They will be migrated together once Section 10 picks a pattern. |
-| **APIKeys app** — internal Keys / Applications / Scopes / Usage Analytics tabs | One resource component with internal tab switching | Same pattern; same deferral. |
+| `ApplicationRolesResource`, `SystemDiagnosticsResource` (in `@memberjunction/ng-dashboards`) | Loaded into Admin shells (`admin-identity-access`, `admin-monitoring`) via `kind: 'resource'` | Use the bespoke `.sticky-header` / `.scrollable-content` pattern (matches the 5 explorer-settings components above). `<mj-stat-badge>` and `<mj-refresh-button>` are still used inside the sticky header — they're chrome *primitives*, not the chrome *frame*. |
+| **APIKeys app** — internal Keys / Applications / Scopes / Usage Analytics tabs | One resource component with its own internal left-nav | Same deferral. Note: APIKeys is *structurally different* — its own nested left-nav means it doesn't fit the "embed me in a shell" pattern even with a Section 10 fix. May need promotion to Section 9a (workspace exception) when Section 10 lands. |
 | **Knowledge Hub Configuration** internal sections | Inline `@if`-switched templates inside the parent component | Only one header total today, so no migration debt. |
 | **AI Analytics** sub-sections (Executive Summary / Prompt Runs / Agent Runs / Model Performance / Cost & Budget / Error Analysis / Usage Patterns) | Inline components inside `<app-ai-analytics-resource>`, no own `<mj-page-header>` | The shell projects per-section filter chrome via `FilterBarConfig`. Pattern used as a candidate solution for the broader Section 10 question. |
 
-The **sibling** Admin sub-sections that DO have full `<mj-page-header>` chrome
-today and read as intentional page-within-a-page hierarchy (the doubled header
-is accepted): `ApplicationRolesResource`, `SystemDiagnosticsResource`,
-`DatabaseDesignerDashboard`, `EntityAdmin`. These four are correctly migrated
-and not exceptions.
+**Adjacent pages that are NOT exceptions:**
+- `DatabaseDesignerDashboard` — loaded inside `admin-data-schema` but already renders no `<mj-page-header>` (its body is a slide-panel workspace), so the doubled-header problem doesn't apply.
+- `EntityAdmin` — registered as a top-level dashboard in the Admin app's metadata, NOT loaded inside any left-nav shell. Standard chrome is correct here.
 
 ---
 
@@ -353,10 +371,12 @@ above, the sub-component's title below.
 
 Today, each example handles this differently:
 
-- **Admin** — lives with the doubled header (each sub-section reads as a
-  complete page-within-a-page, hierarchy reads correctly: "Identity & Access >
-  Users"). Used by `ApplicationRolesResource` / `SystemDiagnostics` /
-  `DatabaseDesignerDashboard` / `EntityAdmin`.
+- **Admin** — sub-pages use a local `.sticky-header` action row inside the
+  shell's body, no inner `<mj-page-header>`. Currently applied to the 5
+  explorer-settings components (UserManagement / RoleManagement /
+  ApplicationManagement / EntityPermissions / SqlLogging) plus
+  `ApplicationRolesResource` and `SystemDiagnosticsResource`. The shell's own
+  `<mj-page-header>` is the only page-level chrome the user sees.
 - **KH Configuration** — sub-sections are inline templates inside the parent
   component, not loaded sub-components, so there's only one header.
 - **AI Analytics** — sub-sections are inline components without their own
@@ -379,10 +399,10 @@ Today, each example handles this differently:
 4. **Workspace exception** — treat shell-with-left-nav as its own template,
    similar to Data Explorer. Each sub-component keeps full chrome.
 
-Until this is decided, the explorer-settings sub-pages and APIKeys are kept
-on bespoke chrome (see Section 9b). When the decision IS made, all
-shell-with-left-nav sub-pages should be migrated together with whatever
-pattern is chosen, NOT piecemeal.
+Until this is decided, all shell-with-left-nav sub-pages stay on bespoke
+`.sticky-header` chrome (see Section 9b). When the decision IS made, all of
+them should be migrated together with whatever pattern is chosen, NOT
+piecemeal.
 
 ---
 

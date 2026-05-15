@@ -63,7 +63,7 @@ export interface ViewToggleOption {
 
     .mj-view-toggle {
       display: inline-flex;
-      gap: 2px;
+      gap: var(--mj-space-0-5);
       padding: 3px;
       background: var(--mj-bg-surface-card);
       border: 1px solid var(--mj-border-default);
@@ -74,7 +74,7 @@ export interface ViewToggleOption {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      gap: 6px;
+      gap: var(--mj-space-1-5);
       width: 28px;
       height: 28px;
       background: transparent;
@@ -90,12 +90,12 @@ export interface ViewToggleOption {
     /* Text-label mode: wider button with padding for the label. */
     .mj-view-toggle-btn--text {
       width: auto;
-      padding: 0 12px;
+      padding: 0 var(--mj-space-3);
       font-weight: 600;
     }
 
     .mj-view-toggle-label {
-      font-size: 12px;
+      font-size: var(--mj-text-xs);
       line-height: 1;
       white-space: nowrap;
     }

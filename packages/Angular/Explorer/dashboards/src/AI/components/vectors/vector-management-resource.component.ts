@@ -83,8 +83,11 @@ export class VectorManagementResourceComponent extends BaseResourceComponent imp
         { key: 'operations', icon: 'fa-solid fa-gauge-high', title: 'Operations View' }
     ];
 
-    /** Whether this component is embedded inside the Knowledge Hub shell */
-    @Input() EmbeddedMode = false;
+    /**
+     * When true, renders only the body content (no chrome). Set by parent shells
+     * that embed this resource. See plans/explorer-chrome-conventions.md Section 5.
+     */
+    @Input() HideToolbar = false;
 
     /** Toggle between view modes */
     public ToggleViewMode(): void {

@@ -33,8 +33,8 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
     .mj-filter-toggle {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      padding: 8px 14px;
+      gap: var(--mj-space-2);
+      padding: var(--mj-space-2) var(--mj-space-3-5);
       background: var(--mj-bg-surface-card);
       border: 1px solid var(--mj-border-default);
       border-radius: var(--mj-radius-md);
@@ -65,7 +65,7 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
     }
 
     .mj-filter-toggle i {
-      font-size: 12px;
+      font-size: var(--mj-text-xs);
       color: var(--mj-brand-primary);
     }
 

@@ -40,8 +40,13 @@ export class SchedulingResourceComponent extends BaseResourceComponent implement
      * When true, renders only the body content (no <mj-page-layout> + <mj-page-header>
      * chrome). Used when embedded inside another resource page (e.g. KH Configuration's
      * Scheduling section) so we don't get nested page-layouts that trap click events.
+     *
+     * Named `HideToolbar` for cross-section consistency with Scheduling/Testing inner
+     * components — see plans/explorer-chrome-conventions.md Section 5. The name is
+     * narrower than its actual behavior (suppresses entire chrome, not just the toolbar)
+     * but matches the documented convention.
      */
-    @Input() EmbeddedMode = false;
+    @Input() HideToolbar = false;
 
     private cdr = inject(ChangeDetectorRef);
     protected override navigationService = inject(NavigationService);

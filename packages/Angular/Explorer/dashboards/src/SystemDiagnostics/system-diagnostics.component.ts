@@ -172,26 +172,29 @@ export interface SystemDiagnosticsUserPreferences {
     selector: 'app-system-diagnostics',
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
-        <mj-page-layout>
-          <mj-page-header
-            Title="System Diagnostics"
-            Icon="fa-solid fa-stethoscope"
-            Subtitle="Runtime metrics, engines, caches, and telemetry">
-            <div meta>
+        <!--
+          SystemDiagnostics renders inside Admin's "Monitoring" left-nav shell,
+          which owns its own <mj-page-header>. We deliberately do NOT render a
+          <mj-page-header> here to avoid the doubled-header pattern Section 9b
+          defers. Action chrome (auto-refresh toggle + refresh button) lives
+          inline in the .sticky-header below, matching UserManagement /
+          ApplicationRoles. See plans/explorer-chrome-conventions.md Section 10.
+        -->
+        <div class="sd-container">
+          <div class="sticky-header">
+            <div class="action-buttons" role="toolbar" aria-label="System diagnostics actions">
               @if (autoRefresh) {
                 <mj-stat-badge Icon="fa-solid fa-sync-alt fa-spin" Label="Auto-refresh · every 5s" Variant="info"></mj-stat-badge>
               }
-            </div>
-            <div actions>
               <label class="auto-refresh-toggle">
                 <input type="checkbox" [(ngModel)]="autoRefresh" (change)="toggleAutoRefresh()">
                 Auto-refresh
               </label>
               <mj-refresh-button [Loading]="isLoading" Label="Refresh Now" [ShowLabel]="true" (Clicked)="refreshData()"></mj-refresh-button>
             </div>
-          </mj-page-header>
+          </div>
 
-          <mj-page-body>
+          <div class="scrollable-content">
         <div class="system-diagnostics">
 
           <!-- Overview Cards (Collapsible) -->
@@ -1483,8 +1486,8 @@ export interface SystemDiagnosticsUserPreferences {
             </div>
           </div>
         }
-          </mj-page-body>
-        </mj-page-layout>
+          </div>
+        </div>
         `,
     styleUrls: ['./system-diagnostics.component.css']
 })

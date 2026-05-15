@@ -47,12 +47,12 @@ export type MJStatBadgeVariant =
     :host {
       display: inline-flex;
       align-items: center;
-      gap: 6px;
-      padding: 4px 10px;
+      gap: var(--mj-space-1-5);
+      padding: var(--mj-space-1) var(--mj-space-2-5);
       background: var(--mj-bg-surface-card);
       border: 1px solid var(--mj-border-default);
-      border-radius: 999px;
-      font-size: 12px;
+      border-radius: var(--mj-radius-full);
+      font-size: var(--mj-text-xs);
       color: var(--mj-text-secondary);
       white-space: nowrap;
       line-height: 1.4;

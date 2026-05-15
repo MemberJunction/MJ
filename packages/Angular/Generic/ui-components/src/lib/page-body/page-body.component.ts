@@ -42,7 +42,7 @@ import { Component, HostBinding, Input } from '@angular/core';
       /* Top padding doubles as header-to-body spacing — <mj-page-header>
          intentionally has no margin-bottom so [Padding]="false" yields a
          truly flush layout (e.g. AI Analytics sidebar+content). */
-      padding: 24px;
+      padding: var(--mj-space-6);
       overflow-y: auto;
     }
     :host(.mj-page-body--no-padding) {

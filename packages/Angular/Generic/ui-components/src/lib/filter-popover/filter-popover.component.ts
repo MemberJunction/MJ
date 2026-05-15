@@ -75,8 +75,8 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
     .mj-filter-popover-trigger {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      padding: 8px 14px;
+      gap: var(--mj-space-2);
+      padding: var(--mj-space-2) var(--mj-space-3-5);
       background: var(--mj-bg-surface-card);
       border: 1px solid var(--mj-border-default);
       border-radius: var(--mj-radius-md);
@@ -107,7 +107,7 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
     }
 
     .mj-filter-popover-trigger > i:first-child {
-      font-size: 12px;
+      font-size: var(--mj-text-xs);
       color: var(--mj-brand-primary);
     }
 
@@ -117,7 +117,7 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
       justify-content: center;
       min-width: 20px;
       height: 20px;
-      padding: 0 6px;
+      padding: 0 var(--mj-space-1-5);
       border-radius: 10px;
       background: var(--mj-brand-primary);
       color: var(--mj-text-inverse);
@@ -143,7 +143,7 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
       border: 1px solid var(--mj-border-default);
       border-radius: var(--mj-radius-md);
       box-shadow: var(--mj-shadow-md);
-      margin-top: 6px;
+      margin-top: var(--mj-space-1-5);
       overflow: hidden;
     }
 
@@ -151,7 +151,7 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 12px 16px 0;
+      padding: var(--mj-space-3) var(--mj-space-4) 0;
     }
 
     .mj-filter-popover-title {
@@ -164,10 +164,10 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
       background: transparent;
       border: none;
       color: var(--mj-brand-primary);
-      font-size: 12px;
+      font-size: var(--mj-text-xs);
       font-weight: 500;
       cursor: pointer;
-      padding: 4px 8px;
+      padding: var(--mj-space-1) var(--mj-space-2);
       border-radius: var(--mj-radius-sm);
     }
 
@@ -176,10 +176,10 @@ import { OverlayModule, ConnectedPosition } from '@angular/cdk/overlay';
     }
 
     .mj-filter-popover-content {
-      padding: 12px 16px 16px;
+      padding: var(--mj-space-3) var(--mj-space-4) var(--mj-space-4);
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: var(--mj-space-2-5);
     }
   `]
 })

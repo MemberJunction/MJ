@@ -67,8 +67,8 @@ export interface TabConfig {
 
     .mj-tab-nav {
       display: inline-flex;
-      gap: 4px;
-      padding: 4px;
+      gap: var(--mj-space-1);
+      padding: var(--mj-space-1);
       background: var(--mj-bg-surface-card);
       border: 1px solid var(--mj-border-default);
       border-radius: var(--mj-radius-lg);
@@ -77,8 +77,8 @@ export interface TabConfig {
     .mj-tab-nav-btn {
       display: inline-flex;
       align-items: center;
-      gap: 8px;
-      padding: 7px 14px;
+      gap: var(--mj-space-2);
+      padding: 7px var(--mj-space-3-5);
       background: transparent;
       border: none;
       border-radius: var(--mj-radius-md);
@@ -118,7 +118,7 @@ export interface TabConfig {
       justify-content: center;
       min-width: 22px;
       height: 18px;
-      padding: 0 6px;
+      padding: 0 var(--mj-space-1-5);
       border-radius: 9px;
       background: var(--mj-border-default);
       color: var(--mj-text-muted);

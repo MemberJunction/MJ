@@ -1,4 +1,4 @@
-@if (!EmbeddedMode) {
+@if (!HideToolbar) {
   <mj-page-layout>
     <mj-page-header
       Title="Vector Management"
@@ -17,7 +17,7 @@
     </mj-page-body>
   </mj-page-layout>
 }
-@if (EmbeddedMode) {
+@if (HideToolbar) {
   <ng-container *ngTemplateOutlet="vectorBody"></ng-container>
 }
 

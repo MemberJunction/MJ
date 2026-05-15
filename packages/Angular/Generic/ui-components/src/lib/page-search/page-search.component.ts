@@ -45,9 +45,9 @@ import { Component, EventEmitter, Input, Output } from '@angular/core';
     .mj-page-search {
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: var(--mj-space-2);
       width: 100%;
-      padding: 4px 12px;
+      padding: var(--mj-space-1) var(--mj-space-3);
       font-family: var(--mj-font-family);
       font-size: var(--mj-text-sm);
       line-height: 1.5;

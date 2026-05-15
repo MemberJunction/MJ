@@ -1,4 +1,4 @@
-@if (!EmbeddedMode) {
+@if (!HideToolbar) {
 <mj-page-layout>
   <mj-page-header
     Title="Knowledge Pipelines"
@@ -38,7 +38,7 @@
   </mj-page-body>
 </mj-page-layout>
 }
-@if (EmbeddedMode) {
+@if (HideToolbar) {
   <div class="embedded-controls">
     <input
       type="text"

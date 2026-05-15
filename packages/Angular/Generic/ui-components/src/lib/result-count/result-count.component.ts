@@ -37,10 +37,10 @@ import { Component, Input } from '@angular/core';
     .mj-result-count {
       display: inline-flex;
       align-items: center;
-      padding: 6px 12px;
+      padding: var(--mj-space-1-5) var(--mj-space-3);
       background: var(--mj-bg-surface-card);
       border: 1px solid var(--mj-border-default);
-      border-radius: 16px;
+      border-radius: var(--mj-radius-xl);
       color: var(--mj-text-muted);
       font-size: 13px;
       font-weight: 500;
