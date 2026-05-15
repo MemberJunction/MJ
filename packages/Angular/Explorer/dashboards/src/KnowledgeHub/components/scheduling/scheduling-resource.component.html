@@ -1,51 +1,27 @@
-@if (!HideToolbar) {
-<mj-page-layout>
-  <mj-page-header
-    Title="Knowledge Pipelines"
-    Icon="fa-solid fa-calendar-check"
-    Subtitle="Scheduled knowledge ingestion, autotagging, and embedding pipelines">
-    <div meta>
-      @if (ActiveCount > 0) {
-        <mj-stat-badge [Count]="ActiveCount" Label="active" Variant="success"></mj-stat-badge>
-      }
-      @if (PausedCount > 0) {
-        <mj-stat-badge [Count]="PausedCount" Label="paused" Variant="warning"></mj-stat-badge>
-      }
-    </div>
-    <div actions>
-      <button mjButton variant="primary" size="sm" (click)="OnNewSchedule()">
-        <i class="fa-solid fa-plus"></i> New Schedule
-      </button>
-    </div>
-    <div toolbar>
-      <mj-page-search
-        Placeholder="Search pipelines..."
-        [Value]="SearchQuery"
-        (ValueChange)="SearchQuery = $event; OnSearchChanged()">
-      </mj-page-search>
-      <select class="mj-input kh-toolbar-select" [(ngModel)]="StatusFilter" (ngModelChange)="OnFilterChanged()">
-        <option value="">All Statuses</option>
-        <option value="Active">Active</option>
-        <option value="Paused">Paused</option>
-        <option value="Disabled">Disabled</option>
-        <option value="Pending">Pending</option>
-      </select>
-    </div>
-  </mj-page-header>
-
-  <mj-page-body>
-    <ng-container *ngTemplateOutlet="schedulingBody"></ng-container>
-  </mj-page-body>
-</mj-page-layout>
-}
-@if (HideToolbar) {
-  <div class="embedded-controls">
-    <input
-      type="text"
-      class="mj-input embedded-search"
-      placeholder="Search pipelines..."
-      [(ngModel)]="SearchQuery"
-      (ngModelChange)="OnSearchChanged()" />
+<mj-page-frame
+  Title="Knowledge Pipelines"
+  Icon="fa-solid fa-calendar-check"
+  Subtitle="Scheduled knowledge ingestion, autotagging, and embedding pipelines"
+  [HideToolbar]="HideToolbar">
+  <div meta>
+    @if (ActiveCount > 0) {
+      <mj-stat-badge [Count]="ActiveCount" Label="active" Variant="success"></mj-stat-badge>
+    }
+    @if (PausedCount > 0) {
+      <mj-stat-badge [Count]="PausedCount" Label="paused" Variant="warning"></mj-stat-badge>
+    }
+  </div>
+  <div actions>
+    <button mjButton variant="primary" size="sm" (click)="OnNewSchedule()">
+      <i class="fa-solid fa-plus"></i> New Schedule
+    </button>
+  </div>
+  <div toolbar>
+    <mj-page-search
+      Placeholder="Search pipelines..."
+      [Value]="SearchQuery"
+      (ValueChange)="SearchQuery = $event; OnSearchChanged()">
+    </mj-page-search>
     <select class="mj-input kh-toolbar-select" [(ngModel)]="StatusFilter" (ngModelChange)="OnFilterChanged()">
       <option value="">All Statuses</option>
       <option value="Active">Active</option>
@@ -53,13 +29,33 @@
       <option value="Disabled">Disabled</option>
       <option value="Pending">Pending</option>
     </select>
-    <span class="embedded-spacer"></span>
-    <button mjButton variant="primary" size="sm" (click)="OnNewSchedule()">
-      <i class="fa-solid fa-plus"></i> New Schedule
-    </button>
   </div>
+
+  @if (HideToolbar) {
+    <!-- Bespoke embedded controls row — only when embedded inside the KH Config
+         left-nav shell; the standalone path uses the toolbar slot above. -->
+    <div class="embedded-controls">
+      <input
+        type="text"
+        class="mj-input embedded-search"
+        placeholder="Search pipelines..."
+        [(ngModel)]="SearchQuery"
+        (ngModelChange)="OnSearchChanged()" />
+      <select class="mj-input kh-toolbar-select" [(ngModel)]="StatusFilter" (ngModelChange)="OnFilterChanged()">
+        <option value="">All Statuses</option>
+        <option value="Active">Active</option>
+        <option value="Paused">Paused</option>
+        <option value="Disabled">Disabled</option>
+        <option value="Pending">Pending</option>
+      </select>
+      <span class="embedded-spacer"></span>
+      <button mjButton variant="primary" size="sm" (click)="OnNewSchedule()">
+        <i class="fa-solid fa-plus"></i> New Schedule
+      </button>
+    </div>
+  }
   <ng-container *ngTemplateOutlet="schedulingBody"></ng-container>
-}
+</mj-page-frame>
 
 <ng-template #schedulingBody>
 @if (IsLoading) {

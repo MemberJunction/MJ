@@ -33,6 +33,10 @@ describe('MJStatBadgeComponent', () => {
       expect(cmp.Icon).toBe('');
     });
 
+    it('should default Total to null (the "X of Y label" path is opt-in)', () => {
+      expect(cmp.Total).toBeNull();
+    });
+
     it('should have all variant getters false by default', () => {
       expect(cmp.IsSuccess).toBe(false);
       expect(cmp.IsError).toBe(false);
@@ -77,6 +81,35 @@ describe('MJStatBadgeComponent', () => {
         const trueCount = getters.filter(g => cmp[g] === true).length;
         expect(trueCount).toBeLessThanOrEqual(1);
       }
+    });
+  });
+
+  describe('Total input (absorbed from mj-result-count)', () => {
+    it('should accept numeric Count + numeric Total', () => {
+      cmp.Count = 12;
+      cmp.Total = 50;
+      expect(cmp.Count).toBe(12);
+      expect(cmp.Total).toBe(50);
+    });
+
+    it('should accept Count without Total (original stat-badge contract)', () => {
+      cmp.Count = 42;
+      cmp.Total = null;
+      expect(cmp.Count).toBe(42);
+      expect(cmp.Total).toBeNull();
+    });
+
+    it('should accept string Count + string Total', () => {
+      cmp.Count = '1.2k';
+      cmp.Total = '5k';
+      expect(cmp.Count).toBe('1.2k');
+      expect(cmp.Total).toBe('5k');
+    });
+
+    it('should accept Total=0 (legitimate zero-total state, not null/undefined)', () => {
+      cmp.Count = 0;
+      cmp.Total = 0;
+      expect(cmp.Total).toBe(0);
     });
   });
 });

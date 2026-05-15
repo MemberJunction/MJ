@@ -4,11 +4,11 @@
     Icon="fa-solid fa-folder-tree"
     Subtitle="Browse, organize, and run all configured actions">
     <div meta>
-      <mj-result-count
+      <mj-stat-badge
         [Count]="FilteredActions.length"
         [Total]="Actions.length"
         Label="actions">
-      </mj-result-count>
+      </mj-stat-badge>
     </div>
     <div actions>
       <!-- Filters popover (shared trigger + popover chrome; multi-select checkbox content stays bespoke) -->

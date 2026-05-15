@@ -20,8 +20,8 @@ import {
     MJPageHeaderComponent,
     MJPageBodyComponent,
     MJPageSearchComponent,
-    MJResultCountComponent,
-    MJRefreshButtonComponent
+    MJRefreshButtonComponent,
+    MJStatBadgeComponent
 } from '@memberjunction/ng-ui-components';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { VersionsModule } from '@memberjunction/ng-versions';
@@ -74,8 +74,8 @@ import { DatabaseDesignerService } from './services/database-designer.service';
         MJPageHeaderComponent,
         MJPageBodyComponent,
         MJPageSearchComponent,
-        MJResultCountComponent,
         MJRefreshButtonComponent,
+        MJStatBadgeComponent,
         SharedGenericModule,
         VersionsModule,
         MarkdownModule,

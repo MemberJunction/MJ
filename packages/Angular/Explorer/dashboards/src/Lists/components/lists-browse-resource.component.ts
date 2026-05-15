@@ -35,7 +35,7 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
     <mj-page-layout>
       <mj-page-header Title="Lists" Icon="fa-solid fa-list-check">
         <div meta>
-          <mj-result-count [Count]="filteredLists.length" Label="lists"></mj-result-count>
+          <mj-stat-badge [Count]="filteredLists.length" Label="lists"></mj-stat-badge>
         </div>
         <div actions>
           <mj-filter-popover

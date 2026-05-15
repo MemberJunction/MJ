@@ -50,9 +50,9 @@ deleted across all migrated pages.
 Read-only context that sits next to the title. **Never anything actionable.**
 
 ✅ Permitted:
-- `<mj-result-count [Count] [Total] Label="…">`
-- Status pills (Healthy / Alert / Running / Unsaved / Pending review)
-- Stat badges (small counts: `3 active`, `12 errors`)
+- `<mj-stat-badge [Count] [Total]? Label="…" [Variant]?>` (covers both result-count "X of Y label" and status pills via Variant)
+- Status pills (Healthy / Alert / Running / Unsaved / Pending review) via `Variant="success|warning|error|running|info"`
+- Stat counts (`3 active`, `12 errors`, `8 of 50 prompts`)
 
 ❌ Not permitted:
 - Buttons, dropdowns, popovers, search, view-toggles
@@ -221,22 +221,40 @@ recipe in a per-page CSS file. Use `<mj-page-body>`.
 
 ### Inner component `HideToolbar` gate
 
-```html
-@if (HideToolbar) {
-  <ng-container *ngTemplateOutlet="content"></ng-container>
-} @else {
-  <mj-page-layout>
-    <mj-page-header …>…</mj-page-header>
-    <mj-page-body>
-      <ng-container *ngTemplateOutlet="content"></ng-container>
-    </mj-page-body>
-  </mj-page-layout>
-}
+Use **`<mj-page-frame>`** — the canonical composite that bundles
+`<mj-page-layout>` + `<mj-page-header>` + `<mj-page-body>` with built-in
+`HideToolbar` gating. The chrome renders when `HideToolbar=false`; only
+the default-slot (body) content renders when `HideToolbar=true`.
 
-<ng-template #content>
-  <!-- actual page content (unchanged regardless of HideToolbar) -->
-</ng-template>
+```html
+<mj-page-frame
+  Title="Scheduled Jobs"
+  Icon="fa-solid fa-calendar-check"
+  Subtitle="Configure and manage scheduled jobs"
+  [HideToolbar]="HideToolbar">
+
+  <div meta>
+    <mj-stat-badge [Count]="FilteredJobs.length" [Total]="Jobs.length" Label="jobs" />
+  </div>
+  <div actions>
+    <mj-refresh-button (Clicked)="Refresh()" />
+    <button mjButton variant="primary" size="sm" (click)="OpenCreateSlideout()">
+      <i class="fa-solid fa-plus"></i> New Job
+    </button>
+  </div>
+  <div toolbar>
+    <mj-page-search [Value]="SearchTerm" (ValueChange)="OnSearchChange($event)" />
+  </div>
+
+  <!-- Body content (everything not in a named slot) -->
+  <div class="jobs-container">…</div>
+</mj-page-frame>
 ```
+
+This replaces the previous `@if (HideToolbar) { ngTemplateOutlet } @else { mj-page-layout > … }`
+boilerplate. The lower-level trio (`<mj-page-layout>` + `<mj-page-header>` +
+`<mj-page-body>`) is still available for cases that need to gate chrome
+parts independently or for Section 9a/9b exception pages.
 
 ### Filter helpers (where filters exist on a page)
 
@@ -273,12 +291,12 @@ For any page using the chrome:
 ```typescript
 import {
   MJButtonDirective,
-  MJPageHeaderComponent,
-  MJPageLayoutComponent,
-  MJPageBodyComponent,
+  MJPageFrameComponent,          // composite — preferred for inner tab-parent components (handles HideToolbar)
+  MJPageHeaderComponent,         // direct use — when not using mj-page-frame
+  MJPageLayoutComponent,         // direct use — when not using mj-page-frame
+  MJPageBodyComponent,           // direct use — when not using mj-page-frame
   MJPageSearchComponent,        // if [toolbar] has search
-  MJResultCountComponent,        // if [meta] has a count
-  MJStatBadgeComponent,          // if [meta] has stat badges (Variant: success/error/warning/running/info)
+  MJStatBadgeComponent,          // for [meta] counts/badges — supports Count, Total, Label, Icon, Variant (absorbed mj-result-count)
   MJRefreshButtonComponent,      // if [actions] has a Refresh button
   MJFilterChipComponent,         // if filter chips used
   MJFilterPopoverComponent,      // if filter popover used

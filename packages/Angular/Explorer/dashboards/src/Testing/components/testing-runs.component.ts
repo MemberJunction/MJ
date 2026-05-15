@@ -43,29 +43,19 @@ interface FilteredStats {
   selector: 'app-testing-runs',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    @if (HideToolbar) {
-      <ng-container *ngTemplateOutlet="content"></ng-container>
-    } @else {
-      <mj-page-layout>
-        <mj-page-header
-          Title="Test Runs"
-          Icon="fa-solid fa-list-check"
-          Subtitle="Test execution history and monitoring">
-          <div actions>
-            <mj-refresh-button [Loading]="IsRefreshing" (Clicked)="Refresh()"></mj-refresh-button>
-            <button mjButton variant="primary" size="sm" (click)="StartNewTest()">
-              <i class="fa-solid fa-play"></i> Run Test
-            </button>
-          </div>
-        </mj-page-header>
-        <mj-page-body>
-          <ng-container *ngTemplateOutlet="content"></ng-container>
-        </mj-page-body>
-      </mj-page-layout>
-    }
+    <mj-page-frame
+      Title="Test Runs"
+      Icon="fa-solid fa-list-check"
+      Subtitle="Test execution history and monitoring"
+      [HideToolbar]="HideToolbar">
+      <div actions>
+        <mj-refresh-button [Loading]="IsRefreshing" (Clicked)="Refresh()"></mj-refresh-button>
+        <button mjButton variant="primary" size="sm" (click)="StartNewTest()">
+          <i class="fa-solid fa-play"></i> Run Test
+        </button>
+      </div>
 
-    <ng-template #content>
-    <div class="runs-container" (keydown.escape)="CloseDetailPanel()">
+      <div class="runs-container" (keydown.escape)="CloseDetailPanel()">
 
       <!-- Filter Bar -->
       <div class="filter-bar">
@@ -360,8 +350,8 @@ interface FilteredStats {
           </div>
         </div>
       }
-    </div>
-    </ng-template>
+      </div>
+    </mj-page-frame>
   `,
   styles: [`
     /* ==========================================

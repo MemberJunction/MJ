@@ -33,33 +33,27 @@ interface ReviewFormState {
   selector: 'app-testing-review',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    @if (HideToolbar) {
+    <mj-page-frame
+      Title="Human Review"
+      Icon="fa-solid fa-clipboard-check"
+      Subtitle="Human-in-the-loop review for test outcomes"
+      [HideToolbar]="HideToolbar">
+      <div meta>
+        @if (PendingCount > 0) {
+          <mj-stat-badge
+            Icon="fa-solid fa-hourglass-half"
+            [Count]="PendingCount"
+            Label="pending"
+            Variant="warning">
+          </mj-stat-badge>
+        }
+      </div>
+      <div actions>
+        <mj-refresh-button [Loading]="IsRefreshing" (Clicked)="Refresh()"></mj-refresh-button>
+      </div>
+
       <ng-container *ngTemplateOutlet="content"></ng-container>
-    } @else {
-      <mj-page-layout>
-        <mj-page-header
-          Title="Human Review"
-          Icon="fa-solid fa-clipboard-check"
-          Subtitle="Human-in-the-loop review for test outcomes">
-          <div meta>
-            @if (PendingCount > 0) {
-              <mj-stat-badge
-                Icon="fa-solid fa-hourglass-half"
-                [Count]="PendingCount"
-                Label="pending"
-                Variant="warning">
-              </mj-stat-badge>
-            }
-          </div>
-          <div actions>
-            <mj-refresh-button [Loading]="IsRefreshing" (Clicked)="Refresh()"></mj-refresh-button>
-          </div>
-        </mj-page-header>
-        <mj-page-body>
-          <ng-container *ngTemplateOutlet="content"></ng-container>
-        </mj-page-body>
-      </mj-page-layout>
-    }
+    </mj-page-frame>
 
     <ng-template #content>
     <!-- Inner page content -->

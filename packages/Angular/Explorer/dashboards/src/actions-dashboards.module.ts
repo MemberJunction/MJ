@@ -10,7 +10,6 @@ import {
   MJPageSearchComponent,
   MJFilterPopoverComponent,
   MJFilterPanelComponent,
-  MJResultCountComponent,
   MJViewToggleComponent,
   MJStatBadgeComponent,
   MJRefreshButtonComponent
@@ -78,7 +77,6 @@ import {
     MJPageSearchComponent,
     MJFilterPopoverComponent,
     MJFilterPanelComponent,
-    MJResultCountComponent,
     MJViewToggleComponent,
     MJStatBadgeComponent,
     MJRefreshButtonComponent,

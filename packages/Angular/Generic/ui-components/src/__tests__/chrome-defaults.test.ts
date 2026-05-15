@@ -1,8 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { MJPageLayoutComponent } from '../lib/page-layout/page-layout.component';
 import { MJPageHeaderComponent } from '../lib/page-header/page-header.component';
-import { MJFilterToggleComponent } from '../lib/filter-toggle/filter-toggle.component';
-import { MJResultCountComponent } from '../lib/result-count/result-count.component';
 import { MJTabNavComponent, TabConfig } from '../lib/tab-nav/tab-nav.component';
 import { MJViewToggleComponent, ViewToggleOption } from '../lib/view-toggle/view-toggle.component';
 
@@ -28,39 +26,6 @@ describe('MJPageHeaderComponent', () => {
   });
   it('should default Subtitle to null (template hides the subtitle when falsy)', () => {
     expect(new MJPageHeaderComponent().Subtitle).toBeNull();
-  });
-});
-
-describe('MJFilterToggleComponent', () => {
-  it('should default Active to false', () => {
-    expect(new MJFilterToggleComponent().Active).toBe(false);
-  });
-  it('should default ShowLabel/HideLabel to canonical strings', () => {
-    const c = new MJFilterToggleComponent();
-    expect(c.ShowLabel).toBe('Show Filters');
-    expect(c.HideLabel).toBe('Hide Filters');
-  });
-  it('should default Icon to fa-solid fa-filter', () => {
-    expect(new MJFilterToggleComponent().Icon).toBe('fa-solid fa-filter');
-  });
-  it('should emit Toggled when the directive consumer fires it', () => {
-    const c = new MJFilterToggleComponent();
-    const emitted: void[] = [];
-    c.Toggled.subscribe(() => emitted.push(undefined));
-    c.Toggled.emit();
-    expect(emitted.length).toBe(1);
-  });
-});
-
-describe('MJResultCountComponent', () => {
-  it('should default Count to 0', () => {
-    expect(new MJResultCountComponent().Count).toBe(0);
-  });
-  it('should default Total to null (omit-Total path)', () => {
-    expect(new MJResultCountComponent().Total).toBeNull();
-  });
-  it('should default Label to empty string', () => {
-    expect(new MJResultCountComponent().Label).toBe('');
   });
 });
 

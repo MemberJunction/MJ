@@ -31,7 +31,7 @@ interface CategoryNode {
         Icon="fa-solid fa-list-check"
         Subtitle="Lists you've created or have access to">
         <div meta>
-          <mj-result-count [Count]="filteredLists.length" [Total]="allLists.length" Label="lists"></mj-result-count>
+          <mj-stat-badge [Count]="filteredLists.length" [Total]="allLists.length" Label="lists"></mj-stat-badge>
         </div>
         <div actions>
           <button mjButton variant="primary" size="sm" (click)="createNewList()">

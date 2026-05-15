@@ -20,15 +20,14 @@ import {
     MJPageHeaderComponent,
     MJPageLayoutComponent,
     MJPageBodyComponent,
-    MJFilterToggleComponent,
-    MJResultCountComponent,
     MJFilterPopoverComponent,
     MJFilterPanelComponent,
     MJFilterFieldComponent,
     MJPageSearchComponent,
     MJTabNavComponent,
     MJViewToggleComponent,
-    MJRefreshButtonComponent
+    MJRefreshButtonComponent,
+    MJStatBadgeComponent
 } from '@memberjunction/ng-ui-components';
 
 // MemberJunction Modules
@@ -71,8 +70,6 @@ import { MCPLogDetailPanelComponent } from './components/mcp-log-detail-panel.co
         MJPageHeaderComponent,
         MJPageLayoutComponent,
         MJPageBodyComponent,
-        MJFilterToggleComponent,
-        MJResultCountComponent,
         MJFilterPopoverComponent,
         MJFilterPanelComponent,
         MJFilterFieldComponent,
@@ -80,6 +77,7 @@ import { MCPLogDetailPanelComponent } from './components/mcp-log-detail-panel.co
         MJTabNavComponent,
         MJViewToggleComponent,
         MJRefreshButtonComponent,
+    MJStatBadgeComponent,
         SharedGenericModule,
         CredentialsModule,
         CodeEditorModule,

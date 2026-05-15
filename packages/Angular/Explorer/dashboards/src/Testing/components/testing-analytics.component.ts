@@ -46,33 +46,23 @@ interface VersionRow {
   selector: 'app-testing-analytics',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    @if (HideToolbar) {
-      <ng-container *ngTemplateOutlet="content"></ng-container>
-    } @else {
-      <mj-page-layout>
-        <mj-page-header
-          Title="Testing Analytics"
-          Icon="fa-solid fa-chart-bar"
-          Subtitle="Test trends, pass rates, and version metrics">
-          <div actions>
-            @for (range of TimeRanges; track range.days) {
-              <mj-filter-chip
-                [Label]="range.label"
-                [Active]="SelectedDays === range.days"
-                (Clicked)="OnTimeRangeSelect(range.days)">
-              </mj-filter-chip>
-            }
-            <mj-refresh-button (Clicked)="Refresh()"></mj-refresh-button>
-          </div>
-        </mj-page-header>
-        <mj-page-body>
-          <ng-container *ngTemplateOutlet="content"></ng-container>
-        </mj-page-body>
-      </mj-page-layout>
-    }
+    <mj-page-frame
+      Title="Testing Analytics"
+      Icon="fa-solid fa-chart-bar"
+      Subtitle="Test trends, pass rates, and version metrics"
+      [HideToolbar]="HideToolbar">
+      <div actions>
+        @for (range of TimeRanges; track range.days) {
+          <mj-filter-chip
+            [Label]="range.label"
+            [Active]="SelectedDays === range.days"
+            (Clicked)="OnTimeRangeSelect(range.days)">
+          </mj-filter-chip>
+        }
+        <mj-refresh-button (Clicked)="Refresh()"></mj-refresh-button>
+      </div>
 
-    <ng-template #content>
-    <div class="testing-analytics">
+      <div class="testing-analytics">
 
       <!-- ===== 2. Trend Overview (2-column CSS charts) ===== -->
       <div class="section-title">
@@ -347,8 +337,8 @@ interface VersionRow {
           </div>
         }
       </div>
-    </div>
-    </ng-template>
+      </div>
+    </mj-page-frame>
   `,
   styles: [`
     /* ------------------------------------------------------------------ */

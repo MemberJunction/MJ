@@ -9,7 +9,6 @@ import {
   MJPageSearchComponent,
   MJFilterPopoverComponent,
   MJFilterPanelComponent,
-  MJResultCountComponent,
   MJViewToggleComponent,
   MJStatBadgeComponent,
   MJRefreshButtonComponent
@@ -52,7 +51,6 @@ import { GroupByPipe } from './Credentials/pipes/group-by.pipe';
     MJPageSearchComponent,
     MJFilterPopoverComponent,
     MJFilterPanelComponent,
-    MJResultCountComponent,
     MJViewToggleComponent,
     MJStatBadgeComponent,
     MJRefreshButtonComponent,

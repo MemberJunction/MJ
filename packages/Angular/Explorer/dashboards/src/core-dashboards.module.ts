@@ -15,7 +15,6 @@ import {
   MJFilterPopoverComponent,
   MJFilterPanelComponent,
   MJFilterChipComponent,
-  MJResultCountComponent,
   MJViewToggleComponent,
   MJStatBadgeComponent,
   MJRefreshButtonComponent
@@ -141,7 +140,6 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     MJFilterPopoverComponent,
     MJFilterPanelComponent,
     MJFilterChipComponent,
-    MJResultCountComponent,
     MJViewToggleComponent,
     MJStatBadgeComponent,
     MJRefreshButtonComponent,

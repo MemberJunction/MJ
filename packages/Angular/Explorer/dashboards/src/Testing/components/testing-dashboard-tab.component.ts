@@ -34,23 +34,17 @@ interface TestAlert {
   selector: 'app-testing-dashboard-tab',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    @if (HideToolbar) {
+    <mj-page-frame
+      Title="Testing Overview"
+      Icon="fa-solid fa-gauge-high"
+      Subtitle="Test health, recent activity, and KPIs"
+      [HideToolbar]="HideToolbar">
+      <div actions>
+        <mj-refresh-button [Loading]="IsLoading" (Clicked)="OnRefresh()"></mj-refresh-button>
+      </div>
+
       <ng-container *ngTemplateOutlet="content"></ng-container>
-    } @else {
-      <mj-page-layout>
-        <mj-page-header
-          Title="Testing Overview"
-          Icon="fa-solid fa-gauge-high"
-          Subtitle="Test health, recent activity, and KPIs">
-          <div actions>
-            <mj-refresh-button [Loading]="IsLoading" (Clicked)="OnRefresh()"></mj-refresh-button>
-          </div>
-        </mj-page-header>
-        <mj-page-body>
-          <ng-container *ngTemplateOutlet="content"></ng-container>
-        </mj-page-body>
-      </mj-page-layout>
-    }
+    </mj-page-frame>
 
     <ng-template #content>
     <!-- Full-page loading state -->

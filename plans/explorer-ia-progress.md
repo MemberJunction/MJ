@@ -16,11 +16,11 @@ So far: **14 shared chrome components** built (page-layout, page-header, page-bo
 |---|---|---|
 | `MJPageLayoutComponent` | `mj-page-layout` | Outer flex-column shell. `--mj-bg-page` background, `overflow: hidden`, full-height. Replaces every dashboard's bespoke `.{name}-container` wrapper. |
 | `MJPageHeaderComponent` | `mj-page-header` | Canonical title row. Typed inputs `Title`, `Icon`, `Subtitle`. Three projection slots: `[meta]` (next to title), `[actions]` (right side), `[toolbar]` (secondary row inside same card). Icon uses `--mj-brand-primary` (NOT `--mj-app-accent`) so color is unified across apps. |
-| `MJFilterToggleComponent` | `mj-filter-toggle` | Show/hide filters button. Inputs `Active`, `ShowLabel`, `HideLabel`, `Icon`. Output `Toggled`. Replaces 5 different bespoke `.filter-toggle-btn` rules across the codebase. |
-| `MJResultCountComponent` | `mj-result-count` | Pill: "X label" or "X of Y label". Inputs `Count`, `Total`, `Label`. Replaces `.item-count`, `.config-count`, etc. |
+| `MJPageFrameComponent` | `mj-page-frame` | **Composite** of layout + header + body with built-in `HideToolbar` gating. Inputs `Title`, `Icon`, `Subtitle`, `HideToolbar`, `Padding`, `Flex`. Same `[meta]`/`[actions]`/`[toolbar]` slots as `mj-page-header`. Preferred for inner tab-parent components — replaces the previous 30-line `@if (HideToolbar) { ngTemplateOutlet } @else { mj-page-layout > ... }` boilerplate. |
+| `MJStatBadgeComponent` | `mj-stat-badge` | Pill: "Count Label" or "Count of Total Label" or "Icon Label" (variants for status). Inputs `Count`, `Total`, `Label`, `Icon`, `Variant`. **Absorbed `mj-result-count`** in the organizational refactor. |
 | `MJFilterPopoverComponent` | `mj-filter-popover` | Trigger button (filter icon + label + active count badge) that opens a CDK Overlay popover. Inputs `Label`, `Icon`, `ActiveCount`, `ShowClearAll`. Output `ClearAllRequested`. Content projected via `<ng-content>`. **Prototype** for the unified-filter-placement direction. |
 
-All 5 are standalone, design-token-only, PascalCase API.
+All standalone, design-token-only, PascalCase API. `MJFilterToggleComponent` (was `mj-filter-toggle`) was deleted in the organizational refactor — zero template usages, fully replaced by the popover pattern.
 
 ## Pages migrated
 
@@ -121,7 +121,7 @@ The three projection slots on `<mj-page-header>` are not interchangeable. Consis
 | `[toolbar]` (secondary row below title) | **Search input** + **quick-filter chips** that operate on the page's primary dataset. Chips sit *immediately adjacent* to search — they're the same logical control group | Dropdown filters (those belong in the filter popover) |
 
 **Anti-patterns observed mid-migration:**
-- Putting `<mj-result-count>` in `[actions]` next to Refresh — count is metadata, not a verb. Move to `[meta]`.
+- Putting `<mj-stat-badge [Total]>` (a count) in `[actions]` next to Refresh — count is metadata, not a verb. Move to `[meta]`.
 - Pushing time-range chips to the far right of the toolbar with a `flex: 1` spacer — implies they're independent of search. Drop the spacer; let them flow naturally next to the search input.
 - Rendering `<select class="mj-input">` dropdowns directly in the toolbar — dense filter UI should live inside `<mj-filter-popover>` + `<mj-filter-panel>`, not flat on the toolbar row.
 

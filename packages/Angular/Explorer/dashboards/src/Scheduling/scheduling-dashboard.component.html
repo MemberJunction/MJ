@@ -19,11 +19,11 @@
         </mj-stat-badge>
       }
       @if (ActiveTab === 'jobs') {
-        <mj-result-count
+        <mj-stat-badge
           [Count]="jobsCmp?.FilteredJobs?.length ?? 0"
           [Total]="jobsCmp?.Jobs?.length ?? 0"
           Label="jobs">
-        </mj-result-count>
+        </mj-stat-badge>
       }
     </div>
     <div actions>

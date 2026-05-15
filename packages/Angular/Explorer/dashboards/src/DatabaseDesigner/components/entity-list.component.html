@@ -4,7 +4,7 @@
     Icon="fa-solid fa-table-cells-large"
     Subtitle="Browse and create user-defined entities">
     <div meta>
-      <mj-result-count [Count]="FilteredEntities.length" Label="entities"></mj-result-count>
+      <mj-stat-badge [Count]="FilteredEntities.length" Label="entities"></mj-stat-badge>
     </div>
     <div actions>
       <mj-refresh-button [Loading]="IsLoading" (Clicked)="OnRefresh()"></mj-refresh-button>

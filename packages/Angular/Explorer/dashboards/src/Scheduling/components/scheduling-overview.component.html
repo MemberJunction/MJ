@@ -1,31 +1,21 @@
-@if (HideToolbar) {
-  <ng-container *ngTemplateOutlet="content"></ng-container>
-} @else {
-  <mj-page-layout>
-    <mj-page-header
-      Title="Scheduling Dashboard"
-      Icon="fa-solid fa-gauge-high"
-      Subtitle="System health, KPIs, and alerts">
-      <div actions>
-        <mj-refresh-button (Clicked)="Refresh()"></mj-refresh-button>
-        <button mjButton
-          [variant]="AutoRefreshEnabled ? 'primary' : 'secondary'"
-          size="sm"
-          (click)="ToggleAutoRefresh()"
-          title="Toggle auto-refresh">
-          <i class="fa-solid fa-rotate"></i>
-          Auto: {{AutoRefreshEnabled ? 'ON' : 'OFF'}}
-        </button>
-      </div>
-    </mj-page-header>
-    <mj-page-body>
-      <ng-container *ngTemplateOutlet="content"></ng-container>
-    </mj-page-body>
-  </mj-page-layout>
-}
+<mj-page-frame
+  Title="Scheduling Dashboard"
+  Icon="fa-solid fa-gauge-high"
+  Subtitle="System health, KPIs, and alerts"
+  [HideToolbar]="HideToolbar">
+  <div actions>
+    <mj-refresh-button (Clicked)="Refresh()"></mj-refresh-button>
+    <button mjButton
+      [variant]="AutoRefreshEnabled ? 'primary' : 'secondary'"
+      size="sm"
+      (click)="ToggleAutoRefresh()"
+      title="Toggle auto-refresh">
+      <i class="fa-solid fa-rotate"></i>
+      Auto: {{AutoRefreshEnabled ? 'ON' : 'OFF'}}
+    </button>
+  </div>
 
-<ng-template #content>
-<div class="overview-container">
+  <div class="overview-container">
 
   @if (IsLoading) {
     <div class="loading-container">
@@ -256,5 +246,5 @@
       }
     </div>
   }
-</div>
-</ng-template>
+  </div>
+</mj-page-frame>

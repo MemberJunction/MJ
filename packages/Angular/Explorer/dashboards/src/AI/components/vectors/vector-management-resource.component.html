@@ -1,25 +1,18 @@
-@if (!HideToolbar) {
-  <mj-page-layout>
-    <mj-page-header
-      Title="Vector Management"
-      Icon="fa-solid fa-cubes"
-      Subtitle="Vector index health, embeddings, and entity sync status">
-      <div actions>
-        <mj-view-toggle
-          [Options]="VectorViewOptions"
-          [ActiveKey]="ViewMode"
-          (KeyChange)="ViewMode = $any($event)">
-        </mj-view-toggle>
-      </div>
-    </mj-page-header>
-    <mj-page-body [Flex]="true">
-      <ng-container *ngTemplateOutlet="vectorBody"></ng-container>
-    </mj-page-body>
-  </mj-page-layout>
-}
-@if (HideToolbar) {
+<mj-page-frame
+  Title="Vector Management"
+  Icon="fa-solid fa-cubes"
+  Subtitle="Vector index health, embeddings, and entity sync status"
+  [HideToolbar]="HideToolbar"
+  [Flex]="true">
+  <div actions>
+    <mj-view-toggle
+      [Options]="VectorViewOptions"
+      [ActiveKey]="ViewMode"
+      (KeyChange)="ViewMode = $any($event)">
+    </mj-view-toggle>
+  </div>
   <ng-container *ngTemplateOutlet="vectorBody"></ng-container>
-}
+</mj-page-frame>
 
 <ng-template #vectorBody>
 @if (IsLoading) {

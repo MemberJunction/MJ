@@ -4,11 +4,11 @@
     Icon="fa-solid fa-clock-rotate-left"
     Subtitle="Track all restore operations and their outcomes">
     <div meta>
-      <mj-result-count
+      <mj-stat-badge
         [Count]="FilteredRestores.length"
         [Total]="Restores.length"
         Label="restores">
-      </mj-result-count>
+      </mj-stat-badge>
     </div>
     <div actions>
       <mj-refresh-button [Loading]="IsLoading" (Clicked)="Refresh()"></mj-refresh-button>
