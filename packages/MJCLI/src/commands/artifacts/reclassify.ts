@@ -103,7 +103,7 @@ export default class ArtifactsReclassify extends Command {
             return;
         }
 
-        const writeable = targets.filter(t => t.proposedTypeID && t.proposedTypeID !== t.currentTypeID);
+        const writeable = targets.filter(t => t.proposedTypeID && !UUIDsEqual(t.proposedTypeID, t.currentTypeID));
         if (writeable.length === 0) {
             this.log('\nNothing to apply (all rows either have no match or already point to the correct type).');
             await pool.close();

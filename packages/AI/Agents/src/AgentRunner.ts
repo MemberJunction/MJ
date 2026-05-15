@@ -1293,7 +1293,7 @@ export class AgentRunner {
         const fileOutputs = steps.flatMap(step => this.parseStepFileOutputs(step));
 
         // Look up the agent's AcceptUnregisteredFiles setting via the agent run.
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(md);
         const runResult = await rv.RunView<{ AgentID: string }>({
             EntityName: 'MJ: AI Agent Runs',
             Fields: ['AgentID'],
