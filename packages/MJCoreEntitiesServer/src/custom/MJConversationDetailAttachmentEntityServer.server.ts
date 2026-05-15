@@ -1,24 +1,4 @@
-import { BaseEntity, EntitySaveOptions, LogError, LogStatus, Metadata, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
-
-/**
- * Returns true when bytes for this MIME should be stored as raw UTF-8 text
- * (so artifact tool libraries can JSON.parse / split-by-line directly).
- * Returns false for binary types whose tools work with the data-URL wrapper
- * or a FileID reference.
- */
-function isTextyMime(mime: string): boolean {
-    const lower = mime.toLowerCase();
-    if (lower.startsWith('text/')) return true;
-    return [
-        'application/json',
-        'application/xml',
-        'application/javascript',
-        'application/typescript',
-        'application/sql',
-        'application/csv',
-    ].includes(lower);
-}
-
+import { BaseEntity, EntitySaveOptions, IMetadataProvider, LogError, LogStatus, ValidationErrorInfo, ValidationErrorType, ValidationResult } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import {
     ArtifactMetadataEngine,
@@ -26,6 +6,8 @@ import {
     MJArtifactVersionEntity,
     MJConversationDetailArtifactEntity,
     MJConversationDetailAttachmentEntity,
+    buildUnregisteredMimeError,
+    decideInlineStorage,
 } from '@memberjunction/core-entities';
 
 /**
@@ -108,10 +90,9 @@ export class MJConversationDetailAttachmentEntityServer extends MJConversationDe
         const ext = this.FileName?.includes('.') ? this.FileName.split('.').pop() : undefined;
         const artifactType = ArtifactMetadataEngine.Instance.GetArtifactTypeByMimeType(mime, ext);
         if (!artifactType) {
-            const fileName = this.FileName ?? 'this file';
             return new ValidationErrorInfo(
                 'MimeType',
-                `"${fileName}" can't be attached — its file type isn't supported here. Try a PDF, Word, Excel, image, audio, video, JSON, CSV, XML, or plain-text file.`,
+                buildUnregisteredMimeError(this.FileName, mime),
                 mime,
                 ValidationErrorType.Failure,
             );
@@ -132,7 +113,11 @@ export class MJConversationDetailAttachmentEntityServer extends MJConversationDe
             return null;
         }
 
-        const md = new Metadata();
+        // Use this entity's own provider rather than `new Metadata()` — keeps
+        // the artifact pair on the same provider as the originating attachment
+        // in multi-provider clients (per @memberjunction/global multi-provider
+        // compliance rule).
+        const md = this.ProviderToUse as unknown as IMetadataProvider;
         const userId = this.ContextCurrentUser?.ID;
         if (!userId) {
             LogError(`[MJConversationDetailAttachmentEntityServer] no context user for attachment ${this.ID}; cannot create artifact.`);
@@ -159,23 +144,12 @@ export class MJConversationDetailAttachmentEntityServer extends MJConversationDe
         if (this.FileID) {
             version.ContentMode = 'File';
             version.FileID = this.FileID;
-        } else if (this.InlineData) {
-            version.ContentMode = 'Text';
-            // For text-based MIMEs the artifact tool libraries (JSON, CSV,
-            // Text) expect raw decoded text — they JSON.parse / split-by-line
-            // the content. If we leave it as `data:...;base64,...` they fail
-            // on the wrapper and the agent hallucinates. For binary content
-            // (image/audio/video/PDF) keep the data URL so the resolver's
-            // media-modality branch can route it as image_url etc.
-            version.Content = isTextyMime(mime)
-                ? Buffer.from(this.InlineData, 'base64').toString('utf-8')
-                : `data:${mime};base64,${this.InlineData}`;
         } else {
-            // No content to mirror — leave the version's content empty rather
-            // than fail. The agent runtime can still report the artifact's
-            // metadata via the manifest.
-            version.ContentMode = 'Text';
-            version.Content = '';
+            // Single source of truth for the inline-storage decision — pure
+            // helper so both upload-path and tests share the same logic.
+            const stored = decideInlineStorage(mime, this.InlineData);
+            version.ContentMode = stored.contentMode;
+            version.Content = stored.content;
         }
         if (!(await version.Save())) {
             LogError(`[MJConversationDetailAttachmentEntityServer] failed to save artifact version for attachment ${this.ID}: ${version.LatestResult?.CompleteMessage ?? 'unknown error'}`);

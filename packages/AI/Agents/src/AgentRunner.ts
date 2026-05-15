@@ -17,7 +17,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, ActionStepOutputData, ActionStepSummary, ParseFileOutputRef } from '@memberjunction/ai-core-plus';
 import { BaseAgent } from './base-agent';
 import { InputArtifact } from './ArtifactToolManager';
-import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJConversationDetailAttachmentEntity, ArtifactMetadataEngine } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJConversationDetailAttachmentEntity, ArtifactMetadataEngine, extractBase64FromDataUrl } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
 
 /**
@@ -1685,6 +1685,17 @@ export class AgentRunner {
                             }
                         } else {
                             content = row.Content || '';
+                        }
+
+                        // Binary artifacts stored as a base64 data URL by the
+                        // server hook (xlsx, docx, pdf, image when inline) need
+                        // to reach their tool libraries as a Buffer of the
+                        // decoded bytes — the libraries call
+                        // `Buffer.from(content, 'base64')` and that fails on
+                        // the `data:<mime>;base64,` prefix. Pure helper shared
+                        // with the server-hook unit tests.
+                        if (typeof content === 'string') {
+                            content = extractBase64FromDataUrl(content);
                         }
 
                         if (typeof content === 'string' && content) {

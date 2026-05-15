@@ -54,15 +54,37 @@ export abstract class BaseArtifactToolLibrary {
         return this.InvokeSubclassTool(toolName, input, artifactContent);
     }
 
-    /** Subclass-specific tools (everything other than `get_full`). */
-    protected abstract GetSubclassToolList(): ArtifactToolDefinition[];
+    /**
+     * Subclass-specific tools (everything other than `get_full`).
+     *
+     * Default returns an empty list so external consumers (e.g. Skip-Brain)
+     * whose subclasses still override the public `GetToolList()` directly
+     * continue to compile without changes — their override of `GetToolList()`
+     * replaces this whole chain. New subclasses should prefer overriding
+     * this method so they pick up the base-class `get_full` for free.
+     */
+    protected GetSubclassToolList(): ArtifactToolDefinition[] {
+        return [];
+    }
 
-    /** Subclass tool dispatcher — invoked for every tool except `get_full`. */
-    protected abstract InvokeSubclassTool(
+    /**
+     * Subclass tool dispatcher — invoked for every tool except `get_full`.
+     *
+     * Default returns an "unknown tool" error. Same backwards-compat note as
+     * `GetSubclassToolList()`: external subclasses that override the public
+     * `InvokeTool()` directly continue to work unchanged.
+     */
+    protected async InvokeSubclassTool(
         toolName: string,
-        input: Record<string, unknown>,
-        artifactContent: string | Buffer
-    ): Promise<ArtifactToolResult>;
+        _input: Record<string, unknown>,
+        _artifactContent: string | Buffer
+    ): Promise<ArtifactToolResult> {
+        return {
+            success: false,
+            data: null,
+            errorMessage: `Tool "${toolName}" is not defined by this artifact tool library.`,
+        };
+    }
 
     /**
      * Returns the `get_full` tool definition. Override only to change the
