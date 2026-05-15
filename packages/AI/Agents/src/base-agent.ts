@@ -1194,13 +1194,22 @@ export class BaseAgent {
             this._scratchpadManager.Clear();
             this._artifactToolManager.Clear();
 
-            // Initialize artifact tools with any input artifacts from the conversation
-            const inputArtifacts = (wrappedParams.data as Record<string, unknown>)?.__inputArtifacts as InputArtifact[] | undefined;
+            // Initialize artifact tools with any input artifacts from the conversation.
+            // After ArtifactToolManager consumes the artifacts (in-memory, used by
+            // tool dispatch), we DELETE `__inputArtifacts` from the prompt data so
+            // the prompt template doesn't serialize artifact bodies into the LLM
+            // payload. The manifest is injected separately via _ARTIFACT_MANIFEST
+            // below — that's the only artifact-shaped data the LLM should see.
+            const dataBag = wrappedParams.data as Record<string, unknown> | undefined;
+            const inputArtifacts = dataBag?.__inputArtifacts as InputArtifact[] | undefined;
             if (inputArtifacts?.length) {
                 this._artifactToolManager.Initialize(inputArtifacts);
                 this.logStatus(`[ArtifactTools] Initialized with ${inputArtifacts.length} artifact(s): ${inputArtifacts.map(a => `${a.typeName}:"${a.name}"`).join(', ')}`, true, params);
             } else {
                 this.logStatus(`[ArtifactTools] No input artifacts found for this run`, true, params);
+            }
+            if (dataBag && '__inputArtifacts' in dataBag) {
+                delete dataBag.__inputArtifacts;
             }
 
             // Initialize starting payload — must complete before AgentRun creation since the

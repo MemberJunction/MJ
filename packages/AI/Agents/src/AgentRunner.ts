@@ -32,9 +32,11 @@ interface ArtifactVersionRow {
     FileID: string | null;
     Content: string | null;
     MimeType: string | null;
+    ForceToolsOnly: boolean | null;
     ArtifactName: string;
     TypeName: string;
     ToolLibraryClass: string | null;
+    DefaultDeliveryMode: 'Inline' | 'ToolsOnly' | null;
 }
 
 /**
@@ -493,7 +495,8 @@ export class AgentRunner {
                         agentResponseDetailId,
                         contextUser,
                         agentResult.resolvedStorageAccountId,
-                        md
+                        md,
+                        params.agent.AcceptUnregisteredFiles
                     );
                 }
             })();
@@ -1249,11 +1252,13 @@ export class AgentRunner {
         conversationDetailId: string,
         contextUser: UserInfo,
         resolvedStorageAccountId?: string,
-        provider?: IMetadataProvider
+        provider?: IMetadataProvider,
+        acceptUnregisteredFiles?: boolean
     ): Promise<void> {
         if (fileOutputs.length === 0) return;
 
         const md = provider || this._provider;
+        const acceptUnregistered = acceptUnregisteredFiles ?? false;
 
         // Hoist engine configs before parallel processing
         await Promise.all([
@@ -1262,7 +1267,7 @@ export class AgentRunner {
         ]);
 
         await Promise.all(
-            fileOutputs.map(fo => this.processFileOutput(fo, conversationDetailId, contextUser, resolvedStorageAccountId, md))
+            fileOutputs.map(fo => this.processFileOutput(fo, conversationDetailId, contextUser, resolvedStorageAccountId, md, acceptUnregistered))
         );
     }
 
@@ -1287,7 +1292,19 @@ export class AgentRunner {
 
         const fileOutputs = steps.flatMap(step => this.parseStepFileOutputs(step));
 
-        await this.ProcessFileArtifacts(fileOutputs, conversationDetailId, contextUser, undefined, md);
+        // Look up the agent's AcceptUnregisteredFiles setting via the agent run.
+        const rv = new RunView();
+        const runResult = await rv.RunView<{ AgentID: string }>({
+            EntityName: 'MJ: AI Agent Runs',
+            Fields: ['AgentID'],
+            ExtraFilter: `ID='${agentRunId}'`,
+            ResultType: 'simple',
+        }, contextUser);
+        const agentId = runResult.Success && runResult.Results.length > 0 ? runResult.Results[0].AgentID : undefined;
+        const agent = agentId ? AIEngine.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId)) : undefined;
+        const acceptUnregistered = agent?.AcceptUnregisteredFiles ?? false;
+
+        await this.ProcessFileArtifacts(fileOutputs, conversationDetailId, contextUser, undefined, md, acceptUnregistered);
     }
 
     /** Loads all completed action steps for a given agent run (read-only, narrow fields). */
@@ -1338,12 +1355,13 @@ export class AgentRunner {
         conversationDetailId: string,
         contextUser: UserInfo,
         resolvedStorageAccountId: string | undefined,
-        provider: IMetadataProvider
+        provider: IMetadataProvider,
+        acceptUnregisteredFiles: boolean
     ): Promise<void> {
         try {
             if (fo.fileId) {
                 // File already in storage — create file-backed artifact
-                await this.createFileArtifact(fo.fileId, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider);
+                await this.createFileArtifact(fo.fileId, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles);
                 return;
             }
 
@@ -1353,7 +1371,7 @@ export class AgentRunner {
             if (!hasStorage) {
                 // No storage configured — go straight to inline artifact
                 LogStatus(`ProcessFileArtifacts: no storage accounts configured for "${fo.fileName}", creating inline artifact`);
-                await this.createInlineFileArtifact(fo.fileData!, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider);
+                await this.createInlineFileArtifact(fo.fileData!, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles);
                 return;
             }
 
@@ -1367,11 +1385,11 @@ export class AgentRunner {
                     resolvedStorageAccountId,
                     provider
                 );
-                await this.createFileArtifact(fileId, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider);
+                await this.createFileArtifact(fileId, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles);
             } catch (storageError) {
                 // Upload failed — fall back to inline artifact
                 LogStatus(`ProcessFileArtifacts: storage upload failed for "${fo.fileName}", creating inline artifact: ${(storageError as Error).message}`);
-                await this.createInlineFileArtifact(fo.fileData!, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider);
+                await this.createInlineFileArtifact(fo.fileData!, fo.mimeType, fo.fileName, fo.sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles);
             }
         } catch (error) {
             LogError(`ProcessFileArtifacts: failed for "${fo.fileName}": ${(error as Error).message}`);
@@ -1417,21 +1435,42 @@ export class AgentRunner {
             conversationDetailId: string;
             contextUser: UserInfo;
             provider: IMetadataProvider;
+            /** Whether to fall back to the Generic Binary artifact type when MIME has no exact match. */
+            acceptUnregisteredFiles: boolean;
             /** Callback to set version-specific fields (ContentMode, FileID/Content, etc.) */
             setVersionFields: (version: MJArtifactVersionEntity) => void;
             /** Label for log/error messages (e.g. 'file' or 'inline file') */
             label: string;
         }
     ): Promise<void> {
-        const { mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider, setVersionFields, label } = params;
+        const { mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles, setVersionFields, label } = params;
 
-        // Resolve the artifact type by MIME type; fall back to the built-in JSON type
-        const JSON_ARTIFACT_TYPE_ID = 'ae674c7e-ea0d-49ea-89e4-0649f5eb20d4';
-        const artifactType = ArtifactMetadataEngine.Instance.GetArtifactTypeByMimeType(mimeType);
-        if (!artifactType) {
-            LogStatus(`ProcessFileArtifacts: no ArtifactType found for MIME ${mimeType}, using JSON fallback`);
+        // Resolve the artifact type using the wildcard-aware resolver with an
+        // extension hint for application/octet-stream uploads.
+        const fileExtension = fileName.includes('.') ? fileName.split('.').pop() : undefined;
+        const artifactType = ArtifactMetadataEngine.Instance.GetArtifactTypeByMimeType(mimeType, fileExtension);
+
+        let artifactTypeId: string;
+        if (artifactType) {
+            artifactTypeId = artifactType.ID;
+        } else if (acceptUnregisteredFiles) {
+            // Per-agent opt-in: resolve to the Generic Binary fallback.
+            const genericBinary = ArtifactMetadataEngine.Instance.ArtifactTypes.find(
+                t => t.Name === 'Generic Binary'
+            );
+            if (!genericBinary) {
+                throw new Error(
+                    `Cannot create artifact for ${label} "${fileName}": MIME type "${mimeType}" is not registered and the Generic Binary fallback type is missing from the artifact registry.`
+                );
+            }
+            LogStatus(`ProcessFileArtifacts: no exact ArtifactType for MIME "${mimeType}"; resolving to Generic Binary fallback (agent has AcceptUnregisteredFiles=true).`);
+            artifactTypeId = genericBinary.ID;
+        } else {
+            throw new Error(
+                `Cannot create artifact for ${label} "${fileName}": MIME type "${mimeType}" is not supported. ` +
+                `Register an Artifact Type for this MIME, or set AcceptUnregisteredFiles=true on this agent to use the Generic Binary fallback.`
+            );
         }
-        const artifactTypeId = artifactType?.ID ?? JSON_ARTIFACT_TYPE_ID;
 
         // Use direct provider transaction (BeginTransaction/CommitTransaction) instead of
         // TransactionGroup. This ensures saves execute immediately within the SQL transaction,
@@ -1507,10 +1546,11 @@ export class AgentRunner {
         sizeBytes: number | undefined,
         conversationDetailId: string,
         contextUser: UserInfo,
-        provider: IMetadataProvider
+        provider: IMetadataProvider,
+        acceptUnregisteredFiles: boolean
     ): Promise<void> {
         await this.createArtifactWithVersion({
-            mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider,
+            mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles,
             label: 'file',
             setVersionFields: (version) => {
                 version.ContentMode = 'File';
@@ -1527,10 +1567,11 @@ export class AgentRunner {
         sizeBytes: number | undefined,
         conversationDetailId: string,
         contextUser: UserInfo,
-        provider: IMetadataProvider
+        provider: IMetadataProvider,
+        acceptUnregisteredFiles: boolean
     ): Promise<void> {
         await this.createArtifactWithVersion({
-            mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider,
+            mimeType, fileName, sizeBytes, conversationDetailId, contextUser, provider, acceptUnregisteredFiles,
             label: 'inline file',
             setVersionFields: (version) => {
                 version.ContentMode = 'Text';
@@ -1657,24 +1698,25 @@ export class AgentRunner {
                                 content,
                                 mimeType: row.MimeType ?? undefined,
                                 ...(row.ToolLibraryClass ? { toolLibraryClass: row.ToolLibraryClass } : {}),
+                                deliveryMode: row.DefaultDeliveryMode ?? 'ToolsOnly',
+                                forceToolsOnly: row.ForceToolsOnly === true,
                             });
                         }
                     }
                 }
             }
 
-            // Also gather file attachments (ConversationDetailAttachment) that are
-            // document types the agent can explore (PDF, Excel, Word, etc.).
-            // Uploaded files go through the attachment system, not the artifact system,
-            // so gatherConversationArtifacts would miss them without this.
-            const FILE_MIME_PREFIXES = [
-                'application/pdf',
-                'application/vnd.openxmlformats-officedocument', // .docx, .xlsx, .pptx
-                'application/vnd.ms-excel', // .xls
-                'application/msword', // .doc
-                'text/', // .txt, .csv, .json, .md, etc.
-                'application/json',
-            ];
+            // Back-compat path: gather ConversationDetailAttachment rows authored
+            // BEFORE storage unification — those have ArtifactVersionID = NULL
+            // and aren't represented in the junction query above. New uploads
+            // (server hook created the artifact pair) come through the junction
+            // path with ArtifactVersionID set; we skip them here to avoid
+            // double-counting.
+            //
+            // Resolution is via the Artifact Type registry (wildcard-aware), not
+            // a hardcoded MIME prefix list — same source of truth as the upload
+            // gate in MJConversationDetailAttachmentEntityServer.
+            await ArtifactMetadataEngine.Instance.Config(false, contextUser);
 
             const attachments = await rv.RunView<{
                 ID: string;
@@ -1682,11 +1724,12 @@ export class AgentRunner {
                 FileID: string | null;
                 FileName: string | null;
                 InlineData: string | null;
+                ArtifactVersionID: string | null;
             }>(
                 {
                     EntityName: 'MJ: Conversation Detail Attachments',
-                    ExtraFilter: `ConversationDetailID IN ('${detailIds.join("','")}')`,
-                    Fields: ['ID', 'MimeType', 'FileID', 'FileName', 'InlineData'],
+                    ExtraFilter: `ConversationDetailID IN ('${detailIds.join("','")}') AND ArtifactVersionID IS NULL`,
+                    Fields: ['ID', 'MimeType', 'FileID', 'FileName', 'InlineData', 'ArtifactVersionID'],
                     ResultType: 'simple',
                 },
                 contextUser,
@@ -1695,8 +1738,9 @@ export class AgentRunner {
             if (attachments.Success && attachments.Results.length > 0) {
                 for (const att of attachments.Results) {
                     const mime = att.MimeType ?? '';
-                    const isDocumentType = FILE_MIME_PREFIXES.some((prefix) => mime.startsWith(prefix));
-                    if (!isDocumentType) continue;
+                    const ext = att.FileName?.includes('.') ? att.FileName.split('.').pop() : undefined;
+                    const artifactType = ArtifactMetadataEngine.Instance.GetArtifactTypeByMimeType(mime, ext);
+                    if (!artifactType) continue; // Unsupported MIME — agent has no tools for it.
 
                     let content: string | Buffer = '';
                     if (att.FileID) {
@@ -1718,12 +1762,14 @@ export class AgentRunner {
                         continue; // No content available
                     }
 
-                    const typeName = this.inferArtifactTypeName(mime);
                     inputArtifacts.push({
                         name: att.FileName || 'Uploaded File',
-                        typeName,
+                        typeName: artifactType.Name,
                         content,
                         mimeType: mime || undefined,
+                        ...(artifactType.ToolLibraryClass ? { toolLibraryClass: artifactType.ToolLibraryClass } : {}),
+                        deliveryMode: artifactType.DefaultDeliveryMode,
+                        forceToolsOnly: false,
                     });
                 }
             }

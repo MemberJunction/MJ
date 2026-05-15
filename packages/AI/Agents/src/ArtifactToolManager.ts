@@ -18,6 +18,18 @@ export interface InputArtifact {
   /** Optional: class name from ArtifactType.ToolLibraryClass metadata.
    *  When set, used for plugin-based resolution via ClassFactory. */
   toolLibraryClass?: string;
+  /** Optional annotation surfaced verbatim on the artifact's manifest entry
+   *  (e.g. "configured for Inline but exceeds inline size cap; delivered via
+   *  tools"). Lets the resolver communicate routing decisions to the LLM. */
+  annotation?: string;
+  /** Resolved DefaultDeliveryMode for this artifact's type. When 'ToolsOnly',
+   *  the agent reaches the content via tool calls and we MUST NOT also offer
+   *  it as a native file input (otherwise we double-deliver: 1 MB JSON would
+   *  go through both the tool manager AND the native-file-input text fallback,
+   *  leaking the full content into the prompt). */
+  deliveryMode?: 'Inline' | 'ToolsOnly';
+  /** Per-instance override that forces ToolsOnly regardless of type default. */
+  forceToolsOnly?: boolean;
 }
 
 /**
@@ -39,6 +51,9 @@ interface ArtifactEntry {
   mimeType?: string;
   content: string | Buffer;
   library: BaseArtifactToolLibrary;
+  annotation?: string;
+  deliveryMode?: 'Inline' | 'ToolsOnly';
+  forceToolsOnly?: boolean;
 }
 
 /**
@@ -56,7 +71,10 @@ class CompositeArtifactToolLibrary extends BaseArtifactToolLibrary {
     super();
   }
 
-  GetToolList(): ArtifactToolDefinition[] {
+  // Composite wraps a chain of real libraries and fully overrides the public
+  // dispatchers — the abstract Subclass methods below are required to make the
+  // class concrete but are never reached.
+  public override GetToolList(): ArtifactToolDefinition[] {
     const seen = new Set<string>();
     const merged: ArtifactToolDefinition[] = [];
     for (const lib of this.chain) {
@@ -69,7 +87,7 @@ class CompositeArtifactToolLibrary extends BaseArtifactToolLibrary {
     return merged;
   }
 
-  async InvokeTool(
+  public override async InvokeTool(
     toolName: string,
     input: Record<string, unknown>,
     artifactContent: string | Buffer,
@@ -85,6 +103,15 @@ class CompositeArtifactToolLibrary extends BaseArtifactToolLibrary {
       data: null,
       errorMessage: `Tool "${toolName}" is not defined by any library in this artifact type's chain.`,
     };
+  }
+
+  // Required by the abstract base but never invoked — GetToolList / InvokeTool
+  // are fully overridden above.
+  protected GetSubclassToolList(): ArtifactToolDefinition[] {
+    return [];
+  }
+  protected async InvokeSubclassTool(): Promise<ArtifactToolResult> {
+    return { success: false, data: null, errorMessage: 'CompositeArtifactToolLibrary does not dispatch via InvokeSubclassTool.' };
   }
 }
 
@@ -147,6 +174,9 @@ export class ArtifactToolManager {
         mimeType: artifact.mimeType,
         content: artifact.content,
         library: this.ResolveLibrary(artifact.typeName, artifact.toolLibraryClass),
+        annotation: artifact.annotation,
+        deliveryMode: artifact.deliveryMode,
+        forceToolsOnly: artifact.forceToolsOnly,
       });
     }
   }
@@ -191,6 +221,15 @@ export class ArtifactToolManager {
     const candidates: NativeFileInput[] = [];
     for (const entry of this.artifacts.values()) {
       if (!entry.mimeType) continue;
+      // Skip artifacts the agent is supposed to reach via tools. Including
+      // them here would duplicate-deliver: AIPromptRunner.injectNativeFileInputs
+      // would either inject the bytes as a file_url block OR fall back to
+      // embedding the full extracted text — both paths leak content the
+      // routing layer already decided not to inline.
+      const effectiveMode: 'Inline' | 'ToolsOnly' = entry.forceToolsOnly
+        ? 'ToolsOnly'
+        : (entry.deliveryMode ?? 'ToolsOnly');
+      if (effectiveMode === 'ToolsOnly') continue;
       const contentBuffer = typeof entry.content === 'string'
         ? Buffer.from(entry.content)
         : entry.content;
@@ -253,11 +292,24 @@ export class ArtifactToolManager {
 
   // ─── PROMPT INJECTION ───
 
-  /** Markdown manifest: artifact IDs, names, types */
-  ToManifestString(): string {
+  /**
+   * Markdown manifest: artifact IDs, names, types, optional routing
+   * annotations, plus modality-mismatch warnings when the active driver
+   * can't process a media artifact's MIME. The warning is what stops
+   * non-vision models from pretending to see image artifacts based on
+   * pattern-matched few-shot examples.
+   *
+   * @param opts.supportedMimeTypes Driver-declared file capabilities. When
+   *        provided, any artifact whose MIME doesn't match (and isn't a
+   *        text-based type the agent reaches via tools) gets a per-entry
+   *        warning telling the agent the model can't process the artifact.
+   *        Pass `undefined` to disable the check (legacy callers).
+   */
+  ToManifestString(opts?: { supportedMimeTypes?: ReadonlyArray<string> | null }): string {
     if (this.artifacts.size === 0) return '';
 
     const lines: string[] = ['## Available Artifacts\n'];
+    const supportedMimes = opts?.supportedMimeTypes ?? null;
     for (const entry of this.artifacts.values()) {
       const sizeSuffix = Buffer.isBuffer(entry.content)
         ? ` (${(entry.content.length / 1024).toFixed(0)} KB)`
@@ -266,6 +318,21 @@ export class ArtifactToolManager {
           : '';
       const mimeNote = entry.mimeType ? ` [${entry.mimeType}]` : '';
       lines.push(`**${entry.alphaId}** — ${entry.typeName}: "${entry.name}"${mimeNote}${sizeSuffix}`);
+
+      // Modality-mismatch warning: when the driver can't process the
+      // artifact's media type, tell the agent explicitly so it doesn't
+      // hallucinate a description from few-shot examples or pretend the
+      // base64 it gets from get_full means something visual to it.
+      const mismatch = this.modalityMismatchMessage(entry.mimeType, supportedMimes);
+      if (mismatch) {
+        lines.push(`    > ⚠ ${mismatch}`);
+      }
+      if (entry.annotation) {
+        const annotation = entry.annotation.length > ArtifactToolManager.MAX_MANIFEST_PREVIEW_CHARS_PER_ARTIFACT
+          ? entry.annotation.slice(0, ArtifactToolManager.MAX_MANIFEST_PREVIEW_CHARS_PER_ARTIFACT) + '...[truncated]'
+          : entry.annotation;
+        lines.push(`    > Note: ${annotation}`);
+      }
     }
     lines.push('');
     lines.push('Use the artifact tools below to explore content.');
@@ -300,6 +367,47 @@ export class ArtifactToolManager {
 
     return sections.join('\n');
   }
+
+  /**
+   * Returns a per-artifact warning when the active driver can't process the
+   * artifact's media type. Only fires for media MIMEs (image/audio/video) —
+   * text-y MIMEs (json/text/csv/xml/etc.) are reached via tools and don't
+   * need modality support from the driver itself, so this stays quiet.
+   */
+  private modalityMismatchMessage(
+    mimeType: string | undefined,
+    supportedMimes: ReadonlyArray<string> | null,
+  ): string | null {
+    if (!mimeType) return null;
+    const lower = mimeType.toLowerCase();
+    const isMediaModality = lower.startsWith('image/') || lower.startsWith('audio/') || lower.startsWith('video/');
+    if (!isMediaModality) return null;
+
+    if (!supportedMimes || supportedMimes.length === 0) {
+      const modality = lower.split('/')[0];
+      return `The current model cannot process ${modality} content. ` +
+        `Calling get_full will return the raw base64 bytes — you cannot interpret those visually. ` +
+        `Tell the user the active model does not support ${modality} input rather than guessing what the file contains.`;
+    }
+    const supported = supportedMimes.some((pattern) => {
+      const p = pattern.toLowerCase();
+      if (p.endsWith('/*')) return lower.startsWith(p.slice(0, -1));
+      return lower === p;
+    });
+    if (supported) return null;
+
+    const modality = lower.split('/')[0];
+    return `The current model cannot process ${modality} content (${lower}). ` +
+      `Calling get_full will return the raw base64 bytes — you cannot interpret those visually. ` +
+      `Tell the user the active model does not support ${modality} input rather than guessing what the file contains.`;
+  }
+
+  /**
+   * Per-artifact cap on manifest extras (annotations, future preview content).
+   * Keeps any one artifact entry from dominating the manifest in a long
+   * conversation. The LLM sees a `...[truncated]` marker when the cap fires.
+   */
+  private static readonly MAX_MANIFEST_PREVIEW_CHARS_PER_ARTIFACT = 1_000;
 
   /**
    * Max characters for the tool results section injected into the prompt.
