@@ -12,7 +12,7 @@ interface SearchMatch {
  */
 @RegisterClass(BaseArtifactToolLibrary, 'JSONToolLibrary')
 export class JSONToolLibrary extends BaseArtifactToolLibrary {
-    GetToolList(): ArtifactToolDefinition[] {
+    protected GetSubclassToolList(): ArtifactToolDefinition[] {
         return [
             {
                 name: 'json_path',
@@ -63,7 +63,7 @@ export class JSONToolLibrary extends BaseArtifactToolLibrary {
         ];
     }
 
-    async InvokeTool(
+    protected async InvokeSubclassTool(
         toolName: string,
         input: Record<string, unknown>,
         artifactContent: string | Buffer

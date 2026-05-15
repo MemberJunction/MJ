@@ -29,10 +29,10 @@ interface PDFDocProxy {
 @RegisterClass(BaseArtifactToolLibrary, 'PDFToolLibrary')
 export class PDFToolLibrary extends BaseArtifactToolLibrary {
   // -----------------------------------------------------------------------
-  // GetToolList
+  // GetSubclassToolList
   // -----------------------------------------------------------------------
 
-  public GetToolList(): ArtifactToolDefinition[] {
+  protected GetSubclassToolList(): ArtifactToolDefinition[] {
     return [
       {
         name: 'get_page_count',
@@ -67,28 +67,39 @@ export class PDFToolLibrary extends BaseArtifactToolLibrary {
         description: 'Returns PDF metadata (title, author, subject, creator, creationDate, pageCount).',
         inputSchema: { type: 'object', properties: {}, required: [] },
       },
-      {
-        name: 'get_full',
-        description: 'Returns all text from all pages concatenated.',
-        inputSchema: { type: 'object', properties: {}, required: [] },
-      },
     ];
   }
 
-  // -----------------------------------------------------------------------
-  // InvokeTool — dispatcher
-  // -----------------------------------------------------------------------
+  // PDF overrides the default `get_full` description because the override returns
+  // extracted plain text rather than the base64-encoded PDF bytes.
+  protected GetFullToolDefinition(): ArtifactToolDefinition {
+    return {
+      name: 'get_full',
+      description: 'Returns all text from every page concatenated. Use get_text for page-range slices or search_text to locate content first.',
+      inputSchema: { type: 'object', properties: {}, required: [] },
+    };
+  }
 
-  public async InvokeTool(toolName: string, input: Record<string, unknown>, artifactContent: string | Buffer): Promise<ArtifactToolResult> {
-    const buffer = this.toBuffer(artifactContent);
-
-    let pdfDoc: PDFDocProxy;
+  // PDF overrides the default `get_full` impl: extracted text is far more useful
+  // than the raw binary the base class would return.
+  protected async GetFull(artifactContent: string | Buffer): Promise<ArtifactToolResult> {
+    const pdfDoc = await this.loadDocument(artifactContent);
+    if ('error' in pdfDoc) return pdfDoc.error;
     try {
-      const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
-      pdfDoc = (await pdfjsLib.getDocument({ data: new Uint8Array(buffer) }).promise) as unknown as PDFDocProxy;
-    } catch (err: unknown) {
-      return this.errorResult(`Failed to parse PDF: ${err instanceof Error ? err.message : String(err)}`);
+      return await this.handleGetFull(pdfDoc.doc);
+    } finally {
+      pdfDoc.doc.destroy();
     }
+  }
+
+  // -----------------------------------------------------------------------
+  // InvokeSubclassTool — dispatcher
+  // -----------------------------------------------------------------------
+
+  protected async InvokeSubclassTool(toolName: string, input: Record<string, unknown>, artifactContent: string | Buffer): Promise<ArtifactToolResult> {
+    const loaded = await this.loadDocument(artifactContent);
+    if ('error' in loaded) return loaded.error;
+    const pdfDoc = loaded.doc;
 
     try {
       switch (toolName) {
@@ -100,13 +111,22 @@ export class PDFToolLibrary extends BaseArtifactToolLibrary {
           return await this.handleSearchText(pdfDoc, input);
         case 'get_metadata':
           return this.handleGetMetadata(pdfDoc);
-        case 'get_full':
-          return await this.handleGetFull(pdfDoc);
         default:
           return this.errorResult(`Unknown tool: "${toolName}".`);
       }
     } finally {
       pdfDoc.destroy();
+    }
+  }
+
+  private async loadDocument(artifactContent: string | Buffer): Promise<{ doc: PDFDocProxy } | { error: ArtifactToolResult }> {
+    const buffer = this.toBuffer(artifactContent);
+    try {
+      const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+      const doc = (await pdfjsLib.getDocument({ data: new Uint8Array(buffer) }).promise) as unknown as PDFDocProxy;
+      return { doc };
+    } catch (err: unknown) {
+      return { error: this.errorResult(`Failed to parse PDF: ${err instanceof Error ? err.message : String(err)}`) };
     }
   }
 
