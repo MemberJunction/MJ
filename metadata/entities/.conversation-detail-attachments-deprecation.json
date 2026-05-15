@@ -1,0 +1,12 @@
+[
+  {
+    "fields": {
+      "Name": "MJ: Conversation Detail Attachments",
+      "Status": "Deprecated",
+      "Description": "DEPRECATED: file uploads now flow through ConversationArtifactVersion so they share storage, identity, versioning, permissions, and the artifact-tool dispatch path. Table, generated entity class, GraphQL types, and stored procedures all remain functional — runtime use produces a console warning per the framework's standard handling of Status='Deprecated'. See packages/AI/Agents/docs/ARTIFACT_TOOLS_GUIDE.md for migration guidance. Originally: Stores attachments (images, videos, audio, documents) for conversation messages."
+    },
+    "primaryKey": {
+      "ID": "4EDC5656-949F-4FA4-B909-DFC61AD4E1C3"
+    }
+  }
+]

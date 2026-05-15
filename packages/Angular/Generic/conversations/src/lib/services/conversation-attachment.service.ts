@@ -179,6 +179,7 @@ export class ConversationAttachmentService {
     contextUser?: UserInfo
   ): Promise<MJConversationDetailAttachmentEntity[]> {
     const savedAttachments: MJConversationDetailAttachmentEntity[] = [];
+    const rejectionMessages: string[] = [];
     const md = this.Provider;
 
     for (let i = 0; i < pendingAttachments.length; i++) {
@@ -231,11 +232,24 @@ export class ConversationAttachmentService {
         if (saved) {
           savedAttachments.push(attachment);
         } else {
+          const message = attachment.LatestResult?.CompleteMessage
+            ?? `Attachment "${pending.fileName}" was rejected by the server.`;
           console.error('Failed to save attachment:', attachment.LatestResult);
+          rejectionMessages.push(message);
         }
       } catch (error) {
         console.error('Error saving attachment:', error);
+        rejectionMessages.push(
+          `Attachment "${pending.fileName}" failed to upload: ${error instanceof Error ? error.message : String(error)}`,
+        );
       }
+    }
+
+    // Surface server-side rejections (e.g. unregistered MIME types) to the
+    // caller — throwing here lets the message-input toast pipeline display
+    // the actual server message rather than silently dropping the file.
+    if (rejectionMessages.length > 0) {
+      throw new Error(rejectionMessages.join('\n'));
     }
 
     return savedAttachments;

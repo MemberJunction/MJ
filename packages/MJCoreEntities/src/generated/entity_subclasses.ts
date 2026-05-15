@@ -3576,7 +3576,7 @@ export const MJAIAgentSchema = z.object({
         * * Description: When true, enables automatic compression of conversation context when the message threshold is reached.`),
     ContextCompressionMessageThreshold: z.number().nullable().describe(`
         * * Field Name: ContextCompressionMessageThreshold
-        * * Display Name: Message Threshold
+        * * Display Name: Compression Message Threshold
         * * SQL Data Type: int
         * * Description: Number of messages that triggers context compression when EnableContextCompression is true.`),
     ContextCompressionPromptID: z.string().nullable().describe(`
@@ -3657,7 +3657,7 @@ data flow when the agent executes its own prompt step.`),
         * * Description: Defines the scope/path within the parent payload that this sub-agent operates on. When set, the sub-agent receives only this portion of the payload and all change requests are relative to this scope. Format: /path/to/scope (e.g. /PropA/SubProp1)`),
     FinalPayloadValidation: z.string().nullable().describe(`
         * * Field Name: FinalPayloadValidation
-        * * Display Name: Final Payload Validation
+        * * Display Name: Final Validation Schema
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Optional JSON schema or requirements that define the expected structure and content of the agent's final payload. Used to validate the output when the agent declares success. Similar to OutputExample in AI Prompts.`),
     FinalPayloadValidationMode: z.union([z.literal('Fail'), z.literal('Retry'), z.literal('Warn')]).describe(`
@@ -3704,17 +3704,17 @@ terminated if this limit is exceeded.`),
 if this limit is exceeded.`),
     MinExecutionsPerRun: z.number().nullable().describe(`
         * * Field Name: MinExecutionsPerRun
-        * * Display Name: Min Executions Per Run
+        * * Display Name: Min Executions
         * * SQL Data Type: int
         * * Description: When acting as a sub-agent, minimum number of times this agent must be executed per parent agent run`),
     MaxExecutionsPerRun: z.number().nullable().describe(`
         * * Field Name: MaxExecutionsPerRun
-        * * Display Name: Max Executions Per Run
+        * * Display Name: Max Executions
         * * SQL Data Type: int
         * * Description: When acting as a sub-agent, maximum number of times this agent can be executed per parent agent run`),
     StartingPayloadValidation: z.string().nullable().describe(`
         * * Field Name: StartingPayloadValidation
-        * * Display Name: Starting Payload Validation
+        * * Display Name: Starting Validation Schema
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Optional JSON schema validation to apply to the input payload before agent execution begins. Uses the same JSONValidator format as FinalPayloadValidation.`),
     StartingPayloadValidationMode: z.union([z.literal('Fail'), z.literal('Warn')]).describe(`
@@ -3734,7 +3734,7 @@ if this limit is exceeded.`),
         * * Description: Default effort level for all prompts executed by this agent (1-100, where 1=minimal effort, 100=maximum effort). Takes precedence over individual prompt EffortLevel settings but can be overridden by runtime parameters. Inherited by sub-agents unless explicitly overridden.`),
     ChatHandlingOption: z.union([z.literal('Failed'), z.literal('Retry'), z.literal('Success')]).nullable().describe(`
         * * Field Name: ChatHandlingOption
-        * * Display Name: Chat Handling Option
+        * * Display Name: Chat Handling
         * * SQL Data Type: nvarchar(30)
     * * Value List Type: List
     * * Possible Values 
@@ -3795,13 +3795,13 @@ if this limit is exceeded.`),
         * * Description: When enabled, agent notes will be automatically injected into the agent context based on scoping rules.`),
     MaxNotesToInject: z.number().describe(`
         * * Field Name: MaxNotesToInject
-        * * Display Name: Max Notes to Inject
+        * * Display Name: Max Notes
         * * SQL Data Type: int
         * * Default Value: 5
         * * Description: Maximum number of notes to inject into agent context per request.`),
     NoteInjectionStrategy: z.union([z.literal('All'), z.literal('Recent'), z.literal('Relevant')]).describe(`
         * * Field Name: NoteInjectionStrategy
-        * * Display Name: Note Injection Strategy
+        * * Display Name: Note Strategy
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Relevant
     * * Value List Type: List
@@ -3818,13 +3818,13 @@ if this limit is exceeded.`),
         * * Description: When enabled, agent examples will be automatically injected into the agent context based on scoping rules.`),
     MaxExamplesToInject: z.number().describe(`
         * * Field Name: MaxExamplesToInject
-        * * Display Name: Max Examples to Inject
+        * * Display Name: Max Examples
         * * SQL Data Type: int
         * * Default Value: 3
         * * Description: Maximum number of examples to inject into agent context per request.`),
     ExampleInjectionStrategy: z.union([z.literal('Rated'), z.literal('Recent'), z.literal('Semantic')]).describe(`
         * * Field Name: ExampleInjectionStrategy
-        * * Display Name: Example Injection Strategy
+        * * Display Name: Example Strategy
         * * SQL Data Type: nvarchar(20)
         * * Default Value: Semantic
     * * Value List Type: List
@@ -3869,12 +3869,12 @@ if this limit is exceeded.`),
         * * Description: Base path within the storage provider for this agent's attachments. Agent run ID and sequence number are appended to create unique paths. Format: /folder/subfolder`),
     InlineStorageThresholdBytes: z.number().nullable().describe(`
         * * Field Name: InlineStorageThresholdBytes
-        * * Display Name: Inline Storage Threshold
+        * * Display Name: Inline Threshold (Bytes)
         * * SQL Data Type: int
         * * Description: File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.`),
     AgentTypePromptParams: z.string().nullable().describe(`
         * * Field Name: AgentTypePromptParams
-        * * Display Name: Prompt Parameters
+        * * Display Name: Agent Type Prompt Params
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON object containing parameter values that customize how this agent's type-level system prompt is rendered. The schema is defined by the agent type's PromptParamsSchema field. Allows per-agent control over which prompt sections are included, enabling token savings by excluding unused documentation.`),
     ScopeConfig: z.string().nullable().describe(`
@@ -3934,17 +3934,23 @@ if this limit is exceeded.`),
     *   * Assigned
     *   * None
         * * Description: Controls the agent's search capability. All = may use any scope including Global; search action does not restrict. Assigned = may use ONLY scopes explicitly linked via AIAgentSearchScope; scoped search action enforces this. None = agent has no search capability; the scoped search action rejects all requests.`),
+    AcceptUnregisteredFiles: z.boolean().describe(`
+        * * Field Name: AcceptUnregisteredFiles
+        * * Display Name: Accept Unregistered Files
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Per-agent opt-in to a Generic Binary fallback for file uploads whose MIME type does not match any registered Artifact Type. When false (default), unrecognized uploads are rejected at upload time with an actionable error. When true, unrecognized uploads resolve to the Generic Binary artifact type, exposing only get_full and get_metadata tools. Scoped per agent — there is no system-wide global flag.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent Name
         * * SQL Data Type: nvarchar(255)`),
     ContextCompressionPrompt: z.string().nullable().describe(`
         * * Field Name: ContextCompressionPrompt
-        * * Display Name: Compression Prompt Name
+        * * Display Name: Compression Prompt Text
         * * SQL Data Type: nvarchar(255)`),
     Type: z.string().nullable().describe(`
         * * Field Name: Type
-        * * Display Name: Type Name
+        * * Display Name: Type
         * * SQL Data Type: nvarchar(100)`),
     DefaultArtifactType: z.string().nullable().describe(`
         * * Field Name: DefaultArtifactType
@@ -3964,7 +3970,7 @@ if this limit is exceeded.`),
         * * SQL Data Type: nvarchar(200)`),
     DefaultStorageAccount: z.string().nullable().describe(`
         * * Field Name: DefaultStorageAccount
-        * * Display Name: Default Storage Account Name
+        * * Display Name: Storage Account Name
         * * SQL Data Type: nvarchar(200)`),
     RootParentID: z.string().nullable().describe(`
         * * Field Name: RootParentID
@@ -7873,7 +7879,7 @@ export const MJArtifactTypeSchema = z.object({
         * * Description: Parent artifact type ID for hierarchical artifact type organization. Child types inherit ExtractRules from parent but can override.`),
     ExtractRules: z.string().nullable().describe(`
         * * Field Name: ExtractRules
-        * * Display Name: Extraction Rules
+        * * Display Name: Extract Rules
         * * SQL Data Type: nvarchar(MAX)
         * * Description: JSON array of extraction rules defining how to extract attributes from artifact content. Each rule has: name (string), description (string), type (TypeScript type), standardProperty ('name'|'description'|'displayMarkdown'|'displayHtml'|null), extractor (JavaScript code string). Child types inherit parent rules and can override by name.`),
     DriverClass: z.string().nullable().describe(`
@@ -7901,6 +7907,28 @@ export const MJArtifactTypeSchema = z.object({
         * * Display Name: Tool Library Class
         * * SQL Data Type: nvarchar(100)
         * * Description: Class name for the BaseArtifactToolLibrary subclass that provides type-specific artifact exploration tools for agents. Resolved via ClassFactory. When NULL, ArtifactToolManager uses name-based fallback resolution.`),
+    Priority: z.number().describe(`
+        * * Field Name: Priority
+        * * Display Name: Priority
+        * * SQL Data Type: int
+        * * Default Value: 0
+        * * Description: Deterministic tiebreaker when multiple Artifact Types match the same MIME pattern. Higher values win. Within a specificity tier (exact > subtype-wildcard), the resolver sorts by Priority desc, then SystemSupplied = false beats SystemSupplied = true, then lowest ID wins.`),
+    DefaultDeliveryMode: z.union([z.literal('Inline'), z.literal('ToolsOnly')]).describe(`
+        * * Field Name: DefaultDeliveryMode
+        * * Display Name: Default Delivery Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: ToolsOnly
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Inline
+    *   * ToolsOnly
+        * * Description: How artifacts of this type are delivered to the LLM by default. Inline: emitted as an inline content block (image_url, audio_url, small text, etc.) when the model supports the modality and the size is under the inline cap. ToolsOnly: never inlined; the agent reaches the bytes only through tool calls (get_full, library-specific tools). Per-instance override is one-way via ConversationArtifactVersion.ForceToolsOnly — an instance can opt out of inline but never opt in when the type default is ToolsOnly.`),
+    SystemSupplied: z.boolean().describe(`
+        * * Field Name: SystemSupplied
+        * * Display Name: System Supplied
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: True for Artifact Types shipped as part of the MemberJunction default registry (JSON, PDF, Office variants, Image/Audio/Video, Generic Text, Generic Binary). False for user/org-supplied customizations. Used as a tiebreaker in MIME pattern resolution: user customizations win over shipped defaults at equal Priority.`),
     Parent: z.string().nullable().describe(`
         * * Field Name: Parent
         * * Display Name: Parent
@@ -8124,20 +8152,26 @@ export const MJArtifactVersionSchema = z.object({
         * * Description: Original filename of the stored file (e.g. report.pdf). Denormalized from the File entity for display without joins. Only populated when ContentMode is 'File'.`),
     ContentSizeBytes: z.number().nullable().describe(`
         * * Field Name: ContentSizeBytes
-        * * Display Name: Content Size Bytes
+        * * Display Name: Content Size (Bytes)
         * * SQL Data Type: bigint
         * * Description: Size of the stored file in bytes. Denormalized for display without loading the file. Only populated when ContentMode is 'File'.`),
+    ForceToolsOnly: z.boolean().describe(`
+        * * Field Name: ForceToolsOnly
+        * * Display Name: Force Tools Only
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: One-way override that forces this artifact version to be delivered via tools regardless of the Artifact Type's DefaultDeliveryMode. When true, the resolver never emits an inline content block for this version. There is no inverse override — an instance cannot be widened from ToolsOnly to Inline. Default false.`),
     Artifact: z.string().describe(`
         * * Field Name: Artifact
-        * * Display Name: Artifact
+        * * Display Name: Artifact Reference
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().describe(`
         * * Field Name: User
-        * * Display Name: User
+        * * Display Name: User Reference
         * * SQL Data Type: nvarchar(100)`),
     File: z.string().nullable().describe(`
         * * Field Name: File
-        * * Display Name: File
+        * * Display Name: File Reference
         * * SQL Data Type: nvarchar(500)`),
 });
 
@@ -11520,7 +11554,7 @@ export const MJConversationDetailAttachmentSchema = z.object({
         * * Description: Base64-encoded file data for small attachments stored inline. Mutually exclusive with FileID - exactly one must be populated.`),
     FileID: z.string().nullable().describe(`
         * * Field Name: FileID
-        * * Display Name: File ID
+        * * Display Name: File Reference ID
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
         * * Description: Reference to File entity for large attachments stored in MJStorage. Mutually exclusive with InlineData - exactly one must be populated.`),
@@ -11550,18 +11584,28 @@ export const MJConversationDetailAttachmentSchema = z.object({
         * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Description of the attachment providing context about its content and purpose.`),
+    ArtifactVersionID: z.string().nullable().describe(`
+        * * Field Name: ArtifactVersionID
+        * * Display Name: Artifact Version ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Artifact Versions (vwArtifactVersions.ID)
+        * * Description: Foreign key to the ArtifactVersion created alongside this attachment by the storage-unification path. When set, the agent resolver routes via the artifact path (manifest + tool dispatch) and skips inline embedding of the attachment to avoid double-processing. NULL for pre-v5.35 attachment rows authored before storage unification.`),
     ConversationDetail: z.string().describe(`
         * * Field Name: ConversationDetail
-        * * Display Name: Conversation Detail
+        * * Display Name: Conversation Detail Object
         * * SQL Data Type: nvarchar(MAX)`),
     Modality: z.string().describe(`
         * * Field Name: Modality
-        * * Display Name: Modality
+        * * Display Name: Modality Object
         * * SQL Data Type: nvarchar(50)`),
     File: z.string().nullable().describe(`
         * * Field Name: File
-        * * Display Name: File
+        * * Display Name: File Object
         * * SQL Data Type: nvarchar(500)`),
+    ArtifactVersion: z.string().nullable().describe(`
+        * * Field Name: ArtifactVersion
+        * * Display Name: Artifact Version Object
+        * * SQL Data Type: nvarchar(255)`),
 });
 
 export type MJConversationDetailAttachmentEntityType = z.infer<typeof MJConversationDetailAttachmentSchema>;
@@ -36490,7 +36534,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
 
     /**
     * * Field Name: ContextCompressionMessageThreshold
-    * * Display Name: Message Threshold
+    * * Display Name: Compression Message Threshold
     * * SQL Data Type: int
     * * Description: Number of messages that triggers context compression when EnableContextCompression is true.
     */
@@ -36675,7 +36719,7 @@ data flow when the agent executes its own prompt step.
 
     /**
     * * Field Name: FinalPayloadValidation
-    * * Display Name: Final Payload Validation
+    * * Display Name: Final Validation Schema
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Optional JSON schema or requirements that define the expected structure and content of the agent's final payload. Used to validate the output when the agent declares success. Similar to OutputExample in AI Prompts.
     */
@@ -36778,7 +36822,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: MinExecutionsPerRun
-    * * Display Name: Min Executions Per Run
+    * * Display Name: Min Executions
     * * SQL Data Type: int
     * * Description: When acting as a sub-agent, minimum number of times this agent must be executed per parent agent run
     */
@@ -36791,7 +36835,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: MaxExecutionsPerRun
-    * * Display Name: Max Executions Per Run
+    * * Display Name: Max Executions
     * * SQL Data Type: int
     * * Description: When acting as a sub-agent, maximum number of times this agent can be executed per parent agent run
     */
@@ -36804,7 +36848,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: StartingPayloadValidation
-    * * Display Name: Starting Payload Validation
+    * * Display Name: Starting Validation Schema
     * * SQL Data Type: nvarchar(MAX)
     * * Description: Optional JSON schema validation to apply to the input payload before agent execution begins. Uses the same JSONValidator format as FinalPayloadValidation.
     */
@@ -36848,7 +36892,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: ChatHandlingOption
-    * * Display Name: Chat Handling Option
+    * * Display Name: Chat Handling
     * * SQL Data Type: nvarchar(30)
     * * Value List Type: List
     * * Possible Values 
@@ -36973,7 +37017,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: MaxNotesToInject
-    * * Display Name: Max Notes to Inject
+    * * Display Name: Max Notes
     * * SQL Data Type: int
     * * Default Value: 5
     * * Description: Maximum number of notes to inject into agent context per request.
@@ -36987,7 +37031,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: NoteInjectionStrategy
-    * * Display Name: Note Injection Strategy
+    * * Display Name: Note Strategy
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Relevant
     * * Value List Type: List
@@ -37020,7 +37064,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: MaxExamplesToInject
-    * * Display Name: Max Examples to Inject
+    * * Display Name: Max Examples
     * * SQL Data Type: int
     * * Default Value: 3
     * * Description: Maximum number of examples to inject into agent context per request.
@@ -37034,7 +37078,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: ExampleInjectionStrategy
-    * * Display Name: Example Injection Strategy
+    * * Display Name: Example Strategy
     * * SQL Data Type: nvarchar(20)
     * * Default Value: Semantic
     * * Value List Type: List
@@ -37127,7 +37171,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: InlineStorageThresholdBytes
-    * * Display Name: Inline Storage Threshold
+    * * Display Name: Inline Threshold (Bytes)
     * * SQL Data Type: int
     * * Description: File size threshold for inline storage. Files <= this size are stored as base64 inline, larger files use MJStorage. NULL uses system default (1MB). Set to 0 to always use MJStorage.
     */
@@ -37140,7 +37184,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: AgentTypePromptParams
-    * * Display Name: Prompt Parameters
+    * * Display Name: Agent Type Prompt Params
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON object containing parameter values that customize how this agent's type-level system prompt is rendered. The schema is defined by the agent type's PromptParamsSchema field. Allows per-agent control over which prompt sections are included, enabling token savings by excluding unused documentation.
     */
@@ -37281,6 +37325,20 @@ if this limit is exceeded.
     }
 
     /**
+    * * Field Name: AcceptUnregisteredFiles
+    * * Display Name: Accept Unregistered Files
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Per-agent opt-in to a Generic Binary fallback for file uploads whose MIME type does not match any registered Artifact Type. When false (default), unrecognized uploads are rejected at upload time with an actionable error. When true, unrecognized uploads resolve to the Generic Binary artifact type, exposing only get_full and get_metadata tools. Scoped per agent — there is no system-wide global flag.
+    */
+    get AcceptUnregisteredFiles(): boolean {
+        return this.Get('AcceptUnregisteredFiles');
+    }
+    set AcceptUnregisteredFiles(value: boolean) {
+        this.Set('AcceptUnregisteredFiles', value);
+    }
+
+    /**
     * * Field Name: Parent
     * * Display Name: Parent Name
     * * SQL Data Type: nvarchar(255)
@@ -37291,7 +37349,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: ContextCompressionPrompt
-    * * Display Name: Compression Prompt Name
+    * * Display Name: Compression Prompt Text
     * * SQL Data Type: nvarchar(255)
     */
     get ContextCompressionPrompt(): string | null {
@@ -37300,7 +37358,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: Type
-    * * Display Name: Type Name
+    * * Display Name: Type
     * * SQL Data Type: nvarchar(100)
     */
     get Type(): string | null {
@@ -37345,7 +37403,7 @@ if this limit is exceeded.
 
     /**
     * * Field Name: DefaultStorageAccount
-    * * Display Name: Default Storage Account Name
+    * * Display Name: Storage Account Name
     * * SQL Data Type: nvarchar(200)
     */
     get DefaultStorageAccount(): string | null {
@@ -47858,7 +47916,7 @@ export class MJArtifactTypeEntity extends BaseEntity<MJArtifactTypeEntityType> {
 
     /**
     * * Field Name: ExtractRules
-    * * Display Name: Extraction Rules
+    * * Display Name: Extract Rules
     * * SQL Data Type: nvarchar(MAX)
     * * Description: JSON array of extraction rules defining how to extract attributes from artifact content. Each rule has: name (string), description (string), type (TypeScript type), standardProperty ('name'|'description'|'displayMarkdown'|'displayHtml'|null), extractor (JavaScript code string). Child types inherit parent rules and can override by name.
     */
@@ -47924,6 +47982,52 @@ export class MJArtifactTypeEntity extends BaseEntity<MJArtifactTypeEntityType> {
     }
     set ToolLibraryClass(value: string | null) {
         this.Set('ToolLibraryClass', value);
+    }
+
+    /**
+    * * Field Name: Priority
+    * * Display Name: Priority
+    * * SQL Data Type: int
+    * * Default Value: 0
+    * * Description: Deterministic tiebreaker when multiple Artifact Types match the same MIME pattern. Higher values win. Within a specificity tier (exact > subtype-wildcard), the resolver sorts by Priority desc, then SystemSupplied = false beats SystemSupplied = true, then lowest ID wins.
+    */
+    get Priority(): number {
+        return this.Get('Priority');
+    }
+    set Priority(value: number) {
+        this.Set('Priority', value);
+    }
+
+    /**
+    * * Field Name: DefaultDeliveryMode
+    * * Display Name: Default Delivery Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: ToolsOnly
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Inline
+    *   * ToolsOnly
+    * * Description: How artifacts of this type are delivered to the LLM by default. Inline: emitted as an inline content block (image_url, audio_url, small text, etc.) when the model supports the modality and the size is under the inline cap. ToolsOnly: never inlined; the agent reaches the bytes only through tool calls (get_full, library-specific tools). Per-instance override is one-way via ConversationArtifactVersion.ForceToolsOnly — an instance can opt out of inline but never opt in when the type default is ToolsOnly.
+    */
+    get DefaultDeliveryMode(): 'Inline' | 'ToolsOnly' {
+        return this.Get('DefaultDeliveryMode');
+    }
+    set DefaultDeliveryMode(value: 'Inline' | 'ToolsOnly') {
+        this.Set('DefaultDeliveryMode', value);
+    }
+
+    /**
+    * * Field Name: SystemSupplied
+    * * Display Name: System Supplied
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: True for Artifact Types shipped as part of the MemberJunction default registry (JSON, PDF, Office variants, Image/Audio/Video, Generic Text, Generic Binary). False for user/org-supplied customizations. Used as a tiebreaker in MIME pattern resolution: user customizations win over shipped defaults at equal Priority.
+    */
+    get SystemSupplied(): boolean {
+        return this.Get('SystemSupplied');
+    }
+    set SystemSupplied(value: boolean) {
+        this.Set('SystemSupplied', value);
     }
 
     /**
@@ -48476,7 +48580,7 @@ export class MJArtifactVersionEntity extends BaseEntity<MJArtifactVersionEntityT
 
     /**
     * * Field Name: ContentSizeBytes
-    * * Display Name: Content Size Bytes
+    * * Display Name: Content Size (Bytes)
     * * SQL Data Type: bigint
     * * Description: Size of the stored file in bytes. Denormalized for display without loading the file. Only populated when ContentMode is 'File'.
     */
@@ -48488,8 +48592,22 @@ export class MJArtifactVersionEntity extends BaseEntity<MJArtifactVersionEntityT
     }
 
     /**
+    * * Field Name: ForceToolsOnly
+    * * Display Name: Force Tools Only
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: One-way override that forces this artifact version to be delivered via tools regardless of the Artifact Type's DefaultDeliveryMode. When true, the resolver never emits an inline content block for this version. There is no inverse override — an instance cannot be widened from ToolsOnly to Inline. Default false.
+    */
+    get ForceToolsOnly(): boolean {
+        return this.Get('ForceToolsOnly');
+    }
+    set ForceToolsOnly(value: boolean) {
+        this.Set('ForceToolsOnly', value);
+    }
+
+    /**
     * * Field Name: Artifact
-    * * Display Name: Artifact
+    * * Display Name: Artifact Reference
     * * SQL Data Type: nvarchar(255)
     */
     get Artifact(): string {
@@ -48498,7 +48616,7 @@ export class MJArtifactVersionEntity extends BaseEntity<MJArtifactVersionEntityT
 
     /**
     * * Field Name: User
-    * * Display Name: User
+    * * Display Name: User Reference
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string {
@@ -48507,7 +48625,7 @@ export class MJArtifactVersionEntity extends BaseEntity<MJArtifactVersionEntityT
 
     /**
     * * Field Name: File
-    * * Display Name: File
+    * * Display Name: File Reference
     * * SQL Data Type: nvarchar(500)
     */
     get File(): string | null {
@@ -57410,7 +57528,7 @@ export class MJConversationDetailAttachmentEntity extends BaseEntity<MJConversat
 
     /**
     * * Field Name: FileID
-    * * Display Name: File ID
+    * * Display Name: File Reference ID
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Files (vwFiles.ID)
     * * Description: Reference to File entity for large attachments stored in MJStorage. Mutually exclusive with InlineData - exactly one must be populated.
@@ -57483,8 +57601,22 @@ export class MJConversationDetailAttachmentEntity extends BaseEntity<MJConversat
     }
 
     /**
+    * * Field Name: ArtifactVersionID
+    * * Display Name: Artifact Version ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Artifact Versions (vwArtifactVersions.ID)
+    * * Description: Foreign key to the ArtifactVersion created alongside this attachment by the storage-unification path. When set, the agent resolver routes via the artifact path (manifest + tool dispatch) and skips inline embedding of the attachment to avoid double-processing. NULL for pre-v5.35 attachment rows authored before storage unification.
+    */
+    get ArtifactVersionID(): string | null {
+        return this.Get('ArtifactVersionID');
+    }
+    set ArtifactVersionID(value: string | null) {
+        this.Set('ArtifactVersionID', value);
+    }
+
+    /**
     * * Field Name: ConversationDetail
-    * * Display Name: Conversation Detail
+    * * Display Name: Conversation Detail Object
     * * SQL Data Type: nvarchar(MAX)
     */
     get ConversationDetail(): string {
@@ -57493,7 +57625,7 @@ export class MJConversationDetailAttachmentEntity extends BaseEntity<MJConversat
 
     /**
     * * Field Name: Modality
-    * * Display Name: Modality
+    * * Display Name: Modality Object
     * * SQL Data Type: nvarchar(50)
     */
     get Modality(): string {
@@ -57502,11 +57634,20 @@ export class MJConversationDetailAttachmentEntity extends BaseEntity<MJConversat
 
     /**
     * * Field Name: File
-    * * Display Name: File
+    * * Display Name: File Object
     * * SQL Data Type: nvarchar(500)
     */
     get File(): string | null {
         return this.Get('File');
+    }
+
+    /**
+    * * Field Name: ArtifactVersion
+    * * Display Name: Artifact Version Object
+    * * SQL Data Type: nvarchar(255)
+    */
+    get ArtifactVersion(): string | null {
+        return this.Get('ArtifactVersion');
     }
 }
 

@@ -1,0 +1,16 @@
+[
+  {
+    "fields": {
+      "Name": "CSV",
+      "Description": "Comma-separated values. Provides column-aware get_rows / get_columns / search via the CSV tool library.",
+      "ParentID": null,
+      "ContentType": "text/csv",
+      "ToolLibraryClass": "CSVToolLibrary",
+      "IsEnabled": true,
+      "Priority": 0,
+      "DefaultDeliveryMode": "ToolsOnly",
+      "SystemSupplied": true,
+      "Icon": "fa-solid fa-table"
+    }
+  }
+]

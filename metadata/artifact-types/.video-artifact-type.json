@@ -1,0 +1,16 @@
+[
+  {
+    "fields": {
+      "Name": "Video",
+      "Description": "Video content (MP4, WebM, etc.). Delivered inline as video_url where the model supports the modality.",
+      "ParentID": null,
+      "ContentType": "video/*",
+      "ToolLibraryClass": null,
+      "IsEnabled": true,
+      "Priority": 0,
+      "DefaultDeliveryMode": "Inline",
+      "SystemSupplied": true,
+      "Icon": "fa-solid fa-video"
+    }
+  }
+]

@@ -1,0 +1,16 @@
+[
+  {
+    "fields": {
+      "Name": "Generic Text",
+      "Description": "Catchall for text/* MIME subtypes not otherwise registered (logs, YAML, TOML, Markdown, source code, etc.). Provides grep / get_lines / get_full via the Text tool library.",
+      "ParentID": null,
+      "ContentType": "text/*",
+      "ToolLibraryClass": "TextToolLibrary",
+      "IsEnabled": true,
+      "Priority": 0,
+      "DefaultDeliveryMode": "ToolsOnly",
+      "SystemSupplied": true,
+      "Icon": "fa-solid fa-file-lines"
+    }
+  }
+]
