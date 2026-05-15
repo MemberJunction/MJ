@@ -1,5 +1,23 @@
 # @memberjunction/computer-use-engine
 
+## 5.34.1
+
+### Patch Changes
+
+- Updated dependencies [3a35358]
+- Updated dependencies [5abf790]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/ai-core-plus@5.34.1
+  - @memberjunction/computer-use@5.34.1
+  - @memberjunction/aiengine@5.34.1
+  - @memberjunction/ai-prompts@5.34.1
+  - @memberjunction/actions-base@5.34.1
+  - @memberjunction/actions@5.34.1
+  - @memberjunction/core-entities@5.34.1
+  - @memberjunction/testing-engine@5.34.1
+  - @memberjunction/ai@5.34.1
+  - @memberjunction/global@5.34.1
+
 ## 5.34.0
 
 ### Patch Changes
