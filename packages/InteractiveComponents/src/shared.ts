@@ -294,9 +294,15 @@ export interface SimpleGeoPointResolution {
 export interface SimpleGeoDataEngine {
     /**
      * Resolve a coordinate pair to its containing country and state/province.
-     * Uses cached GeoJSON boundaries with ray-casting point-in-polygon.
+     * Callers should `await EnsureLoaded()` first if the resolver lazy-loads.
      */
     ResolvePointToLocation(lat: number, lng: number): SimpleGeoPointResolution;
+
+    /** Idempotent loader for reference geometries. Optional for backwards compatibility. */
+    EnsureLoaded?: () => Promise<void>;
+
+    /** True once the underlying engine has finished loading reference geometries. */
+    Loaded?: boolean;
 }
 
 /**

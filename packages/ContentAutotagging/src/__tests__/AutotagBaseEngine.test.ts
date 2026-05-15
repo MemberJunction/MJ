@@ -7,6 +7,32 @@ const mockRunViewFn = vi.fn().mockResolvedValue({
   Results: [],
 });
 
+// Multi-provider migration helper: mock entity record factory shared between the mock
+// factory below (which hoists to top of file) and the test setup. Use vi.hoisted to make
+// it available even after hoisting reorders things.
+const { buildMockEntityRecord } = vi.hoisted(() => ({
+  buildMockEntityRecord: () => ({
+    NewRecord: vi.fn(),
+    Load: vi.fn().mockResolvedValue(true),
+    Delete: vi.fn().mockResolvedValue(true),
+    Save: vi.fn().mockResolvedValue(true),
+    Set: vi.fn(),
+    Get: vi.fn(),
+    ID: 'mock-id',
+    Name: 'Mock',
+    Description: '',
+    ItemID: '',
+    Tag: '',
+    ContentItemID: '',
+    Value: '',
+    SourceID: '',
+    StartTime: new Date(),
+    EndTime: new Date(),
+    Status: '',
+    ProcessedItems: 0,
+  }),
+}));
+
 const mockRunViewsFn = vi.fn().mockResolvedValue([
   { Success: true, Results: [], TotalCount: 0, RowCount: 0, Elapsed: 0, ErrorMessage: '' },
   { Success: true, Results: [], TotalCount: 0, RowCount: 0, Elapsed: 0, ErrorMessage: '' },
@@ -15,26 +41,12 @@ const mockRunViewsFn = vi.fn().mockResolvedValue([
 vi.mock('@memberjunction/core', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@memberjunction/core')>();
   class MockMetadata {
-    GetEntityObject = vi.fn().mockResolvedValue({
-      NewRecord: vi.fn(),
-      Load: vi.fn().mockResolvedValue(true),
-      Delete: vi.fn().mockResolvedValue(true),
-      Save: vi.fn().mockResolvedValue(true),
-      Set: vi.fn(),
-      Get: vi.fn(),
-      ID: 'mock-id',
-      Name: 'Mock',
-      Description: '',
-      ItemID: '',
-      Tag: '',
-      ContentItemID: '',
-      Value: '',
-      SourceID: '',
-      StartTime: new Date(),
-      EndTime: new Date(),
-      Status: '',
-      ProcessedItems: 0,
-    });
+    GetEntityObject = vi.fn().mockResolvedValue(buildMockEntityRecord());
+    // Multi-provider migration: AutotagBaseEngine uses this.ProviderToUse, which falls back
+    // to Metadata.Provider. Mirror the helper instance shape on the static.
+    static Provider = {
+      GetEntityObject: vi.fn().mockResolvedValue(buildMockEntityRecord()),
+    };
   }
   class MockRunView {
     RunView = mockRunViewFn;
@@ -56,6 +68,9 @@ vi.mock('@memberjunction/global', async (importOriginal) => {
     RegisterClass: vi.fn(() => (target: Function) => target),
     MJGlobal: {
       Instance: {
+        // Multi-provider migration: BaseSingleton.getInstance uses GetGlobalObjectStore.
+        // Provide a per-test object store so AutotagBaseEngine instances resolve correctly.
+        GetGlobalObjectStore: vi.fn(() => ({})),
         ClassFactory: {
           CreateInstance: vi.fn().mockReturnValue({
             ChatCompletion: vi.fn().mockResolvedValue({
@@ -299,6 +314,19 @@ describe('AutotagBaseEngine', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     engine = new AutotagBaseEngine();
+    // Multi-provider migration: AutotagBaseEngine uses this.ProviderToUse, which falls back
+    // to Metadata.Provider. The vi.mock above replaces the Metadata helper class, but the
+    // real BaseEngine internally reads `Metadata.Provider` from a module loaded before the
+    // mock takes effect. Stub the engine's ProviderToUse getter directly so tests reach the
+    // mock GetEntityObject deterministically.
+    Object.defineProperty(engine, 'ProviderToUse', {
+      get() {
+        return {
+          GetEntityObject: vi.fn().mockResolvedValue(buildMockEntityRecord()),
+        };
+      },
+      configurable: true,
+    });
   });
 
   describe('chunkExtractedText', () => {
@@ -738,6 +766,125 @@ describe('AutotagBaseEngine', () => {
       await engine.VectorizeContentItems(items, mockUser, progressFn);
 
       expect(progressFn).toHaveBeenCalledWith(2, 2);
+    });
+
+    describe('EmbeddingStatus transitions', () => {
+      // Mirror of createMockItem with a Save spy and the embedding-status fields
+      // initialized so we can assert how vectorizeGroup mutates them.
+      function createMockItemWithSave(id: string, text: string) {
+        return {
+          ID: id,
+          Text: text,
+          Name: `Item ${id}`,
+          Description: `Description for ${id}`,
+          URL: `https://example.com/${id}`,
+          ContentSourceID: 'source-1',
+          ContentSourceTypeID: 'type-1',
+          ContentFileTypeID: 'file-type-1',
+          ContentTypeID: 'content-type-1',
+          EmbeddingStatus: 'Pending' as 'Pending' | 'Processing' | 'Complete' | 'Failed',
+          LastEmbeddedAt: null as Date | null,
+          EmbeddingModelID: null as string | null,
+          Save: vi.fn().mockResolvedValue(true),
+        };
+      }
+
+      it('should transition items through Processing then Complete on a successful batch', async () => {
+        await setupVectorMocks();
+        const item = createMockItemWithSave('item-success', 'Hello world content');
+
+        await engine.VectorizeContentItems([item] as never[], mockUser);
+
+        // Two saves: Processing (group-level) + Complete (per-batch)
+        expect(item.Save).toHaveBeenCalledTimes(2);
+        expect(item.EmbeddingStatus).toBe('Complete');
+        expect(item.EmbeddingModelID).toBe('embed-model-1');
+        expect(item.LastEmbeddedAt).toBeInstanceOf(Date);
+      });
+
+      it('should transition items to Failed when the embedding API returns no vectors', async () => {
+        await setupVectorMocks();
+        // Force the embedding call to fail with mismatched vector count.
+        // vectorizeGroup treats this as a batch-level failure.
+        mockRunEmbeddingFn.mockResolvedValueOnce({
+          Success: false,
+          Vectors: [],
+          PromptRunID: null,
+          TokensUsed: 0,
+          Cost: 0,
+          ErrorMessage: 'simulated rate limit',
+          ExecutionTimeMs: 1,
+        });
+        const item = createMockItemWithSave('item-embed-fail', 'Some content');
+
+        await engine.VectorizeContentItems([item] as never[], mockUser);
+
+        // Two saves: Processing then Failed. No Complete metadata set.
+        expect(item.Save).toHaveBeenCalledTimes(2);
+        expect(item.EmbeddingStatus).toBe('Failed');
+        expect(item.LastEmbeddedAt).toBeNull();
+        expect(item.EmbeddingModelID).toBeNull();
+      });
+
+      it('should transition items to Failed when the vector DB upsert fails', async () => {
+        const { mockCreateRecords } = await setupVectorMocks();
+        // Make Pinecone reject the upsert
+        mockCreateRecords.mockResolvedValueOnce({
+          success: false,
+          message: 'upsert refused — dimension mismatch',
+        });
+        const item = createMockItemWithSave('item-upsert-fail', 'Content for upsert');
+
+        await engine.VectorizeContentItems([item] as never[], mockUser);
+
+        // Two saves: Processing then Failed. Complete metadata must NOT be set.
+        expect(item.Save).toHaveBeenCalledTimes(2);
+        expect(item.EmbeddingStatus).toBe('Failed');
+        expect(item.LastEmbeddedAt).toBeNull();
+        expect(item.EmbeddingModelID).toBeNull();
+      });
+
+      it('should LogError and keep going when Save returns false (logical failure)', async () => {
+        await setupVectorMocks();
+        const { LogError } = await import('@memberjunction/core');
+        const loggedErrorFn = vi.mocked(LogError);
+
+        // Logical-failure shape: Save returns false, surface error via LatestResult.CompleteMessage
+        const item = createMockItemWithSave('item-save-false', 'Content with failing save');
+        item.Save = vi.fn().mockResolvedValue(false);
+        (item as Record<string, unknown>).LatestResult = { CompleteMessage: 'simulated validation failure' };
+
+        // Pipeline must complete cleanly even though every Save returns false
+        await expect(
+          engine.VectorizeContentItems([item] as never[], mockUser)
+        ).resolves.not.toThrow();
+
+        // Save was still attempted twice (Processing + Complete)
+        expect(item.Save).toHaveBeenCalledTimes(2);
+
+        // LogError fired with the offending item ID and the CompleteMessage
+        const errorMessages = loggedErrorFn.mock.calls.map(call => String(call[0]));
+        expect(errorMessages.some(m => m.includes('item-save-false') && m.includes('simulated validation failure'))).toBe(true);
+      });
+
+      it('should LogError and keep going when Save throws (infrastructure failure)', async () => {
+        await setupVectorMocks();
+        const { LogError } = await import('@memberjunction/core');
+        const loggedErrorFn = vi.mocked(LogError);
+
+        // Infrastructure-failure shape: Save throws (e.g. network/connection error)
+        const item = createMockItemWithSave('item-save-throw', 'Content with throwing save');
+        item.Save = vi.fn().mockRejectedValue(new Error('connection reset by peer'));
+
+        // Pipeline must NOT abort on a single status-save infrastructure error
+        await expect(
+          engine.VectorizeContentItems([item] as never[], mockUser)
+        ).resolves.not.toThrow();
+
+        // LogError fired with the offending item ID and the thrown error message
+        const errorMessages = loggedErrorFn.mock.calls.map(call => String(call[0]));
+        expect(errorMessages.some(m => m.includes('item-save-throw') && m.includes('connection reset by peer'))).toBe(true);
+      });
     });
   });
 

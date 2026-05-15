@@ -113,7 +113,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
      */
     public get CurrentQueryInfo(): QueryInfo | undefined {
         if (!this.record?.ID) return undefined;
-        return Metadata.Provider.Queries.find(q => UUIDsEqual(q.ID, this.record.ID));
+        return this.ProviderToUse.Queries.find(q => UUIDsEqual(q.ID, this.record.ID));
     }
 
     /**
@@ -211,7 +211,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         if (this.record && this.record.ID) {
             this.isLoadingParameters = true;
             try {
-                const rv = new RunView();
+                const rv = RunView.FromMetadataProvider(this.ProviderToUse);
                 const results = await rv.RunView<MJQueryParameterEntity>({
                     EntityName: 'MJ: Query Parameters',
                     ExtraFilter: `QueryID='${this.record.ID}'`,
@@ -235,7 +235,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         if (this.record && this.record.ID) {
             this.isLoadingFields = true;
             try {
-                const rv = new RunView();
+                const rv = RunView.FromMetadataProvider(this.ProviderToUse);
                 const results = await rv.RunView<MJQueryFieldEntity>({
                     EntityName: 'MJ: Query Fields',
                     ExtraFilter: `QueryID='${this.record.ID}'`,
@@ -259,7 +259,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         if (this.record && this.record.ID) {
             this.isLoadingEntities = true;
             try {
-                const rv = new RunView();
+                const rv = RunView.FromMetadataProvider(this.ProviderToUse);
                 const results = await rv.RunView<MJQueryEntityEntity>({
                     EntityName: 'MJ: Query Entities',
                     ExtraFilter: `QueryID='${this.record.ID}'`,
@@ -284,7 +284,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         if (this.record && this.record.ID) {
             this.isLoadingPermissions = true;
             try {
-                const rv = new RunView();
+                const rv = RunView.FromMetadataProvider(this.ProviderToUse);
                 const results = await rv.RunView<MJQueryPermissionEntity>({
                     EntityName: 'MJ: Query Permissions',
                     ExtraFilter: `QueryID='${this.record.ID}'`,
@@ -306,7 +306,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
 
     async loadCategories() {
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const results = await rv.RunView<MJQueryCategoryEntity>({
                 EntityName: 'MJ: Query Categories',
                 OrderBy: 'Name',
@@ -422,7 +422,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
 
             try {
                 // Create new category with trimmed name
-                const md = new Metadata();
+                const md = this.ProviderToUse;
                 const newCategory = await md.GetEntityObject<MJQueryCategoryEntity>('MJ: Query Categories');
                 newCategory.Name = value.trim();
                 const saved = await newCategory.Save();
@@ -527,7 +527,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
      */
     async addParameter() {
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const newParam = await md.GetEntityObject<MJQueryParameterEntity>('MJ: Query Parameters');
             newParam.QueryID = this.record.ID;
             newParam.Name = `param${this.queryParameters.length + 1}`;
@@ -579,7 +579,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         try {
             // Reload the parameter entity fresh to ensure we have a clean copy
             // not tied to any form transaction state
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const freshParam = await md.GetEntityObject<MJQueryParameterEntity>('MJ: Query Parameters');
             const loaded = await freshParam.Load(param.ID);
             if (!loaded) {
@@ -680,7 +680,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
                 }
             } else {
                 try {
-                    const md = new Metadata();
+                    const md = this.ProviderToUse;
                     const newCategory = await md.GetEntityObject<MJQueryCategoryEntity>('MJ: Query Categories');
                     newCategory.Name = this.record.CategoryID.trim();
                     const saved = await newCategory.Save();
@@ -776,7 +776,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
      * Handle composition token click — navigate to the referenced query
      */
     onCompositionTokenClick(event: CompositionTokenClickEvent): void {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const segments = event.FullPath.split('/').map(s => s.trim()).filter(s => s.length > 0);
         if (segments.length === 0) return;
 
@@ -834,7 +834,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
      */
     async addField() {
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const newField = await md.GetEntityObject<MJQueryFieldEntity>('MJ: Query Fields');
             newField.QueryID = this.record.ID;
             newField.Name = `field${this.queryFields.length + 1}`;
@@ -873,7 +873,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         }
 
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const freshField = await md.GetEntityObject<MJQueryFieldEntity>('MJ: Query Fields');
             const loaded = await freshField.Load(field.ID);
             if (!loaded) {
@@ -915,7 +915,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
      */
     async addEntity() {
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const newEntity = await md.GetEntityObject<MJQueryEntityEntity>('MJ: Query Entities');
             newEntity.QueryID = this.record.ID;
             
@@ -941,7 +941,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
         }
 
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const freshEntity = await md.GetEntityObject<MJQueryEntityEntity>('MJ: Query Entities');
             const loaded = await freshEntity.Load(entity.ID);
             if (!loaded) {
@@ -982,7 +982,7 @@ export class MJQueryFormComponentExtended extends MJQueryFormComponent implement
      * Get entity options for dropdown
      */
     getEntityOptions(): Array<{text: string, id: string}> {
-        return Metadata.Provider.Entities.map(e => ({
+        return this.ProviderToUse.Entities.map(e => ({
             text: e.Name,
             id: e.ID
         })).sort((a, b) => a.text.localeCompare(b.text));

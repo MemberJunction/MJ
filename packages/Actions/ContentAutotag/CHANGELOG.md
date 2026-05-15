@@ -1,5 +1,114 @@
 # Change Log - @memberjunction/actions-content-autotag
 
+## 5.34.1
+
+### Patch Changes
+
+- Updated dependencies [3a35358]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/ai-vector-sync@5.34.1
+  - @memberjunction/actions-base@5.34.1
+  - @memberjunction/core-actions@5.34.1
+  - @memberjunction/actions@5.34.1
+  - @memberjunction/content-autotagging@5.34.1
+  - @memberjunction/core-entities@5.34.1
+  - @memberjunction/global@5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [003317f]
+- Updated dependencies [0caffca]
+- Updated dependencies [cfffb6d]
+- Updated dependencies [e999e0d]
+- Updated dependencies [389d356]
+- Updated dependencies [7ccaf70]
+- Updated dependencies [ae5cfbd]
+- Updated dependencies [6d8ee1a]
+- Updated dependencies [8dad9c5]
+- Updated dependencies [72cb92e]
+  - @memberjunction/ai-vector-sync@5.34.0
+  - @memberjunction/actions-base@5.34.0
+  - @memberjunction/core-actions@5.34.0
+  - @memberjunction/actions@5.34.0
+  - @memberjunction/content-autotagging@5.34.0
+  - @memberjunction/core@5.34.0
+  - @memberjunction/core-entities@5.34.0
+  - @memberjunction/global@5.34.0
+
+## 5.33.0
+
+### Patch Changes
+
+- Updated dependencies [95eb27e]
+- Updated dependencies [74b0be0]
+- Updated dependencies [5cc5326]
+- Updated dependencies [312fcee]
+- Updated dependencies [7e4957d]
+  - @memberjunction/core@5.33.0
+  - @memberjunction/global@5.33.0
+  - @memberjunction/core-actions@5.33.0
+  - @memberjunction/ai-vector-sync@5.33.0
+  - @memberjunction/actions-base@5.33.0
+  - @memberjunction/actions@5.33.0
+  - @memberjunction/content-autotagging@5.33.0
+  - @memberjunction/core-entities@5.33.0
+
+## 5.32.0
+
+### Patch Changes
+
+- 26ee07c: fix vectorization crash from using non-provider Metadata() fallback, and harden ScheduledJobEngine lock lifecycle with save verification and DB reload after stale lock cleanup
+- Updated dependencies [a7e8b3b]
+- Updated dependencies [b9c67ac]
+  - @memberjunction/core@5.32.0
+  - @memberjunction/core-actions@5.32.0
+  - @memberjunction/ai-vector-sync@5.32.0
+  - @memberjunction/actions-base@5.32.0
+  - @memberjunction/actions@5.32.0
+  - @memberjunction/content-autotagging@5.32.0
+  - @memberjunction/core-entities@5.32.0
+  - @memberjunction/global@5.32.0
+
+## 5.31.0
+
+### Patch Changes
+
+- 7ed7a4b: no metadata/migration changes
+- Updated dependencies [fc8b9b8]
+- Updated dependencies [cde4d2c]
+- Updated dependencies [7ed7a4b]
+- Updated dependencies [60e7541]
+- Updated dependencies [18be074]
+- Updated dependencies [17b8087]
+- Updated dependencies [6779c1e]
+- Updated dependencies [de34786]
+- Updated dependencies [5db36d9]
+  - @memberjunction/core-entities@5.31.0
+  - @memberjunction/content-autotagging@5.31.0
+  - @memberjunction/ai-vector-sync@5.31.0
+  - @memberjunction/actions-base@5.31.0
+  - @memberjunction/core-actions@5.31.0
+  - @memberjunction/actions@5.31.0
+  - @memberjunction/core@5.31.0
+  - @memberjunction/global@5.31.0
+
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ai-vector-sync@5.30.1
+- @memberjunction/actions-base@5.30.1
+- @memberjunction/core-actions@5.30.1
+- @memberjunction/actions@5.30.1
+- @memberjunction/content-autotagging@5.30.1
+- @memberjunction/core@5.30.1
+- @memberjunction/core-entities@5.30.1
+- @memberjunction/global@5.30.1
+
 ## 5.30.0
 
 ### Patch Changes

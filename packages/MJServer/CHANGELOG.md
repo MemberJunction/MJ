@@ -1,5 +1,699 @@
 # Change Log - @memberjunction/server
 
+## 5.34.1
+
+### Patch Changes
+
+- 8695f65: Add server-side query name collision resolution and extract resolveDependencies helper in React ComponentManager
+- Updated dependencies [3a35358]
+- Updated dependencies [8695f65]
+- Updated dependencies [5abf790]
+- Updated dependencies [16e799c]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/generic-database-provider@5.34.1
+  - @memberjunction/graphql-dataprovider@5.34.1
+  - @memberjunction/ai-agents@5.34.1
+  - @memberjunction/ai-core-plus@5.34.1
+  - @memberjunction/codegen-lib@5.34.1
+  - @memberjunction/ai-agent-manager-actions@5.34.1
+  - @memberjunction/ai-agent-manager@5.34.1
+  - @memberjunction/aiengine@5.34.1
+  - @memberjunction/tag-engine@5.34.1
+  - @memberjunction/tag-engine-base@5.34.1
+  - @memberjunction/ai-mcp-client@5.34.1
+  - @memberjunction/computer-use-engine@5.34.1
+  - @memberjunction/ai-prompts@5.34.1
+  - @memberjunction/ai-vectordb@5.34.1
+  - @memberjunction/ai-vectors-pinecone@5.34.1
+  - @memberjunction/ai-vector-sync@5.34.1
+  - @memberjunction/api-keys@5.34.1
+  - @memberjunction/actions-apollo@5.34.1
+  - @memberjunction/actions-base@5.34.1
+  - @memberjunction/actions-bizapps-accounting@5.34.1
+  - @memberjunction/actions-bizapps-crm@5.34.1
+  - @memberjunction/actions-bizapps-formbuilders@5.34.1
+  - @memberjunction/actions-bizapps-lms@5.34.1
+  - @memberjunction/actions-bizapps-social@5.34.1
+  - @memberjunction/core-actions@5.34.1
+  - @memberjunction/actions@5.34.1
+  - @memberjunction/auth-providers@5.34.1
+  - @memberjunction/communication-types@5.34.1
+  - @memberjunction/entity-communications-base@5.34.1
+  - @memberjunction/entity-communications-server@5.34.1
+  - @memberjunction/notifications@5.34.1
+  - @memberjunction/communication-ms-graph@5.34.1
+  - @memberjunction/communication-sendgrid@5.34.1
+  - @memberjunction/component-registry-client-sdk@5.34.1
+  - @memberjunction/doc-utils@5.34.1
+  - @memberjunction/encryption@5.34.1
+  - @memberjunction/external-change-detection@5.34.1
+  - @memberjunction/integration-engine@5.34.1
+  - @memberjunction/integration-schema-builder@5.34.1
+  - @memberjunction/interactive-component-types@5.34.1
+  - @memberjunction/core-entities@5.34.1
+  - @memberjunction/core-entities-server@5.34.1
+  - @memberjunction/data-context@5.34.1
+  - @memberjunction/data-context-server@5.34.1
+  - @memberjunction/queue@5.34.1
+  - @memberjunction/storage@5.34.1
+  - @memberjunction/postgresql-dataprovider@5.34.1
+  - @memberjunction/redis-provider@5.34.1
+  - @memberjunction/sqlserver-dataprovider@5.34.1
+  - @memberjunction/scheduling-actions@5.34.1
+  - @memberjunction/scheduling-engine-base@5.34.1
+  - @memberjunction/scheduling-engine@5.34.1
+  - @memberjunction/schema-engine@5.34.1
+  - @memberjunction/search-engine@5.34.1
+  - @memberjunction/server-extensions-core@5.34.1
+  - @memberjunction/skip-types@5.34.1
+  - @memberjunction/templates@5.34.1
+  - @memberjunction/testing-engine@5.34.1
+  - @memberjunction/testing-engine-base@5.34.1
+  - @memberjunction/version-history@5.34.1
+  - @memberjunction/ai-provider-bundle@5.34.1
+  - @memberjunction/ai@5.34.1
+  - @memberjunction/config@5.34.1
+  - @memberjunction/global@5.34.1
+  - @memberjunction/sql-dialect@5.34.1
+  - @memberjunction/scheduling-base-types@5.34.1
+
+## 5.34.0
+
+### Minor Changes
+
+- ae5cfbd: Search Scopes & RAG+ — multi-phase ship
+
+  A bundled feature release across the search pipeline (Phases 2A–6 of
+  the Search Scopes & RAG+ initiative). Highlights:
+
+  **SearchEngine pipeline**
+  - New `SimpleVectorDatabase` in-process driver — points
+    `VectorDBBase` at any entity column with an `EmbeddingVector`
+    field. Suitable for dev / agent-memory / small-medium corpora.
+    Constructor accepts an empty/missing API key (in-process driver
+    has no remote auth target).
+  - `VectorDBBase.QueryIndex(params, contextUser?)` — `contextUser`
+    is now a proper second parameter instead of being smuggled
+    through `filter.__contextUser`. Pinecone/Qdrant/pgvector ignore
+    it (they auth via API key); in-process drivers use it for
+    RunView's server-side RLS guard. Method-level pattern matches
+    MJ's `RunView(params, contextUser)` and `GetEntityObject(name,
+contextUser)` conventions.
+  - `SearchFusion` — multi-provider score evidence is now preserved
+    through RRF. Previously the second provider's `ScoreBreakdown`
+    contribution was silently dropped when the same RecordID
+    appeared in two provider lists, causing the merged item to
+    rank below single-provider hits. Records that match in
+    Vector + Entity now carry both contributions and rank
+    correctly.
+  - Defensive sanitation in `Fuse()` — items with non-finite Score
+    (NaN, Infinity), empty/non-string RecordID, or null payloads are
+    filtered before fusion. Closes a class of failure modes from
+    misbehaving 3rd-party providers.
+  - Tier-1 input edge cases hardened — null/undefined/non-string
+    Query no longer TypeErrors, surfaces a clean Failure result.
+    `EntitySearchProvider` now strips SQL LIKE wildcards (`%`, `_`,
+    `[`, `]`) from user input — `Query="%"` no longer matches every
+    row through the LIKE-injection vector.
+  - Streaming search — `SearchEngine.streamSearch()` v2 emits
+    provider events as soon as each provider promise settles
+    (concurrent emission), not in registration order.
+
+  **Permission gate (Phase 2A)**
+  - `SearchScopePermissionResolver` enforces a 6-step decision tree:
+    AgentNone → AgentAssignedNotListed → DirectGrant → RoleGrant →
+    AgentUnscopedAll → NoGrant.
+  - `AIAgent.SearchScopeAccess` enum (`'None' | 'All' | 'Assigned'`)
+    controls agent-side fallback when no per-user/per-role grant
+    applies. `BypassCache` propagates through the dedup-linger cache
+    so freshly-revoked grants take effect immediately.
+  - New tests + agent scenarios cover all 13 permission-matrix cells
+    (PM-01..PM-13).
+
+  **Reranker catalog (Phase 2D)**
+  - 4 reranker drivers — Cohere, Voyage, OpenAI judge, BGE local —
+    all with `@RegisterClass(BaseReRanker, ...)`. Per-search
+    `RerankerBudgetGuard` caps API spend; `EstimateCostCents` and
+    `CostReporter` per driver. Graceful degradation when the
+    upstream SDK rejects/times out/returns malformed responses.
+
+  **Observability (Phase 3)**
+  - `MJSearchExecutionLog` — every `Search()` invocation writes one
+    row with Status / ResultCount / TotalDurationMs / RerankerCostCents
+    / ProvidersJSON (per-source hit counts) / AIAgentID attribution.
+    Forbidden gate decisions log `Status='Forbidden'` rows.
+  - Knowledge Hub Config dashboard subtab visualizes the log:
+    hit-rate, p50/p95 latency, top failure reasons, top users, total
+    reranker cost.
+
+  **External providers (Phase 5)**
+  - 4 search providers — Elasticsearch, Typesense, Azure AI Search,
+    OpenSearch — all with `@RegisterClass(BaseSearchProvider, ...)`.
+  - New `AvailableSearchProviders` GraphQL query exposes the
+    `BaseSearchProvider.GetAvailableProviders()` runtime catalog to
+    the SearchScope form's provider dropdown (P5.5).
+
+  **Angular / UI**
+  - Custom `MJSearchScopeFormComponentExtended` (P2D.7 / P4) — fusion
+    weights sliders, reranker dropdown, live-preview panel, A/B
+    Kendall-tau similarity, CSV export of last 500 invocations.
+  - Custom `MJSearchScopeProviderFormComponentExtended` (P5.5) —
+    provider dropdown sourced from `MJ: Search Providers` rows,
+    annotated with whether each provider's DriverClass is currently
+    registered with the server's ClassFactory.
+  - Streaming search consumer in `SearchService.StreamSearch()` —
+    Angular Observable surface for the `StreamScopedSearch`
+    mutation + `SearchStreamEvents` subscription.
+
+  **Migration**
+  - `V202605081416__v5.34.x__Search_Scopes_And_RAG_Plus.sql` —
+    consolidated. Contains six DDL sections (Phase 1 baseline,
+    `SearchScopePermission`, `SearchScope.RerankerBudgetCents`,
+    `SearchExecutionLog`, `SearchScopeTestQuery`, unique-constraint
+    fix) followed by five CodeGen runs that regenerate the entity
+    metadata, sprocs, views, and permission grants for all of the
+    above.
+
+  **Test suite**
+  - 17 end-to-end agent scenarios (s01–s17) under `agent-scenarios/`,
+    driving real LLM tool-calls (Sage agent) against the SearchEngine
+    - multi-provider RRF + reranker pipeline. 95 assertions; all PASS.
+  - `@memberjunction/search-engine` vitest: 237 unit tests across 21
+    files, all PASS. Covers fusion, providers (real + external),
+    rerankers, scope template renderer, parent-ID metadata,
+    streaming, permission resolver, edge cases, mid-flight failures.
+
+  **Documentation**
+  - `guides/SEARCH_SCOPES_AND_RAG_GUIDE.md` — comprehensive guide
+    covering scope creation, agent integration, permission resolution,
+    multi-scope fusion, reranker catalog, observability, external
+    providers, how-to templates for adding a new provider /
+    reranker / artifact tool library / vector index over an
+    embedded entity column. Documents the embedding-regeneration
+    contract for ops.
+
+  See `RAG_plan.md` for the full multi-phase plan and `plans/
+search-scopes-rag-plus/what-we-built.md` for the customer-facing
+  summary.
+
+### Patch Changes
+
+- 9081314: Fix SkipProxyAgent to accept analysis-only responses from Skip's Analysis Agent path, returning the analysis markdown as the success message when no componentOptions are present.
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- cfffb6d: Add keyset (seek) pagination to `RunView` via the new `RunViewParams.AfterKey: CompositeKey` field. Iterating large entities (background jobs, scheduled actions, bulk processing) now stays O(log N) per page regardless of depth — `StartRow`-based OFFSET pagination is unchanged and remains the right choice for UI grids.
+
+  **Framework changes**
+  - New `RunViewParams.AfterKey: CompositeKey` accepted by all RunView entry points (TS, GraphQL, REST flows that go through RunView).
+  - New exported error class `AfterKeyNotSupportedError` (with `Reason` codes `CompositePK | UnsupportedPKType | IncompatibleOrderBy | StartRowConflict | AfterKeyShape`).
+  - New exported helper `IsKeysetPaginationOrderableType(sqlType)` and constant `KEYSET_PAGINATION_ORDERABLE_PK_TYPES`.
+  - Keyset queries bypass server cache (read + write) automatically — they're inherently single-use so caching is pure overhead.
+  - v1 constraint: single-column PK only. Composite-PK entities throw `AfterKeyNotSupportedError` with `Reason: 'CompositePK'`.
+
+  **Migrated callers (now use keyset by default when entity has a single-column PK)**
+  - `ScheduledGeocodingAction` (`processMissingForEntity`) — falls back to OFFSET on composite-PK entities.
+  - `VectorBase.PageRecordsByEntityID` + `EntityVectorSyncer.startDataPaging` — auto-promotes to keyset when possible. New helper `VectorBase.CanUseKeysetPagination()`. New optional `PageRecordsParams.AfterKey`.
+
+  **Metadata**
+  - `Geocoding Maintenance` scheduled job cron updated to weekly (Saturdays 2 AM UTC); description reworded to not hard-code a cadence. Administrators can adjust the `CronExpression` as needed.
+
+  **Documentation**
+  - New guide: `guides/KEYSET_PAGINATION_GUIDE.md`.
+  - `CLAUDE.md` performance section updated.
+
+  **Out of scope for v1**
+  - `ExternalChangeDetection.ChangeDetector` uses `RunQuery` (saved queries with arbitrary SQL), which the framework can't safely rewrite. Stays on OFFSET; tracked as a follow-up.
+
+  **Backwards compatibility**
+  - Fully additive. Existing callers that don't pass `AfterKey` are unaffected.
+
+- e999e0d: Add cross-server cache invalidation via shared storage provider, fix "No Applications Available" after browser refresh, use cacheSettings.verboseLogging for Redis provider, add ParameterHints to override LLM-generated sampleValues, and thread forceRefresh as BypassCache through BaseEngine config loading
+- 72cb92e: Optimize component loading pipeline: remove 163 MB MJ: Components bulk load from ComponentMetadataEngine, add ComponentMetadataEngineServer for server-only use, add generic cache API to LocalCacheManager with server-side registry caching (page refresh component load reduced from 12-20s to ~70ms), add hash-based 304 support for registry fetches, remove proprietary spec caching to client database, and optimize Component Studio to load lightweight summaries on demand.
+- Updated dependencies [4b8d9ed]
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [003317f]
+- Updated dependencies [5d6110f]
+- Updated dependencies [0caffca]
+- Updated dependencies [cfffb6d]
+- Updated dependencies [1b258e6]
+- Updated dependencies [e999e0d]
+- Updated dependencies [389d356]
+- Updated dependencies [7ccaf70]
+- Updated dependencies [ae5cfbd]
+- Updated dependencies [6d8ee1a]
+- Updated dependencies [72cb92e]
+  - @memberjunction/core-entities-server@5.34.0
+  - @memberjunction/ai-agent-manager-actions@5.34.0
+  - @memberjunction/ai-agent-manager@5.34.0
+  - @memberjunction/ai-agents@5.34.0
+  - @memberjunction/ai-core-plus@5.34.0
+  - @memberjunction/aiengine@5.34.0
+  - @memberjunction/tag-engine@5.34.0
+  - @memberjunction/tag-engine-base@5.34.0
+  - @memberjunction/ai-mcp-client@5.34.0
+  - @memberjunction/computer-use-engine@5.34.0
+  - @memberjunction/ai-prompts@5.34.0
+  - @memberjunction/ai-provider-bundle@5.34.0
+  - @memberjunction/ai-vectordb@5.34.0
+  - @memberjunction/ai-vectors-pinecone@5.34.0
+  - @memberjunction/ai-vector-sync@5.34.0
+  - @memberjunction/api-keys@5.34.0
+  - @memberjunction/actions-apollo@5.34.0
+  - @memberjunction/actions-base@5.34.0
+  - @memberjunction/actions-bizapps-accounting@5.34.0
+  - @memberjunction/actions-bizapps-crm@5.34.0
+  - @memberjunction/actions-bizapps-formbuilders@5.34.0
+  - @memberjunction/actions-bizapps-lms@5.34.0
+  - @memberjunction/actions-bizapps-social@5.34.0
+  - @memberjunction/core-actions@5.34.0
+  - @memberjunction/actions@5.34.0
+  - @memberjunction/codegen-lib@5.34.0
+  - @memberjunction/communication-types@5.34.0
+  - @memberjunction/entity-communications-base@5.34.0
+  - @memberjunction/entity-communications-server@5.34.0
+  - @memberjunction/notifications@5.34.0
+  - @memberjunction/communication-sendgrid@5.34.0
+  - @memberjunction/component-registry-client-sdk@5.34.0
+  - @memberjunction/config@5.34.0
+  - @memberjunction/doc-utils@5.34.0
+  - @memberjunction/encryption@5.34.0
+  - @memberjunction/external-change-detection@5.34.0
+  - @memberjunction/generic-database-provider@5.34.0
+  - @memberjunction/integration-engine@5.34.0
+  - @memberjunction/integration-schema-builder@5.34.0
+  - @memberjunction/interactive-component-types@5.34.0
+  - @memberjunction/data-context@5.34.0
+  - @memberjunction/data-context-server@5.34.0
+  - @memberjunction/storage@5.34.0
+  - @memberjunction/postgresql-dataprovider@5.34.0
+  - @memberjunction/redis-provider@5.34.0
+  - @memberjunction/sql-dialect@5.34.0
+  - @memberjunction/sqlserver-dataprovider@5.34.0
+  - @memberjunction/scheduling-actions@5.34.0
+  - @memberjunction/scheduling-engine-base@5.34.0
+  - @memberjunction/scheduling-base-types@5.34.0
+  - @memberjunction/scheduling-engine@5.34.0
+  - @memberjunction/schema-engine@5.34.0
+  - @memberjunction/search-engine@5.34.0
+  - @memberjunction/server-extensions-core@5.34.0
+  - @memberjunction/skip-types@5.34.0
+  - @memberjunction/templates@5.34.0
+  - @memberjunction/testing-engine@5.34.0
+  - @memberjunction/testing-engine-base@5.34.0
+  - @memberjunction/version-history@5.34.0
+  - @memberjunction/core@5.34.0
+  - @memberjunction/core-entities@5.34.0
+  - @memberjunction/graphql-dataprovider@5.34.0
+  - @memberjunction/global@5.34.0
+  - @memberjunction/communication-ms-graph@5.34.0
+  - @memberjunction/queue@5.34.0
+  - @memberjunction/auth-providers@5.34.0
+  - @memberjunction/ai@5.34.0
+
+## 5.33.0
+
+### Patch Changes
+
+- 74b0be0: Tolerate non-ISO `maxUpdatedAt` values in the smart cache check so a malformed timestamp degrades to a cache miss instead of throwing `Invalid time value`. Also expand the MJAPI GraphQL operation log so nested variables render as truncated JSON instead of Node's `[Object]` placeholders.
+- 5cc5326: PostgreSQL end-to-end support — first MJ release where a fresh PG database can be migrated, codegen'd against, signed into, and synced from `mj sync push` without manual intervention. Plus a structural cleanup pass over how the stack handles the database-platform vocabulary and dialect-aware SQL.
+
+  ### PG fresh-install path
+  - **`@memberjunction/postgresql-dataprovider`** — replaces the `Nested transactions are not yet supported` throw with full SAVEPOINT-based nesting (mirrors SQL Server's depth/savepoint model). Adds the missing `ValidateDeleteResult` override that the Phase-2 Save/Delete refactor introduced for SS but skipped for PG, so `BaseEntity.Delete()` correctly recognizes successful deletes on PG. RDS-compatible startup wrapper (no `pg_catalog` writes, rejected by managed PG). Per-connection transaction mutex prevents interleaved BEGIN on shared connections during `mj sync` fan-out.
+  - **`@memberjunction/sql-converter`** — new `ConditionalDDLRule` handlers for SS-only patterns that previously survived into PG output untranslated: `IF NOT EXISTS (sys.schemas …) EXEC('CREATE SCHEMA [X]')` → `CREATE SCHEMA IF NOT EXISTS "X"`, and `sp_addextendedproperty` schema descriptions → `COMMENT ON SCHEMA "X" IS '...'`. Function-output now emits a `DROP FUNCTION IF EXISTS` guard before recreate so re-runs don't trip "function … is not unique." `ADD COLUMN IF NOT EXISTS` for idempotent column-add migrations. `bit`-parameter body coercion + tagged dollar-quoting on `DO` blocks containing nested `$$`.
+  - **`@memberjunction/codegen-lib`** — PG `CodeGenProvider` emits `spCreate*` / `spUpdate*` / `spDelete*` matching the SS-ported baseline (was `fn_create_<snake>`). `pgDialect.ParameterRef` produces `p_<flat lowercase>` matching baseline + runtime `buildCRUDParams`. Without these, every `Save()` against PG failed with `function does not exist`. Pre-pass in `spUpdateExistingEntityFieldsFromSchema` reseats stale negative `Sequence` values from prior interrupted runs at the tail of each entity's positive range, eliminating `UQ_EntityField_EntityID_Sequence` collisions on re-runs. PG-output statement termination — `;` after `INSERT`, `ALTER`, etc. so generated `CodeGen_Run_*.pg.sql` replays cleanly.
+  - **`@memberjunction/cli`** (`mj migrate`) — fresh-PG-install blockers: now reads `DB_PLATFORM` from env to select dialect (was config-only); auto-defaults `dbPort` to 5432/1433 based on inferred platform; defaults `BaselineVersion` to `'1'` (Skyway sentinel meaning "auto-select highest-versioned `B__` baseline file"). Without these, `mj migrate` against a PG `.env` silently constructed a `SqlServerProvider`.
+
+  ### Single source of truth for database-platform vocabulary
+
+  Addresses code-review feedback that the stack had three parallel definitions of the same concept and a normalizer in the middle "translating" between them.
+  - **`@memberjunction/global`** — new canonical `DatabasePlatform` type (`'sqlserver' | 'postgresql'`) and `resolveDbPlatformFromEnv()` helper that reads from `DB_PLATFORM`. STRICT — only the canonical pair is recognized; legacy aliases (`mssql`, `postgres`, `pg`) are no longer honored, and unrecognized non-empty values **throw** rather than silently falling back to `'sqlserver'`. The earlier dev-only `DB_TYPE` env var is no longer consulted.
+  - **`@memberjunction/core`** and **`@memberjunction/sql-dialect`** — both packages re-export `DatabasePlatform` from global instead of defining their own copies.
+  - **`@memberjunction/codegen-lib`** — config schema drops `dbType` entirely. `dbPlatform` is the only field. The `dbType()` exported helper is renamed to `dbPlatform()`. `normalizeDbPlatformAndType()` and its tests are deleted.
+  - **`@memberjunction/cli`** and **`@memberjunction/server`** — drop their local `resolveDbPlatformFromEnv` copies in favor of the global helper. MJServer's `getDbType()` is now a 1-line wrapper.
+
+  ### SQLDialect as the single source of truth for SQL type ↔ category mapping
+
+  Replaces 5+ hand-coded SQL type-name lists scattered across the codebase ("when you see this pattern repeat, alarm bells").
+  - **`@memberjunction/sql-dialect`** — each dialect now exposes 11 typed getters listing the SQL type names IT uses for each conceptual category: `BooleanTypeNames`, `StringTypeNames`, `DateTypeNames`, `IntegerTypeNames`, `FloatTypeNames`, `UuidTypeNames`, `BinaryTypeNames`, `JsonTypeNames`, `CurrencyTypeNames`, `IntervalTypeNames`, `NetworkTypeNames`. New `typeClassification.ts` module unions both dialects into cross-platform predicates (`IsBooleanSQLType`, `IsStringSQLType`, …, plus `IsNumericSQLType` aggregate). New `LowerCase(expr)` method on the base dialect (default `LOWER(${expr})`, ANSI-portable) replaces hardcoded `LOWER(...)` strings in callers. New `BooleanParameterType()` returns `'bit'` on SS, `'boolean'` on PG — used by codegen to emit dialect-correct tolerant-SP `_Clear` parameter declarations. Adding a future dialect = implementing the getters; no other site changes.
+  - **`@memberjunction/core`** — `DatabaseProviderBase` gains a `Dialect: SQLDialect` getter, lazily resolved from `PlatformKey`. Server-side code can now write `provider.Dialect.BooleanLiteral(true)` etc. without independently importing `GetDialect`. `util.ts` `TypeScriptTypeFromSQLType` and `FormatValueInternal` rewritten over the predicates — ~70 lines of hardcoded switches collapse to ~25 lines of dispatches. New dep on `@memberjunction/sql-dialect`.
+  - **`@memberjunction/codegen-lib`** — `getTypeGraphQLFieldString` 50-line switch replaced with predicate dispatch. `createNewUser.ts` boolean filter that previously avoided dialect-specific SQL via client-side `.filter()` post-pass now uses `dialect.BooleanLiteral(true)` and filters server-side.
+  - **`@memberjunction/metadata-sync`** — `sync-engine.ts` lookup-filter type detection uses `IsUuidSQLType` / `IsDateSQLType` instead of a hand-maintained `!== 'uuid' && !== 'datetime' && …` chain. `LOWER()` wrapping goes through `dialect.LowerCase()`. `PushService.ts:isTextLikeColumn` is now a one-liner over `IsStringSQLType`. New dep on `@memberjunction/sql-dialect`.
+  - **`@memberjunction/server`** — `auth/newUsers.ts` and `resolvers/IntegrationDiscoveryResolver.ts` boolean filters that previously loaded all rows + filtered client-side now run server-side via `provider.Dialect.BooleanLiteral(true)`.
+  - **`@memberjunction/core-entities-server`** — `MJApplicationEntityServer.server.ts` IsActive filter on Users moved server-side via `provider.Dialect.BooleanLiteral(true)`. `MJTemplateContentEntityServer.server.ts` AI enrichment now wrapped in a SAVEPOINT so failures don't poison the outer Save tx (PG's whole-tx-aborts-on-stmt-error policy made this fatal where SS treated it as a per-stmt skip).
+
+  ### Cross-dialect runtime fixes
+  - **`@memberjunction/sql-dialect`** — `pgDialect.ParameterRef` flat-lowercase contract; PG type → GraphQL `String` mapping for `character`, `varchar`, `citext`. `sqlDialect.ts` runtime SQL emission: `INTEGER`, `DOUBLE`, `PRECISION`, `BYTEA`, `OID`, `REGCLASS`, `REGPROC`, `NAME` added to `autoQuoteIdentifiers` keyword set so casts in hand-written SQL (`CAST(x AS INTEGER)`) stop being quoted as user-defined types. New `coerceBooleanLiteralsInSQL` pass rewrites SS bit literals (`Bool = 1` / `= 0` / `!= 1` / `<> 0`) to `TRUE`/`FALSE` for fields whose `TSType` is Boolean — fixes `operator does not exist: boolean = integer` for `ExtraFilter` clauses across engines, agents, and dashboards.
+  - **`@memberjunction/codegen-lib`** — `applyPermissions` inner catch was binding `e` and shadowing the outer `EntityInfo` loop variable, producing `Error executing permissions file ... for entity undefined` log lines. Renamed to `sqlError` with `instanceof Error` typed message extraction.
+  - **`@memberjunction/metadata-sync`** — `mj sync push` tolerates UUID case mismatches (PG returns lowercase, SS returns uppercase) on lookup resolution. `@file:` JSON references serialize to `jsonb` correctly on PG (was double-stringifying via the SS path).
+  - **`@memberjunction/core`** (`baseEntity.ts`) — string default values now strip PG's typed-literal wrapper (`'Single'::character varying` → `Single`) before assignment so `MaxLength` validation doesn't fail on the wrapper length.
+  - **`@memberjunction/core`** (`entityInfo.ts`) — multi-`IsNameField` resolution rule: when more than one field is marked, prefer the one literally named `Name`. Without this rule the pick depended on insertion order (PG returns DisplayName first, SS returns Name first), producing wrong codegen view aliases on PG.
+
+  ### Breaking changes (for direct config consumers)
+  - Any user `mj.config.cjs` with `dbType: 'mssql'` or `dbType: 'postgresql'` must rename to `dbPlatform: 'sqlserver'` or `dbPlatform: 'postgresql'`. The `dbType` field is removed.
+  - Any user `.env` with `DB_TYPE=...` must rename it to `DB_PLATFORM=...`. The legacy `DB_TYPE` env var is no longer consulted at all (no fallback). `DB_PLATFORM` accepts only `sqlserver` or `postgresql` (case-insensitive); legacy aliases (`mssql`, `postgres`, `pg`) and any other non-empty value throw a clear "Invalid DB_PLATFORM value" error at startup rather than silently routing the wrong provider.
+  - Both `dbType`/`DB_TYPE` were dev-only additions during PG support development (Feb 2026, first appeared in v5.30.0). They were never documented as customer-facing and never exposed a stable contract.
+
+  ### Validation
+  - 2,536 unit tests passing across the 8 affected packages (`@memberjunction/global` 381, `@memberjunction/core` 1099, `@memberjunction/sql-dialect` 213, `@memberjunction/codegen-lib` 435, `@memberjunction/metadata-sync` 220, `@memberjunction/server` 188), 0 failed.
+  - Fresh-DB PostgreSQL replay clean: `DROP SCHEMA __mj CASCADE` → `mj migrate` applies 127/127 migrations, produces 316 `spCreate*` + 319 `spUpdate*` functions, with 0 `EntityField` rows in the staging-band Sequence range.
+
+- Updated dependencies [97ed790]
+- Updated dependencies [95eb27e]
+- Updated dependencies [8836d2d]
+- Updated dependencies [74b0be0]
+- Updated dependencies [5cc5326]
+- Updated dependencies [312fcee]
+- Updated dependencies [af7180f]
+- Updated dependencies [7e4957d]
+- Updated dependencies [f94ebd6]
+- Updated dependencies [7add405]
+- Updated dependencies [3e84676]
+- Updated dependencies [c8039b3]
+- Updated dependencies [b0329f6]
+- Updated dependencies [7716c98]
+- Updated dependencies [fad046c]
+  - @memberjunction/graphql-dataprovider@5.33.0
+  - @memberjunction/core@5.33.0
+  - @memberjunction/codegen-lib@5.33.0
+  - @memberjunction/generic-database-provider@5.33.0
+  - @memberjunction/postgresql-dataprovider@5.33.0
+  - @memberjunction/sql-dialect@5.33.0
+  - @memberjunction/global@5.33.0
+  - @memberjunction/core-entities-server@5.33.0
+  - @memberjunction/sqlserver-dataprovider@5.33.0
+  - @memberjunction/core-actions@5.33.0
+  - @memberjunction/search-engine@5.33.0
+  - @memberjunction/interactive-component-types@5.33.0
+  - @memberjunction/ai-prompts@5.33.0
+  - @memberjunction/ai-agent-manager-actions@5.33.0
+  - @memberjunction/ai-agent-manager@5.33.0
+  - @memberjunction/ai-agents@5.33.0
+  - @memberjunction/ai-core-plus@5.33.0
+  - @memberjunction/aiengine@5.33.0
+  - @memberjunction/tag-engine@5.33.0
+  - @memberjunction/tag-engine-base@5.33.0
+  - @memberjunction/ai-mcp-client@5.33.0
+  - @memberjunction/computer-use-engine@5.33.0
+  - @memberjunction/ai-vectordb@5.33.0
+  - @memberjunction/ai-vectors-pinecone@5.33.0
+  - @memberjunction/ai-vector-sync@5.33.0
+  - @memberjunction/api-keys@5.33.0
+  - @memberjunction/actions-apollo@5.33.0
+  - @memberjunction/actions-base@5.33.0
+  - @memberjunction/actions-bizapps-accounting@5.33.0
+  - @memberjunction/actions-bizapps-crm@5.33.0
+  - @memberjunction/actions-bizapps-formbuilders@5.33.0
+  - @memberjunction/actions-bizapps-lms@5.33.0
+  - @memberjunction/actions-bizapps-social@5.33.0
+  - @memberjunction/actions@5.33.0
+  - @memberjunction/auth-providers@5.33.0
+  - @memberjunction/communication-types@5.33.0
+  - @memberjunction/entity-communications-base@5.33.0
+  - @memberjunction/entity-communications-server@5.33.0
+  - @memberjunction/notifications@5.33.0
+  - @memberjunction/communication-ms-graph@5.33.0
+  - @memberjunction/communication-sendgrid@5.33.0
+  - @memberjunction/component-registry-client-sdk@5.33.0
+  - @memberjunction/doc-utils@5.33.0
+  - @memberjunction/encryption@5.33.0
+  - @memberjunction/external-change-detection@5.33.0
+  - @memberjunction/integration-engine@5.33.0
+  - @memberjunction/integration-schema-builder@5.33.0
+  - @memberjunction/core-entities@5.33.0
+  - @memberjunction/data-context@5.33.0
+  - @memberjunction/data-context-server@5.33.0
+  - @memberjunction/queue@5.33.0
+  - @memberjunction/storage@5.33.0
+  - @memberjunction/redis-provider@5.33.0
+  - @memberjunction/scheduling-actions@5.33.0
+  - @memberjunction/scheduling-engine-base@5.33.0
+  - @memberjunction/scheduling-engine@5.33.0
+  - @memberjunction/schema-engine@5.33.0
+  - @memberjunction/server-extensions-core@5.33.0
+  - @memberjunction/skip-types@5.33.0
+  - @memberjunction/templates@5.33.0
+  - @memberjunction/testing-engine@5.33.0
+  - @memberjunction/testing-engine-base@5.33.0
+  - @memberjunction/version-history@5.33.0
+  - @memberjunction/ai@5.33.0
+  - @memberjunction/scheduling-base-types@5.33.0
+  - @memberjunction/ai-provider-bundle@5.33.0
+  - @memberjunction/config@5.33.0
+
+## 5.32.0
+
+### Patch Changes
+
+- Updated dependencies [26ee07c]
+- Updated dependencies [a7e8b3b]
+- Updated dependencies [b9c67ac]
+- Updated dependencies [ef8f900]
+  - @memberjunction/scheduling-engine@5.32.0
+  - @memberjunction/core@5.32.0
+  - @memberjunction/core-actions@5.32.0
+  - @memberjunction/codegen-lib@5.32.0
+  - @memberjunction/ai-agent-manager-actions@5.32.0
+  - @memberjunction/ai-agent-manager@5.32.0
+  - @memberjunction/ai-agents@5.32.0
+  - @memberjunction/ai-core-plus@5.32.0
+  - @memberjunction/aiengine@5.32.0
+  - @memberjunction/tag-engine@5.32.0
+  - @memberjunction/tag-engine-base@5.32.0
+  - @memberjunction/ai-mcp-client@5.32.0
+  - @memberjunction/computer-use-engine@5.32.0
+  - @memberjunction/ai-prompts@5.32.0
+  - @memberjunction/ai-vectordb@5.32.0
+  - @memberjunction/ai-vectors-pinecone@5.32.0
+  - @memberjunction/ai-vector-sync@5.32.0
+  - @memberjunction/api-keys@5.32.0
+  - @memberjunction/actions-apollo@5.32.0
+  - @memberjunction/actions-base@5.32.0
+  - @memberjunction/actions-bizapps-accounting@5.32.0
+  - @memberjunction/actions-bizapps-crm@5.32.0
+  - @memberjunction/actions-bizapps-formbuilders@5.32.0
+  - @memberjunction/actions-bizapps-lms@5.32.0
+  - @memberjunction/actions-bizapps-social@5.32.0
+  - @memberjunction/actions@5.32.0
+  - @memberjunction/auth-providers@5.32.0
+  - @memberjunction/communication-types@5.32.0
+  - @memberjunction/entity-communications-base@5.32.0
+  - @memberjunction/entity-communications-server@5.32.0
+  - @memberjunction/notifications@5.32.0
+  - @memberjunction/communication-ms-graph@5.32.0
+  - @memberjunction/communication-sendgrid@5.32.0
+  - @memberjunction/component-registry-client-sdk@5.32.0
+  - @memberjunction/doc-utils@5.32.0
+  - @memberjunction/encryption@5.32.0
+  - @memberjunction/external-change-detection@5.32.0
+  - @memberjunction/generic-database-provider@5.32.0
+  - @memberjunction/graphql-dataprovider@5.32.0
+  - @memberjunction/integration-engine@5.32.0
+  - @memberjunction/integration-schema-builder@5.32.0
+  - @memberjunction/interactive-component-types@5.32.0
+  - @memberjunction/core-entities@5.32.0
+  - @memberjunction/core-entities-server@5.32.0
+  - @memberjunction/data-context@5.32.0
+  - @memberjunction/data-context-server@5.32.0
+  - @memberjunction/queue@5.32.0
+  - @memberjunction/storage@5.32.0
+  - @memberjunction/postgresql-dataprovider@5.32.0
+  - @memberjunction/redis-provider@5.32.0
+  - @memberjunction/sqlserver-dataprovider@5.32.0
+  - @memberjunction/scheduling-actions@5.32.0
+  - @memberjunction/scheduling-engine-base@5.32.0
+  - @memberjunction/schema-engine@5.32.0
+  - @memberjunction/search-engine@5.32.0
+  - @memberjunction/server-extensions-core@5.32.0
+  - @memberjunction/skip-types@5.32.0
+  - @memberjunction/templates@5.32.0
+  - @memberjunction/testing-engine@5.32.0
+  - @memberjunction/testing-engine-base@5.32.0
+  - @memberjunction/version-history@5.32.0
+  - @memberjunction/ai-provider-bundle@5.32.0
+  - @memberjunction/ai@5.32.0
+  - @memberjunction/config@5.32.0
+  - @memberjunction/global@5.32.0
+  - @memberjunction/sql-dialect@5.32.0
+  - @memberjunction/scheduling-base-types@5.32.0
+
+## 5.31.0
+
+### Minor Changes
+
+- fc8b9b8: Autotagger scope & governance — per-tenant tag scoping, per-tag governance, persisted embeddings, suggestion queue, Tag Health, and a unified Tag Governance dashboard with full UI.
+
+  **Schema (one additive migration `V202605010846`)** — 9 new columns on `__mj.Tag` (governance + persisted embedding cache), three new tables (`__mj.TagScope` polymorphic M2M, `__mj.TagSynonym`, `__mj.TagSuggestion` review queue). Existing rows default to `IsGlobal=1` so behavior is unchanged out of the box. `IContentSourceConfiguration` JSON type extended with five net-new optional knobs (`SuggestThreshold`, `MaxNewTagsPerRun`, `MaxNewTagsPerItem`, `MaxTokensPerRun`, `MaxCostPerRun`) — CodeGen emits the typed accessor.
+
+  **Engine (`tag-engine` / `tag-engine-base` / `core-entities-server`)** — `MJTagEntityServer` + new `MJTagScopeEntityServer` enforce the `IsGlobal ⊕ TagScope` invariant via `ValidateAsync` (no DB triggers); persisted-embedding `Save()` hook + cold-start hydrate path replace the every-startup recompute. `TagEngineBase` eagerly loads scope + synonyms in `Config()` and exposes `GetVisibleTags / GetTagBySynonym / GetTagByName(name, ctx) / GetTaxonomyTree(rootID, ctx)`. New `TagScopeFilterBuilder` (`BaseSingleton`) produces SQL fragments + in-memory predicates + child-scope subset validator. `TagEngine.ResolveTag` widened with a `'hybrid'` mode and a `ResolveTagOptions` parameter — new 4+1-tier pipeline (synonym → exact → fuzzy → semantic with tiered confidence routing → governance-gated `handleNoMatch`). `SuggestThreshold` band routes to the suggestion queue; `createAndEmbedTag` snapshots parent scope onto new children when parent is non-global. `TagGovernanceEngine` adds `ValidateAutoGrow / EnqueueSuggestion / PromoteSuggestion / RejectSuggestion`; `MergeTags` carries source synonyms (`Source='Merged'`). New `TagHealthJob` with three idempotent emitters (merge / low-usage / wide-node), gated by `MJ_AUTOTAG_RUN_TAG_HEALTH=1` env or invokable on demand. New `TagEngine.RebuildTagEmbeddings(contextUser)` utility for post-model-change rebuilds.
+
+  **Autotag pipeline (`content-autotagging`)** — `ScopeContextResolver` derives per-source scope from `TagRootID`, `RunBudget` enforces per-run + per-item caps, new `OnAfterBatch` hook on `AutotagBaseEngine` gracefully pauses runs via the existing `CancellationRequested` machinery. `BridgeContentItemTagToTaxonomy` threads `scopeContext`, `SuggestThreshold`, source traceability, and an `onTagCreated` callback into `ResolveTag`. Per-item budget exhaustion collapses the effective mode to `hybrid` so further new tags route to suggestions instead of being auto-created.
+
+  **Server (`server` / `graphql-dataprovider`)** — new `TagGovernanceResolver` exposes `PromoteTagSuggestion` / `RejectTagSuggestion` / `RebuildTagEmbeddings` / `RunTagHealth` mutations so suggestion dispositions run transactionally on the server. Matching `GraphQLAIClient` methods + result interfaces.
+
+  **UI (`ng-dashboards` / `ng-core-entity-forms`)** — new `TagGovernanceResourceComponent` (registered as `'TagGovernance'`) — single dashboard with **left-nav** (top nav stays with the MJExplorer shell). Three sections built to the picked mockup options: Taxonomy (Option A — tree + governance/scope/synonyms detail-form, scope dialog with parent-subset validation), Suggestions (Option C — table + drawer with bulk actions and "if approved" preview), Tag Health (Option A — three summary cards + threshold tuning + run history + Rebuild stale embeddings). `MJContentSourceFormComponentExtended` gains a "Tag Pipeline Configuration" panel (Option B dense form) with mode picker cards, threshold sliders that auto-keep `SuggestThreshold < MatchThreshold`, scope+root, and budget fields — the existing JSON code editor stays available collapsed below as the advanced override. Multi-provider safe + UUID-compliant throughout.
+
+  **Tests** — 271 tests across the impacted packages, all green. New: 12 `TagScopeFilterBuilder`, 8 `ValidateAutoGrow`, 4 `TagHealthJob`, 7 `RunBudget`, 8 `ScopeContextResolver`, 18 `TagGovernanceResolver`, 18 `TagGovernance` dashboard, 23 `ContentSource` form (vitest newly enabled in `ng-core-entity-forms`).
+
+  **Documentation** — `guides/TAXONOMY_TAGGING_GUIDE.md` (~730 lines, 7 Mermaid diagrams) covers the entity model, autotag pipeline, 4+1-tier resolver, taxonomy modes, governance gates, scope inheritance, suggestion lifecycle, worked implementation guides, seeding patterns, and ops guidance. `guides/BASE_ENTITY_SERVER_PATTERNS.md` captures the persisted-embedding + `ValidateAsync` invariant + FK-cleanup-before-delete patterns this PR introduces so future agents lift the recipe rather than re-discover it. `mockups/knowledge-hub-classify-redesign/` ships 12 polished HTML mockups (3 options each across the 3 high-priority surfaces) that drove the UX direction.
+
+  Migration ordering: apply the SQL migration → run CodeGen → `mj sync push` for the JSON-type interface → build. The migration is additive and idempotent against `IsGlobal=1` defaults; existing customers see no behavior change until they opt in by setting per-tag governance flags or moving sources off the default `auto-grow` mode.
+
+### Patch Changes
+
+- 7ed7a4b: no metadata/migration changes
+- Updated dependencies [fc8b9b8]
+- Updated dependencies [cde4d2c]
+- Updated dependencies [7ed7a4b]
+- Updated dependencies [84494bb]
+- Updated dependencies [dfab537]
+- Updated dependencies [9457655]
+- Updated dependencies [60e7541]
+- Updated dependencies [28beaa4]
+- Updated dependencies [18be074]
+- Updated dependencies [17b8087]
+- Updated dependencies [6779c1e]
+- Updated dependencies [3c5176f]
+- Updated dependencies [e545a51]
+- Updated dependencies [132ce24]
+- Updated dependencies [de34786]
+- Updated dependencies [5db36d9]
+  - @memberjunction/core-entities@5.31.0
+  - @memberjunction/core-entities-server@5.31.0
+  - @memberjunction/tag-engine@5.31.0
+  - @memberjunction/tag-engine-base@5.31.0
+  - @memberjunction/graphql-dataprovider@5.31.0
+  - @memberjunction/ai-agent-manager-actions@5.31.0
+  - @memberjunction/ai-agent-manager@5.31.0
+  - @memberjunction/ai-agents@5.31.0
+  - @memberjunction/ai@5.31.0
+  - @memberjunction/ai-core-plus@5.31.0
+  - @memberjunction/aiengine@5.31.0
+  - @memberjunction/ai-mcp-client@5.31.0
+  - @memberjunction/computer-use-engine@5.31.0
+  - @memberjunction/ai-prompts@5.31.0
+  - @memberjunction/ai-provider-bundle@5.31.0
+  - @memberjunction/ai-vectordb@5.31.0
+  - @memberjunction/ai-vectors-pinecone@5.31.0
+  - @memberjunction/ai-vector-sync@5.31.0
+  - @memberjunction/api-keys@5.31.0
+  - @memberjunction/actions-apollo@5.31.0
+  - @memberjunction/actions-base@5.31.0
+  - @memberjunction/actions-bizapps-accounting@5.31.0
+  - @memberjunction/actions-bizapps-crm@5.31.0
+  - @memberjunction/actions-bizapps-formbuilders@5.31.0
+  - @memberjunction/actions-bizapps-lms@5.31.0
+  - @memberjunction/actions-bizapps-social@5.31.0
+  - @memberjunction/core-actions@5.31.0
+  - @memberjunction/actions@5.31.0
+  - @memberjunction/auth-providers@5.31.0
+  - @memberjunction/codegen-lib@5.31.0
+  - @memberjunction/communication-types@5.31.0
+  - @memberjunction/entity-communications-base@5.31.0
+  - @memberjunction/entity-communications-server@5.31.0
+  - @memberjunction/notifications@5.31.0
+  - @memberjunction/communication-ms-graph@5.31.0
+  - @memberjunction/communication-sendgrid@5.31.0
+  - @memberjunction/component-registry-client-sdk@5.31.0
+  - @memberjunction/config@5.31.0
+  - @memberjunction/doc-utils@5.31.0
+  - @memberjunction/encryption@5.31.0
+  - @memberjunction/external-change-detection@5.31.0
+  - @memberjunction/generic-database-provider@5.31.0
+  - @memberjunction/integration-engine@5.31.0
+  - @memberjunction/integration-schema-builder@5.31.0
+  - @memberjunction/interactive-component-types@5.31.0
+  - @memberjunction/core@5.31.0
+  - @memberjunction/data-context@5.31.0
+  - @memberjunction/data-context-server@5.31.0
+  - @memberjunction/global@5.31.0
+  - @memberjunction/queue@5.31.0
+  - @memberjunction/storage@5.31.0
+  - @memberjunction/postgresql-dataprovider@5.31.0
+  - @memberjunction/redis-provider@5.31.0
+  - @memberjunction/sql-dialect@5.31.0
+  - @memberjunction/sqlserver-dataprovider@5.31.0
+  - @memberjunction/scheduling-actions@5.31.0
+  - @memberjunction/scheduling-engine-base@5.31.0
+  - @memberjunction/scheduling-base-types@5.31.0
+  - @memberjunction/scheduling-engine@5.31.0
+  - @memberjunction/schema-engine@5.31.0
+  - @memberjunction/search-engine@5.31.0
+  - @memberjunction/server-extensions-core@5.31.0
+  - @memberjunction/skip-types@5.31.0
+  - @memberjunction/templates@5.31.0
+  - @memberjunction/testing-engine@5.31.0
+  - @memberjunction/testing-engine-base@5.31.0
+  - @memberjunction/version-history@5.31.0
+
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ai-agent-manager-actions@5.30.1
+- @memberjunction/ai-agent-manager@5.30.1
+- @memberjunction/ai-agents@5.30.1
+- @memberjunction/ai@5.30.1
+- @memberjunction/ai-core-plus@5.30.1
+- @memberjunction/aiengine@5.30.1
+- @memberjunction/ai-mcp-client@5.30.1
+- @memberjunction/computer-use-engine@5.30.1
+- @memberjunction/ai-prompts@5.30.1
+- @memberjunction/ai-provider-bundle@5.30.1
+- @memberjunction/ai-vectordb@5.30.1
+- @memberjunction/ai-vectors-pinecone@5.30.1
+- @memberjunction/ai-vector-sync@5.30.1
+- @memberjunction/api-keys@5.30.1
+- @memberjunction/actions-apollo@5.30.1
+- @memberjunction/actions-base@5.30.1
+- @memberjunction/actions-bizapps-accounting@5.30.1
+- @memberjunction/actions-bizapps-crm@5.30.1
+- @memberjunction/actions-bizapps-formbuilders@5.30.1
+- @memberjunction/actions-bizapps-lms@5.30.1
+- @memberjunction/actions-bizapps-social@5.30.1
+- @memberjunction/core-actions@5.30.1
+- @memberjunction/actions@5.30.1
+- @memberjunction/auth-providers@5.30.1
+- @memberjunction/codegen-lib@5.30.1
+- @memberjunction/communication-types@5.30.1
+- @memberjunction/entity-communications-base@5.30.1
+- @memberjunction/entity-communications-server@5.30.1
+- @memberjunction/notifications@5.30.1
+- @memberjunction/communication-ms-graph@5.30.1
+- @memberjunction/communication-sendgrid@5.30.1
+- @memberjunction/component-registry-client-sdk@5.30.1
+- @memberjunction/config@5.30.1
+- @memberjunction/doc-utils@5.30.1
+- @memberjunction/encryption@5.30.1
+- @memberjunction/external-change-detection@5.30.1
+- @memberjunction/generic-database-provider@5.30.1
+- @memberjunction/graphql-dataprovider@5.30.1
+- @memberjunction/integration-engine@5.30.1
+- @memberjunction/integration-schema-builder@5.30.1
+- @memberjunction/interactive-component-types@5.30.1
+- @memberjunction/core@5.30.1
+- @memberjunction/core-entities@5.30.1
+- @memberjunction/core-entities-server@5.30.1
+- @memberjunction/data-context@5.30.1
+- @memberjunction/data-context-server@5.30.1
+- @memberjunction/global@5.30.1
+- @memberjunction/queue@5.30.1
+- @memberjunction/storage@5.30.1
+- @memberjunction/postgresql-dataprovider@5.30.1
+- @memberjunction/redis-provider@5.30.1
+- @memberjunction/sql-dialect@5.30.1
+- @memberjunction/sqlserver-dataprovider@5.30.1
+- @memberjunction/scheduling-actions@5.30.1
+- @memberjunction/scheduling-engine-base@5.30.1
+- @memberjunction/scheduling-base-types@5.30.1
+- @memberjunction/scheduling-engine@5.30.1
+- @memberjunction/schema-engine@5.30.1
+- @memberjunction/search-engine@5.30.1
+- @memberjunction/server-extensions-core@5.30.1
+- @memberjunction/skip-types@5.30.1
+- @memberjunction/templates@5.30.1
+- @memberjunction/testing-engine@5.30.1
+- @memberjunction/testing-engine-base@5.30.1
+- @memberjunction/version-history@5.30.1
+
 ## 5.30.0
 
 ### Minor Changes

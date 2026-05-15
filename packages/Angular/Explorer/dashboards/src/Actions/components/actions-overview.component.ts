@@ -100,7 +100,7 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
       this.cdr.detectChanges();
 
       // Load all data in a single batch using RunViews
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       
       const [actionsResult, categoriesResult, executionsResult] = await rv.RunViews([
         {
@@ -220,7 +220,7 @@ export class ActionsOverviewComponent extends BaseResourceComponent implements O
     }
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView({
         EntityName: 'MJ: Actions',
         ExtraFilter: extraFilter,

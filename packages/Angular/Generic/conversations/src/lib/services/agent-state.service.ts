@@ -1,7 +1,7 @@
 import { Injectable, OnDestroy } from '@angular/core';
 import { BehaviorSubject, Observable, interval, Subscription } from 'rxjs';
 import { map, shareReplay, switchMap } from 'rxjs/operators';
-import { LogStatusEx, RunView, UserInfo } from '@memberjunction/core';
+import { LogStatusEx, RunView, UserInfo, Metadata, IMetadataProvider } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { MJAIAgentRunEntity } from '@memberjunction/core-entities';
 
@@ -33,7 +33,20 @@ export class AgentStateService implements OnDestroy {
   // Public observable streams
   public readonly activeAgents$ = this._activeAgents$.asObservable();
 
+  private _provider: IMetadataProvider | null = null;
+
   constructor() {}
+
+  /**
+   * Set the metadata provider this service should use. When unset, falls back to Metadata.Provider.
+   */
+  public set Provider(value: IMetadataProvider | null) {
+      this._provider = value;
+  }
+
+  public get Provider(): IMetadataProvider {
+      return this._provider ?? Metadata.Provider;
+  }
 
   ngOnDestroy(): void {
     this.stopPolling();
@@ -111,7 +124,7 @@ export class AgentStateService implements OnDestroy {
     LogStatusEx({message: `[${timestamp}] 🤖 AgentStateService.loadActiveAgents - Polling for active agents (conversation: ${conversationId || 'ALL'}, cycle: ${this.pollCycleCount})`, verboseOnly: true});
 
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.Provider);
       // Valid statuses: Running, Completed, Paused, Failed, Cancelled
       let filter = `Status IN ('Running', 'Paused')`;
 

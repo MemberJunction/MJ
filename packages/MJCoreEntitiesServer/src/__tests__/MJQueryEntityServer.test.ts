@@ -1686,3 +1686,39 @@ WHERE a.IsPersonAccount = 1
         expect(params[0].isRequired).toBe(true);
     });
 });
+
+// ═══════════════════════════════════════════════════
+// NormalizeDefaultForType (enrich.ts)
+// Ensures array-typed parameter defaults are valid JSON arrays.
+// ═══════════════════════════════════════════════════
+
+import { NormalizeDefaultForType } from '../custom/query-extraction/enrich';
+
+describe('NormalizeDefaultForType', () => {
+    it('should pass through non-array types unchanged', () => {
+        expect(NormalizeDefaultForType('hello', 'string')).toBe('hello');
+        expect(NormalizeDefaultForType('42', 'number')).toBe('42');
+        expect(NormalizeDefaultForType('true', 'boolean')).toBe('true');
+    });
+
+    it('should pass through valid JSON array strings for array type', () => {
+        expect(NormalizeDefaultForType('["a","b"]', 'array')).toBe('["a","b"]');
+        expect(NormalizeDefaultForType('[1,2,3]', 'array')).toBe('[1,2,3]');
+    });
+
+    it('should wrap plain string in JSON array for array type', () => {
+        expect(NormalizeDefaultForType('Attended', 'array')).toBe('["Attended"]');
+        expect(NormalizeDefaultForType('Active', 'array')).toBe('["Active"]');
+    });
+
+    it('should wrap non-array JSON value in array for array type', () => {
+        expect(NormalizeDefaultForType('42', 'array')).toBe('[42]');
+        expect(NormalizeDefaultForType('"hello"', 'array')).toBe('["hello"]');
+    });
+
+    it('should handle JSON object default by wrapping in array', () => {
+        const obj = '{"key":"value"}';
+        const result = NormalizeDefaultForType(obj, 'array');
+        expect(JSON.parse(result)).toEqual([{ key: 'value' }]);
+    });
+});

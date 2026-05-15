@@ -34,7 +34,7 @@ export class EntityAdminDashboardComponent extends BaseDashboard implements Afte
   // State management
   private userStateChangeSubject = new Subject<ERDCompositeState>();
   private hasLoadedUserState = false;
-  private metadata = new Metadata();
+  private metadata = this.ProviderToUse;
   private userSettingEntity: MJUserSettingEntity | null = null;
 
   ngAfterViewInit(): void {

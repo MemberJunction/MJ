@@ -35,7 +35,7 @@
  */
 
 import { RegisterClass } from '@memberjunction/global';
-import { DatabaseProviderBase, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { DatabaseProviderBase, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
 import { ActionResultSimple, RunActionParams, ActionParam } from '@memberjunction/actions-base';
 import { EncryptionEngine } from '../EncryptionEngine';
 import { RotateKeyParams, RotateKeyResult } from '../interfaces';
@@ -107,7 +107,7 @@ export class RotateEncryptionKeyAction {
                 encryptionKeyId,
                 newKeyLookupValue,
                 batchSize
-            }, ContextUser);
+            }, ContextUser, params.Provider);
 
             // Update output parameters
             const outputParams = [...Params];
@@ -151,13 +151,14 @@ export class RotateEncryptionKeyAction {
      */
     private async rotateKey(
         params: RotateKeyParams,
-        contextUser?: UserInfo
+        contextUser?: UserInfo,
+        callerProvider?: IMetadataProvider
     ): Promise<RotateKeyResult> {
         const { encryptionKeyId, newKeyLookupValue, batchSize = 100 } = params;
         const engine = EncryptionEngine.Instance;
         await engine.Config(false, contextUser);
-        const md = new Metadata();
-        const rv = new RunView();
+        const md = (callerProvider ?? new Metadata()) as unknown as IMetadataProvider;
+        const rv = callerProvider ? RunView.FromMetadataProvider(callerProvider) : new RunView();
 
         // Track progress
         const fieldsProcessed: string[] = [];
@@ -232,7 +233,7 @@ export class RotateEncryptionKeyAction {
 
                 try {
                     // Get entity info for schema/view name
-                    const entityInfo = md.Entities.find(e => e.Name === entityName);
+                    const entityInfo = md.EntityByName(entityName);
                     if (!entityInfo) {
                         LogError(`Entity not found: ${entityName}`);
                         continue;
@@ -242,7 +243,7 @@ export class RotateEncryptionKeyAction {
                     let offset = 0;
                     let hasMore = true;
 
-                    const provider = Metadata.Provider as DatabaseProviderBase;
+                    const provider = (callerProvider ?? Metadata.Provider) as DatabaseProviderBase;
 
                     while (hasMore) {
                         // Load a batch of records

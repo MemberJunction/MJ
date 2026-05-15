@@ -11,6 +11,7 @@ import { FormContext, PanelVariant, PanelDragStartEvent, PanelDropEvent } from '
 import { FormNavigationEvent } from '../types/navigation-events';
 import { MjFormFieldComponent } from '../field/form-field.component';
 import { CompositeKey } from '@memberjunction/core';
+import { EscapeHTML, HighlightSearchMatches } from '@memberjunction/global';
 
 /**
  * Reusable collapsible panel for form sections.
@@ -396,13 +397,11 @@ export class MjCollapsiblePanelComponent implements OnInit, OnChanges, AfterCont
     const fieldsMatch = this.FieldNames.includes(searchTerm);
     this.IsVisible = sectionMatches || fieldsMatch;
 
-    if (this.IsVisible && sectionMatches) {
-      const escaped = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const regex = new RegExp(escaped, 'gi');
-      this.DisplayName = this.SectionName.replace(regex, '<mark class="mj-forms-search-highlight">$&</mark>');
-    } else {
-      this.DisplayName = this.SectionName;
-    }
+    // DisplayName is bound to `[innerHTML]` in the template — must always be HTML-safe.
+    this.DisplayName =
+      this.IsVisible && sectionMatches
+        ? HighlightSearchMatches(this.SectionName, searchTerm, 'mj-forms-search-highlight')
+        : EscapeHTML(this.SectionName);
 
     this.cdr.markForCheck();
   }

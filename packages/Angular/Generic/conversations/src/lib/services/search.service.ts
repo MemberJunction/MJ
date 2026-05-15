@@ -10,7 +10,7 @@ import {
   MJTaskEntity,
   MJArtifactEntity
 } from '@memberjunction/core-entities';
-import { RunView, UserInfo, Metadata } from '@memberjunction/core';
+import { RunView, UserInfo, Metadata, IMetadataProvider } from '@memberjunction/core';
 
 /**
  * Types of searchable content
@@ -92,9 +92,22 @@ export class SearchService {
   public readonly isSearching$ = this._isSearching$.asObservable();
   public readonly searchResults$ = this._searchResults$.asObservable();
 
+  private _provider: IMetadataProvider | null = null;
+
   constructor() {
     this.initializeSearch();
     this.loadRecentSearches();
+  }
+
+  /**
+   * Set the metadata provider this service should use. When unset, falls back to Metadata.Provider.
+   */
+  public set Provider(value: IMetadataProvider | null) {
+      this._provider = value;
+  }
+
+  public get Provider(): IMetadataProvider {
+      return this._provider ?? Metadata.Provider;
   }
 
   /**
@@ -183,7 +196,7 @@ export class SearchService {
     currentUser: UserInfo,
     dateRange: DateRange
   ): Promise<SearchResult[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     const lowerQuery = query.toLowerCase();
 
     let filter = `EnvironmentID='${environmentId}' AND (IsArchived IS NULL OR IsArchived=0)`;
@@ -224,7 +237,7 @@ export class SearchService {
     currentUser: UserInfo,
     dateRange: DateRange
   ): Promise<SearchResult[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     const lowerQuery = query.toLowerCase();
 
     // First get conversations in this environment
@@ -268,7 +281,7 @@ export class SearchService {
     currentUser: UserInfo,
     dateRange: DateRange
   ): Promise<SearchResult[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     const lowerQuery = query.toLowerCase();
 
     // Search artifacts directly by name and description
@@ -344,7 +357,7 @@ export class SearchService {
     currentUser: UserInfo,
     dateRange: DateRange
   ): Promise<SearchResult[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     const lowerQuery = query.toLowerCase();
 
     const ownerFilter = `OwnerID='${currentUser.ID}'`;
@@ -394,11 +407,11 @@ export class SearchService {
     currentUser: UserInfo,
     dateRange: DateRange
   ): Promise<SearchResult[]> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.Provider);
     const lowerQuery = query.toLowerCase();
 
     // Build filter using same logic as TasksFullViewComponent
-    const md = new Metadata();
+    const md = this.Provider;
     const cd = md.EntityByName('MJ: Conversation Details');
     const c = md.EntityByName('MJ: Conversations');
 

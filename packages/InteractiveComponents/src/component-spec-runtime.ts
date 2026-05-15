@@ -1,7 +1,7 @@
 import { ComponentSpec } from "./component-spec";
 import { ComponentEntitySimplePermission } from "./data-requirements";
 import { ComponentLibraryDependency } from "./library-dependency";
-import { EntityPermissionType, UserInfo, Metadata } from "@memberjunction/core";
+import { EntityPermissionType, UserInfo, Metadata, IMetadataProvider } from "@memberjunction/core";
 
 /**
  * Runtime extension of ComponentSpec that provides helper methods for permission checking,
@@ -9,6 +9,20 @@ import { EntityPermissionType, UserInfo, Metadata } from "@memberjunction/core";
  * to keep token usage efficient.
  */
 export class ComponentSpecRuntime extends ComponentSpec {
+    private _provider: IMetadataProvider | null = null;
+
+    /**
+     * Optional metadata provider override. Callers should set
+     * `instance.Provider = providerToUse` before invoking permission-checking methods
+     * in multi-provider contexts. Falls back to the global default provider when unset.
+     */
+    public get Provider(): IMetadataProvider {
+        return this._provider ?? (new Metadata() as unknown as IMetadataProvider);
+    }
+    public set Provider(value: IMetadataProvider | null) {
+        this._provider = value;
+    }
+
     /**
      * Get all unique permissions required by this component across all entities.
      * This aggregates permissions from all entity data requirements to provide
@@ -103,7 +117,7 @@ export class ComponentSpecRuntime extends ComponentSpec {
         const degraded: Array<{entity: string, permission: ComponentEntitySimplePermission, reason: string}> = [];
         
         // Get metadata instance to access entity information
-        const md = new Metadata();
+        const md = this.Provider;
         
         // Check each entity's required permissions
         for (const entityReq of this.dataRequirements?.entities || []) {

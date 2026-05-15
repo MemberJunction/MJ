@@ -8,6 +8,7 @@ import { Observable, Subject } from 'rxjs';
 import { takeUntil } from 'rxjs/operators';
 import { UUIDsEqual } from '@memberjunction/global';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 interface NotificationSummary {
   InAppEnabled: boolean;
   EmailEnabled: boolean;
@@ -20,7 +21,7 @@ interface NotificationSummary {
   templateUrl: './user-profile.component.html',
   styleUrls: ['./user-profile.component.css']
 })
-export class UserProfileComponent implements OnInit, OnDestroy {
+export class UserProfileComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   public JSON: any = JSON;
   public User: Observable<StandardUserInfo | null>;
   public Loading = true;
@@ -39,6 +40,7 @@ export class UserProfileComponent implements OnInit, OnDestroy {
     private sharedService: SharedService,
     private cdr: ChangeDetectorRef
   ) {
+    super();
     // v3.0 API - User is now an observable that the template subscribes to
     this.User = authBase.getUserInfo();
   }
@@ -106,7 +108,7 @@ export class UserProfileComponent implements OnInit, OnDestroy {
   async ToggleChannel(channel: 'InApp' | 'Email' | 'SMS'): Promise<void> {
     try {
       this.Saving = true;
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const currentUser = md.CurrentUser;
       const transGroup = await md.CreateTransactionGroup();
 

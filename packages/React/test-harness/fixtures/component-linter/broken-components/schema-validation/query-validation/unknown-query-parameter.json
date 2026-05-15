@@ -10,11 +10,34 @@
       {
         "name": "CustomerReport",
         "categoryPath": "Reports/Customers",
-        "fields": ["ID", "Name", "Total"],
-        "entityNames": ["Customers"],
+        "fields": [
+          {
+            "name": "ID",
+            "type": "uniqueidentifier"
+          },
+          {
+            "name": "Name",
+            "type": "nvarchar"
+          },
+          {
+            "name": "Total",
+            "type": "int"
+          }
+        ],
+        "entityNames": [
+          "Customers"
+        ],
         "parameters": [
-          { "name": "startDate", "type": "string", "required": true },
-          { "name": "endDate", "type": "string", "required": true }
+          {
+            "name": "startDate",
+            "type": "string",
+            "required": true
+          },
+          {
+            "name": "endDate",
+            "type": "string",
+            "required": true
+          }
         ]
       }
     ]

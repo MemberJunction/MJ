@@ -1,5 +1,5 @@
 import { AIEngine } from "@memberjunction/aiengine";
-import { BaseEntity, Metadata, CompositeKey, RunView, UserInfo, EntityInfo, RunViewResult, LogError } from "@memberjunction/core";
+import { BaseEntity, Metadata, CompositeKey, RunView, UserInfo, EntityInfo, RunViewResult, LogError, IMetadataProvider } from "@memberjunction/core";
 import { MJVectorDatabaseEntity } from "@memberjunction/core-entities";
 import { UUIDsEqual } from "@memberjunction/global";
 import { PageRecordsParams } from "../generic/VectorCore.types";
@@ -9,10 +9,11 @@ export class VectorBase {
     _runView: RunView;
     _metadata: Metadata;
     _currentUser: UserInfo;
+    private _provider: IMetadataProvider | null = null;
 
     constructor() {
         this._runView = new RunView();
-        this._metadata = new Metadata();
+        this._metadata = (this._provider as unknown as Metadata) ?? new Metadata();
         this._currentUser = this._metadata.CurrentUser;
     }
 
@@ -21,8 +22,20 @@ export class VectorBase {
     public get CurrentUser(): UserInfo { return this._currentUser; }
     public set CurrentUser(user: UserInfo) { this._currentUser = user; }
 
+    /**
+     * Optional metadata provider override. Callers should set
+     * `instance.Provider = providerToUse` before invoking helper methods
+     * in multi-provider contexts. Falls back to the global default provider when unset.
+     */
+    public get Provider(): IMetadataProvider {
+        return this._provider ?? (this._metadata as unknown as IMetadataProvider);
+    }
+    public set Provider(value: IMetadataProvider | null) {
+        this._provider = value;
+    }
+
     protected async GetRecordsByEntityID(entityID: string, recordIDs?: CompositeKey[]): Promise<BaseEntity[]> {
-        const md = new Metadata();
+        const md = this.Provider;
         const entity = md.Entities.find(e => UUIDsEqual(e.ID, entityID));
         if (!entity){
             throw new Error(`Entity with ID ${entityID} not found.`);
@@ -48,19 +61,45 @@ export class VectorBase {
           throw new Error(`Entity with ID ${params.EntityID} not found.`);
         }
 
+        // Prefer keyset (seek) pagination when the caller provides AfterKey.
+        // The framework will throw AfterKeyNotSupportedError if the entity has a composite
+        // PK — callers iterating those entities must use the PageNumber path.
+        const useKeyset = !!params.AfterKey;
+
         const rvResult: RunViewResult<T> = await this._runView.RunView<T>({
             EntityName: entity.Name,
             ResultType: params.ResultType,
             MaxRows: params.PageSize,
-            StartRow: Math.max(0, (params.PageNumber - 1) * params.PageSize),
+            ...(useKeyset
+                ? { AfterKey: params.AfterKey, OrderBy: entity.FirstPrimaryKey!.Name }
+                : { StartRow: Math.max(0, (params.PageNumber - 1) * params.PageSize) }),
             ExtraFilter: params.Filter
         }, this.CurrentUser);
-    
+
         if (!rvResult.Success) {
           throw new Error(rvResult.ErrorMessage);
         }
-    
+
         return rvResult.Results;
+    }
+
+    /**
+     * Returns true when {@link PageRecordsByEntityID} can serve the given entity via
+     * keyset (seek) pagination — i.e. the entity has a single-column PK on a comparable
+     * type. Callers iterating large tables should consult this and pass `AfterKey` when true.
+     */
+    protected CanUseKeysetPagination(entityID: string | number): boolean {
+        const entity = this.Metadata.Entities.find(e => UUIDsEqual(e.ID, entityID as string));
+        if (!entity || !entity.FirstPrimaryKey) return false;
+        if (entity.PrimaryKeys.length !== 1) return false;
+        // Inline allowlist check (avoid pulling in the helper here)
+        const t = (entity.FirstPrimaryKey.Type || '').replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
+        // Same set as KEYSET_PAGINATION_ORDERABLE_PK_TYPES in @memberjunction/core
+        return ['uniqueidentifier','uuid','int','bigint','smallint','tinyint','decimal','numeric','money','smallmoney',
+            'float','real','double precision','char','varchar','nchar','nvarchar','text','ntext',
+            'date','datetime','datetime2','datetimeoffset','smalldatetime','time','bit',
+            'integer','bigserial','serial','character varying','character','timestamp',
+            'timestamp with time zone','timestamp without time zone','boolean'].includes(t);
     }
 
     /**

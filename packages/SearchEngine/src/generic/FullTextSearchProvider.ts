@@ -9,10 +9,10 @@
  * @module @memberjunction/search-engine
  */
 
-import { LogError, Metadata, UserInfo } from '@memberjunction/core';
+import { IRunViewProvider, LogError, UserInfo } from '@memberjunction/core';
 import { RegisterClass } from '@memberjunction/global';
 import { BaseSearchProvider, SearchProviderConfig } from './ISearchProvider';
-import { SearchSource, SearchFilters, SearchResultItem, SearchResultType } from './search.types';
+import { SearchSource, SearchFilters, SearchResultItem, SearchResultType, ScopeConstraints } from './search.types';
 import { SearchEnricher } from './SearchEnricher';
 
 /**
@@ -22,6 +22,12 @@ import { SearchEnricher } from './SearchEnricher';
 @RegisterClass(BaseSearchProvider, 'FullTextSearchProvider')
 export class FullTextSearchProvider extends BaseSearchProvider {
     public readonly SourceType: SearchSource = 'fulltext';
+
+    /**
+     * Minimum trimmed term length we accept. SQL Server FTS treats single
+     * characters as noise; rejecting them matches the EntitySearchProvider guard.
+     */
+    private static readonly MIN_TERM_LENGTH = 3;
 
     private enricher: SearchEnricher | null = null;
 
@@ -43,13 +49,33 @@ export class FullTextSearchProvider extends BaseSearchProvider {
         query: string,
         topK: number,
         filters: SearchFilters | undefined,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        scopeConstraints?: ScopeConstraints
     ): Promise<SearchResultItem[]> {
+        const trimmed = (query ?? '').trim();
+        if (trimmed.length < FullTextSearchProvider.MIN_TERM_LENGTH) return [];
         try {
-            const md = new Metadata();
+            // Honor per-provider query transform (keyword extraction / rewrite)
+            const effectiveQuery = scopeConstraints?.QueryTransforms?.[this.SourceType] ?? query;
+
+            // Restrict entities: scopeConstraints take precedence, then filters.EntityNames,
+            // then no restriction.
+            const scopedEntityNames = scopeConstraints?.Entities?.map(e => e.EntityName);
+            const restrictedEntityNames = scopedEntityNames?.length
+                ? scopedEntityNames
+                : filters?.EntityNames;
+
+            // Multi-provider migration (v5.31+): use `this.Provider` instead of
+            // `new Metadata()`. Cast to IRunViewProvider to access FullTextSearch
+            // — only DB-backed providers expose it; remote providers don't.
+            const md = this.Provider as unknown as IRunViewProvider;
+            if (!md.FullTextSearch) {
+                LogError('FullTextSearchProvider: provider does not support FullTextSearch');
+                return [];
+            }
             const ftsResult = await md.FullTextSearch({
-                SearchText: query,
-                EntityNames: filters?.EntityNames,
+                SearchText: effectiveQuery,
+                EntityNames: restrictedEntityNames,
                 MaxRowsPerEntity: Math.max(3, Math.ceil(topK / 10))
             }, contextUser);
 

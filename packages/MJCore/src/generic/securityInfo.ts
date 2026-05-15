@@ -1,6 +1,13 @@
 import { BaseInfo } from "./baseInfo";
 import { IMetadataProvider } from "./interfaces";
 import { LogError } from "./logging";
+// NOTE: Circular import with metadata.ts is intentional and safe.
+// Both modules reference each other at the type/getter level only;
+// all cross-module calls happen inside function bodies (never at
+// class-field initialisation time), so the modules are fully
+// evaluated before any getter is invoked.  This is the same
+// pattern already used by queryInfo.ts ↔ metadata.ts.
+import { Metadata } from "./metadata";
 import { DatabasePlatform } from "./platformSQL";
 import { ParsePlatformVariants, PlatformVariantsJSON, ResolvePlatformVariant } from "./platformVariants";
 import { UUIDsEqual } from "@memberjunction/global";
@@ -413,38 +420,30 @@ export class AuthorizationInfo extends BaseInfo {
      */
     Parent: string
 
-    private _AuthorizationRoles: AuthorizationRoleInfo[] = []
-    get Roles(): AuthorizationRoleInfo[] {
-        return this._AuthorizationRoles
-    }
-
-    constructor (md: IMetadataProvider, initData: any = null) {
-        super()
-        this.copyInitData(initData)
-        if (initData) 
-            this.SetupAuthorizationRoles(md, initData.AuthorizationRoles || initData._AuthorizationRoles)
+    /**
+     * Returns the role assignments for this authorization.
+     *
+     * **Lazy resolution** — filters from the global `Metadata.Provider.AuthorizationRoles`
+     * collection on every call, like `QueryInfo.Permissions` filters from
+     * `Metadata.Provider.QueryPermissions`.  No result caching is applied because
+     * `AuthorizationRoleInfo` objects are lightweight and the collection is small.
+     */
+    public get Roles(): AuthorizationRoleInfo[] {
+        return Metadata.Provider?.AuthorizationRoles?.filter( // global-provider-ok: AuthorizationInfo is a metadata DTO — resolves roles from the global provider like QueryInfo.Permissions
+            ar => UUIDsEqual(ar.AuthorizationID, this.ID)
+        ) ?? [];
     }
 
     /**
-     * Sets up the roles associated with this authorization using the provided metadata and initial data.
-     * 
-     * @param {IMetadataProvider} md - The metadata provider to fetch role information.
-     * @param {AuthorizationRoleInfo[]} authorizationRoles - An array of `AuthorizationRoleInfo` instances or equivalent data to be associated with this authorization.
+     * @param initData - Raw data row from the metadata dataset / database view.
+     *   `copyInitData` maps this into the typed properties (ID, Name, ParentID, etc.).
+     * @param _md - Accepted but unused; retained so the signature matches the universal
+     *   `new m.class(dataRow, metadataProvider)` convention used by
+     *   `MetadataFromSimpleObjectWithoutUser`.
      */
-    public SetupAuthorizationRoles(md: IMetadataProvider, authorizationRoles: AuthorizationRoleInfo[]) {
-        if (authorizationRoles) {
-            const mdRoles = md.Roles;
-            this._AuthorizationRoles=  [];
-            for (let i = 0; i < authorizationRoles.length; i++) {
-                // 
-                const ari = new AuthorizationRoleInfo(authorizationRoles[i])
-                this._AuthorizationRoles.push(ari)
-    
-                const match = mdRoles.find(r => UUIDsEqual(r.ID, ari.RoleID))
-                if (match)
-                    ari._setRole(match)
-            }
-        }
+    constructor (initData: any = null, _md?: IMetadataProvider) {
+        super()
+        this.copyInitData(initData)
     }
 
     /**

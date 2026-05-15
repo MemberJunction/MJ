@@ -11,6 +11,19 @@ export interface EntityFilter {
   baseTable: string;
 }
 
+interface FilterOption {
+  text: string;
+  value: string | null;
+}
+
+/** Dropdown items for the Status filter — static list. */
+const STATUS_OPTIONS: ReadonlyArray<FilterOption> = [
+  { text: 'All Statuses', value: null },
+  { text: 'Active', value: 'Active' },
+  { text: 'Deprecated', value: 'Deprecated' },
+  { text: 'Disabled', value: 'Disabled' },
+];
+
 /**
  * Entity filter panel component that provides filtering controls for entities.
  * Supports filtering by schema, entity name, base table, and status.
@@ -51,7 +64,8 @@ export class EntityFilterPanelComponent implements OnInit, OnChanges {
   /** Emitted when close button is clicked */
   @Output() closePanel = new EventEmitter<void>();
 
-  public distinctSchemas: Array<{ text: string; value: string }> = [];
+  public schemaOptions: FilterOption[] = [];
+  public readonly statusOptions = STATUS_OPTIONS;
 
   ngOnInit(): void {
     this.updateDistinctSchemas();
@@ -63,9 +77,18 @@ export class EntityFilterPanelComponent implements OnInit, OnChanges {
     }
   }
 
+  public onSchemaChange(value: unknown): void {
+    this.filters = { ...this.filters, schemaName: (value as string | null) ?? null };
+    this.emitFilterChange();
+  }
+
+  public onStatusChange(value: unknown): void {
+    this.filters = { ...this.filters, entityStatus: (value as string | null) ?? null };
+    this.emitFilterChange();
+  }
+
   public onFilterChange(): void {
-    this.filtersChange.emit(this.filters);
-    this.filterChange.emit();
+    this.emitFilterChange();
   }
 
   public resetAllFilters(): void {
@@ -76,6 +99,11 @@ export class EntityFilterPanelComponent implements OnInit, OnChanges {
     this.closePanel.emit();
   }
 
+  private emitFilterChange(): void {
+    this.filtersChange.emit(this.filters);
+    this.filterChange.emit();
+  }
+
   private updateDistinctSchemas(): void {
     const schemas = new Set<string>();
     this.entities.forEach(entity => {
@@ -84,8 +112,9 @@ export class EntityFilterPanelComponent implements OnInit, OnChanges {
       }
     });
 
-    this.distinctSchemas = Array.from(schemas)
-      .sort()
-      .map(schema => ({ text: schema, value: schema }));
+    this.schemaOptions = [
+      { text: 'All Schemas', value: null },
+      ...Array.from(schemas).sort().map(schema => ({ text: schema, value: schema })),
+    ];
   }
 }

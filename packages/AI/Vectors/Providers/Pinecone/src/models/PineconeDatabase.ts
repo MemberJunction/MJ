@@ -3,7 +3,7 @@ import { error } from 'console';
 import { RegisterClass } from '@memberjunction/global'
 import { FetchResponse, Index, Pinecone, QueryOptions } from '@pinecone-database/pinecone';
 import { BaseRequestParams, BaseResponse, CreateIndexParams, EditIndexParams, IndexDescription, IndexList, ListVectorIDsParams, ListVectorIDsResult, QueryResponse, RecordMetadata, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
-import { LogError, LogStatus } from '@memberjunction/core';
+import { LogError, LogStatus, UserInfo } from '@memberjunction/core';
 
 
 export type BaseMetadata = {
@@ -123,7 +123,10 @@ export class PineconeDatabase extends VectorDBBase {
        throw new error("Method not implemented");
     }
 
-    public async QueryIndex(params: QueryOptions): Promise<BaseResponse> {
+    // Pinecone authenticates via its own API key, so contextUser is unused here.
+    // Accepting the parameter keeps the override compatible with the abstract
+    // signature added in @memberjunction/ai-vectordb v5.30+.
+    public async QueryIndex(params: QueryOptions, _contextUser?: UserInfo): Promise<BaseResponse> {
         try{
             // Use index name from params.id if available (for multi-index support)
             // But strip 'id' before passing to Pinecone query() since Pinecone treats

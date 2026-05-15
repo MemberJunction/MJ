@@ -86,7 +86,7 @@ export class BufferCreatePostAction extends BufferBaseAction {
         throw new Error('Content, ImageURLs, VideoURLs, or MediaLink is required');
       }
 
-      const authError = await this.ensureAuthenticated(Params);
+      const authError = await this.ensureAuthenticated(params);
       if (authError) return authError;
 
       const mode = resolveShareMode(postNow, addToTop, scheduledTime);

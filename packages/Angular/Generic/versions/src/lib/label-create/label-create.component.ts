@@ -8,7 +8,8 @@ import {
     ChangeDetectionStrategy,
     NgZone
 } from '@angular/core';
-import { RunView, Metadata, EntityInfo } from '@memberjunction/core';
+import { RunView, EntityInfo } from '@memberjunction/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import {
     GraphQLDataProvider,
     GraphQLVersionHistoryClient,
@@ -28,7 +29,7 @@ export interface RecordOption {
     styleUrls: ['./label-create.component.css'],
     changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class MjLabelCreateComponent implements OnInit {
+export class MjLabelCreateComponent extends BaseAngularComponent implements OnInit {
     /**
      * When set, skips the entity picker step and pre-selects this entity.
      */
@@ -71,9 +72,9 @@ export class MjLabelCreateComponent implements OnInit {
     public CreatedItemCount = 0;
     public CreateProgress: CreateVersionLabelProgress | null = null;
 
-    private metadata = new Metadata();
+    private get metadata() { return this.ProviderToUse; }
 
-    constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) {}
+    constructor(private cdr: ChangeDetectorRef, private ngZone: NgZone) { super(); }
 
     ngOnInit(): void {
         this.resetCreateDialog();
@@ -336,7 +337,7 @@ export class MjLabelCreateComponent implements OnInit {
         this.cdr.markForCheck();
 
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const nameField = this.findNameField(entity);
             const fields = nameField ? ['ID', nameField] : ['ID'];
 

@@ -6,6 +6,7 @@ import { MJAIAgentPromptEntity, MJAIConfigurationEntity } from '@memberjunction/
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { UUIDsEqual } from '@memberjunction/global';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface AgentPromptAdvancedSettingsFormData {
   executionOrder: number;
   purpose: string | null;
@@ -25,7 +26,7 @@ export interface AgentPromptAdvancedSettingsFormData {
   templateUrl: './agent-prompt-advanced-settings-dialog.component.html',
   styleUrls: ['./agent-prompt-advanced-settings-dialog.component.css']
 })
-export class AgentPromptAdvancedSettingsDialogComponent implements OnInit, OnDestroy {
+export class AgentPromptAdvancedSettingsDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   
   // Input properties set by service
   agentPrompt!: MJAIAgentPromptEntity;
@@ -68,7 +69,8 @@ export class AgentPromptAdvancedSettingsDialogComponent implements OnInit, OnDes
   constructor(
     private fb: FormBuilder,
     private cdr: ChangeDetectorRef
-  ) {}
+  ) {
+    super();}
 
   ngOnInit() {
     this.initializeForm();
@@ -146,7 +148,7 @@ export class AgentPromptAdvancedSettingsDialogComponent implements OnInit, OnDes
     this.isLoading$.next(true);
     
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       
       // Load AI Configurations
       const configurationsResult = await rv.RunView<MJAIConfigurationEntity>({

@@ -176,6 +176,28 @@ async function getMultipleDatasets() {
   return results;
 }
 
+// Iterate through a large entity using keyset (seek) pagination
+// O(log N) per page, regardless of depth — ideal for background jobs and bulk processing
+async function iterateAllTaxReturns() {
+  let lastSeenKey: CompositeKey | undefined; // undefined => first page
+  while (true) {
+    const result = await dataProvider.RunView({
+      EntityName: 'Tax Returns',
+      ExtraFilter: 'AddressLine1 IS NOT NULL',
+      AfterKey: lastSeenKey,
+      MaxRows: 500,
+      ResultType: 'entity_object',
+    });
+    if (!result.Success || result.Results.length === 0) break;
+    for (const r of result.Results) { /* process */ }
+    if (result.Results.length < 500) break;
+    lastSeenKey = CompositeKey.FromID(result.Results[result.Results.length - 1].ID);
+  }
+}
+// AfterKey is forwarded through the GraphQL wire via CompositeKeyInputType.
+// See guides/KEYSET_PAGINATION_GUIDE.md for the full pattern, constraints,
+// and reference implementations.
+
 // Execute a report
 async function getSalesReport(reportId: string) {
   const params = {
@@ -667,11 +689,40 @@ For comprehensive information about IS-A relationships in MemberJunction:
 
 ## Caching & Real-Time Sync
 
-This package provides browser-side storage providers (`BrowserIndexedDBStorageProvider`, `BrowserLocalStorageProvider`) for `LocalCacheManager`, and subscribes to `CACHE_INVALIDATION` GraphQL events to keep browser data fresh when other users or servers modify entities.
+This package provides browser-side storage providers for `LocalCacheManager` and subscribes to `CACHE_INVALIDATION` GraphQL events to keep browser data fresh when other users or servers modify entities.
 
-`setupGraphQLClient` orchestrates a deterministic warm-load path: after `provider.Config(...)` loads the cached `AllMetadata` blob from IndexedDB (gzip-compressed), it calls `provider.preValidateAndRefresh()` to confirm the cache is current via a single batched timestamp round-trip. If current, fast-start engages and engines trust their local IndexedDB caches without per-view smart-cache-check round-trips during `StartupManager.Startup()`. If stale, metadata is refreshed in place and fast-start is disabled so engines fall through to smart-cache-check.
+### Storage providers
 
-For the full architecture — including differential updates, the fast-start window, Redis cross-server sync, session-based deduplication, and deployment topologies — see the [**Caching & Pub/Sub Guide**](/guides/CACHING_AND_PUBSUB_GUIDE.md).
+| Provider | Backing store | Key features |
+|---|---|---|
+| `BrowserIndexedDBStorageProvider` | IndexedDB | **Native object storage via structured clone** (no JSON parse/stringify on the hot path), **single-transaction batched reads via `GetItems`**, per-category object stores, version-bumped wipe on minor releases |
+| `BrowserLocalStorageProvider` | `localStorage` | Generic-typed `SetItem<T>` / `GetItem<T>` / `GetItems<T>` with internal JSON serialization, key-prefix-based category isolation |
+
+Both implement the generic-typed `ILocalStorageProvider` interface defined in `@memberjunction/core` — see that package's README for interface details.
+
+### IndexedDB schema versioning (auto-derived from package version)
+
+`BrowserIndexedDBStorageProvider` ties its IDB `DB_VERSION` to this package's `package.json` version (`major * 1000 + minor`):
+
+- **5.30.x** → DB version `5030`
+- **5.31.x** → DB version `5031`
+- **6.0.x**  → DB version `6000`
+
+Patch releases keep the same DB version, so frequent patch deploys don't force users into cold-cache loads. Each minor release triggers a one-time `onupgradeneeded` that wipes all object stores; caches repopulate on first use.
+
+The version is generated at build time by `scripts/generate-version.mjs` (runs as a `prebuild`/`pretest` step) into `src/version.generated.ts`. To force an extra wipe within the same minor (rare — emergency hotfix scenario), bump the `MANUAL_CACHE_REVISION` constant at the top of `storage-providers.ts`.
+
+### Batched IDB reads (single-transaction)
+
+`BrowserIndexedDBStorageProvider.GetItems<T>(keys, category?)` reads N keys inside a single read transaction. Per-call IDB transaction overhead is real (~3–10ms each in most browsers) and *serialized* on the same object store, so `Promise.all([...N GetItem calls])` actually pays N × overhead even though it looks parallel.
+
+For the warm-load smart-cache-check flow this matters a lot — the client reads cached fingerprint metadata for every view in the coalesced engine bundle, then reads the actual cached row data for entries the server marks as 'current'. Both passes used to do per-key reads; both now use `GetItems` to amortize the overhead into one transaction. For 85 keys this is the difference between ~425ms of pure IDB bookkeeping and ~10ms.
+
+### Warm-load orchestration
+
+`setupGraphQLClient` orchestrates a deterministic warm-load path: after `provider.Config(...)` loads the cached `AllMetadata` blob from IndexedDB (gzip-compressed, three keys read in a single batched call), it calls `provider.preValidateAndRefresh()` to confirm the cache is current via a single batched timestamp round-trip. If current, engines trust their local caches and route per-view requests through `RunViewsWithCacheCheck` — a fingerprint-only GraphQL call that returns either a "current" marker (use local cache) or fresh data for stale entries.
+
+For the full architecture — differential updates, Redis cross-server sync, session-based deduplication, and deployment topologies — see the [**Caching & Pub/Sub Guide**](/guides/CACHING_AND_PUBSUB_GUIDE.md).
 
 ## Dependencies
 

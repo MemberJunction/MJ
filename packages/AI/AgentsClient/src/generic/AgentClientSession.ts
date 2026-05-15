@@ -14,7 +14,7 @@
  */
 
 import { Subject, Subscription, Observable } from 'rxjs';
-import { Metadata } from '@memberjunction/core';
+import { IMetadataProvider, Metadata } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import {
     GraphQLAIClient,
@@ -67,6 +67,18 @@ export class AgentClientSession {
     private _sessionId: string | null = null;
     private _isActive = false;
 
+    /**
+     * The metadata provider this session is bound to. Set by the constructor or via
+     * {@link Provider} setter. When null, falls back to the global `Metadata.Provider`.
+     *
+     * **Why this exists:** browser apps can hold multiple `GraphQLDataProvider` instances
+     * connected to different MJ servers in parallel (multi-tenant client, federated UIs).
+     * Each `AgentClientSession` must subscribe to a specific server's tool-request stream —
+     * letting the session reach for the global default would silently route every session's
+     * subscription through whichever provider happened to be registered last.
+     */
+    private _provider: IMetadataProvider | null = null;
+
     /** Decorators that enrich base tool metadata with runtime context */
     private toolDecorators = new Map<string, ClientToolDecorator>();
     /** Current runtime context for decorators */
@@ -93,8 +105,26 @@ export class AgentClientSession {
     /** Emitted on agent progress updates during RunAgent / RunAgentFromConversationDetail */
     public AgentProgress$ = new Subject<AgentProgress>();
 
-    constructor(toolRegistry?: ClientToolRegistry) {
+    /**
+     * @param toolRegistry  Optional pre-built tool registry. Defaults to a fresh empty registry.
+     * @param provider      Optional `IMetadataProvider` to bind this session to. Pass an explicit
+     *   provider when your app talks to multiple MJ servers in parallel; otherwise the session
+     *   falls back to `Metadata.Provider` (the global default), which is fine for single-server apps.
+     */
+    constructor(toolRegistry?: ClientToolRegistry, provider?: IMetadataProvider) {
         this.toolRegistry = toolRegistry ?? new ClientToolRegistry();
+        this._provider = provider ?? null;
+    }
+
+    /**
+     * The metadata provider this session uses. Falls back to the global `Metadata.Provider`
+     * when no explicit provider was supplied.
+     */
+    public get Provider(): IMetadataProvider {
+        return this._provider ?? Metadata.Provider;
+    }
+    public set Provider(value: IMetadataProvider | null) {
+        this._provider = value;
     }
 
     /** The current session ID, or null if no session is active */
@@ -431,11 +461,13 @@ export class AgentClientSession {
     // ================================================================
 
     /**
-     * Get the GraphQLDataProvider from Metadata.Provider.
-     * Returns null if the provider is not a GraphQLDataProvider.
+     * Get the GraphQLDataProvider for this session — the explicit provider passed to the
+     * constructor (or via {@link Provider} setter), falling back to the global default.
+     * Returns null if the bound provider isn't a GraphQLDataProvider (the duck-typed
+     * methods we need aren't present).
      */
     private getProvider(): GraphQLDataProvider | null {
-        const provider = Metadata.Provider;
+        const provider = this.Provider;
         if (!provider) return null;
         // Check for the methods we need (duck-typing for safety)
         const gqlProvider = provider as unknown as GraphQLDataProvider;

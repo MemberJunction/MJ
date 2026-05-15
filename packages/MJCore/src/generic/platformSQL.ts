@@ -1,8 +1,13 @@
-/**
- * Supported database platforms.
- * Extensible — add new platforms as support is implemented.
- */
-export type DatabasePlatform = 'sqlserver' | 'postgresql';
+// `DatabasePlatform` is owned by `@memberjunction/sql-dialect`. Re-exported
+// here so callsites that already pull other things from `@memberjunction/core`
+// get the matching type from one place.
+//
+// The companion `resolveDbPlatformFromEnv` helper that used to live alongside
+// this re-export was moved out — it touches `process.env`, which is a Node
+// API, and core is imported by client-side packages. The helper now lives in
+// `@memberjunction/generic-database-provider` (the first server-only package
+// in the dep chain).
+export type { DatabasePlatform } from '@memberjunction/sql-dialect';
 
 /**
  * Represents a SQL fragment that may have platform-specific variants.

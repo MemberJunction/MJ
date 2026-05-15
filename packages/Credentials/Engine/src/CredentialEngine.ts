@@ -123,7 +123,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
             entityMatch = provider.Entities.find(e => e.Name?.trim().toLowerCase() === 'mj: credentials')
         }
         else {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             entityMatch = md.EntityByName("MJ: Credentials");
         }
         if (entityMatch) {
@@ -330,7 +330,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
         this.validateValues(valuesWithDefaults, credType.FieldSchema, credType.ID);
 
         // Create credential entity via metadata
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const credEntity = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
         credEntity.NewRecord();
         credEntity.CredentialTypeID = credType.ID;
@@ -378,7 +378,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
     ): Promise<void> {
         this.TryThrowIfNotLoaded();
 
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const credEntity = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
         const loaded = await credEntity.Load(credentialId);
         if (!loaded) {
@@ -649,7 +649,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
      */
     private async updateLastUsedAt(credentialId: string, contextUser: UserInfo): Promise<void> {
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const credEntity = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
             await credEntity.Load(credentialId);
             credEntity.LastUsedAt = new Date();
@@ -665,7 +665,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
      */
     private async updateLastValidatedAt(credentialId: string, contextUser: UserInfo): Promise<void> {
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const credEntity = await md.GetEntityObject<MJCredentialEntity>('MJ: Credentials', contextUser);
             await credEntity.Load(credentialId);
             credEntity.LastValidatedAt = new Date();
@@ -709,7 +709,7 @@ export class CredentialEngine extends BaseEngine<CredentialEngine> {
                 return;
             }
 
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const auditLog = await md.GetEntityObject<MJAuditLogEntity>('MJ: Audit Logs', contextUser);
             auditLog.NewRecord();
 

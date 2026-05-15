@@ -5,6 +5,7 @@ import { MJEntityPermissionEntity } from '@memberjunction/core-entities';
 import { UUIDsEqual } from '@memberjunction/global';
 
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export type EntityPermissionChangedEvent = {
   EntityName: string,
   RoleID: string
@@ -19,7 +20,7 @@ export type EntityPermissionChangedEvent = {
   templateUrl: './entity-permissions-grid.component.html',
   styleUrls: ['./entity-permissions-grid.component.css']
 })
-export class EntityPermissionsGridComponent implements OnInit, OnChanges {
+export class EntityPermissionsGridComponent extends BaseAngularComponent implements OnInit, OnChanges {
   @Input() Mode: 'Entity' | 'Role' = 'Entity';
   @Input() EntityName!: string; // used when Mode is 'Entity'
   @Input() RoleName!: string; // used when Mode is 'Role'
@@ -31,8 +32,9 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
   public gridHeight: number = 750;
   public isLoading: boolean = false;
 
-  constructor() { 
-  } 
+  constructor() {
+    super();
+  }
 
   ngOnInit(): void {
     this.Refresh()
@@ -56,7 +58,7 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
     const startTime = new Date().getTime();
     this.isLoading = true
 
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const entity = md.Entities.find(e => e.Name === this.EntityName);
     if (this.Mode === 'Entity' && !entity)
       throw new Error("Entity not found: " + this.EntityName)
@@ -65,7 +67,7 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
     if (this.Mode === 'Role' && !r)
       throw new Error("Role not found: " + this.RoleName)
 
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const filter: string = this.Mode === 'Entity' ? `EntityID='${entity!.ID}'` : `RoleName='${r?.Name}'`;
     const result = await rv.RunView({
       EntityName: 'MJ: Entity Permissions',
@@ -129,7 +131,7 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
     
 
   public getRoleName(roleID: string): string {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const r = md.Roles.find(r => UUIDsEqual(r.ID, roleID));
     return r ? r.Name : '';
   }
@@ -137,7 +139,7 @@ export class EntityPermissionsGridComponent implements OnInit, OnChanges {
   public async savePermissions() {
     if (this.NumDirtyPermissions > 0) {
       // iterate through each permisison and for the ones that are dirty, add to transaction group then commit at once
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const tg = await md.CreateTransactionGroup();
       let itemCount: number = 0;
       for (const p of this.permissions) {

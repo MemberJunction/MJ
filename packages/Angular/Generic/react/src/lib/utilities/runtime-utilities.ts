@@ -46,7 +46,7 @@ export class RuntimeUtilities {
    */
   public buildUtilities(debug: boolean = false): ComponentUtilities {
     this.debug = debug;
-    const md = new Metadata();
+    const md = new Metadata();  // global-provider-ok: utility — single-provider context
     return this.SetupUtilities(md);
   }
 
@@ -159,6 +159,11 @@ export class RuntimeUtilities {
       return {
         ResolvePointToLocation: (lat: number, lng: number) => {
           return geo.ResolvePointToLocation(lat, lng);
+        },
+        // GeoDataEngine is on-demand load — callers must await before ResolvePointToLocation works.
+        EnsureLoaded: () => geo.EnsureLoaded(),
+        get Loaded() {
+          return geo.Loaded;
         }
       };
     } catch {

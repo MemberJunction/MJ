@@ -2,6 +2,7 @@ import { Component, Input, ChangeDetectionStrategy, ChangeDetectorRef, OnChanges
 import { CompositeKey, Metadata, EntityInfo } from '@memberjunction/core';
 import { SharedService } from '@memberjunction/ng-shared';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 /**
  * A clickable pill component that displays a link to a related entity record.
  * Shows the entity icon (from metadata) and either the record name or entity name.
@@ -76,7 +77,7 @@ import { SharedService } from '@memberjunction/ng-shared';
   `],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class EntityLinkPillComponent implements OnChanges {
+export class EntityLinkPillComponent extends BaseAngularComponent implements OnChanges {
   /**
    * The entity name to link to (e.g., 'MJ: AI Agent Runs')
    */
@@ -93,13 +94,13 @@ export class EntityLinkPillComponent implements OnChanges {
   @Input() recordName: string | null = null;
 
   entityInfo: EntityInfo | null = null;
-  private metadata = new Metadata();
-
-  constructor(private cdr: ChangeDetectorRef) {}
+  private get metadata() { return this.ProviderToUse; }
+  constructor(private cdr: ChangeDetectorRef) {
+    super();}
 
   ngOnChanges(changes: SimpleChanges): void {
     if (changes['entityName'] && this.entityName) {
-      this.entityInfo = this.metadata.EntityByName(this.entityName);
+      this.entityInfo = this.metadata.EntityByName(this.entityName) ?? null;
       this.cdr.markForCheck();
     }
   }

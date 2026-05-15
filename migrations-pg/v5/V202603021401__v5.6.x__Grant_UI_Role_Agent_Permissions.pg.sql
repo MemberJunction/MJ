@@ -1,25 +1,3 @@
--- ============================================================================
--- MemberJunction PostgreSQL Migration
--- Converted from SQL Server using TypeScript conversion pipeline
--- ============================================================================
-
--- Extensions
-CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- Schema
-CREATE SCHEMA IF NOT EXISTS __mj;
-SET search_path TO __mj, public;
-
--- Ensure backslashes in string literals are treated literally (not as escape sequences)
-SET standard_conforming_strings = on;
-
--- Implicit INTEGER -> BOOLEAN cast (SQL Server BIT columns accept 0/1 in INSERTs)
--- PostgreSQL has a built-in explicit-only INTEGER->bool cast. We upgrade it to implicit
--- so INSERT VALUES with 0/1 for BOOLEAN columns work like SQL Server BIT.
-UPDATE pg_cast SET castcontext = 'i'
-WHERE castsource = 'integer'::regtype AND casttarget = 'boolean'::regtype;
-
 
 -- ===================== Data (INSERT/UPDATE/DELETE) =====================
 
@@ -48,7 +26,7 @@ BEGIN
   RETURN;
   END IF;
   -- Grant Create + Update for all affected entities
-  UPDATE __mj."EntityPermission" SET "CanCreate" = 1, "CanUpdate" = 1
+  UPDATE __mj."EntityPermission" SET "CanCreate" = TRUE, "CanUpdate" = TRUE
   FROM __mj."Entity" e
   WHERE __mj."EntityPermission"."EntityID" = e."ID"
   AND __mj."EntityPermission"."RoleID" = v_UIRoleID

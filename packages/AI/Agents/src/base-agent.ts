@@ -22,6 +22,7 @@ import { AIEngine } from '@memberjunction/aiengine';
 import { ActionEngineServer } from '@memberjunction/actions';
 import { AIAgentPermissionHelper } from '@memberjunction/ai-engine-base';
 import { AgentContextInjector } from './agent-context-injector';
+import { AgentPreExecutionRAG, AgentPreExecutionRAGResult } from './agent-pre-execution-rag';
 import { RerankerService } from '@memberjunction/ai-reranker';
 import {
     AIPromptParams,
@@ -197,18 +198,21 @@ export class BaseAgent {
     private _promptRunner: AIPromptRunner = new AIPromptRunner();
 
     /**
-     * Metadata instance for creating entity objects.
-     * @private
-     */
-    private _metadata: Metadata = new Metadata();
-
-    /**
      * Active per-request metadata provider, set at the start of Execute().
      * Defaults to the global Metadata.Provider; overridden when a per-request
      * provider is passed through ExecuteAgentParams.provider for server isolation.
      * @private
      */
-    private _activeProvider: IMetadataProvider = Metadata.Provider;
+    private _activeProvider: IMetadataProvider = Metadata.Provider; // global-provider-ok: default until Execute() captures per-request provider
+
+    /**
+     * Returns the active metadata provider for this agent run. Subclasses MUST
+     * use this getter (rather than `new Metadata()` or `Metadata.Provider`) so
+     * that per-request provider isolation is preserved on the server.
+     */
+    protected get ProviderToUse(): IMetadataProvider {
+        return this._activeProvider ?? Metadata.Provider;
+    }
 
     /**
      * This is state information that is specific to the agent type. BaseAgent doesn't know what
@@ -976,16 +980,28 @@ export class BaseAgent {
                     params
                 );
 
-                // Merge with existing data/context/payload (caller values take precedence)
+                // Merge with existing data/context/payload (caller values take precedence).
+                // IMPORTANT: Do NOT spread params.context — it may be a class instance
+                // whose getters/methods would be destroyed by spreading into a plain object.
+                // Instead, copy preloaded properties onto the existing context object.
                 params.data = {
                     ...preloadedResult.data,
                     ...params.data
                 };
 
-                params.context = {
-                    ...preloadedResult.context,
-                    ...params.context
-                };
+                if (preloadedResult.context && typeof preloadedResult.context === 'object') {
+                    if (!params.context || typeof params.context !== 'object') {
+                        params.context = preloadedResult.context;
+                    } else {
+                        // Copy preloaded properties onto the existing context without
+                        // replacing it, so class identity (prototype, getters) is preserved.
+                        for (const key of Object.keys(preloadedResult.context)) {
+                            if (!(key in params.context)) {
+                                (params.context as Record<string, unknown>)[key] = (preloadedResult.context as Record<string, unknown>)[key];
+                            }
+                        }
+                    }
+                }
 
                 params.payload = {
                     ...preloadedResult.payload,
@@ -1084,7 +1100,7 @@ export class BaseAgent {
     public async Execute<C = any, R = any>(params: ExecuteAgentParams<C>): Promise<ExecuteAgentResult<R>> {
         // Capture per-request provider for the duration of this execution so all entity
         // saves go through the isolated provider, never the global singleton's transaction.
-        this._activeProvider = params.provider || Metadata.Provider;
+        this._activeProvider = params.provider ?? Metadata.Provider;
 
         // =====================================================================================
         // UNIVERSAL WALL-CLOCK TIMEOUT
@@ -1303,7 +1319,7 @@ export class BaseAgent {
 
             let primaryScopeEntityId: string | undefined;
             if (primaryScopeEntityName) {
-                const primaryEntity = this._metadata.Entities.find(e => e.Name === primaryScopeEntityName);
+                const primaryEntity = this.ProviderToUse.EntityByName(primaryScopeEntityName);
                 if (primaryEntity) {
                     primaryScopeEntityId = primaryEntity.ID;
                 }
@@ -1323,6 +1339,17 @@ export class BaseAgent {
                     primaryScopeRecordId,
                     secondaryScopes,
                     scopeConfig
+                ),
+                this.InjectPreExecutionRAG(
+                    typeof inputText === 'string' ? inputText : '',
+                    params.agent,
+                    params.contextUser,
+                    wrappedParams.conversationMessages,
+                    params.conversationMessages,
+                    primaryScopeEntityId,
+                    primaryScopeRecordId,
+                    secondaryScopes,
+                    params.payload
                 )
             ]);
 
@@ -1533,6 +1560,15 @@ export class BaseAgent {
     private _injectedMemory: { notes: MJAIAgentNoteEntity[]; examples: MJAIAgentExampleEntity[] } = { notes: [], examples: [] };
 
     /**
+     * Storage for injected pre-execution RAG context (Phase 1C of search-scopes-rag-plus).
+     * Contains the formatted `<retrieved_context>` system-message block actually injected
+     * into `conversationMessages`, plus the structured per-scope / combined result detail
+     * for downstream observability and artifact persistence.
+     */
+    private _ragContext: string = '';
+    private _injectedRAG: AgentPreExecutionRAGResult | null = null;
+
+    /**
      * Determine the scope label for a note based on its scope fields.
      * Used for memory attribution logging to help identify which scope level
      * a note belongs to.
@@ -1605,8 +1641,7 @@ export class BaseAgent {
         const injector = new AgentContextInjector();
 
         // Parse reranker configuration if present
-        // Access dynamically since field may not exist until CodeGen runs after migration
-        const rerankerConfigJson = agent.Get('RerankerConfiguration') as string | null;
+        const rerankerConfigJson = agent.RerankerConfiguration;
         const rerankerConfig = RerankerService.Instance.parseConfiguration(rerankerConfigJson);
 
         // Get notes if injection enabled
@@ -1675,6 +1710,81 @@ export class BaseAgent {
         this._injectedMemory = { notes, examples };
 
         return { notes, examples };
+    }
+
+    /**
+     * Inject pre-execution RAG context for this agent using scoped search.
+     *
+     * Runs in parallel with `InjectContextMemory` during Phase 2 of `Execute()`. Loads the
+     * agent's `AIAgentSearchScope` rows (Phase IN 'PreExecution'|'Both'), renders any per-scope
+     * query templates, calls `SearchEngine.Search()` per scope, cross-scope RRF fuses the
+     * results when multiple scopes contributed, and unshifts a `<retrieved_context>` system
+     * message onto `conversationMessages`.
+     *
+     * When the agent has no active pre-execution scopes (or all scopes returned zero results),
+     * this method is a no-op — no system message is injected and `_injectedRAG` stays null.
+     *
+     * See plans/search-scopes-rag-plus.md §4 (Agent Integration — Pre-Execution RAG).
+     *
+     * @param lastUserMessage - The most recent user message text.
+     * @param agent - The agent being executed.
+     * @param contextUser - Calling user (threaded to SearchEngine + Metadata).
+     * @param conversationMessages - The mutated message array that flows to the LLM (system msg is unshifted here).
+     * @param originalMessages - The unmodified messages array (for template `recentMessages`).
+     * @param primaryScopeEntityId - Multi-tenant primary scope entity ID.
+     * @param primaryScopeRecordId - Multi-tenant primary scope record ID.
+     * @param secondaryScopes - Multi-tenant secondary scope dimensions.
+     * @param payload - The agent's current payload (for template rendering).
+     * @returns The structured RAG result, or `null` if no scopes produced results.
+     */
+    protected async InjectPreExecutionRAG(
+        lastUserMessage: string,
+        agent: MJAIAgentEntityExtended,
+        contextUser: UserInfo | undefined,
+        conversationMessages: ChatMessage[] | undefined,
+        originalMessages: ChatMessage[] | undefined,
+        primaryScopeEntityId?: string,
+        primaryScopeRecordId?: string,
+        secondaryScopes?: Record<string, SecondaryScopeValue>,
+        payload?: unknown
+    ): Promise<AgentPreExecutionRAGResult | null> {
+        try {
+            if (!contextUser) return null;
+            if (!agent?.ID) return null;
+
+            const rag = new AgentPreExecutionRAG();
+            const result = await rag.Execute({
+                agent,
+                lastUserMessage,
+                recentMessages: originalMessages ? originalMessages.slice(-5) : undefined,
+                payload,
+                primaryScopeRecordId,
+                primaryScopeEntityId,
+                secondaryScopes,
+                contextUser
+            });
+
+            if (!result) return null;
+
+            if (conversationMessages && result.formattedSystemMessage) {
+                this._ragContext = result.formattedSystemMessage;
+                conversationMessages.unshift({ role: 'system', content: this._ragContext });
+                this.logStatus(
+                    `🔎 Injected pre-execution RAG context: ${result.combinedResults.length} result(s) from ${result.queriedScopeIDs.length} scope(s)`,
+                    true
+                );
+            }
+
+            this._injectedRAG = result;
+            return result;
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            this.logError(`InjectPreExecutionRAG failed — continuing without RAG context: ${msg}`, {
+                agent,
+                category: 'AgentPreExecutionRAG'
+            });
+            return null;
+        }
     }
 
     /**
@@ -4141,10 +4251,16 @@ The context is now within limits. Please retry your request with the recovered c
                 Type: 'Input' as const
             }));
 
-            // Build action context: preserve the agent's context and inject resolved storage account ID
-            const actionContext = this._resolvedStorageAccountId
-                ? { ...(typeof params.context === 'object' && params.context ? params.context : {}), __resolvedStorageAccountId: this._resolvedStorageAccountId }
-                : params.context;
+            // Build action context: preserve the agent's context by reference
+            // (do NOT spread — spreading destroys class instances, losing
+            // getters/methods on typed contexts like SkipAgentContext).
+            // Stamp the calling agent's identity and resolved storage account ID
+            // directly onto the original context object.
+            const actionContext = typeof params.context === 'object' && params.context ? params.context : {};
+            (actionContext as Record<string, unknown>).AgentID = params.agent.ID;
+            if (this._resolvedStorageAccountId) {
+                (actionContext as Record<string, unknown>).__resolvedStorageAccountId = this._resolvedStorageAccountId;
+            }
 
             // Execute the action and return the full ActionResult
             const result = await actionEngine.RunAction({
@@ -5123,9 +5239,7 @@ The context is now within limits. Please retry your request with the recovered c
 
             // Resolve primary entity ID from entity name
             if (primaryScopeEntityName) {
-                const primaryEntity = this._metadata.Entities.find(
-                    e => e.Name === primaryScopeEntityName
-                );
+                const primaryEntity = this.ProviderToUse.EntityByName(primaryScopeEntityName);
                 if (primaryEntity) {
                     this._agentRun.PrimaryScopeEntityID = primaryEntity.ID;
                 } else {

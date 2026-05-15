@@ -120,10 +120,11 @@ export function MergeParametersWithLLM(
     deterministicParams: MJParameterInfo[],
     llmResult: ParameterExtractionResult | null,
     passthroughContext: Map<string, PassthroughParamContext> = new Map(),
+    parameterHints: Map<string, string> = new Map(),
 ): ExtractedParameter[] {
     const llmParams = llmResult?.parameters ?? [];
 
-    return deterministicParams.map(dp => BuildMergedParameter(dp, llmParams, passthroughContext));
+    return deterministicParams.map(dp => BuildMergedParameter(dp, llmParams, passthroughContext, parameterHints));
 }
 
 /**
@@ -133,9 +134,11 @@ function BuildMergedParameter(
     dp: MJParameterInfo,
     llmParams: ExtractedParameter[],
     passthroughContext: Map<string, PassthroughParamContext>,
+    parameterHints: Map<string, string>,
 ): ExtractedParameter {
     const llmMatch = FindLLMMatch(dp.name, llmParams);
     const ptContext = passthroughContext.get(dp.name.toLowerCase());
+    const hintValue = parameterHints.get(dp.name) ?? parameterHints.get(dp.name.toLowerCase());
 
     const inheritedDescription = ptContext
         ? BuildPassthroughDescription(dp, ptContext)
@@ -148,7 +151,7 @@ function BuildMergedParameter(
         description: llmMatch?.description ?? inheritedDescription ?? GenerateParameterDescription(dp),
         usage: llmMatch?.usage ?? dp.usageLocations,
         defaultValue: ResolveDefaultValue(dp, llmMatch),
-        sampleValue: llmMatch?.sampleValue ?? ptContext?.sampleValue ?? GenerateSampleValue(dp),
+        sampleValue: hintValue ?? llmMatch?.sampleValue ?? ptContext?.sampleValue ?? GenerateSampleValue(dp),
     };
 }
 
@@ -178,15 +181,44 @@ function ResolveParameterType(
 
 /**
  * Resolves the default value, preferring the deterministic value over LLM.
+ * For array-typed parameters, ensures the default is a valid JSON array string
+ * so downstream consumers (e.g., queryParameterProcessor) can parse it safely.
  */
 function ResolveDefaultValue(
     dp: MJParameterInfo,
     llmMatch: ExtractedParameter | undefined,
 ): string | null {
-    if (dp.defaultValue !== null) {
-        return String(dp.defaultValue);
+    const raw = dp.defaultValue !== null
+        ? String(dp.defaultValue)
+        : (llmMatch?.defaultValue ?? null);
+
+    if (raw === null) return null;
+
+    return NormalizeDefaultForType(raw, dp.type === 'unknown' ? (llmMatch?.type ?? 'string') : dp.type);
+}
+
+/**
+ * Normalizes a raw default value string based on the parameter type.
+ * For array types, ensures the value is a valid JSON array string.
+ * Plain strings like "Attended" become '["Attended"]'; already-valid
+ * JSON arrays like '["a","b"]' pass through unchanged.
+ */
+export function NormalizeDefaultForType(
+    rawDefault: string,
+    paramType: string,
+): string {
+    if (paramType !== 'array') return rawDefault;
+
+    // Already a valid JSON array? Pass through.
+    try {
+        const parsed = JSON.parse(rawDefault);
+        if (Array.isArray(parsed)) return rawDefault;
+        // Parsed to a non-array (e.g., a number or string) — wrap it
+        return JSON.stringify([parsed]);
+    } catch {
+        // Not valid JSON (e.g., "Attended") — wrap as single-element array
+        return JSON.stringify([rawDefault]);
     }
-    return llmMatch?.defaultValue ?? null;
 }
 
 /**

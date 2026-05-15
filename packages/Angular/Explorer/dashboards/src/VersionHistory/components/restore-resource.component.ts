@@ -68,7 +68,7 @@ export class VersionHistoryRestoreResourceComponent extends BaseResourceComponen
             this.IsLoading = true;
             this.cdr.markForCheck();
 
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<MJVersionLabelRestoreEntityType>({
                 EntityName: 'MJ: Version Label Restores',
                 OrderBy: '__mj_CreatedAt DESC',

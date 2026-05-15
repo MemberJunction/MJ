@@ -7,6 +7,7 @@ import { AIAgentRunDataHelper } from './ai-agent-run-data.service';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { UUIDsEqual } from '@memberjunction/global';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface TimelineItem {
   id: string;
   type: 'step' | 'subrun' | 'action' | 'prompt';
@@ -35,7 +36,7 @@ export interface TimelineItem {
   styleUrls: ['./ai-agent-run-timeline.component.css'],
   changeDetection: ChangeDetectionStrategy.OnPush
 })
-export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
+export class AIAgentRunTimelineComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   @Input() aiAgentRunId!: string;
   @Input() autoRefresh = false;
   @Input() refreshInterval = 30000; // Minimum 30 seconds
@@ -63,9 +64,14 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
   
   constructor(
     private cdr: ChangeDetectorRef
-  ) {}
+  ) {
+    super();}
   
-  ngOnInit() {
+  async ngOnInit() {
+    // AIEngineBase is deferred at startup; ensure it's loaded before timeline
+    // items render — getStepIconInfo / sub-agent lookups read .Agents synchronously.
+    await AIEngineBase.Instance.EnsureLoaded();
+
     // Initialize observables from the data helper
     this.steps$ = this.dataHelper.steps$;
     this.subRuns$ = this.dataHelper.subRuns$;
@@ -132,7 +138,7 @@ export class AIAgentRunTimelineComponent implements OnInit, OnDestroy {
         switchMap(() => {
           if (!this.aiAgentRunId) return of(null);
           
-          const rv = new RunView();
+          const rv = RunView.FromMetadataProvider(this.ProviderToUse);
           return from(rv.RunView({
             EntityName: 'MJ: AI Agent Runs',
             ExtraFilter: `ID = '${this.aiAgentRunId}'`,

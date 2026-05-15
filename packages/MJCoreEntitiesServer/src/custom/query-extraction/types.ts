@@ -103,8 +103,8 @@ export interface ResolveResult {
     allDeterministicParams: MJParameterInfo[];
     passthroughContext: Map<string, PassthroughParamContext>;
     entityMetadata: EntityMetadataEntry[];
-    /** Non-null if SELECT * was detected and fields were expanded deterministically */
-    selectStarFields: ExtractedField[] | null;
+    /** Fields resolved from the SQL — via SELECT * expansion against entity metadata, or parsed from explicit SELECT columns */
+    resolvedFields: ExtractedField[] | null;
 }
 
 /**
@@ -119,4 +119,7 @@ export interface QuerySyncContext {
     contextUser: UserInfo;
     metadataProvider: IMetadataProvider;
     runViewProvider: IRunViewProvider;
+    /** Caller-provided tested parameter sample values (paramName → sampleValue).
+     *  When present, these take highest priority over LLM-generated or heuristic sampleValues. */
+    parameterHints?: Map<string, string>;
 }

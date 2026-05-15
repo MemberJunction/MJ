@@ -1,4 +1,4 @@
-import { BaseEntity, EntityDeleteOptions, IMetadataProvider, LogError, Metadata } from "@memberjunction/core";
+import { BaseEntity, EntityDeleteOptions, IMetadataProvider, LogError } from "@memberjunction/core";
 import { RegisterClass, ValidationErrorInfo, ValidationResult } from "@memberjunction/global";
 import { MJDashboardEntity } from "../generated/entity_subclasses";
 import { DashboardEngine } from "../engines/dashboards";
@@ -19,7 +19,7 @@ export class MJDashboardEntityExtended extends MJDashboardEntity  {
             const configJSON = JSON.stringify(defaultConfigDetails);
             this.Set("UIConfigDetails", configJSON);
 
-            const md: Metadata = new Metadata();
+            const md = this.ProviderToUse as unknown as IMetadataProvider;
             if(md.CurrentUser){
                 this.Set("UserID", md.CurrentUser.ID);
             }

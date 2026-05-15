@@ -7,6 +7,7 @@ import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { MJAIAgentEntityExtended } from '@memberjunction/ai-core-plus';
 import { UUIDsEqual } from '@memberjunction/global';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 export interface SubAgentAdvancedSettingsFormData {
   executionOrder: number;
   executionMode: 'Sequential' | 'Parallel';
@@ -25,7 +26,7 @@ export interface SubAgentAdvancedSettingsFormData {
   templateUrl: './sub-agent-advanced-settings-dialog.component.html',
   styleUrls: ['./sub-agent-advanced-settings-dialog.component.css']
 })
-export class SubAgentAdvancedSettingsDialogComponent implements OnInit, OnDestroy {
+export class SubAgentAdvancedSettingsDialogComponent extends BaseAngularComponent implements OnInit, OnDestroy {
   
   // Input properties set by service
   subAgent!: MJAIAgentEntityExtended;
@@ -73,7 +74,8 @@ export class SubAgentAdvancedSettingsDialogComponent implements OnInit, OnDestro
   constructor(
     private fb: FormBuilder,
     private cdr: ChangeDetectorRef
-  ) {}
+  ) {
+    super();}
 
   ngOnInit() {
     this.initializeForm();
@@ -149,7 +151,7 @@ export class SubAgentAdvancedSettingsDialogComponent implements OnInit, OnDestro
     this.isLoading$.next(true);
     
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       
       // Load AI Agent Types
       const agentTypesResult = await rv.RunView<MJAIAgentTypeEntity>({

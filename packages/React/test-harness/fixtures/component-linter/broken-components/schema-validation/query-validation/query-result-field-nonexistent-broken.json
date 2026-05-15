@@ -10,10 +10,29 @@
   "registry": "MJ",
   "status": "Active",
   "dataRequirements": {
-    "queries": [{
-      "name": "Top Selling Products",
-      "categoryPath": "Sales/Reports",
-      "fields": ["ProductID", "ProductName", "TotalRevenue", "TotalQuantity"]
-    }]
+    "queries": [
+      {
+        "name": "Top Selling Products",
+        "categoryPath": "Sales/Reports",
+        "fields": [
+          {
+            "name": "ProductID",
+            "type": "uniqueidentifier"
+          },
+          {
+            "name": "ProductName",
+            "type": "nvarchar"
+          },
+          {
+            "name": "TotalRevenue",
+            "type": "decimal"
+          },
+          {
+            "name": "TotalQuantity",
+            "type": "int"
+          }
+        ]
+      }
+    ]
   }
 }

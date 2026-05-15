@@ -1,7 +1,7 @@
 import { Component, ViewContainerRef, ViewChild, AfterViewInit, OnDestroy, inject } from '@angular/core';
 import { MJActionEntity, MJAIAgentActionEntity, MJAIAgentLearningCycleEntity, MJAIAgentNoteEntity, MJAIAgentPromptEntity, MJAIAgentTypeEntity, MJAIAgentRelationshipEntity } from '@memberjunction/core-entities';
 import { MJAIAgentRunEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, } from "@memberjunction/ai-core-plus";
-import { RegisterClass, MJGlobal , UUIDsEqual } from '@memberjunction/global';
+import { RegisterClass, MJGlobal , UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { BaseFormComponent, BaseFormSectionComponent, CUSTOM_LAYOUT_TOOLBAR_CONFIG } from '@memberjunction/ng-base-forms';
 import { CompositeKey, KeyValuePair, Metadata, RunView } from '@memberjunction/core';
 import { TreeBranchConfig } from '@memberjunction/ng-trees';
@@ -19,6 +19,7 @@ import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { ActionEngineBase } from '@memberjunction/actions-base';
 import { PromptSelectorDialogComponent } from './prompt-selector-dialog.component';
 import { CreateAgentService, CreateAgentResult } from '@memberjunction/ng-agents';
+import { SearchScopeChildGridColumn } from '@memberjunction/ng-search';
 // AgentPermissionsDialogComponent is now from @memberjunction/ng-agents (shown via ShowPermissionsDialog flag)
 
 /**
@@ -253,8 +254,110 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         actions: true,
         learningCycles: true,
         notes: true,
-        customSection: true
+        customSection: true,
+        searchScopes: false
     };
+
+    /** Column spec for the AIAgentSearchScope child grid (mockup #5). */
+    public readonly AgentSearchScopeColumns: SearchScopeChildGridColumn[] = [
+        { Field: 'SearchScopeID', Label: 'Scope', Type: 'lookup', LookupEntityName: 'MJ: Search Scopes', LookupFilter: "Status='Active'", Width: '200px' },
+        { Field: 'Phase', Label: 'Phase', Type: 'select', Options: [
+            { Label: 'Pre-Execution (injected before LLM)', Value: 'PreExecution' },
+            { Label: 'Agent-Invoked (tool-callable)', Value: 'AgentInvoked' },
+            { Label: 'Both', Value: 'Both' },
+        ], Width: '220px' },
+        { Field: 'Priority', Label: 'Priority', Type: 'number', Placeholder: 'e.g. 10', Width: '90px' },
+        { Field: 'MaxResults', Label: 'Max Results', Type: 'number', Placeholder: '10', Width: '110px' },
+        { Field: 'MinScore', Label: 'Min Score', Type: 'number', Placeholder: '0.35', Width: '110px' },
+        { Field: 'QueryTemplateID', Label: 'Query Template', Type: 'lookup', LookupEntityName: 'Templates', Width: '180px' },
+        { Field: 'FusionWeightsOverride', Label: 'Fusion Weights Override', Type: 'code', Placeholder: '{ "vector": 2.0, "fulltext": 1.0 }' },
+        { Field: 'IsDefault', Label: 'Default', Type: 'checkbox', Width: '80px' },
+    ];
+
+    /**
+     * Read-only summary of SearchScopePermission rows that apply to the
+     * scopes this agent is assigned to. Drives a small audit table inside
+     * the agent form's Search section so an agent owner can see at a glance
+     * who has access to the scopes their agent uses, without navigating
+     * away to the Knowledge Hub Config dashboard's full audit surface.
+     *
+     * Each entry pairs a scope name with a list of permission rows
+     * (principal type + name + level). Rebuilt whenever the agent's
+     * AIAgentSearchScope assignments change.
+     */
+    public PermissionSummary: Array<{
+        ScopeName: string;
+        ScopeID: string;
+        Permissions: Array<{
+            Principal: string;
+            PrincipalType: 'User' | 'Role';
+            Level: string;
+        }>;
+    }> = [];
+
+    public IsLoadingPermissions = false;
+
+    /**
+     * Loads the permission summary for the scopes currently assigned to
+     * this agent. Called on agent load and after AIAgentSearchScope edits.
+     */
+    public async LoadPermissionSummary(): Promise<void> {
+        if (!this.record?.ID) {
+            this.PermissionSummary = [];
+            return;
+        }
+        this.IsLoadingPermissions = true;
+        try {
+            const rv = new RunView();
+            // 1. Fetch the agent's assigned scope IDs.
+            const assigned = await rv.RunView<{ SearchScopeID: string; SearchScope?: string }>({
+                EntityName: 'MJ: AI Agent Search Scopes',
+                ExtraFilter: `AgentID='${this.record.ID}'`,
+                Fields: ['SearchScopeID', 'SearchScope'],
+                ResultType: 'simple',
+            });
+            if (!assigned.Success || !assigned.Results?.length) {
+                this.PermissionSummary = [];
+                return;
+            }
+            const scopeIds = assigned.Results.map(r => r.SearchScopeID);
+            const scopeNames = new Map<string, string>(
+                assigned.Results.map(r => [r.SearchScopeID, r.SearchScope ?? r.SearchScopeID])
+            );
+
+            // 2. Fetch all permission rows for those scopes in one batch.
+            const idList = scopeIds.map(id => `'${id}'`).join(',');
+            const perms = await rv.RunView<{
+                SearchScopeID: string;
+                UserID: string | null;
+                RoleID: string | null;
+                User?: string;
+                Role?: string;
+                PermissionLevel: string;
+            }>({
+                EntityName: 'MJ: Search Scope Permissions',
+                ExtraFilter: `SearchScopeID IN (${idList})`,
+                Fields: ['SearchScopeID', 'UserID', 'RoleID', 'User', 'Role', 'PermissionLevel'],
+                ResultType: 'simple',
+            });
+            const rows = perms.Success ? (perms.Results ?? []) : [];
+
+            // 3. Group by scope.
+            this.PermissionSummary = scopeIds.map(scopeId => ({
+                ScopeID: scopeId,
+                ScopeName: scopeNames.get(scopeId) ?? scopeId,
+                Permissions: rows
+                    .filter(r => UUIDsEqual(r.SearchScopeID, scopeId))
+                    .map(r => ({
+                        Principal: r.UserID ? (r.User ?? 'unknown user') : (r.Role ?? 'unknown role'),
+                        PrincipalType: (r.UserID ? 'User' : 'Role') as 'User' | 'Role',
+                        Level: r.PermissionLevel,
+                    })),
+            }));
+        } finally {
+            this.IsLoadingPermissions = false;
+        }
+    }
 
     // === User Preferences ===
     private static readonly PREFS_KEY = 'ai-agent-form/preferences';
@@ -493,7 +596,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         }
 
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const entityInfo = md.Entities.find(e => e.Name === entityName);
             
             if (!entityInfo) {
@@ -597,15 +700,20 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         if (this.record?.ID) {
             await this.loadRelatedCounts(false); // no need to force refresh on initial load
             await this.loadCurrentAgentType();
-            
+
+            // Phase 2A: load the permission summary for the scopes this
+            // agent is assigned to. Fire-and-forget — the panel renders an
+            // IsLoadingPermissions skeleton while it resolves.
+            void this.LoadPermissionSummary();
+
             // Schedule change detection - safer than manual detectChanges()
             this.cdr.markForCheck();
-            
+
             // Defer custom section loading to next tick after DOM updates
             this.setTrackedTimeout(() => {
                 this.loadCustomFormSection();
             }, 0);
-            
+
             // Start background timer for running time updates
             this.startRunningTimeUpdater();
         }
@@ -637,9 +745,16 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             actions: true,
             learningCycles: true,
             notes: true,
-            customSection: true
+            customSection: true,
+            searchScopes: false
         };
-        this.cdr.detectChanges(); // update UI
+        // markForCheck (not detectChanges) — we're invoked from inside ngOnInit's
+        // await chain, which still sits within the host's CD pass. A synchronous
+        // detectChanges() here forces a check whose results dev-mode checkNoChanges
+        // re-verifies against state that further awaits below mutate (totalSubAgentCount
+        // 0→1 etc.), producing NG0100. markForCheck schedules a future CD pass that
+        // runs against fully-settled state.
+        this.cdr.markForCheck();
 
         if (forceRefresh) {
             await AIEngineBase.Instance.Config(true); // force refresh
@@ -649,9 +764,22 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             // Clear unified sub-agents array
             this.allSubAgents = [];
 
-            // Load child sub-agents (ParentID-based)
+            // Track agent IDs we've already added so the same agent doesn't appear twice
+            // when it's both a structural child (ParentID) AND has an entry in the
+            // AI Agent Relationships table. Without this dedup, `filteredSubAgents`
+            // emits two items with the same `agent.ID`, the @for(track item.agent.ID)
+            // trips NG0955 ("duplicated keys") on every CD pass, and `totalSubAgentCount`
+            // becomes inconsistent with the visible list. Normalize the UUID for the
+            // Set key — see guides/UUID_COMPARISON_GUIDE.md.
+            const seenSubAgentIds = new Set<string>();
+
+            // Load child sub-agents (ParentID-based) — these take precedence over
+            // relationship-based entries since ParentID is a structural relationship.
             const childAgents = AIEngineBase.Instance.Agents.filter(a => UUIDsEqual(a.ParentID, this.record.ID));
             for (const agent of childAgents) {
+                const key = NormalizeUUID(agent.ID);
+                if (seenSubAgentIds.has(key)) continue;
+                seenSubAgentIds.add(key);
                 this.allSubAgents.push({
                     agent,
                     type: 'child'
@@ -662,7 +790,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             this.subAgents = [...childAgents];
 
             // Load related sub-agents (Relationship-based)
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const relationshipsResult = await rv.RunView<MJAIAgentRelationshipEntity>({
                 EntityName: 'MJ: AI Agent Relationships',
                 ExtraFilter: `AgentID='${this.record.ID}' AND Status='Active'`,
@@ -675,13 +803,17 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                         a => UUIDsEqual(a.ID, relationship.SubAgentID)
                     );
 
-                    if (agent) {
-                        this.allSubAgents.push({
-                            agent,
-                            type: 'related',
-                            relationship
-                        });
-                    }
+                    if (!agent) continue;
+                    const key = NormalizeUUID(agent.ID);
+                    // Skip if the agent is already in the list as a child OR as another
+                    // active Relationship row pointing to the same SubAgentID.
+                    if (seenSubAgentIds.has(key)) continue;
+                    seenSubAgentIds.add(key);
+                    this.allSubAgents.push({
+                        agent,
+                        type: 'related',
+                        relationship
+                    });
                 }
             }
 
@@ -776,9 +908,13 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 actions: false,
                 learningCycles: false,
                 notes: false,
-                customSection: false
+                customSection: false,
+                searchScopes: false
             };
-            this.cdr.detectChanges();
+            // See the comment on the matching call at the top of this method:
+            // markForCheck instead of detectChanges so we don't fight the parent
+            // CD pass (this method runs inside ngOnInit's await chain).
+            this.cdr.markForCheck();
         }
     }
 
@@ -853,7 +989,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 await this.applySearchFilter();
             } else {
                 // Need to load from database
-                const rv = new RunView();
+                const rv = RunView.FromMetadataProvider(this.ProviderToUse);
                 const result = await rv.RunView<MJAIAgentRunEntityExtended>({
                     EntityName: 'MJ: AI Agent Runs',
                     Fields: [
@@ -922,7 +1058,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         }
         
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             this.agentType = await md.GetEntityObject<MJAIAgentTypeEntity>('MJ: AI Agent Types');
             if (this.agentType) {
                 await this.agentType.Load(this.record.TypeID);
@@ -1152,7 +1288,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
 
     private async refreshPermissionState(): Promise<void> {
         if (!this.record?.ID) return;
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView<{ID: string}>({
             EntityName: 'MJ: AI Agent Permissions',
             Fields: ['ID'],
@@ -1399,7 +1535,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                         }
                         
                         // Add to pending changes (defer until save)
-                        const md = new Metadata();
+                        const md = this.ProviderToUse;
                         for (const prompt of newPrompts) {
                             const agentPrompt = await md.GetEntityObject<MJAIAgentPromptEntity>('MJ: AI Agent Prompts');
                             agentPrompt.NewRecord();
@@ -1502,7 +1638,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                     }
                     
                     // Add to pending changes (defer until save)
-                    const md = new Metadata();
+                    const md = this.ProviderToUse;
                     for (const action of newActions) {
                         const agentAction = await md.GetEntityObject<MJAIAgentActionEntity>('MJ: AI Agent Actions');
                         agentAction.NewRecord();
@@ -1796,7 +1932,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
         }
 
         try {
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
             const result = await rv.RunView<MJAIAgentRunEntityExtended>({
                 EntityName: 'MJ: AI Agent Runs',
                 Fields: [
@@ -1949,7 +2085,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                     if (result && result.prompt) {
                         try {
                             // Get current user using proper MJ pattern
-                            const md = new Metadata();
+                            const md = this.ProviderToUse;
                             const currentUserId = md.CurrentUser.ID;
 
                             // Add the prompt to PendingRecords (will be saved with agent)
@@ -2069,7 +2205,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                         this.PendingRecords.splice(pendingAddIndex, 1);
                     } else {
                         // Find the existing AI Agent Prompt link record for deferred deletion
-                        const rv = new RunView();
+                        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
                         const linkResult = await rv.RunView<MJAIAgentPromptEntity>({
                             EntityName: 'MJ: AI Agent Prompts',
                             ExtraFilter: `AgentID='${this.record.ID}' AND PromptID='${prompt.ID}'`,
@@ -2168,7 +2304,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                         }
                         
                         // Add to pending changes (defer until save)
-                        const md = new Metadata();
+                        const md = this.ProviderToUse;
                         for (const agent of newAgents) {
                             const subAgentToUpdate = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents');
                             await subAgentToUpdate.Load(agent.ID);
@@ -2254,7 +2390,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                         this.PendingRecords.splice(pendingAddIndex, 1);
                     } else {
                         // Add to pending removals (will restore to root agent)
-                        const md = new Metadata();
+                        const md = this.ProviderToUse;
                         const subAgentToUpdate = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents');
                         await subAgentToUpdate.Load(subAgent.ID);
                         subAgentToUpdate.ParentID = null; // Will become a root agent
@@ -2475,7 +2611,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                     this.PendingRecords.splice(pendingAddIndex, 1);
                 } else {
                     // Find the existing AI Agent Action link record for deferred deletion
-                    const rv = new RunView();
+                    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
                     const linkResult = await rv.RunView<MJAIAgentActionEntity>({
                         EntityName: 'MJ: AI Agent Actions',
                         ExtraFilter: `AgentID='${this.record.ID}' AND ActionID='${action.ID}'`,
@@ -2744,7 +2880,7 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 this.selectedContextCompressionPrompt = null;
             }
 
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const transactionGroup = await md.CreateTransactionGroup();
 
             // Set transaction group on main record first

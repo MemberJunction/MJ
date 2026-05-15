@@ -193,6 +193,25 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 }
             }
 
+            // Per-batch budget gate — subclasses (e.g., AutotagEntity) inspect
+            // their per-source RunBudget instances and can request a pause.
+            if (this.OnAfterBatch) {
+                try {
+                    const verdict = await this.OnAfterBatch(batch, totalProcessed);
+                    if (verdict && !verdict.continue) {
+                        LogStatus(`[Autotag] Pipeline paused by budget gate: ${verdict.reason ?? 'unspecified'} at offset ${totalProcessed}`);
+                        if (processRun) {
+                            processRun.ErrorMessage = `Auto-paused: ${verdict.reason ?? 'budget exceeded'}`;
+                            processRun.CancellationRequested = true;
+                            await processRun.Save();
+                        }
+                        return;
+                    }
+                } catch (e) {
+                    LogError(`[Autotag] OnAfterBatch hook threw: ${e instanceof Error ? e.message : String(e)}`);
+                }
+            }
+
             // Circuit breaker: halt if error rate exceeds threshold
             if (totalProcessed > 0 && totalFailures > 0) {
                 const errorRate = (totalFailures / totalProcessed) * 100;
@@ -276,15 +295,23 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         embeddingModelID?: string
     ): Promise<void> {
         for (const item of items) {
+            item.EmbeddingStatus = status;
+            if (status === 'Complete') {
+                item.LastEmbeddedAt = new Date();
+                if (embeddingModelID) item.EmbeddingModelID = embeddingModelID;
+            }
+            // Status updates are best-effort relative to the vectorization itself: the vectors
+            // are already (or are about to be) in the vector DB, so a status-save failure on a
+            // single row must not abort the rest of the pipeline. We log on both logical failure
+            // (Save returns false) and infrastructure failure (Save throws) so the gap is visible.
             try {
-                item.EmbeddingStatus = status;
-                if (status === 'Complete') {
-                    item.LastEmbeddedAt = new Date();
-                    if (embeddingModelID) item.EmbeddingModelID = embeddingModelID;
+                const saved = await item.Save();
+                if (!saved) {
+                    LogError(`updateEmbeddingStatusBatch: Save returned false for item ${item.ID} (status='${status}'): ${item.LatestResult?.CompleteMessage ?? 'unknown error'}`);
                 }
-                await item.Save();
-            } catch {
-                // Non-critical
+            } catch (e) {
+                const msg = e instanceof Error ? e.message : String(e);
+                LogError(`updateEmbeddingStatusBatch: infrastructure error saving item ${item.ID} (status='${status}'): ${msg}`);
             }
         }
     }
@@ -296,7 +323,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         contextUser: UserInfo
     ): Promise<void> {
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const item = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', contextUser);
             await item.Load(contentItemID);
             item.TaggingStatus = status;
@@ -489,7 +516,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         contextUser: UserInfo
     ): Promise<void> {
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             let entityID: string;
             let recordID: string;
 
@@ -528,7 +555,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
                 recordID = erdResult.Results[0].RecordID;
             } else {
                 // Non-entity source — tag the ContentItem itself
-                const contentItemsEntity = md.Entities.find(e => e.Name === 'MJ: Content Items');
+                const contentItemsEntity = md.EntityByName('MJ: Content Items');
                 if (!contentItemsEntity) return;
                 entityID = contentItemsEntity.ID;
                 recordID = contentItemTag.ItemID;
@@ -705,7 +732,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     }
 
     public async deleteInvalidContentItem(contentItemID: string, contextUser: UserInfo): Promise<void> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const contentItem: MJContentItemEntity = await md.GetEntityObject<MJContentItemEntity>('MJ: Content Items', contextUser);
         await contentItem.Load(contentItemID);
         await contentItem.Delete();
@@ -766,13 +793,21 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
     public OnContentItemTagSaved: ((tag: MJContentItemTagEntity, parentTag: string | null, contextUser: UserInfo) => Promise<void>) | null = null;
 
     /**
+     * Optional after-batch hook used to enforce per-run budgets. Subclasses
+     * (e.g., AutotagEntity) check their RunBudget instances and may return
+     * `{ continue: false }` to gracefully pause the run via the existing
+     * CancellationRequested machinery.
+     */
+    public OnAfterBatch: ((batch: MJContentItemEntity[], totalProcessed: number) => Promise<{ continue: boolean; reason?: string } | null>) | null = null;
+
+    /**
      * Saves keyword tags from LLM results as Content Item Tags.
      * Uses batched saves for better performance.
      * After each tag is saved, invokes the OnContentItemTagSaved callback (if set)
      * for taxonomy bridge processing.
      */
     public async saveContentItemTags(contentItemID: string, LLMResults: JsonObject, contextUser: UserInfo): Promise<void> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const keywords = LLMResults.keywords;
         if (!keywords || !Array.isArray(keywords)) return;
 
@@ -821,7 +856,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * Updates content item name/description, then creates attribute records for other fields.
      */
     public async saveResultsToContentItemAttribute(LLMResults: JsonObject, contextUser: UserInfo): Promise<void> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const contentItemID = LLMResults.contentItemID as string;
         const skipKeys = new Set(['keywords', 'processStartTime', 'processEndTime', 'contentItemID', 'isValidContent']);
 
@@ -1066,7 +1101,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      * Saves process run metadata to the database (backward-compatible simple version).
      */
     public async saveProcessRun(processRunParams: ProcessRunParams, contextUser: UserInfo): Promise<void> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const processRun = await md.GetEntityObject<MJContentProcessRunEntity>('MJ: Content Process Runs', contextUser);
         processRun.NewRecord();
         processRun.SourceID = processRunParams.sourceID;
@@ -1090,7 +1125,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         contextUser: UserInfo,
         config?: MJContentProcessRunEntity_IContentProcessRunConfiguration
     ): Promise<MJContentProcessRunEntity> {
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const processRun = await md.GetEntityObject<MJContentProcessRunEntity>('MJ: Content Process Runs', contextUser);
         processRun.NewRecord();
         processRun.SourceID = sourceID;
@@ -1302,6 +1337,11 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         const promptRunIDs: string[] = [];
         const modelRunner = new AIModelRunner();
 
+        // Mark every item in this infra group as Processing up front so dashboards
+        // reflect in-flight state. Each batch will transition its items to Complete
+        // or Failed as outcomes are known.
+        await this.updateEmbeddingStatusBatch(items, 'Processing', contextUser);
+
         // Resolve the "Content Embedding" prompt ID for tracking
         const embeddingPromptID = this.resolveEmbeddingPromptID();
 
@@ -1326,6 +1366,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
 
             if (!runResult.Success || runResult.Vectors.length !== allChunks.length) {
                 LogError(`VectorizeContentItems: embedding returned ${runResult.Vectors.length} vectors for ${allChunks.length} texts — ${runResult.ErrorMessage ?? 'unknown error'}`);
+                await this.updateEmbeddingStatusBatch(batch, 'Failed', contextUser);
                 onBatchComplete(batch.length);
                 continue;
             }
@@ -1340,6 +1381,9 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             const batchSuccess = await this.upsertVectorRecords(records, infra);
             if (batchSuccess) {
                 vectorized += batch.length;
+                await this.updateEmbeddingStatusBatch(batch, 'Complete', contextUser, infra.embeddingModelID);
+            } else {
+                await this.updateEmbeddingStatusBatch(batch, 'Failed', contextUser);
             }
 
             onBatchComplete(batch.length);
@@ -1727,17 +1771,28 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
      */
     private async recomputeCoOccurrenceIfAvailable(contextUser: UserInfo): Promise<void> {
         try {
-            // Dynamic check: TagCoOccurrenceEngine is registered via class factory
-            const { TagCoOccurrenceEngine } = await import('@memberjunction/tag-engine');
+            // Dynamic check: TagCoOccurrenceEngine is registered via class factory.
+            // The dynamic import here is the established pattern for the tag-engine
+            // bridge — see CLAUDE.md §"acceptable reasons for dynamic import" #5.
+            const tagEngineModule = await import('@memberjunction/tag-engine');
+            const { TagCoOccurrenceEngine, TagHealthJob, DEFAULT_TAG_HEALTH_THRESHOLDS } = tagEngineModule;
             const engine = TagCoOccurrenceEngine.Instance;
             if (engine && typeof engine.RecomputeCoOccurrence === 'function') {
                 LogStatus('[Autotag] Recomputing tag co-occurrence after pipeline completion...');
                 const result = await engine.RecomputeCoOccurrence(contextUser);
                 LogStatus(`[Autotag] Co-occurrence recompute complete: ${result.PairsUpdated} pairs updated, ${result.PairsDeleted} deleted`);
             }
+
+            // Tag Health emitters — gated by env flag so deployments can opt in.
+            // Set MJ_AUTOTAG_RUN_TAG_HEALTH=1 to enable.
+            if (process.env.MJ_AUTOTAG_RUN_TAG_HEALTH === '1' && TagHealthJob && DEFAULT_TAG_HEALTH_THRESHOLDS) {
+                LogStatus('[Autotag] Running Tag Health emitters (MJ_AUTOTAG_RUN_TAG_HEALTH=1)...');
+                const summary = await TagHealthJob.Instance.Run(DEFAULT_TAG_HEALTH_THRESHOLDS, contextUser);
+                LogStatus(`[Autotag] Tag Health: ${summary.mergeCount} merge / ${summary.lowUsageCount} low-usage / ${summary.wideNodeCount} wide-node suggestions in ${summary.durationMs}ms.`);
+            }
         } catch (e) {
             const msg = e instanceof Error ? e.message : String(e);
-            LogStatus(`[Autotag] Co-occurrence recompute skipped (not available): ${msg}`);
+            LogStatus(`[Autotag] Co-occurrence / health recompute skipped: ${msg}`);
         }
     }
 
@@ -1965,7 +2020,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
         contextUser: UserInfo
     ): Promise<boolean> {
         try {
-            const md = new Metadata();
+            const md = this.ProviderToUse;
             const duplicate = await md.GetEntityObject<MJContentItemDuplicateEntity>('MJ: Content Item Duplicates', contextUser);
             const loaded = await duplicate.Load(duplicateID);
             if (!loaded) {
@@ -2101,7 +2156,7 @@ export class AutotagBaseEngine extends BaseEngine<AutotagBaseEngine> {
             return;
         }
 
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         const duplicate = await md.GetEntityObject<MJContentItemDuplicateEntity>('MJ: Content Item Duplicates', contextUser);
         duplicate.NewRecord();
         duplicate.ContentItemAID = canonicalAID;

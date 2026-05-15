@@ -37,7 +37,7 @@ import {
   DownloadAttachmentParams,
   DownloadAttachmentResult
 } from "@memberjunction/communication-types";
-import { RegisterClass } from "@memberjunction/global";
+import { RegisterClass, MJLruCache } from "@memberjunction/global";
 import { LogError, LogStatus } from "@memberjunction/core";
 import * as Config from "./config";
 import googleApis from 'googleapis';
@@ -90,8 +90,15 @@ export class GmailProvider extends BaseCommunicationProvider {
   /** Cached Gmail client for environment credentials */
   private envGmailClient: CachedGmailClient | null = null;
 
-  /** Cache of Gmail clients for per-request credentials */
-  private clientCache: Map<string, CachedGmailClient> = new Map();
+  /**
+   * Cache of Gmail clients keyed by clientId + refresh-token-prefix. Bounded
+   * LRU(100) + 1-hour TTL — prior unbounded `Map` retained credential-derived
+   * OAuth2 clients (and refresh-token fragments) indefinitely. See audit R2-C3.
+   */
+  private clientCache: MJLruCache<string, CachedGmailClient> = new MJLruCache<string, CachedGmailClient>({
+    maxSize: 100,
+    ttlMs: 60 * 60 * 1000,
+  });
 
   /**
    * Resolves credentials by merging request credentials with environment fallback
@@ -166,14 +173,14 @@ export class GmailProvider extends BaseCommunicationProvider {
 
     // For per-request credentials, use cached client by credential key
     const cacheKey = `${creds.clientId}:${creds.refreshToken.substring(0, 10)}`;
-    let cached = this.clientCache.get(cacheKey);
+    let cached = this.clientCache.Get(cacheKey);
 
     if (!cached) {
       cached = {
         client: this.createGmailClient(creds),
         userEmail: null
       };
-      this.clientCache.set(cacheKey, cached);
+      this.clientCache.Set(cacheKey, cached);
     }
 
     return cached;

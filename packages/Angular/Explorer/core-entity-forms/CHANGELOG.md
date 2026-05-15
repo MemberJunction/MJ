@@ -1,5 +1,412 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 5.34.1
+
+### Patch Changes
+
+- Updated dependencies [3a35358]
+- Updated dependencies [8695f65]
+- Updated dependencies [5abf790]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/ng-base-application@5.34.1
+  - @memberjunction/graphql-dataprovider@5.34.1
+  - @memberjunction/ai-core-plus@5.34.1
+  - @memberjunction/ai-engine-base@5.34.1
+  - @memberjunction/actions-base@5.34.1
+  - @memberjunction/ng-link-directives@5.34.1
+  - @memberjunction/ng-shared@5.34.1
+  - @memberjunction/ng-testing@5.34.1
+  - @memberjunction/ng-action-gallery@5.34.1
+  - @memberjunction/ng-actions@5.34.1
+  - @memberjunction/ng-agents@5.34.1
+  - @memberjunction/ng-ai-test-harness@5.34.1
+  - @memberjunction/ng-base-forms@5.34.1
+  - @memberjunction/ng-base-types@5.34.1
+  - @memberjunction/ng-code-editor@5.34.1
+  - @memberjunction/ng-deep-diff@5.34.1
+  - @memberjunction/ng-entity-relationship-diagram@5.34.1
+  - @memberjunction/ng-entity-viewer@5.34.1
+  - @memberjunction/ng-flow-editor@5.34.1
+  - @memberjunction/ng-join-grid@5.34.1
+  - @memberjunction/ng-list-management@5.34.1
+  - @memberjunction/ng-notifications@5.34.1
+  - @memberjunction/ng-search@5.34.1
+  - @memberjunction/ng-shared-generic@5.34.1
+  - @memberjunction/ng-timeline@5.34.1
+  - @memberjunction/ng-trees@5.34.1
+  - @memberjunction/ng-versions@5.34.1
+  - @memberjunction/core-entities@5.34.1
+  - @memberjunction/templates-base-types@5.34.1
+  - @memberjunction/ng-tabstrip@5.34.1
+  - @memberjunction/ai@5.34.1
+  - @memberjunction/ng-markdown@5.34.1
+  - @memberjunction/ng-ui-components@5.34.1
+  - @memberjunction/global@5.34.1
+
+## 5.34.0
+
+### Minor Changes
+
+- ae5cfbd: Search Scopes & RAG+ — multi-phase ship
+
+  A bundled feature release across the search pipeline (Phases 2A–6 of
+  the Search Scopes & RAG+ initiative). Highlights:
+
+  **SearchEngine pipeline**
+  - New `SimpleVectorDatabase` in-process driver — points
+    `VectorDBBase` at any entity column with an `EmbeddingVector`
+    field. Suitable for dev / agent-memory / small-medium corpora.
+    Constructor accepts an empty/missing API key (in-process driver
+    has no remote auth target).
+  - `VectorDBBase.QueryIndex(params, contextUser?)` — `contextUser`
+    is now a proper second parameter instead of being smuggled
+    through `filter.__contextUser`. Pinecone/Qdrant/pgvector ignore
+    it (they auth via API key); in-process drivers use it for
+    RunView's server-side RLS guard. Method-level pattern matches
+    MJ's `RunView(params, contextUser)` and `GetEntityObject(name,
+contextUser)` conventions.
+  - `SearchFusion` — multi-provider score evidence is now preserved
+    through RRF. Previously the second provider's `ScoreBreakdown`
+    contribution was silently dropped when the same RecordID
+    appeared in two provider lists, causing the merged item to
+    rank below single-provider hits. Records that match in
+    Vector + Entity now carry both contributions and rank
+    correctly.
+  - Defensive sanitation in `Fuse()` — items with non-finite Score
+    (NaN, Infinity), empty/non-string RecordID, or null payloads are
+    filtered before fusion. Closes a class of failure modes from
+    misbehaving 3rd-party providers.
+  - Tier-1 input edge cases hardened — null/undefined/non-string
+    Query no longer TypeErrors, surfaces a clean Failure result.
+    `EntitySearchProvider` now strips SQL LIKE wildcards (`%`, `_`,
+    `[`, `]`) from user input — `Query="%"` no longer matches every
+    row through the LIKE-injection vector.
+  - Streaming search — `SearchEngine.streamSearch()` v2 emits
+    provider events as soon as each provider promise settles
+    (concurrent emission), not in registration order.
+
+  **Permission gate (Phase 2A)**
+  - `SearchScopePermissionResolver` enforces a 6-step decision tree:
+    AgentNone → AgentAssignedNotListed → DirectGrant → RoleGrant →
+    AgentUnscopedAll → NoGrant.
+  - `AIAgent.SearchScopeAccess` enum (`'None' | 'All' | 'Assigned'`)
+    controls agent-side fallback when no per-user/per-role grant
+    applies. `BypassCache` propagates through the dedup-linger cache
+    so freshly-revoked grants take effect immediately.
+  - New tests + agent scenarios cover all 13 permission-matrix cells
+    (PM-01..PM-13).
+
+  **Reranker catalog (Phase 2D)**
+  - 4 reranker drivers — Cohere, Voyage, OpenAI judge, BGE local —
+    all with `@RegisterClass(BaseReRanker, ...)`. Per-search
+    `RerankerBudgetGuard` caps API spend; `EstimateCostCents` and
+    `CostReporter` per driver. Graceful degradation when the
+    upstream SDK rejects/times out/returns malformed responses.
+
+  **Observability (Phase 3)**
+  - `MJSearchExecutionLog` — every `Search()` invocation writes one
+    row with Status / ResultCount / TotalDurationMs / RerankerCostCents
+    / ProvidersJSON (per-source hit counts) / AIAgentID attribution.
+    Forbidden gate decisions log `Status='Forbidden'` rows.
+  - Knowledge Hub Config dashboard subtab visualizes the log:
+    hit-rate, p50/p95 latency, top failure reasons, top users, total
+    reranker cost.
+
+  **External providers (Phase 5)**
+  - 4 search providers — Elasticsearch, Typesense, Azure AI Search,
+    OpenSearch — all with `@RegisterClass(BaseSearchProvider, ...)`.
+  - New `AvailableSearchProviders` GraphQL query exposes the
+    `BaseSearchProvider.GetAvailableProviders()` runtime catalog to
+    the SearchScope form's provider dropdown (P5.5).
+
+  **Angular / UI**
+  - Custom `MJSearchScopeFormComponentExtended` (P2D.7 / P4) — fusion
+    weights sliders, reranker dropdown, live-preview panel, A/B
+    Kendall-tau similarity, CSV export of last 500 invocations.
+  - Custom `MJSearchScopeProviderFormComponentExtended` (P5.5) —
+    provider dropdown sourced from `MJ: Search Providers` rows,
+    annotated with whether each provider's DriverClass is currently
+    registered with the server's ClassFactory.
+  - Streaming search consumer in `SearchService.StreamSearch()` —
+    Angular Observable surface for the `StreamScopedSearch`
+    mutation + `SearchStreamEvents` subscription.
+
+  **Migration**
+  - `V202605081416__v5.34.x__Search_Scopes_And_RAG_Plus.sql` —
+    consolidated. Contains six DDL sections (Phase 1 baseline,
+    `SearchScopePermission`, `SearchScope.RerankerBudgetCents`,
+    `SearchExecutionLog`, `SearchScopeTestQuery`, unique-constraint
+    fix) followed by five CodeGen runs that regenerate the entity
+    metadata, sprocs, views, and permission grants for all of the
+    above.
+
+  **Test suite**
+  - 17 end-to-end agent scenarios (s01–s17) under `agent-scenarios/`,
+    driving real LLM tool-calls (Sage agent) against the SearchEngine
+    - multi-provider RRF + reranker pipeline. 95 assertions; all PASS.
+  - `@memberjunction/search-engine` vitest: 237 unit tests across 21
+    files, all PASS. Covers fusion, providers (real + external),
+    rerankers, scope template renderer, parent-ID metadata,
+    streaming, permission resolver, edge cases, mid-flight failures.
+
+  **Documentation**
+  - `guides/SEARCH_SCOPES_AND_RAG_GUIDE.md` — comprehensive guide
+    covering scope creation, agent integration, permission resolution,
+    multi-scope fusion, reranker catalog, observability, external
+    providers, how-to templates for adding a new provider /
+    reranker / artifact tool library / vector index over an
+    embedded entity column. Documents the embedding-regeneration
+    contract for ops.
+
+  See `RAG_plan.md` for the full multi-phase plan and `plans/
+search-scopes-rag-plus/what-we-built.md` for the customer-facing
+  summary.
+
+### Patch Changes
+
+- b03bfb4: Replace hardcoded colors with semantic design tokens across Angular components and shared styles, restoring correct dark-mode behavior and enabling white-labeling. Also maps the System Diagnostics PerfMon chrome (background, borders, text, controls) to MJ semantic tokens so the panel adapts to the active theme; series colors stay categorical.
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- Updated dependencies [b03bfb4]
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [003317f]
+- Updated dependencies [0caffca]
+- Updated dependencies [cfffb6d]
+- Updated dependencies [e999e0d]
+- Updated dependencies [389d356]
+- Updated dependencies [ae5cfbd]
+- Updated dependencies [6d8ee1a]
+- Updated dependencies [72cb92e]
+  - @memberjunction/ng-flow-editor@5.34.0
+  - @memberjunction/ng-markdown@5.34.0
+  - @memberjunction/ai-engine-base@5.34.0
+  - @memberjunction/ai-core-plus@5.34.0
+  - @memberjunction/actions-base@5.34.0
+  - @memberjunction/ng-base-application@5.34.0
+  - @memberjunction/ng-link-directives@5.34.0
+  - @memberjunction/ng-shared@5.34.0
+  - @memberjunction/ng-testing@5.34.0
+  - @memberjunction/ng-action-gallery@5.34.0
+  - @memberjunction/ng-actions@5.34.0
+  - @memberjunction/ng-agents@5.34.0
+  - @memberjunction/ng-ai-test-harness@5.34.0
+  - @memberjunction/ng-base-forms@5.34.0
+  - @memberjunction/ng-base-types@5.34.0
+  - @memberjunction/ng-code-editor@5.34.0
+  - @memberjunction/ng-deep-diff@5.34.0
+  - @memberjunction/ng-entity-relationship-diagram@5.34.0
+  - @memberjunction/ng-entity-viewer@5.34.0
+  - @memberjunction/ng-join-grid@5.34.0
+  - @memberjunction/ng-list-management@5.34.0
+  - @memberjunction/ng-notifications@5.34.0
+  - @memberjunction/ng-search@5.34.0
+  - @memberjunction/ng-shared-generic@5.34.0
+  - @memberjunction/ng-tabstrip@5.34.0
+  - @memberjunction/ng-timeline@5.34.0
+  - @memberjunction/ng-trees@5.34.0
+  - @memberjunction/ng-ui-components@5.34.0
+  - @memberjunction/ng-versions@5.34.0
+  - @memberjunction/templates-base-types@5.34.0
+  - @memberjunction/core@5.34.0
+  - @memberjunction/core-entities@5.34.0
+  - @memberjunction/graphql-dataprovider@5.34.0
+  - @memberjunction/global@5.34.0
+  - @memberjunction/ai@5.34.0
+
+## 5.33.0
+
+### Patch Changes
+
+- Updated dependencies [97ed790]
+- Updated dependencies [95eb27e]
+- Updated dependencies [74b0be0]
+- Updated dependencies [5cc5326]
+- Updated dependencies [7e4957d]
+- Updated dependencies [3e84676]
+  - @memberjunction/graphql-dataprovider@5.33.0
+  - @memberjunction/core@5.33.0
+  - @memberjunction/global@5.33.0
+  - @memberjunction/ng-entity-viewer@5.33.0
+  - @memberjunction/ng-shared@5.33.0
+  - @memberjunction/ng-testing@5.33.0
+  - @memberjunction/ng-actions@5.33.0
+  - @memberjunction/ng-ai-test-harness@5.33.0
+  - @memberjunction/ng-notifications@5.33.0
+  - @memberjunction/ng-versions@5.33.0
+  - @memberjunction/ai-engine-base@5.33.0
+  - @memberjunction/ai-core-plus@5.33.0
+  - @memberjunction/actions-base@5.33.0
+  - @memberjunction/ng-base-application@5.33.0
+  - @memberjunction/ng-link-directives@5.33.0
+  - @memberjunction/ng-action-gallery@5.33.0
+  - @memberjunction/ng-agents@5.33.0
+  - @memberjunction/ng-base-forms@5.33.0
+  - @memberjunction/ng-base-types@5.33.0
+  - @memberjunction/ng-code-editor@5.33.0
+  - @memberjunction/ng-deep-diff@5.33.0
+  - @memberjunction/ng-entity-relationship-diagram@5.33.0
+  - @memberjunction/ng-flow-editor@5.33.0
+  - @memberjunction/ng-join-grid@5.33.0
+  - @memberjunction/ng-list-management@5.33.0
+  - @memberjunction/ng-shared-generic@5.33.0
+  - @memberjunction/ng-timeline@5.33.0
+  - @memberjunction/ng-trees@5.33.0
+  - @memberjunction/core-entities@5.33.0
+  - @memberjunction/templates-base-types@5.33.0
+  - @memberjunction/ai@5.33.0
+  - @memberjunction/ng-tabstrip@5.33.0
+  - @memberjunction/ng-markdown@5.33.0
+  - @memberjunction/ng-ui-components@5.33.0
+
+## 5.32.0
+
+### Patch Changes
+
+- Updated dependencies [a7e8b3b]
+- Updated dependencies [b9c67ac]
+  - @memberjunction/core@5.32.0
+  - @memberjunction/ai-engine-base@5.32.0
+  - @memberjunction/ai-core-plus@5.32.0
+  - @memberjunction/actions-base@5.32.0
+  - @memberjunction/ng-base-application@5.32.0
+  - @memberjunction/ng-link-directives@5.32.0
+  - @memberjunction/ng-shared@5.32.0
+  - @memberjunction/ng-testing@5.32.0
+  - @memberjunction/ng-action-gallery@5.32.0
+  - @memberjunction/ng-actions@5.32.0
+  - @memberjunction/ng-agents@5.32.0
+  - @memberjunction/ng-ai-test-harness@5.32.0
+  - @memberjunction/ng-base-forms@5.32.0
+  - @memberjunction/ng-base-types@5.32.0
+  - @memberjunction/ng-code-editor@5.32.0
+  - @memberjunction/ng-deep-diff@5.32.0
+  - @memberjunction/ng-entity-relationship-diagram@5.32.0
+  - @memberjunction/ng-entity-viewer@5.32.0
+  - @memberjunction/ng-flow-editor@5.32.0
+  - @memberjunction/ng-join-grid@5.32.0
+  - @memberjunction/ng-list-management@5.32.0
+  - @memberjunction/ng-notifications@5.32.0
+  - @memberjunction/ng-shared-generic@5.32.0
+  - @memberjunction/ng-timeline@5.32.0
+  - @memberjunction/ng-trees@5.32.0
+  - @memberjunction/ng-versions@5.32.0
+  - @memberjunction/graphql-dataprovider@5.32.0
+  - @memberjunction/core-entities@5.32.0
+  - @memberjunction/templates-base-types@5.32.0
+  - @memberjunction/ng-tabstrip@5.32.0
+  - @memberjunction/ai@5.32.0
+  - @memberjunction/ng-markdown@5.32.0
+  - @memberjunction/ng-ui-components@5.32.0
+  - @memberjunction/global@5.32.0
+
+## 5.31.0
+
+### Minor Changes
+
+- fc8b9b8: Autotagger scope & governance — per-tenant tag scoping, per-tag governance, persisted embeddings, suggestion queue, Tag Health, and a unified Tag Governance dashboard with full UI.
+
+  **Schema (one additive migration `V202605010846`)** — 9 new columns on `__mj.Tag` (governance + persisted embedding cache), three new tables (`__mj.TagScope` polymorphic M2M, `__mj.TagSynonym`, `__mj.TagSuggestion` review queue). Existing rows default to `IsGlobal=1` so behavior is unchanged out of the box. `IContentSourceConfiguration` JSON type extended with five net-new optional knobs (`SuggestThreshold`, `MaxNewTagsPerRun`, `MaxNewTagsPerItem`, `MaxTokensPerRun`, `MaxCostPerRun`) — CodeGen emits the typed accessor.
+
+  **Engine (`tag-engine` / `tag-engine-base` / `core-entities-server`)** — `MJTagEntityServer` + new `MJTagScopeEntityServer` enforce the `IsGlobal ⊕ TagScope` invariant via `ValidateAsync` (no DB triggers); persisted-embedding `Save()` hook + cold-start hydrate path replace the every-startup recompute. `TagEngineBase` eagerly loads scope + synonyms in `Config()` and exposes `GetVisibleTags / GetTagBySynonym / GetTagByName(name, ctx) / GetTaxonomyTree(rootID, ctx)`. New `TagScopeFilterBuilder` (`BaseSingleton`) produces SQL fragments + in-memory predicates + child-scope subset validator. `TagEngine.ResolveTag` widened with a `'hybrid'` mode and a `ResolveTagOptions` parameter — new 4+1-tier pipeline (synonym → exact → fuzzy → semantic with tiered confidence routing → governance-gated `handleNoMatch`). `SuggestThreshold` band routes to the suggestion queue; `createAndEmbedTag` snapshots parent scope onto new children when parent is non-global. `TagGovernanceEngine` adds `ValidateAutoGrow / EnqueueSuggestion / PromoteSuggestion / RejectSuggestion`; `MergeTags` carries source synonyms (`Source='Merged'`). New `TagHealthJob` with three idempotent emitters (merge / low-usage / wide-node), gated by `MJ_AUTOTAG_RUN_TAG_HEALTH=1` env or invokable on demand. New `TagEngine.RebuildTagEmbeddings(contextUser)` utility for post-model-change rebuilds.
+
+  **Autotag pipeline (`content-autotagging`)** — `ScopeContextResolver` derives per-source scope from `TagRootID`, `RunBudget` enforces per-run + per-item caps, new `OnAfterBatch` hook on `AutotagBaseEngine` gracefully pauses runs via the existing `CancellationRequested` machinery. `BridgeContentItemTagToTaxonomy` threads `scopeContext`, `SuggestThreshold`, source traceability, and an `onTagCreated` callback into `ResolveTag`. Per-item budget exhaustion collapses the effective mode to `hybrid` so further new tags route to suggestions instead of being auto-created.
+
+  **Server (`server` / `graphql-dataprovider`)** — new `TagGovernanceResolver` exposes `PromoteTagSuggestion` / `RejectTagSuggestion` / `RebuildTagEmbeddings` / `RunTagHealth` mutations so suggestion dispositions run transactionally on the server. Matching `GraphQLAIClient` methods + result interfaces.
+
+  **UI (`ng-dashboards` / `ng-core-entity-forms`)** — new `TagGovernanceResourceComponent` (registered as `'TagGovernance'`) — single dashboard with **left-nav** (top nav stays with the MJExplorer shell). Three sections built to the picked mockup options: Taxonomy (Option A — tree + governance/scope/synonyms detail-form, scope dialog with parent-subset validation), Suggestions (Option C — table + drawer with bulk actions and "if approved" preview), Tag Health (Option A — three summary cards + threshold tuning + run history + Rebuild stale embeddings). `MJContentSourceFormComponentExtended` gains a "Tag Pipeline Configuration" panel (Option B dense form) with mode picker cards, threshold sliders that auto-keep `SuggestThreshold < MatchThreshold`, scope+root, and budget fields — the existing JSON code editor stays available collapsed below as the advanced override. Multi-provider safe + UUID-compliant throughout.
+
+  **Tests** — 271 tests across the impacted packages, all green. New: 12 `TagScopeFilterBuilder`, 8 `ValidateAutoGrow`, 4 `TagHealthJob`, 7 `RunBudget`, 8 `ScopeContextResolver`, 18 `TagGovernanceResolver`, 18 `TagGovernance` dashboard, 23 `ContentSource` form (vitest newly enabled in `ng-core-entity-forms`).
+
+  **Documentation** — `guides/TAXONOMY_TAGGING_GUIDE.md` (~730 lines, 7 Mermaid diagrams) covers the entity model, autotag pipeline, 4+1-tier resolver, taxonomy modes, governance gates, scope inheritance, suggestion lifecycle, worked implementation guides, seeding patterns, and ops guidance. `guides/BASE_ENTITY_SERVER_PATTERNS.md` captures the persisted-embedding + `ValidateAsync` invariant + FK-cleanup-before-delete patterns this PR introduces so future agents lift the recipe rather than re-discover it. `mockups/knowledge-hub-classify-redesign/` ships 12 polished HTML mockups (3 options each across the 3 high-priority surfaces) that drove the UX direction.
+
+  Migration ordering: apply the SQL migration → run CodeGen → `mj sync push` for the JSON-type interface → build. The migration is additive and idempotent against `IsGlobal=1` defaults; existing customers see no behavior change until they opt in by setting per-tag governance flags or moving sources off the default `auto-grow` mode.
+
+### Patch Changes
+
+- 7ed7a4b: no metadata/migration changes
+- 6779c1e: Lazy field hydration in BaseEntity + smarter engine startup (~30x warm-load speedup, ~14s to ~470ms). Defers per-row Field construction until something mutates or walks Fields, removes a speculative per-view fast-start path, adds a `deferred` flag to `@RegisterForStartup` and an `EnsureLoaded()` shortcut on `BaseEngine` / `AIEngine`. DeveloperModeService and WorkspaceStateManager swapped weak `Get`/`Set` calls for typed accessors. EnsureLoaded calls added at AI engine consumption sites.
+- Updated dependencies [fc8b9b8]
+- Updated dependencies [cde4d2c]
+- Updated dependencies [7ed7a4b]
+- Updated dependencies [60e7541]
+- Updated dependencies [18be074]
+- Updated dependencies [17b8087]
+- Updated dependencies [6779c1e]
+- Updated dependencies [de34786]
+- Updated dependencies [5db36d9]
+- Updated dependencies [0e3365f]
+  - @memberjunction/core-entities@5.31.0
+  - @memberjunction/graphql-dataprovider@5.31.0
+  - @memberjunction/ai-engine-base@5.31.0
+  - @memberjunction/ai@5.31.0
+  - @memberjunction/ai-core-plus@5.31.0
+  - @memberjunction/actions-base@5.31.0
+  - @memberjunction/ng-base-application@5.31.0
+  - @memberjunction/ng-link-directives@5.31.0
+  - @memberjunction/ng-shared@5.31.0
+  - @memberjunction/ng-testing@5.31.0
+  - @memberjunction/ng-action-gallery@5.31.0
+  - @memberjunction/ng-actions@5.31.0
+  - @memberjunction/ng-agents@5.31.0
+  - @memberjunction/ng-ai-test-harness@5.31.0
+  - @memberjunction/ng-base-forms@5.31.0
+  - @memberjunction/ng-base-types@5.31.0
+  - @memberjunction/ng-code-editor@5.31.0
+  - @memberjunction/ng-deep-diff@5.31.0
+  - @memberjunction/ng-entity-relationship-diagram@5.31.0
+  - @memberjunction/ng-entity-viewer@5.31.0
+  - @memberjunction/ng-flow-editor@5.31.0
+  - @memberjunction/ng-join-grid@5.31.0
+  - @memberjunction/ng-list-management@5.31.0
+  - @memberjunction/ng-markdown@5.31.0
+  - @memberjunction/ng-notifications@5.31.0
+  - @memberjunction/ng-shared-generic@5.31.0
+  - @memberjunction/ng-tabstrip@5.31.0
+  - @memberjunction/ng-timeline@5.31.0
+  - @memberjunction/ng-trees@5.31.0
+  - @memberjunction/ng-ui-components@5.31.0
+  - @memberjunction/ng-versions@5.31.0
+  - @memberjunction/core@5.31.0
+  - @memberjunction/global@5.31.0
+  - @memberjunction/templates-base-types@5.31.0
+
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ai-engine-base@5.30.1
+- @memberjunction/ai@5.30.1
+- @memberjunction/ai-core-plus@5.30.1
+- @memberjunction/actions-base@5.30.1
+- @memberjunction/ng-base-application@5.30.1
+- @memberjunction/ng-link-directives@5.30.1
+- @memberjunction/ng-shared@5.30.1
+- @memberjunction/ng-testing@5.30.1
+- @memberjunction/ng-action-gallery@5.30.1
+- @memberjunction/ng-actions@5.30.1
+- @memberjunction/ng-agents@5.30.1
+- @memberjunction/ng-ai-test-harness@5.30.1
+- @memberjunction/ng-base-forms@5.30.1
+- @memberjunction/ng-code-editor@5.30.1
+- @memberjunction/ng-deep-diff@5.30.1
+- @memberjunction/ng-entity-relationship-diagram@5.30.1
+- @memberjunction/ng-entity-viewer@5.30.1
+- @memberjunction/ng-flow-editor@5.30.1
+- @memberjunction/ng-join-grid@5.30.1
+- @memberjunction/ng-list-management@5.30.1
+- @memberjunction/ng-markdown@5.30.1
+- @memberjunction/ng-notifications@5.30.1
+- @memberjunction/ng-shared-generic@5.30.1
+- @memberjunction/ng-tabstrip@5.30.1
+- @memberjunction/ng-timeline@5.30.1
+- @memberjunction/ng-trees@5.30.1
+- @memberjunction/ng-ui-components@5.30.1
+- @memberjunction/ng-versions@5.30.1
+- @memberjunction/graphql-dataprovider@5.30.1
+- @memberjunction/core@5.30.1
+- @memberjunction/core-entities@5.30.1
+- @memberjunction/global@5.30.1
+- @memberjunction/templates-base-types@5.30.1
+
 ## 5.30.0
 
 ### Minor Changes

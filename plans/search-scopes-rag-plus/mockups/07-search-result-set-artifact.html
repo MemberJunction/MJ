@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <title>Mockup: Search Result Set Artifact Viewer</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+    <link rel="stylesheet" href="_tokens.css" />
+    <style>
+        .artifact-head {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px;
+            background: var(--mj-bg-surface);
+            border: 1px solid var(--mj-border-default);
+            border-radius: 8px;
+            margin-bottom: 16px;
+        }
+        .artifact-head h2 { margin: 0; font-size: 1.125rem; flex: 1; }
+        .artifact-meta { display: flex; gap: 16px; font-size: 0.8125rem; color: var(--mj-text-muted); }
+
+        .summary-row {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .summary-card {
+            background: var(--mj-bg-surface);
+            border: 1px solid var(--mj-border-default);
+            border-radius: 8px;
+            padding: 12px;
+        }
+        .summary-card .label { margin-bottom: 4px; }
+        .summary-card .value { font-size: 1.25rem; font-weight: 600; color: var(--mj-text-primary); font-variant-numeric: tabular-nums; }
+
+        .result-toolbar {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            padding: 10px 16px;
+            background: var(--mj-bg-surface-card);
+            border: 1px solid var(--mj-border-default);
+            border-radius: 8px 8px 0 0;
+            font-size: 0.8125rem;
+        }
+        .result-toolbar input { flex: 1; max-width: 300px; }
+        .result-toolbar .dropdown {
+            padding: 4px 10px;
+            border: 1px solid var(--mj-border-default);
+            border-radius: 6px;
+            background: var(--mj-bg-surface);
+            font-size: 0.8125rem;
+            cursor: pointer;
+        }
+
+        .result-table { width: 100%; border-collapse: collapse; font-size: 0.8125rem; background: var(--mj-bg-surface); border: 1px solid var(--mj-border-default); border-top: none; }
+        .result-table th, .result-table td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--mj-border-subtle); vertical-align: top; }
+        .result-table th {
+            background: var(--mj-bg-surface-card);
+            color: var(--mj-text-secondary);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            font-weight: 600;
+        }
+        .score-cell {
+            display: inline-block;
+            min-width: 44px;
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: var(--mj-bg-surface-sunken);
+            color: var(--mj-text-primary);
+            font-weight: 600;
+            text-align: center;
+            font-variant-numeric: tabular-nums;
+        }
+        .pagination { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; color: var(--mj-text-muted); font-size: 0.8125rem; }
+        .pagination .pages { display: flex; gap: 4px; }
+        .pagination button { width: 28px; height: 28px; border-radius: 4px; border: 1px solid var(--mj-border-default); background: var(--mj-bg-surface); cursor: pointer; }
+        .pagination button.active { background: var(--mj-brand-primary); color: var(--mj-text-inverse); border-color: var(--mj-brand-primary); }
+    </style>
+</head>
+<body>
+    <div class="mock-frame">
+        <div class="mock-header">
+            <h1>Artifact — Search Result Set</h1>
+            <span class="mock-breadcrumb">Mockup 7/10 · Data-Snapshot–shaped artifact persisted from a scoped search</span>
+        </div>
+
+        <div class="artifact-head">
+            <i class="fa-solid fa-magnifying-glass-plus" style="font-size:1.5rem;color:var(--mj-brand-primary);"></i>
+            <h2>Scoped Search: "refund policy" <span class="muted" style="font-weight:400;">· Apr 19 2026, 10:15 AM</span></h2>
+            <span class="badge info">Search Result Set</span>
+            <span class="badge success">v2</span>
+            <button class="btn"><i class="fa-solid fa-code-compare"></i> Compare</button>
+            <button class="btn"><i class="fa-solid fa-share-nodes"></i> Share</button>
+        </div>
+
+        <div class="summary-row">
+            <div class="summary-card">
+                <div class="label">Total results</div>
+                <div class="value">47</div>
+            </div>
+            <div class="summary-card">
+                <div class="label">Top score</div>
+                <div class="value">0.91</div>
+            </div>
+            <div class="summary-card">
+                <div class="label">Vector hits</div>
+                <div class="value">22</div>
+            </div>
+            <div class="summary-card">
+                <div class="label">Full-text hits</div>
+                <div class="value">18</div>
+            </div>
+            <div class="summary-card">
+                <div class="label">Database hits</div>
+                <div class="value">7</div>
+            </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 280px;gap:16px;">
+            <div>
+                <div class="result-toolbar">
+                    <i class="fa-solid fa-filter"></i>
+                    <input type="text" placeholder="Filter results…" />
+                    <select class="dropdown">
+                        <option>All scopes</option>
+                        <option>HR Policies</option>
+                        <option>Customer KB</option>
+                    </select>
+                    <select class="dropdown">
+                        <option>All sources</option>
+                        <option>Semantic</option>
+                        <option>Full-text</option>
+                        <option>Database</option>
+                    </select>
+                    <span style="flex:1;"></span>
+                    <button class="btn"><i class="fa-solid fa-download"></i> Export CSV</button>
+                </div>
+                <table class="result-table">
+                    <thead>
+                        <tr>
+                            <th style="width:40%;">Title</th>
+                            <th>Entity</th>
+                            <th>Scope</th>
+                            <th>Source</th>
+                            <th>Score</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>
+                                <strong>Refund &amp; Reimbursement Policy — 2025 Update</strong>
+                                <div class="muted" style="margin-top:4px;font-size:0.75rem;">"Expense refund requests must be submitted within 30 days…"</div>
+                            </td>
+                            <td>Knowledge Articles</td>
+                            <td>HR Policies</td>
+                            <td><span class="badge info">semantic</span> <span class="badge success">fulltext</span></td>
+                            <td><span class="score-cell">0.91</span></td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <strong>Employee Handbook §8.4 — Travel &amp; Reimbursement</strong>
+                                <div class="muted" style="margin-top:4px;font-size:0.75rem;">"Travel-related refunds follow the same submission flow…"</div>
+                            </td>
+                            <td>Documents</td>
+                            <td>HR Policies</td>
+                            <td><span class="badge success">fulltext</span></td>
+                            <td><span class="score-cell">0.84</span></td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <strong>Customer Refund FAQ</strong>
+                                <div class="muted" style="margin-top:4px;font-size:0.75rem;">"Returns are accepted within 60 days with original receipt…"</div>
+                            </td>
+                            <td>Knowledge Articles</td>
+                            <td>Customer KB</td>
+                            <td><span class="badge info">semantic</span> <span class="badge neutral">database</span></td>
+                            <td><span class="score-cell">0.79</span></td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <strong>Travel Expense FAQ</strong>
+                                <div class="muted" style="margin-top:4px;font-size:0.75rem;">"Per diem rates are set by jurisdiction and updated quarterly…"</div>
+                            </td>
+                            <td>Knowledge Articles</td>
+                            <td>Customer KB</td>
+                            <td><span class="badge info">semantic</span></td>
+                            <td><span class="score-cell">0.72</span></td>
+                        </tr>
+                        <tr>
+                            <td>
+                                <strong>Corporate Credit Card Policy</strong>
+                                <div class="muted" style="margin-top:4px;font-size:0.75rem;">"All charges require itemized receipts…"</div>
+                            </td>
+                            <td>Policies</td>
+                            <td>HR Policies</td>
+                            <td><span class="badge success">fulltext</span></td>
+                            <td><span class="score-cell">0.68</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="pagination">
+                    <span>Showing 1-5 of 47 results</span>
+                    <div class="pages">
+                        <button class="active">1</button>
+                        <button>2</button>
+                        <button>3</button>
+                        <button>&hellip;</button>
+                        <button>10</button>
+                        <button>&rsaquo;</button>
+                    </div>
+                </div>
+            </div>
+
+            <aside class="card">
+                <div class="label" style="margin-bottom:8px;">About this artifact</div>
+                <div style="font-size:0.8125rem;color:var(--mj-text-secondary);line-height:1.5;">
+                    <p style="margin-top:0;">Persisted by agent <strong>Betty</strong> on <strong>Apr 19 2026</strong> at the end of a scoped search invocation.</p>
+                    <div class="label" style="margin-top:12px;">Query</div>
+                    <div style="font-family:ui-monospace,monospace;background:var(--mj-bg-surface-sunken);padding:6px;border-radius:4px;">refund policy</div>
+                    <div class="label" style="margin-top:12px;">Scopes</div>
+                    <div>HR Policies · Customer Knowledge Base</div>
+                    <div class="label" style="margin-top:12px;">Search Context</div>
+                    <div>PrimaryScopeRecordID = <code>tenant-a</code></div>
+                    <div class="label" style="margin-top:12px;">Versions</div>
+                    <ul style="margin:0;padding-left:20px;">
+                        <li><strong>v2</strong> (current) · refined query · 47 results</li>
+                        <li>v1 · original search · 38 results</li>
+                    </ul>
+                    <div style="margin-top:16px;padding:10px;background:var(--mj-status-info-bg);color:var(--mj-status-info-text);border-radius:6px;font-size:0.75rem;">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                        After PR #2237 lands, agents can invoke <code>get_rows</code>, <code>search_rows</code>, <code>aggregate</code> against this artifact across turns — no re-search.
+                    </div>
+                </div>
+            </aside>
+        </div>
+    </div>
+</body>
+</html>

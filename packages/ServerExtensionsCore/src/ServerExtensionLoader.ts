@@ -5,7 +5,7 @@
 
 import { Application } from 'express';
 import { MJGlobal } from '@memberjunction/global';
-import { LogError, LogStatus } from '@memberjunction/core';
+import { LogError, LogStatus, LogStatusEx } from '@memberjunction/core';
 import { BaseServerExtension } from './BaseServerExtension.js';
 import {
     ServerExtensionConfig,
@@ -195,6 +195,11 @@ export class ServerExtensionLoader {
                 if (result.RegisteredRoutes && result.RegisteredRoutes.length > 0) {
                     LogStatus(`  Routes: ${result.RegisteredRoutes.join(', ')}`);
                 }
+            } else if (result.Skipped) {
+                LogStatusEx({
+                    message: `Server extension '${driverClass}' skipped: ${result.Message}`,
+                    verboseOnly: true
+                });
             } else {
                 LogError(`Server extension '${driverClass}' failed to initialize: ${result.Message}`);
             }

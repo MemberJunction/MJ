@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Knowledge Hub Classify — design exploration</title>
+<link rel="stylesheet" href="mockup.css" />
+<style>
+  .hero {
+    background: linear-gradient(135deg, #0076b6 0%, #2898d2 60%, #38bdf8 100%);
+    color: #fff;
+    border-radius: 14px;
+    padding: 32px 36px;
+    margin-bottom: 24px;
+  }
+  .hero h1 { margin: 0 0 8px; font-size: 28px; letter-spacing: -0.02em; }
+  .hero p { margin: 0; max-width: 800px; line-height: 1.55; opacity: 0.94; }
+  .hero .pill {
+    display: inline-block;
+    background: rgba(255,255,255,0.16);
+    border: 1px solid rgba(255,255,255,0.28);
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 12px;
+  }
+  .hero .meta-row {
+    display: flex; gap: 26px; margin-top: 18px;
+    color: rgba(255,255,255,0.92);
+    font-size: 13px;
+  }
+  .hero .meta-row span strong { display: block; font-size: 18px; font-weight: 700; }
+
+  .grid-areas {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  .toc-strip {
+    background: #0f172a;
+    color: #cbd5e1;
+    padding: 14px 20px;
+    border-radius: 10px;
+    font-size: 12px;
+    margin-bottom: 18px;
+    display: flex; gap: 18px; flex-wrap: wrap;
+  }
+  .toc-strip a { color: #93c5fd; }
+  .toc-strip strong { color: #fff; margin-right: 6px; }
+</style>
+</head>
+<body>
+
+<div class="mockup-ribbon">
+  <span><strong>Mockup:</strong> Knowledge Hub Classify redesign — pure HTML for review. Not Angular code.</span>
+  <span>Designed for desktop, 1440+ wide</span>
+</div>
+
+<header class="mj-app-header">
+  <div class="logo"><span class="logo-mark">MJ</span> MJ Explorer</div>
+  <div class="breadcrumbs">
+    <span>Apps</span><span class="sep">›</span>
+    <span>Knowledge Hub</span><span class="sep">›</span>
+    <span class="current">Classify</span>
+  </div>
+  <div class="right">
+    <span>v5.31</span>
+    <span class="avatar">AN</span>
+  </div>
+</header>
+
+<div class="page wide">
+
+  <div class="hero">
+    <span class="pill">Design exploration · 18 mockups across 6 surfaces</span>
+    <h1>Classify is growing up</h1>
+    <p>
+      The autotagger's gaining real teeth: per-tag governance, polymorphic tag scope (so tenants only see their own taxonomy),
+      a tag suggestions queue for ambiguous classifications, synonyms, and per-source budgets. This deck explores three
+      visual + interaction directions for each new surface so a human reviewer can pick a direction before we wire any of it
+      into Angular.
+    </p>
+    <div class="meta-row">
+      <span><strong>6</strong>major surfaces</span>
+      <span><strong>3</strong>options each</span>
+      <span><strong>12</strong>polished pages delivered</span>
+      <span><strong>~1440px</strong>desktop-first</span>
+    </div>
+  </div>
+
+  <div class="toc-strip">
+    <strong>Jump to:</strong>
+    <a href="#area-taxonomy">Taxonomy Admin</a>
+    <a href="#area-suggestions">Suggestions Inbox</a>
+    <a href="#area-source">Source Configuration</a>
+    <a href="#area-scope">Tag Scope Editor</a>
+    <a href="#area-syn">Tag Synonyms</a>
+    <a href="#area-health">Tag Health</a>
+  </div>
+
+  <!-- mermaid diagram -->
+  <div class="diagram-wrap">
+    <h2 style="margin:0 0 12px; font-size: 14px;">The Classify pipeline (where the new surfaces fit)</h2>
+    <div class="mermaid">
+flowchart LR
+    CS[ContentSource] -->|config| BUD{Budget OK?}
+    BUD -->|no| PAUSE[Pause run]
+    BUD -->|yes| CLS[LLM classifier]
+    CLS --> RT[ResolveTag]
+    RT -->|exact / synonym| MATCH[Tag matched]
+    RT -->|semantic ≥ MatchThreshold| MATCH
+    RT -->|SuggestThreshold ≤ score &lt; MatchThreshold| Q[Suggestions Inbox]
+    RT -->|score &lt; SuggestThreshold and AutoGrow| GOV{Governance}
+    GOV -->|allowed| NEW[Create tag, embed]
+    GOV -->|frozen / depth / scope| Q
+    MATCH --> ITEM[ContentItemTag.TagID]
+    NEW --> ITEM
+    Q --> REVIEW[Reviewer: Approve / Merge / Reject]
+    REVIEW --> ITEM
+    classDef new fill:#dbeafe,stroke:#1d4ed8,color:#0f172a;
+    class Q,REVIEW,GOV,BUD new
+    </div>
+  </div>
+
+  <h2 style="margin:30px 0 16px; font-size: 18px;">Six surfaces, three options each</h2>
+  <p class="muted" style="margin: 0 0 18px;">Each option-link below opens a polished mockup in this folder. The reviewer picks A, B or C per surface (or mixes and matches).</p>
+
+  <div class="grid-areas">
+
+    <!-- Taxonomy -->
+    <section id="area-taxonomy" class="area-card">
+      <div class="area-title"><span class="icon">🌳</span>1 · Taxonomy Admin &amp; Tree</div>
+      <p class="area-blurb">
+        Curating the tag hierarchy with the new governance flags (frozen, max children, max depth, requires-review)
+        plus per-node scope and synonym editing. Today's UI is a flat panel + tree; we need to fit a lot more meaning.
+      </p>
+      <div class="options">
+        <a class="option-link" href="taxonomy-a-classic-split.html">
+          <span class="opt-letter">OPTION A</span>
+          <span class="opt-name">Classic split</span>
+          <span class="opt-desc">Tree on left, governance form on right. Familiar; reads dense info comfortably.</span>
+        </a>
+        <a class="option-link" href="taxonomy-b-card-galaxy.html">
+          <span class="opt-letter">OPTION B</span>
+          <span class="opt-name">Card galaxy</span>
+          <span class="opt-desc">Subtree as a constellation of cards. Visual; better for browsing, slower to edit.</span>
+        </a>
+        <a class="option-link" href="taxonomy-c-table-first.html">
+          <span class="opt-letter">OPTION C</span>
+          <span class="opt-name">Table-first</span>
+          <span class="opt-desc">Bulk-editable grid with collapsible parents. Best for governance audits at scale.</span>
+        </a>
+      </div>
+      <div class="feedback-callout">
+        <strong>What we need feedback on:</strong> how prominent should governance badges be on the tree itself,
+        versus tucked behind a click? Power users will live here daily.
+      </div>
+    </section>
+
+    <!-- Suggestions Inbox -->
+    <section id="area-suggestions" class="area-card">
+      <div class="area-title"><span class="icon">📥</span>2 · Tag Suggestions Inbox</div>
+      <p class="area-blurb">
+        The new human-in-the-loop queue. Suggestions arrive from low-confidence classifications, frozen-subtree
+        denials, governance failures, and Tag Health analytics (merge / low-usage / wide-node). Reviewers approve,
+        merge into existing, or reject — sometimes by the hundred.
+      </p>
+      <div class="options">
+        <a class="option-link" href="suggestions-a-inbox.html">
+          <span class="opt-letter">OPTION A</span>
+          <span class="opt-name">Email-style inbox</span>
+          <span class="opt-desc">List + reading pane. Snappy keyboard nav. Best for triaging one at a time.</span>
+        </a>
+        <a class="option-link" href="suggestions-b-kanban.html">
+          <span class="opt-letter">OPTION B</span>
+          <span class="opt-name">Kanban by reason</span>
+          <span class="opt-desc">Columns by Reason. Drag to approve / merge / reject. Visual prioritization.</span>
+        </a>
+        <a class="option-link" href="suggestions-c-table-drawer.html">
+          <span class="opt-letter">OPTION C</span>
+          <span class="opt-name">Table + drawer</span>
+          <span class="opt-desc">Dense table with bulk actions; row click opens a drawer. Fastest for bulk merges.</span>
+        </a>
+      </div>
+      <div class="feedback-callout">
+        <strong>What we need feedback on:</strong> two distinct workflows — single-item careful review vs.
+        100-item bulk merge approvals. One UI for both, or a mode toggle?
+      </div>
+    </section>
+
+    <!-- ContentSource Config -->
+    <section id="area-source" class="area-card">
+      <div class="area-title"><span class="icon">⚙️</span>3 · ContentSource Configuration</div>
+      <p class="area-blurb">
+        Per-source knobs: TaxonomyMode (Constrained / AutoGrow / FreeFlow / Hybrid), TagRoot, MatchThreshold,
+        SuggestThreshold, MaxNewTagsPerRun, MaxNewTagsPerItem, MaxTokensPerRun, MaxCostPerRun. Lots of dials
+        to expose without overwhelming the operator.
+      </p>
+      <div class="options">
+        <a class="option-link" href="source-a-wizard.html">
+          <span class="opt-letter">OPTION A</span>
+          <span class="opt-name">Stepped wizard</span>
+          <span class="opt-desc">Mode → Scope → Thresholds → Budgets. Guided; great for first-time setup.</span>
+        </a>
+        <a class="option-link" href="source-b-dense-form.html">
+          <span class="opt-letter">OPTION B</span>
+          <span class="opt-name">Dense form</span>
+          <span class="opt-desc">All knobs on one page, grouped. Power-user friendly; less opinionated.</span>
+        </a>
+        <a class="option-link" href="source-c-pipeline.html">
+          <span class="opt-letter">OPTION C</span>
+          <span class="opt-name">Pipeline canvas</span>
+          <span class="opt-desc">Visual flow with knobs at each stage. Beautiful; expensive to build.</span>
+        </a>
+      </div>
+      <div class="feedback-callout">
+        <strong>What we need feedback on:</strong> threshold sliders are paired (MatchThreshold &gt; SuggestThreshold).
+        Should we enforce that visually, or leave it as validation?
+      </div>
+    </section>
+
+    <!-- Tag Scope Editor -->
+    <section id="area-scope" class="area-card">
+      <div class="area-title"><span class="icon">🔒</span>4 · Tag Scope Editor</div>
+      <p class="area-blurb">
+        Polymorphic scope: a tag is either Global or has rows in MJ:TagScope tying it to (Entity, Record) tuples
+        — typically Companies / Tenants. Children must inherit. Locked when IsGlobal=1.
+      </p>
+      <div class="options">
+        <a class="option-link" href="scope-a-dual-pane.html">
+          <span class="opt-letter">OPTION A</span>
+          <span class="opt-name">Dual-pane picker</span>
+          <span class="opt-desc">Available on left, in-scope on right, transfer arrows. Classic and bulletproof.</span>
+        </a>
+        <a class="option-link deferred" href="scope-a-dual-pane.html#design-notes">
+          <span class="opt-letter">OPTION B</span>
+          <span class="opt-name">Chip multi-picker</span>
+          <span class="opt-desc">Searchable input, chips for selected. Compact, modern; harder for 50+ scopes. Sketch in A's design notes.</span>
+        </a>
+        <a class="option-link deferred" href="scope-a-dual-pane.html#design-notes">
+          <span class="opt-letter">OPTION C</span>
+          <span class="opt-name">Tag × Tenant matrix</span>
+          <span class="opt-desc">Heatmap view across many tags at once. Great for audits, not for single-tag edits. Sketch in A's design notes.</span>
+        </a>
+      </div>
+      <div class="feedback-callout">
+        <strong>What we need feedback on:</strong> the inheritance rule ("child scope ⊆ parent") is hard to surface.
+        Show it as warnings, hard-disable invalid options, or both?
+      </div>
+    </section>
+
+    <!-- Synonyms -->
+    <section id="area-syn" class="area-card">
+      <div class="area-title"><span class="icon">🔤</span>5 · Tag Synonyms</div>
+      <p class="area-blurb">
+        Alternate names that resolve to the same TagID. Source field tracks where each came from
+        (Manual / LLM / Imported / Merged). Simple but high-volume — a tag might pick up dozens.
+      </p>
+      <div class="options">
+        <a class="option-link" href="synonyms-a-inline.html">
+          <span class="opt-letter">OPTION A</span>
+          <span class="opt-name">Inline-edit on tag form</span>
+          <span class="opt-desc">Lives on the tag governance panel. Frictionless. Best for &lt;20 synonyms each.</span>
+        </a>
+        <a class="option-link deferred" href="synonyms-a-inline.html#design-notes">
+          <span class="opt-letter">OPTION B</span>
+          <span class="opt-name">Dedicated synonyms page</span>
+          <span class="opt-desc">Browse / search across all synonyms. Useful for de-dup audits. Sketch in A's design notes.</span>
+        </a>
+        <a class="option-link deferred" href="synonyms-a-inline.html#design-notes">
+          <span class="opt-letter">OPTION C</span>
+          <span class="opt-name">Chip stack with bulk paste</span>
+          <span class="opt-desc">Paste-a-list dialog for bulk import. Power users with CSVs in hand. Sketch in A's design notes.</span>
+        </a>
+      </div>
+      <div class="feedback-callout">
+        <strong>What we need feedback on:</strong> auto-generated synonyms (Source='LLM') need approval before they
+        count. Inline review or batched on the dedicated page?
+      </div>
+    </section>
+
+    <!-- Tag Health -->
+    <section id="area-health" class="area-card">
+      <div class="area-title"><span class="icon">📊</span>6 · Tag Health Dashboard</div>
+      <p class="area-blurb">
+        Surfaces three signals from TagHealthJob: merge candidates (high-cosine pairs that co-occur),
+        low-usage deprecation candidates, and wide-node alerts (parents with too many direct children).
+      </p>
+      <div class="options">
+        <a class="option-link" href="health-a-cards.html">
+          <span class="opt-letter">OPTION A</span>
+          <span class="opt-name">Three summary cards</span>
+          <span class="opt-desc">One card per signal with drill-in. Calm, scannable. Defaults well.</span>
+        </a>
+        <a class="option-link deferred" href="health-a-cards.html#design-notes">
+          <span class="opt-letter">OPTION B</span>
+          <span class="opt-name">Insights feed</span>
+          <span class="opt-desc">Reverse-chronological stream of detected issues. Feels like Jira Insights. Sketch in A's design notes.</span>
+        </a>
+        <a class="option-link deferred" href="health-a-cards.html#design-notes">
+          <span class="opt-letter">OPTION C</span>
+          <span class="opt-name">Tree heat-map</span>
+          <span class="opt-desc">Taxonomy tree colored by health. Beautiful but information-dense. Sketch in A's design notes.</span>
+        </a>
+      </div>
+      <div class="feedback-callout">
+        <strong>What we need feedback on:</strong> all three signals route to the same Suggestions Inbox.
+        Should Tag Health be its own dashboard, or just live as a "filter by Reason" on the inbox?
+      </div>
+    </section>
+
+  </div>
+
+  <div class="design-notes">
+    <h3>About this deck</h3>
+    <p>Each mockup is standalone HTML+CSS+vanilla JS. Real-looking fake data. Shared <code>mockup.css</code>
+    drives consistency. Mermaid diagrams only on this index. Tabs and chips have working hover states; reviewers can
+    click between options and tabs without anything breaking. Honesty note: the deck delivers <strong>12 polished
+    pages of an aspirational 18</strong> — three options each for Suggestions Inbox, Source Configuration and Taxonomy Admin
+    (the highest-traffic surfaces), and one polished representative (Option A) for Tag Scope, Synonyms and Tag Health.
+    The B/C variants for those three surfaces are described in the index callouts and in each A page's "Design notes"
+    section, but not yet built — the picked direction can drive that work. Deferred options are visually marked with
+    a hatched pattern and "NOT BUILT" label so reviewers don't click into broken links.</p>
+    <ul>
+      <li>Visual baseline derived from <code>packages/Angular/Generic/shared/src/lib/_tokens.scss</code></li>
+      <li>Pipeline / data model from <code>plans/autotagger-scope-and-governance.md</code></li>
+      <li>Field semantics from <code>guides/TAXONOMY_TAGGING_GUIDE.md</code></li>
+    </ul>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'base',
+    themeVariables: {
+      primaryColor: '#e6f1f9',
+      primaryTextColor: '#0f172a',
+      primaryBorderColor: '#0076b6',
+      lineColor: '#64748b',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+    }
+  });
+</script>
+</body>
+</html>

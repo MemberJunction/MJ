@@ -34,7 +34,7 @@ CodeGenDatabaseProvider (@memberjunction/codegen-lib)
 
 | File | Purpose |
 |------|---------|
-| `PostgreSQLDataProvider.ts` | Main provider: CRUD, queries, view execution, dataset handling, caching |
+| `PostgreSQLDataProvider.ts` | Main provider: CRUD, queries, view execution (supports both OFFSET `StartRow` and keyset `AfterKey` pagination — see [KEYSET_PAGINATION_GUIDE.md](../../guides/KEYSET_PAGINATION_GUIDE.md)), dataset handling, caching |
 | `pgConnectionManager.ts` | Connection pool lifecycle with `pg.Pool`, shared pool support |
 | `queryParameterProcessor.ts` | Boolean, date, UUID, number, and binary type conversion |
 | `types.ts` | `PostgreSQLProviderConfigData` and `PostgreSQLProviderConfigOptions` interfaces |
@@ -135,6 +135,25 @@ await txGroup.Submit(); // Executes all items in a single BEGIN/COMMIT block
 ```
 
 The `PostgreSQLTransactionGroup` supports variable dependencies between transaction items, allowing later items to reference values produced by earlier items in the same transaction.
+
+#### Nested transactions (SAVEPOINTs)
+
+`BeginTransaction()` / `CommitTransaction()` / `RollbackTransaction()` support arbitrary nesting that mirrors the `SQLServerDataProvider`'s depth/savepoint-stack model:
+
+| Depth | Begin emits | Commit emits | Rollback emits |
+|---|---|---|---|
+| 1 (outermost) | `BEGIN` on a fresh client | `COMMIT` + release client | `ROLLBACK` + release client |
+| 2+ (nested) | `SAVEPOINT mj_sp_<n>` | `RELEASE SAVEPOINT mj_sp_<n>` | `ROLLBACK TO SAVEPOINT mj_sp_<n>` + `RELEASE SAVEPOINT` |
+
+```typescript
+await provider.BeginTransaction();      // BEGIN; depth=1
+await provider.BeginTransaction();      // SAVEPOINT mj_sp_1; depth=2
+//   ...do work...
+await provider.RollbackTransaction();   // ROLLBACK TO + RELEASE mj_sp_1; depth=1
+await provider.CommitTransaction();     // COMMIT; depth=0
+```
+
+Use `provider.TransactionDepth` to inspect the current nesting depth (0 = no active transaction). If `COMMIT` or `ROLLBACK` itself fails at depth 1, the provider force-releases the client to avoid leaking a poisoned connection back to the pool.
 
 ### Connection Pool Sharing
 

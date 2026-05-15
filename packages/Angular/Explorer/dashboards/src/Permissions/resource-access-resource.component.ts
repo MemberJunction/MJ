@@ -110,7 +110,7 @@ export class PermissionsResourceAccessResourceComponent extends BaseResourceComp
             this.ResourceTypeInput = '';
             return;
         }
-        this.ResourceTypes = PermissionEngine.Instance.GetResourceTypes(domainName);
+        this.ResourceTypes = PermissionEngine.Instance.GetResourceTypes(domainName, this.ProviderToUse);
         if (this.ResourceTypes.length === 1) {
             this.ResourceTypeInput = this.ResourceTypes[0];
         } else if (!this.ResourceTypes.includes(this.ResourceTypeInput)) {

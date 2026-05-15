@@ -94,7 +94,7 @@ export class PromptManagementComponent extends BaseResourceComponent implements 
   // === Permission Checks ===
   /** Cache for permission checks to avoid repeated calculations */
   private _permissionCache = new Map<string, boolean>();
-  private _metadata = new Metadata();
+  private _metadata = this.ProviderToUse;
 
   /** Check if user can create AI Prompts */
   public get UserCanCreatePrompts(): boolean {

@@ -22,7 +22,7 @@ export type GeocodeStatus = 'success' | 'failed' | 'pending';
 /**
  * Source that produced the geocode.
  */
-export type GeocodingSource = 'google' | 'reference_data' | 'manual' | 'ip_geolocation' | 'native' | 'reverse';
+export type GeocodingSource = 'google' | 'geocodio' | 'here' | 'reference_data' | 'manual' | 'ip_geolocation' | 'native' | 'reverse';
 
 /**
  * Result from a geocoding operation.
@@ -34,6 +34,20 @@ export interface GeocodeResult {
     CountryID: string | null;
     StateProvinceID: string | null;
     Source: GeocodingSource;
+}
+
+/**
+ * Lightweight summary of an existing RecordGeoCode row, used by bulk lookup
+ * to eliminate per-record SQL queries during batch geocoding.
+ *
+ * The map is keyed by `RecordID|LocationType` for O(1) lookup.
+ */
+export interface ExistingGeoCodeInfo {
+    ID: string;
+    RecordID: string;
+    LocationType: string;
+    SourceFieldHash: string | null;
+    Status: string;
 }
 
 /**

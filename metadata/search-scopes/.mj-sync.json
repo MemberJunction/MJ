@@ -1,0 +1,44 @@
+{
+  "entity": "MJ: Search Scopes",
+  "filePattern": "**/.*.json",
+  "defaults": {},
+  "pull": {
+    "createNewFileIfNotFound": true,
+    "newFileName": ".search-scopes.json",
+    "appendRecordsToExistingFile": true,
+    "updateExistingRecords": true,
+    "preserveFields": [],
+    "excludeFields": [],
+    "mergeStrategy": "merge",
+    "backupBeforeUpdate": true,
+    "backupDirectory": ".backups",
+    "filter": "",
+    "externalizeFields": [],
+    "ignoreNullFields": true,
+    "ignoreVirtualFields": true,
+    "lookupFields": {
+      "OwnerUserID": {
+        "entity": "Users",
+        "field": "Name"
+      }
+    },
+    "relatedEntities": {
+      "MJ: Search Scope Providers": {
+        "entity": "MJ: Search Scope Providers",
+        "foreignKey": "SearchScopeID"
+      },
+      "MJ: Search Scope External Indexes": {
+        "entity": "MJ: Search Scope External Indexes",
+        "foreignKey": "SearchScopeID"
+      },
+      "MJ: Search Scope Entities": {
+        "entity": "MJ: Search Scope Entities",
+        "foreignKey": "SearchScopeID"
+      },
+      "MJ: Search Scope Storage Accounts": {
+        "entity": "MJ: Search Scope Storage Accounts",
+        "foreignKey": "SearchScopeID"
+      }
+    }
+  }
+}

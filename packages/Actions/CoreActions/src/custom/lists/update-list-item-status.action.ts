@@ -131,7 +131,7 @@ export class UpdateListItemStatusAction extends BaseAction {
       }
 
       // Update status on all matching records atomically — any failure rolls back the whole batch
-      const provider = Metadata.Provider as DatabaseProviderBase;
+      const provider = (params.Provider ?? Metadata.Provider) as DatabaseProviderBase;
       await provider.BeginTransaction();
       try {
         for (const detail of details) {

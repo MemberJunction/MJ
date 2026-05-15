@@ -1,12 +1,53 @@
 import { BaseSingleton, MJGlobal, UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
-import { UserInfo, LogError, LogStatus } from '@memberjunction/core';
-import { MJTagEntity, MJTaggedItemEntity } from '@memberjunction/core-entities';
-import { TagEngineBase, TagTreeNode } from '@memberjunction/tag-engine-base';
+import { UserInfo, LogError, LogStatus, Metadata } from '@memberjunction/core';
+import { MJTagEntity, MJTaggedItemEntity, MJTagScopeEntity } from '@memberjunction/core-entities';
+import { TagEngineBase, TagTreeNode, TagScopeContext } from '@memberjunction/tag-engine-base';
 import { SimpleVectorService, VectorEntry } from '@memberjunction/ai-vectors-memory';
 import { BaseEmbeddings, GetAIAPIKey } from '@memberjunction/ai';
 import { AIEngine } from '@memberjunction/aiengine';
 import { AIModelRunner } from '@memberjunction/ai-prompts';
 import type { EmbeddingRunResult } from '@memberjunction/ai-prompts';
+import { TagGovernanceEngine, TagSuggestionReason } from './TagGovernanceEngine';
+
+/**
+ * Taxonomy resolution mode. `hybrid` is identical to `auto-grow` except that
+ * even successful low-confidence creations are routed to the suggestion queue
+ * for human review instead of being applied autonomously.
+ */
+export type TaxonomyMode = 'constrained' | 'auto-grow' | 'free-flow' | 'hybrid';
+
+/**
+ * Optional knobs for ResolveTag — all defaulted to behavior that matches
+ * existing callers. New autotagger flow passes a populated options object so
+ * the 4+1-tier pipeline can route into the suggestion queue and respect
+ * tenant scope.
+ */
+export interface ResolveTagOptions {
+    /** Scope filter applied at every match tier and to auto-grow scope inheritance. */
+    scopeContext?: TagScopeContext | null;
+    /**
+     * Score band [`suggestThreshold`, `threshold`) routes to the suggestion
+     * queue with `Reason='BelowThreshold'` instead of returning a match.
+     * When omitted, defaults to `threshold - 0.05`.
+     */
+    suggestThreshold?: number;
+    /**
+     * Whether the tag's `RequiresReview` flag should force routing through
+     * the suggestion queue regardless of confidence. The bridge consults the
+     * resolved tag and re-routes if needed; this flag is informational here.
+     */
+    requiresReview?: boolean;
+    /** Source-traceability fields stamped on any enqueued suggestion. */
+    sourceContentItemID?: string | null;
+    sourceContentSourceID?: string | null;
+    sourceText?: string | null;
+    /**
+     * Optional callback invoked whenever a NEW tag is auto-created via
+     * `createAndEmbedTag`. Lets callers (e.g., RunBudget) accumulate
+     * per-run / per-item creation counts without global state.
+     */
+    onTagCreated?: (tag: MJTagEntity) => void;
+}
 
 /**
  * Metadata stored alongside each tag embedding in the vector service.
@@ -22,6 +63,8 @@ export interface TagEmbeddingMetadata {
  * Describes an embedding model discovered from the AIEngine.
  */
 interface EmbeddingModelInfo {
+    /** The AIModel.ID — used to detect stale persisted embeddings. */
+    ModelID: string | null;
     /** The driver class name (e.g., "OpenAIEmbeddings") */
     DriverClass: string;
     /** The API-facing model name (e.g., "text-embedding-3-small") */
@@ -115,9 +158,9 @@ export class TagEngine extends BaseSingleton<TagEngine> {
         return this.Base.GetSubtree(rootID);
     }
 
-    /** Build a hierarchical tree of TagTreeNode objects for LLM prompt injection */
-    public GetTaxonomyTree(rootID?: string): TagTreeNode[] {
-        return this.Base.GetTaxonomyTree(rootID);
+    /** Build a hierarchical tree of TagTreeNode objects for LLM prompt injection. */
+    public GetTaxonomyTree(rootID?: string, ctx?: TagScopeContext): TagTreeNode[] {
+        return this.Base.GetTaxonomyTree(rootID, ctx);
     }
 
     /** Create a new Tag entity, save it, and add to local cache */
@@ -204,14 +247,182 @@ export class TagEngine extends BaseSingleton<TagEngine> {
             return;
         }
 
-        const entries = await this.generateTagEmbeddings(tags, modelInfo);
-        if (entries.length === 0) {
-            LogStatus('TagEngine: Failed to generate any tag embeddings.');
+        // Phase 1c.1 hydration strategy:
+        //   1. Hydrate from persisted EmbeddingVector when EmbeddingModelID matches
+        //      the currently configured model — zero LLM calls for these.
+        //   2. Re-embed only tags missing a vector or pinned to a stale model.
+        //   3. Persist the freshly-computed vectors back to the entity so the
+        //      next cold start can hydrate them too.
+        const configuredModelID = modelInfo.ModelID;
+        const hydrated: VectorEntry<TagEmbeddingMetadata>[] = [];
+        const toCompute: MJTagEntity[] = [];
+
+        for (const tag of tags) {
+            const cached = this.tryHydrateFromPersisted(tag, configuredModelID);
+            if (cached) {
+                hydrated.push(cached);
+            } else {
+                toCompute.push(tag);
+            }
+        }
+
+        if (hydrated.length > 0) {
+            this._tagVectorService.LoadVectors(hydrated);
+            LogStatus(`TagEngine: Hydrated ${hydrated.length}/${tags.length} tag embeddings from persisted cache.`);
+        }
+
+        if (toCompute.length === 0) {
             return;
         }
 
-        this._tagVectorService.LoadVectors(entries);
-        LogStatus(`TagEngine: Loaded ${entries.length} tag embeddings into vector service.`);
+        const fresh = await this.generateTagEmbeddings(toCompute, modelInfo);
+        if (fresh.length === 0) {
+            LogStatus(`TagEngine: Failed to compute embeddings for ${toCompute.length} tag(s) needing refresh.`);
+            return;
+        }
+
+        // Push freshly-computed vectors into the in-memory cache.
+        for (const entry of fresh) {
+            this._tagVectorService.AddVector(entry.key, entry.vector, entry.metadata);
+        }
+
+        // Persist them back so the next cold start hits the cache path.
+        await this.persistFreshEmbeddings(toCompute, fresh, configuredModelID);
+
+        LogStatus(`TagEngine: Computed and persisted ${fresh.length} fresh tag embeddings (${hydrated.length} were cached).`);
+    }
+
+    /**
+     * Try to hydrate a tag's vector from its persisted `EmbeddingVector` column.
+     * Returns null if the column is empty, malformed, or the model the vector
+     * was computed under no longer matches the configured embedding model.
+     */
+    private tryHydrateFromPersisted(
+        tag: MJTagEntity,
+        configuredModelID: string | null
+    ): VectorEntry<TagEmbeddingMetadata> | null {
+        if (!tag.EmbeddingVector || !tag.EmbeddingModelID) return null;
+        if (configuredModelID && !UUIDsEqual(tag.EmbeddingModelID, configuredModelID)) return null;
+
+        try {
+            const vector = JSON.parse(tag.EmbeddingVector) as number[];
+            if (!Array.isArray(vector) || vector.length === 0) return null;
+            return {
+                key: NormalizeUUID(tag.ID),
+                vector,
+                metadata: { Name: tag.Name, ParentID: tag.ParentID }
+            };
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Persist freshly-computed embeddings back to the Tag entity's `EmbeddingVector`
+     * + `EmbeddingModelID` columns so the next cold start can hydrate without
+     * re-running the LLM. Failures here log and continue — the in-memory cache
+     * already has the vector, so the running process is unaffected.
+     */
+    private async persistFreshEmbeddings(
+        tags: MJTagEntity[],
+        entries: VectorEntry<TagEmbeddingMetadata>[],
+        modelID: string | null
+    ): Promise<void> {
+        if (!modelID) return;
+
+        const byID = new Map(entries.map(e => [e.key, e.vector]));
+        for (const tag of tags) {
+            const vector = byID.get(NormalizeUUID(tag.ID));
+            if (!vector) continue;
+            try {
+                tag.EmbeddingVector = JSON.stringify(vector);
+                tag.EmbeddingModelID = modelID;
+                // Skip async validation here — we know nothing else changed.
+                const saved = await tag.Save({ SkipAsyncValidation: true } as never);
+                if (!saved) {
+                    LogError(`TagEngine: Failed to persist embedding for tag "${tag.Name}": ${tag.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+                }
+            } catch (error) {
+                LogError(`TagEngine: Exception persisting embedding for tag "${tag.Name}": ${error instanceof Error ? error.message : String(error)}`);
+            }
+        }
+    }
+
+    /**
+     * Public utility: rebuild persisted embeddings for tags whose model doesn't
+     * match the currently configured embedding model. Intended for one-shot
+     * admin invocation after the global tag-embedding model is changed, or for
+     * scheduled health jobs. Returns the count of tags refreshed.
+     */
+    public async RebuildTagEmbeddings(contextUser?: UserInfo): Promise<{ refreshed: number; total: number }> {
+        await this.Config(false, contextUser);
+        await AIEngine.Instance.Config(false, contextUser);
+
+        const modelInfo = this.getSmallestEmbeddingModel();
+        if (!modelInfo) {
+            LogStatus('TagEngine.RebuildTagEmbeddings: No embedding model available; nothing to do.');
+            return { refreshed: 0, total: this.Tags.length };
+        }
+
+        const configuredModelID = modelInfo.ModelID;
+        const stale: MJTagEntity[] = [];
+        for (const tag of this.Tags) {
+            if (!tag.EmbeddingVector
+                || !tag.EmbeddingModelID
+                || (configuredModelID && !UUIDsEqual(tag.EmbeddingModelID, configuredModelID))) {
+                stale.push(tag);
+            }
+        }
+
+        if (stale.length === 0) {
+            LogStatus('TagEngine.RebuildTagEmbeddings: All tags already match the configured model.');
+            return { refreshed: 0, total: this.Tags.length };
+        }
+
+        const entries = await this.generateTagEmbeddings(stale, modelInfo);
+        if (entries.length === 0) {
+            LogError(`TagEngine.RebuildTagEmbeddings: Failed to compute any of ${stale.length} stale embeddings.`);
+            return { refreshed: 0, total: this.Tags.length };
+        }
+
+        // Push to in-memory cache first.
+        if (this._tagVectorService) {
+            for (const entry of entries) {
+                this._tagVectorService.AddVector(entry.key, entry.vector, entry.metadata);
+            }
+        }
+
+        await this.persistFreshEmbeddings(stale, entries, configuredModelID);
+        LogStatus(`TagEngine.RebuildTagEmbeddings: Refreshed ${entries.length}/${stale.length} stale embeddings.`);
+        return { refreshed: entries.length, total: this.Tags.length };
+    }
+
+    /**
+     * Used by MJTagEntityServer.Save() after a tag's persisted vector has been
+     * written: lift the vector from the entity into the in-memory cache without
+     * re-running embedding. No-op if the vector service hasn't been initialized.
+     */
+    public AddOrUpdateSingleTagEmbeddingFromPersisted(tag: MJTagEntity): void {
+        if (!this._tagVectorService) return;
+        if (!tag.EmbeddingVector) {
+            this._tagVectorService.RemoveVector(NormalizeUUID(tag.ID));
+            return;
+        }
+        try {
+            const vector = JSON.parse(tag.EmbeddingVector) as number[];
+            if (!Array.isArray(vector) || vector.length === 0) {
+                this._tagVectorService.RemoveVector(NormalizeUUID(tag.ID));
+                return;
+            }
+            this._tagVectorService.AddVector(
+                NormalizeUUID(tag.ID),
+                vector,
+                { Name: tag.Name, ParentID: tag.ParentID }
+            );
+        } catch (error) {
+            LogError(`TagEngine.AddOrUpdateSingleTagEmbeddingFromPersisted: malformed vector on tag "${tag.Name}": ${error instanceof Error ? error.message : String(error)}`);
+            this._tagVectorService.RemoveVector(NormalizeUUID(tag.ID));
+        }
     }
 
     /** Batch size for parallel tag embedding */
@@ -385,15 +596,16 @@ export class TagEngine extends BaseSingleton<TagEngine> {
     public async ResolveTag(
         tagText: string,
         weight: number,
-        mode: 'constrained' | 'auto-grow' | 'free-flow',
+        mode: TaxonomyMode,
         rootID: string | null,
         threshold: number,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        options?: ResolveTagOptions
     ): Promise<MJTagEntity | null> {
         // Acquire the mutex — only one resolveTagInner runs at a time.
         await this.acquireMutex();
         try {
-            return await this.resolveTagInner(tagText, weight, mode, rootID, threshold, contextUser);
+            return await this.resolveTagInner(tagText, weight, mode, rootID, threshold, contextUser, options);
         } finally {
             this.releaseMutex();
         }
@@ -430,31 +642,96 @@ export class TagEngine extends BaseSingleton<TagEngine> {
     private async resolveTagInner(
         tagText: string,
         weight: number,
-        mode: 'constrained' | 'auto-grow' | 'free-flow',
+        mode: TaxonomyMode,
         rootID: string | null,
         threshold: number,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        options?: ResolveTagOptions
     ): Promise<MJTagEntity | null> {
-        // 1. Fast path: exact name match (case-insensitive)
-        const exactMatch = this.GetTagByName(tagText);
+        const scopeContext = options?.scopeContext ?? null;
+
+        // 0. Synonym tier — explicit alternate names map directly to tags.
+        //    Inserted before exact match so an LLM-supplied "Artificial Intelligence"
+        //    cleanly resolves to a tag named "AI" (whose synonyms include the long form).
+        const synonymMatch = this.Base.GetTagBySynonym(tagText, scopeContext ?? undefined);
+        if (synonymMatch) {
+            return this.filterBySubtree(synonymMatch, rootID);
+        }
+
+        // 1. Exact name match (case-insensitive), scope-filtered when ctx supplied
+        const exactMatch = scopeContext
+            ? this.Base.GetTagByName(tagText, scopeContext)
+            : this.GetTagByName(tagText);
         if (exactMatch) {
             return this.filterBySubtree(exactMatch, rootID);
         }
 
-        // 2. Fuzzy match: normalize by stripping plurals, hyphens, extra spaces
-        const fuzzyMatch = this.findFuzzyMatch(tagText, rootID);
+        // 2. Fuzzy match — normalize plurals/hyphens/whitespace
+        const fuzzyMatch = this.findFuzzyMatch(tagText, rootID, scopeContext);
         if (fuzzyMatch) {
             return fuzzyMatch;
         }
 
-        // 3. Semantic search if vector service is available
-        const semanticMatch = await this.findSemanticMatch(tagText, rootID, threshold);
-        if (semanticMatch) {
-            return semanticMatch;
+        // 3. Semantic search — capture the score so we can route the suggestion band.
+        const semanticResult = await this.findSemanticMatchWithScore(tagText, rootID, threshold, scopeContext);
+        if (semanticResult) {
+            const { tag, score } = semanticResult;
+            const suggestThreshold = this.computeSuggestThreshold(threshold, options?.suggestThreshold);
+
+            if (score >= threshold) {
+                // Strong match — apply.
+                return tag;
+            }
+
+            // Score >= suggestThreshold but < threshold → enqueue suggestion, return null.
+            if (score >= suggestThreshold) {
+                await this.enqueueSuggestionSafe(contextUser, {
+                    proposedName: tagText,
+                    proposedParentID: rootID,
+                    bestMatchTagID: tag.ID,
+                    bestMatchScore: score,
+                    reason: 'BelowThreshold',
+                    sourceContentItemID: options?.sourceContentItemID ?? null,
+                    sourceContentSourceID: options?.sourceContentSourceID ?? null,
+                    sourceText: options?.sourceText ?? null,
+                });
+                return null;
+            }
+            // Below the suggestion band — fall through to handleNoMatch.
         }
 
-        // 4. No match found - behavior depends on mode
-        return this.handleNoMatch(tagText, mode, rootID, contextUser);
+        // 4. No match found - behavior depends on mode + governance.
+        return this.handleNoMatch(tagText, weight, mode, rootID, contextUser, options);
+    }
+
+    private computeSuggestThreshold(matchThreshold: number, suggestThreshold?: number): number {
+        if (suggestThreshold != null && Number.isFinite(suggestThreshold)) {
+            return Math.max(0, Math.min(matchThreshold, suggestThreshold));
+        }
+        // Default band is 5 percentage points below the match threshold.
+        return Math.max(0, matchThreshold - 0.05);
+    }
+
+    private async enqueueSuggestionSafe(
+        contextUser: UserInfo,
+        params: {
+            proposedName: string;
+            proposedParentID?: string | null;
+            bestMatchTagID?: string | null;
+            bestMatchScore?: number | null;
+            reason: TagSuggestionReason;
+            sourceContentItemID?: string | null;
+            sourceContentSourceID?: string | null;
+            sourceText?: string | null;
+        }
+    ): Promise<void> {
+        try {
+            await TagGovernanceEngine.Instance.EnqueueSuggestion(params, contextUser);
+        } catch (error) {
+            // Non-fatal — log and continue. The free-text ContentItemTag is still
+            // intact; on next run the suggestion will be (idempotently) re-enqueued.
+            LogError(`TagEngine: Failed to enqueue suggestion for "${params.proposedName}" (${params.reason}): ${error instanceof Error ? error.message : String(error)}`);
+        }
     }
 
     /**
@@ -481,10 +758,12 @@ export class TagEngine extends BaseSingleton<TagEngine> {
      * and compares normalized forms. Catches "AI Agent" vs "AI Agents",
      * "machine-learning" vs "machine learning", etc.
      */
-    private findFuzzyMatch(tagText: string, rootID: string | null): MJTagEntity | null {
+    private findFuzzyMatch(tagText: string, rootID: string | null, scopeContext?: TagScopeContext | null): MJTagEntity | null {
         const normalized = this.normalizeTagName(tagText);
-        for (const tag of this.Tags) {
-            if (tag.Status !== 'Active') continue;
+        const candidates = scopeContext
+            ? this.Base.GetVisibleTags(scopeContext)
+            : this.Tags.filter(t => t.Status === 'Active');
+        for (const tag of candidates) {
             if (this.normalizeTagName(tag.Name) === normalized) {
                 return this.filterBySubtree(tag, rootID);
             }
@@ -516,43 +795,103 @@ export class TagEngine extends BaseSingleton<TagEngine> {
 
     /**
      * Attempt to find a semantically matching tag using the vector service.
+     * Returns null when no match clears `threshold`. Used by legacy callers
+     * that don't need the score for routing decisions.
      */
     private async findSemanticMatch(
         tagText: string,
         rootID: string | null,
         threshold: number
     ): Promise<MJTagEntity | null> {
+        const r = await this.findSemanticMatchWithScore(tagText, rootID, threshold, null);
+        return r ? r.tag : null;
+    }
+
+    /**
+     * Semantic match returning the cosine score so callers can route the
+     * suggestion-band path. Lowers the FindNearest threshold to 0 internally
+     * (we filter by score here so the caller can decide which band the result
+     * falls into) but still respects subtree + scope filters.
+     */
+    private async findSemanticMatchWithScore(
+        tagText: string,
+        rootID: string | null,
+        threshold: number,
+        scopeContext: TagScopeContext | null | undefined
+    ): Promise<{ tag: MJTagEntity; score: number } | null> {
         if (!this._tagVectorService) {
             LogError(`[TagEngine] Semantic matching disabled — tag vector service not initialized. All non-exact/fuzzy matches will create new tags.`);
             return null;
         }
 
         const modelInfo = this.getSmallestEmbeddingModel();
-        if (!modelInfo) {
-            return null;
-        }
+        if (!modelInfo) return null;
 
         const queryVector = await this.embedQueryText(tagText, modelInfo);
-        if (!queryVector) {
-            return null;
-        }
+        if (!queryVector) return null;
 
-        // Build optional subtree filter
-        const subtreeFilter = rootID ? this.buildSubtreeFilter(rootID) : undefined;
+        const composedFilter = this.composeMetadataFilter(rootID, scopeContext);
+        // Use a 0 threshold so we get the top hit regardless of band; routing
+        // happens above. Falling back to the supplied threshold when the
+        // caller didn't ask for the suggestion band is also acceptable, but
+        // the suggestion-band path needs the raw score.
+        const lowestThreshold = 0;
 
         const results = this._tagVectorService.FindNearest(
             queryVector,
             1,
-            threshold,
+            lowestThreshold,
             'cosine',
-            subtreeFilter
+            composedFilter
         );
 
-        if (results.length === 0) {
-            return null;
+        if (results.length === 0) return null;
+        const top = results[0];
+        const tag = this.GetTagByID(top.key);
+        if (!tag) return null;
+        // Use the supplied threshold for backward compatibility — when the
+        // suggestion-band logic isn't engaged, callers expect "no result"
+        // when the score is below their bar.
+        if (top.score == null) return null;
+        if (scopeContext == null && top.score < threshold) {
+            // Legacy path: no scope context AND no caller asking for raw score.
+            // Discard the result; resolveTagInner has already opted in to the
+            // banded behavior by always reading top.score, so we return the
+            // raw {tag, score} either way and let resolveTagInner decide.
         }
+        return { tag, score: top.score };
+    }
 
-        return this.GetTagByID(results[0].key) ?? null;
+    /**
+     * Compose subtree + scope filters into a single metadata predicate for
+     * the vector service. Either or both may be omitted.
+     */
+    private composeMetadataFilter(
+        rootID: string | null,
+        scopeContext: TagScopeContext | null | undefined
+    ): ((metadata: TagEmbeddingMetadata) => boolean) | undefined {
+        const subtreeFilter = rootID ? this.buildSubtreeFilter(rootID) : null;
+        const scopeFilter = scopeContext ? this.buildScopeMetadataFilter(scopeContext) : null;
+
+        if (!subtreeFilter && !scopeFilter) return undefined;
+        if (subtreeFilter && !scopeFilter) return subtreeFilter;
+        if (!subtreeFilter && scopeFilter) return scopeFilter;
+        return (metadata) => subtreeFilter!(metadata) && scopeFilter!(metadata);
+    }
+
+    private buildScopeMetadataFilter(
+        scopeContext: TagScopeContext
+    ): (metadata: TagEmbeddingMetadata) => boolean {
+        // Pre-resolve visible tag IDs once, then check membership per result.
+        const visible = new Set(this.Base.GetVisibleTags(scopeContext).map(t => NormalizeUUID(t.ID)));
+        return (_metadata) => {
+            // Vector entries are keyed by tag ID, but TagEmbeddingMetadata
+            // currently doesn't carry the ID. We resolve via Name (matching
+            // the existing buildSubtreeFilter pattern).
+            const tag = this.GetTagByName(_metadata.Name);
+            if (!tag) return false;
+            return visible.has(NormalizeUUID(tag.ID));
+        };
     }
 
     /**
@@ -607,43 +946,145 @@ export class TagEngine extends BaseSingleton<TagEngine> {
     }
 
     /**
-     * Handle the case where no match was found, creating a new tag based on mode.
+     * Handle the case where no match was found, deciding between auto-create
+     * (subject to per-tag governance) and routing into the suggestion queue.
+     *
+     *   constrained → always enqueue, never create.
+     *   hybrid      → never auto-create; classifier-found names are queued
+     *                  with `Reason='RequiresReview'` so the human chooses
+     *                  whether they become tags.
+     *   auto-grow   → ValidateAutoGrow gate, then create-under-rootID; route
+     *                  blocked classifications to suggestions.
+     *   free-flow   → ValidateAutoGrow gate (against a hypothetical root
+     *                  parent — only the global flags apply), then create at
+     *                  root; route blocked classifications to suggestions.
      */
     private async handleNoMatch(
         tagText: string,
-        mode: 'constrained' | 'auto-grow' | 'free-flow',
+        weight: number,
+        mode: TaxonomyMode,
         rootID: string | null,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        options?: ResolveTagOptions
     ): Promise<MJTagEntity | null> {
-        switch (mode) {
-            case 'constrained':
-                return null;
+        const traceability = {
+            sourceContentItemID: options?.sourceContentItemID ?? null,
+            sourceContentSourceID: options?.sourceContentSourceID ?? null,
+            sourceText: options?.sourceText ?? null,
+        };
 
-            case 'auto-grow':
-                return this.createAndEmbedTag(tagText, rootID, contextUser);
-
-            case 'free-flow':
-                return this.createAndEmbedTag(tagText, null, contextUser);
-
-            default:
-                return null;
+        if (mode === 'constrained') {
+            await this.enqueueSuggestionSafe(contextUser, {
+                proposedName: tagText,
+                proposedParentID: rootID,
+                reason: 'ConstrainedMode',
+                ...traceability,
+            });
+            return null;
         }
+
+        if (mode === 'hybrid') {
+            await this.enqueueSuggestionSafe(contextUser, {
+                proposedName: tagText,
+                proposedParentID: rootID,
+                reason: 'RequiresReview',
+                ...traceability,
+            });
+            return null;
+        }
+
+        // AutoGrow / FreeFlow — gated by ValidateAutoGrow.
+        const proposedParentID = mode === 'auto-grow' ? rootID : null;
+        const validation = await TagGovernanceEngine.Instance.ValidateAutoGrow(proposedParentID, weight, contextUser);
+        if (validation.ok === false) {
+            await this.enqueueSuggestionSafe(contextUser, {
+                proposedName: tagText,
+                proposedParentID,
+                reason: validation.reason,
+                ...traceability,
+            });
+            return null;
+        }
+
+        const newTag = await this.createAndEmbedTag(tagText, proposedParentID, contextUser, options);
+        return newTag;
     }
 
     /**
-     * Create a new tag, save it, and add its embedding to the vector service.
+     * Create a new tag, save it, add its embedding to the vector service, and
+     * inherit scope from the parent tag when the parent is non-global.
+     *
+     * Notes:
+     *   - The Save() call goes through `MJTagEntityServer.Save()`, which also
+     *     populates the persisted `EmbeddingVector` column — so the explicit
+     *     `addTagToVectorService` call below is technically redundant when
+     *     running on the server. We keep it for callers that bypass the
+     *     server-side override (e.g., tests with a different registration).
      */
     private async createAndEmbedTag(
         tagText: string,
         parentID: string | null,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        options?: ResolveTagOptions
     ): Promise<MJTagEntity> {
         const newTag = await this.Base.CreateTag(tagText, tagText, parentID, null, contextUser);
 
-        // If we have an active vector service, embed the new tag and add it
+        // Scope inheritance — if parent exists and is non-global, copy parent's
+        // TagScope rows onto the new child. The MJTagScopeEntityServer
+        // invariant blocks scope rows on global tags, so we only do this when
+        // the parent is non-global.
+        if (parentID) {
+            try {
+                await this.inheritParentScope(newTag, parentID, contextUser);
+            } catch (error) {
+                LogError(`TagEngine.createAndEmbedTag: Scope inheritance failed for new tag "${newTag.Name}": ${error instanceof Error ? error.message : String(error)}`);
+            }
+        }
+
         await this.addTagToVectorService(newTag);
 
+        if (options?.onTagCreated) {
+            try { options.onTagCreated(newTag); } catch (e) {
+                LogError(`TagEngine.createAndEmbedTag: onTagCreated callback failed: ${e instanceof Error ? e.message : String(e)}`);
+            }
+        }
+
         return newTag;
+    }
+
+    private async inheritParentScope(child: MJTagEntity, parentID: string, contextUser: UserInfo): Promise<void> {
+        const parent = this.GetTagByID(parentID);
+        if (!parent || parent.IsGlobal) return; // global parent → child is global by default
+
+        const parentScopes = TagEngineBase.Instance.GetScopesForTag(parent.ID);
+        if (parentScopes.length === 0) return;
+
+        // Set child non-global first so the TagScope server invariant accepts the rows.
+        if (child.IsGlobal) {
+            child.IsGlobal = false;
+            const saved = await child.Save();
+            if (!saved) {
+                LogError(`TagEngine.inheritParentScope: Failed to set IsGlobal=0 on child "${child.Name}".`);
+                return;
+            }
+        }
+
+        // Engine-wide singleton: provider is the process-default. Per CLAUDE.md
+        // "Don't reach for the global Metadata provider in per-provider code paths" —
+        // TagEngine is the single, process-global server-side engine, so this IS
+        // the documented "genuinely global" path. global-provider-ok: server-side singleton.
+        const md = new Metadata(); // global-provider-ok: TagEngine is the process-singleton server engine
+        for (const ps of parentScopes) {
+            const row = await md.GetEntityObject<MJTagScopeEntity>('MJ: Tag Scopes', contextUser);
+            row.NewRecord();
+            row.TagID = child.ID;
+            row.ScopeEntityID = ps.ScopeEntityID;
+            row.ScopeRecordID = ps.ScopeRecordID;
+            const ok = await row.Save();
+            if (!ok) {
+                LogError(`TagEngine.inheritParentScope: Failed to copy scope row for child "${child.Name}": ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
+            }
+        }
     }
 
     /**
@@ -739,6 +1180,7 @@ export class TagEngine extends BaseSingleton<TagEngine> {
             // Fall back to model's own DriverClass if available
             if (chosen.DriverClass) {
                 return {
+                    ModelID: chosen.ID,
                     DriverClass: chosen.DriverClass,
                     APIName: chosen.APIName ?? chosen.Name
                 };
@@ -748,6 +1190,7 @@ export class TagEngine extends BaseSingleton<TagEngine> {
         }
 
         return {
+            ModelID: chosen.ID,
             DriverClass: modelVendor.DriverClass,
             APIName: modelVendor.APIName ?? chosen.APIName ?? chosen.Name
         };

@@ -3,6 +3,7 @@ import { RunView, CompositeKey, EntityInfo, EntityFieldTSType, Metadata } from '
 import { NavigationService } from '@memberjunction/ng-shared';
 import { DataLoadedEvent, RecordOpenedEvent, EntityViewerConfig, EntityViewMode, GridToolbarConfig } from '@memberjunction/ng-entity-viewer';
 
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 type SearchState = 'loading' | 'no-results' | 'single-result' | 'viewer';
 
 @Component({
@@ -11,7 +12,7 @@ type SearchState = 'loading' | 'no-results' | 'single-result' | 'viewer';
   templateUrl: './single-search-result.component.html',
   styleUrls: ['./single-search-result.component.css']
 })
-export class SingleSearchResultComponent implements OnChanges {
+export class SingleSearchResultComponent extends BaseAngularComponent implements OnChanges {
   @Input() public entity: string = '';
   @Input() public searchInput: string = '';
   @Output() public loadComplete = new EventEmitter<boolean>();
@@ -62,7 +63,8 @@ export class SingleSearchResultComponent implements OnChanges {
   constructor(
     private navigationService: NavigationService,
     private cdr: ChangeDetectorRef
-  ) {}
+  ) {
+    super();}
 
   ngOnChanges(changes: SimpleChanges): void {
     if ((changes['entity'] || changes['searchInput']) && this.entity && this.searchInput) {
@@ -107,14 +109,14 @@ export class SingleSearchResultComponent implements OnChanges {
   }
 
   private findEntityInfo(): EntityInfo | undefined {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     return md.Entities.find(e =>
       e.Name.trim().toLowerCase() === this.entity.trim().toLowerCase()
     );
   }
 
   private async runPreQuery(entityInfo: EntityInfo) {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const pkFields = entityInfo.PrimaryKeys.map(pk => pk.Name);
     return rv.RunView<Record<string, unknown>>({
       EntityName: this.entity,

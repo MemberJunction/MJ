@@ -22,7 +22,7 @@ import {
     ViewChild,
     inject
 } from '@angular/core';
-import { Subject } from 'rxjs';
+import { Subject, Subscription } from 'rxjs';
 import { debounceTime, distinctUntilChanged, takeUntil } from 'rxjs/operators';
 import { SearchService } from './search.service';
 import {
@@ -34,6 +34,24 @@ import {
     SearchFilterChangeEvent,
     SearchExecutedEvent,
 } from './search-types';
+
+/**
+ * Per-provider streaming status displayed above the results list while a streaming
+ * search is in flight. One entry per provider that has reported back. Populated
+ * progressively as `streamScopedSearch` emits 'provider' events.
+ */
+export interface StreamingProviderStatus {
+    /** Provider name from the SearchEngine (e.g. 'Vector', 'FullText') */
+    Name: string;
+    /** Result count contributed by this provider */
+    Count: number;
+    /** Wall-clock latency for this provider's leg, in milliseconds */
+    ElapsedMs: number;
+    /** Reported state for this provider */
+    State: 'Completed' | 'Error';
+    /** Last error message if State is 'Error' */
+    ErrorMessage?: string;
+}
 
 @Component({
     standalone: false,
@@ -90,6 +108,14 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
     /** Whether to show the agent CTA */
     @Input() ShowAgentCta = true;
 
+    /**
+     * When true, the overlay subscribes to `SearchService.StreamSearch` instead of awaiting
+     * `ExecuteSearch`. Results render progressively as each provider reports back. The
+     * per-provider status chip strip becomes visible while the stream is in flight.
+     * Defaults to false to preserve the request-response UX that shipped in Phase 1.
+     */
+    @Input() EnableStreaming = false;
+
     // --- Outputs ---
 
     @Output() IsOpenChange = new EventEmitter<boolean>();
@@ -112,6 +138,16 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
     public HasSearched = false;
     private searchVersion = 0;
 
+    /**
+     * Per-provider status entries shown above the results list while a streaming search
+     * is in flight. One entry per provider that has reported back. Empty when the user
+     * is not running a streaming search (or when `EnableStreaming` is false).
+     */
+    public StreamingProviders: StreamingProviderStatus[] = [];
+
+    /** Active stream subscription so we can cancel on a new search or destroy. */
+    private currentStream: Subscription | null = null;
+
     /** All results flattened for keyboard navigation */
     public get FlatResults(): SearchResultItem[] {
         return this.AllResults;
@@ -123,6 +159,8 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
     }
 
     ngOnDestroy(): void {
+        this.currentStream?.unsubscribe();
+        this.currentStream = null;
         this.destroy$.next();
         this.destroy$.complete();
     }
@@ -313,6 +351,11 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
             IncludeSources: this.IncludeSources,
         };
 
+        if (this.EnableStreaming) {
+            this.executeStreamingSearch(query, request, version);
+            return;
+        }
+
         const response = await this.searchService.ExecuteSearch(request);
 
         // Discard results if a newer search was triggered while this one was in-flight
@@ -336,6 +379,86 @@ export class SearchOverlayComponent implements OnInit, OnDestroy {
         });
 
         this.cdr.detectChanges();
+    }
+
+    /**
+     * Streaming variant of executeSearch — subscribes to `SearchService.StreamSearch` and
+     * progressively updates the result list as each provider reports back. The 'final'
+     * event carries the canonical fused/reranked list, which replaces the partials.
+     *
+     * Cancellation: a new search invocation tears down the in-flight stream via
+     * `searchVersion` and `currentStream.unsubscribe()`.
+     */
+    private executeStreamingSearch(query: string, request: SearchRequest, version: number): void {
+        // Tear down any prior stream so we don't get cross-talk between consecutive queries.
+        this.currentStream?.unsubscribe();
+        this.currentStream = null;
+
+        // Reset visible state for a fresh stream.
+        this.StreamingProviders = [];
+        this.AllResults = [];
+        this.ResultGroups = [];
+        this.TotalCount = 0;
+        this.ElapsedMs = 0;
+        this.HasSearched = true;
+        this.HighlightedIndex = -1;
+        this.cdr.detectChanges();
+
+        this.currentStream = this.searchService.StreamSearch(request).subscribe({
+            next: (event) => {
+                if (version !== this.searchVersion) return;
+
+                if (event.Phase === 'provider' && event.ProviderName) {
+                    const count = event.Results?.length ?? 0;
+                    this.StreamingProviders = [
+                        ...this.StreamingProviders,
+                        {
+                            Name: event.ProviderName,
+                            Count: count,
+                            ElapsedMs: event.ElapsedMs ?? 0,
+                            State: 'Completed',
+                        },
+                    ];
+                    if (event.Results && event.Results.length > 0) {
+                        // Append partials so the user sees the list grow as providers return.
+                        this.AllResults = [...this.AllResults, ...event.Results];
+                        this.ResultGroups = this.searchService.GroupResults(this.AllResults);
+                        this.TotalCount = this.AllResults.length;
+                        if (this.HighlightedIndex < 0) {
+                            this.HighlightedIndex = 0;
+                        }
+                    }
+                } else if (event.Phase === 'final' && event.Results) {
+                    // Replace the appended partials with the canonical fused/reranked list.
+                    this.AllResults = event.Results;
+                    this.ResultGroups = this.searchService.GroupResults(this.AllResults);
+                    this.Filters = this.searchService.BuildFilters(this.AllResults);
+                    this.TotalCount = event.Results.length;
+                    this.ElapsedMs = event.ElapsedMs ?? this.ElapsedMs;
+                    this.HighlightedIndex = event.Results.length > 0 ? 0 : -1;
+                }
+
+                this.cdr.detectChanges();
+            },
+            error: (err: Error) => {
+                if (version !== this.searchVersion) return;
+                this.StreamingProviders = [
+                    ...this.StreamingProviders,
+                    { Name: 'stream', Count: 0, ElapsedMs: 0, State: 'Error', ErrorMessage: err.message },
+                ];
+                this.cdr.detectChanges();
+            },
+            complete: () => {
+                if (version !== this.searchVersion) return;
+                this.SearchExecuted.emit({
+                    Query: query,
+                    Filters: this.ActiveFilters,
+                    ResultCount: this.TotalCount,
+                    ElapsedMs: this.ElapsedMs,
+                });
+                this.cdr.detectChanges();
+            },
+        });
     }
 
     private clearResults(): void {

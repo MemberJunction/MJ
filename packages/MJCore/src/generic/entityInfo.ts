@@ -360,7 +360,7 @@ export class EntityPermissionInfo extends BaseInfo{
                 break;
         }
         if (fID && fID.length > 0) 
-            return Metadata.Provider.RowLevelSecurityFilters.find(f => UUIDsEqual(f.ID, fID));
+            return Metadata.Provider.RowLevelSecurityFilters.find(f => UUIDsEqual(f.ID, fID));  // global-provider-ok: stateless info class — proxies to global metadata
     }
 
     constructor (initData: any) {
@@ -536,10 +536,32 @@ export class EntityFieldInfo extends BaseInfo {
     IncludeInUserSearchAPI: boolean = null
     FullTextSearchEnabled: boolean = false
     UserSearchParamFormatAPI: string = null
+    /**
+     * Search predicate controlling how user-search queries match against this field
+     * in the LIKE-based search path used when the entity does not have FullTextSearchEnabled.
+     * Valid values: 'BeginsWith' | 'Contains' | 'EndsWith' | 'Exact'. Default 'Contains'.
+     * Honored by GenericDatabaseProvider.createViewUserSearchSQL.
+     */
+    UserSearchPredicateAPI: string = null
     IncludeInGeneratedForm: boolean = null
     GeneratedFormSection: string = null
-    IsVirtual: boolean = null 
-    IsNameField: boolean = null 
+    IsVirtual: boolean = null
+    /**
+     * When true, this field is a SQL Server computed column or PostgreSQL generated column —
+     * physically present in the base table but read-only at the SQL layer. Distinct from
+     * IsVirtual, which is also set to 1 for these fields (because they are read-only at the
+     * API layer) but is additionally set for view-only columns that don't exist in the base
+     * table at all (e.g., joined name lookups in the base view). Use the combination to
+     * disambiguate:
+     *   IsVirtual=0, IsComputed=0 → regular base-table column (writable)
+     *   IsVirtual=1, IsComputed=0 → view-only column (no physical storage)
+     *   IsVirtual=1, IsComputed=1 → computed/generated column (physical, read-only in SQL)
+     * Only relevant downstream consumer that branches on this is base-view JOIN target
+     * selection in CodeGen — when an FK's related Name Field is IsComputed=1, the join
+     * targets the related entity's base table (not its view).
+     */
+    IsComputed: boolean = null
+    IsNameField: boolean = null
     RelatedEntityID: string = null
     RelatedEntityFieldName: string = null
     IncludeRelatedEntityNameFieldInBaseView: boolean = null
@@ -794,6 +816,13 @@ export class EntityFieldInfo extends BaseInfo {
     IsFloat: boolean
     _RelatedEntityTableAlias: string
     _RelatedEntityNameFieldIsVirtual: boolean
+    /**
+     * Mirror of `IsComputed` on the related entity's Name Field. Tracked alongside
+     * `_RelatedEntityNameFieldIsVirtual` so that base-view JOIN-target selection can
+     * prefer the related entity's base table when the Name Field is a SQL computed/
+     * generated column (physically present in the base table even though IsVirtual=1).
+     */
+    _RelatedEntityNameFieldIsComputed: boolean
     private _rawEntityFieldValues: Record<string, unknown>[] | null = null;
     private _entityFieldValuesConstructed = false;
     _EntityFieldValues: EntityFieldValueInfo[];
@@ -805,6 +834,7 @@ export class EntityFieldInfo extends BaseInfo {
         sourceField: string;
         alias: string;
         isVirtual: boolean;
+        isComputed: boolean;
     }>;
 
     /**
@@ -1046,6 +1076,92 @@ export class EntityFieldInfo extends BaseInfo {
      */
     get HasDefaultValue(): boolean {
         return this.DefaultValue && this.DefaultValue.trim().length > 0
+    }
+
+    /**
+     * Returns true when the field's `spUpdate` / `spCreate` procedure
+     * exposes a `<Param>_Clear` companion parameter — i.e. the field is
+     * nullable and has a non-NULL database default.
+     *
+     * Codegen emits the companion so a caller can disambiguate
+     * "leave unchanged / apply default" (omit the parameter) from
+     * "explicitly set this column to NULL" (`<Param>_Clear = 1`).
+     * Without it, the SP body's `ISNULL(@Param, [Col])` merge silently
+     * substitutes the existing value or default, and a literal NULL
+     * could never be persisted.
+     *
+     * Save-time callers in the data providers use this to decide whether
+     * to also emit the `_Clear` companion parameter when the entity
+     * intentionally sets such a field to NULL. Stays in sync with
+     * `CodeGenLib`'s `needsClearCompanion`.
+     *
+     * Note: relies on `DefaultValue` already being normalized by
+     * `ExtractActualDefaultValue` at populate time — that helper strips
+     * the DB's wrapping parens and converts a literal `NULL` default to
+     * JS `null`. So if `HasDefaultValue` is true, the default is
+     * guaranteed to be non-NULL.
+     */
+    get NeedsClearCompanion(): boolean {
+        return this.AllowsNull;
+    }
+
+    /**
+     * Returns true when this field appears as a parameter in the entity's
+     * `spCreate` (when `isUpdate=false`) or `spUpdate` (when `isUpdate=true`)
+     * stored procedure.
+     *
+     * This is the **single source of truth** for the SP parameter contract,
+     * consumed by both:
+     *
+     *   • **CodeGen**, when emitting the SP body (which `@params` to declare
+     *     and which columns to `INSERT`/`UPDATE`), and
+     *   • **Runtime data providers**, via the `RenderSaveCallBinding` hook
+     *     implemented by `SQLServerDataProvider` and `PostgreSQLDataProvider`
+     *     (orchestrated by `GenericDatabaseProvider.GenerateSaveSQL`), when
+     *     building the EXEC / parameter list passed to the SP.
+     *
+     * Keeping both sides on the same predicate guarantees the SP signature
+     * and the call-site argument list always agree. Drift between them
+     * surfaces as a SQL Server "Procedure or function ... has too many
+     * arguments specified" error at save time (or its PG equivalent).
+     *
+     * **Exclusion rules** (in order):
+     *
+     *   • `IsVirtual` — view-only / joined columns. Not present in the base
+     *     table; the SP body never references them. Also covers IS-A parent
+     *     fields on child entities — those are saved via the parent's SP,
+     *     not the child's, so they must not appear in the child's SP params.
+     *   • `IsComputed` — SQL Server computed columns and PG generated
+     *     columns. Physically present in the base table but read-only at
+     *     the SQL layer (`INSERT`/`UPDATE` cannot target them). Today
+     *     `IsComputed=1` implies `IsVirtual=1`, but checking both is
+     *     defensive against future decoupling of the flags.
+     *   • `IsSpecialDateField` — `__mj_CreatedAt`, `__mj_UpdatedAt`,
+     *     `__mj_DeletedAt`. Set inside the SP body / trigger from
+     *     `GETUTCDATE()` rather than by the caller.
+     *   • Non-PK fields without `AllowUpdateAPI` — by definition not
+     *     callable via the SP signature.
+     *
+     * **PK handling**:
+     *
+     *   • On **update**, the PK is always a parameter (required to identify
+     *     the row).
+     *   • On **create**, the PK is a parameter only when it's NOT
+     *     auto-increment — the SP body declares it with a default so the
+     *     caller can either supply a value or let the database default fire
+     *     (e.g. `NEWSEQUENTIALID()`). For auto-increment PKs, the SP
+     *     intentionally doesn't expose the PK as a parameter.
+     *
+     * @param isUpdate `true` for `spUpdate`, `false` for `spCreate`.
+     */
+    public IsSPParameter(isUpdate: boolean): boolean {
+        if (this.IsVirtual) return false;
+        if (this.IsComputed) return false;
+        if (this.IsSpecialDateField) return false;
+        if (this.IsPrimaryKey) {
+            return isUpdate || !this.AutoIncrement;
+        }
+        return this.AllowUpdateAPI;
     }
 
     /**
@@ -1752,12 +1868,29 @@ export class EntityInfo extends BaseInfo {
      * If no fields match, if there is a field called "Name", that is returned. If there is no field called "Name", null is returned.
      */
     get NameField(): EntityFieldInfo | null {
-      const f = this.Fields.find((f) => f.IsNameField);
-
-      if (!f)
-        return this.Fields.find((f) => f.Name?.trim().toLowerCase() === 'name');
-      else
-        return f;
+      // Multiple fields can have IsNameField=true (e.g. Entity has both `Name`
+      // and `DisplayName` marked). Without a deterministic preference, the
+      // pick depends on `this.Fields` insertion order — which differs between
+      // SQL Server (where `Name` happens to come first) and PostgreSQL (where
+      // `DisplayName` does). Codegen builds JOIN aliases off NameField, so
+      // the divergence produces views like `vwDatasetItems` that SELECT the
+      // wrong column on PG (`DisplayName AS "Entity"` instead of
+      // `Name AS "Entity"`), and downstream consumers like
+      // TemplateEngineBase.GetDatasetByName then look up `"Templates"`
+      // (the DisplayName) instead of `"MJ: Templates"` (the actual Name) and
+      // crash with `Entity Templates not found in metadata`.
+      //
+      // Resolution rule: when more than one field claims IsNameField, prefer
+      // the one literally named `Name`. Falls back to the first IsNameField
+      // match (preserves prior behavior when there's no `Name` field), then
+      // to a field named `Name` even without IsNameField set (legacy default).
+      const candidates = this.Fields.filter((f) => f.IsNameField);
+      if (candidates.length > 1) {
+        const literalName = candidates.find((f) => f.Name?.trim().toLowerCase() === 'name');
+        if (literalName) return literalName;
+      }
+      if (candidates.length > 0) return candidates[0];
+      return this.Fields.find((f) => f.Name?.trim().toLowerCase() === 'name') ?? null;
     }
 
     /**************************************************************************
@@ -1775,7 +1908,7 @@ export class EntityInfo extends BaseInfo {
      */
     get ParentEntityInfo(): EntityInfo | null {
         if (!this.ParentID) return null;
-        const p = Metadata.Provider;
+        const p = Metadata.Provider;  // global-provider-ok: stateless info class — proxies to global metadata
         if (p?.EntityByID) {
             return p.EntityByID(this.ParentID) ?? null;
         }
@@ -1792,7 +1925,7 @@ export class EntityInfo extends BaseInfo {
      * only one child type is allowed per parent record (disjoint subtypes).
      */
     get ChildEntities(): EntityInfo[] {
-        return Metadata.Provider?.Entities?.filter(e => UUIDsEqual(e.ParentID, this.ID)) ?? [];
+        return Metadata.Provider?.Entities?.filter(e => UUIDsEqual(e.ParentID, this.ID)) ?? [];  // global-provider-ok: stateless info class — proxies to global metadata
     }
 
     /**

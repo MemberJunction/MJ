@@ -3,7 +3,7 @@
  * @module @memberjunction/testing-engine
  */
 
-import { Metadata, DatabaseProviderBase, UserInfo } from '@memberjunction/core';
+import { Metadata, DatabaseProviderBase, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { IOracle } from './IOracle';
 import { OracleInput, OracleConfig, OracleResult } from '../types';
 
@@ -49,6 +49,20 @@ import { OracleInput, OracleConfig, OracleResult } from '../types';
  */
 export class SQLValidatorOracle implements IOracle {
     readonly type = 'sql-validate';
+
+    private _provider: IMetadataProvider | null = null;
+
+    /**
+     * Optional metadata provider override. Callers should set
+     * `instance.Provider = providerToUse` before invoking `evaluate()`
+     * in multi-provider contexts. Falls back to the global default provider when unset.
+     */
+    public get Provider(): IMetadataProvider {
+        return this._provider ?? (new Metadata() as unknown as IMetadataProvider);
+    }
+    public set Provider(value: IMetadataProvider | null) {
+        this._provider = value;
+    }
 
     /**
      * Evaluate database state using SQL queries.
@@ -141,8 +155,8 @@ export class SQLValidatorOracle implements IOracle {
             // Replace parameters in SQL with values from actualOutput
             const sql = this.replaceParameters(validation.sql, actualOutput);
 
-            // Get database provider from Metadata.Provider
-            const dbProvider = Metadata.Provider as DatabaseProviderBase;
+            // Get database provider from the configured Provider
+            const dbProvider = this.Provider as unknown as DatabaseProviderBase;
 
             // Execute the SQL query
             const queryResults = await dbProvider.ExecuteSQL<Record<string, unknown>>(

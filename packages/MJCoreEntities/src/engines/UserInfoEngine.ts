@@ -3,8 +3,9 @@ import {
   BaseEngine,
   BaseEnginePropertyConfig,
   IMetadataProvider,
-  Metadata,
+  LogStatus,
   RegisterForStartup,
+  RunView,
   UserInfo,
 } from '@memberjunction/core';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
@@ -119,7 +120,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * @param provider - Optional custom metadata provider
    */
   public async Config(forceRefresh?: boolean, contextUser?: UserInfo, provider?: IMetadataProvider): Promise<void> {
-    const md = new Metadata();
+    const md = provider ?? this.ProviderToUse;
     const userId = contextUser?.ID || md.CurrentUser?.ID;
 
     if (!userId) {
@@ -288,7 +289,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * @returns true if successful, false otherwise
    */
   public async SetSetting(settingKey: string, value: string, contextUser?: UserInfo): Promise<boolean> {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const userId = contextUser?.ID || md.CurrentUser?.ID;
 
     if (!userId) {
@@ -706,7 +707,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
     if (appRoles.length === 0) return true;
 
     // Check if any of the user's roles have CanAccess=1
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const user = md.CurrentUser;
     if (!user || !user.UserRoles) return false;
 
@@ -727,7 +728,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
     );
     if (appRoles.length === 0) return false; // No admin without explicit grant
 
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const user = md.CurrentUser;
     if (!user || !user.UserRoles) return false;
 
@@ -743,7 +744,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * @param applicationId - The application ID to check
    */
   public IsApplicationInactive(applicationId: string): boolean {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const appInfo = md.Applications.find((a) => UUIDsEqual(a.ID, applicationId));
     return appInfo != null && appInfo.Status !== 'Active';
   }
@@ -753,7 +754,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * @param applicationId - The application ID to find
    */
   public GetApplicationInfo(applicationId: string): ApplicationInfo | undefined {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     return md.Applications.find((a) => UUIDsEqual(a.ID, applicationId));
   }
 
@@ -763,7 +764,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    */
   public FindApplicationByPathOrName(pathOrName: string): ApplicationInfo | undefined {
     const normalized = pathOrName.trim().toLowerCase();
-    const md = new Metadata();
+    const md = this.ProviderToUse;
 
     // First try path match
     const pathMatch = md.Applications.find((a) => a.Path?.toLowerCase() === normalized);
@@ -819,7 +820,7 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
    * @returns The newly created MJUserApplicationEntity, or null if failed
    */
   public async InstallApplication(applicationId: string, contextUser?: UserInfo): Promise<MJUserApplicationEntity | null> {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const userId = contextUser?.ID || md.CurrentUser?.ID;
 
     if (!userId) {
@@ -1012,16 +1013,55 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   }
 
   /**
+   * Checks the database directly for this user's UserApplication records.
+   * If the DB has records but our in-memory cache is empty (load failure),
+   * repairs the cache and emits a property change so subscribers update.
+   * @returns The DB records if repair occurred, empty array otherwise
+   */
+  private async repairUserApplicationsFromDatabase(userId: string, contextUser?: UserInfo): Promise<MJUserApplicationEntity[]> {
+    try {
+      const rv = new RunView(this.RunViewProviderToUse);
+      const dbResult = await rv.RunView<MJUserApplicationEntity>({
+        EntityName: 'MJ: User Applications',
+        ExtraFilter: `UserID='${userId}'`,
+        ResultType: 'entity_object',
+        BypassCache: true
+      }, contextUser ?? this.ContextUser);
+
+      if (dbResult.Success && dbResult.Results.length > 0) {
+        LogStatus(`UserInfoEngine: Repaired _UserApplications from database (${dbResult.Results.length} records) — in-memory cache was empty`);
+        this._UserApplications = dbResult.Results;
+        this.emitPropertyChange('_UserApplications');
+        return dbResult.Results;
+      }
+    } catch (error) {
+      console.error('UserInfoEngine.repairUserApplicationsFromDatabase: DB verification failed:', error instanceof Error ? error.message : String(error));
+    }
+    return [];
+  }
+
+  /**
    * Internal implementation of CreateDefaultApplications.
    * Separated to allow the public method to manage the promise state.
    */
   private async doCreateDefaultApplications(contextUser?: UserInfo): Promise<MJUserApplicationEntity[]> {
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const userId = contextUser?.ID || md.CurrentUser?.ID;
 
     if (!userId) {
       console.error('UserInfoEngine.CreateDefaultApplications: No user context available');
       return [];
+    }
+
+    // Verify against the database before creating — if the in-memory cache is empty
+    // due to a load failure (e.g., cache timestamp bug), we'd otherwise attempt to
+    // create records that already exist, hitting unique constraint violations.
+    const userAppsForUser = this._UserApplications.filter((ua) => UUIDsEqual(ua.UserID, userId));
+    if (userAppsForUser.length === 0) {
+      const repaired = await this.repairUserApplicationsFromDatabase(userId, contextUser);
+      if (repaired.length > 0) {
+        return repaired;
+      }
     }
 
     // Get existing UserApplication records for this user to prevent duplicates

@@ -1,5 +1,200 @@
 # @memberjunction/ng-conversations
 
+## 5.34.1
+
+### Patch Changes
+
+- Updated dependencies [3a35358]
+- Updated dependencies [8695f65]
+- Updated dependencies [5abf790]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/graphql-dataprovider@5.34.1
+  - @memberjunction/ai-core-plus@5.34.1
+  - @memberjunction/ai-agent-client@5.34.1
+  - @memberjunction/ai-engine-base@5.34.1
+  - @memberjunction/ng-testing@5.34.1
+  - @memberjunction/ng-artifacts@5.34.1
+  - @memberjunction/ng-base-types@5.34.1
+  - @memberjunction/ng-code-editor@5.34.1
+  - @memberjunction/ng-container-directives@5.34.1
+  - @memberjunction/ng-notifications@5.34.1
+  - @memberjunction/ng-resource-permissions@5.34.1
+  - @memberjunction/ng-shared-generic@5.34.1
+  - @memberjunction/ng-tasks@5.34.1
+  - @memberjunction/core-entities@5.34.1
+  - @memberjunction/ng-forms@5.34.1
+  - @memberjunction/ng-agent-client@5.34.1
+  - @memberjunction/ai@5.34.1
+  - @memberjunction/ng-markdown@5.34.1
+  - @memberjunction/ng-ui-components@5.34.1
+  - @memberjunction/global@5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- a6a16fa: Conversation sidebar now uses MJ design tokens for all text, borders, popovers, and status colors instead of hardcoded `rgba(255,255,255,X)` / `rgba(239,68,68,X)` / `#fb923c` / `rgba(0,0,0,0.4)` values. The "Pinned" and "Messages" section headers share the same style (no special background on Pinned), and the thumbtack icon no longer rotates when the section is collapsed/expanded.
+- 389d356: Fix XSS vulnerability in search-result highlighters across form-field labels, collapsible-panel section names, and conversation search snippets. Extracted shared `HighlightSearchMatches` helper in `@memberjunction/global` that escapes each text segment individually after a literal-string match, so HTML in the source can never leak into `[innerHTML]` as live markup. Also restored multi-match highlighting that had regressed to single-match.
+- ad61267: no migration
+- Updated dependencies [b03bfb4]
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [003317f]
+- Updated dependencies [11ae7e6]
+- Updated dependencies [0caffca]
+- Updated dependencies [cfffb6d]
+- Updated dependencies [e999e0d]
+- Updated dependencies [389d356]
+- Updated dependencies [ae5cfbd]
+- Updated dependencies [6d8ee1a]
+- Updated dependencies [ad61267]
+- Updated dependencies [72cb92e]
+  - @memberjunction/ng-artifacts@5.34.0
+  - @memberjunction/ng-markdown@5.34.0
+  - @memberjunction/ai-agent-client@5.34.0
+  - @memberjunction/ai-engine-base@5.34.0
+  - @memberjunction/ai-core-plus@5.34.0
+  - @memberjunction/ng-testing@5.34.0
+  - @memberjunction/ng-agent-client@5.34.0
+  - @memberjunction/ng-base-types@5.34.0
+  - @memberjunction/ng-code-editor@5.34.0
+  - @memberjunction/ng-container-directives@5.34.0
+  - @memberjunction/ng-forms@5.34.0
+  - @memberjunction/ng-notifications@5.34.0
+  - @memberjunction/ng-resource-permissions@5.34.0
+  - @memberjunction/ng-shared-generic@5.34.0
+  - @memberjunction/ng-tasks@5.34.0
+  - @memberjunction/ng-ui-components@5.34.0
+  - @memberjunction/core@5.34.0
+  - @memberjunction/core-entities@5.34.0
+  - @memberjunction/graphql-dataprovider@5.34.0
+  - @memberjunction/global@5.34.0
+  - @memberjunction/ai@5.34.0
+
+## 5.33.0
+
+### Patch Changes
+
+- Updated dependencies [97ed790]
+- Updated dependencies [95eb27e]
+- Updated dependencies [74b0be0]
+- Updated dependencies [5cc5326]
+- Updated dependencies [7e4957d]
+  - @memberjunction/graphql-dataprovider@5.33.0
+  - @memberjunction/core@5.33.0
+  - @memberjunction/global@5.33.0
+  - @memberjunction/ai-agent-client@5.33.0
+  - @memberjunction/ng-testing@5.33.0
+  - @memberjunction/ng-artifacts@5.33.0
+  - @memberjunction/ng-notifications@5.33.0
+  - @memberjunction/ai-engine-base@5.33.0
+  - @memberjunction/ai-core-plus@5.33.0
+  - @memberjunction/ng-base-types@5.33.0
+  - @memberjunction/ng-code-editor@5.33.0
+  - @memberjunction/ng-container-directives@5.33.0
+  - @memberjunction/ng-resource-permissions@5.33.0
+  - @memberjunction/ng-shared-generic@5.33.0
+  - @memberjunction/ng-tasks@5.33.0
+  - @memberjunction/core-entities@5.33.0
+  - @memberjunction/ai@5.33.0
+  - @memberjunction/ng-agent-client@5.33.0
+  - @memberjunction/ng-forms@5.33.0
+  - @memberjunction/ng-markdown@5.33.0
+  - @memberjunction/ng-ui-components@5.33.0
+
+## 5.32.0
+
+### Patch Changes
+
+- Updated dependencies [a7e8b3b]
+- Updated dependencies [b9c67ac]
+  - @memberjunction/core@5.32.0
+  - @memberjunction/ai-agent-client@5.32.0
+  - @memberjunction/ai-engine-base@5.32.0
+  - @memberjunction/ai-core-plus@5.32.0
+  - @memberjunction/ng-testing@5.32.0
+  - @memberjunction/ng-artifacts@5.32.0
+  - @memberjunction/ng-base-types@5.32.0
+  - @memberjunction/ng-code-editor@5.32.0
+  - @memberjunction/ng-container-directives@5.32.0
+  - @memberjunction/ng-notifications@5.32.0
+  - @memberjunction/ng-resource-permissions@5.32.0
+  - @memberjunction/ng-shared-generic@5.32.0
+  - @memberjunction/ng-tasks@5.32.0
+  - @memberjunction/graphql-dataprovider@5.32.0
+  - @memberjunction/core-entities@5.32.0
+  - @memberjunction/ng-agent-client@5.32.0
+  - @memberjunction/ng-forms@5.32.0
+  - @memberjunction/ai@5.32.0
+  - @memberjunction/ng-markdown@5.32.0
+  - @memberjunction/ng-ui-components@5.32.0
+  - @memberjunction/global@5.32.0
+
+## 5.31.0
+
+### Patch Changes
+
+- 7ed7a4b: no metadata/migration changes
+- 6779c1e: Lazy field hydration in BaseEntity + smarter engine startup (~30x warm-load speedup, ~14s to ~470ms). Defers per-row Field construction until something mutates or walks Fields, removes a speculative per-view fast-start path, adds a `deferred` flag to `@RegisterForStartup` and an `EnsureLoaded()` shortcut on `BaseEngine` / `AIEngine`. DeveloperModeService and WorkspaceStateManager swapped weak `Get`/`Set` calls for typed accessors. EnsureLoaded calls added at AI engine consumption sites.
+- Updated dependencies [fc8b9b8]
+- Updated dependencies [cde4d2c]
+- Updated dependencies [7ed7a4b]
+- Updated dependencies [60e7541]
+- Updated dependencies [18be074]
+- Updated dependencies [17b8087]
+- Updated dependencies [6779c1e]
+- Updated dependencies [c8b6f8a]
+- Updated dependencies [de34786]
+- Updated dependencies [5db36d9]
+- Updated dependencies [0e3365f]
+  - @memberjunction/core-entities@5.31.0
+  - @memberjunction/graphql-dataprovider@5.31.0
+  - @memberjunction/ai-agent-client@5.31.0
+  - @memberjunction/ai-engine-base@5.31.0
+  - @memberjunction/ai@5.31.0
+  - @memberjunction/ai-core-plus@5.31.0
+  - @memberjunction/ng-testing@5.31.0
+  - @memberjunction/ng-agent-client@5.31.0
+  - @memberjunction/ng-artifacts@5.31.0
+  - @memberjunction/ng-base-types@5.31.0
+  - @memberjunction/ng-code-editor@5.31.0
+  - @memberjunction/ng-container-directives@5.31.0
+  - @memberjunction/ng-forms@5.31.0
+  - @memberjunction/ng-markdown@5.31.0
+  - @memberjunction/ng-notifications@5.31.0
+  - @memberjunction/ng-resource-permissions@5.31.0
+  - @memberjunction/ng-shared-generic@5.31.0
+  - @memberjunction/ng-tasks@5.31.0
+  - @memberjunction/ng-ui-components@5.31.0
+  - @memberjunction/core@5.31.0
+  - @memberjunction/global@5.31.0
+
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ai-agent-client@5.30.1
+- @memberjunction/ai-engine-base@5.30.1
+- @memberjunction/ai@5.30.1
+- @memberjunction/ai-core-plus@5.30.1
+- @memberjunction/ng-testing@5.30.1
+- @memberjunction/ng-agent-client@5.30.1
+- @memberjunction/ng-artifacts@5.30.1
+- @memberjunction/ng-base-types@5.30.1
+- @memberjunction/ng-code-editor@5.30.1
+- @memberjunction/ng-container-directives@5.30.1
+- @memberjunction/ng-forms@5.30.1
+- @memberjunction/ng-markdown@5.30.1
+- @memberjunction/ng-notifications@5.30.1
+- @memberjunction/ng-resource-permissions@5.30.1
+- @memberjunction/ng-shared-generic@5.30.1
+- @memberjunction/ng-tasks@5.30.1
+- @memberjunction/ng-ui-components@5.30.1
+- @memberjunction/graphql-dataprovider@5.30.1
+- @memberjunction/core@5.30.1
+- @memberjunction/core-entities@5.30.1
+- @memberjunction/global@5.30.1
+
 ## 5.30.0
 
 ### Patch Changes

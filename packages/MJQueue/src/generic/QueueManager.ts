@@ -2,7 +2,7 @@
 import { TaskBase, QueueBase } from "./QueueBase";
 import { LogError, Metadata, RunView, UserInfo, BaseEntity } from "@memberjunction/core";
 import { MJQueueEntity, MJQueueTaskEntity, MJQueueTypeEntity } from "@memberjunction/core-entities";
-import { MJGlobal, UUIDsEqual, BaseSingleton } from "@memberjunction/global";
+import { MJGlobal, UUIDsEqual, BaseSingleton, ShutdownRegistry, IShutdownable } from "@memberjunction/global";
 import os from 'os';
 
 /**
@@ -18,9 +18,32 @@ import os from 'os';
  *information. Heartbeat information is used to determine if a queue has crashed or not by other processes 
  *or not. After a heartbeat timeout is reached, other queues can pick up tasks from a crashed process.
  */
-export class QueueManager extends BaseSingleton<QueueManager> {
+export class QueueManager extends BaseSingleton<QueueManager> implements IShutdownable {
   private _queueTypes: MJQueueTypeEntity[] = [];
   private _queues: QueueBase[] = [];
+
+  public get ShutdownName(): string {
+    return 'QueueManager';
+  }
+
+  /**
+   * Stop every active queue. Idempotent. Wired to `ShutdownRegistry` so the
+   * SIGTERM/SIGINT handler can drain queues during graceful shutdown — without
+   * this, each `QueueBase` keeps `setTimeout`-pinning itself indefinitely.
+   */
+  public ShutdownAllQueues(): void {
+    for (const q of this._queues) {
+      try {
+        q.Stop();
+      } catch {
+        // Per-queue failures must not abort the rest of the shutdown.
+      }
+    }
+  }
+
+  public Shutdown(): void {
+    this.ShutdownAllQueues();
+  }
 
   public static get QueueTypes(): MJQueueTypeEntity[] {
     return QueueManager.Instance._queueTypes;
@@ -60,6 +83,9 @@ export class QueueManager extends BaseSingleton<QueueManager> {
 
   public constructor() {
     super();
+    // Self-register so SIGTERM/SIGINT handlers wired to ShutdownRegistry can
+    // drain queues without each entry-point app needing to know about us.
+    ShutdownRegistry.Instance.Register(this);
   }
 
   public static async AddTask(QueueType: string, data: any, options: any, contextUser: UserInfo): Promise<TaskBase | undefined> {
@@ -85,7 +111,7 @@ export class QueueManager extends BaseSingleton<QueueManager> {
       const queue = await this.CheckCreateQueue(queueType, contextUser);
       if (queue) {
         // STEP 3: Create a task in the database for this new task
-        const md = new Metadata();
+        const md = new Metadata(); // global-provider-ok: process-wide queue singleton, no per-request provider context (QueueManager is process-scoped)
         const taskRecord = <MJQueueTaskEntity>await md.GetEntityObject('MJ: Queue Tasks', contextUser);
         taskRecord.Set('QueueID', queue.QueueID);
         taskRecord.Set('Status', 'Pending');
@@ -139,7 +165,7 @@ export class QueueManager extends BaseSingleton<QueueManager> {
   protected async CreateQueue(queueType: MJQueueTypeEntity, contextUser: UserInfo): Promise<QueueBase | null | undefined> {
     try {
       // create a new queue, based on the Queue Type metadata and process info
-      const md = new Metadata();
+      const md = new Metadata(); // global-provider-ok: process-wide queue singleton, no per-request provider context (QueueManager is process-scoped)
       const newQueueRecord = <MJQueueEntity>await md.GetEntityObject('MJ: Queues', contextUser);
       newQueueRecord.NewRecord();
       newQueueRecord.Set('QueueTypeID', queueType.ID);

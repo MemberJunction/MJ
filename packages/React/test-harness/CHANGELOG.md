@@ -1,5 +1,135 @@
 # @memberjunction/react-test-harness
 
+## 5.34.1
+
+### Patch Changes
+
+- Updated dependencies [3a35358]
+- Updated dependencies [8695f65]
+- Updated dependencies [5abf790]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/react-runtime@5.34.1
+  - @memberjunction/ai-core-plus@5.34.1
+  - @memberjunction/aiengine@5.34.1
+  - @memberjunction/ai-vectors-memory@5.34.1
+  - @memberjunction/interactive-component-types@5.34.1
+  - @memberjunction/core-entities@5.34.1
+  - @memberjunction/core-entities-server@5.34.1
+  - @memberjunction/global@5.34.1
+  - @memberjunction/sql-dialect@5.34.1
+  - @memberjunction/sql-parser@5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- 72cb92e: Optimize component loading pipeline: remove 163 MB MJ: Components bulk load from ComponentMetadataEngine, add ComponentMetadataEngineServer for server-only use, add generic cache API to LocalCacheManager with server-side registry caching (page refresh component load reduced from 12-20s to ~70ms), add hash-based 304 support for registry fetches, remove proprietary spec caching to client database, and optimize Component Studio to load lightweight summaries on demand.
+- Updated dependencies [4b8d9ed]
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [003317f]
+- Updated dependencies [0caffca]
+- Updated dependencies [cfffb6d]
+- Updated dependencies [e999e0d]
+- Updated dependencies [389d356]
+- Updated dependencies [ae5cfbd]
+- Updated dependencies [6d8ee1a]
+- Updated dependencies [72cb92e]
+  - @memberjunction/core-entities-server@5.34.0
+  - @memberjunction/ai-core-plus@5.34.0
+  - @memberjunction/aiengine@5.34.0
+  - @memberjunction/ai-vectors-memory@5.34.0
+  - @memberjunction/interactive-component-types@5.34.0
+  - @memberjunction/react-runtime@5.34.0
+  - @memberjunction/sql-dialect@5.34.0
+  - @memberjunction/sql-parser@5.34.0
+  - @memberjunction/core@5.34.0
+  - @memberjunction/core-entities@5.34.0
+  - @memberjunction/global@5.34.0
+
+## 5.33.0
+
+### Patch Changes
+
+- Updated dependencies [95eb27e]
+- Updated dependencies [74b0be0]
+- Updated dependencies [5cc5326]
+- Updated dependencies [312fcee]
+- Updated dependencies [7e4957d]
+- Updated dependencies [7add405]
+- Updated dependencies [3e84676]
+  - @memberjunction/core@5.33.0
+  - @memberjunction/react-runtime@5.33.0
+  - @memberjunction/sql-dialect@5.33.0
+  - @memberjunction/global@5.33.0
+  - @memberjunction/interactive-component-types@5.33.0
+  - @memberjunction/ai-core-plus@5.33.0
+  - @memberjunction/aiengine@5.33.0
+  - @memberjunction/ai-vectors-memory@5.33.0
+  - @memberjunction/core-entities@5.33.0
+  - @memberjunction/sql-parser@5.33.0
+
+## 5.32.0
+
+### Patch Changes
+
+- Updated dependencies [a7e8b3b]
+- Updated dependencies [b9c67ac]
+  - @memberjunction/core@5.32.0
+  - @memberjunction/ai-core-plus@5.32.0
+  - @memberjunction/aiengine@5.32.0
+  - @memberjunction/ai-vectors-memory@5.32.0
+  - @memberjunction/interactive-component-types@5.32.0
+  - @memberjunction/core-entities@5.32.0
+  - @memberjunction/react-runtime@5.32.0
+  - @memberjunction/global@5.32.0
+  - @memberjunction/sql-dialect@5.32.0
+  - @memberjunction/sql-parser@5.32.0
+
+## 5.31.0
+
+### Patch Changes
+
+- 7ed7a4b: no metadata/migration changes
+- 18be074: Fix boundary wildcard stripping in sqlLike filters, fix QueryProcessor default value handling for array-typed parameters, add Chart.js canvas container and no-unwrap-utility-libs lint rules to react-test-harness, and fix SimpleChart label leak through onDataPointClick
+- Updated dependencies [fc8b9b8]
+- Updated dependencies [cde4d2c]
+- Updated dependencies [7ed7a4b]
+- Updated dependencies [84494bb]
+- Updated dependencies [9457655]
+- Updated dependencies [60e7541]
+- Updated dependencies [18be074]
+- Updated dependencies [17b8087]
+- Updated dependencies [6779c1e]
+- Updated dependencies [c8b6f8a]
+- Updated dependencies [de34786]
+- Updated dependencies [5db36d9]
+  - @memberjunction/core-entities@5.31.0
+  - @memberjunction/ai-core-plus@5.31.0
+  - @memberjunction/aiengine@5.31.0
+  - @memberjunction/ai-vectors-memory@5.31.0
+  - @memberjunction/interactive-component-types@5.31.0
+  - @memberjunction/core@5.31.0
+  - @memberjunction/global@5.31.0
+  - @memberjunction/react-runtime@5.31.0
+  - @memberjunction/sql-dialect@5.31.0
+  - @memberjunction/sql-parser@5.31.0
+
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ai-core-plus@5.30.1
+- @memberjunction/aiengine@5.30.1
+- @memberjunction/ai-vectors-memory@5.30.1
+- @memberjunction/interactive-component-types@5.30.1
+- @memberjunction/core@5.30.1
+- @memberjunction/core-entities@5.30.1
+- @memberjunction/global@5.30.1
+- @memberjunction/react-runtime@5.30.1
+- @memberjunction/sql-dialect@5.30.1
+- @memberjunction/sql-parser@5.30.1
+
 ## 5.30.0
 
 ### Patch Changes

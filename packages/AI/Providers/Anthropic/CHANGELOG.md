@@ -1,5 +1,51 @@
 # Change Log - @memberjunction/ai-anthropic
 
+## 5.34.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.34.1
+- @memberjunction/global@5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- Updated dependencies [389d356]
+  - @memberjunction/global@5.34.0
+  - @memberjunction/ai@5.34.0
+
+## 5.33.0
+
+### Patch Changes
+
+- Updated dependencies [5cc5326]
+  - @memberjunction/global@5.33.0
+  - @memberjunction/ai@5.33.0
+
+## 5.32.0
+
+### Patch Changes
+
+- @memberjunction/ai@5.32.0
+- @memberjunction/global@5.32.0
+
+## 5.31.0
+
+### Patch Changes
+
+- 7ed7a4b: no metadata/migration changes
+- Updated dependencies [7ed7a4b]
+  - @memberjunction/ai@5.31.0
+  - @memberjunction/global@5.31.0
+
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.30.1
+- @memberjunction/global@5.30.1
+
 ## 5.30.0
 
 ### Patch Changes

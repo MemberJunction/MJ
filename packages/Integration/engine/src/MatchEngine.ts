@@ -1,4 +1,4 @@
-import { Metadata, RunView, type UserInfo } from '@memberjunction/core';
+import { IMetadataProvider, Metadata, RunView, type UserInfo } from '@memberjunction/core';
 import type { ICompanyIntegrationFieldMap, ICompanyIntegrationEntityMap } from './entity-types.js';
 import type { MappedRecord, ConflictResolution } from './types.js';
 
@@ -7,6 +7,14 @@ import type { MappedRecord, ConflictResolution } from './types.js';
  * whether each record should be Created, Updated, Skipped, or Deleted.
  */
 export class MatchEngine {
+    /** Optional provider override; falls back to Metadata.Provider when not set. */
+    private _provider?: IMetadataProvider;
+
+    /** Returns the active provider — explicit override if set, otherwise the global default. */
+    protected get ProviderToUse(): IMetadataProvider {
+        return this._provider ?? Metadata.Provider;
+    }
+
     /**
      * Resolves change types for a batch of mapped records by checking for existing
      * MJ records via key field matching and record map lookups.
@@ -21,8 +29,10 @@ export class MatchEngine {
         records: MappedRecord[],
         entityMap: ICompanyIntegrationEntityMap,
         fieldMaps: ICompanyIntegrationFieldMap[],
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        provider?: IMetadataProvider
     ): Promise<MappedRecord[]> {
+        if (provider) this._provider = provider;
         const keyFields = fieldMaps.filter(fm => fm.IsKeyField && fm.Status === 'Active');
         const conflictResolution = entityMap.ConflictResolution as ConflictResolution;
 
@@ -116,8 +126,8 @@ export class MatchEngine {
         keyFields: ICompanyIntegrationFieldMap[],
         contextUser: UserInfo
     ): Promise<string | null> {
-        const md = new Metadata();
-        const entityInfo = md.Entities.find(e => e.Name === record.MJEntityName);
+        const md = this.ProviderToUse;
+        const entityInfo = md.EntityByName(record.MJEntityName);
         const isCompositePK = (entityInfo?.PrimaryKeys?.length ?? 0) > 1;
 
         if (keyFields.length > 0 || isCompositePK) {
@@ -148,8 +158,8 @@ export class MatchEngine {
         keyFields: ICompanyIntegrationFieldMap[],
         contextUser: UserInfo
     ): Promise<string | null> {
-        const md = new Metadata();
-        const entityInfo = md.Entities.find(e => e.Name === record.MJEntityName);
+        const md = this.ProviderToUse;
+        const entityInfo = md.EntityByName(record.MJEntityName);
         const pkFields = entityInfo?.PrimaryKeys ?? (entityInfo?.FirstPrimaryKey ? [entityInfo.FirstPrimaryKey] : []);
 
         if (pkFields.length === 0) return null;

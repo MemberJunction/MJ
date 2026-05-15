@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetectorRef, HostListener } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, RunView, Metadata } from '@memberjunction/core';
 import { MJCollectionEntity, MJArtifactEntity, MJArtifactVersionEntity, MJCollectionArtifactEntity } from '@memberjunction/core-entities';
 import { DialogService } from '../../services/dialog.service';
@@ -1441,7 +1442,7 @@ import { UUIDsEqual } from '@memberjunction/global';
     }
   `]
 })
-export class CollectionsFullViewComponent implements OnInit, OnDestroy {
+export class CollectionsFullViewComponent extends BaseAngularComponent implements OnInit, OnDestroy  {
   @Input() environmentId!: string;
   @Input() currentUser!: UserInfo;
   @Output() collectionNavigated = new EventEmitter<{
@@ -1518,9 +1519,15 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     private permissionService: CollectionPermissionService,
     private artifactIconService: ArtifactIconService,
     private cdr: ChangeDetectorRef
-  ) {}
+  ) {
+  super();}
 
   ngOnInit() {
+    // Bind provider-aware services to this component's provider.
+    const p = this.ProviderToUse;
+    this.artifactState.Provider = p;
+    this.permissionService.Provider = p;
+
     // Subscribe to collection state changes for deep linking FIRST
     // This ensures that if there's a URL with collectionId, we set it before loading data
     this.subscribeToCollectionState();
@@ -1625,7 +1632,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
 
   private async loadCollections(): Promise<void> {
     try {
-      const rv = new RunView();
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
       // Load collections where user is owner OR has permissions
       const ownerFilter = `OwnerID='${this.currentUser.ID}'`;
@@ -1674,7 +1681,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     const collectionIds = this.collections.map(c => c.ID);
     const inClause = collectionIds.map(id => `'${id}'`).join(',');
 
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
     const [childResult, artifactResult] = await rv.RunViews(
       [
         {
@@ -1791,7 +1798,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
         this.currentCollectionId = crumb.id;
 
         // Load the collection entity
-        const md = new Metadata();
+        const md = this.ProviderToUse;
         this.currentCollection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
         await this.currentCollection.Load(crumb.id);
 
@@ -1852,7 +1859,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
       console.log('📁 Navigating to collection by ID:', collectionId);
 
       // Load the target collection
-      const md = new Metadata();
+      const md = this.ProviderToUse;
       const targetCollection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
       await targetCollection.Load(collectionId);
 
@@ -1968,7 +1975,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
   }
 
   private async deleteCollectionRecursive(collectionId: string): Promise<void> {
-    const rv = new RunView();
+    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
     // Step 1: Find and delete all child collections recursively
     const childrenResult = await rv.RunView<MJCollectionEntity>(
@@ -2008,7 +2015,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     }
 
     // Step 4: Delete the collection itself
-    const md = new Metadata();
+    const md = this.ProviderToUse;
     const collection = await md.GetEntityObject<MJCollectionEntity>('MJ: Collections', this.currentUser);
     await collection.Load(collectionId);
     const deleted = await collection.Delete();
@@ -2082,7 +2089,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
     if (confirmed) {
       try {
         // Delete THIS SPECIFIC VERSION from the collection
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         const result = await rv.RunView({
           EntityName: 'MJ: Collection Artifacts',
           ExtraFilter: `CollectionID='${this.currentCollectionId}' AND ArtifactVersionID='${item.version.ID}'`,
@@ -2481,7 +2488,7 @@ export class CollectionsFullViewComponent implements OnInit, OnDestroy {
       }
 
       if (artifactItems.length > 0 && this.currentCollectionId) {
-        const rv = new RunView();
+        const rv = RunView.FromMetadataProvider(this.ProviderToUse);
         for (const item of artifactItems) {
           const result = await rv.RunView<MJCollectionArtifactEntity>({
             EntityName: 'MJ: Collection Artifacts',

@@ -14,7 +14,7 @@
  * - **Agent run linkage** links all prompt runs to a parent agent run
  */
 
-import { LogError, LogStatus, Metadata, RunView, UserInfo } from '@memberjunction/core';
+import { LogError, LogStatus, Metadata, RunView, UserInfo, IMetadataProvider } from '@memberjunction/core';
 import { UUIDsEqual } from '@memberjunction/global';
 import { AIPromptRunner } from '@memberjunction/ai-prompts';
 import { AIPromptParams, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
@@ -55,6 +55,19 @@ export class MJComputerUseEngine extends ComputerUseEngine {
     private contextUser: UserInfo | undefined;
     private agentRunId: string | undefined;
     private lastPromptRunId: string | undefined;
+    private _provider: IMetadataProvider | null = null;
+
+    /**
+     * Optional metadata provider override. Callers should set
+     * `instance.Provider = providerToUse` before invoking `Run()`
+     * in multi-provider contexts. Falls back to the global default provider when unset.
+     */
+    public get Provider(): IMetadataProvider {
+        return this._provider ?? (new Metadata() as unknown as IMetadataProvider);
+    }
+    public set Provider(value: IMetadataProvider | null) {
+        this._provider = value;
+    }
 
     /** Resolved prompt entities — populated in Run() from PromptEntityRef refs */
     private controllerPromptEntity: MJAIPromptEntityExtended | undefined;
@@ -758,7 +771,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
             return;
         }
 
-        const md = new Metadata();
+        const md = this.Provider;
         const mediaEntity = await md.GetEntityObject<MJAIPromptRunMediaEntity>(
             'MJ: AI Prompt Run Medias',
             this.contextUser

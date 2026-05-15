@@ -35,7 +35,7 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
     private _isAllSelected = false;
 
     // Permissions
-    private _metadata = new Metadata();
+    private _metadata = this.ProviderToUse;
     private _permissionCache = new Map<string, boolean>();
 
     protected override destroy$ = new Subject<void>();
@@ -117,7 +117,7 @@ export class CredentialsListResourceComponent extends BaseResourceComponent impl
             this.isLoading = true;
             this.cdr.markForCheck();
 
-            const rv = new RunView();
+            const rv = RunView.FromMetadataProvider(this.ProviderToUse);
 
             const [credResult, typeResult] = await rv.RunViews([
                 {

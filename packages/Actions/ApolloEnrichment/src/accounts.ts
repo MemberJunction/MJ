@@ -1,7 +1,7 @@
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
 import * as Config from './config';
-import { BaseEntity, LogError, LogStatus, Metadata, RunView, UserInfo, CompositeKey } from "@memberjunction/core";
+import { BaseEntity, IMetadataProvider, LogError, LogStatus, Metadata, RunView, UserInfo, CompositeKey } from "@memberjunction/core";
 import axios, { AxiosResponse } from "axios";
 import { AccountEntityFields, AccountTechnologyEntityFields, ContactEducationHistoryEntityFields, ContactEntityFields, OrganizationEnrichmentOrganization, ProcessSingleDomainParams, SearchPeopleResponse, SearchPeopleResponsePerson, TechnologyCategoryEntityFields, TechnologyMap } from "./generic/apollo.types";
 import { ActionParam, ActionResultSimple, RunActionParams } from "@memberjunction/actions-base";
@@ -97,7 +97,7 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
             const actionParams = paramValidation.data!;
 
             // Process all account records
-            return await this.processAllAccountRecords(actionParams, params.ContextUser, 1);
+            return await this.processAllAccountRecords(actionParams, params.ContextUser, 1, params.Provider);
         } catch (error) {
             LogError('Unexpected error in ApolloAccountsEnrichmentAction', undefined, error);
             return {
@@ -248,12 +248,13 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
      * @returns Promise indicating overall success/failure of the batch
      */
     private async processAllAccountRecords(
-        actionParams: AccountEnrichmentParams, 
+        actionParams: AccountEnrichmentParams,
         contextUser: UserInfo,
-        executionCount: number = 1
+        executionCount: number = 1,
+        provider?: IMetadataProvider
     ): Promise<ActionResultSimple> {
-        const md = new Metadata();
-        const rv = new RunView();
+        const md: IMetadataProvider = provider ?? (new Metadata() as unknown as IMetadataProvider);
+        const rv = RunView.FromMetadataProvider(md);
 
         // Initial query to get accounts to process
         const runViewResult = await rv.RunView({
@@ -311,7 +312,7 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
     private async processAccountGroups(
         results: any[],
         actionParams: AccountEnrichmentParams,
-        md: Metadata,
+        md: IMetadataProvider,
         contextUser: UserInfo
     ): Promise<void> {
         const tasks = [];
@@ -348,7 +349,7 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
      * @param currentUser - User context for data access
      * @returns Promise<boolean> indicating success/failure of domain processing
      */
-    protected async ProcessSingleDomain(params: ProcessSingleDomainParams, startRow: number, totalRows: number, md: Metadata, currentUser: UserInfo): Promise<boolean> {
+    protected async ProcessSingleDomain(params: ProcessSingleDomainParams, startRow: number, totalRows: number, md: IMetadataProvider, currentUser: UserInfo): Promise<boolean> {
         const record = params.Record;
         const accountID = record[params.AccountEntity.AccountIDField];
         const domain = record[params.AccountEntity.DomainField];
@@ -370,7 +371,7 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
      * @param currentUser - User context for data access
      * @returns Promise<boolean> indicating success/failure
      */
-    private async enrichOrganization(params: ProcessSingleDomainParams, startRow: number, totalRows: number, md: Metadata, currentUser: UserInfo): Promise<boolean> {
+    private async enrichOrganization(params: ProcessSingleDomainParams, startRow: number, totalRows: number, md: IMetadataProvider, currentUser: UserInfo): Promise<boolean> {
         try {
             const record = params.Record;
             const orgQueryString = {
@@ -428,7 +429,7 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
         organization: OrganizationEnrichmentOrganization,
         params: ProcessSingleDomainParams,
         record: Record<string, any>,
-        md: Metadata,
+        md: IMetadataProvider,
         currentUser: UserInfo
     ): Promise<boolean> {
         try {
@@ -473,7 +474,7 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
     private async updateAccountEnrichedTimestamp(
         params: ProcessSingleDomainParams,
         record: Record<string, any>,
-        md: Metadata,
+        md: IMetadataProvider,
         currentUser: UserInfo
     ): Promise<boolean> {
         try {
@@ -518,7 +519,7 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
      * @param currentUser - User context for data access
      * @returns Promise<boolean> indicating overall success/failure
      */
-    protected async CreateAccountTechnologyRecords(params: ProcessSingleDomainParams, accountID: string | number, technologies: TechnologyMap[], md: Metadata, currentUser: UserInfo): Promise<boolean> {
+    protected async CreateAccountTechnologyRecords(params: ProcessSingleDomainParams, accountID: string | number, technologies: TechnologyMap[], md: IMetadataProvider, currentUser: UserInfo): Promise<boolean> {
         if (!params.AccountTechnologyEntity || !technologies || technologies.length === 0) {
             return true;
         }
@@ -593,7 +594,7 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
      * @param currentUser - User context for data access
      * @returns Promise<number> - ID of the category (0 if error)
      */
-    private async getOrCreateTechnologyCategoryId(params: ProcessSingleDomainParams, categoryName: string, md: Metadata, currentUser: UserInfo): Promise<number> {
+    private async getOrCreateTechnologyCategoryId(params: ProcessSingleDomainParams, categoryName: string, md: IMetadataProvider, currentUser: UserInfo): Promise<number> {
         const TCEntity = params.TechnologyCategoryEntity;
         if (!TCEntity) {
             return 0;
@@ -643,7 +644,7 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
      * @param currentUser - User context for data access
      * @returns Promise<number> - ID of the technology (0 if error)
      */
-    private async getOrCreateTechnologyId(name: string, categoryId: number, md: Metadata, currentUser: UserInfo): Promise<number> {
+    private async getOrCreateTechnologyId(name: string, categoryId: number, md: IMetadataProvider, currentUser: UserInfo): Promise<number> {
         try {
             const rv = new RunView();
             const runViewResult = await rv.RunView({
@@ -692,7 +693,7 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
      * @param currentUser - User context for data access
      * @returns Promise<boolean> indicating success/failure of people processing
      */
-    private async createAndEnrichPeople(params: ProcessSingleDomainParams, accountID: string | number, domain: string, startRow: number, md: Metadata, currentUser: UserInfo): Promise<boolean> {
+    private async createAndEnrichPeople(params: ProcessSingleDomainParams, accountID: string | number, domain: string, startRow: number, md: IMetadataProvider, currentUser: UserInfo): Promise<boolean> {
         if (!params.ContactEntity) {
             return true; // No contact processing needed
         }
@@ -795,7 +796,7 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
      * @param total - Total contacts for progress tracking
      * @returns Promise<boolean> indicating success/failure
      */
-    private async createAndEnrichContact(params: ProcessSingleDomainParams, accountID: string | number, person: SearchPeopleResponsePerson, md: Metadata, currentUser: UserInfo, sequence: number, total: number): Promise<boolean> {
+    private async createAndEnrichContact(params: ProcessSingleDomainParams, accountID: string | number, person: SearchPeopleResponsePerson, md: IMetadataProvider, currentUser: UserInfo, sequence: number, total: number): Promise<boolean> {
         const CEntity = params.ContactEntity;
         if (!CEntity) {
             return false;
@@ -866,7 +867,7 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
      * @param currentUser - User context for data access
      * @returns Promise<BaseEntity | null> - Contact entity or null if conflict/error
      */
-    private async getOrCreateContact(params: ProcessSingleDomainParams, accountID: number | string, person: SearchPeopleResponsePerson, md: Metadata, currentUser: UserInfo): Promise<BaseEntity | null> {
+    private async getOrCreateContact(params: ProcessSingleDomainParams, accountID: number | string, person: SearchPeopleResponsePerson, md: IMetadataProvider, currentUser: UserInfo): Promise<BaseEntity | null> {
         const CEntity = params.ContactEntity;
         if (!CEntity) {
             return null;
@@ -938,7 +939,7 @@ export class ApolloEnrichmentAccountsAction extends BaseAction {
      * @param currentUser - User context for data access
      * @returns Promise<boolean> indicating success/failure
      */
-    private async createUpdateContactEmploymentAndEducationHistory(params: ProcessSingleDomainParams, contactID: number | string, person: SearchPeopleResponsePerson, md: Metadata, currentUser: UserInfo): Promise<boolean> {
+    private async createUpdateContactEmploymentAndEducationHistory(params: ProcessSingleDomainParams, contactID: number | string, person: SearchPeopleResponsePerson, md: IMetadataProvider, currentUser: UserInfo): Promise<boolean> {
         const CEntity = params.ContactEducationHistoryEntity;
         if (!CEntity || !person.employment_history) {
             return true;

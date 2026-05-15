@@ -20,6 +20,12 @@ export * from './components/requests/agent-requests-resource.component';
 // Autotagging Pipeline
 export * from './components/autotagging/autotagging-pipeline-resource.component';
 
+// Tags — canonical Knowledge Hub dashboard for everything tag-related
+// (Library + Taxonomy moved from Classify, plus Suggestions + Health).
+// Re-exported explicitly because the file is a clone of the autotag pipeline
+// and shares cron-helper module-level exports we don't want to re-export twice.
+export { TagsResourceComponent, LoadTagsResource } from './components/tags/tags-resource.component';
+
 // Vector Management
 export * from './components/vectors/vector-management-resource.component';
 

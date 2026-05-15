@@ -1,5 +1,5 @@
 import { RegisterClass, UUIDsEqual } from '@memberjunction/global';
-import { Metadata } from '@memberjunction/core';
+import { Metadata, IMetadataProvider } from '@memberjunction/core';
 import { DashboardEngine, MJDashboardUserPreferenceEntity } from '@memberjunction/core-entities';
 import { NavItem } from './interfaces/nav-item.interface';
 import { TabRequest } from './interfaces/tab-request.interface';
@@ -71,6 +71,21 @@ export class BaseApplication {
     if (data) {
       Object.assign(this, data);
     }
+  }
+
+  /**
+   * Optional explicit metadata provider. When set, all provider lookups
+   * use this instead of falling back to `Metadata.Provider`. This allows
+   * multi-provider Angular apps to scope per-app metadata access.
+   */
+  private _provider: IMetadataProvider | null = null;
+
+  public set Provider(value: IMetadataProvider | null) {
+      this._provider = value;
+  }
+
+  public get Provider(): IMetadataProvider {
+      return this._provider ?? Metadata.Provider;
   }
 
   private _defaultNavItems: NavItem[] | null = null;
@@ -166,7 +181,7 @@ export class BaseApplication {
    */
   private async loadDefaultDashboard(): Promise<TabRequest | null> {
     try {
-      const md = new Metadata();
+      const md = this.Provider;
       const currentUserId = md.CurrentUser?.ID;
 
       if (!currentUserId) {

@@ -1,4 +1,5 @@
 import { Component, Input, Output, EventEmitter, OnInit, ViewChild, OnDestroy, AfterViewInit, ChangeDetectorRef, inject } from '@angular/core';
+import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { MJWindowComponent } from '@memberjunction/ng-ui-components';
 import { MJAIAgentEntityExtended, MJAIPromptEntityExtended } from '@memberjunction/ai-core-plus';
 import { Metadata } from '@memberjunction/core';
@@ -188,7 +189,7 @@ export interface CustomWindowData {
         }
     `]
 })
-export class TestHarnessCustomWindowComponent implements OnInit, OnDestroy, AfterViewInit {
+export class TestHarnessCustomWindowComponent extends BaseAngularComponent implements OnInit, OnDestroy, AfterViewInit  {
     @ViewChild('mjWindow', { static: false }) MjWindow!: MJWindowComponent;
     @ViewChild(AITestHarnessComponent, { static: false }) TestHarness?: AITestHarnessComponent;
     @Input() Data: CustomWindowData = {};
@@ -219,7 +220,7 @@ export class TestHarnessCustomWindowComponent implements OnInit, OnDestroy, Afte
     Prompt?: MJAIPromptEntityExtended;
     Mode: 'agent' | 'prompt' = 'agent';
 
-    private metadata = new Metadata();
+    private metadata = this.ProviderToUse;
     private executionCheckInterval: ReturnType<typeof setInterval> | null = null;
     private cdr = inject(ChangeDetectorRef);
 

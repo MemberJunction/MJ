@@ -98,6 +98,14 @@ export interface CodeGenTransaction {
  */
 export interface CodeGenConnection {
     /**
+     * The SQL dialect for this connection's platform. Exposes identifier quoting,
+     * timestamp expressions, etc. — used by callers (e.g. validator-function
+     * emission in `EntitySubClassGeneratorBase`) that need to author dialect-aware
+     * SQL but don't have access to a `CodeGenDatabaseProvider` instance.
+     */
+    readonly Dialect: SQLDialect;
+
+    /**
      * Executes a SQL query without parameters.
      * @param sql The SQL statement to execute.
      * @returns The query result with a `recordset` array.
@@ -144,6 +152,28 @@ export const CRUDType = {
     Delete: 'Delete',
 } as const;
 export type CRUDType = (typeof CRUDType)[keyof typeof CRUDType];
+
+/**
+ * One missing CRUD routine reported by the post-generation validator. The
+ * validator (see `CodeGenDatabaseProvider.validateExpectedCRUDFunctions`)
+ * cross-checks the entity-level Allow*API/sp*Generated configuration against
+ * what's actually present in the target database after CodeGen finishes. Each
+ * entry represents a routine the runtime will try to invoke at Save/Delete
+ * time but which doesn't exist — i.e. a silent generation gap that would
+ * otherwise be invisible until the first user-driven mutation crashed.
+ */
+export interface CRUDValidationMissing {
+    /** Entity.Name (e.g. "MJ: AI Agents") */
+    entity: string;
+    /** Entity.SchemaName (e.g. "__mj") */
+    schema: string;
+    /** Operation whose routine is missing. */
+    type: 'create' | 'update' | 'delete';
+    /** Routine the runtime will look up — custom name from entity.spCreate/Update/Delete
+     *  if set, otherwise the dialect-generated default (e.g. `spCreateUser` for SQL Server,
+     *  `fn_create_user` for PostgreSQL). */
+    expectedRoutine: string;
+}
 
 /**
  * Result from full-text search SQL generation.
@@ -209,6 +239,41 @@ export abstract class CodeGenDatabaseProvider {
      * The database platform key (e.g., 'sqlserver', 'postgresql').
      */
     abstract get PlatformKey(): DatabasePlatform;
+
+    /**
+     * Whether this dialect can handle a base view that LEFT-JOINs itself to read
+     * a virtual computed column (e.g. `vwRecordChanges` joining to itself for the
+     * `RestoredFromID` virtual NameField lookup).
+     *
+     * Default: `false`. No shipped provider currently supports this pattern:
+     * - PostgreSQL: `CREATE OR REPLACE VIEW` resolves view names against catalog
+     *   state at parse time, so a self-reference fails with `42P01
+     *   undefined_table`. A `CREATE OR REPLACE` retry against a NULL-typed stub
+     *   then fails with `cannot change data type of view column ... from text
+     *   to character varying(N)` because PG enforces strict column-type compat.
+     * - SQL Server: the base view emitter uses `DROP VIEW` then `CREATE VIEW`,
+     *   and SQL Server resolves view-body references at parse/bind time — there
+     *   is no deferred name resolution for view bodies the way there is for
+     *   stored procedures. After the DROP, the post-DROP self-reference fails
+     *   with error 208 "Invalid object name".
+     *
+     * With the default of `false`, `sql_codegen.ts` skips the self-virtual-
+     * NameField join entirely for self-FK + virtual-NameField cases. The trade-
+     * off: the corresponding virtual lookup column (e.g. `RestoredFrom` on
+     * `vwRecordChanges`, or `Parent` on a `vwTags`-style view if the Name Field
+     * were computed) is not emitted on the base view. Matches the baseline-
+     * shipped view shapes.
+     *
+     * Subclasses can override to return `true` if a future dialect (or a
+     * provider that switches to a different emit pattern, e.g. stub-then-alter)
+     * can support the self-reference. The fix for the underlying conflation
+     * between SQL Server computed columns and view-only columns under
+     * `IsVirtual = 1` would let the join target the base table instead,
+     * removing the need for this capability flag entirely.
+     */
+    canSelfJoinViewForVirtualNameField(): boolean {
+        return false;
+    }
 
     // ─── DROP GUARDS ─────────────────────────────────────────────────────
 
@@ -333,25 +398,294 @@ export abstract class CodeGenDatabaseProvider {
     // ─── PARAMETER / FIELD HELPERS ───────────────────────────────────────
 
     /**
-     * Generates the parameter list string for a CRUD routine.
-     * SQL Server: `@Name NVARCHAR(255), @Email NVARCHAR(255)`
-     * PostgreSQL: `p_name VARCHAR(255), p_email VARCHAR(255)`
+     * Returns true when codegen should emit a `<Param>_Clear` companion
+     * parameter for the given field. The companion lets callers
+     * disambiguate "leave unchanged / apply DB default" (omit the
+     * parameter) from "explicitly set this column to NULL"
+     * (`<Param>_Clear = 1`). Required only for nullable columns whose
+     * database default is itself non-NULL — without the companion, a
+     * caller could not preserve a literal NULL because the dialect's
+     * `IsNull` wrap would always substitute the default.
+     *
+     * Routes the NULL-literal check through the dialect so future
+     * dialects can override what "this value is NULL" looks like in
+     * their generated SQL. Pure decision logic — no rendering.
      */
-    abstract generateCRUDParamString(entityFields: EntityFieldInfo[], isUpdate: boolean): string;
+    protected needsClearCompanion(ef: EntityFieldInfo): boolean {
+        return ef.AllowsNull;
+    }
 
     /**
-     * Generates the column-list or value-list portion of an INSERT statement.
-     * When `prefix` is empty, generates column names.
-     * When `prefix` is '@' (SQL Server) or 'p_' (PostgreSQL), generates parameter references.
+     * Builds the EXEC parameter fragment(s) for a single field when calling a
+     * tolerant update SP. Returns an array of `@ParamName = value` strings.
+     *
+     * For most fields this is just `['@FieldName = @variable']`. But when
+     * `clearValue` is true and the field has a `_Clear` companion (see
+     * {@link needsClearCompanion}), an additional `@FieldName_Clear = 1` is
+     * prepended so the tolerant SP actually sets the column to NULL instead
+     * of treating the NULL parameter as "leave unchanged".
+     *
+     * **This is the single source of truth for the calling convention of
+     * tolerant update SPs.** All codepaths that generate EXEC calls to
+     * spUpdate — cascade-update cursors, future SP-to-SP calls, etc. —
+     * should use this method to stay in sync with the SP declaration logic
+     * in {@link generateCRUDParamString}.
+     *
+     * @param ef         The entity field being passed
+     * @param valueExpr  The SQL expression for the value (e.g. `@prefixed_var`)
+     * @param clearValue Whether this field is being explicitly set to NULL
      */
-    abstract generateInsertFieldString(entity: EntityInfo, entityFields: EntityFieldInfo[], prefix: string, excludePrimaryKey?: boolean): string;
+    protected buildExecParamForField(ef: EntityFieldInfo, valueExpr: string, clearValue: boolean = false): string[] {
+        const parts: string[] = [];
+        if (clearValue && this.needsClearCompanion(ef)) {
+            parts.push(`@${ef.CodeName}_Clear = 1`);
+        }
+        parts.push(`@${ef.CodeName} = ${valueExpr}`);
+        return parts;
+    }
 
     /**
-     * Generates the SET clause for an UPDATE statement.
-     * SQL Server: `[Name] = @Name, [Email] = @Email`
-     * PostgreSQL: `"Name" = p_name, "Email" = p_email`
+     * Returns true when this field should appear in the parameter list of
+     * a CRUD routine for the given operation (`isUpdate` true → spUpdate,
+     * false → spCreate). Pure decision logic shared across all dialects:
+     * filters out virtual fields, special-date fields, auto-increment PKs
+     * on create, etc. Subclasses that need additional dialect-specific
+     * exclusion criteria can override.
      */
-    abstract generateUpdateFieldString(entityFields: EntityFieldInfo[]): string;
+    /**
+     * Delegates to {@link EntityFieldInfo.IsSPParameter} — the single source
+     * of truth for whether a field appears as a parameter in `spCreate` /
+     * `spUpdate`. Runtime data providers consume the same predicate so the
+     * SP signature emitted here and the EXEC argument list built at save
+     * time always agree.
+     */
+    protected shouldIncludeFieldInParams(ef: EntityFieldInfo, isUpdate: boolean): boolean {
+        return ef.IsSPParameter(isUpdate);
+    }
+
+    /**
+     * Tolerant-SP semantics: returns true when this parameter must be
+     * provided by every caller (no default, no fallback). Pure decision
+     * logic — Pillar 1 of the cross-app migration architecture.
+     *
+     * - PKs: required on update, optional on non-AutoIncrement create
+     *   (codegen emits a default that lets the database supply the value).
+     * - Non-PK on update: never required (merge semantics).
+     * - Non-PK on create: required only when the column is NOT NULL with
+     *   no database default — i.e. a value the DB has no way to fill in.
+     */
+    protected isParamRequired(ef: EntityFieldInfo, isUpdate: boolean): boolean {
+        if (ef.IsPrimaryKey) {
+            return isUpdate; // required on update, optional on create
+        }
+        if (isUpdate) {
+            return false; // every non-PK update param is optional (merge semantics)
+        }
+        // Create: required only if NOT NULL with no DB default
+        return !ef.AllowsNull && !ef.HasDefaultValue;
+    }
+
+    /**
+     * Render hook: returns the SQL type token that should appear in a CRUD
+     * parameter declaration for the given field. SQL Server emits the
+     * entity-field's `SQLFullType` directly (T-SQL native); PostgreSQL maps
+     * it through its type mapper. Override per dialect if your generated
+     * SP signatures need a transformed type.
+     */
+    protected renderParameterType(ef: EntityFieldInfo): string {
+        return ef.SQLFullType;
+    }
+
+    /**
+     * Render hook: returns the default value for a field formatted for
+     * embedding in a generated INSERT statement. The base implementation
+     * delegates to `formatDefaultValue` (which handles SQL functions, quoted
+     * literals, etc.). Dialects with type-strict semantics may need to
+     * massage the value further — for example, PostgreSQL maps SQL Server
+     * `BIT` literal defaults (`0`/`1`) to PG `BOOLEAN` literals
+     * (`FALSE`/`TRUE`) so that `COALESCE(boolean_param, 0)` doesn't fail
+     * with a type-mismatch error.
+     */
+    protected formatInsertDefaultValue(ef: EntityFieldInfo): string {
+        return this.formatDefaultValue(ef.DefaultValue, ef.NeedsQuotes);
+    }
+
+    /**
+     * Generates the parameter list string for a CRUD routine with tolerant
+     * SP signatures (Pillar 1 of the cross-app migration architecture).
+     *
+     * Structural logic — what's required, what's optional, when a `_Clear`
+     * companion appears — lives here in the base class and is shared across
+     * dialects. The dialect-specific syntax (parameter prefix, default
+     * keyword, type rendering) is delegated to:
+     *   - `Dialect.ParameterRef(name)` — `@Name` vs. `p_name`
+     *   - `Dialect.ParameterDefault(value)` — ` = NULL` vs. ` DEFAULT NULL`
+     *   - `Dialect.NullLiteral` — `NULL` literal
+     *   - `renderParameterType(ef)` — type formatting (T-SQL native vs. PG-mapped)
+     *
+     * Subclasses can override the hooks above without re-implementing the
+     * full method. Subclasses can also override the method itself if their
+     * dialect imposes additional constraints not modelable through hooks
+     * (e.g. PostgreSQL's "all params after the first DEFAULT must also have
+     * DEFAULTs" rule, which the PostgreSQL provider handles via override).
+     */
+    generateCRUDParamString(entityFields: EntityFieldInfo[], isUpdate: boolean): string {
+        const dialect = this.Dialect;
+        const nullDefault = dialect.ParameterDefault(dialect.NullLiteral);
+        const parts: string[] = [];
+        for (const ef of entityFields) {
+            if (!this.shouldIncludeFieldInParams(ef, isUpdate)) continue;
+
+            // _Clear companion is emitted immediately before its main parameter
+            // for nullable columns whose database default is non-NULL.
+            if (!ef.IsPrimaryKey && this.needsClearCompanion(ef)) {
+                parts.push(`${dialect.ParameterRef(ef.CodeName + '_Clear')} ${dialect.BooleanParameterType()}${dialect.ParameterDefault(dialect.BooleanLiteral(false))}`);
+            }
+
+            const defaultClause = this.isParamRequired(ef, isUpdate) ? '' : nullDefault;
+            parts.push(`${dialect.ParameterRef(ef.CodeName)} ${this.renderParameterType(ef)}${defaultClause}`);
+        }
+        return parts.join(',\n    ');
+    }
+
+    /**
+     * Generates the column-list or value-list portion of an INSERT
+     * statement, depending on whether `prefix` is empty (column names)
+     * or non-empty (parameter values).
+     *
+     * **Empty `prefix`** — produces dialect-quoted column names suitable
+     * for the `INSERT INTO ... (col1, col2)` clause.
+     *
+     * **Non-empty `prefix`** — produces the parameter-value list suitable
+     * for the `VALUES (...)` clause, with tolerant-SP behavior:
+     *   - Special-date fields are substituted with the dialect's
+     *     `CurrentTimestampUTC()` (created/updated) or `NullLiteral`
+     *     (deleted-at).
+     *   - GUID fields with database defaults emit a `CASE` that detects
+     *     the empty-GUID sentinel and falls back to the database default;
+     *     otherwise wraps with `IsNull`.
+     *   - Non-nullable fields with defaults are wrapped in
+     *     `IsNull(@Param, default)`.
+     *   - Nullable fields with non-NULL defaults emit a `_Clear`
+     *     companion CASE so callers can distinguish "leave default"
+     *     from "explicitly NULL."
+     *   - Plain nullable fields with no default pass the parameter
+     *     reference through directly (NULL flows through).
+     *
+     * Skips auto-increment, virtual, and non-updatable fields. The PK
+     * column can be optionally excluded (used by the two-branch GUID-PK
+     * insert pattern in `generateCRUDCreate`).
+     *
+     * Dialect-specific syntax is fully delegated to:
+     *   - `Dialect.QuoteIdentifier`, `Dialect.ParameterRef`,
+     *   - `Dialect.IsNull`, `Dialect.NullLiteral`,
+     *   - `Dialect.CurrentTimestampUTC`, `Dialect.EmptyUUIDLiteral`,
+     *   - `formatInsertDefaultValue(ef)` render hook (for type-strict
+     *     dialects that need to massage default values).
+     */
+    generateInsertFieldString(entity: EntityInfo, entityFields: EntityFieldInfo[], prefix: string, excludePrimaryKey: boolean = false): string {
+        const dialect = this.Dialect;
+        const autoGeneratedPrimaryKey = entity.FirstPrimaryKey.AutoIncrement;
+        const usingParameterPrefix = !!prefix && prefix.length > 0;
+        const parts: string[] = [];
+        for (const ef of entityFields) {
+            // A caller-supplied PK is one the caller MUST provide on INSERT — i.e. a PK
+            // that isn't auto-generated (no IDENTITY, no UUID-with-default) and that the
+            // caller isn't explicitly excluding via excludePrimaryKey=true. This covers
+            // composite PKs and single non-UUID PKs (e.g. string `Code` keys). Without
+            // this exception, the !AllowUpdateAPI clause below silently strips these
+            // out — the metadata discovery query hardcodes `AllowUpdateAPI=0` for every
+            // PK row — and the generated INSERT becomes invalid.
+            const isCallerSuppliedPK = ef.IsPrimaryKey && !autoGeneratedPrimaryKey && !excludePrimaryKey;
+            if (
+                (excludePrimaryKey && ef.IsPrimaryKey) ||
+                (ef.IsPrimaryKey && autoGeneratedPrimaryKey) ||
+                ef.IsVirtual ||
+                (!ef.AllowUpdateAPI && !isCallerSuppliedPK) ||
+                ef.AutoIncrement
+            ) {
+                continue;
+            }
+
+            if (!usingParameterPrefix) {
+                // Column-name list: emit dialect-quoted identifier.
+                parts.push(dialect.QuoteIdentifier(ef.Name));
+                continue;
+            }
+
+            // Parameter-value list (tolerant-SP semantics)
+            if (ef.IsSpecialDateField) {
+                if (ef.IsCreatedAtField || ef.IsUpdatedAtField) {
+                    parts.push(dialect.CurrentTimestampUTC());
+                } else {
+                    parts.push(dialect.NullLiteral);
+                }
+                continue;
+            }
+
+            const paramRef = dialect.ParameterRef(ef.CodeName);
+
+            if (ef.HasDefaultValue && !ef.AllowsNull && ef.IsUniqueIdentifier) {
+                // GUID-PK insert: detect empty-sentinel and fall back to DB default
+                const formattedDefault = this.formatInsertDefaultValue(ef);
+                parts.push(`CASE WHEN ${paramRef} = ${dialect.EmptyUUIDLiteral()} THEN ${formattedDefault} ELSE ${dialect.IsNull(paramRef, formattedDefault)} END`);
+            } else if (ef.HasDefaultValue && !ef.AllowsNull) {
+                // Non-nullable with default: ISNULL/COALESCE merge
+                const formattedDefault = this.formatInsertDefaultValue(ef);
+                parts.push(dialect.IsNull(paramRef, formattedDefault));
+            } else if (!ef.IsPrimaryKey && this.needsClearCompanion(ef)) {
+                // Nullable with non-NULL default: _Clear companion CASE
+                const formattedDefault = this.formatInsertDefaultValue(ef);
+                const clearRef = dialect.ParameterRef(ef.CodeName + '_Clear');
+                parts.push(`CASE WHEN ${clearRef} = ${dialect.BooleanLiteral(true)} THEN ${dialect.NullLiteral} ELSE ${dialect.IsNull(paramRef, formattedDefault)} END`);
+            } else {
+                // Plain pass-through (PKs, plain nullables, non-defaulted required fields)
+                parts.push(paramRef);
+            }
+        }
+        return parts.join(',\n                ');
+    }
+
+    /**
+     * Generates the SET clause body for an UPDATE statement with tolerant
+     * merge semantics. Each non-PK column wraps the parameter with the
+     * dialect's null-coalescing call against the column's existing value
+     * (`SET [Col] = ISNULL(@Param, [Col])` on SQL Server,
+     * `SET "col" = COALESCE(p_col, "col")` on PostgreSQL) so omitting a
+     * parameter preserves the existing row value. Nullable columns whose
+     * database default is non-NULL also emit a `_Clear` companion branch
+     * that lets callers distinguish "leave unchanged" from "explicitly NULL."
+     *
+     * The full structural logic lives here in the base class; only the
+     * per-line render is dialect-specific and that's resolved through the
+     * `Dialect` accessor's helpers (`QuoteIdentifier`, `ParameterRef`,
+     * `IsNull`, `NullLiteral`). Subclasses can override to customize line
+     * formatting if a future dialect needs something different.
+     */
+    generateUpdateFieldString(entityFields: EntityFieldInfo[]): string {
+        const dialect = this.Dialect;
+        const parts: string[] = [];
+        for (const ef of entityFields) {
+            if (
+                ef.IsPrimaryKey ||
+                ef.IsVirtual ||
+                !ef.AllowUpdateAPI ||
+                ef.AutoIncrement ||
+                ef.IsSpecialDateField
+            ) {
+                continue;
+            }
+            const colRef = dialect.QuoteIdentifier(ef.Name);
+            const paramRef = dialect.ParameterRef(ef.CodeName);
+            if (this.needsClearCompanion(ef)) {
+                const clearRef = dialect.ParameterRef(ef.CodeName + '_Clear');
+                parts.push(`${colRef} = CASE WHEN ${clearRef} = ${dialect.BooleanLiteral(true)} THEN ${dialect.NullLiteral} ELSE ${dialect.IsNull(paramRef, colRef)} END`);
+            } else {
+                parts.push(`${colRef} = ${dialect.IsNull(paramRef, colRef)}`);
+            }
+        }
+        return parts.join(',\n        ');
+    }
 
     // ─── ROUTINE NAMING ──────────────────────────────────────────────────
 
@@ -665,4 +999,195 @@ export abstract class CodeGenDatabaseProvider {
      * @returns True if execution succeeded, false otherwise.
      */
     abstract executeSQLFileViaShell(filePath: string): Promise<boolean>;
+
+    /**
+     * Optional — dialect-specific fast path for regenerating a single entity's
+     * base view with recovery logic.
+     *
+     * When provided, the orchestration layer (sql.ts regenerateFailedBaseViews)
+     * will route regeneration through this method instead of the generic
+     * write-temp-file-and-shell-out path. Implementations can add capture/
+     * recovery behavior around the `CREATE OR REPLACE VIEW` — e.g. PG's 42P16
+     * capture-and-restore fallback that preserves dependent views, functions,
+     * grants, comments, and ownership across the unavoidable DROP CASCADE.
+     *
+     * @param entity The entity whose base view is being regenerated.
+     * @param viewSQL The full output of generateBaseView for this entity.
+     * @param willRegenerate Optional set of `"schema.viewName"` strings for
+     *                       views the caller will regenerate later in the same
+     *                       run — implementations may skip restoring those
+     *                       dependents since CodeGen will recreate them.
+     * @throws Error on failure — callers should treat this identically to any
+     *               other per-entity regeneration failure (collected into the
+     *               batch summary, halts the install in strict mode).
+     */
+    regenerateBaseView?(
+        entity: EntityInfo,
+        viewSQL: string,
+        willRegenerate?: Set<string>
+    ): Promise<void>;
+
+    /**
+     * Optional — dialect-specific phased execution of a single entity's full
+     * CodeGen SQL package (view, CRUD functions, permissions) for the main
+     * per-entity run path.
+     *
+     * Default path concatenates all the SQL and hands it to the shell executor,
+     * which runs it as a single multi-statement query. When any statement
+     * fails, pg's simple-query protocol aborts the rest of the batch — so a
+     * view that fails 42P16 silently blocks the CREATE FUNCTIONs that follow
+     * for the same entity.
+     *
+     * Providers that implement this method run the pieces in separate phases
+     * so a failure in phase 1 prevents phase 2 from producing functions that
+     * reference a missing or stale view. PG's implementation additionally
+     * routes the view phase through the 42P16 capture/restore fallback.
+     *
+     * Phasing contract:
+     *   Phase 0 = TVF DDL (tvfSQL) — root-ID functions for recursive FKs that
+     *             the base view references. Must run before phase 1 or PG
+     *             rejects the view with `function does not exist`.
+     *   Phase 1 = view DDL (viewSQL) — may invoke provider-specific recovery.
+     *   Phase 2 = CRUD function DDL — ONLY runs if phase 1 succeeded.
+     *   Phase 3 = view permissions (viewPermSQL) — runs only if phase 2 succeeded.
+     * The `success`/`phase` pair in the result identifies exactly where things
+     * fell over so the caller doesn't have to bisect.
+     */
+    executeEntityPhased?(opts: {
+        entity: EntityInfo;
+        /** Root-ID TVF DDL emitted ahead of the view. Empty when the entity
+         *  has no recursive ParentID FKs. */
+        tvfSQL: string;
+        viewSQL: string;
+        crudCreateSQL: string;
+        crudUpdateSQL: string;
+        crudDeleteSQL: string;
+        viewPermSQL: string;
+        willRegenerate?: Set<string>;
+    }): Promise<PhasedExecutionResult>;
+
+    // ─── POST-RUN VALIDATION ─────────────────────────────────────────────
+
+    /**
+     * Returns a SQL query that lists every stored procedure / function name in
+     * the given schemas. Used by the post-run CRUD validator to diff expected
+     * vs actual routine presence in one round trip.
+     *
+     * The result set must contain exactly two columns:
+     *   `schema_name` — the schema the routine lives in
+     *   `routine_name` — the proc/function name as stored in the catalog
+     *
+     * SQL Server: queries `sys.objects` for procedures and functions.
+     * PostgreSQL: queries `pg_proc` joined to `pg_namespace`.
+     *
+     * Default: returns empty string. Providers that don't implement this opt
+     * out of the post-run CRUD validator (the validator returns no missing
+     * when this returns empty), preserving backwards compatibility for
+     * downstream subclasses that haven't been updated.
+     *
+     * @param schemas List of schemas to scan. Empty array returns no rows.
+     */
+    getRoutineNamesBySchemaSQL(_schemas: string[]): string {
+        return '';
+    }
+
+    /**
+     * Cross-checks the entity-level Allow*API/sp*Generated/sp* configuration
+     * against the routines actually present in the database after CodeGen
+     * finishes. Returns one entry per missing routine.
+     *
+     * **Why this exists:** silent generation gaps (e.g. an entity dropped
+     * because an upstream batch errored, or stale entity-field metadata
+     * causing the PK check to fail) historically reported success at the
+     * pipeline level while leaving runtime CRUD broken. This validator turns
+     * that into a loud, actionable failure list before the install pipeline
+     * exits.
+     *
+     * **What's expected per entity:**
+     * - Skip virtual entities (no DB-backed routines).
+     * - For each of Create / Update / Delete:
+     *   - Skip when the corresponding `Allow{Type}API` flag is false.
+     *   - Look up the routine name via `getCRUDRoutineName` (which honors
+     *     `entity.spCreate`/`spUpdate`/`spDelete` overrides; otherwise returns
+     *     the dialect-generated default).
+     *   - Report it as missing when not found in the DB catalog.
+     *
+     * Schema-level case sensitivity: SQL Server is case-insensitive,
+     * PostgreSQL is case-preserving. Both lookups normalize via lowercase to
+     * keep the validator dialect-agnostic.
+     *
+     * Default implementation works for both dialects via the
+     * `getRoutineNamesBySchemaSQL` helper. Providers may override to add
+     * platform-specific shortcuts (e.g. checking only `sys.procedures` on
+     * SQL Server) but the default is fine for all current dialects.
+     */
+    async validateExpectedCRUDFunctions(
+        pool: CodeGenConnection,
+        entities: EntityInfo[],
+    ): Promise<CRUDValidationMissing[]> {
+        // Build the expected list: one entry per entity × Create/Update/Delete
+        // where the entity opts in via Allow{Type}API and isn't a virtual entity.
+        const expected: CRUDValidationMissing[] = [];
+        const schemas = new Set<string>();
+        for (const entity of entities) {
+            if (entity.VirtualEntity) continue;
+            schemas.add(entity.SchemaName);
+            if (entity.AllowCreateAPI) {
+                expected.push({
+                    entity: entity.Name,
+                    schema: entity.SchemaName,
+                    type: 'create',
+                    expectedRoutine: this.getCRUDRoutineName(entity, CRUDType.Create),
+                });
+            }
+            if (entity.AllowUpdateAPI) {
+                expected.push({
+                    entity: entity.Name,
+                    schema: entity.SchemaName,
+                    type: 'update',
+                    expectedRoutine: this.getCRUDRoutineName(entity, CRUDType.Update),
+                });
+            }
+            if (entity.AllowDeleteAPI) {
+                expected.push({
+                    entity: entity.Name,
+                    schema: entity.SchemaName,
+                    type: 'delete',
+                    expectedRoutine: this.getCRUDRoutineName(entity, CRUDType.Delete),
+                });
+            }
+        }
+
+        if (expected.length === 0) return [];
+
+        // One round-trip to fetch every routine in the relevant schemas.
+        const sql = this.getRoutineNamesBySchemaSQL(Array.from(schemas));
+        if (!sql || !sql.trim()) return [];
+        const result = await pool.query(sql);
+        const existing = new Set<string>();
+        for (const row of result.recordset) {
+            const schemaName = String(row.schema_name ?? '').toLowerCase();
+            const routineName = String(row.routine_name ?? '').toLowerCase();
+            if (schemaName && routineName) {
+                existing.add(`${schemaName}.${routineName}`);
+            }
+        }
+
+        return expected.filter(e =>
+            !existing.has(`${e.schema.toLowerCase()}.${e.expectedRoutine.toLowerCase()}`)
+        );
+    }
+}
+
+/**
+ * Result of a phased per-entity SQL execution. Reports which phase (if any)
+ * failed so the caller can aggregate a per-entity diagnostic without bisecting.
+ */
+export interface PhasedExecutionResult {
+    /** True only when every requested phase succeeded. */
+    success: boolean;
+    /** Which phase failed. Null when `success` is true. */
+    phase: 'tvf' | 'view' | 'functions' | 'permissions' | null;
+    /** Underlying error when `success` is false. */
+    error?: Error;
 }

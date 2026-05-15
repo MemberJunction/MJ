@@ -1,4 +1,4 @@
-import { DatabaseProviderBase, Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { DatabaseProviderBase, IMetadataProvider, Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
 import { MJTaskEntity, MJTaskDependencyEntity, MJTaskTypeEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJUserNotificationEntity } from '@memberjunction/core-entities';
 import { AgentRunner } from '@memberjunction/ai-agents';
 import { ChatMessageRole } from '@memberjunction/ai';
@@ -53,8 +53,13 @@ export class TaskOrchestrator {
         private sessionId?: string,
         private userPayload?: UserPayload,
         private createNotifications: boolean = false,
-        private conversationDetailId?: string
+        private conversationDetailId?: string,
+        private provider?: IMetadataProvider
     ) {}
+
+    private getMetadata(): IMetadataProvider {
+        return this.provider ?? (new Metadata() as unknown as IMetadataProvider);
+    }
 
     /**
      * Initialize the orchestrator by finding/creating the AI Agent Task type
@@ -77,7 +82,7 @@ export class TaskOrchestrator {
         }
 
         // Create the task type if it doesn't exist
-        const md = new Metadata();
+        const md = this.getMetadata();
         const taskType = await md.GetEntityObject<MJTaskTypeEntity>('MJ: Task Types', this.contextUser);
         taskType.Name = 'AI Agent Execution';
         taskType.Description = 'Task executed by an AI agent as part of conversation workflow';
@@ -104,7 +109,7 @@ export class TaskOrchestrator {
         environmentId: string
     ): Promise<{ parentTaskId: string; taskIdMap: Map<string, string> }> {
         const taskTypeId = await this.ensureTaskType();
-        const md = new Metadata();
+        const md = this.getMetadata();
         const tempIdToRealId = new Map<string, string>();
 
         // Build the parent task, deduplicate the incoming task defs, and resolve agents
@@ -142,7 +147,7 @@ export class TaskOrchestrator {
         }
 
         // Persist parent + children + dependency graph in one transaction
-        const provider = Metadata.Provider as DatabaseProviderBase;
+        const provider = (this.provider ?? Metadata.Provider) as DatabaseProviderBase;
         await provider.BeginTransaction();
         try {
             if (!await parentTask.Save()) {
@@ -302,7 +307,7 @@ export class TaskOrchestrator {
         let hasMore = true;
 
         // Get parent task for progress updates
-        const md = new Metadata();
+        const md = this.getMetadata();
         const parentTask = await md.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
         await parentTask.Load(parentTaskId);
 
@@ -381,7 +386,7 @@ export class TaskOrchestrator {
      * Update parent task progress based on child task completion
      */
     private async updateParentTaskProgress(parentTaskId: string): Promise<void> {
-        const md = new Metadata();
+        const md = this.getMetadata();
         const parentTask = await md.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
         const loaded = await parentTask.Load(parentTaskId);
         if (!loaded) return;
@@ -414,7 +419,7 @@ export class TaskOrchestrator {
      * Mark parent task as complete when all children are done
      */
     private async completeParentTask(parentTaskId: string): Promise<void> {
-        const md = new Metadata();
+        const md = this.getMetadata();
         const parentTask = await md.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
         const loaded = await parentTask.Load(parentTaskId);
         if (!loaded) return;
@@ -464,7 +469,7 @@ export class TaskOrchestrator {
      * Load a task by ID
      */
     private async loadTask(taskId: string): Promise<MJTaskEntity | null> {
-        const md = new Metadata();
+        const md = this.getMetadata();
         const task = await md.GetEntityObject<MJTaskEntity>('MJ: Tasks', this.contextUser);
         const loaded = await task.Load(taskId);
         return loaded ? task : null;
@@ -483,7 +488,7 @@ export class TaskOrchestrator {
             await task.Save();
 
             // Load the agent entity
-            const md = new Metadata();
+            const md = this.getMetadata();
             const agentEntity = await md.GetEntityObject<MJAIAgentEntityExtended>('MJ: AI Agents', this.contextUser);
             const loaded = await agentEntity.Load(task.AgentID!);
             if (!loaded) {
@@ -707,8 +712,8 @@ export class TaskOrchestrator {
         agent: MJAIAgentEntityExtended,
         taskName: string
     ): Promise<void> {
-        const md = new Metadata();
-        const provider = Metadata.Provider as DatabaseProviderBase;
+        const md = this.getMetadata();
+        const provider = (this.provider ?? Metadata.Provider) as DatabaseProviderBase;
 
         await provider.BeginTransaction();
         try {
@@ -795,7 +800,7 @@ export class TaskOrchestrator {
                 return;
             }
 
-            const md = new Metadata();
+            const md = this.getMetadata();
 
             // Load conversation detail to get conversation ID
             const detail = await md.GetEntityObject<MJConversationDetailEntity>(

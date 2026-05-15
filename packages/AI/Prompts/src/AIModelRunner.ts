@@ -1,4 +1,4 @@
-import { Metadata, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { Metadata, UserInfo, LogError, LogStatus, IMetadataProvider } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { BaseEmbeddings, EmbedTextsResult, GetAIAPIKey } from '@memberjunction/ai';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
@@ -67,6 +67,19 @@ export interface EmbeddingRunParams {
  * ```
  */
 export class AIModelRunner {
+    private _provider: IMetadataProvider | null = null;
+
+    /**
+     * Optional metadata provider override. Callers should set
+     * `instance.Provider = providerToUse` before invoking run methods
+     * in multi-provider contexts. Falls back to the global default provider when unset.
+     */
+    public get Provider(): IMetadataProvider {
+        return this._provider ?? (new Metadata() as unknown as IMetadataProvider);
+    }
+    public set Provider(value: IMetadataProvider | null) {
+        this._provider = value;
+    }
 
     /**
      * Execute an embedding call with full AIPromptRun tracking.
@@ -255,7 +268,7 @@ export class AIModelRunner {
         startTime: number
     ): Promise<MJAIPromptRunEntityExtended | null> {
         try {
-            const md = new Metadata();
+            const md = this.Provider;
             const promptRun = await md.GetEntityObject<MJAIPromptRunEntityExtended>(
                 'MJ: AI Prompt Runs', params.ContextUser
             );

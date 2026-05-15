@@ -1,28 +1,9 @@
 import { BaseSingleton } from '@memberjunction/global';
-import { BaseEntity, EntityFieldInfo, EntityInfo, Metadata, RunView, UserInfo, LogError, LogStatus } from '@memberjunction/core';
+import { BaseEntity, EntityFieldInfo, EntityInfo, Metadata, RunView, UserInfo, LogError } from '@memberjunction/core';
 import { MJRecordGeoCodeEntity, GeoDataEngine } from '@memberjunction/core-entities';
-import { GeoFieldMapping, GeocodeResult, GeocodeStatus, GeocodePrecision } from './types';
+import { GeoFieldMapping, GeocodeResult, GeocodeStatus, GeocodingSource, ExistingGeoCodeInfo } from './types';
 import { ComputeGeoSourceHash } from './hash';
-
-/**
- * Response shape from the Google Geocoding API.
- */
-interface GoogleGeocodingResponse {
-    results: Array<{
-        address_components: Array<{
-            long_name: string;
-            short_name: string;
-            types: string[];
-        }>;
-        formatted_address: string;
-        geometry: {
-            location: { lat: number; lng: number };
-            location_type: string;
-        };
-    }>;
-    status: string;
-    error_message?: string;
-}
+import { GeocodingProviderRegistry, GeocodeRequest, IGeocodingProvider, ProviderGeocodeResult } from './providers';
 
 /**
  * Singleton service that manages the geocoding lifecycle for entity records.
@@ -55,12 +36,21 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
      * @param entity - The entity instance that was just saved
      * @param contextUser - The user context for data operations
      * @param mappings - Field-to-location mappings (if not provided, derived from EntityField.ExtendedType metadata)
+     * @param existingGeoCodesMap - Optional pre-loaded map of existing RecordGeoCode rows keyed by
+     *        `RecordID|LocationType`. When provided, eliminates per-record SQL queries in
+     *        FindExistingGeoCode(). Used by the scheduled geocoding job for batch processing.
      * @returns The geocode result from the first successfully geocoded mapping, or null
      *          if no geocoding was performed (e.g., hash unchanged) or all attempts failed.
      *          The caller can use this to patch virtual lat/lng fields on the entity's
      *          SP result before finalizeSave() loads it into the entity object.
      */
-    public async SyncIfChanged(entity: BaseEntity, contextUser: UserInfo, mappings?: GeoFieldMapping[]): Promise<GeocodeResult | null> {
+    public async SyncIfChanged(
+        entity: BaseEntity,
+        contextUser: UserInfo,
+        mappings?: GeoFieldMapping[],
+        existingGeoCodesMap?: Map<string, ExistingGeoCodeInfo>,
+        providerName?: string | null
+    ): Promise<GeocodeResult | null> {
         const resolvedMappings = mappings ?? GeoCodeSyncService.BuildMappingsFromMetadata(entity.EntityInfo);
         if (resolvedMappings.length === 0) return null;
 
@@ -70,9 +60,11 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
         // populated by this load, so await it before any per-mapping processing.
         await GeoDataEngine.Instance.Config(false, contextUser);
 
+        const provider = GeocodingProviderRegistry.Instance.Resolve(providerName);
+
         for (const mapping of resolvedMappings) {
             try {
-                const result = await this.ProcessMapping(entity, mapping, contextUser);
+                const result = await this.ProcessMapping(entity, mapping, contextUser, existingGeoCodesMap, provider);
                 if (result) return result;
             } catch (e: unknown) {
                 const message = e instanceof Error ? e.message : String(e);
@@ -116,11 +108,26 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
     }
 
     /**
+     * Build the composite key used for ExistingGeoCodeInfo map lookups.
+     * Format: `RecordID|LocationType`
+     */
+    public static BuildGeoCodeMapKey(recordID: string, locationType: string): string {
+        return `${recordID}|${locationType}`;
+    }
+
+    /**
      * Process a single field mapping for a single entity record.
+     * @param existingGeoCodesMap - Optional pre-loaded map for O(1) lookup instead of per-record SQL query
      * @returns The geocode result if geocoding was performed successfully, or null if
      *          no geocoding was needed (hash unchanged) or the attempt failed.
      */
-    protected async ProcessMapping(entity: BaseEntity, mapping: GeoFieldMapping, contextUser: UserInfo): Promise<GeocodeResult | null> {
+    protected async ProcessMapping(
+        entity: BaseEntity,
+        mapping: GeoFieldMapping,
+        contextUser: UserInfo,
+        existingGeoCodesMap?: Map<string, ExistingGeoCodeInfo>,
+        provider?: IGeocodingProvider | null
+    ): Promise<GeocodeResult | null> {
         const hash = ComputeGeoSourceHash(entity, mapping.Fields);
 
         // Build RecordID matching the format used in the view's LEFT JOIN to vwRecordGeoCodes:
@@ -136,7 +143,8 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
             entity.EntityInfo.ID,
             recordId,
             mapping.LocationType,
-            contextUser
+            contextUser,
+            existingGeoCodesMap
         );
 
         if (existing && existing.SourceFieldHash === hash && existing.Status === 'success') {
@@ -168,7 +176,7 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
 
         // Attempt geocoding
         try {
-            const result = await this.Geocode(entity, mapping);
+            const result = await this.Geocode(entity, mapping, provider);
             if (result) {
                 await this.UpdateSuccess(row, result, hash);
                 return result;
@@ -188,13 +196,35 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
 
     /**
      * Find an existing RecordGeoCode row for a given entity/record/location type.
+     *
+     * When `existingGeoCodesMap` is provided (batch mode), checks the in-memory map first.
+     * If a match is found, loads the full entity object by ID (single PK lookup — much cheaper
+     * than a filtered query). Falls back to a per-record RunView query when no map is provided
+     * (single-record mode, e.g., called from the AfterSave hook).
      */
     protected async FindExistingGeoCode(
         entityID: string,
         recordID: string,
         locationType: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        existingGeoCodesMap?: Map<string, ExistingGeoCodeInfo>
     ): Promise<MJRecordGeoCodeEntity | null> {
+        // Batch mode: O(1) map lookup + single PK load
+        if (existingGeoCodesMap) {
+            const key = `${recordID}|${locationType}`;
+            const info = existingGeoCodesMap.get(key);
+            if (!info) return null;
+
+            // We have a match — check staleness inline to avoid loading the full entity
+            // when the hash hasn't changed. The caller (ProcessMapping) does this check too,
+            // but we can short-circuit the entity load here for the common "no change" case.
+            const md = new Metadata();  // global-provider-ok: sync service — single-provider context
+            const row = await md.GetEntityObject<MJRecordGeoCodeEntity>('MJ: Record Geo Codes', contextUser);
+            const loaded = await row.Load(info.ID);
+            return loaded ? row : null;
+        }
+
+        // Single-record mode: per-record RunView query (used by AfterSave hook)
         const rv = new RunView();
         const result = await rv.RunView<MJRecordGeoCodeEntity>({
             EntityName: 'MJ: Record Geo Codes',
@@ -209,7 +239,9 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
     }
 
     /**
-     * Create a new RecordGeoCode row.
+     * Create a new RecordGeoCode row. If the insert fails due to a unique
+     * constraint (race condition from concurrent batch geocoding), falls back
+     * to loading the existing row.
      */
     protected async CreateGeoCodeRow(
         entityID: string,
@@ -217,7 +249,7 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
         locationType: string,
         contextUser: UserInfo
     ): Promise<MJRecordGeoCodeEntity | null> {
-        const md = new Metadata();
+        const md = new Metadata();  // global-provider-ok: sync service — single-provider context
         const row = await md.GetEntityObject<MJRecordGeoCodeEntity>('MJ: Record Geo Codes', contextUser);
         row.NewRecord();
         row.EntityID = entityID;
@@ -227,6 +259,12 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
         row.RetryCount = 0;
         const saved = await row.Save();
         if (!saved) {
+            // Likely a UNIQUE KEY violation from a concurrent batch — another thread
+            // created the row between our FindExistingGeoCode check and this INSERT.
+            // Fall back to loading the existing row.
+            const existing = await this.FindExistingGeoCode(entityID, recordID, locationType, contextUser);
+            if (existing) return existing;
+
             LogError(`GeoCodeSyncService: Failed to create RecordGeoCode row: ${row.LatestResult?.CompleteMessage ?? 'unknown error'}`);
             return null;
         }
@@ -247,7 +285,11 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
         row.CountryID = result.CountryID ?? null;
         row.StateProvinceID = result.StateProvinceID ?? null;
         row.Status = 'success';
-        row.GeocodingSource = result.Source;
+        // The entity's GeocodingSource setter literal type is generated from the DB CHECK
+        // constraint. Migration V202605141800 widens that constraint to include 'geocodio'
+        // and 'here'; once CodeGen re-runs against the post-migration schema, the cast
+        // below becomes unnecessary and should be removed.
+        row.GeocodingSource = result.Source as typeof row.GeocodingSource;
         row.SourceFieldHash = hash;
         row.GeocodedAt = new Date();
         row.ErrorMessage = '';
@@ -292,12 +334,17 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
      * Perform the actual geocoding using a priority-based strategy:
      *
      * 1. Native lat/lng fields → copy directly (GeocodingSource = 'native')
-     * 2. Address-level fields → external geocoding API (GeocodingSource = 'google')
+     * 2. Address-level fields → configured external geocoding provider
+     *    (GeocodingSource = provider.Name — 'google' | 'geocodio' | 'here' | ...)
      * 3. Country/state only → reference table centroid lookup (GeocodingSource = 'reference_data')
+     *
+     * @param provider The resolved geocoding provider to use for strategy 2.
+     *        When null, strategy 2 is skipped and we fall through to reference data.
      */
     protected async Geocode(
         entity: BaseEntity,
         _mapping: GeoFieldMapping,
+        provider?: IGeocodingProvider | null,
     ): Promise<GeocodeResult | null> {
         // Strategy 1: Check for native (non-virtual) lat/lng fields.
         // Virtual fields like __mj_Latitude/__mj_Longitude come from the RecordGeoCode JOIN
@@ -324,22 +371,45 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
         // Collect address field values organized by their geo role
         const geoValues = this.extractGeoFieldValues(entity);
 
-        // Strategy 2: Google Geocoding API (if API key is available)
-        const apiKey = this.getGoogleApiKey();
-        if (apiKey) {
+        // Strategy 2: Configured external provider (if one is resolvable)
+        const activeProvider = provider ?? GeocodingProviderRegistry.Instance.Resolve();
+        if (activeProvider) {
             const addressString = this.buildAddressString(geoValues);
             if (addressString) {
-                const googleResult = await this.geocodeViaGoogle(addressString, apiKey);
-                if (googleResult) {
-                    // Resolve country/state IDs from Google's response
-                    this.resolveReferenceIDs(googleResult, entity);
-                    return googleResult;
+                const request: GeocodeRequest = {
+                    AddressString: addressString,
+                    Address: geoValues['GeoAddress'],
+                    City: geoValues['GeoCity'],
+                    StateProvince: geoValues['GeoStateProvince'],
+                    PostalCode: geoValues['GeoPostalCode'],
+                    Country: geoValues['GeoCountry']
+                };
+                const providerResult = await activeProvider.Geocode(request);
+                if (providerResult) {
+                    const result = this.mapProviderResult(providerResult, activeProvider.Name as GeocodingSource);
+                    this.resolveReferenceIDs(result, entity);
+                    return result;
                 }
             }
         }
 
         // Strategy 3: Reference data centroid lookup (country/state → approximate lat/lng)
         return this.geocodeViaReferenceData(geoValues);
+    }
+
+    /**
+     * Convert a provider-agnostic result into the persistence-layer shape.
+     * Country/state resolution to MJ IDs happens in resolveReferenceIDs().
+     */
+    private mapProviderResult(r: ProviderGeocodeResult, source: GeocodingSource): GeocodeResult {
+        return {
+            Latitude: r.Latitude,
+            Longitude: r.Longitude,
+            Precision: r.Precision,
+            CountryID: null,
+            StateProvinceID: null,
+            Source: source
+        };
     }
 
     /**
@@ -373,53 +443,6 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
         return parts.length > 0 ? parts.join(', ') : null;
     }
 
-    /**
-     * Call the Google Geocoding API to convert an address string to coordinates.
-     */
-    private async geocodeViaGoogle(address: string, apiKey: string): Promise<GeocodeResult | null> {
-        try {
-            const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`;
-            const response = await fetch(url);
-            if (!response.ok) {
-                LogError(`GeoCodeSyncService: Google API HTTP error: ${response.status}`);
-                return null;
-            }
-
-            const data = await response.json() as GoogleGeocodingResponse;
-            if (data.status !== 'OK' || !data.results?.length) {
-                LogStatus(`GeoCodeSyncService: Google returned status "${data.status}" for "${address}"`);
-                return null;
-            }
-
-            const result = data.results[0];
-            const locationType = result.geometry.location_type;
-
-            // Map Google's location_type to our precision enum
-            let precision: GeocodePrecision = 'city';
-            if (locationType === 'ROOFTOP') precision = 'exact';
-            else if (locationType === 'RANGE_INTERPOLATED') precision = 'exact';
-            else if (locationType === 'GEOMETRIC_CENTER') precision = 'city';
-            else if (locationType === 'APPROXIMATE') precision = 'state_province';
-
-            return {
-                Latitude: result.geometry.location.lat,
-                Longitude: result.geometry.location.lng,
-                Precision: precision,
-                CountryID: null,     // resolved in resolveReferenceIDs
-                StateProvinceID: null, // resolved in resolveReferenceIDs
-                Source: 'google'
-            };
-        } catch (e: unknown) {
-            const msg = e instanceof Error ? e.message : String(e);
-            LogError(`GeoCodeSyncService: Google geocoding error: ${msg}`);
-            return null;
-        }
-    }
-
-    /**
-     * Resolve CountryID and StateProvinceID from entity geo field values
-     * against the reference Country/StateProvince tables.
-     */
     /**
      * Resolve CountryID and StateProvinceID from entity geo field values
      * using the in-memory GeoDataEngine (O(1) lookups, no DB queries).
@@ -494,21 +517,4 @@ export class GeoCodeSyncService extends BaseSingleton<GeoCodeSyncService> {
         return null;
     }
 
-    /**
-     * Get the Google Geocoding API key from config or environment.
-     */
-    private getGoogleApiKey(): string | null {
-        // Check environment variables
-        const envKey = process.env.GOOGLE_GEOCODING_API_KEY || process.env.GOOGLE_MAPS_API_KEY;
-        if (envKey) return envKey;
-
-        // Try mj.config.cjs via cosmiconfig pattern
-        try {
-            // Dynamic import to avoid hard dependency on cosmiconfig
-            const configVal = (globalThis as Record<string, unknown>)['__mj_config_apiIntegrations'] as Record<string, Record<string, Record<string, string>>> | undefined;
-            return configVal?.google?.geocoding?.apiKey ?? null;
-        } catch {
-            return null;
-        }
-    }
 }

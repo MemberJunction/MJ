@@ -1,5 +1,162 @@
 # @memberjunction/ng-artifacts
 
+## 5.34.1
+
+### Patch Changes
+
+- Updated dependencies [3a35358]
+- Updated dependencies [8695f65]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/graphql-dataprovider@5.34.1
+  - @memberjunction/ng-base-types@5.34.1
+  - @memberjunction/ng-code-editor@5.34.1
+  - @memberjunction/ng-notifications@5.34.1
+  - @memberjunction/ng-query-viewer@5.34.1
+  - @memberjunction/ng-react@5.34.1
+  - @memberjunction/ng-shared-generic@5.34.1
+  - @memberjunction/ng-trees@5.34.1
+  - @memberjunction/interactive-component-types@5.34.1
+  - @memberjunction/core-entities@5.34.1
+  - @memberjunction/ng-export-service@5.34.1
+  - @memberjunction/ng-markdown@5.34.1
+  - @memberjunction/ng-pagination@5.34.1
+  - @memberjunction/global@5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- b03bfb4: Replace hardcoded colors with semantic design tokens across Angular components and shared styles, restoring correct dark-mode behavior and enabling white-labeling. Also maps the System Diagnostics PerfMon chrome (background, borders, text, controls) to MJ semantic tokens so the panel adapts to the active theme; series colors stay categorical.
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- 11ae7e6: no migration
+- ad61267: no migration
+- Updated dependencies [b03bfb4]
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [003317f]
+- Updated dependencies [0caffca]
+- Updated dependencies [cfffb6d]
+- Updated dependencies [e999e0d]
+- Updated dependencies [389d356]
+- Updated dependencies [ae5cfbd]
+- Updated dependencies [6d8ee1a]
+- Updated dependencies [72cb92e]
+  - @memberjunction/ng-markdown@5.34.0
+  - @memberjunction/ng-pagination@5.34.0
+  - @memberjunction/ng-base-types@5.34.0
+  - @memberjunction/ng-code-editor@5.34.0
+  - @memberjunction/ng-export-service@5.34.0
+  - @memberjunction/ng-notifications@5.34.0
+  - @memberjunction/ng-query-viewer@5.34.0
+  - @memberjunction/ng-react@5.34.0
+  - @memberjunction/ng-shared-generic@5.34.0
+  - @memberjunction/ng-trees@5.34.0
+  - @memberjunction/interactive-component-types@5.34.0
+  - @memberjunction/core@5.34.0
+  - @memberjunction/core-entities@5.34.0
+  - @memberjunction/graphql-dataprovider@5.34.0
+  - @memberjunction/global@5.34.0
+
+## 5.33.0
+
+### Patch Changes
+
+- Updated dependencies [97ed790]
+- Updated dependencies [95eb27e]
+- Updated dependencies [74b0be0]
+- Updated dependencies [5cc5326]
+- Updated dependencies [7e4957d]
+- Updated dependencies [3e84676]
+  - @memberjunction/graphql-dataprovider@5.33.0
+  - @memberjunction/core@5.33.0
+  - @memberjunction/global@5.33.0
+  - @memberjunction/ng-react@5.33.0
+  - @memberjunction/interactive-component-types@5.33.0
+  - @memberjunction/ng-notifications@5.33.0
+  - @memberjunction/ng-base-types@5.33.0
+  - @memberjunction/ng-code-editor@5.33.0
+  - @memberjunction/ng-query-viewer@5.33.0
+  - @memberjunction/ng-shared-generic@5.33.0
+  - @memberjunction/ng-trees@5.33.0
+  - @memberjunction/core-entities@5.33.0
+  - @memberjunction/ng-export-service@5.33.0
+  - @memberjunction/ng-markdown@5.33.0
+  - @memberjunction/ng-pagination@5.33.0
+
+## 5.32.0
+
+### Patch Changes
+
+- Updated dependencies [a7e8b3b]
+- Updated dependencies [b9c67ac]
+  - @memberjunction/core@5.32.0
+  - @memberjunction/ng-base-types@5.32.0
+  - @memberjunction/ng-code-editor@5.32.0
+  - @memberjunction/ng-notifications@5.32.0
+  - @memberjunction/ng-query-viewer@5.32.0
+  - @memberjunction/ng-react@5.32.0
+  - @memberjunction/ng-shared-generic@5.32.0
+  - @memberjunction/ng-trees@5.32.0
+  - @memberjunction/graphql-dataprovider@5.32.0
+  - @memberjunction/interactive-component-types@5.32.0
+  - @memberjunction/core-entities@5.32.0
+  - @memberjunction/ng-export-service@5.32.0
+  - @memberjunction/ng-markdown@5.32.0
+  - @memberjunction/ng-pagination@5.32.0
+  - @memberjunction/global@5.32.0
+
+## 5.31.0
+
+### Patch Changes
+
+- 7ed7a4b: no metadata/migration changes
+- c8b6f8a: Component Studio: React runtime now keys cached components by content fingerprint so artifact versions sharing `(name, namespace, version)` but differing in code coexist as separate cache entries — fixes the conversation panel's version dropdown showing stale compiled code when toggling between Skip-authored registry-reference stubs and Studio-authored inline-code exports of the same component. Adds change-detection fixes to the artifact-load and artifact-selection dialogs, wires the React bridge's `(initialized)` event into `UpdateWithResolvedSpec` so registry-resolved code populates the code editor on first load, and unwraps Skip's `componentOptions` envelope when reading from the artifact `Content` field.
+- Updated dependencies [fc8b9b8]
+- Updated dependencies [cde4d2c]
+- Updated dependencies [7ed7a4b]
+- Updated dependencies [60e7541]
+- Updated dependencies [18be074]
+- Updated dependencies [17b8087]
+- Updated dependencies [6779c1e]
+- Updated dependencies [c8b6f8a]
+- Updated dependencies [de34786]
+- Updated dependencies [5db36d9]
+- Updated dependencies [0e3365f]
+  - @memberjunction/core-entities@5.31.0
+  - @memberjunction/graphql-dataprovider@5.31.0
+  - @memberjunction/ng-base-types@5.31.0
+  - @memberjunction/ng-code-editor@5.31.0
+  - @memberjunction/ng-export-service@5.31.0
+  - @memberjunction/ng-markdown@5.31.0
+  - @memberjunction/ng-notifications@5.31.0
+  - @memberjunction/ng-pagination@5.31.0
+  - @memberjunction/ng-query-viewer@5.31.0
+  - @memberjunction/ng-react@5.31.0
+  - @memberjunction/ng-shared-generic@5.31.0
+  - @memberjunction/ng-trees@5.31.0
+  - @memberjunction/interactive-component-types@5.31.0
+  - @memberjunction/core@5.31.0
+  - @memberjunction/global@5.31.0
+
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/ng-base-types@5.30.1
+- @memberjunction/ng-code-editor@5.30.1
+- @memberjunction/ng-export-service@5.30.1
+- @memberjunction/ng-markdown@5.30.1
+- @memberjunction/ng-notifications@5.30.1
+- @memberjunction/ng-pagination@5.30.1
+- @memberjunction/ng-query-viewer@5.30.1
+- @memberjunction/ng-react@5.30.1
+- @memberjunction/ng-shared-generic@5.30.1
+- @memberjunction/ng-trees@5.30.1
+- @memberjunction/graphql-dataprovider@5.30.1
+- @memberjunction/interactive-component-types@5.30.1
+- @memberjunction/core@5.30.1
+- @memberjunction/core-entities@5.30.1
+- @memberjunction/global@5.30.1
+
 ## 5.30.0
 
 ### Patch Changes

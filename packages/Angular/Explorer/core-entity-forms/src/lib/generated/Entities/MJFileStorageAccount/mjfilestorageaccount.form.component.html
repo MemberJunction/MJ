@@ -150,25 +150,25 @@
         }
     </mj-collapsible-panel>
 
-    <!-- File Storage Account Permissions Section -->
+    <!-- Search Scope Storage Accounts Section -->
     <mj-collapsible-panel
-        SectionKey="mJFileStorageAccountPermissions"
-        SectionName="File Storage Account Permissions"
-        Icon="fa fa-shield-alt"
+        SectionKey="mJSearchScopeStorageAccounts"
+        SectionName="Search Scope Storage Accounts"
+        Icon="fa fa-folder-open"
         Variant="related-entity"
         [Form]="this"
         [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJFileStorageAccountPermissions')"
+        [BadgeCount]="GetSectionRowCount('mJSearchScopeStorageAccounts')"
         [DefaultExpanded]="false">
         @if (record.IsSaved) {
         <div>
             <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: File Storage Account Permissions','FileStorageAccountID')"
-                [NewRecordValues]="NewRecordValues('MJ: File Storage Account Permissions')"
-                [AllowLoad]="IsSectionExpanded('mJFileStorageAccountPermissions')"
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: Search Scope Storage Accounts','FileStorageAccountID')"
+                [NewRecordValues]="NewRecordValues('MJ: Search Scope Storage Accounts')"
+                [AllowLoad]="IsSectionExpanded('mJSearchScopeStorageAccounts')"
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJFileStorageAccountPermissions', $event.totalRowCount)"
+                (AfterDataLoad)="SetSectionRowCount('mJSearchScopeStorageAccounts', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>
@@ -194,6 +194,31 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJAIAgentCategories', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
+    <!-- File Storage Account Permissions Section -->
+    <mj-collapsible-panel
+        SectionKey="mJFileStorageAccountPermissions"
+        SectionName="File Storage Account Permissions"
+        Icon="fa fa-shield-alt"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJFileStorageAccountPermissions')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: File Storage Account Permissions','FileStorageAccountID')"
+                [NewRecordValues]="NewRecordValues('MJ: File Storage Account Permissions')"
+                [AllowLoad]="IsSectionExpanded('mJFileStorageAccountPermissions')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJFileStorageAccountPermissions', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

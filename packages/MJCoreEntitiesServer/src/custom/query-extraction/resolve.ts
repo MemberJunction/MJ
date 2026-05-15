@@ -5,7 +5,7 @@
  * Every function is stateless: context is passed in as parameters rather than via `this`.
  */
 
-import { EntityInfo, IMetadataProvider, Metadata, QueryDependencyInfo, QueryFieldInfo, QueryInfo, TypeScriptTypeFromSQLType } from "@memberjunction/core";
+import { EntityInfo, IMetadataProvider, QueryDependencyInfo, QueryFieldInfo, QueryInfo, TypeScriptTypeFromSQLType } from "@memberjunction/core";
 import { QueryCompositionEngine } from "@memberjunction/generic-database-provider";
 import { UUIDsEqual } from "@memberjunction/global";
 import { SQLParser } from "@memberjunction/sql-parser";
@@ -250,6 +250,51 @@ export function MapQueryParamTypeToParserType(
 // ═══════════════════════════════════════════════════
 
 /**
+ * Builds ExtractedField[] deterministically from the parsed SELECT columns.
+ *
+ * This is the PRIMARY deterministic field extraction path, handling explicit
+ * column lists like `SELECT col1, col2 AS Alias, COUNT(*) AS Total`.
+ * For each parsed column, it creates an ExtractedField with:
+ *   - name: the output name (alias if present, otherwise source column)
+ *   - isComputed: true for expression columns (aggregates, calculations)
+ *   - sourceFieldName: the original column name (before AS alias)
+ *
+ * Returns null only if selectColumns is empty (e.g., a stored procedure call
+ * or non-SELECT statement).
+ */
+export function BuildFieldsFromSelectColumns(
+    selectColumns: SQLSelectColumn[]
+): ExtractedField[] | null {
+    if (selectColumns.length === 0) return null;
+
+    // Skip if ALL columns are wildcards — BuildFieldsForSelectStar handles that
+    if (selectColumns.every(col => col.SourceColumn === '*')) return null;
+
+    return selectColumns
+        .filter(col => col.SourceColumn !== '*')
+        .map(col => buildFieldFromSelectColumn(col));
+}
+
+/**
+ * Converts a single parsed SELECT column into an ExtractedField.
+ */
+function buildFieldFromSelectColumn(col: SQLSelectColumn): ExtractedField {
+    return {
+        name: col.OutputName,
+        description: col.IsExpression
+            ? `Computed column: ${col.SourceColumn}`
+            : col.OutputName !== col.SourceColumn
+                ? `${col.SourceColumn} (aliased as ${col.OutputName})`
+                : col.OutputName,
+        type: 'string', // default; enrichment stages refine this from entity/composition metadata
+        optional: false,
+        sourceFieldName: col.IsExpression ? null : col.SourceColumn,
+        isComputed: col.IsExpression,
+        isSummary: false,
+    };
+}
+
+/**
  * Detects SELECT * and builds the complete field list deterministically
  * from entity metadata and/or composition ref fields.
  * Returns null if the SQL doesn't use SELECT * or if entities can't be resolved.
@@ -307,7 +352,7 @@ function expandFieldsFromCompositionRefs(
     const compositionRefs = SQLParser.ExtractCompositionRefs(sql);
 
     for (const ref of compositionRefs) {
-        const referencedQuery = Metadata.Provider.Queries.find(q =>
+        const referencedQuery = md.Queries.find(q =>
             q.Name.toLowerCase() === ref.queryName.toLowerCase()
         );
 
@@ -375,7 +420,8 @@ function buildFieldFromQueryField(
 export function EnrichFieldTypesFromCompositions(
     fields: ExtractedField[],
     resolvedRefs: ResolvedCompositionReference[],
-    selectColumns: SQLSelectColumn[]
+    selectColumns: SQLSelectColumn[],
+    md: IMetadataProvider
 ): ExtractedField[] {
     if (resolvedRefs.length === 0 || fields.length === 0) return fields;
 
@@ -390,7 +436,7 @@ export function EnrichFieldTypesFromCompositions(
             ?? allDepFields.get(field.name.toLowerCase());
 
         if (matchedField) {
-            return applyQueryFieldMetadata(field, matchedField);
+            return applyQueryFieldMetadata(field, matchedField, md);
         }
 
         return field;
@@ -653,14 +699,15 @@ function buildDependencyFieldLookup(
  */
 function applyQueryFieldMetadata(
     field: ExtractedField,
-    matchedField: QueryFieldInfo
+    matchedField: QueryFieldInfo,
+    md: IMetadataProvider
 ): ExtractedField {
     return {
         ...field,
         sqlBaseType: matchedField.SQLBaseType,
         sqlFullType: matchedField.SQLFullType,
         sourceEntity: field.sourceEntity ?? (matchedField.SourceEntityID
-            ? findEntityNameByID(Metadata.Provider, matchedField.SourceEntityID)
+            ? findEntityNameByID(md, matchedField.SourceEntityID)
             : null),
         sourceFieldName: field.sourceFieldName ?? matchedField.SourceFieldName,
         isComputed: field.isComputed ?? matchedField.IsComputed ?? false,
@@ -787,7 +834,7 @@ function expandWildcardFromSource(
         return expandFromEntityInfo(sourceEntityInfo, field.optional);
     }
 
-    const composedQuery = Metadata.Provider.Queries.find(q =>
+    const composedQuery = md.Queries.find(q =>
         q.Name.toLowerCase() === field.sourceEntity!.toLowerCase()
     );
     if (composedQuery && composedQuery.Fields.length > 0) {

@@ -50,11 +50,22 @@ const mockStorageDriver = { PutObject: vi.fn(), GetObject: vi.fn() };
 vi.mock('@memberjunction/core', () => ({
     LogError: vi.fn(),
     LogStatus: vi.fn(),
-    Metadata: class MockMetadata {
-        GetEntityObject = vi.fn().mockImplementation((entityName: string) =>
-            Promise.resolve(mockGetEntityObjectHandler(entityName))
-        );
-    },
+    Metadata: (() => {
+        class MockMetadata {
+            GetEntityObject = vi.fn().mockImplementation((entityName: string) =>
+                Promise.resolve(mockGetEntityObjectHandler(entityName))
+            );
+            // Multi-provider migration: ArchiveEngine uses this.ProviderToUse, which falls back
+            // to Metadata.Provider. Mirror the helper instance shape on the static Provider so
+            // GetEntityObject calls find the same handler.
+            static Provider: { GetEntityObject: (entityName: string) => Promise<unknown> };
+        }
+        MockMetadata.Provider = {
+            GetEntityObject: (entityName: string) =>
+                Promise.resolve(mockGetEntityObjectHandler(entityName)),
+        };
+        return MockMetadata;
+    })(),
     RunView: class MockRunView {
         RunView = vi.fn().mockImplementation((params: { EntityName: string; ExtraFilter?: string }) =>
             Promise.resolve(mockRunViewHandler(params))

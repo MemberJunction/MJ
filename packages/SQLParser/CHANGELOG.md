@@ -1,5 +1,50 @@
 # @memberjunction/sql-parser
 
+## 5.34.1
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- Updated dependencies [7d8a0f9]
+  - @memberjunction/sql-dialect@5.34.0
+
+## 5.33.0
+
+### Patch Changes
+
+- Updated dependencies [5cc5326]
+- Updated dependencies [312fcee]
+- Updated dependencies [7add405]
+  - @memberjunction/sql-dialect@5.33.0
+
+## 5.32.0
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.32.0
+
+## 5.31.0
+
+### Patch Changes
+
+- 7ed7a4b: no metadata/migration changes
+- 18be074: Fix boundary wildcard stripping in sqlLike filters, fix QueryProcessor default value handling for array-typed parameters, add Chart.js canvas container and no-unwrap-utility-libs lint rules to react-test-harness, and fix SimpleChart label leak through onDataPointClick
+- Updated dependencies [7ed7a4b]
+- Updated dependencies [9457655]
+  - @memberjunction/sql-dialect@5.31.0
+
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/sql-dialect@5.30.1
+
 ## 5.30.0
 
 ### Patch Changes

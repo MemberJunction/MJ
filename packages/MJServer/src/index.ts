@@ -5,7 +5,8 @@ dotenv.config({ quiet: true });
 import { expressMiddleware } from '@as-integrations/express5';
 import { mergeSchemas } from '@graphql-tools/schema';
 import { Metadata, DatabasePlatform, SetProvider, StartupManager as StartupManagerImport, BaseEntity, BaseEntityEvent, RunView } from '@memberjunction/core';
-import { MJGlobal, MJEventType, UUIDsEqual } from '@memberjunction/global';
+import { resolveDbPlatformFromEnv } from '@memberjunction/generic-database-provider';
+import { MJGlobal, MJEventType, UUIDsEqual, ShutdownRegistry } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerDataProvider, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { extendConnectionPoolWithQuery } from './util.js';
 import { default as BodyParser } from 'body-parser';
@@ -58,15 +59,19 @@ import { ServerExtensionLoader, ServerExtensionConfig } from '@memberjunction/se
 const cacheRefreshInterval = configInfo.databaseSettings.metadataCacheRefreshInterval;
 
 /**
- * Returns the configured database platform type based on the DB_TYPE environment variable.
- * Defaults to 'sqlserver' for backward compatibility.
+ * Returns the configured database platform from the `DB_PLATFORM` environment
+ * variable, falling back to `'sqlserver'` when the env var is unset. An
+ * unrecognized non-empty value (typo, legacy alias) throws — silent fallback
+ * is the bug we don't want, because it routes the wrong provider against a
+ * real database.
+ *
+ * Implementation note: the actual env-parsing lives in
+ * `@memberjunction/global` (single source of truth across MJCLI, MJServer,
+ * CodeGenLib). This wrapper keeps the public `getDbType()` symbol that
+ * MJServer consumers (and the broader stack) already import.
  */
 export function getDbType(): DatabasePlatform {
-    const dbType = process.env.DB_TYPE?.toLowerCase();
-    if (dbType === 'postgresql' || dbType === 'postgres' || dbType === 'pg') {
-        return 'postgresql';
-    }
-    return 'sqlserver';
+    return resolveDbPlatformFromEnv() ?? 'sqlserver';
 }
 
 export { MaxLength } from 'class-validator';
@@ -96,10 +101,13 @@ export * from './resolvers/RunAIPromptResolver.js';
 export * from './resolvers/RunAIAgentResolver.js';
 export * from './resolvers/VectorizeEntityResolver.js';
 export * from './resolvers/SearchKnowledgeResolver.js';
+export * from './resolvers/SearchKnowledgeStreamResolver.js';
+export * from './resolvers/AvailableSearchProvidersResolver.js';
 export * from './resolvers/FetchEntityVectorsResolver.js';
 export * from './resolvers/PipelineProgressResolver.js';
 export * from './resolvers/ClientToolRequestResolver.js';
 export * from './resolvers/AutotagPipelineResolver.js';
+export * from './resolvers/TagGovernanceResolver.js';
 export * from './resolvers/TaskResolver.js';
 export * from './generic/KeyValuePairInput.js';
 export * from './generic/KeyInputOutputTypes.js';
@@ -284,7 +292,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       return origExecuteSQLWithPool.call(this, pool, query, parameters, contextUser);
     };
 
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: bootstrap
     console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
   } else {
     // ─── SQL Server Path (existing behavior) ───────────────────────
@@ -326,7 +334,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
     const config = new SQLServerProviderConfigData(pool, mj_core_schema, cacheRefreshInterval);
     await setupSQLServerClient(config);
     tPhase = lap('Metadata + Provider Setup', tPhase);
-    const md = new Metadata();
+    const md = new Metadata(); // global-provider-ok: bootstrap
     console.log(`Data Source has been initialized. ${md?.Entities ? md.Entities.length : 0} entities loaded.`);
 
     // Set up CodeGen-credentialed provider for RSU DDL operations (CREATE TABLE, CREATE SCHEMA, etc.)
@@ -416,9 +424,9 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       url: process.env.REDIS_URL,
       keyPrefix: process.env.REDIS_KEY_PREFIX || 'mj',
       enablePubSub: true,
-      enableLogging: true,
+      enableLogging: configInfo.cacheSettings?.verboseLogging ?? false,
     });
-    (Metadata.Provider as GenericDatabaseProvider).SetLocalStorageProvider(redisProvider);
+    (Metadata.Provider as GenericDatabaseProvider).SetLocalStorageProvider(redisProvider); // global-provider-ok: bootstrap (Redis cache wiring)
     await redisProvider.StartListening();
 
     // Connect Redis pub/sub events to LocalCacheManager callback dispatch
@@ -449,7 +457,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
   // LocalCacheManager may have already been initialized (with in-memory provider)
   // during engine loading. SetStorageProvider migrates cached data to Redis.
   if (process.env.REDIS_URL) {
-    await LocalCacheManager.Instance.SetStorageProvider(Metadata.Provider.LocalStorageProvider);
+    await LocalCacheManager.Instance.SetStorageProvider(Metadata.Provider.LocalStorageProvider); // global-provider-ok: bootstrap
     console.log('LocalCacheManager: storage provider swapped to Redis');
   }
   // Ensure LocalCacheManager is initialized (no-op if already done during engine loading)
@@ -463,7 +471,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       evictionSweepIntervalMs: (cs.evictionSweepIntervalSeconds ?? 300) * 1000,
       verboseLogging: cs.verboseLogging ?? false,
     };
-    await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider, cacheConfig);
+    await LocalCacheManager.Instance.Initialize(Metadata.Provider.LocalStorageProvider, cacheConfig); // global-provider-ok: bootstrap
     console.log('LocalCacheManager initialized with cache config:', JSON.stringify({
       maxMemoryMB: cs.maxMemoryMB ?? 150,
       maxPercentOfCachePerEntity: cs.maxPercentOfCachePerEntity ?? 50,
@@ -900,6 +908,19 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       }
     }
 
+    // Drain anything self-registered with ShutdownRegistry — QueueManager,
+    // future engines/services with timers/intervals/listeners. Each is
+    // responsible for being idempotent and not throwing.
+    try {
+      const count = ShutdownRegistry.Instance.Count;
+      if (count > 0) {
+        await ShutdownRegistry.Instance.ShutdownAll();
+        console.log(`✅ ShutdownRegistry drained ${count} registered service(s)`);
+      }
+    } catch (error) {
+      console.error('❌ Error draining ShutdownRegistry:', error);
+    }
+
     // Close server
     httpServer.close(() => {
       console.log('✅ HTTP server closed');
@@ -943,8 +964,7 @@ async function processRSUPendingWork(): Promise<void> {
 
   for (const item of pendingItems) {
     try {
-      const md = new Metadata();
-
+      const md = new Metadata(); // global-provider-ok: server startup recovery — runs once before any per-request context exists
       // Get system user for server-side operations
       const systemUser = UserCache.Instance.Users.find(u => u.Type?.trim().toLowerCase() === 'owner') ?? UserCache.Instance.Users[0];
       if (!systemUser) {
@@ -952,7 +972,7 @@ async function processRSUPendingWork(): Promise<void> {
         continue;
       }
 
-      await Metadata.Provider.Refresh();
+      await Metadata.Provider.Refresh(); // global-provider-ok: server startup recovery — one-shot global cache refresh
 
       // Resolve connector
       const rv = new RunView();
@@ -1221,7 +1241,7 @@ async function refreshUserCacheFromPG(pgPool: import('pg').Pool, coreSchema: str
         ...user,
         UserRoles: roles.filter((role: Record<string, unknown>) => UUIDsEqual(role.UserID as string, user.ID as string)),
       };
-      return new UserInfo(Metadata.Provider, userWithRoles);
+      return new UserInfo(Metadata.Provider, userWithRoles); // global-provider-ok: bootstrap (UserCache initialization)
     });
     // Access the UserCache internals to set users
     const cache = UserCache.Instance;

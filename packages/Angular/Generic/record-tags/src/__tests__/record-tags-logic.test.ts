@@ -7,12 +7,22 @@ vi.mock('@angular/core', () => {
     }
     return {
         Component: () => (target: unknown) => target,
+        Directive: () => (target: unknown) => target,
         Input: () => (target: unknown, key: string) => {},
         Output: () => (target: unknown, key: string) => {},
         EventEmitter: MockEventEmitter,
         OnInit: undefined,
         inject: vi.fn(),
     };
+});
+
+// BaseAngularComponent uses @Directive() at runtime — mock it so tests don't pull in real Angular DI.
+vi.mock('@memberjunction/ng-base-types', () => {
+    class MockBaseAngularComponent {
+        Provider: unknown = null;
+        get ProviderToUse() { return this.Provider; }
+    }
+    return { BaseAngularComponent: MockBaseAngularComponent };
 });
 
 // Mock MJ dependencies

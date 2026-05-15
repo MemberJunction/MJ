@@ -1,5 +1,94 @@
 # @memberjunction/schema-engine
 
+## 5.34.1
+
+### Patch Changes
+
+- Updated dependencies [3a35358]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/queue@5.34.1
+  - @memberjunction/global@5.34.1
+  - @memberjunction/sql-dialect@5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [003317f]
+- Updated dependencies [cfffb6d]
+- Updated dependencies [e999e0d]
+- Updated dependencies [389d356]
+- Updated dependencies [ae5cfbd]
+- Updated dependencies [6d8ee1a]
+- Updated dependencies [72cb92e]
+  - @memberjunction/sql-dialect@5.34.0
+  - @memberjunction/core@5.34.0
+  - @memberjunction/global@5.34.0
+  - @memberjunction/queue@5.34.0
+
+## 5.33.0
+
+### Patch Changes
+
+- Updated dependencies [95eb27e]
+- Updated dependencies [74b0be0]
+- Updated dependencies [5cc5326]
+- Updated dependencies [312fcee]
+- Updated dependencies [7e4957d]
+- Updated dependencies [7add405]
+  - @memberjunction/core@5.33.0
+  - @memberjunction/sql-dialect@5.33.0
+  - @memberjunction/global@5.33.0
+  - @memberjunction/queue@5.33.0
+
+## 5.32.0
+
+### Patch Changes
+
+- Updated dependencies [a7e8b3b]
+- Updated dependencies [b9c67ac]
+  - @memberjunction/core@5.32.0
+  - @memberjunction/queue@5.32.0
+  - @memberjunction/global@5.32.0
+  - @memberjunction/sql-dialect@5.32.0
+
+## 5.31.0
+
+### Minor Changes
+
+- dfab537: Database Designer prompts and SchemaEngine fixes:
+  - **Agent Manager prompt**: deterministic schema-work guard that fails loudly when the user's request implies schema work but the plan didn't include `pendingSchemaChanges`, instead of silently building an agent that depends on tables that were never created.
+  - **Database Designer prompt**: success messages now require `entityName` on every `open:resource` actionableCommand so the "View [Entity] Entity" buttons actually navigate.
+  - **Schema Designer prompt**: UDT entities are explicitly UUID-only at the PK layer; the agent now declines non-UUID PK requests on UDT targets instead of silently overriding the user's INT request. Column removals must omit the column from the desired `Columns` array (not tag it with a fabricated `__DELETE__` marker), and the agent must be explicit that the SQL column is left in place and must be dropped manually.
+  - **SchemaEngine.SchemaEvolution**: `GenerateEvolutionMigration` now throws when the diff contains only column removals (no adds or modifications). Previously this case emitted SQL comments for each removal that executed as no-ops while the rest of the pipeline reported success — a false-success bug for destructive operations. Removed-column comments are also rewritten as explicit "DROP NOT EXECUTED" warnings.
+
+### Patch Changes
+
+- 7ed7a4b: no metadata/migration changes
+- Updated dependencies [7ed7a4b]
+- Updated dependencies [9457655]
+- Updated dependencies [60e7541]
+- Updated dependencies [18be074]
+- Updated dependencies [17b8087]
+- Updated dependencies [6779c1e]
+- Updated dependencies [de34786]
+- Updated dependencies [5db36d9]
+  - @memberjunction/core@5.31.0
+  - @memberjunction/global@5.31.0
+  - @memberjunction/queue@5.31.0
+  - @memberjunction/sql-dialect@5.31.0
+
+## 5.30.1
+
+### Patch Changes
+
+- @memberjunction/core@5.30.1
+- @memberjunction/global@5.30.1
+- @memberjunction/queue@5.30.1
+- @memberjunction/sql-dialect@5.30.1
+
 ## 5.30.0
 
 ### Patch Changes
