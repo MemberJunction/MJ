@@ -1,65 +1,39 @@
-<div class="entity-list-root">
-
-  <!-- ── Header ─────────────────────────────────────────────────────────── -->
-  <div class="entity-list-header">
-    <h2 class="entity-list-title">
-      <i class="fa-solid fa-table-cells-large"></i>
-      Database Designer
-    </h2>
-    <button
-      mjButton
-      buttonStyle="primary"
-      class="new-entity-btn"
-      (click)="OnNewEntity()">
-      <i class="fa-solid fa-plus"></i>
-      New Entity
-    </button>
-  </div>
-
-  <!-- ── Toolbar ────────────────────────────────────────────────────────── -->
-  <div class="entity-list-toolbar">
-    <div class="search-wrap">
-      <i class="fa-solid fa-magnifying-glass search-icon"></i>
-      <input
-        type="text"
-        class="mj-input search-input"
-        placeholder="Search by name, table, or schema…"
-        [(ngModel)]="SearchTerm"
-        aria-label="Search entities" />
-      @if (SearchTerm) {
-        <button
-          class="search-clear"
-          (click)="SearchTerm = ''"
-          aria-label="Clear search">
-          <i class="fa-solid fa-xmark"></i>
-        </button>
+<mj-page-layout>
+  <mj-page-header
+    Title="Database Designer"
+    Icon="fa-solid fa-table-cells-large"
+    Subtitle="Browse and create user-defined entities">
+    <div meta>
+      <mj-result-count [Count]="FilteredEntities.length" Label="entities"></mj-result-count>
+    </div>
+    <div actions>
+      <mj-refresh-button [Loading]="IsLoading" (Clicked)="OnRefresh()"></mj-refresh-button>
+      <button mjButton variant="primary" size="sm" (click)="OnNewEntity()">
+        <i class="fa-solid fa-plus"></i> New Entity
+      </button>
+    </div>
+    <div toolbar>
+      <mj-page-search
+        Placeholder="Search by name, table, or schema..."
+        [Value]="SearchTerm"
+        (ValueChange)="SearchTerm = $event">
+      </mj-page-search>
+      @if (AvailableFilterSchemas.length > 1) {
+        <select
+          class="mj-input schema-filter"
+          [value]="SelectedSchema"
+          (change)="SelectedSchema = $any($event.target).value"
+          aria-label="Filter by schema">
+          <option value="">All Schemas</option>
+          @for (schema of AvailableFilterSchemas; track schema) {
+            <option [value]="schema">{{ schema }}</option>
+          }
+        </select>
       }
     </div>
+  </mj-page-header>
 
-    @if (AvailableFilterSchemas.length > 1) {
-      <select
-        class="mj-input schema-filter"
-        [value]="SelectedSchema"
-        (change)="SelectedSchema = $any($event.target).value"
-        aria-label="Filter by schema">
-        <option value="">All Schemas</option>
-        @for (schema of AvailableFilterSchemas; track schema) {
-          <option [value]="schema">{{ schema }}</option>
-        }
-      </select>
-    }
-
-    <button
-      mjButton
-      buttonStyle="secondary"
-      class="refresh-btn"
-      title="Refresh list"
-      [disabled]="IsLoading"
-      (click)="OnRefresh()">
-      <i class="fa-solid fa-rotate" [class.fa-spin]="IsLoading"></i>
-    </button>
-  </div>
-
+  <mj-page-body>
   <!-- ── Error ──────────────────────────────────────────────────────────── -->
   @if (ErrorMessage) {
     <div class="entity-list-error" role="alert">
@@ -223,4 +197,5 @@
       </div>
     }
   }
-</div>
+  </mj-page-body>
+</mj-page-layout>

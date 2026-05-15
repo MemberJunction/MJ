@@ -172,33 +172,28 @@ export interface SystemDiagnosticsUserPreferences {
     selector: 'app-system-diagnostics',
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
+        <mj-page-layout>
+          <mj-page-header
+            Title="System Diagnostics"
+            Icon="fa-solid fa-stethoscope"
+            Subtitle="Runtime metrics, engines, caches, and telemetry">
+            <div meta>
+              @if (autoRefresh) {
+                <mj-stat-badge Icon="fa-solid fa-sync-alt fa-spin" Label="Auto-refresh · every 5s" Variant="info"></mj-stat-badge>
+              }
+            </div>
+            <div actions>
+              <label class="auto-refresh-toggle">
+                <input type="checkbox" [(ngModel)]="autoRefresh" (change)="toggleAutoRefresh()">
+                Auto-refresh
+              </label>
+              <mj-refresh-button [Loading]="isLoading" Label="Refresh Now" [ShowLabel]="true" (Clicked)="refreshData()"></mj-refresh-button>
+            </div>
+          </mj-page-header>
+
+          <mj-page-body>
         <div class="system-diagnostics">
-          <!-- Header -->
-          <div class="diagnostics-header">
-            <div class="header-title">
-              <i class="fa-solid fa-stethoscope"></i>
-              <h2>System Diagnostics</h2>
-            </div>
-            <div class="header-controls">
-              <div class="auto-refresh-control">
-                <label>
-                  <input type="checkbox" [(ngModel)]="autoRefresh" (change)="toggleAutoRefresh()">
-                  Auto-refresh
-                </label>
-                @if (autoRefresh) {
-                  <span class="refresh-indicator">
-                    <i class="fa-solid fa-sync-alt spinning"></i>
-                    Every 5s
-                  </span>
-                }
-              </div>
-              <button class="refresh-btn" (click)="refreshData()" [disabled]="isLoading">
-                <i class="fa-solid fa-refresh" [class.spinning]="isLoading"></i>
-                Refresh Now
-              </button>
-            </div>
-          </div>
-        
+
           <!-- Overview Cards (Collapsible) -->
           <div class="overview-cards-container" [class.collapsed]="kpiCardsCollapsed">
             <button class="kpi-toggle-btn" (click)="toggleKpiCards()" [title]="kpiCardsCollapsed ? 'Expand KPI cards' : 'Collapse KPI cards'">
@@ -1488,6 +1483,8 @@ export interface SystemDiagnosticsUserPreferences {
             </div>
           </div>
         }
+          </mj-page-body>
+        </mj-page-layout>
         `,
     styleUrls: ['./system-diagnostics.component.css']
 })

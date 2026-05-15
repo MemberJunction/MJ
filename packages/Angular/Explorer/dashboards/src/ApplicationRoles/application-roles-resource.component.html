@@ -1,16 +1,19 @@
-<div class="app-roles-container">
-  <!-- Header -->
-  <div class="header">
-    <div class="header-left">
-      <i class="fa-solid fa-user-shield header-icon"></i>
-      <h2 class="header-title">Application Roles</h2>
-    </div>
-    <div class="header-actions">
+<mj-page-layout>
+  <mj-page-header
+    Title="Application Roles"
+    Icon="fa-solid fa-user-shield"
+    Subtitle="Configure which roles can access each application">
+    <div meta>
       @if (HasUnsavedChanges) {
-        <button mjButton variant="secondary" (click)="DiscardChanges()" [disabled]="IsSaving">
+        <mj-stat-badge Icon="fa-solid fa-circle-exclamation" Label="Unsaved changes" Variant="warning"></mj-stat-badge>
+      }
+    </div>
+    <div actions>
+      @if (HasUnsavedChanges) {
+        <button mjButton variant="secondary" size="sm" (click)="DiscardChanges()" [disabled]="IsSaving">
           <i class="fa-solid fa-rotate-left"></i> Discard
         </button>
-        <button mjButton variant="primary" (click)="SaveChanges()" [disabled]="IsSaving">
+        <button mjButton variant="primary" size="sm" (click)="SaveChanges()" [disabled]="IsSaving">
           @if (IsSaving) {
             <i class="fa-solid fa-spinner fa-spin"></i> Saving...
           } @else {
@@ -18,12 +21,11 @@
           }
         </button>
       }
-      <button mjButton variant="secondary" (click)="loadData()" [disabled]="IsLoading || IsSaving">
-        <i class="fa-solid fa-arrows-rotate" [class.fa-spin]="IsLoading"></i> Refresh
-      </button>
+      <mj-refresh-button [Loading]="IsLoading" [Disabled]="IsSaving" (Clicked)="loadData()"></mj-refresh-button>
     </div>
-  </div>
+  </mj-page-header>
 
+  <mj-page-body>
   <!-- Status Messages -->
   @if (ErrorMessage) {
     <div class="message error-message">
@@ -138,4 +140,5 @@
       }
     </div>
   }
-</div>
+  </mj-page-body>
+</mj-page-layout>
