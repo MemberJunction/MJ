@@ -36,6 +36,27 @@ Strict layering. Each layer is a thin pass-through over the one below.
 
 See visual: [`mockups/27-architecture.html`](mockups/27-architecture.html).
 
+## 2.5 Mockups: Visual Intent Only — Implement With MJ Design System
+
+**The mockups in [`mockups/`](mockups/) define the visual intent of every screen and component — layout, hierarchy, copy, states, badges, drop-warning treatment, button placement, etc. The implementing agent MUST match the mockups pixel-for-pixel in terms of *what is rendered and where* — but MUST NOT lift the HTML/CSS verbatim.**
+
+The mockups are static HTML using ad-hoc CSS tokens defined in [`mockups/styles.css`](mockups/styles.css) for the sole purpose of standalone browser review. They are **not** production code, do not match every real MJ component contract, and must be re-implemented properly using the production stack:
+
+- **Design tokens** — every color, radius, shadow, spacing value comes from the canonical MJ tokens in [`packages/Angular/Generic/shared/src/lib/_tokens.scss`](../../packages/Angular/Generic/shared/src/lib/_tokens.scss). **No hardcoded hex values, no copying the mockup's `--mj-*` definitions.** Per CLAUDE.md design-token rules: use *semantic* tokens (`--mj-text-primary`, `--mj-bg-surface-card`, `--mj-brand-primary`, `--mj-status-error-bg`, etc.), never primitives.
+- **Angular components** — use the MJ UI components package (`@memberjunction/ng-ui-components`) for buttons (`mjButton`), dialogs (`mj-dialog` / `MJDialogService`), inputs, dropdowns, switches, accordions, etc. **Do not roll plain `<button>` / `<input>` styled with raw CSS** — that's what the mockups did for portability, not what production should do.
+- **Splitter / grid / tree** — use `angular-split`, AG Grid, and existing tree components. The mockups draw these by hand for layout; production reuses the real widgets.
+- **Form patterns** — follow the patterns in CLAUDE.md (getter/setter `@Input()`, `inject()` over constructor DI for new code, `@if`/`@for` block syntax).
+- **Standalone vs NgModule** — follow the pattern of the package each component lives in (per CLAUDE.md Angular section).
+- **Loading states** — use `<mj-loading>`, not the spinner divs sketched in the mockups.
+- **Icons** — Font Awesome 6 classes as shown in the mockups; identical names.
+- **Modal/dialog UX** — Confirm/Submit on LEFT, Cancel on RIGHT (per CLAUDE.md). Mockups follow this convention; production must too.
+
+**Pixel-perfect parity is required for:** layout structure (3-pane ops grid, sidebar + main shell, modal sizes, card grids), every visual state shown (no-drops vs drops, viewer perspective gating, lineage badges, tag chips, audience picker tabs, delta summary tiles), copy and microcopy in dialogs/warnings, the drop-warning red treatment with required acknowledgment checkbox, badge colors and meanings.
+
+**What is NOT pixel-perfect:** the exact pixel values of padding/margins/radius — those come from MJ tokens, which may differ slightly from the mockup's approximations. If a token gives a slightly different result, the token wins.
+
+When in doubt: read the mockup for *intent*, build it with MJ design system + components for *implementation*.
+
 ## 3. Naming Conventions (Strictly Enforced)
 
 Per the repo's [CLAUDE.md](../../CLAUDE.md):
@@ -244,6 +265,8 @@ Each phase ships as a separate PR off `next`. CodeGen runs after every schema ch
 > **This is the canonical execution order.** The implementing agent MUST work through these tasks in order. Each task lists Exit Criteria — do not mark `[x]` unless all criteria are met. If a session interrupts, the next agent resumes at the first non-`[x]` task. Do not skip ahead. Do not start a Phase N task before all Phase (N-1) tasks are checked.
 >
 > **Format:** `[ ] N.x — Title` (N = phase number, x = sequence within phase).
+>
+> **Visual fidelity reminder:** every UI task references a mockup under [`mockups/`](mockups/). The mockups define WHAT to build and how it should LOOK; they do not define HOW to build it. Implementation uses MJ design tokens ([`_tokens.scss`](../../packages/Angular/Generic/shared/src/lib/_tokens.scss)), `@memberjunction/ng-ui-components`, AG Grid, `angular-split`, etc. — see [§2.5](#25-mockups-visual-intent-only--implement-with-mj-design-system). Do not lift HTML/CSS from the mockups verbatim.
 
 ### Phase 0 — Foundation
 
