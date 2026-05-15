@@ -1,0 +1,35 @@
+{
+  "fields": {
+    "Name": "Generic Web Example Suite",
+    "Description": "Mode C reference suite — runs 3 tests against MDN Web Docs to demonstrate variable templating ({{baseUrl}}, {{allowedDomains}}) and a custom IOracle plugged in via `mj test suite --oracles-module=…`. Used by the docker/regression/examples/generic-web/ scaffold.",
+    "Status": "Active"
+  },
+  "relatedEntities": {
+    "MJ: Test Suite Tests": [
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=GW01 - MDN Home Loads",
+          "Sequence": 1,
+          "Status": "Active"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=GW02 - Search Array.prototype.map",
+          "Sequence": 2,
+          "Status": "Active"
+        }
+      },
+      {
+        "fields": {
+          "SuiteID": "@parent:ID",
+          "TestID": "@lookup:MJ: Tests.Name=GW03 - Navigate References Section",
+          "Sequence": 3,
+          "Status": "Active"
+        }
+      }
+    ]
+  }
+}

@@ -74,24 +74,24 @@ cp docker/regression/.env.test.example docker/regression/.env.test
 # Edit docker/regression/.env.test with real values
 
 # 2. Build all images. The first run (or any time .docker-generated/ is
-#    empty) also runs `regression:gen-forms` to produce Angular entity forms
-#    against a temp DB — that step adds ~5 min but only happens when the form
-#    output is missing. Subsequent builds skip it.
-npm run regression:build
+#    empty) also invokes `gen-forms` to produce Angular entity forms against
+#    a temp DB — that step adds ~5 min but only happens when the form output
+#    is missing. Subsequent builds skip it.
+mj test regression build
 
 # 3. Run the full stack — creates docker/regression/test-results/run-{TIMESTAMP}/
-#    Fast path: plain `docker compose up`, no rebuild, no codegen.
-npm run regression:up
+#    Fast path: docker compose up under the "full" profile, no codegen.
+mj test regression up
 
 # 4. Check results — open the HTML gallery in a browser
 open docker/regression/test-results/latest/report.html        # macOS
 xdg-open docker/regression/test-results/latest/report.html    # Linux
 
 # 5. Compare against the previous run
-npm run regression:compare
+mj test regression compare
 
 # 6. Tear down
-npm run regression:down
+mj test regression down
 ```
 
 Each run writes to a brand-new `run-{TIMESTAMP}/` folder with `results.json`, `report.md`, `report.html`, and `screenshots/`. Runs never overwrite each other; the `latest` symlink always points at the most recent.
@@ -100,10 +100,10 @@ Each run writes to a brand-new `run-{TIMESTAMP}/` folder with `results.json`, `r
 
 ```bash
 # Rebuild only the explorer (e.g., after changing environment config)
-npm run regression:build -- mjexplorer
+mj test regression build mjexplorer
 
 # Rebuild only the test runner (e.g., after changing ComputerUse packages)
-npm run regression:build -- test-runner
+mj test regression build test-runner
 
 # The entrypoint script is bind-mounted — changes take effect without rebuilding
 ```
@@ -236,11 +236,11 @@ The Docker DB is wiped on `down -v`, so comparisons use the per-run JSON artifac
 
 ```bash
 # Compare the two most recent runs
-npm run regression:compare
+mj test regression compare
 
-# Pass extra flags after `--`
-npm run regression:compare -- --diff-only
-npm run regression:compare -- --format=markdown --output=delta.md
+# Pass extra flags directly
+mj test regression compare --diff-only
+mj test regression compare --format=markdown --output=delta.md
 ```
 
 Exit code `0` = no regressions, `1` = regressions detected, `2` = data error. CI-friendly. A test is a "regression" when its previous status was Passed and current is not, OR when its score dropped by more than 0.10.
@@ -303,7 +303,7 @@ Full 25-test suite: approximately **$10-12** per run. Parallel execution (4 work
 3. Verify `GRAPHQL_URI` is absolute (`http://localhost:4200/api/`, not `/api/`)
 4. Check nginx config: `docker exec <explorer> cat /etc/nginx/conf.d/default.conf`
 
-**Docker OOM during build** -- Build one service at a time: `npm run regression:build -- mjapi`, or increase Docker Desktop memory to 12+ GB.
+**Docker OOM during build** -- Build one service at a time: `mj test regression build mjapi`, or increase Docker Desktop memory to 12+ GB.
 
 **"Port already in use"** -- The stack uses non-standard host ports (11433, 14000). Edit `ports:` in `docker/regression/docker-compose.test.yml` if needed.
 

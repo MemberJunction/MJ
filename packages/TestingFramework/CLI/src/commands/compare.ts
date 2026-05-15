@@ -75,6 +75,12 @@ export class CompareCommand {
         //   - Two file paths:  --from-json PREV.json --from-json CURR.json
         //   - One directory:   --from-json <dir>  (picks two newest results-*.json by mtime)
         if (flags.fromJson && flags.fromJson.length > 0) {
+            if (flags.tag) {
+                console.warn(
+                    `Warning: --tag is ignored with --from-json — results.json does not currently emit the Tags field. ` +
+                        `Use DB mode (drop --from-json) to filter by tag.`,
+                );
+            }
             const resolved = this.resolveFromJsonPaths(flags.fromJson);
             if (resolved) {
                 return this.executeFromJson(resolved.previous, resolved.current, flags);
@@ -103,8 +109,8 @@ export class CompareCommand {
             } else if (hasVersionFlag) {
                 // Compare by version: -v <previous> -v <current>
                 const [prevRun, currRun] = await Promise.all([
-                    this.findLatestSuiteRunBy(rv, 'AgentVersion', flags.version![0], contextUser),
-                    this.findLatestSuiteRunBy(rv, 'AgentVersion', flags.version![1], contextUser),
+                    this.findLatestSuiteRunBy(rv, 'AgentVersion', flags.version![0], contextUser, flags.tag),
+                    this.findLatestSuiteRunBy(rv, 'AgentVersion', flags.version![1], contextUser, flags.tag),
                 ]);
                 if (!prevRun) {
                     console.error(OutputFormatter.formatError(`No completed suite run found with AgentVersion='${flags.version![0]}'`));
@@ -119,8 +125,8 @@ export class CompareCommand {
             } else if (hasCommitFlag) {
                 // Compare by git commit: -c <previous> -c <current>
                 const [prevRun, currRun] = await Promise.all([
-                    this.findLatestSuiteRunBy(rv, 'GitCommit', flags.commit![0], contextUser),
-                    this.findLatestSuiteRunBy(rv, 'GitCommit', flags.commit![1], contextUser),
+                    this.findLatestSuiteRunBy(rv, 'GitCommit', flags.commit![0], contextUser, flags.tag),
+                    this.findLatestSuiteRunBy(rv, 'GitCommit', flags.commit![1], contextUser, flags.tag),
                 ]);
                 if (!prevRun) {
                     console.error(OutputFormatter.formatError(`No completed suite run found with GitCommit='${flags.commit![0]}'`));
@@ -135,17 +141,28 @@ export class CompareCommand {
             } else {
                 // Default behavior: compare the two most recent completed suite runs.
                 // Triggered by --latest OR by running `mj test compare` with no args.
+                // When --tag is provided, restrict to runs whose Tags JSON array
+                // includes the tag. Tags is stored as a JSON array string like
+                // `["staging-nightly","sonnet-4.6"]`, so we LIKE-match the quoted
+                // form to avoid false-positives where the tag is a substring of
+                // another tag (e.g. "prod" matching "production").
+                let extraFilter = "Status IN ('Completed', 'Failed')";
+                if (flags.tag) {
+                    const escaped = flags.tag.replace(/'/g, "''");
+                    extraFilter += ` AND Tags LIKE '%"${escaped}"%'`;
+                }
                 const runs = await rv.RunView<MJTestSuiteRunEntity>({
                     EntityName: 'MJ: Test Suite Runs',
-                    ExtraFilter: "Status IN ('Completed', 'Failed')",
+                    ExtraFilter: extraFilter,
                     OrderBy: 'StartedAt DESC',
                     MaxRows: 2,
                     ResultType: 'entity_object'
                 }, contextUser);
 
                 if (!runs.Success || runs.Results.length < 2) {
+                    const tagSuffix = flags.tag ? ` matching tag '${flags.tag}'` : '';
                     console.error(OutputFormatter.formatError(
-                        `Need at least 2 completed suite runs to compare (found ${runs.Results?.length ?? 0})`
+                        `Need at least 2 completed suite runs to compare${tagSuffix} (found ${runs.Results?.length ?? 0})`
                     ));
                     process.exit(2);
                 }
@@ -466,13 +483,19 @@ export class CompareCommand {
         rv: RunView,
         fieldName: 'AgentVersion' | 'GitCommit',
         value: string,
-        contextUser: UserInfo
+        contextUser: UserInfo,
+        tag?: string,
     ): Promise<MJTestSuiteRunEntity | null> {
         // Escape single quotes for SQL safety
         const safeValue = value.replace(/'/g, "''");
+        let extraFilter = `${fieldName}='${safeValue}' AND Status IN ('Completed', 'Failed')`;
+        if (tag) {
+            const safeTag = tag.replace(/'/g, "''");
+            extraFilter += ` AND Tags LIKE '%"${safeTag}"%'`;
+        }
         const result = await rv.RunView<MJTestSuiteRunEntity>({
             EntityName: 'MJ: Test Suite Runs',
-            ExtraFilter: `${fieldName}='${safeValue}' AND Status IN ('Completed', 'Failed')`,
+            ExtraFilter: extraFilter,
             OrderBy: 'StartedAt DESC',
             MaxRows: 1,
             ResultType: 'entity_object'

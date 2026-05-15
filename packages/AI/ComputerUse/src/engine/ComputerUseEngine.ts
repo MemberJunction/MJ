@@ -759,6 +759,11 @@ export class ComputerUseEngine {
             request.PreviousStepSummary = summary;
         }
 
+        // Forward application context (suite-level + per-test) if set
+        if (context.Params.ApplicationContext) {
+            request.ApplicationContext = context.Params.ApplicationContext;
+        }
+
         return request;
     }
 
@@ -1194,12 +1199,20 @@ export class ComputerUseEngine {
     private buildDynamicSections(request: ControllerPromptRequest): string {
         const sections: string[] = [];
 
+        // Application context first — it's the most general signal, sets the
+        // stage before per-step/per-tool-specific guidance.
+        sections.push(this.renderApplicationContextSection(request.ApplicationContext));
         sections.push(this.renderToolDefinitionsSection(request.ToolDefinitions));
         sections.push(this.renderFormLoginSection(request.FormLoginCredentials));
         sections.push(this.renderJudgeFeedbackSection(request.JudgeFeedback));
         sections.push(this.renderPreviousStepsSection(request.PreviousStepSummary));
 
         return sections.filter(Boolean).join('\n\n');
+    }
+
+    private renderApplicationContextSection(context: string | undefined): string {
+        if (!context || !context.trim()) return '';
+        return `## Application Context\nYou are testing the application described below. Use this context to navigate efficiently — do NOT waste steps rediscovering these facts.\n\n${context.trim()}`;
     }
 
     private renderToolDefinitionsSection(tools: ControllerPromptRequest['ToolDefinitions']): string {

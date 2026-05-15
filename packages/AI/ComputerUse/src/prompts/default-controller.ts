@@ -17,6 +17,8 @@ export const DEFAULT_CONTROLLER_PROMPT = `You are a browser automation agent. Yo
 ## Your Goal
 {{goal}}
 
+
+
 ## Current State
 - Step: {{stepNumber}} of {{maxSteps}}
 - Current URL: {{currentUrl}}

@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "1.0",
+  "name": "bring-your-own-app",
+  "kind": "generic-web",
+  "description": "Mode D scaffold (realistic): targets the BYO Angular+Express demo brought up by docker-compose.app.yml. Used by `mj test regression init bring-your-own-app` to seed a project; see the README in this directory for the full adoption walkthrough.",
+
+  "baseUrl": "http://byo-app:3000",
+  "allowedDomains": ["byo-app"],
+
+  "auth": { "bindings": [] },
+
+  "suite": "BYO Regression Suite",
+  "extraMetadataDirs": [
+    "/app/byo-metadata"
+  ],
+
+  "archive": {
+    "configFile": "/app/docker/regression/configs/archive-local.config.cjs",
+    "tag": "byo-loopback",
+    "source": "byo-app-demo"
+  },
+
+  "notes": "This app ships with intentional bugs to demonstrate the suite catching real defects (see README). Replace the Dockerfile + Angular source with your own app, edit byo-metadata/tests/ to match its UI flows, and re-run."
+}

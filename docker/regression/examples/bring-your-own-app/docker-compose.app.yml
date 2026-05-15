@@ -1,0 +1,72 @@
+# Mode D overlay: boots the BYO test app on the regression network so the
+# test-runner can reach it at http://byo-app:3000, and points the runner at
+# the BYO suite via env vars.
+#
+# Run from the repo root with the base compose + this overlay:
+#
+#   docker compose \
+#     -f docker/regression/docker-compose.test.yml \
+#     -f docker/regression/examples/bring-your-own-app/docker-compose.app.yml \
+#     --env-file docker/regression/.env.test \
+#     up --abort-on-container-exit --exit-code-from test-runner
+#
+# What changes vs. the base compose:
+#   - Adds a `byo-app` service (the demo app under test)
+#   - Mounts the BYO tests + suites into the test-runner
+#   - Sets TEST_SUITE_NAME so the runner executes the BYO suite (not the MJ suite)
+#   - Sets EXTRA_METADATA_DIRS so the runner pushes BYO tests + suites before running
+#   - Sets MJ_TEST_VAR_* env vars that flow into {{baseUrl}} / {{allowedDomains}}
+#     in the BYO test JSONs — see ComputerUseTestDriver's variable-substitution.
+
+services:
+  byo-app:
+    # The base compose file is profile-gated (Phase 4). Mode D launches with
+    # `--profile full` so the BYO app participates in the full-stack startup
+    # alongside the test-runner.
+    profiles: ["full"]
+    # NOTE: compose resolves relative paths in overlay files using the directory
+    # of the FIRST `-f` file, not the overlay's own location. The first file is
+    # docker/regression/docker-compose.test.yml, so paths here are relative to
+    # `docker/regression/`. That's why this is `examples/bring-your-own-app`
+    # and NOT `../../examples/...`.
+    build:
+      context: examples/bring-your-own-app
+      dockerfile: Dockerfile
+    image: mj-regression-byo-app:latest
+    container_name: mj-regression-byo-app
+    environment:
+      PORT: "3000"
+      NODE_ENV: "production"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:3000/api/healthcheck').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+
+  test-runner:
+    depends_on:
+      byo-app:
+        condition: service_healthy
+    environment:
+      # Override the suite to run
+      TEST_SUITE_NAME: "BYO Regression Suite"
+      # Push BYO test + suite metadata in addition to the MJ defaults.
+      # Structure mirrors the canonical metadata/ layout (root .mj-sync.json
+      # with directoryOrder, then tests/ and test-suites/ entity subdirs)
+      # so mj-sync recognizes it as a proper sync root.
+      EXTRA_METADATA_DIRS: "/app/byo-metadata"
+      # Drive {{baseUrl}} and {{allowedDomains}} substitution in BYO test JSONs
+      MJ_TEST_VAR_baseUrl: "http://byo-app:3000"
+      MJ_TEST_VAR_allowedDomains: "[\"byo-app\"]"
+      # Phase 3 archive flow — push the suite run + cascading children to an
+      # archive MJ via mj-sync. Loopback config writes to the same docker DB
+      # for verification; in production this points at a separate MJ instance.
+      ARCHIVE_MJ_CONFIG: "/app/docker/regression/configs/archive-local.config.cjs"
+      ARCHIVE_TAG: "byo-loopback"
+      ARCHIVE_SOURCE: "byo-app-demo"
+    volumes:
+      # NOT read-only: mj-sync writes auto-generated primaryKey + sync state back
+      # to the JSON files after autoCreateMissingRecords. Subsequent runs reuse
+      # those IDs for idempotent upserts.
+      - ./examples/bring-your-own-app/byo-metadata:/app/byo-metadata

@@ -26,17 +26,18 @@ This directory contains Docker configurations for MemberJunction. When working w
 
 **Common commands** (run from repo root):
 ```bash
-npm run regression:build         # Build all images
-npm run regression:up            # Run the suite (creates a new run-* folder)
-npm run regression:down          # Tear down stack and wipe DB
-npm run regression:compare       # Compare the two most recent runs
+mj test regression build                              # Build all images
+mj test regression up                                 # Run the suite (creates a new run-* folder)
+mj test regression down                               # Tear down stack and wipe DB
+mj test regression compare                            # Compare the two most recent runs
+mj test regression remote --target=<name-or-path>     # Run against a remote URL (Mode B/C/D)
 ```
 
 **Comparing runs:**
-- `npm run regression:compare` invokes `mj test compare --from-json docker/regression/test-results`
-- The compare command auto-discovers `run-*/results.json` AND legacy `results-*.json` files in the directory and picks the two newest by mtime
+- `mj test regression compare` invokes `mj test compare --from-json docker/regression/test-results`
+- Auto-discovers `run-*/results.json` AND legacy `results-*.json` files in the directory and picks the two newest by mtime
 - Exit codes: `0` = no regressions, `1` = regressions detected, `2` = data error
-- Forward extra flags with `--`: `npm run regression:compare -- --diff-only --format=markdown --output=report.md`
+- Forward extra flags directly: `mj test regression compare --diff-only --format=markdown --output=report.md`
 
 **Why JSON comparison instead of DB:** The Docker SQL Server is wiped on `down -v`, so DB-based `mj test compare` can't see prior runs. The JSON artifacts in `test-results/run-*/` are the portable comparison baseline — they survive teardown, work in CI, and can be archived as build artifacts.
 

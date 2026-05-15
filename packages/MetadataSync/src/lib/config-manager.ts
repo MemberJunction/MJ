@@ -11,6 +11,8 @@ import { cosmiconfigSync } from 'cosmiconfig';
 import { mergeConfigs, parseBooleanEnv } from '@memberjunction/config';
 import { BaseSingleton } from '@memberjunction/global';
 import { MJConfig } from '../config';
+import * as fs from 'fs';
+import * as path from 'path';
 
 /**
  * Default configuration for MetadataSync
@@ -78,13 +80,21 @@ export class ConfigManager extends BaseSingleton<ConfigManager> {
   }
 
   /**
-   * Load MemberJunction configuration
-   * 
-   * Searches for mj.config.cjs starting from the original working directory
-   * and walking up the directory tree. Caches the result for subsequent calls.
-   * 
-   * @param forceReload - Force reload the configuration even if cached
-   * @returns MJConfig object if found, null if not found or invalid
+   * Load MemberJunction configuration.
+   *
+   * Resolution order:
+   *  1. `process.env.MJ_CONFIG_FILE` — if set to an absolute or repo-relative
+   *     path of a config file (e.g. `mj.config.cjs`), load that file directly.
+   *     Used by the regression archive flow to swap configs between
+   *     `mj sync pull` (source DB) and `mj sync push` (archive DB) without
+   *     touching the filesystem.
+   *  2. Otherwise: cosmiconfig search starting from the original working
+   *     directory, walking up. This is the original behavior.
+   *
+   * The loaded user config is merged into `DEFAULT_SYNC_CONFIG` so env-var
+   * overrides for database settings continue to apply.
+   *
+   * Result is cached for subsequent calls; pass `forceReload=true` to invalidate.
    */
   loadMJConfig(forceReload = false): MJConfig | null {
     if (this.configLoaded && !forceReload) {
@@ -93,9 +103,24 @@ export class ConfigManager extends BaseSingleton<ConfigManager> {
 
     try {
       const explorer = cosmiconfigSync('mj');
-      // Always search from the original working directory
-      const searchPath = this.getOriginalCwd();
-      const result = explorer.search(searchPath);
+      let result: ReturnType<typeof explorer.search>;
+
+      const envOverride = process.env.MJ_CONFIG_FILE;
+      if (envOverride && envOverride.trim()) {
+        // Resolve relative to the original cwd so callers can pass either an
+        // absolute path or a path relative to where the user invoked the CLI.
+        const resolved = path.isAbsolute(envOverride)
+          ? envOverride
+          : path.resolve(this.getOriginalCwd(), envOverride);
+        if (!fs.existsSync(resolved)) {
+          console.error(`MJ_CONFIG_FILE points at "${resolved}" which does not exist; falling back to cosmiconfig search`);
+          result = explorer.search(this.getOriginalCwd());
+        } else {
+          result = explorer.load(resolved);
+        }
+      } else {
+        result = explorer.search(this.getOriginalCwd());
+      }
 
       // Merge user config with DEFAULT_SYNC_CONFIG (user config takes precedence)
       // This ensures environment variables are used for database settings

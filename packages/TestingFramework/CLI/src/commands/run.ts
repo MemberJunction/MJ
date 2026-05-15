@@ -11,6 +11,7 @@ import { SpinnerManager } from '../utils/spinner-manager';
 import { loadCLIConfig } from '../utils/config-loader';
 import { initializeMJProvider, closeMJProvider, getContextUser } from '../lib/mj-provider';
 import { parseVariableFlags, getTestVariablesSchema } from '../utils/variable-parser';
+import { loadOraclesModule } from '../utils/oracle-module-loader';
 
 /**
  * Run command - Execute a single test or filtered set of tests
@@ -42,6 +43,17 @@ export class RunCommand {
             // Get engine instance
             const engine = TestEngine.Instance;
             await engine.Config(false, contextUser);
+
+            // Plug in user-supplied oracles before resolving the test.
+            if (flags.oraclesModule) {
+                const summary = await loadOraclesModule(flags.oraclesModule, engine);
+                console.log(
+                    `Loaded oracle module ${summary.modulePath} ` +
+                        `(registered: ${summary.registered.join(', ') || 'none'}` +
+                        (summary.skipped.length ? `; skipped: ${summary.skipped.length}` : '') +
+                        ')',
+                );
+            }
 
             let test;
 

@@ -54,6 +54,12 @@ export default class TestSuite extends Command {
     'flaky-check': Flags.integer({
       description: 'Run each test N times to detect flakiness (variance > 0.3 or mixed pass/fail = flaky). Recommended: 3 or 5',
     }),
+    'oracles-module': Flags.string({
+      description:
+        'Path to a JS/TS module that exports custom IOracle classes or instances. ' +
+        'Each export is registered on the engine before the suite runs — used by non-MJ ' +
+        'adopters to plug app-specific oracle types without modifying TestingFramework.',
+    }),
   };
 
   async run(): Promise<void> {
@@ -74,6 +80,7 @@ export default class TestSuite extends Command {
         parallel: flags.parallel,
         maxParallel: flags['max-parallel'],
         flakyCheck: flags['flaky-check'],
+        oraclesModule: flags['oracles-module'],
       });
 
     } catch (error) {

@@ -1,0 +1,49 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "GW03 - Navigate References Section",
+    "Description": "Clicks the top-nav References menu and lands on the references landing page. Demonstrates pure nav-flow testing (no search, no auth) plus the custom 'final-url-host' oracle from the example oracle module.",
+    "InputDefinition": {
+      "goal": "Find and click the 'References' link in the top navigation. The page that loads should be the MDN References landing page — listing topics like Web APIs, JavaScript, HTML, CSS. Do not drill into a specific reference; verify the landing page appeared.",
+      "startUrl": "{{baseUrl}}",
+      "allowedDomains": "{{allowedDomains}}",
+      "auth": {
+        "bindings": []
+      }
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "(?i)/docs/web/?$|/references?/?$",
+      "minConfidence": 0.6,
+      "maxSteps": 12,
+      "judgeValidationCriteria": [
+        "Landed on a references / docs landing page",
+        "Page lists multiple reference topics",
+        "Did not drill into a specific reference"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 12,
+      "maxExecutionTime": 180000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:3",
+      "oracles": [
+        { "type": "goal-completion", "weight": 0.5, "config": { "minConfidence": 0.6 } },
+        { "type": "step-count", "weight": 0.2, "config": { "maxSteps": 12 } },
+        { "type": "final-url-host", "weight": 0.3, "config": { "host": "developer.mozilla.org" } }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.5,
+        "step-count": 0.2,
+        "final-url-host": 0.3
+      }
+    },
+    "Status": "Active",
+    "Tags": "P1,generic-web,navigation"
+  }
+}

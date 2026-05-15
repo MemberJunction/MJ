@@ -11,6 +11,7 @@ import { SpinnerManager } from '../utils/spinner-manager';
 import { loadCLIConfig } from '../utils/config-loader';
 import { initializeMJProvider, closeMJProvider, getContextUser } from '../lib/mj-provider';
 import { parseVariableFlags } from '../utils/variable-parser';
+import { loadOraclesModule } from '../utils/oracle-module-loader';
 
 /**
  * Suite command - Execute a test suite
@@ -48,6 +49,20 @@ export class SuiteCommand {
             console.log(`TestEngine configured. Test Types loaded: ${engine.TestTypes?.length || 0}`);
             console.log(`Test Suites loaded: ${engine.TestSuites?.length || 0}`);
             console.log(`Tests loaded: ${engine.Tests?.length || 0}`);
+
+            // Plug in user-supplied oracles before resolving the suite. They
+            // register at the engine level via `engine.RegisterOracle()` and
+            // become available to every test in the suite that references the
+            // matching oracle `type`.
+            if (flags.oraclesModule) {
+                const summary = await loadOraclesModule(flags.oraclesModule, engine);
+                console.log(
+                    `Loaded oracle module ${summary.modulePath} ` +
+                        `(registered: ${summary.registered.join(', ') || 'none'}` +
+                        (summary.skipped.length ? `; skipped: ${summary.skipped.length}` : '') +
+                        ')',
+                );
+            }
 
             let suite;
 

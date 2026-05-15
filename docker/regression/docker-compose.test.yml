@@ -3,11 +3,15 @@
 # Architecture:
 #   sqlserver → db-setup (migrations + AssociationDB + CodeGen) → mjapi → mjexplorer → test-runner
 #
-# Usage (from repo root):
+# Usage (from repo root, via the MJ CLI):
 #   cp docker/regression/.env.test.example docker/regression/.env.test
-#   npm run regression:build
-#   npm run regression:up
-#   npm run regression:down
+#   mj test regression build
+#   mj test regression up
+#   mj test regression down
+#
+# All `regression:*` npm scripts were removed in Phase 4 — every service is
+# now profile-gated (`full`, `remote-target`, `gen-forms`). Plain
+# `docker compose up` (no profile) starts zero services; use the CLI.
 #
 # NOTE: Project name "mj-regression" and non-standard host ports (11433, 14000)
 #       avoid conflicts with existing local containers.
@@ -23,8 +27,21 @@ x-db-env: &db-env
   DB_TRUST_SERVER_CERTIFICATE: "true"
   MJ_BASE_ENCRYPTION_KEY: "${MJ_BASE_ENCRYPTION_KEY:-}"
 
+# ─── Compose profiles ────────────────────────────────────────────────────────
+# - "full"          → Mode A: self-contained MJ regression stack (all services)
+# - "remote-target" → Modes B/C/D: only the test-runner; targets a remote URL
+# - "gen-forms"     → one-shot form-generator service (codegen Angular forms)
+#
+# All entry points go through `mj test regression *` (Phase 4). Services
+# without `profiles:` no longer exist — every service is profile-gated so
+# `docker compose up` (no profile arg) is a no-op and won't accidentally
+# bring up the stack without one of the documented commands.
 services:
   sqlserver:
+    # Also active during the gen-forms profile since form-generator runs
+    # codegen against this DB. (The gen-forms profile tears the temp stack
+    # down afterward, so this doesn't conflict with a parallel `full` run.)
+    profiles: ["full", "gen-forms"]
     image: mcr.microsoft.com/mssql/server:2022-latest
     platform: linux/amd64
     user: root
@@ -41,6 +58,7 @@ services:
       start_period: 30s
 
   db-setup:
+    profiles: ["full"]
     build:
       context: ../..
       dockerfile: docker/regression/Dockerfile.db-setup
@@ -95,6 +113,7 @@ services:
       - ./.docker-generated/MJAPI-generated:/app/packages/MJAPI/src/generated
 
   mjapi:
+    profiles: ["full"]
     build:
       context: ../..
       dockerfile: docker/regression/Dockerfile.api
@@ -121,6 +140,7 @@ services:
       start_period: 30s
 
   mjexplorer:
+    profiles: ["full"]
     build:
       context: ../..
       dockerfile: docker/regression/Dockerfile.explorer
@@ -134,14 +154,24 @@ services:
       - "4200:4200"
 
   test-runner:
+    # In "full" → Mode A (local MJ stack). In "remote-target" → Modes B/C/D
+    # (target a remote URL; MJ services don't start, so their depends_on
+    # conditions are skipped by compose, which is exactly what we want).
+    profiles: ["full", "remote-target"]
     build:
       context: ../..
       dockerfile: docker/regression/Dockerfile.test-runner
     depends_on:
+      # `required: false` lets compose skip these deps when the targets
+      # aren't in the active profile (Modes B/C/D run remote-target with no
+      # MJ stack — the runner still works because it talks to the remote URL
+      # set via MJ_TEST_VAR_baseUrl).
       mjapi:
         condition: service_healthy
+        required: false
       mjexplorer:
         condition: service_started
+        required: false
     environment:
       <<: *db-env
       AUTH0_DOMAIN: "${AUTH0_DOMAIN:-}"
@@ -154,13 +184,61 @@ services:
       BASE_URL: "http://mjexplorer:4200"
       API_URL: "http://mjapi:4000"
       MAX_PARALLEL_WORKERS: "${MAX_PARALLEL_WORKERS:-4}"
+      # Optional archive flow — when ARCHIVE_MJ_CONFIG is set to a config file
+      # path, the entrypoint pulls the suite run + children and pushes them
+      # to the destination MJ instance defined in that config. ARCHIVE_TAG and
+      # ARCHIVE_SOURCE flow through to scripts/tag-archive.cjs for per-source
+      # filtering in `mj test compare --tag=...`.
+      ARCHIVE_MJ_CONFIG: "${ARCHIVE_MJ_CONFIG:-}"
+      ARCHIVE_TAG: "${ARCHIVE_TAG:-}"
+      ARCHIVE_SOURCE: "${ARCHIVE_SOURCE:-}"
+      # Suite selector — defaults to MJ Explorer Regression Suite in the
+      # entrypoint; overridden by `mj test regression remote` via the target
+      # profile's "suite" field. Used by the BYO overlay too.
+      TEST_SUITE_NAME: "${TEST_SUITE_NAME:-}"
+      EXTRA_METADATA_DIRS: "${EXTRA_METADATA_DIRS:-}"
+      # Variable-substitution payload for `{{baseUrl}}`, `{{authUsername}}`,
+      # etc. inside test JSONs. Mode A leaves these empty; the entrypoint
+      # defaults to localhost. Mode B/C/D populates them from the target
+      # profile via load-target-profile.cjs (consumed by the CLI).
+      MJ_TEST_VAR_baseUrl: "${MJ_TEST_VAR_baseUrl:-}"
+      MJ_TEST_VAR_allowedDomains: "${MJ_TEST_VAR_allowedDomains:-}"
+      MJ_TEST_VAR_authUsername: "${MJ_TEST_VAR_authUsername:-}"
+      MJ_TEST_VAR_authPassword: "${MJ_TEST_VAR_authPassword:-}"
+      MJ_TEST_VAR_authDomains: "${MJ_TEST_VAR_authDomains:-}"
+      # Entrypoint dispatcher — picks which script the test-runner container
+      # actually runs. Mode A keeps the default (full-stack entrypoint);
+      # `mj test regression remote` sets this to the remote variant.
+      TEST_RUNNER_ENTRYPOINT: "${TEST_RUNNER_ENTRYPOINT:-test-runner-entrypoint.sh}"
+      TEST_RUNNER_MODE: "${TEST_RUNNER_MODE:-full}"
+      TARGET_PROFILE_NAME: "${TARGET_PROFILE_NAME:-}"
+      TARGET_PROFILE_KIND: "${TARGET_PROFILE_KIND:-}"
     shm_size: '4gb'
-    entrypoint: ["/bin/bash", "/app/test-runner-entrypoint.sh"]
+    # Compose interpolates ${TEST_RUNNER_ENTRYPOINT} at parse time using the
+    # host env (defaulting to the full-stack script). Both scripts are bind-
+    # mounted below so the dispatch is purely a filename swap — no rebuild
+    # required to switch modes.
+    entrypoint: ["/bin/bash", "/app/${TEST_RUNNER_ENTRYPOINT:-test-runner-entrypoint.sh}"]
     volumes:
       - ./test-results:/app/test-results
       - ./test-runner-entrypoint.sh:/app/test-runner-entrypoint.sh:ro
+      - ./test-runner-remote-entrypoint.sh:/app/test-runner-remote-entrypoint.sh:ro
       # All of the entrypoint's Node helpers — DB ops, screenshot extraction,
       # md/html report generators, health monitor, etc. — live under scripts/
       - ./scripts:/app/docker/regression/scripts:ro
+      # Archive entity-cascade config templates (.mj-sync.json files). The
+      # entrypoint copies these into each run's archive dir before pulling.
+      - ./archive:/app/docker/regression/archive:ro
+      # Archive config(s) — mj.config.cjs files for destination MJ instances.
+      # Files are bind-mounted but only read when ARCHIVE_MJ_CONFIG points at one.
+      - ./configs:/app/docker/regression/configs:ro
+      # Target profile JSONs for Modes B/C/D (read-only — the runner only
+      # consumes them, the loader runs on the host).
+      - ./targets:/app/docker/regression/targets:ro
+      # Example directories (generic-web, bring-your-own-app, etc.). Each
+      # holds its own metadata/, oracles/, and (optionally) docker-compose
+      # overlay. RW because mj-sync writes primaryKey + sync state back into
+      # the test/suite JSONs after autoCreateMissingRecords.
+      - ./examples:/app/docker/regression/examples
       - ../../metadata:/app/metadata
       - ./test-metadata:/app/test-metadata:ro

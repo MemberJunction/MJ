@@ -76,6 +76,7 @@ import { BaseBrowserAdapter } from '@memberjunction/computer-use';
 import { MJComputerUseEngine } from '../engine/MJComputerUseEngine.js';
 import { MJRunComputerUseParams, PromptEntityRef, ActionRef } from '../types/mj-params.js';
 import { parseJudgeFrequency } from '../utils/judge-frequency-parser.js';
+import { buildVariableValuesFromContext, substituteVariables, composeApplicationContext } from '../utils/variable-substitution.js';
 
 import type {
     ComputerUseTestConfig,
@@ -135,12 +136,33 @@ export class ComputerUseTestDriver extends BaseTestDriver {
 
         try {
             // 1. Parse test definition
-            const config = this.parseConfig<ComputerUseTestConfig>(context.test);
-            const input = this.parseInputDefinition<ComputerUseTestInput>(context.test);
-            const expected = this.parseExpectedOutcomes<ComputerUseExpectedOutcomes>(context.test);
+            let config = this.parseConfig<ComputerUseTestConfig>(context.test);
+            let input = this.parseInputDefinition<ComputerUseTestInput>(context.test);
+            let expected = this.parseExpectedOutcomes<ComputerUseExpectedOutcomes>(context.test);
+
+            // 1b. Apply {{var}} substitution so test JSONs are reusable across targets
+            // (e.g., startUrl: "{{baseUrl}}" → "http://localhost:4200" for local,
+            //  "http://byo-app:3000" for a remote-target profile pointing at the BYO app).
+            // Values come from the variable resolver (schema-validated) PLUS env vars
+            // prefixed with MJ_TEST_VAR_ as an ad-hoc fallback when no schema is defined.
+            const variableValues = buildVariableValuesFromContext(context);
+            if (Object.keys(variableValues).length > 0) {
+                config = substituteVariables(config, variableValues);
+                input = substituteVariables(input, variableValues);
+                expected = substituteVariables(expected, variableValues);
+            }
+
+            // 1c. Resolve application context (suite-level + per-test). Suite context
+            // comes from TestSuite.Configuration.applicationContext; the test can
+            // append per-test notes via InputDefinition.applicationContext. Variable
+            // substitution applies to both so authors can reference {{baseUrl}} etc.
+            const applicationContext = this.resolveApplicationContext(context, input, variableValues);
 
             // 2. Build engine params
             const runParams = this.buildRunParams(config, input, context);
+            if (applicationContext) {
+                runParams.ApplicationContext = applicationContext;
+            }
 
             this.logToTestRun(context, 'info', `Executing Computer Use: goal="${input.goal}", startUrl="${input.startUrl ?? 'none'}"`);
 
@@ -292,6 +314,27 @@ export class ComputerUseTestDriver extends BaseTestDriver {
     }
 
     // ═══════════════════════════════════════════════════════════
+    // APPLICATION CONTEXT RESOLUTION
+    // ═══════════════════════════════════════════════════════════
+
+    /**
+     * Resolve the application context the controller LLM will see in its
+     * system prompt — suite-level (from `context.suiteContext.applicationContext`)
+     * concatenated with the optional per-test override (`input.applicationContext`).
+     * Implementation lives in `composeApplicationContext` for testability.
+     */
+    private resolveApplicationContext(
+        context: DriverExecutionContext,
+        input: ComputerUseTestInput & { applicationContext?: string },
+        variableValues: Record<string, unknown>
+    ): string | undefined {
+        const suiteLevel = typeof context.suiteContext?.applicationContext === 'string'
+            ? context.suiteContext.applicationContext
+            : undefined;
+        return composeApplicationContext(suiteLevel, input.applicationContext, variableValues);
+    }
+
+    // ═══════════════════════════════════════════════════════════
     // ENGINE EXECUTION
     // ═══════════════════════════════════════════════════════════
 
@@ -396,7 +439,10 @@ export class ComputerUseTestDriver extends BaseTestDriver {
     ): Promise<{ result: ComputerUseResult; timedOut: boolean; browserDiagnostics: unknown[] }> {
         const engine = new MJComputerUseEngine();
 
-        // Resolve browser session strategy
+        // Resolve browser session strategy. For the default "new" strategy,
+        // `resolveBrowserAdapter` returns an isolated adapter from
+        // HeadlessBrowserEngine; we MUST call ReleaseIsolated below so the
+        // captured storageState gets cached for the next test in this worker.
         const adapter = await this.resolveBrowserAdapter(config, context);
         if (adapter) {
             engine.SetBrowserAdapter(adapter);
@@ -438,6 +484,35 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             if (timeoutId) {
                 clearTimeout(timeoutId);
             }
+
+            // Release isolated adapter — captures storageState back into the
+            // per-worker cache so the next test replays auth, then closes the
+            // context. No-op if the adapter wasn't produced by GetIsolated
+            // (e.g., shared:* legacy modes or "new-clean").
+            if (adapter) {
+                await this.releaseIsolatedIfApplicable(adapter, context);
+            }
+        }
+    }
+
+    /**
+     * Best-effort cleanup for an isolated adapter — invokes
+     * `HeadlessBrowserEngine.ReleaseIsolated`, swallowing errors so a release
+     * failure doesn't mask the test's actual result.
+     */
+    private async releaseIsolatedIfApplicable(
+        adapter: BaseBrowserAdapter,
+        context: DriverExecutionContext
+    ): Promise<void> {
+        try {
+            const { HeadlessBrowserEngine } = await import('@memberjunction/computer-use');
+            const engine = HeadlessBrowserEngine.Instance;
+            // ReleaseIsolated is a no-op for adapters that weren't produced
+            // by GetIsolated, so it's safe to always call.
+            await engine.ReleaseIsolated(adapter as unknown as Parameters<typeof engine.ReleaseIsolated>[0]);
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            this.logToTestRun(context, 'warn', `Failed to release isolated browser adapter: ${msg}`);
         }
     }
 
@@ -460,24 +535,48 @@ export class ComputerUseTestDriver extends BaseTestDriver {
     }
 
     /**
-     * Resolve the browser adapter based on the test config's browserSession
-     * strategy and the execution context's workerIndex.
+     * Resolve the browser adapter based on the test config's `browserSession`
+     * strategy and the execution context's `workerIndex`.
      *
-     * - "new" → fresh context (returns null, engine creates its own)
-     * - "shared:suite" → recycled by suite run + worker index
-     * - "shared:global" → recycled by worker index only
-     * - Any other string → used as a literal key
-     * - Undefined + workerIndex set → defaults to "shared:suite"
-     * - Undefined + no workerIndex → returns null (fresh)
+     * Default behavior (recommended): each test gets a **fresh `BrowserContext`**.
+     * Auth state (cookies + localStorage) is captured at the end of each test
+     * and replayed into the next test's fresh context — so AuthHandler doesn't
+     * re-run per test, but no other state leaks forward. This is what most
+     * regression suites should use.
+     *
+     * Strategies:
+     * - `"new"` (default when `workerIndex` is set) — fresh context per test,
+     *   with auth replay across tests in the same worker via
+     *   `HeadlessBrowserEngine.GetIsolated`. Driver MUST pair this with
+     *   `ReleaseIsolated` after `engine.Run` so the captured state propagates.
+     * - `"new-clean"` — truly fresh context, no auth replay. Engine creates
+     *   its own adapter (returns `null` here). Useful for tests that explicitly
+     *   want to exercise the login flow.
+     * - `"shared:suite"` (legacy) — recycled context keyed by suite-run +
+     *   worker. Tests in the same worker share one context. Cross-test
+     *   mutations leak forward; only auth-token localStorage is preserved
+     *   by `ResetStatePreservingAuth`. Opt-in for tests that depend on
+     *   cross-test continuity.
+     * - `"shared:global"` (legacy) — recycled context keyed by worker only.
+     * - Any other string — used as a literal recycled-context key.
+     * - Undefined + no `workerIndex` — also defaults to `"new"` (truly fresh).
+     *
+     * **Phase 1C change**: the default flipped from `"shared:suite"` to `"new"`
+     * to give each test isolation. The previous default relied on a heuristic
+     * `ResetStatePreservingAuth` cleanup between tests; the new default uses
+     * Playwright `storageState` capture+replay so auth is preserved cleanly
+     * while everything else (IndexedDB, sessionStorage, in-memory SPA state,
+     * mid-test cookies) is fresh.
      */
     private async resolveBrowserAdapter(
         config: ComputerUseTestConfig,
         context: DriverExecutionContext
     ): Promise<BaseBrowserAdapter | null> {
-        const strategy = config.browserSession
-            ?? (context.workerIndex != null ? 'shared:suite' : 'new');
+        const strategy = config.browserSession ?? 'new';
 
-        if (strategy === 'new') return null;
+        // "new-clean" — return null so engine builds its own truly-fresh adapter
+        // (no engine-pool involvement, no state replay).
+        if (strategy === 'new-clean') return null;
 
         const { HeadlessBrowserEngine, BrowserConfig: BConfig } = await import('@memberjunction/computer-use');
         const browserEngine = HeadlessBrowserEngine.Instance;
@@ -488,7 +587,13 @@ export class ComputerUseTestDriver extends BaseTestDriver {
         browserConfig.ViewportWidth = config.viewportWidth ?? 1280;
         browserConfig.ViewportHeight = config.viewportHeight ?? 720;
 
-        // Build the session key
+        // "new" (default) — isolated context with per-worker auth replay
+        if (strategy === 'new') {
+            const workerKey = `worker-${context.workerIndex ?? 'sequential'}`;
+            return browserEngine.GetIsolated(workerKey, browserConfig);
+        }
+
+        // Legacy shared-context modes
         let key: string;
         if (strategy === 'shared:suite') {
             key = `suite:${context.testRun.TestSuiteRunID ?? 'standalone'}:worker-${context.workerIndex ?? 0}`;
@@ -498,7 +603,24 @@ export class ComputerUseTestDriver extends BaseTestDriver {
             key = strategy; // Literal key
         }
 
+        // One-time warning when shared:* modes are used so authors notice
+        // they've opted out of the per-test isolation default.
+        ComputerUseTestDriver.warnSharedSessionOnce();
+
         return browserEngine.GetRecycled(key, browserConfig);
+    }
+
+    private static _sharedSessionWarned = false;
+    private static warnSharedSessionOnce(): void {
+        if (ComputerUseTestDriver._sharedSessionWarned) return;
+        ComputerUseTestDriver._sharedSessionWarned = true;
+        // eslint-disable-next-line no-console
+        console.warn(
+            '[ComputerUseTestDriver] browserSession = "shared:*" — test isolation is degraded. ' +
+            'Tests in the same worker share a BrowserContext; only auth-token localStorage is ' +
+            'preserved between them via ResetStatePreservingAuth. Prefer "new" (default) unless ' +
+            'tests explicitly depend on cross-test continuity.'
+        );
     }
 
     // ═══════════════════════════════════════════════════════════

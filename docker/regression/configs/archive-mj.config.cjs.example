@@ -1,0 +1,48 @@
+/**
+ * Example archive `mj.config.cjs` — points at the destination MJ database
+ * for `mj sync push` during the regression archive step.
+ *
+ * Copy this to `configs/archive-mj.config.cjs` (gitignored), fill in real
+ * values, then set `ARCHIVE_MJ_CONFIG=docker/regression/configs/archive-mj.config.cjs`
+ * in `.env.test` (or pass it as a compose env var) to enable archiving.
+ *
+ * The test-runner entrypoint:
+ *   1. After the suite completes, runs `mj sync pull` against the LOCAL docker
+ *      DB using the default mj.config.cjs (search-based lookup) to populate
+ *      `${RUN_DIR}/archive/` with the suite-run + children.
+ *   2. Tags the records via `scripts/tag-archive.cjs` (adds source / env tags).
+ *   3. Sets `MJ_CONFIG_FILE` to this archive config so `mj sync push` connects
+ *      to the destination DB instead of the local docker DB. Pushes the
+ *      `${RUN_DIR}/archive/` folder.
+ *
+ * Without `ARCHIVE_MJ_CONFIG` set, the archive step is skipped entirely.
+ *
+ * NOTE: the destination DB must already have the MJ core schema installed
+ * (Flyway-migrated, CodeGen-applied). Typically that's a production /
+ * long-running MJ instance — not an empty database.
+ */
+
+/** @type {import('@memberjunction/config').MJConfig} */
+module.exports = {
+    // ─── Destination database ────────────────────────────────────────────────
+    dbHost: process.env.ARCHIVE_DB_HOST || 'archive-mj.example.com',
+    dbPort: process.env.ARCHIVE_DB_PORT ? parseInt(process.env.ARCHIVE_DB_PORT) : 1433,
+    dbDatabase: process.env.ARCHIVE_DB_DATABASE || 'MemberJunction_Archive',
+    dbUsername: process.env.ARCHIVE_DB_USERNAME || 'archive_user',
+    dbPassword: process.env.ARCHIVE_DB_PASSWORD || '',
+    dbTrustServerCertificate: process.env.ARCHIVE_DB_TRUST_CERT === 'true',
+
+    // ─── User context for record creation ────────────────────────────────────
+    // The user the archive push runs as. Must exist in the destination DB.
+    // Defaults to "System" — change if your archive needs a specific operator.
+    currentUserEmail: process.env.ARCHIVE_USER_EMAIL || 'not.set@nowhere.com',
+
+    // ─── MJ schema ───────────────────────────────────────────────────────────
+    mjCoreSchema: process.env.ARCHIVE_MJ_CORE_SCHEMA || '__mj',
+
+    // ─── Encryption key ──────────────────────────────────────────────────────
+    // Required for encrypted credential fields. Use the SAME key as your
+    // archive MJ instance — otherwise encrypted values won't decrypt
+    // correctly on the destination.
+    baseEncryptionKey: process.env.MJ_BASE_ENCRYPTION_KEY || '',
+};

@@ -328,12 +328,17 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             // Get suite variables for passing to tests
             const suiteVariablesJson = suite.Variables;
 
+            // Extract suite-level applicationContext from suite.Configuration once
+            // here so every test in the suite sees the same parsed value. Malformed
+            // JSON degrades gracefully — log a warning and proceed without context.
+            const suiteContext = this.extractSuiteContext(suite);
+
             // Execute tests — parallel or sequential
             let testResults: TestRunResult[];
             if (options.parallel && tests.length > 1) {
-                testResults = await this.runTestsParallel(tests, options, contextUser, suiteRun, suiteVariablesJson);
+                testResults = await this.runTestsParallel(tests, options, contextUser, suiteRun, suiteVariablesJson, suiteContext);
             } else {
-                testResults = await this.runTestsSequential(tests, options, contextUser, suiteRun.ID, suiteVariablesJson);
+                testResults = await this.runTestsSequential(tests, options, contextUser, suiteRun.ID, suiteVariablesJson, suiteContext);
             }
 
             // Update TestSuiteRun entity with results
@@ -382,7 +387,8 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         options: SuiteRunOptions,
         contextUser: UserInfo,
         suiteRunId: string,
-        suiteVariablesJson: string | null
+        suiteVariablesJson: string | null,
+        suiteContext?: Record<string, unknown>
     ): Promise<TestRunResult[]> {
         const testResults: TestRunResult[] = [];
         let testSequence = 1;
@@ -394,7 +400,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             }
 
             try {
-                const result = await this.runTestWithSuiteVariables(test.ID, options, contextUser, suiteRunId, testSequence, suiteVariablesJson);
+                const result = await this.runTestWithSuiteVariables(test.ID, options, contextUser, suiteRunId, testSequence, suiteVariablesJson, undefined, suiteContext);
                 if (Array.isArray(result)) {
                     testResults.push(...result);
                 } else {
@@ -411,6 +417,30 @@ export class TestEngine extends BaseSingleton<TestEngine> {
     }
 
     /**
+     * Extract the bag of suite-level signals from `TestSuite.Configuration`.
+     * Returns `undefined` when Configuration is empty or unparseable so callers
+     * can keep their context optional and degrade gracefully.
+     */
+    private extractSuiteContext(suite: MJTestSuiteEntity): Record<string, unknown> | undefined {
+        const raw = suite.Configuration;
+        if (!raw || !raw.trim()) {
+            return undefined;
+        }
+        try {
+            const parsed = JSON.parse(raw);
+            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                return parsed as Record<string, unknown>;
+            }
+            this.log(`Suite Configuration parsed but is not an object (got ${typeof parsed}); ignoring`);
+            return undefined;
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err);
+            this.log(`Warning: suite.Configuration JSON is malformed — running without suite context. Error: ${msg}`);
+            return undefined;
+        }
+    }
+
+    /**
      * Run tests in parallel across multiple workers. Each worker runs its
      * share of tests sequentially. The test driver (not the engine) manages
      * browser resource sharing via HeadlessBrowserEngine singleton — the
@@ -422,7 +452,8 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         options: SuiteRunOptions,
         contextUser: UserInfo,
         suiteRun: MJTestSuiteRunEntity,
-        suiteVariablesJson: string | null
+        suiteVariablesJson: string | null,
+        suiteContext?: Record<string, unknown>
     ): Promise<TestRunResult[]> {
         const maxWorkers = Math.min(options.maxParallel ?? 4, tests.length);
         this.log(`Starting parallel execution: ${tests.length} tests across ${maxWorkers} workers`);
@@ -441,7 +472,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                 setTimeout(() => {
                     this.log(`Worker ${workerIndex + 1}/${maxWorkers} starting (${group.length} tests)`);
                     this.executeParallelWorker(
-                        group, workerIndex, options, contextUser, suiteRun.ID, suiteVariablesJson
+                        group, workerIndex, options, contextUser, suiteRun.ID, suiteVariablesJson, suiteContext
                     ).then(resolve, reject);
                 }, staggerMs);
             });
@@ -476,7 +507,8 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         options: SuiteRunOptions,
         contextUser: UserInfo,
         suiteRunId: string,
-        suiteVariablesJson: string | null
+        suiteVariablesJson: string | null,
+        suiteContext?: Record<string, unknown>
     ): Promise<TestRunResult[]> {
         const results: TestRunResult[] = [];
 
@@ -484,7 +516,7 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             try {
                 this.log(`[Worker ${workerIndex + 1}] Running: ${test.Name}`, options.verbose);
                 const result = await this.runTestWithSuiteVariables(
-                    test.ID, options, contextUser, suiteRunId, sequence, suiteVariablesJson, workerIndex
+                    test.ID, options, contextUser, suiteRunId, sequence, suiteVariablesJson, workerIndex, suiteContext
                 );
                 if (Array.isArray(result)) {
                     results.push(...result);
@@ -510,7 +542,8 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         suiteRunId: string,
         suiteTestSequence: number,
         suiteVariablesJson: string | null,
-        workerIndex?: number
+        workerIndex?: number,
+        suiteContext?: Record<string, unknown>
     ): Promise<TestRunResult | TestRunResult[]> {
         const startTime = Date.now();
 
@@ -525,11 +558,11 @@ export class TestEngine extends BaseSingleton<TestEngine> {
 
         // Check RepeatCount and branch to repeated execution if needed
         if (test.RepeatCount && test.RepeatCount > 1) {
-            return await this.runRepeatedTest(test, test.RepeatCount, options, contextUser, suiteRunId, suiteTestSequence, startTime, tags, suiteVariablesJson, workerIndex);
+            return await this.runRepeatedTest(test, test.RepeatCount, options, contextUser, suiteRunId, suiteTestSequence, startTime, tags, suiteVariablesJson, workerIndex, suiteContext);
         }
 
         // Single execution
-        return await this.runSingleTestIteration(test, suiteRunId, suiteTestSequence, options, contextUser, startTime, tags, suiteVariablesJson, workerIndex);
+        return await this.runSingleTestIteration(test, suiteRunId, suiteTestSequence, options, contextUser, startTime, tags, suiteVariablesJson, workerIndex, suiteContext);
     }
 
     /**
@@ -962,7 +995,8 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         startTime: number,
         tags?: string,
         suiteVariablesJson?: string | null,
-        workerIndex?: number
+        workerIndex?: number,
+        suiteContext?: Record<string, unknown>
     ): Promise<TestRunResult[]> {
         const results: TestRunResult[] = [];
 
@@ -980,7 +1014,8 @@ export class TestEngine extends BaseSingleton<TestEngine> {
                 Date.now(), // Each iteration gets its own start time
                 tags,
                 suiteVariablesJson,
-                workerIndex
+                workerIndex,
+                suiteContext
             );
 
             results.push(result);
@@ -1008,7 +1043,8 @@ export class TestEngine extends BaseSingleton<TestEngine> {
         startTime: number,
         tags?: string,
         suiteVariablesJson?: string | null,
-        workerIndex?: number
+        workerIndex?: number,
+        suiteContext?: Record<string, unknown>
     ): Promise<TestRunResult> {
         // Get test type
         const testType = this.GetTestTypeByID(test.TypeID);
@@ -1103,7 +1139,8 @@ export class TestEngine extends BaseSingleton<TestEngine> {
             options: enhancedOptions,
             oracleRegistry: this._oracleRegistry,
             resolvedVariables,
-            workerIndex
+            workerIndex,
+            suiteContext
         });
 
         // If timeout occurred and driver doesn't support cancellation, add warning to error message

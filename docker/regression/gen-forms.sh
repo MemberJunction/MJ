@@ -8,7 +8,7 @@
 # The explorer build picks them up via COPY in Dockerfile.explorer.
 #
 # Always tears down the temporary stack (sqlserver + volumes) before exiting,
-# even on failure, so regression:up starts from a clean DB.
+# even on failure, so the next `mj test regression up` starts from a clean DB.
 set -u
 
 cd "$(dirname "$0")/../.."

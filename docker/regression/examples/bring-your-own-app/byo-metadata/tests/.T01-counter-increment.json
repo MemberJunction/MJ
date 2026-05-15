@@ -1,0 +1,63 @@
+{
+  "fields": {
+    "TypeID": "@lookup:MJ: Test Types.Name=Computer Use",
+    "Name": "BYO T01 - Counter Increments On Click",
+    "Description": "Navigates to the counter page, clicks the '+1' button three times, and verifies the displayed count went UP. Demonstrates the regression suite catching a broken counter — the BYO app intentionally decrements on click instead, so this test is expected to FAIL when the suite is run against the buggy app.",
+    "InputDefinition": {
+      "goal": "Open the page at {{baseUrl}}/counter. The page shows a counter (currently 0) and a button labeled '+1'. Click the '+1' button three times. After three clicks, the counter MUST display 3. If it displays anything other than 3 (e.g., -3, 0, or any negative number), the test goal has NOT been met. Report the final count you observed.",
+      "startUrl": "{{baseUrl}}/counter",
+      "allowedDomains": "{{allowedDomains}}"
+    },
+    "ExpectedOutcomes": {
+      "goalCompleted": true,
+      "finalUrlPattern": "/counter$",
+      "minConfidence": 0.7,
+      "maxSteps": 12,
+      "judgeValidationCriteria": [
+        "The counter displays the value 3 (not -3, 0, or any other value)",
+        "The +1 button was clicked exactly three times",
+        "The counter went UP with each click, not down"
+      ]
+    },
+    "Configuration": {
+      "headless": true,
+      "maxSteps": 12,
+      "maxExecutionTime": 120000,
+      "screenshotHistoryDepth": 3,
+      "viewportWidth": 1280,
+      "viewportHeight": 720,
+      "controllerPromptName": "Computer Use - Controller",
+      "judgePromptName": "Computer Use - Judge",
+      "judgeFrequency": "EveryNSteps:2",
+      "oracles": [
+        {
+          "type": "goal-completion",
+          "weight": 0.7,
+          "config": {
+            "minConfidence": 0.7
+          }
+        },
+        {
+          "type": "step-count",
+          "weight": 0.3,
+          "config": {
+            "maxSteps": 12
+          }
+        }
+      ],
+      "scoringWeights": {
+        "goal-completion": 0.7,
+        "step-count": 0.3
+      }
+    },
+    "Status": "Active",
+    "Tags": "byo-app,smoke,regression"
+  },
+  "primaryKey": {
+    "ID": "D712B7E1-7B67-42A5-8C88-F994D1F3D5CD"
+  },
+  "sync": {
+    "lastModified": "2026-05-14T01:33:14.486Z",
+    "checksum": "e820483652ec4bc9a26bdb4b033feed7347a04be4a808687b4a260774ec03e41"
+  }
+}

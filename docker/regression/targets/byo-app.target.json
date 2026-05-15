@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "1.0",
+  "name": "byo-app",
+  "kind": "generic-web",
+  "description": "Mode D target for the BYO Angular+Express demo app. Used with the matching docker-compose.app.yml overlay so the app boots inside the regression network and the runner reaches it at http://byo-app:3000.",
+
+  "baseUrl": "http://byo-app:3000",
+  "allowedDomains": ["byo-app"],
+
+  "auth": { "bindings": [] },
+
+  "suite": "BYO Regression Suite",
+  "extraMetadataDirs": [
+    "/app/byo-metadata"
+  ],
+
+  "archive": {
+    "configFile": "/app/docker/regression/configs/archive-local.config.cjs",
+    "tag": "byo-loopback",
+    "source": "byo-app-demo"
+  },
+
+  "notes": "The BYO app has TWO intentional bugs: the counter decrements when you click '+1', and the contact-form Submit handler is a no-op. Both shipped tests EXPECT to fail against this version. Used to demonstrate that the regression suite catches real defects. Pointed at a corrected app (fix counter.component.ts + contact.component.ts), both should pass."
+}

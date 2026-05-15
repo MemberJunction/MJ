@@ -62,6 +62,12 @@ export default class TestCompare extends Command {
       description: 'Show detailed information',
       default: false,
     }),
+    tag: Flags.string({
+      description:
+        'Filter suite runs by tag (matches against MJTestSuiteRunEntity.Tags). Useful for ' +
+        'isolating runs from a specific source environment in an archive MJ. DB mode only — ' +
+        '--from-json ignores this flag.',
+    }),
   };
 
   async run(): Promise<void> {
@@ -82,6 +88,7 @@ export default class TestCompare extends Command {
         format: flags.format as 'console' | 'json' | 'markdown',
         output: flags.output,
         verbose: flags.verbose,
+        tag: flags.tag,
       });
 
     } catch (error) {

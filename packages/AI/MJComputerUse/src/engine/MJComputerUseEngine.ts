@@ -157,6 +157,7 @@ export class MJComputerUseEngine extends ComputerUseEngine {
                 maxSteps: request.MaxSteps,
                 formLoginCredentials: request.FormLoginCredentials,
                 previousStepSummary: request.PreviousStepSummary,
+                applicationContext: request.ApplicationContext,
             });
 
             if (!result.success) {

@@ -6,10 +6,10 @@ LLM-driven browser regression tests that exercise MJ Explorer end-to-end. Each t
 
 ```bash
 # Run the full suite via Docker
-npm run regression:up
+mj test regression up
 
 # Compare the two most recent runs
-npm run regression:compare
+mj test regression compare
 
 # Validate test definitions without executing
 mj test validate --dir=metadata/tests/regression

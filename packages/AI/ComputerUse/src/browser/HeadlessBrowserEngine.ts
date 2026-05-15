@@ -35,6 +35,23 @@ interface RecycledEntry {
     UseCount: number;
 }
 
+/**
+ * The shape returned by `BrowserContext.storageState()` — cookies + per-origin
+ * localStorage. Inferred from Playwright's return type so we don't need to
+ * import the named export (which can vary across Playwright versions).
+ */
+type StorageState = Awaited<ReturnType<BrowserContext['storageState']>>;
+
+/**
+ * Tracking entry for an isolated adapter — links the public adapter back to
+ * its underlying context and the worker key it should checkpoint storage
+ * state into on release.
+ */
+interface IsolatedEntry {
+    Context: BrowserContext;
+    WorkerKey: string;
+}
+
 export class HeadlessBrowserEngine extends BaseSingleton<HeadlessBrowserEngine> {
     public static get Instance(): HeadlessBrowserEngine {
         return super.getInstance<HeadlessBrowserEngine>();
@@ -46,6 +63,25 @@ export class HeadlessBrowserEngine extends BaseSingleton<HeadlessBrowserEngine> 
     private _recycled: Map<string, RecycledEntry> = new Map();
     private _fresh: SharedContextBrowserAdapter[] = [];
     private _cleanupRegistered: boolean = false;
+
+    /**
+     * Per-worker cached `storageState` (cookies + localStorage). The isolated
+     * path captures the previous context's state on Release, then replays it
+     * into the next freshly-created context for the same worker — preserving
+     * auth (Auth0 tokens, session cookies) without preserving page mutations.
+     *
+     * Result: the controller LLM doesn't pay the Auth0 round-trip on every
+     * test in a worker, but still gets a clean BrowserContext (no
+     * IndexedDB cache, no in-progress SPA state, no leaked sessionStorage).
+     */
+    private _workerStorageState: Map<string, StorageState> = new Map();
+
+    /**
+     * Live tracking of isolated adapters — used by `ReleaseIsolated` to find
+     * the underlying context and worker key when the driver hands back an
+     * adapter for checkpoint+close. `WeakMap` so dropped references get GC'd.
+     */
+    private _isolatedAdapters: WeakMap<SharedContextBrowserAdapter, IsolatedEntry> = new WeakMap();
 
     // ─── Lifecycle ─────────────────────────────────────────
 
@@ -129,6 +165,89 @@ export class HeadlessBrowserEngine extends BaseSingleton<HeadlessBrowserEngine> 
     }
 
     /**
+     * Get an isolated adapter — a fresh `BrowserContext` seeded with the
+     * cached `storageState` (cookies + localStorage) for the given worker
+     * key, if any. Every call returns a NEW context, even within the same
+     * worker, so test mutations cannot leak forward.
+     *
+     * Pair every `GetIsolated(key)` with `ReleaseIsolated(adapter)` after
+     * the test completes — that's when the context's storage is captured
+     * back into `_workerStorageState[key]` for the next test in the worker
+     * to replay. Without the matching release, the cache won't update and
+     * subsequent tests will start from the previous cached state (or empty).
+     *
+     * @param workerKey - Stable identifier for the worker (e.g. `worker-0`).
+     *                    All tests run by this worker share the same cached
+     *                    storage state.
+     * @param config - Browser config used when constructing the context.
+     */
+    public async GetIsolated(
+        workerKey: string,
+        config?: BrowserConfig
+    ): Promise<SharedContextBrowserAdapter> {
+        await this.ensureBrowser();
+        const cfg = config ?? new BrowserConfig();
+        const cachedState = this._workerStorageState.get(workerKey);
+        const context = await this._browser!.newContext({
+            viewport: {
+                width: cfg.ViewportWidth,
+                height: cfg.ViewportHeight,
+            },
+            userAgent: cfg.UserAgent,
+            storageState: cachedState,
+        });
+        const adapter = new SharedContextBrowserAdapter(context);
+        this._isolatedAdapters.set(adapter, { Context: context, WorkerKey: workerKey });
+        return adapter;
+    }
+
+    /**
+     * Release an isolated adapter — captures the context's `storageState`
+     * back into the worker's cache (so the next isolated context for the
+     * same worker replays auth + cookies + localStorage), then closes the
+     * adapter's page and the underlying context.
+     *
+     * No-op when the adapter was not produced by `GetIsolated`. Best-effort
+     * on failures — closing always proceeds.
+     */
+    public async ReleaseIsolated(adapter: SharedContextBrowserAdapter): Promise<void> {
+        const entry = this._isolatedAdapters.get(adapter);
+        if (!entry) return;
+        this._isolatedAdapters.delete(adapter);
+
+        try {
+            // Capture state BEFORE closing — context.storageState() requires
+            // the context to still be alive. Swallow errors (e.g. context
+            // was already aborted) and just don't update the cache.
+            const state = await entry.Context.storageState().catch(() => undefined);
+            if (state) {
+                this._workerStorageState.set(entry.WorkerKey, state);
+            }
+        } finally {
+            try { if (adapter.IsOpen) await adapter.Close(); } catch { /* swallow */ }
+            try { await entry.Context.close(); } catch { /* swallow */ }
+        }
+    }
+
+    /**
+     * Forget the cached storage state for a worker — the next `GetIsolated`
+     * call for the same key will create a context with no auth seed,
+     * forcing the AuthHandler to run from scratch. Use when a token has
+     * expired mid-suite or when an opt-out is desired.
+     */
+    public InvalidateStorageState(workerKey: string): void {
+        this._workerStorageState.delete(workerKey);
+    }
+
+    /**
+     * Diagnostic: how many workers have cached storage state. Used by tests
+     * to verify that capture+replay is wired correctly.
+     */
+    public get IsolatedStorageStateCount(): number {
+        return this._workerStorageState.size;
+    }
+
+    /**
      * Release a single recycled key — closes the adapter's page and the
      * underlying BrowserContext. The key can be reused after release
      * (a new context will be created on next GetRecycled call).
@@ -165,6 +284,10 @@ export class HeadlessBrowserEngine extends BaseSingleton<HeadlessBrowserEngine> 
 
         // Release all recycled
         await this.ReleaseAll();
+
+        // Drop all cached storage states — they belong to a previous process
+        // lifetime and the auth tokens may have expired anyway.
+        this._workerStorageState.clear();
 
         // Close browser
         if (this._browser) {
