@@ -3,6 +3,7 @@ import ora from 'ora-classic';
 import sql from 'mssql';
 import { ArtifactMetadataEngine } from '@memberjunction/core-entities';
 import { RunView, LogStatus, SetProductionStatus } from '@memberjunction/core';
+import { UUIDsEqual } from '@memberjunction/global';
 import { setupSQLServerClient, SQLServerProviderConfigData, UserCache } from '@memberjunction/sqlserver-dataprovider';
 import { getValidatedConfig } from '../../config';
 
@@ -170,7 +171,7 @@ export default class ArtifactsReclassify extends Command {
 
         const targets: ReclassifyTarget[] = [];
         for (const v of versionsResult.Results) {
-            const artifact = artifactsResult.Results.find(a => a.ID === v.ArtifactID)!;
+            const artifact = artifactsResult.Results.find(a => UUIDsEqual(a.ID, v.ArtifactID))!;
 
             let proposedTypeID: string | null = null;
             let proposedTypeName: string | null = null;
@@ -180,7 +181,7 @@ export default class ArtifactsReclassify extends Command {
             if (v.MimeType) {
                 const ext = v.FileName?.includes('.') ? v.FileName.split('.').pop() : undefined;
                 const resolved = ArtifactMetadataEngine.Instance.GetArtifactTypeByMimeType(v.MimeType, ext);
-                if (resolved && resolved.ID !== artifact.TypeID) {
+                if (resolved && !UUIDsEqual(resolved.ID, artifact.TypeID)) {
                     proposedTypeID = resolved.ID;
                     proposedTypeName = resolved.Name;
                     reason = `MIME "${v.MimeType}" resolves to ${resolved.Name}`;

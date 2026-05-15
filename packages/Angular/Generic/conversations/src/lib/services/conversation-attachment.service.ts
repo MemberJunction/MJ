@@ -68,6 +68,15 @@ export class ConversationAttachmentService {
 
       if (attachmentResult.Success && attachmentResult.Results) {
         for (const attachment of attachmentResult.Results) {
+          // Storage-unified attachments (post-v5.35) link to an ArtifactVersion
+          // via ArtifactVersionID. The matching junction is loaded below and
+          // rendered as the artifact card (carries the resolved type name and
+          // tool affordances). Skip the attachment row here to avoid showing
+          // two cards for the same upload — one labeled by its raw MIME, the
+          // other by its artifact type. Legacy attachments (NULL FK) keep the
+          // older single-card path.
+          if (attachment.ArtifactVersionID) continue;
+
           const detailId = attachment.ConversationDetailID;
 
           if (!result.has(detailId)) {
