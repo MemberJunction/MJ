@@ -98,22 +98,22 @@
 
 /* Foblex minimap SVG node rectangles (no default styles provided by Foblex) */
 .mj-flow-editor-minimap .f-minimap-node {
-  fill: #cbd5e1;
-  stroke: #94a3b8;
+  fill: var(--mj-border-strong);
+  stroke: var(--mj-text-disabled);
   stroke-width: 1;
   rx: 3;
   ry: 3;
 }
 
 .mj-flow-editor-minimap .f-minimap-node.f-selected {
-  fill: #93c5fd;
-  stroke: #3b82f6;
+  fill: color-mix(in srgb, var(--mj-brand-primary) 50%, var(--mj-bg-surface));
+  stroke: var(--mj-brand-primary);
   stroke-width: 1.5;
 }
 
 .mj-flow-editor-minimap .f-minimap-group {
-  fill: #e2e8f0;
-  stroke: #94a3b8;
+  fill: var(--mj-border-default);
+  stroke: var(--mj-text-disabled);
   stroke-width: 0.5;
   rx: 2;
   ry: 2;
@@ -121,8 +121,8 @@
 
 /* Viewport indicator rectangle */
 .mj-flow-editor-minimap .f-minimap-view {
-  fill: rgba(59, 130, 246, 0.08);
-  stroke: #3b82f6;
+  fill: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
+  stroke: var(--mj-brand-primary);
   stroke-width: 1.5;
 }
 
@@ -171,7 +171,7 @@
   display: inline-flex;
   align-items: flex-start;
   gap: 5px;
-  background: #fffef5;
+  background: var(--mj-bg-surface);
   border: 1.5px solid var(--mj-border-strong);
   border-radius: 5px;
   padding: 4px 10px;
@@ -200,18 +200,18 @@ f-canvas {
 
 /* Selection area */
 f-selection-area {
-  --f-selection-area-background: rgba(59, 130, 246, 0.08);
-  --f-selection-area-border: 1px solid rgba(59, 130, 246, 0.3);
+  --f-selection-area-background: color-mix(in srgb, var(--mj-brand-primary) 8%, transparent);
+  --f-selection-area-border: 1px solid color-mix(in srgb, var(--mj-brand-primary) 30%, transparent);
 }
 
 /* Line alignment guides */
 f-line-alignment {
-  --f-line-alignment-color: #3b82f6;
+  --f-line-alignment-color: var(--mj-brand-primary);
 }
 
 /* Connection paths — default stroke color prevents invisible connections */
 .f-connection path {
-  stroke: #94a3b8;
+  stroke: var(--mj-text-disabled);
   stroke-width: 2;
   fill: none;
   transition: stroke 0.15s ease, stroke-width 0.15s ease;
@@ -222,17 +222,18 @@ f-line-alignment {
 }
 
 .f-connection.f-selected path {
-  stroke: #3b82f6;
+  stroke: var(--mj-brand-primary);
   stroke-width: 3;
 }
 
-/* Colored connections use the --connection-color custom property */
+/* Colored connections use the --connection-color custom property,
+   defaulting to neutral when no color is specified by the consumer */
 .mj-flow-connection-colored path {
-  stroke: var(--connection-color, #94a3b8);
+  stroke: var(--connection-color, var(--mj-text-disabled));
 }
 
 .mj-flow-connection-colored.f-selected path {
-  stroke: var(--connection-color, #3b82f6);
+  stroke: var(--connection-color, var(--mj-brand-primary));
   stroke-width: 3;
   filter: brightness(0.85);
 }
@@ -249,7 +250,7 @@ f-line-alignment {
 
 /* Connection for create (dragging) */
 .f-connection-for-create path {
-  stroke: #94a3b8;
+  stroke: var(--mj-text-disabled);
   stroke-dasharray: 6 3;
   stroke-width: 2;
 }
@@ -260,7 +261,7 @@ f-line-alignment {
   position: absolute;
   bottom: 12px;
   left: 12px;
-  background: rgba(255, 255, 255, 0.92);
+  background: color-mix(in srgb, var(--mj-bg-surface) 92%, transparent);
   backdrop-filter: blur(6px);
   border: 1px solid var(--mj-border-default);
   border-radius: var(--mj-radius-md);

@@ -22,18 +22,18 @@ export class MJTagFormComponent extends BaseFormComponent {
             { sectionKey: 'tagConfiguration', sectionName: 'Tag Configuration', isExpanded: false },
             { sectionKey: 'aIIntelligence', sectionName: 'AI Intelligence', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
-            { sectionKey: 'mJTagsParentID', sectionName: 'Tags', isExpanded: false },
             { sectionKey: 'mJTaggedItems', sectionName: 'Tagged Items', isExpanded: false },
+            { sectionKey: 'mJTagsParentID', sectionName: 'Tags', isExpanded: false },
             { sectionKey: 'mJContentItemTags', sectionName: 'Content Item Tags', isExpanded: false },
+            { sectionKey: 'mJTagCoOccurrencesTagBID', sectionName: 'Tag Co Occurrences (Tag B ID)', isExpanded: false },
             { sectionKey: 'mJTagSynonyms', sectionName: 'Tag Synonyms', isExpanded: false },
             { sectionKey: 'mJTagAuditLogsRelatedTagID', sectionName: 'Tag Audit Logs (Related Tag)', isExpanded: false },
             { sectionKey: 'mJTagCoOccurrencesTagAID', sectionName: 'Tag Co Occurrences (Tag A ID)', isExpanded: false },
-            { sectionKey: 'mJTagCoOccurrencesTagBID', sectionName: 'Tag Co Occurrences (Tag B ID)', isExpanded: false },
             { sectionKey: 'mJTagScopes', sectionName: 'Tag Scopes', isExpanded: false },
             { sectionKey: 'mJTagSuggestionsProposedParentID', sectionName: 'Tag Suggestions (Proposed Parent)', isExpanded: false },
             { sectionKey: 'mJTagAuditLogsTagID', sectionName: 'Tag Audit Logs (Tag)', isExpanded: false },
-            { sectionKey: 'mJTagsMergedIntoTagID', sectionName: 'Tags (Merged Into)', isExpanded: false },
             { sectionKey: 'mJTagSuggestionsBestMatchTagID', sectionName: 'Tag Suggestions (Best Match Tag)', isExpanded: false },
+            { sectionKey: 'mJTagsMergedIntoTagID', sectionName: 'Tags (Merged Into)', isExpanded: false },
             { sectionKey: 'mJTagSuggestionsResolvedTagID', sectionName: 'Tag Suggestions (Resolved Tag)', isExpanded: false }
         ]);
     }

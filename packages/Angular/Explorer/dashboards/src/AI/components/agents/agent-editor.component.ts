@@ -203,8 +203,8 @@ export class AgentEditorComponent extends BaseAngularComponent implements OnInit
       .append('svg')
       .attr('width', width)
       .attr('height', height)
-      .style('background', '#fafafa')
-      .style('border', '1px solid #e0e0e0');
+      .style('background', 'var(--mj-bg-surface-card)')
+      .style('border', '1px solid var(--mj-border-default)');
 
     // Create zoom behavior with wheel support
     this.zoom = d3.zoom()

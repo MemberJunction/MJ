@@ -1,7 +1,7 @@
 import { Component, ViewContainerRef, ViewChild, AfterViewInit, OnDestroy, inject } from '@angular/core';
 import { MJActionEntity, MJAIAgentActionEntity, MJAIAgentLearningCycleEntity, MJAIAgentNoteEntity, MJAIAgentPromptEntity, MJAIAgentTypeEntity, MJAIAgentRelationshipEntity } from '@memberjunction/core-entities';
 import { MJAIAgentRunEntityExtended, MJAIPromptEntityExtended, MJAIAgentEntityExtended, } from "@memberjunction/ai-core-plus";
-import { RegisterClass, MJGlobal , UUIDsEqual } from '@memberjunction/global';
+import { RegisterClass, MJGlobal , UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
 import { BaseFormComponent, BaseFormSectionComponent, CUSTOM_LAYOUT_TOOLBAR_CONFIG } from '@memberjunction/ng-base-forms';
 import { CompositeKey, KeyValuePair, Metadata, RunView } from '@memberjunction/core';
 import { TreeBranchConfig } from '@memberjunction/ng-trees';
@@ -748,7 +748,13 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             customSection: true,
             searchScopes: false
         };
-        this.cdr.detectChanges(); // update UI
+        // markForCheck (not detectChanges) — we're invoked from inside ngOnInit's
+        // await chain, which still sits within the host's CD pass. A synchronous
+        // detectChanges() here forces a check whose results dev-mode checkNoChanges
+        // re-verifies against state that further awaits below mutate (totalSubAgentCount
+        // 0→1 etc.), producing NG0100. markForCheck schedules a future CD pass that
+        // runs against fully-settled state.
+        this.cdr.markForCheck();
 
         if (forceRefresh) {
             await AIEngineBase.Instance.Config(true); // force refresh
@@ -758,9 +764,22 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
             // Clear unified sub-agents array
             this.allSubAgents = [];
 
-            // Load child sub-agents (ParentID-based)
+            // Track agent IDs we've already added so the same agent doesn't appear twice
+            // when it's both a structural child (ParentID) AND has an entry in the
+            // AI Agent Relationships table. Without this dedup, `filteredSubAgents`
+            // emits two items with the same `agent.ID`, the @for(track item.agent.ID)
+            // trips NG0955 ("duplicated keys") on every CD pass, and `totalSubAgentCount`
+            // becomes inconsistent with the visible list. Normalize the UUID for the
+            // Set key — see guides/UUID_COMPARISON_GUIDE.md.
+            const seenSubAgentIds = new Set<string>();
+
+            // Load child sub-agents (ParentID-based) — these take precedence over
+            // relationship-based entries since ParentID is a structural relationship.
             const childAgents = AIEngineBase.Instance.Agents.filter(a => UUIDsEqual(a.ParentID, this.record.ID));
             for (const agent of childAgents) {
+                const key = NormalizeUUID(agent.ID);
+                if (seenSubAgentIds.has(key)) continue;
+                seenSubAgentIds.add(key);
                 this.allSubAgents.push({
                     agent,
                     type: 'child'
@@ -784,13 +803,17 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                         a => UUIDsEqual(a.ID, relationship.SubAgentID)
                     );
 
-                    if (agent) {
-                        this.allSubAgents.push({
-                            agent,
-                            type: 'related',
-                            relationship
-                        });
-                    }
+                    if (!agent) continue;
+                    const key = NormalizeUUID(agent.ID);
+                    // Skip if the agent is already in the list as a child OR as another
+                    // active Relationship row pointing to the same SubAgentID.
+                    if (seenSubAgentIds.has(key)) continue;
+                    seenSubAgentIds.add(key);
+                    this.allSubAgents.push({
+                        agent,
+                        type: 'related',
+                        relationship
+                    });
                 }
             }
 
@@ -888,7 +911,10 @@ export class MJAIAgentFormComponentExtended extends MJAIAgentFormComponent imple
                 customSection: false,
                 searchScopes: false
             };
-            this.cdr.detectChanges();
+            // See the comment on the matching call at the top of this method:
+            // markForCheck instead of detectChanges so we don't fight the parent
+            // CD pass (this method runs inside ngOnInit's await chain).
+            this.cdr.markForCheck();
         }
     }
 

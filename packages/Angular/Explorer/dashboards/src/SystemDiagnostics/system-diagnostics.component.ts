@@ -38,6 +38,10 @@ export interface EngineConfigItemDisplay {
     memoryDisplay: string;
     sampleData: unknown[];
     expanded: boolean;
+    /** Whether this property loaded successfully during engine startup */
+    loadedSuccessfully: boolean;
+    /** Error message if the property failed to load */
+    errorMessage?: string;
     // Paging support
     displayedData: unknown[];
     allDataLoaded: boolean;
@@ -1022,7 +1026,7 @@ export interface SystemDiagnosticsUserPreferences {
                         </div>
                       } @else {
                         <div class="empty-state">
-                          <i class="fa-solid fa-check-circle" style="color: #4caf50;"></i>
+                          <i class="fa-solid fa-check-circle" style="color: var(--mj-status-success);"></i>
                           <p>No optimization insights</p>
                           <span class="empty-hint">Insights will appear when potential optimizations are detected</span>
                         </div>
@@ -1371,6 +1375,12 @@ export interface SystemDiagnosticsUserPreferences {
                       <div class="config-item" [class.expanded]="item.expanded">
                         <div class="config-item-header" (click)="toggleConfigItemExpanded(item)">
                           <div class="config-item-info">
+                            <i class="fa-solid config-health-icon"
+                               [class.fa-circle-check]="item.loadedSuccessfully"
+                               [class.fa-circle-xmark]="!item.loadedSuccessfully"
+                               [class.health-success]="item.loadedSuccessfully"
+                               [class.health-failure]="!item.loadedSuccessfully"
+                               [title]="item.loadedSuccessfully ? 'Loaded successfully' : ('Load failed: ' + (item.errorMessage || 'unknown'))"></i>
                             <span class="config-type-chip" [class]="'type-' + item.type">{{ item.type }}</span>
                             <span class="config-name">{{ item.entityName || item.datasetName || item.propertyName }}</span>
                           </div>
@@ -1399,7 +1409,13 @@ export interface SystemDiagnosticsUserPreferences {
                                 <code class="detail-value">{{ item.orderBy }}</code>
                               </div>
                             }
-        
+                            @if (!item.loadedSuccessfully && item.errorMessage) {
+                              <div class="config-detail-row config-detail-row--error">
+                                <span class="detail-label">Error:</span>
+                                <span class="detail-value detail-value--error">{{ item.errorMessage }}</span>
+                              </div>
+                            }
+
                             <!-- Data Table with Paging -->
                             @if (item.displayedData.length > 0) {
                               <div class="sample-data-section">
@@ -3803,12 +3819,18 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         const engineObj = engineInstance as Record<string, unknown>;
         const items: EngineConfigItemDisplay[] = [];
 
+        // Get load health data from DataMapEntries (if available)
+        const dataMapEntries = (engineObj as { DataMapEntries?: ReadonlyMap<string, { loadedSuccessfully: boolean; errorMessage?: string }> }).DataMapEntries;
+
         for (const config of engineInstance.Configs) {
             const propValue = engineObj[config.PropertyName];
             const dataArray = Array.isArray(propValue) ? propValue : [];
             const estimatedBytes = this.estimateArrayMemory(dataArray);
             const initialPageSize = 10;
             const initialData = dataArray.slice(0, initialPageSize);
+
+            // Look up load health from _dataMap
+            const healthEntry = dataMapEntries?.get(config.PropertyName);
 
             items.push({
                 propertyName: config.PropertyName,
@@ -3822,6 +3844,8 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
                 memoryDisplay: this.formatBytes(estimatedBytes),
                 sampleData: dataArray, // Store all data for paging
                 expanded: false,
+                loadedSuccessfully: healthEntry?.loadedSuccessfully ?? true,
+                errorMessage: healthEntry?.errorMessage,
                 // Paging support
                 displayedData: initialData,
                 allDataLoaded: dataArray.length <= initialPageSize,

@@ -3,7 +3,8 @@ import { BaseAction } from '@memberjunction/actions';
 import { RegisterClass, MJGlobal, MJEventType } from '@memberjunction/global';
 import {
     RunView, Metadata, LogStatus, LogError, UserInfo, EntityInfo,
-    CompositeKey, BaseEntity, BaseEntityEvent, IMetadataProvider, DatabaseProviderBase
+    CompositeKey, BaseEntity, BaseEntityEvent, IMetadataProvider, DatabaseProviderBase,
+    IsKeysetPaginationOrderableType
 } from '@memberjunction/core';
 import { MJRecordGeoCodeEntity } from '@memberjunction/core-entities';
 import { GeoCodeSyncService, ExistingGeoCodeInfo } from '@memberjunction/geo-core';
@@ -27,9 +28,15 @@ import { GetDialect, SQLDialect } from '@memberjunction/sql-dialect';
  *   records processed in a single run. Prevents unbounded memory growth in
  *   extreme cases. Override via scheduled job parameters. Logs a warning when
  *   the limit is reached so operators know remaining records exist for the
- *   next run.
+ *   next run. Also acts as a coarse per-run quota guard for free-tier API
+ *   plans (e.g. set to 2400 to stay under Geocod.io's daily 2,500 free cap).
  * - **MaxRetries** (default 5) — Maximum retry count for failed geocoding
  *   attempts before a record is considered permanently failed.
+ * - **GeocodingProvider** (optional) — Name of the geocoding provider to use
+ *   for this run: `'google'`, `'geocodio'`, or `'here'`. Overrides the
+ *   `apiIntegrations.geocoding.defaultProvider` config setting. When omitted,
+ *   falls back to config; when neither is set, the first configured provider
+ *   is chosen in priority order: geocodio → here → google.
  *
  * ## Cache Invalidation
  * After geocoding each record, the action loads the parent entity record
@@ -49,6 +56,18 @@ export class ScheduledGeocodingAction extends BaseAction {
     /** Page size for RunView pagination — controls how many BaseEntity objects exist simultaneously. */
     private static readonly PAGE_SIZE = 500;
 
+    /**
+     * Geocoding provider name in effect for the current run. Set at the top of
+     * InternalRunAction from the 'GeocodingProvider' action parameter and read
+     * by geocodeAndInvalidate() when calling SyncIfChanged. Null = let the
+     * registry pick the default (config or priority order).
+     *
+     * Stored on the instance rather than plumbed through every intermediate
+     * method because BaseAction instances are created per-invocation in the
+     * MJ Actions runner, so cross-call leakage isn't a concern.
+     */
+    private currentGeocodingProvider: string | null = null;
+
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         const contextUser = params.ContextUser;
         if (!contextUser) {
@@ -58,8 +77,10 @@ export class ScheduledGeocodingAction extends BaseAction {
         const maxRetries = this.getNumericParam(params, 'MaxRetries', ScheduledGeocodingAction.DEFAULT_MAX_RETRIES);
         const batchSize = this.getNumericParam(params, 'BatchSize', ScheduledGeocodingAction.DEFAULT_BATCH_SIZE);
         const maxTotal = this.getNumericParam(params, 'MaxTotalRecords', ScheduledGeocodingAction.DEFAULT_MAX_TOTAL);
+        const geocodingProvider = this.getStringParam(params, 'GeocodingProvider');
+        this.currentGeocodingProvider = geocodingProvider ?? null;
 
-        LogStatus(`ScheduledGeocodingAction: Starting maintenance run (BatchSize=${batchSize}, MaxTotal=${maxTotal})`);
+        LogStatus(`ScheduledGeocodingAction: Starting maintenance run (BatchSize=${batchSize}, MaxTotal=${maxTotal}, GeocodingProvider=${geocodingProvider ?? 'config-default'})`);
 
         const stats = { MissingProcessed: 0, MissingSuccess: 0, RetriesProcessed: 0, RetriesSuccess: 0, OrphansRemoved: 0 };
 
@@ -147,6 +168,10 @@ export class ScheduledGeocodingAction extends BaseAction {
         const pkField = entityInfo.FirstPrimaryKey;
         if (!pkField) return { Processed: 0, Success: 0 };
 
+        // Keyset pagination requires a single-column PK. For composite-PK entities, the action
+        // falls back to OFFSET-based pagination (slower on deep pages but correct).
+        const canUseKeyset = entityInfo.PrimaryKeys.length === 1 && IsKeysetPaginationOrderableType(pkField.Type);
+
         const geoFields = this.getGeoAddressFields(entityInfo);
         if (geoFields.length === 0) return { Processed: 0, Success: 0 };
 
@@ -159,13 +184,16 @@ export class ScheduledGeocodingAction extends BaseAction {
             const nonNullConditions = geoFields.map(f => `${f.Name} IS NOT NULL`).join(' OR ');
             let totalProcessed = 0;
             let totalSuccess = 0;
-            let pageOffset = 0;
+            let pageOffset = 0;             // OFFSET-mode (composite-PK fallback)
+            let lastSeenKey: CompositeKey | undefined; // keyset mode
 
-            // Paginate through entity records to avoid loading all into memory at once
+            // Paginate through entity records to avoid loading all into memory at once.
+            // Keyset pagination keeps each page O(log N) regardless of depth — a critical
+            // win when the entity has millions of rows. See guides/KEYSET_PAGINATION_GUIDE.md.
             while (totalProcessed < maxRows) {
-                const pageResult = await this.loadEntityPage(
-                    entityInfo.Name, nonNullConditions, pageOffset, contextUser
-                );
+                const pageResult = canUseKeyset
+                    ? await this.loadEntityPageKeyset(entityInfo.Name, pkField.Name, nonNullConditions, lastSeenKey, contextUser)
+                    : await this.loadEntityPageOffset(entityInfo.Name, nonNullConditions, pageOffset, contextUser);
 
                 if (!pageResult.Success || pageResult.Results.length === 0) break;
 
@@ -190,7 +218,16 @@ export class ScheduledGeocodingAction extends BaseAction {
 
                 // If this page was smaller than PAGE_SIZE, we've exhausted the entity
                 if (pageEntities.length < ScheduledGeocodingAction.PAGE_SIZE) break;
-                pageOffset += ScheduledGeocodingAction.PAGE_SIZE;
+
+                if (canUseKeyset) {
+                    // Advance the seek cursor to the last record's PK on this page
+                    const lastRecord = pageEntities[pageEntities.length - 1];
+                    const lastValue = (lastRecord as unknown as Record<string, unknown>)[pkField.Name];
+                    if (lastValue == null) break;
+                    lastSeenKey = CompositeKey.FromKeyValuePair(pkField.Name, lastValue);
+                } else {
+                    pageOffset += ScheduledGeocodingAction.PAGE_SIZE;
+                }
             }
 
             return { Processed: totalProcessed, Success: totalSuccess };
@@ -202,11 +239,44 @@ export class ScheduledGeocodingAction extends BaseAction {
     }
 
     /**
-     * Load a single page of entity records with non-null geo fields.
-     * Uses OrderBy on PK + MaxRows + offset simulation via GreaterThan filter
-     * to paginate without loading the full result set.
+     * Load a single page of entity records using **keyset (seek) pagination**.
+     *
+     * Each page costs O(log N) regardless of depth because the server resolves
+     * `WHERE pk > @lastSeen ORDER BY pk LIMIT N` as a clustered-index seek — the
+     * deeper-page slowdown of OFFSET-based pagination doesn't apply.
+     *
+     * On the first page, `lastSeenKey` is undefined and the query reduces to
+     * `WHERE (filter) ORDER BY pk LIMIT N`.
      */
-    private async loadEntityPage(
+    private async loadEntityPageKeyset(
+        entityName: string,
+        pkColumnName: string,
+        nonNullFilter: string,
+        lastSeenKey: CompositeKey | undefined,
+        contextUser: UserInfo
+    ): Promise<{ Success: boolean; Results: BaseEntity[] }> {
+        const rv = new RunView();
+        const result = await rv.RunView({
+            EntityName: entityName,
+            ExtraFilter: `(${nonNullFilter})`,
+            OrderBy: pkColumnName,
+            MaxRows: ScheduledGeocodingAction.PAGE_SIZE,
+            AfterKey: lastSeenKey,
+            BypassCache: true,
+            ResultType: 'entity_object'
+        }, contextUser);
+
+        return {
+            Success: result.Success,
+            Results: result.Success ? (result.Results as unknown as BaseEntity[]) : []
+        };
+    }
+
+    /**
+     * Load a single page using OFFSET-based pagination — the fallback path for entities
+     * with composite primary keys. Slower on deep pages but correctness is preserved.
+     */
+    private async loadEntityPageOffset(
         entityName: string,
         nonNullFilter: string,
         offset: number,
@@ -507,7 +577,7 @@ export class ScheduledGeocodingAction extends BaseAction {
     ): Promise<boolean> {
         try {
             const result = await GeoCodeSyncService.Instance.SyncIfChanged(
-                entity, contextUser, undefined, existingGeoCodesMap
+                entity, contextUser, undefined, existingGeoCodesMap, this.currentGeocodingProvider
             );
 
             if (result) {
@@ -640,4 +710,13 @@ export class ScheduledGeocodingAction extends BaseAction {
         return isNaN(parsed) ? defaultValue : parsed;
     }
 
+    /**
+     * Extract an optional string parameter, returning null if absent or empty.
+     */
+    private getStringParam(params: RunActionParams, name: string): string | null {
+        const param = params.Params.find(p => p.Name.trim().toLowerCase() === name.toLowerCase());
+        if (!param || param.Value === undefined || param.Value === null) return null;
+        const v = String(param.Value).trim();
+        return v.length > 0 ? v : null;
+    }
 }

@@ -19,3 +19,4 @@ export * from './custom/util';
 
 export * from './engines/QueryEngineServer';
 export * from './engines/QueryMatchResult';
+export * from './engines/ComponentMetadataEngineServer';

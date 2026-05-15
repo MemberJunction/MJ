@@ -16,7 +16,7 @@ export class MJSearchScopeStorageAccountFormComponent extends BaseFormComponent 
         await super.ngOnInit();
         this.initSections([
             { sectionKey: 'scopeConfiguration', sectionName: 'Scope Configuration', isExpanded: true },
-            { sectionKey: 'storageAccountDetails', sectionName: 'Storage Account Details', isExpanded: true },
+            { sectionKey: 'storageConfiguration', sectionName: 'Storage Configuration', isExpanded: true },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }
