@@ -114,6 +114,43 @@ describe('CronExpressionHelper', () => {
         });
     });
 
+    describe('GetMinIntervalMs', () => {
+        it('should return ~60s for an every-minute expression', () => {
+            const interval = CronExpressionHelper.GetMinIntervalMs(
+                '* * * * *',
+                'UTC',
+                6,
+                new Date('2025-01-15T10:00:00Z')
+            );
+            expect(interval).toBe(60_000);
+        });
+
+        it('should return ~5 minutes for */5', () => {
+            const interval = CronExpressionHelper.GetMinIntervalMs(
+                '*/5 * * * *',
+                'UTC',
+                6,
+                new Date('2025-01-15T10:00:00Z')
+            );
+            expect(interval).toBe(5 * 60_000);
+        });
+
+        it('should return ~30s for the seconds-precision form', () => {
+            const interval = CronExpressionHelper.GetMinIntervalMs(
+                '*/30 * * * * *',
+                'UTC',
+                6,
+                new Date('2025-01-15T10:00:00Z')
+            );
+            expect(interval).toBe(30_000);
+        });
+
+        it('should return Infinity for an invalid expression', () => {
+            const interval = CronExpressionHelper.GetMinIntervalMs('not valid', 'UTC');
+            expect(interval).toBe(Number.POSITIVE_INFINITY);
+        });
+    });
+
     describe('IsExpressionDue', () => {
         it('should return false for an invalid expression', () => {
             const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
