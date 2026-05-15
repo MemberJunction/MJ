@@ -1,5 +1,31 @@
 # Change Log - @memberjunction/codegen-lib
 
+## 5.34.1
+
+### Patch Changes
+
+- 16e799c: no migration/metadata
+- Updated dependencies [3a35358]
+- Updated dependencies [5abf790]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/generic-database-provider@5.34.1
+  - @memberjunction/ai-core-plus@5.34.1
+  - @memberjunction/aiengine@5.34.1
+  - @memberjunction/ai-prompts@5.34.1
+  - @memberjunction/actions-base@5.34.1
+  - @memberjunction/actions@5.34.1
+  - @memberjunction/core-entities@5.34.1
+  - @memberjunction/core-entities-server@5.34.1
+  - @memberjunction/postgresql-dataprovider@5.34.1
+  - @memberjunction/sqlserver-dataprovider@5.34.1
+  - @memberjunction/server-bootstrap-lite@5.34.1
+  - @memberjunction/ai-provider-bundle@5.34.1
+  - @memberjunction/ai@5.34.1
+  - @memberjunction/config@5.34.1
+  - @memberjunction/global@5.34.1
+  - @memberjunction/sql-dialect@5.34.1
+  - @memberjunction/sql-parser@5.34.1
+
 ## 5.34.0
 
 ### Patch Changes

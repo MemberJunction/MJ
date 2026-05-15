@@ -1,5 +1,13 @@
 # @memberjunction/ai-vertex
 
+## 5.34.1
+
+### Patch Changes
+
+- @memberjunction/ai@5.34.1
+- @memberjunction/ai-gemini@5.34.1
+- @memberjunction/global@5.34.1
+
 ## 5.34.0
 
 ### Patch Changes

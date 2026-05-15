@@ -1,5 +1,48 @@
 # Change Log - @memberjunction/ng-core-entity-forms
 
+## 5.34.1
+
+### Patch Changes
+
+- Updated dependencies [3a35358]
+- Updated dependencies [8695f65]
+- Updated dependencies [5abf790]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/ng-base-application@5.34.1
+  - @memberjunction/graphql-dataprovider@5.34.1
+  - @memberjunction/ai-core-plus@5.34.1
+  - @memberjunction/ai-engine-base@5.34.1
+  - @memberjunction/actions-base@5.34.1
+  - @memberjunction/ng-link-directives@5.34.1
+  - @memberjunction/ng-shared@5.34.1
+  - @memberjunction/ng-testing@5.34.1
+  - @memberjunction/ng-action-gallery@5.34.1
+  - @memberjunction/ng-actions@5.34.1
+  - @memberjunction/ng-agents@5.34.1
+  - @memberjunction/ng-ai-test-harness@5.34.1
+  - @memberjunction/ng-base-forms@5.34.1
+  - @memberjunction/ng-base-types@5.34.1
+  - @memberjunction/ng-code-editor@5.34.1
+  - @memberjunction/ng-deep-diff@5.34.1
+  - @memberjunction/ng-entity-relationship-diagram@5.34.1
+  - @memberjunction/ng-entity-viewer@5.34.1
+  - @memberjunction/ng-flow-editor@5.34.1
+  - @memberjunction/ng-join-grid@5.34.1
+  - @memberjunction/ng-list-management@5.34.1
+  - @memberjunction/ng-notifications@5.34.1
+  - @memberjunction/ng-search@5.34.1
+  - @memberjunction/ng-shared-generic@5.34.1
+  - @memberjunction/ng-timeline@5.34.1
+  - @memberjunction/ng-trees@5.34.1
+  - @memberjunction/ng-versions@5.34.1
+  - @memberjunction/core-entities@5.34.1
+  - @memberjunction/templates-base-types@5.34.1
+  - @memberjunction/ng-tabstrip@5.34.1
+  - @memberjunction/ai@5.34.1
+  - @memberjunction/ng-markdown@5.34.1
+  - @memberjunction/ng-ui-components@5.34.1
+  - @memberjunction/global@5.34.1
+
 ## 5.34.0
 
 ### Minor Changes

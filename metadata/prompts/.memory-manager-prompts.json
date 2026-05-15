@@ -303,5 +303,66 @@
       "lastModified": "2026-04-27T18:51:13.404Z",
       "checksum": "0d63d48791857c4307eaf5a11b85653251bb376053dac62fdc07e9f9fa89cd47"
     }
+  },
+  {
+    "fields": {
+      "Name": "Memory Manager - Detect Contradictions",
+      "Description": "Evaluates a pair of semantically similar notes to determine whether they contain conflicting facts about the same topic. Extracts entity-attribute-value triples and returns a structured contradiction judgment used by the Memory Manager to resolve or flag conflicts.",
+      "TypeID": "@lookup:MJ: AI Prompt Types.Name=Chat",
+      "TemplateText": "@file:templates/memory-manager/detect-contradictions.md",
+      "Status": "Active",
+      "ResponseFormat": "JSON",
+      "AssistantPrefill": "```json",
+      "StopSequences": "\n```",
+      "PrefillFallbackMode": "Ignore",
+      "SelectionStrategy": "Specific",
+      "PowerPreference": "Highest",
+      "ParallelizationMode": "None",
+      "MaxRetries": 2,
+      "PromptRole": "System",
+      "PromptPosition": "First",
+      "CategoryID": "@lookup:MJ: AI Prompt Categories.Name=MJ: System"
+    },
+    "relatedEntities": {
+      "MJ: AI Prompt Models": [
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=Gemini 3 Flash",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Google",
+            "Priority": 1
+          },
+          "primaryKey": {
+            "ID": "EFEBE70B-43F2-44A0-B4AF-0FE2DD684373"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T20:54:30.924Z",
+            "checksum": "ef984c07c8a2e347565cbf0caf2cfd6591367cd199e211b21c3992f2dc1a9e09"
+          }
+        },
+        {
+          "fields": {
+            "PromptID": "@parent:ID",
+            "ModelID": "@lookup:MJ: AI Models.Name=GPT-OSS-120B",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Groq",
+            "Priority": 2
+          },
+          "primaryKey": {
+            "ID": "12649118-ACFE-4589-8B80-51817822F602"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T20:54:30.937Z",
+            "checksum": "a92d0f80938f839591d68e0d16214a360bf0204a5f7d162c16cd1807b9c77495"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "828BE35D-6122-4C95-9AE4-F8C25D62CF50"
+    },
+    "sync": {
+      "lastModified": "2026-05-14T20:54:30.770Z",
+      "checksum": "bdfb2bb7b1b5a6cedaa2a0f44402e761225b1d2c9679dd1a98f83b8b2ba405ab"
+    }
   }
 ]

@@ -1,5 +1,41 @@
 # Change Log - @memberjunction/core-actions
 
+## 5.34.1
+
+### Patch Changes
+
+- Updated dependencies [3a35358]
+- Updated dependencies [5abf790]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/generic-database-provider@5.34.1
+  - @memberjunction/ai-agents@5.34.1
+  - @memberjunction/ai-core-plus@5.34.1
+  - @memberjunction/ai-agent-manager@5.34.1
+  - @memberjunction/ai-engine-base@5.34.1
+  - @memberjunction/aiengine@5.34.1
+  - @memberjunction/ai-mcp-client@5.34.1
+  - @memberjunction/ai-prompts@5.34.1
+  - @memberjunction/ai-vector-sync@5.34.1
+  - @memberjunction/actions-base@5.34.1
+  - @memberjunction/code-execution@5.34.1
+  - @memberjunction/actions@5.34.1
+  - @memberjunction/communication-types@5.34.1
+  - @memberjunction/communication-engine@5.34.1
+  - @memberjunction/content-autotagging@5.34.1
+  - @memberjunction/external-change-detection@5.34.1
+  - @memberjunction/integration-engine@5.34.1
+  - @memberjunction/core-entities@5.34.1
+  - @memberjunction/core-entities-server@5.34.1
+  - @memberjunction/storage@5.34.1
+  - @memberjunction/sqlserver-dataprovider@5.34.1
+  - @memberjunction/search-engine@5.34.1
+  - @memberjunction/geo-core@5.34.1
+  - @memberjunction/ai@5.34.1
+  - @memberjunction/ai-betty-bot@5.34.1
+  - @memberjunction/export-engine@5.34.1
+  - @memberjunction/global@5.34.1
+  - @memberjunction/sql-dialect@5.34.1
+
 ## 5.34.0
 
 ### Minor Changes

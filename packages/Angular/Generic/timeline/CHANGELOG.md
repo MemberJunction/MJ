@@ -1,5 +1,12 @@
 # Change Log - @memberjunction/ng-timeline
 
+## 5.34.1
+
+### Patch Changes
+
+- Updated dependencies [3a35358]
+  - @memberjunction/core@5.34.1
+
 ## 5.34.0
 
 ### Patch Changes

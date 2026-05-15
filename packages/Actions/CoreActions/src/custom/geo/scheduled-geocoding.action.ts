@@ -28,9 +28,15 @@ import { GetDialect, SQLDialect } from '@memberjunction/sql-dialect';
  *   records processed in a single run. Prevents unbounded memory growth in
  *   extreme cases. Override via scheduled job parameters. Logs a warning when
  *   the limit is reached so operators know remaining records exist for the
- *   next run.
+ *   next run. Also acts as a coarse per-run quota guard for free-tier API
+ *   plans (e.g. set to 2400 to stay under Geocod.io's daily 2,500 free cap).
  * - **MaxRetries** (default 5) — Maximum retry count for failed geocoding
  *   attempts before a record is considered permanently failed.
+ * - **GeocodingProvider** (optional) — Name of the geocoding provider to use
+ *   for this run: `'google'`, `'geocodio'`, or `'here'`. Overrides the
+ *   `apiIntegrations.geocoding.defaultProvider` config setting. When omitted,
+ *   falls back to config; when neither is set, the first configured provider
+ *   is chosen in priority order: geocodio → here → google.
  *
  * ## Cache Invalidation
  * After geocoding each record, the action loads the parent entity record
@@ -50,6 +56,18 @@ export class ScheduledGeocodingAction extends BaseAction {
     /** Page size for RunView pagination — controls how many BaseEntity objects exist simultaneously. */
     private static readonly PAGE_SIZE = 500;
 
+    /**
+     * Geocoding provider name in effect for the current run. Set at the top of
+     * InternalRunAction from the 'GeocodingProvider' action parameter and read
+     * by geocodeAndInvalidate() when calling SyncIfChanged. Null = let the
+     * registry pick the default (config or priority order).
+     *
+     * Stored on the instance rather than plumbed through every intermediate
+     * method because BaseAction instances are created per-invocation in the
+     * MJ Actions runner, so cross-call leakage isn't a concern.
+     */
+    private currentGeocodingProvider: string | null = null;
+
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         const contextUser = params.ContextUser;
         if (!contextUser) {
@@ -59,8 +77,10 @@ export class ScheduledGeocodingAction extends BaseAction {
         const maxRetries = this.getNumericParam(params, 'MaxRetries', ScheduledGeocodingAction.DEFAULT_MAX_RETRIES);
         const batchSize = this.getNumericParam(params, 'BatchSize', ScheduledGeocodingAction.DEFAULT_BATCH_SIZE);
         const maxTotal = this.getNumericParam(params, 'MaxTotalRecords', ScheduledGeocodingAction.DEFAULT_MAX_TOTAL);
+        const geocodingProvider = this.getStringParam(params, 'GeocodingProvider');
+        this.currentGeocodingProvider = geocodingProvider ?? null;
 
-        LogStatus(`ScheduledGeocodingAction: Starting maintenance run (BatchSize=${batchSize}, MaxTotal=${maxTotal})`);
+        LogStatus(`ScheduledGeocodingAction: Starting maintenance run (BatchSize=${batchSize}, MaxTotal=${maxTotal}, GeocodingProvider=${geocodingProvider ?? 'config-default'})`);
 
         const stats = { MissingProcessed: 0, MissingSuccess: 0, RetriesProcessed: 0, RetriesSuccess: 0, OrphansRemoved: 0 };
 
@@ -557,7 +577,7 @@ export class ScheduledGeocodingAction extends BaseAction {
     ): Promise<boolean> {
         try {
             const result = await GeoCodeSyncService.Instance.SyncIfChanged(
-                entity, contextUser, undefined, existingGeoCodesMap
+                entity, contextUser, undefined, existingGeoCodesMap, this.currentGeocodingProvider
             );
 
             if (result) {
@@ -690,4 +710,13 @@ export class ScheduledGeocodingAction extends BaseAction {
         return isNaN(parsed) ? defaultValue : parsed;
     }
 
+    /**
+     * Extract an optional string parameter, returning null if absent or empty.
+     */
+    private getStringParam(params: RunActionParams, name: string): string | null {
+        const param = params.Params.find(p => p.Name.trim().toLowerCase() === name.toLowerCase());
+        if (!param || param.Value === undefined || param.Value === null) return null;
+        const v = String(param.Value).trim();
+        return v.length > 0 ? v : null;
+    }
 }

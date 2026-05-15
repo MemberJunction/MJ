@@ -1,5 +1,21 @@
 # @memberjunction/ng-react
 
+## 5.34.1
+
+### Patch Changes
+
+- Updated dependencies [3a35358]
+- Updated dependencies [8695f65]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/graphql-dataprovider@5.34.1
+  - @memberjunction/react-runtime@5.34.1
+  - @memberjunction/ai-vectors-memory@5.34.1
+  - @memberjunction/ng-base-types@5.34.1
+  - @memberjunction/ng-notifications@5.34.1
+  - @memberjunction/interactive-component-types@5.34.1
+  - @memberjunction/core-entities@5.34.1
+  - @memberjunction/global@5.34.1
+
 ## 5.34.0
 
 ### Patch Changes
