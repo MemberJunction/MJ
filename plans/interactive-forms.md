@@ -1,4 +1,4 @@
-# Interactive Forms
+# Run-Time / Interactive Forms
 
 **Status:** Proposal — for team review
 **Date:** 2026-05-15
@@ -9,54 +9,77 @@
 
 ## TL;DR
 
-Let MJ entity forms be backed by an Interactive Component, in addition to today's CodeGen-generated and `@RegisterClass` code-based forms. The component is just a regular MJ Component — same authoring tools, same versioning, same permissions, same registry. A small metadata bridge (`EntityFormOverride`) lets us point any entity at a component with user / role / global scope and priority-based resolution.
+**Make MJ entity forms something that can be spun up, modified, and replaced at runtime — by users, by in-app AI, and by external agents like Skip — without an Angular build.**
 
-This is forms only. Dashboards already have this capability via the artifact part in `dashboard-viewer`; we are not duplicating that.
+Today every form is either CodeGen-generated or hand-coded Angular shipped in a build. We add a third type: an MJ Component renders the form. Because Components are already runtime artifacts (versioned, permissioned, registry-aware, AI-authorable), this immediately gives us:
 
-PR #1564 attempted the same idea but conflated forms and dashboards, duplicated artifact/component infrastructure, and introduced typing/layering violations. This plan is a cleaner, smaller cut.
+- **Runtime form creation** — a new form for an entity exists the moment a row is written, no deploy.
+- **In-app AI authoring** — a user inside MJ Explorer says "build me a Tax Return form that highlights overdue items" and gets one.
+- **Agent-generated forms** — Skip (or any MJ agent) generates a form for an end user as part of a task, the same way it generates reports and dashboards today.
+- **Per-user / per-role / per-org variants** — same entity, different forms, resolved at view time by scope and priority.
+
+Mechanically: one new bridge table (`EntityFormOverride`) pointing at an existing `Component`, a resolver wedge in `SingleRecordComponent.LoadForm`, an Angular wrapper that owns BaseEntity lifecycle, and a thin "form-role contract" added to `@memberjunction/interactivecomponents` so any component knows how to act like a form.
+
+Forms only. Dashboards already cover this surface via `dashboard-viewer`'s `ArtifactPanelRenderer`. Not duplicating.
+
+PR #1564 attempted similar ground but conflated forms and dashboards, duplicated artifact/component infrastructure, and broke the React/Angular layering. This plan is a smaller, runtime/AI-first cut.
 
 ---
 
 ## Why now
 
-### Business problem
+### The business goal
 
-Today, the only ways to customize an MJ entity form are:
+Forms are the highest-traffic UI surface in any MJ app, and they are currently the *least* dynamic thing in the platform. We can already spin up:
 
-1. Let CodeGen generate it from metadata (no real customization).
-2. Hand-write an Angular component, register it with `@RegisterClass`, and ship a build.
+- Reports at runtime (Skip generates them on demand).
+- Dashboards at runtime (artifacts hosted in `dashboard-viewer`).
+- Queries, views, components, agents — all runtime artifacts.
 
-Option 2 is the only path to a non-default UI, and it has a high bar: TypeScript, Angular, build pipeline, deployment. Non-developers cannot do it. AI agents cannot do it (no schema they can write into). Per-customer or per-role variants require code branches or feature flags.
+Forms are the holdout. Every form requires either CodeGen or an Angular build. That is:
 
-What customers actually want, and what MJ apps built on top of MJ would benefit from:
+- **A blocker for in-app AI features.** An MJ app cannot ship "click here to AI-generate a better form for this entity" because there is no runtime form substrate to write to.
+- **A blocker for Skip and similar agents.** Skip can give a user a report or a dashboard in a chat exchange. It cannot give them a form, because forms only exist as compiled Angular.
+- **A blocker for per-customer / per-role customization.** Every variant today is either a runtime conditional inside one Angular form or a code branch. Both rot fast.
+- **A blocker for citizen development.** A power user with a clear idea of how their team's Customer form should look has no path to ship it short of asking engineering.
 
-- **Per-role variants.** A CSR's Customer form is not a sales rep's Customer form. Today this requires runtime conditional rendering inside one monolithic form.
-- **Per-customer overrides without forks.** Acme's "Tax Return" entity needs three custom panels Beta Corp does not. Today: branched code or feature flags.
-- **Citizen development.** A power user wants to add a section, reorder fields, embed a chart. No path today.
-- **AI-generated forms.** "Build me a form for entity X that highlights overdue invoices." No metadata target exists.
+### What unlocks once forms are runtime artifacts
 
-### Why this approach
+- An MJ app can include an "improve this form" button on any entity, backed by an in-app agent that writes a new `Component` and an `EntityFormOverride` row scoped to the user or their role.
+- Skip, in a chat: *"I noticed you've been entering refund reasons manually. Want a quicker version of this form?"* → generates a Component, drops an override, the user's next visit to that entity uses it.
+- An app vendor ships "stock" forms via CodeGen. A specific customer's team lead spins up their own variants without forking the codebase.
+- A/B'ing form layouts becomes a metadata change, not a deploy.
 
-MJ already has the substrate. Interactive Components (`@memberjunction/interactivecomponents`) are mature: spec definition, compilation, runtime, registry, libraries, permissions, Component Studio. Components ship as artifacts with versioning. The React renderer (`mj-react-component`) is in production.
+### Why this approach now
 
-The missing piece is a thin contract that says "here is how a Component plays the form role," plus a resolver that picks one for a given entity + user + role.
+The substrate exists. Interactive Components (`@memberjunction/interactivecomponents`) are mature: spec definition, compilation, runtime, registry, libraries, permissions, Component Studio, AI generation paths Skip already uses for components. The React renderer (`mj-react-component`) is in production.
+
+The missing pieces are small and clearly bounded:
+
+1. A **form-role contract** so any Component knows what props/events/methods to implement to act as a form.
+2. A **resolver** that picks a form for `(entity, user, roles)` at runtime.
+3. An **Angular wrapper** that owns the `BaseEntity` lifecycle so the React component stays pure.
+
+That's it. Once those exist, every authoring path — manual, in-app AI, external agent — is the same code path.
 
 ---
 
 ## Goals
 
-1. **Make a Component swappable into the form slot** for any entity, without code changes to the host app.
-2. **Per-user, per-role, per-global scope** with priority-based resolution, transparent to callers.
-3. **No behavior change** for entities that have no override — `@RegisterClass` and CodeGen paths continue exactly as today.
-4. **One contract** that hand-written, Studio-built, and agent-generated form components all target.
-5. **Reuse Component / Artifact infrastructure** — no parallel content store for form definitions.
+1. **Forms can be created, modified, and swapped at runtime.** No build, no deploy. New form = new `Component` row + new `EntityFormOverride` row.
+2. **AI agents (in-app and external like Skip) can author and modify forms** by writing to a documented, narrow metadata target.
+3. **Per-user, per-role, per-global scope** with priority-based resolution, transparent to callers.
+4. **One contract** that hand-written, Studio-built, and agent-generated form components all target — every authoring path produces interoperable artifacts.
+5. **Reuse existing Component / Artifact infrastructure** — no parallel content store, no parallel permission system.
+6. **No behavior change** for entities that have no override — `@RegisterClass` and CodeGen paths continue exactly as today.
 
 ## Non-goals
 
-- Replacing CodeGen-generated forms. They remain the default and the fallback.
+- Replacing CodeGen-generated forms. They remain the default and the fallback for any entity without an override.
 - Replacing `@RegisterClass` custom forms. They continue to work unchanged.
 - Anything dashboard-related. `dashboard-viewer` + `ArtifactPanelRenderer` already covers that surface.
 - A new permission model. We reuse Component / Artifact permissions.
+- Migrating existing custom Angular forms to Interactive Forms. They keep working as-is.
 
 ---
 
@@ -225,36 +248,40 @@ The React layer is **not** locked out of MJ data. It can `RunView`, fetch relate
 
 ## Authoring paths
 
-Three ways to produce a form component, all interoperable, all targeting the same contract:
+Three ways to produce a form, all interoperable, all targeting the same contract. The headline value is #1 and #2 — those are what make this a runtime feature rather than just "another way to write forms." Manual authoring (#3) is mostly the dogfooding path that proves the contract.
 
-### 1. mj-sync (metadata-file authoring) — v1
+### 1. AI agents — the primary use case
 
-Hand-author a Component spec in a `.json` next to a `.tsx` code file under `metadata/components/`. `mj sync push` creates the `Component` row. A second metadata file under `metadata/entity-form-overrides/` creates the `EntityFormOverride` row pointing at it.
+**In-app AI authoring.** An MJ app surfaces "improve this form" / "generate a form for this entity" UI on any entity. Backed by an agent (running inside MJAPI or as a tool call) that:
 
-Smallest path to ship. Used internally for dogfooding and for migrating any existing "custom form" needs that today require Angular code.
+- Reads the entity schema (fields, types, FKs, value lists, descriptions, related entities).
+- Optionally takes natural-language requirements ("highlight overdue invoices, group financial fields, hide internal-only fields").
+- Optionally reads the user's existing variants (modification flow).
+- Emits a `ComponentSpec` that satisfies the form contract.
+- Writes the `Component` row + a scoped `EntityFormOverride`.
+- The user's next visit to that entity renders the new form.
 
-### 2. Component Studio with a "Form" mode — v1
+**External agents (Skip and similar).** Skip already generates components, reports, and dashboards as part of conversational tasks. Once the form contract and override table exist, generating a form is the same shape of operation: produce a `ComponentSpec` with `componentRole: 'form'`, write the rows, point the user at the entity. No new integration surface on Skip's side beyond "write a `Component` and an `EntityFormOverride`."
+
+**Symmetry across agents.** Because all agents write through the same contract, a form generated by Skip can be modified by an in-app agent or edited in Studio, and vice versa. There is no "Skip form" vs "MJ form" — they're all just Components.
+
+### 2. Component Studio with a "Form" mode — citizen development
 
 Extend the existing Component Studio with form-aware affordances:
 
 - "New Form Component" entry point that pre-fills `componentRole: 'form'`, scaffolds `FormHostProps` usage, and lists the entity's fields as draggable primitives.
 - A field-binding inspector so dropping `<TextInput>` onto the canvas pre-wires it to `record[fieldName]` with the right type.
-- Save → creates/updates the underlying Component **and** offers to create/update the EntityFormOverride row.
-- Preview pane renders the component against a real record (using the same `InteractiveFormComponent` wrapper) so what you build is what users see.
+- Save → creates/updates the underlying `Component` **and** offers to create/update the `EntityFormOverride` row.
+- Live preview pane renders the component against a real record (using the same `InteractiveFormComponent` wrapper) so what you build is what users see.
+- "Open in chat" → hands the current Component to an in-app agent for AI-driven modification.
 
-This is the citizen-developer story.
+This is the citizen-developer / power-user path, and the human override / fix-up path when an AI-generated form needs adjustment.
 
-### 3. Form Manager agent — v1 stretch
+### 3. mj-sync (metadata-file authoring) — for development and bootstrapping
 
-An agent that reads:
+Hand-author a Component spec in `.json` next to a `.tsx` code file under `metadata/components/`. `mj sync push` creates the `Component` row. A second metadata file under `metadata/entity-form-overrides/` creates the override.
 
-- Entity schema (fields, types, FKs, value lists, descriptions).
-- Optional natural-language requirements ("emphasize the renewal date, hide internal fields, group financials").
-- Optional existing component (when modifying rather than creating).
-
-…and produces a `ComponentSpec` satisfying the form contract, plus an `EntityFormOverride` row. Symmetric with Studio: components produced by the agent can be opened in Studio for further editing, and Studio-built components can be modified by the agent.
-
-This is straightforward once the contract is locked because the contract is the API.
+Smallest possible authoring surface — used internally for dogfooding the contract, for any forms shipped with MJ itself, and for tests/fixtures.
 
 ---
 
@@ -324,12 +351,14 @@ No data seeded in the migration. EntityFormOverride rows are authored via `mj-sy
 
 | Phase | What ships | Approx scope |
 |---|---|---|
-| **A. Contract** | `componentRole` on `ComponentSpec`; `FormHostProps`, event/method name constants, helper builders in `@memberjunction/interactivecomponents/forms`; documented. | 1–2 days. Foundation. |
-| **B. Plumbing** | Migration + CodeGen run; `InteractiveFormComponent` wrapper; resolver in `SingleRecordComponent.LoadForm`; mj-sync metadata directory + worked example for one entity. | ~1 week. Feature lights up end-to-end. |
-| **C. Form Studio** | Component Studio "form mode": entity-aware scaffolding, field-binding inspector, live preview, override row creation. | Separate PR after B. |
-| **D. Form Manager agent** | Agent that creates or modifies a form component + override row from entity schema + NL requirements. | Separate PR after B; can overlap with C. |
+| **A. Form contract** | `componentRole` on `ComponentSpec`; `FormHostProps`, event/method name constants, helper builders in `@memberjunction/interactivecomponents/forms`; documented. | 1–2 days. Foundation — every authoring path targets this. |
+| **B. Runtime substrate** | `EntityFormOverride` migration + CodeGen run; `InteractiveFormComponent` wrapper (owns BaseEntity lifecycle); resolver in `SingleRecordComponent.LoadForm`; mj-sync metadata + worked example for one entity. | ~1 week. Forms become runtime artifacts. |
+| **C. AI authoring** | In-app Form Manager agent (creates / modifies a form Component + override from entity schema + NL requirements). Skip integration — Skip emits the same artifact shape. Shared prompt + contract definitions so in-app and external agents agree. | Separate PR(s) after B. **This is where the headline business value lands.** |
+| **D. Form Studio** | Component Studio "form mode" — entity-aware scaffolding, field-binding inspector, live preview, override row creation, "open in chat" handoff to the agent. | Separate PR after B; can overlap with C. |
 
-This branch / PR is **Phase A + Phase B**. C and D follow in their own PRs and can run in parallel after B merges.
+This branch / PR is **Phase A + Phase B** — the runtime substrate. C is the AI authoring story (in-app + Skip), D is the citizen-developer authoring story. C and D can run in parallel once B merges.
+
+The contract (Phase A) is the deliberate pivot point: lock the shape of `FormHostProps` + events + methods early so C, D, and any future authoring tool are all writing to the same target.
 
 ---
 
@@ -387,17 +416,18 @@ This branch / PR is **Phase A + Phase B**. C and D follow in their own PRs and c
 
 ## What's not in this PR
 
-- Component Studio form mode (Phase C).
-- Form Manager agent (Phase D).
+- AI authoring — in-app Form Manager agent and Skip integration (Phase C).
+- Form Studio with drag-and-drop (Phase D).
 - Per-application scope.
-- A migration tool to import existing `@RegisterClass` forms into Interactive forms. They keep working as-is.
+- A migration tool to import existing `@RegisterClass` forms into Interactive Forms. They keep working as-is.
 - Any change to dashboards.
 
 ---
 
 ## Open questions for the team
 
-1. Branch name `an-interactive-forms-plan` is fine for the plan PR. Implementation work will move to `an-interactive-forms` after plan approval — preference?
-2. Does "Interactive Forms" overload the term too much (since "Interactive Components" is already a thing)? Alternatives: "Component-backed Forms," "Component Forms," "Form Components." Naming feedback welcome.
-3. Should override authoring require an "Owner" / approval workflow (like RecordChanges has audit), or rely on Component / Artifact permissions only?
-4. Anything we should prove out before locking the contract — particular entities, particular form patterns we want this to handle on day one?
+1. **Naming.** "Run-Time / Interactive Forms" is the working title. Does "Interactive Forms" overload the IC term too much? Alternatives: "Runtime Forms," "Component-backed Forms," "Dynamic Forms."
+2. **Skip integration boundary.** Skip already produces Components. Once the form contract exists, Skip writing a form is "produce a `Component` + write an `EntityFormOverride`." Is that the right integration shape, or does Skip want a higher-level "create form for entity X" tool that wraps both writes?
+3. **Approval workflow for AI-generated forms.** Should overrides start in a `Pending` status (require human activation) when authored by an agent, vs `Active` immediately when authored by a human in Studio? Or always `Active` and rely on scope (only the requesting user sees their own variant until they explicitly broaden scope)?
+4. **Day-one entities to prove out.** What 2–3 entities and form patterns should we target with the example form(s) shipped in Phase B, so the contract is exercised against realistic shapes before Phase C agents start writing to it?
+5. **Implementation branch.** Plan PR is `an-interactive-forms-plan`. Implementation will move to `an-interactive-forms` — preferences?
