@@ -325,8 +325,22 @@ per active section.
 - **Admin** section (Identity & Access, Data & Schema, Monitoring, Developer
   Tools) — single shared `admin-container.component.html` template,
   sub-sections loaded into a `ViewContainerRef` based on the active selection.
-  Sub-sections are full `BaseResourceComponent` / `BaseDashboard` instances
-  with their own complete `<mj-page-header>` + `<mj-page-body>` chrome.
+  Sub-sections include:
+  - The 5 explorer-settings components: `UserManagementComponent`,
+    `RoleManagementComponent`, `ApplicationManagementComponent`,
+    `EntityPermissionsComponent`, `SqlLoggingComponent` (in `@memberjunction/ng-explorer-settings`).
+    Today these have a bespoke `.sticky-header` action-buttons row only — no
+    `<mj-page-header>`. **Do NOT migrate them in isolation** — they live as
+    the right-pane content within the Admin shell's left-nav and adding
+    `<mj-page-header>` produces a doubled header. Migrate as part of the
+    Section 11 decision below, not as part of any per-page audit.
+  - `ApplicationRolesResource`, `SystemDiagnosticsResource`,
+    `DatabaseDesignerDashboard` — these DO have full `<mj-page-header>` chrome
+    today and intentionally read as page-within-a-page (the doubled header is
+    accepted as hierarchy).
+- **APIKeys** — same shell-with-left-nav pattern but the whole app is one
+  resource component with internal tab switching (Keys / Applications / Scopes /
+  Usage Analytics). Skipped in chrome audits for the same reason.
 - **Knowledge Hub Configuration** — left config-nav, internal `@if`-switched
   sections (less dynamic than Admin but conceptually similar).
 - **AI Analytics** — left nav-rail with `@switch (ActiveSection)` rendering
@@ -363,6 +377,17 @@ the sub-component's title below. Today, each example handles this differently:
 
 Until this is decided, **keep the shell-with-left-nav pattern as a
 documented exception**. Treat the doubled chrome as intentional hierarchy.
+
+**Concretely, the following pages are documented Section 11 exceptions and
+should NOT be migrated to `<mj-page-layout>` chrome individually:**
+- The 5 explorer-settings sub-pages (Users, Roles, Apps, Permissions, SQL
+  Logging) — they live inside Admin's left-nav shell.
+- APIKeys — its internal tab switcher fits the same pattern.
+
+Two attempts to migrate the explorer-settings pages have been reverted (the
+second on 2026-05-15 — context: PR `explorer-header-consolidation`). When the
+Section 11 decision is made, all shell-with-left-nav sub-pages should be
+migrated together with whatever pattern is chosen, NOT piecemeal.
 
 ---
 
