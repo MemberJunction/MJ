@@ -1,5 +1,19 @@
 # @memberjunction/tag-engine
 
+## 5.34.1
+
+### Patch Changes
+
+- Updated dependencies [3a35358]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/aiengine@5.34.1
+  - @memberjunction/tag-engine-base@5.34.1
+  - @memberjunction/ai-prompts@5.34.1
+  - @memberjunction/ai-vectors-memory@5.34.1
+  - @memberjunction/core-entities@5.34.1
+  - @memberjunction/ai@5.34.1
+  - @memberjunction/global@5.34.1
+
 ## 5.34.0
 
 ### Patch Changes

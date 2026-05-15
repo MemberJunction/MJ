@@ -1,5 +1,82 @@
 # Change Log - @memberjunction/server
 
+## 5.34.1
+
+### Patch Changes
+
+- 8695f65: Add server-side query name collision resolution and extract resolveDependencies helper in React ComponentManager
+- Updated dependencies [3a35358]
+- Updated dependencies [8695f65]
+- Updated dependencies [5abf790]
+- Updated dependencies [16e799c]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/generic-database-provider@5.34.1
+  - @memberjunction/graphql-dataprovider@5.34.1
+  - @memberjunction/ai-agents@5.34.1
+  - @memberjunction/ai-core-plus@5.34.1
+  - @memberjunction/codegen-lib@5.34.1
+  - @memberjunction/ai-agent-manager-actions@5.34.1
+  - @memberjunction/ai-agent-manager@5.34.1
+  - @memberjunction/aiengine@5.34.1
+  - @memberjunction/tag-engine@5.34.1
+  - @memberjunction/tag-engine-base@5.34.1
+  - @memberjunction/ai-mcp-client@5.34.1
+  - @memberjunction/computer-use-engine@5.34.1
+  - @memberjunction/ai-prompts@5.34.1
+  - @memberjunction/ai-vectordb@5.34.1
+  - @memberjunction/ai-vectors-pinecone@5.34.1
+  - @memberjunction/ai-vector-sync@5.34.1
+  - @memberjunction/api-keys@5.34.1
+  - @memberjunction/actions-apollo@5.34.1
+  - @memberjunction/actions-base@5.34.1
+  - @memberjunction/actions-bizapps-accounting@5.34.1
+  - @memberjunction/actions-bizapps-crm@5.34.1
+  - @memberjunction/actions-bizapps-formbuilders@5.34.1
+  - @memberjunction/actions-bizapps-lms@5.34.1
+  - @memberjunction/actions-bizapps-social@5.34.1
+  - @memberjunction/core-actions@5.34.1
+  - @memberjunction/actions@5.34.1
+  - @memberjunction/auth-providers@5.34.1
+  - @memberjunction/communication-types@5.34.1
+  - @memberjunction/entity-communications-base@5.34.1
+  - @memberjunction/entity-communications-server@5.34.1
+  - @memberjunction/notifications@5.34.1
+  - @memberjunction/communication-ms-graph@5.34.1
+  - @memberjunction/communication-sendgrid@5.34.1
+  - @memberjunction/component-registry-client-sdk@5.34.1
+  - @memberjunction/doc-utils@5.34.1
+  - @memberjunction/encryption@5.34.1
+  - @memberjunction/external-change-detection@5.34.1
+  - @memberjunction/integration-engine@5.34.1
+  - @memberjunction/integration-schema-builder@5.34.1
+  - @memberjunction/interactive-component-types@5.34.1
+  - @memberjunction/core-entities@5.34.1
+  - @memberjunction/core-entities-server@5.34.1
+  - @memberjunction/data-context@5.34.1
+  - @memberjunction/data-context-server@5.34.1
+  - @memberjunction/queue@5.34.1
+  - @memberjunction/storage@5.34.1
+  - @memberjunction/postgresql-dataprovider@5.34.1
+  - @memberjunction/redis-provider@5.34.1
+  - @memberjunction/sqlserver-dataprovider@5.34.1
+  - @memberjunction/scheduling-actions@5.34.1
+  - @memberjunction/scheduling-engine-base@5.34.1
+  - @memberjunction/scheduling-engine@5.34.1
+  - @memberjunction/schema-engine@5.34.1
+  - @memberjunction/search-engine@5.34.1
+  - @memberjunction/server-extensions-core@5.34.1
+  - @memberjunction/skip-types@5.34.1
+  - @memberjunction/templates@5.34.1
+  - @memberjunction/testing-engine@5.34.1
+  - @memberjunction/testing-engine-base@5.34.1
+  - @memberjunction/version-history@5.34.1
+  - @memberjunction/ai-provider-bundle@5.34.1
+  - @memberjunction/ai@5.34.1
+  - @memberjunction/config@5.34.1
+  - @memberjunction/global@5.34.1
+  - @memberjunction/sql-dialect@5.34.1
+  - @memberjunction/scheduling-base-types@5.34.1
+
 ## 5.34.0
 
 ### Minor Changes
