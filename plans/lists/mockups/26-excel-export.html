@@ -1,0 +1,56 @@
+<!doctype html><html><head><meta charset="utf-8"><title>26 — Excel Export</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"></head><body>
+<div class="shell">
+<aside class="sidebar"><div class="logo"><i class="fa-solid fa-cubes-stacked"></i> MemberJunction</div><div class="nav-section">Apps</div><div class="nav-item active"><i class="fa-solid fa-list-check"></i> Lists</div></aside>
+<main class="main"><div class="app-header"><h1><i class="fa-solid fa-file-excel"></i> Export — VIP Donors Q4 2026</h1></div><div class="mj-panel" style="opacity:0.35;"><div class="mj-panel-body" style="height:200px;">[List detail underneath]</div></div></main>
+</div>
+
+<div class="modal-backdrop">
+  <div class="modal" style="max-width:580px;">
+    <div class="modal-header"><i class="fa-solid fa-file-excel"></i><h2>Export to Excel</h2><button class="close"><i class="fa-solid fa-times"></i></button></div>
+    <div class="modal-body">
+      <div class="label">Format</div>
+      <div class="row gap-8 mt-8">
+        <label class="row gap-8" style="padding:8px 12px; border:1px solid var(--mj-brand-primary); border-radius:8px; cursor:pointer; flex:1; background:color-mix(in srgb, var(--mj-brand-primary) 6%, transparent);"><input type="radio" checked> <i class="fa-solid fa-file-excel" style="color:#16a34a"></i><span>Excel (.xlsx)</span></label>
+        <label class="row gap-8" style="padding:8px 12px; border:1px solid var(--mj-border-default); border-radius:8px; cursor:pointer; flex:1;"><input type="radio"> <i class="fa-solid fa-file-csv" style="color:#475569"></i><span>CSV</span></label>
+        <label class="row gap-8" style="padding:8px 12px; border:1px solid var(--mj-border-default); border-radius:8px; cursor:pointer; flex:1;"><input type="radio"> <i class="fa-solid fa-file-code" style="color:#8b5cf6"></i><span>JSON</span></label>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="label">Columns to include</div>
+      <div class="mt-8" style="max-height:200px; overflow:auto; border:1px solid var(--mj-border-default); border-radius:8px;">
+        <label class="row gap-8" style="padding:8px 12px; border-bottom:1px solid var(--mj-border-default);"><input type="checkbox" checked> First Name</label>
+        <label class="row gap-8" style="padding:8px 12px; border-bottom:1px solid var(--mj-border-default);"><input type="checkbox" checked> Last Name</label>
+        <label class="row gap-8" style="padding:8px 12px; border-bottom:1px solid var(--mj-border-default);"><input type="checkbox" checked> Email Primary</label>
+        <label class="row gap-8" style="padding:8px 12px; border-bottom:1px solid var(--mj-border-default);"><input type="checkbox" checked> Phone</label>
+        <label class="row gap-8" style="padding:8px 12px; border-bottom:1px solid var(--mj-border-default);"><input type="checkbox" checked> Donation Total</label>
+        <label class="row gap-8" style="padding:8px 12px; border-bottom:1px solid var(--mj-border-default);"><input type="checkbox"> Last Gift Date</label>
+        <label class="row gap-8" style="padding:8px 12px; border-bottom:1px solid var(--mj-border-default);"><input type="checkbox"> Address</label>
+        <label class="row gap-8" style="padding:8px 12px;"><input type="checkbox"> List Member Status</label>
+      </div>
+      <div class="row gap-12 mt-8" style="font-size:11.5px;">
+        <a href="#">Select All</a><a href="#">Select None</a><a href="#">Save as default</a>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="row gap-8">
+        <input type="checkbox" id="audit" checked>
+        <label for="audit" style="font-size:12.5px;">Include list-member metadata (status, sequence, added date)</label>
+      </div>
+      <div class="row gap-8 mt-8">
+        <input type="checkbox" id="email">
+        <label for="email" style="font-size:12.5px;">Email me a copy when ready (recommended for &gt; 10k rows)</label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="mj-btn mj-btn-primary"><i class="fa-solid fa-download"></i> Export 348 records</button>
+      <button class="mj-btn">Cancel</button>
+      <div class="spacer"></div>
+      <span class="muted" style="font-size:11.5px;">Estimated ~28 KB</span>
+    </div>
+  </div>
+</div>
+</body></html>
