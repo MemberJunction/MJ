@@ -1,5 +1,33 @@
 # @memberjunction/ng-explorer-modules
 
+## 5.34.1
+
+### Patch Changes
+
+- @memberjunction/ng-core-entity-forms@5.34.1
+- @memberjunction/ng-explorer-core@5.34.1
+- @memberjunction/ng-explorer-settings@5.34.1
+- @memberjunction/ng-link-directives@5.34.1
+- @memberjunction/ng-shared@5.34.1
+- @memberjunction/ng-workspace-initializer@5.34.1
+- @memberjunction/ng-container-directives@5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- Updated dependencies [b03bfb4]
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [ae5cfbd]
+  - @memberjunction/ng-core-entity-forms@5.34.0
+  - @memberjunction/ng-explorer-core@5.34.0
+  - @memberjunction/ng-explorer-settings@5.34.0
+  - @memberjunction/ng-link-directives@5.34.0
+  - @memberjunction/ng-shared@5.34.0
+  - @memberjunction/ng-workspace-initializer@5.34.0
+  - @memberjunction/ng-container-directives@5.34.0
+
 ## 5.33.0
 
 ### Patch Changes

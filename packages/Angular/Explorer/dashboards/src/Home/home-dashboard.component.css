@@ -643,6 +643,7 @@
 
 /* Pin Empty State */
 .pin-empty-state {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -651,6 +652,28 @@
   border-radius: var(--mj-radius-xl);
   border: 2px dashed var(--mj-border-default);
   text-align: center;
+}
+
+.pin-empty-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--mj-text-muted);
+  cursor: pointer;
+  font-size: var(--mj-text-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pin-empty-close:hover {
+  color: var(--mj-text-primary);
+  background: var(--mj-bg-surface-hover);
 }
 
 .pin-empty-state > i {
@@ -671,6 +694,21 @@
   color: var(--mj-text-muted);
   max-width: 360px;
   margin: 0 0 16px 0;
+}
+
+.pin-empty-dismiss {
+  margin-top: 12px;
+  background: transparent;
+  border: none;
+  padding: 4px 8px;
+  font-size: var(--mj-text-xs);
+  color: var(--mj-text-muted);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.pin-empty-dismiss:hover {
+  color: var(--mj-text-secondary);
 }
 
 /* Pin Grid */

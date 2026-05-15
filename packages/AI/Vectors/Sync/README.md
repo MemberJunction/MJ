@@ -210,6 +210,8 @@ await syncer.VectorizeEntity({
 }, contextUser);
 ```
 
+Note: `StartingOffset` forces OFFSET-based pagination for that run (keyset can't skip ahead without knowing the PK at the offset). For runs from the start, the syncer **auto-promotes to keyset (seek) pagination** when the entity has a single-column orderable PK — each page stays O(log N) regardless of how deep into the entity you go, which makes a meaningful difference on multi-million-row entities. Falls back to `PageNumber`-based OFFSET when the entity has a composite PK. See **[KEYSET_PAGINATION_GUIDE.md](../../../../guides/KEYSET_PAGINATION_GUIDE.md)** for details.
+
 ### Manage Entity Documents
 
 ```typescript

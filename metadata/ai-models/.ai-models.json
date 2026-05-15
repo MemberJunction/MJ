@@ -13538,5 +13538,451 @@
       "lastModified": "2026-05-08T00:53:51.673Z",
       "checksum": "b87c76fc92e1cdd3523dc1337e88a1de3c5d0c33b0c63c51eefe0321bfe39208"
     }
+  },
+  {
+    "fields": {
+      "Name": "GPT Image 2",
+      "PowerRank": 19,
+      "Description": "OpenAI's state-of-the-art image generation and editing model (April 2026). Generates at 1K, 2K, and 4K resolution, accepts up to 16 reference images, and renders multilingual text (including Chinese, Japanese, Korean) inside images with near-perfect accuracy. Pricing is token-based: $5/M text input, $8/M image input, $30/M image output tokens. Claimed #1 on Image Arena leaderboard at launch by a +242 point margin.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=Image Generator",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 8,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GPT 4.o Image 1.5"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "54805631-265A-46C7-B97E-BCFFA7C25E38"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:07:54.033Z",
+            "checksum": "bd9f90b1ce53009b1d2a9baa3fe9507fa650c91ae9f89f92dba3781a3453ff49"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenAIImageGenerator",
+            "APIName": "gpt-image-2",
+            "MaxInputTokens": 10000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "BEAC44C0-808C-4D59-B9B3-0A2AFB4E2C52"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:07:54.044Z",
+            "checksum": "b5daaed97eecf5a10ea7e602117da2c1b6472dafd60eb42eccfc31b435a00cd3"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-04-21T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Image Generation",
+            "InputPricePerUnit": 0,
+            "OutputPricePerUnit": 0.053,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per Image",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT Image 2 (snapshot gpt-image-2-2026-04-21) pricing as of May 2026. OpenAI charges by tokens, not flat per-image: $5/M text input, $8/M image input (cached $2/M), $30/M image output. The per-image figure here ($0.053) is the representative cost for a 1024x1024 medium-quality image based on OpenAI's calculator — low quality ~$0.006/image, high quality ~$0.211/image. Batch API offers 50% discount on all token rates with 24h latency. Released April 21, 2026; API available early May 2026."
+          },
+          "primaryKey": {
+            "ID": "71148A7B-E3AA-47B9-80B9-833CAF56CDE9"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:07:54.133Z",
+            "checksum": "a75571c26e588759b6a6ad862c707a31b6e6882942a64f705277306275804cd7"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "F2A7D6BE-C96B-453E-B330-1D56E5E05AAD"
+    },
+    "sync": {
+      "lastModified": "2026-05-14T02:07:53.193Z",
+      "checksum": "1884c33a57e0b1210b1794b49df6387428e6475facfa23bc9fe29c4ac6fa9059"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GPT 5.5 Instant",
+      "PowerRank": 13,
+      "Description": "OpenAI's latest low-latency default ChatGPT model (May 5, 2026). Replaces GPT-5.3 Instant as the default in ChatGPT and is exposed in the API as `chat-latest`. Headline metric: 52.5% fewer hallucinated claims than GPT-5.3 Instant on high-stakes prompts (legal, medical, financial). Inherits the GPT-5.5 family context: 1,050,000 input tokens, 128,000 output. Supports configurable reasoning_effort. PRICING NOTE: provisional rate uses the GPT-5.5 standard $5/$30 per 1M tokens; Instant SKU may carry a lower rate once OpenAI's pricing page differentiates it.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 9,
+      "CostRank": 10,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GPT 5.5"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "00C49B3A-1A78-439D-A7CE-FCFF755C3FA2"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:07:54.412Z",
+            "checksum": "db9988b1fb179ac0486cdcb4e12b30449b84028f060dab24f6d2084074045fe3"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenAILLM",
+            "APIName": "gpt-5.5-instant",
+            "MaxInputTokens": 1050000,
+            "MaxOutputTokens": 128000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "B12DF96C-C415-4D00-A634-2EBCA428E78C"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:07:54.426Z",
+            "checksum": "21a78384321764121fd637d32e377d84731a92d0965f7f4bbd61975fb3bca6bb"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-05-05T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 5,
+            "OutputPricePerUnit": 30,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT-5.5 Instant pricing as of May 2026. Provisionally recorded at the GPT-5.5 standard family rate ($5/$30 per 1M tokens) — OpenAI's pricing page may differentiate Instant to a lower rate; verify on next pricing-page review. Batch and Flex are 50% off; Priority is 2.5x standard. Released May 5, 2026 as the new default ChatGPT model; also surfaces in API as `chat-latest`."
+          },
+          "primaryKey": {
+            "ID": "FEAA70BB-8BAA-49D2-9300-B5E3CE93DECC"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:07:54.439Z",
+            "checksum": "b41af3e950917d7555864653a4103b3524f6ab0800c9bb79402e73b206dd55a2"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "7E91F18E-52CC-48C9-8457-74C810899B41"
+    },
+    "sync": {
+      "lastModified": "2026-05-14T02:07:54.305Z",
+      "checksum": "91bdd5baea5c7ef5700ed1299ec53cc2449b8b0c3f964e9d26f9a86d7d0cff1b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GPT Realtime 2",
+      "PowerRank": 11,
+      "Description": "OpenAI's second-generation speech-to-speech voice model (May 7, 2026). GPT-5-class reasoning surfaced through the audio modality with five reasoning effort levels (minimal/low/medium/high/xhigh, default low), parallel tool calls, spoken preambles, and recovery on failed tasks. 128K token context (4x the predecessor). Multi-channel pricing: $32/M audio input ($0.40 cached), $64/M audio output, $4/M text input, $24/M text output, $5/M image input.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=TTS",
+      "IsActive": true,
+      "SpeedRank": 8,
+      "CostRank": 8,
+      "InheritTypeModalities": true
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "16F82723-121F-4CFD-92BA-1AD0BFA45A93"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:07:53.113Z",
+            "checksum": "ea8f34ad4c34626c4bb458998247991df9a5a086a71b8fe7b20b50f13cc54701"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "OpenAIRealtime",
+            "APIName": "gpt-realtime-2",
+            "MaxInputTokens": 128000,
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "3393668B-A813-437E-A753-2C01BFC39C01"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:07:53.127Z",
+            "checksum": "67e746c14b122f8b3af5ca311ed501b062f5a219b274f8c1bd4538199d81f7f8"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=OpenAI",
+            "StartedAt": "2026-05-07T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 4,
+            "OutputPricePerUnit": 24,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GPT-Realtime-2 has multi-channel token pricing — the rates here ($4 input / $24 output per 1M) cover the TEXT channel only. Audio channels: $32/M audio input ($0.40 cached), $64/M audio output. Image input: $5/M. Released May 7, 2026 alongside GPT-Realtime-Translate and GPT-Realtime-Whisper (both minute-billed and flagged for human review pending Per-Minute PriceUnitType + Speech-to-Text AIModelType additions to MJ schema)."
+          },
+          "primaryKey": {
+            "ID": "B98BE63A-4F29-449E-97FF-36B4E1B342B1"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:07:53.253Z",
+            "checksum": "5afff6cb32d3edd88afd2b9a139bd5a7cba2271d2faad6da51f6636a1c1f24e3"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "562BA6F2-9D4C-4CBF-8865-4A97EEA0F14C"
+    },
+    "sync": {
+      "lastModified": "2026-05-14T02:07:47.961Z",
+      "checksum": "e6e0ee9add0c539048051161bf21e2c24af5e0d1804ad80ad33f45de8fa059e4"
+    }
+  },
+  {
+    "fields": {
+      "Name": "GLM 5V Turbo",
+      "PowerRank": 12,
+      "Description": "Z.AI's first native multimodal agent foundation model (April 1, 2026). Built for vision-based coding and agent-driven tasks: turns screenshots and designs into code, debugs visually, operates GUIs autonomously. Natively handles image, video, and text inputs. Excels at long-horizon planning, complex coding, and task execution. Context window: 202,752 input tokens, up to 131,072 output tokens.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 5,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=GLM 5.1"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "92007811-328A-44B2-9033-169856FC59F7"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:07:54.513Z",
+            "checksum": "56fd5202288494b1a84a21b434eae9b56306635efe0a6718d7502e729588d2e3"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "ZAILLM",
+            "APIName": "glm-5v-turbo",
+            "MaxInputTokens": 202752,
+            "MaxOutputTokens": 131072,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": false,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "92C44C56-B93B-4A55-BB99-56604C0DA939"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:07:54.527Z",
+            "checksum": "f927c72f1c71f98d0acc16c3cde9c82ee510182d9aa828b2fc9e854fae10c443"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Z.AI",
+            "StartedAt": "2026-04-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.2,
+            "OutputPricePerUnit": 4,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "GLM-5V Turbo pricing on Z.AI direct API as of May 2026: $1.20/M input, $4.00/M output. Released April 1, 2026 — Z.AI's first native multimodal agent model with image, video, and text input. Proprietary (not open-source) per the launch announcement."
+          },
+          "primaryKey": {
+            "ID": "5DB866B6-5F56-4C5E-90F0-CEAA3708259F"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:07:54.539Z",
+            "checksum": "ae8cc9cd20af059aef11f6747870a6b221419c62fcd7b932e2f100ca81079fa5"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "D44ACC64-291F-483C-B870-3C1D0698F335"
+    },
+    "sync": {
+      "lastModified": "2026-05-14T02:07:54.450Z",
+      "checksum": "31b55350d4a99a2198318af6af0ff4ad314fe200f028a52ef521747a1a9a84d7"
+    }
+  },
+  {
+    "fields": {
+      "Name": "Mistral Medium 3.5",
+      "PowerRank": 13,
+      "Description": "Mistral AI's mid-tier model (May 1, 2026, public preview). 128B dense, open-weights under modified MIT license. 256K context. Unified instruction-following, reasoning, and coding capability. Vision input. Function calling, agents, conversation, structured outputs. Configurable reasoning effort. Powers Mistral remote coding agents and Work mode features. Available through Mistral API, NVIDIA endpoints, and self-hosting.",
+      "AIModelTypeID": "@lookup:MJ: AI Model Types.Name=LLM",
+      "IsActive": true,
+      "SpeedRank": 7,
+      "CostRank": 7,
+      "InheritTypeModalities": true,
+      "PriorVersionID": "@lookup:MJ: AI Models.Name=Mistral Medium 3.1"
+    },
+    "relatedEntities": {
+      "MJ: AI Model Vendors": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
+            "Priority": 0,
+            "Status": "Active",
+            "SupportedResponseFormats": "Any",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": false,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Model Developer"
+          },
+          "primaryKey": {
+            "ID": "38F1D214-79CB-49AF-8445-4860B9227846"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:07:54.060Z",
+            "checksum": "96e2e8d56c6156330d55bd96a6262f7d8bc4ff3d22a8988ada61a2537aea9a57"
+          }
+        },
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
+            "Priority": 1,
+            "Status": "Active",
+            "DriverClass": "MistralLLM",
+            "APIName": "mistral-medium-3.5",
+            "MaxInputTokens": 256000,
+            "SupportedResponseFormats": "Any, JSON",
+            "SupportsEffortLevel": true,
+            "SupportsStreaming": true,
+            "TypeID": "@lookup:MJ: AI Vendor Type Definitions.Name=Inference Provider"
+          },
+          "primaryKey": {
+            "ID": "15A40998-1969-4F21-B4C0-A720CCD7CE41"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:07:54.075Z",
+            "checksum": "cd6fff95f3609953ce31dc290ea11c5b121b035ff4e53ae469e8df2060dc0add"
+          }
+        }
+      ],
+      "MJ: AI Model Costs": [
+        {
+          "fields": {
+            "ModelID": "@parent:ID",
+            "VendorID": "@lookup:MJ: AI Vendors.Name=Mistral AI",
+            "StartedAt": "2026-05-01T00:00:00.000Z",
+            "Status": "Active",
+            "Currency": "USD",
+            "PriceTypeID": "@lookup:MJ: AI Model Price Types.Name=Tokens",
+            "InputPricePerUnit": 1.5,
+            "OutputPricePerUnit": 7.5,
+            "UnitTypeID": "@lookup:MJ: AI Model Price Unit Types.Name=Per 1M Tokens",
+            "ProcessingType": "Realtime",
+            "Comments": "Mistral Medium 3.5 pricing on Mistral direct API as of May 2026: $1.50/M input, $7.50/M output. Released May 1, 2026 as a public preview. Sibling of Mistral Medium 3.1 (already in inventory) — this is the new release, not a replacement."
+          },
+          "primaryKey": {
+            "ID": "501719EA-06AC-42AA-9090-BADA50495140"
+          },
+          "sync": {
+            "lastModified": "2026-05-14T02:07:54.086Z",
+            "checksum": "a8c2e337668d4617d135ee6bd875927a167269369a099fa8f01ba8a98851b182"
+          }
+        }
+      ]
+    },
+    "primaryKey": {
+      "ID": "C2FA8AA2-126A-4A0E-88D8-64B938EC815A"
+    },
+    "sync": {
+      "lastModified": "2026-05-14T02:07:53.266Z",
+      "checksum": "87be1e78925cbdf5376feee6623e0caf74983efeab8d030f5225f73680aae050"
+    }
   }
 ]

@@ -347,12 +347,27 @@ export class SkipProxyAgent extends BaseAgent {
     }
 
     /**
-     * Handle analysis_complete phase — validates componentOptions before accessing
+     * Handle analysis_complete phase — supports both component-bearing responses
+     * (componentOptions populated) and analysis-only responses (markdown in `analysis`
+     * with no component, produced by Skip's Analysis Agent path).
      */
     private handleAnalysisComplete(
         response: SkipAPIAnalysisCompleteResponse
     ): BaseAgentNextStep<ComponentSpec> {
-        if (!response.componentOptions || response.componentOptions.length === 0) {
+        const hasComponentOptions = response.componentOptions && response.componentOptions.length > 0;
+        const skipMessage = response.messages?.filter(msg => msg.role === 'system').pop();
+        const analysisText = response.analysis?.trim();
+
+        if (!hasComponentOptions) {
+            if (analysisText || skipMessage?.content) {
+                return {
+                    terminate: true,
+                    step: 'Success',
+                    message: analysisText || skipMessage!.content,
+                    newPayload: undefined
+                };
+            }
+
             const msg = 'Skip completed analysis but returned no component options. '
                 + `Title: "${response.title || 'none'}". `
                 + `Result type: "${response.resultType || 'none'}"`;
@@ -366,8 +381,7 @@ export class SkipProxyAgent extends BaseAgent {
             };
         }
 
-        const componentSpec = response.componentOptions[0].option;
-        const skipMessage = response.messages?.filter(msg => msg.role === 'system').pop();
+        const componentSpec = response.componentOptions![0].option;
 
         return {
             terminate: true,
