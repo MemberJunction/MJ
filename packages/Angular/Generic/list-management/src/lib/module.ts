@@ -18,6 +18,7 @@ import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { ListDeltaConfirmComponent } from './components/list-delta-confirm/list-delta-confirm.component';
 import { ListManagementDialogComponent } from './components/list-management-dialog/list-management-dialog.component';
 import { ListShareDialogComponent } from './components/list-share-dialog/list-share-dialog.component';
+import { SaveViewAsListDialogComponent } from './components/save-view-as-list-dialog/save-view-as-list-dialog.component';
 
 // Services
 import { ListManagementService } from './services/list-management.service';
@@ -30,7 +31,8 @@ import { ListSharingService } from './services/list-sharing.service';
   declarations: [
     ListDeltaConfirmComponent,
     ListManagementDialogComponent,
-    ListShareDialogComponent
+    ListShareDialogComponent,
+    SaveViewAsListDialogComponent
   ],
   imports: [
     CommonModule,
@@ -45,7 +47,8 @@ import { ListSharingService } from './services/list-sharing.service';
   exports: [
     ListDeltaConfirmComponent,
     ListManagementDialogComponent,
-    ListShareDialogComponent
+    ListShareDialogComponent,
+    SaveViewAsListDialogComponent
   ],
   providers: [
     ListManagementService,

@@ -4,6 +4,8 @@ import { MJListDetailEntity, MJListDetailEntityExtended, MJListEntity, MJUserVie
 import { SharedService } from '@memberjunction/ng-shared';
 import { ListDetailGridComponent, ListGridRowClickedEvent } from '@memberjunction/ng-list-detail-grid';
 import { GridToolbarConfig } from '@memberjunction/ng-entity-viewer';
+import { GraphQLDataProvider, GraphQLListsClient } from '@memberjunction/graphql-dataprovider';
+import type { ListDelta, ListRefreshMode } from '@memberjunction/lists';
 import { Subject, debounceTime } from 'rxjs';
 import { NewItemOption } from '../../generic/Item.types';
 import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
@@ -34,6 +36,17 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
   // List record
   public listRecord: MJListEntity | null = null;
   public showLoader: boolean = false;
+
+  // Lineage / refresh-from-source state. `sourceViewName` is loaded after
+  // listRecord so the lineage badge can show a friendly view name; the
+  // refresh-mode default falls back to the list's RefreshMode field but
+  // can be overridden per-user via localStorage (see `loadLastUsedMode`).
+  public sourceViewName: string | null = null;
+  public refreshMode: ListRefreshMode = 'Additive';
+  public isPreviewingRefresh = false;
+  public isApplyingRefresh = false;
+  public refreshDelta: ListDelta | null = null;
+  public refreshConfirmVisible = false;
 
   // Grid state
   public selectedKeys: string[] = [];
@@ -139,6 +152,8 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
       if (!loadResult) {
         LogError("Error loading list with ID " + this.ListID, undefined, this.listRecord.LatestResult);
         this.listRecord = null;
+      } else {
+        await this.loadLineageContext();
       }
     } catch (error) {
       LogError("Error loading list", undefined, error);
@@ -147,6 +162,126 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
       this.showLoader = false;
       this.cdr.detectChanges();
     }
+  }
+
+  /**
+   * Load lineage context for the refresh-from-source UI:
+   *   - Resolve the source view's display name for the lineage badge.
+   *   - Initialize the refresh-mode dropdown from per-user last-used
+   *     preference, falling back to the list's RefreshMode field.
+   * Silent on failure — the badge / refresh button just won't render
+   * rather than blocking the rest of the detail view.
+   */
+  private async loadLineageContext(): Promise<void> {
+    if (!this.listRecord?.SourceViewID) {
+      this.sourceViewName = null;
+      return;
+    }
+    this.refreshMode = this.loadLastUsedMode() ?? this.listRecord.RefreshMode;
+    try {
+      const view = await this.ProviderToUse.GetEntityObject<MJUserViewEntityExtended>('MJ: User Views');
+      const loaded = await view.Load(this.listRecord.SourceViewID);
+      this.sourceViewName = loaded ? view.Name : null;
+    } catch (e) {
+      LogError(`Failed to load source view name for list ${this.ListID}: ${e}`);
+      this.sourceViewName = null;
+    }
+  }
+
+  public get hasLineage(): boolean {
+    return !!this.listRecord?.SourceViewID;
+  }
+
+  private loadLastUsedMode(): ListRefreshMode | null {
+    try {
+      const stored = localStorage.getItem(`mj.lists.refreshMode.${this.ListID}`);
+      if (stored === 'Additive' || stored === 'Sync') return stored;
+    } catch {
+      // localStorage may not be available (SSR, private mode) — fall through.
+    }
+    return null;
+  }
+
+  private saveLastUsedMode(mode: ListRefreshMode): void {
+    try {
+      localStorage.setItem(`mj.lists.refreshMode.${this.ListID}`, mode);
+    } catch {
+      // ignore
+    }
+  }
+
+  /**
+   * Kick off a refresh-from-source preview. Builds the delta server-side
+   * and opens the confirm dialog when it returns. The dialog enforces the
+   * acknowledgement UX; the server enforces the actual drop guard.
+   */
+  public async onRefreshFromSource(): Promise<void> {
+    if (!this.hasLineage || this.isPreviewingRefresh) return;
+    this.isPreviewingRefresh = true;
+    this.refreshDelta = null;
+    this.cdr.detectChanges();
+    try {
+      const provider = this.ProviderToUse as unknown as GraphQLDataProvider;
+      const client = new GraphQLListsClient(provider);
+      const delta = await client.PreviewListDelta({
+        Target: this.ListID,
+        Source: { kind: 'view', viewId: this.listRecord!.SourceViewID! },
+        Mode: this.refreshMode,
+      });
+      this.refreshDelta = delta;
+      this.refreshConfirmVisible = true;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      this.sharedService.CreateSimpleNotification(`Refresh preview failed: ${message}`, 'error', 5000);
+    } finally {
+      this.isPreviewingRefresh = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  public onRefreshConfirmCancel(): void {
+    this.refreshConfirmVisible = false;
+    this.refreshDelta = null;
+    this.cdr.detectChanges();
+  }
+
+  public async onRefreshConfirmCommit(deltaToken: string): Promise<void> {
+    if (!this.refreshDelta) return;
+    this.isApplyingRefresh = true;
+    this.cdr.detectChanges();
+    try {
+      const provider = this.ProviderToUse as unknown as GraphQLDataProvider;
+      const client = new GraphQLListsClient(provider);
+      const result = await client.ApplyListDelta({
+        Delta: { ...this.refreshDelta, DeltaToken: deltaToken },
+        ConfirmDrops: (this.refreshDelta.Counts.Remove ?? 0) > 0,
+      });
+      if (result.Success) {
+        this.saveLastUsedMode(this.refreshMode);
+        this.refreshConfirmVisible = false;
+        this.refreshDelta = null;
+        this.sharedService.CreateSimpleNotification(
+          `Refresh applied: +${result.Counts?.Added ?? 0} / -${result.Counts?.Removed ?? 0}`,
+          'success',
+          3000,
+        );
+        // Reload list (for LastRefreshedAt) + grid in parallel.
+        await this.loadListRecord();
+        this.refreshGrid();
+      } else {
+        this.sharedService.CreateSimpleNotification(`Refresh failed: ${result.Message}`, 'error', 5000);
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      this.sharedService.CreateSimpleNotification(`Refresh failed: ${message}`, 'error', 5000);
+    } finally {
+      this.isApplyingRefresh = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  public onRefreshModeChange(mode: ListRefreshMode): void {
+    this.refreshMode = mode;
   }
 
   // ==========================================

@@ -60,6 +60,7 @@
     "@memberjunction/core-actions": "5.34.1",
     "@memberjunction/core-entities": "5.34.1",
     "@memberjunction/core-entities-server": "5.34.1",
+    "@memberjunction/lists": "5.34.1",
     "@memberjunction/data-context": "5.34.1",
     "@memberjunction/data-context-server": "5.34.1",
     "@memberjunction/doc-utils": "5.34.1",

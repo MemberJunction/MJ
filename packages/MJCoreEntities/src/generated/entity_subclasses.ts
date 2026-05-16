@@ -17754,27 +17754,30 @@ export type MJListShareEntityType = z.infer<typeof MJListShareSchema>;
 export const MJListSchema = z.object({
     ID: z.string().describe(`
         * * Field Name: ID
+        * * Display Name: ID
         * * SQL Data Type: uniqueidentifier
         * * Default Value: newsequentialid()`),
     Name: z.string().describe(`
         * * Field Name: Name
+        * * Display Name: Name
         * * SQL Data Type: nvarchar(100)`),
     Description: z.string().nullable().describe(`
         * * Field Name: Description
+        * * Display Name: Description
         * * SQL Data Type: nvarchar(MAX)`),
     EntityID: z.string().describe(`
         * * Field Name: EntityID
-        * * Display Name: Entity ID
+        * * Display Name: Entity
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)`),
     UserID: z.string().describe(`
         * * Field Name: UserID
-        * * Display Name: User ID
+        * * Display Name: User
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)`),
     CategoryID: z.string().nullable().describe(`
         * * Field Name: CategoryID
-        * * Display Name: Category ID
+        * * Display Name: Category
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: List Categories (vwListCategories.ID)`),
     ExternalSystemRecordID: z.string().nullable().describe(`
@@ -17784,7 +17787,7 @@ export const MJListSchema = z.object({
         * * Description: Identifier for this list in an external system, used for synchronization.`),
     CompanyIntegrationID: z.string().nullable().describe(`
         * * Field Name: CompanyIntegrationID
-        * * Display Name: Company Integration ID
+        * * Display Name: Company Integration
         * * SQL Data Type: uniqueidentifier
         * * Related Entity/Foreign Key: MJ: Company Integrations (vwCompanyIntegrations.ID)`),
     __mj_CreatedAt: z.date().describe(`
@@ -17797,22 +17800,68 @@ export const MJListSchema = z.object({
         * * Display Name: Updated At
         * * SQL Data Type: datetimeoffset
         * * Default Value: getutcdate()`),
+    SourceViewID: z.string().nullable().describe(`
+        * * Field Name: SourceViewID
+        * * Display Name: Source View
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: User Views (vwUserViews.ID)
+        * * Description: Optional ID of the User View this list was materialized from. NULL for hand-built lists. When set, the list can be refreshed against this view via ListOperations.RefreshFromSource.`),
+    SourceFilterSnapshot: z.string().nullable().describe(`
+        * * Field Name: SourceFilterSnapshot
+        * * Display Name: Source Filter Snapshot
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON snapshot of the source filter at materialization time. When UseSnapshot=1, refreshes re-apply this snapshot rather than re-reading the live source view. Null when no snapshot was captured.`),
+    LastRefreshedAt: z.date().nullable().describe(`
+        * * Field Name: LastRefreshedAt
+        * * Display Name: Last Refreshed At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Timestamp (UTC) of the most recent successful RefreshFromSource. Null when the list has never been refreshed.`),
+    LastRefreshedByUserID: z.string().nullable().describe(`
+        * * Field Name: LastRefreshedByUserID
+        * * Display Name: Last Refreshed By
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+        * * Description: User who triggered the most recent successful RefreshFromSource. Null when the list has never been refreshed.`),
+    RefreshMode: z.union([z.literal('Additive'), z.literal('Sync')]).describe(`
+        * * Field Name: RefreshMode
+        * * Display Name: Refresh Mode
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Additive
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Additive
+    *   * Sync
+        * * Description: Default refresh mode for this list. Additive only adds new members; Sync reconciles in both directions (may remove members no longer in the source — requires explicit drop-confirmation).`),
+    UseSnapshot: z.boolean().describe(`
+        * * Field Name: UseSnapshot
+        * * Display Name: Use Snapshot
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: When 1, RefreshFromSource uses SourceFilterSnapshot as the source. When 0 (default), it re-reads the live SourceView.`),
     Entity: z.string().describe(`
         * * Field Name: Entity
-        * * Display Name: Entity
+        * * Display Name: Entity Name
         * * SQL Data Type: nvarchar(255)`),
     User: z.string().describe(`
         * * Field Name: User
-        * * Display Name: User
+        * * Display Name: User Name
         * * SQL Data Type: nvarchar(100)`),
     Category: z.string().nullable().describe(`
         * * Field Name: Category
-        * * Display Name: Category
+        * * Display Name: Category Name
         * * SQL Data Type: nvarchar(100)`),
     CompanyIntegration: z.string().nullable().describe(`
         * * Field Name: CompanyIntegration
-        * * Display Name: Company Integration
+        * * Display Name: Integration Name
         * * SQL Data Type: nvarchar(255)`),
+    SourceView: z.string().nullable().describe(`
+        * * Field Name: SourceView
+        * * Display Name: Source View Name
+        * * SQL Data Type: nvarchar(100)`),
+    LastRefreshedByUser: z.string().nullable().describe(`
+        * * Field Name: LastRefreshedByUser
+        * * Display Name: Last Refreshed By User
+        * * SQL Data Type: nvarchar(100)`),
 });
 
 export type MJListEntityType = z.infer<typeof MJListSchema>;
@@ -73233,6 +73282,7 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
 
     /**
     * * Field Name: ID
+    * * Display Name: ID
     * * SQL Data Type: uniqueidentifier
     * * Default Value: newsequentialid()
     */
@@ -73245,6 +73295,7 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
 
     /**
     * * Field Name: Name
+    * * Display Name: Name
     * * SQL Data Type: nvarchar(100)
     */
     get Name(): string {
@@ -73256,6 +73307,7 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
 
     /**
     * * Field Name: Description
+    * * Display Name: Description
     * * SQL Data Type: nvarchar(MAX)
     */
     get Description(): string | null {
@@ -73267,7 +73319,7 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
 
     /**
     * * Field Name: EntityID
-    * * Display Name: Entity ID
+    * * Display Name: Entity
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Entities (vwEntities.ID)
     */
@@ -73280,7 +73332,7 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
 
     /**
     * * Field Name: UserID
-    * * Display Name: User ID
+    * * Display Name: User
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
     */
@@ -73293,7 +73345,7 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
 
     /**
     * * Field Name: CategoryID
-    * * Display Name: Category ID
+    * * Display Name: Category
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: List Categories (vwListCategories.ID)
     */
@@ -73319,7 +73371,7 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
 
     /**
     * * Field Name: CompanyIntegrationID
-    * * Display Name: Company Integration ID
+    * * Display Name: Company Integration
     * * SQL Data Type: uniqueidentifier
     * * Related Entity/Foreign Key: MJ: Company Integrations (vwCompanyIntegrations.ID)
     */
@@ -73351,8 +73403,94 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
     }
 
     /**
+    * * Field Name: SourceViewID
+    * * Display Name: Source View
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: User Views (vwUserViews.ID)
+    * * Description: Optional ID of the User View this list was materialized from. NULL for hand-built lists. When set, the list can be refreshed against this view via ListOperations.RefreshFromSource.
+    */
+    get SourceViewID(): string | null {
+        return this.Get('SourceViewID');
+    }
+    set SourceViewID(value: string | null) {
+        this.Set('SourceViewID', value);
+    }
+
+    /**
+    * * Field Name: SourceFilterSnapshot
+    * * Display Name: Source Filter Snapshot
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON snapshot of the source filter at materialization time. When UseSnapshot=1, refreshes re-apply this snapshot rather than re-reading the live source view. Null when no snapshot was captured.
+    */
+    get SourceFilterSnapshot(): string | null {
+        return this.Get('SourceFilterSnapshot');
+    }
+    set SourceFilterSnapshot(value: string | null) {
+        this.Set('SourceFilterSnapshot', value);
+    }
+
+    /**
+    * * Field Name: LastRefreshedAt
+    * * Display Name: Last Refreshed At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Timestamp (UTC) of the most recent successful RefreshFromSource. Null when the list has never been refreshed.
+    */
+    get LastRefreshedAt(): Date | null {
+        return this.Get('LastRefreshedAt');
+    }
+    set LastRefreshedAt(value: Date | null) {
+        this.Set('LastRefreshedAt', value);
+    }
+
+    /**
+    * * Field Name: LastRefreshedByUserID
+    * * Display Name: Last Refreshed By
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Users (vwUsers.ID)
+    * * Description: User who triggered the most recent successful RefreshFromSource. Null when the list has never been refreshed.
+    */
+    get LastRefreshedByUserID(): string | null {
+        return this.Get('LastRefreshedByUserID');
+    }
+    set LastRefreshedByUserID(value: string | null) {
+        this.Set('LastRefreshedByUserID', value);
+    }
+
+    /**
+    * * Field Name: RefreshMode
+    * * Display Name: Refresh Mode
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Additive
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Additive
+    *   * Sync
+    * * Description: Default refresh mode for this list. Additive only adds new members; Sync reconciles in both directions (may remove members no longer in the source — requires explicit drop-confirmation).
+    */
+    get RefreshMode(): 'Additive' | 'Sync' {
+        return this.Get('RefreshMode');
+    }
+    set RefreshMode(value: 'Additive' | 'Sync') {
+        this.Set('RefreshMode', value);
+    }
+
+    /**
+    * * Field Name: UseSnapshot
+    * * Display Name: Use Snapshot
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: When 1, RefreshFromSource uses SourceFilterSnapshot as the source. When 0 (default), it re-reads the live SourceView.
+    */
+    get UseSnapshot(): boolean {
+        return this.Get('UseSnapshot');
+    }
+    set UseSnapshot(value: boolean) {
+        this.Set('UseSnapshot', value);
+    }
+
+    /**
     * * Field Name: Entity
-    * * Display Name: Entity
+    * * Display Name: Entity Name
     * * SQL Data Type: nvarchar(255)
     */
     get Entity(): string {
@@ -73361,7 +73499,7 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
 
     /**
     * * Field Name: User
-    * * Display Name: User
+    * * Display Name: User Name
     * * SQL Data Type: nvarchar(100)
     */
     get User(): string {
@@ -73370,7 +73508,7 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
 
     /**
     * * Field Name: Category
-    * * Display Name: Category
+    * * Display Name: Category Name
     * * SQL Data Type: nvarchar(100)
     */
     get Category(): string | null {
@@ -73379,11 +73517,29 @@ export class MJListEntity extends BaseEntity<MJListEntityType> {
 
     /**
     * * Field Name: CompanyIntegration
-    * * Display Name: Company Integration
+    * * Display Name: Integration Name
     * * SQL Data Type: nvarchar(255)
     */
     get CompanyIntegration(): string | null {
         return this.Get('CompanyIntegration');
+    }
+
+    /**
+    * * Field Name: SourceView
+    * * Display Name: Source View Name
+    * * SQL Data Type: nvarchar(100)
+    */
+    get SourceView(): string | null {
+        return this.Get('SourceView');
+    }
+
+    /**
+    * * Field Name: LastRefreshedByUser
+    * * Display Name: Last Refreshed By User
+    * * SQL Data Type: nvarchar(100)
+    */
+    get LastRefreshedByUser(): string | null {
+        return this.Get('LastRefreshedByUser');
     }
 }
 

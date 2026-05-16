@@ -8,7 +8,7 @@ import {
   RunView,
   UserInfo,
 } from '@memberjunction/core';
-import { MJListDetailEntity, MJListEntity } from '@memberjunction/core-entities';
+import { MJListDetailEntity, MJListEntity, MJUserViewEntity } from '@memberjunction/core-entities';
 
 import {
   ComputeSourceSignature,
@@ -26,6 +26,7 @@ import type {
   ListDeltaWarning,
   ListRefreshMode,
   ListSource,
+  MaterializeOptions,
   ResolvedRecordSet,
 } from './types';
 
@@ -262,6 +263,121 @@ export class ListOperations {
     if (!staleness.ok) return staleness.failure;
 
     return this.applyDeltaMutations(delta);
+  }
+
+  /**
+   * Materialize a new list from a User View. Creates an `MJ: List` record,
+   * captures lineage when requested, and bulk-inserts the resolved members
+   * as `MJ: List Details` rows.
+   *
+   * Lineage semantics:
+   *   - `RememberLineage = false` → one-shot copy; the list cannot be
+   *     refreshed against the view later. Useful when the user explicitly
+   *     wants a frozen point-in-time snapshot decoupled from the view.
+   *   - `RememberLineage = true, UseSnapshot = false` → list remembers
+   *     `SourceViewID`; future refreshes re-run the **live** view.
+   *   - `RememberLineage = true, UseSnapshot = true` → list remembers
+   *     `SourceViewID` and a JSON snapshot of the view's filter state;
+   *     future refreshes re-evaluate that **snapshot** even if the view
+   *     itself has since been edited.
+   *
+   * Never produces drops (target is brand new) — no delta-token needed.
+   */
+  public async MaterializeFromView(viewId: string, opts: MaterializeOptions): Promise<ApplyResult> {
+    // 1. Resolve the view's current members. This both validates the view
+    //    exists and gives us the EntityID we need for the new list.
+    const resolved = await this.ResolveSource({ kind: 'view', viewId });
+    const entityInfo = this.metadata().EntityByName(resolved.EntityName);
+    if (!entityInfo) {
+      return this.failure('UNEXPECTED_ERROR', `Entity '${resolved.EntityName}' not found in metadata`);
+    }
+
+    // 2. Optionally snapshot the view's filter state for snapshot-mode refresh.
+    const filterSnapshot = opts.RememberLineage && opts.UseSnapshot
+      ? await this.captureViewFilterSnapshot(viewId)
+      : null;
+
+    // 3. Create + save the list record.
+    const listResult = await this.createListWithLineage({
+      entityId: entityInfo.ID,
+      viewId: opts.RememberLineage ? viewId : null,
+      filterSnapshot,
+      opts,
+    });
+    if (!listResult.ok) return listResult.failure;
+    const listId = listResult.listId;
+
+    // 4. Bulk-insert the resolved members. Any per-record failure is
+    //    surfaced in the result rather than aborting the whole batch.
+    const insertResult = await this.insertListMembers(listId, resolved.RecordIds);
+
+    return {
+      Success: insertResult.failed === 0,
+      ResultCode: insertResult.failed === 0 ? 'SUCCESS' : 'PARTIAL_SUCCESS',
+      Message:
+        insertResult.failed === 0
+          ? `Materialized list with ${insertResult.added} member(s)`
+          : `Materialized list with ${insertResult.added} added, ${insertResult.failed} failed`,
+      CreatedListId: listId,
+      TargetListId: listId,
+      Counts: { Added: insertResult.added, Removed: 0, Failed: insertResult.failed },
+      Errors: insertResult.errors.length > 0 ? insertResult.errors : undefined,
+    };
+  }
+
+  /**
+   * Refresh an existing list against its captured source view. The list
+   * must have been created with `RememberLineage = true` (i.e. it has a
+   * non-null `SourceViewID`) — otherwise this returns `TARGET_NOT_FOUND`.
+   *
+   * When `list.UseSnapshot = true`, the source is re-evaluated against the
+   * filter snapshot captured at materialization time. When `false`, the
+   * live view is re-run — which means edits to the view since
+   * materialization will be reflected in the result.
+   *
+   * In `Sync` mode, callers MUST pass `ConfirmDrops: true` or the
+   * server-side drop guard will reject the apply with `DROP_NOT_CONFIRMED`.
+   * On success, `LastRefreshedAt` and `LastRefreshedByUserID` are updated.
+   */
+  public async RefreshFromSource(
+    listId: string,
+    mode: ListRefreshMode,
+    opts: { ConfirmDrops: boolean },
+  ): Promise<ApplyResult> {
+    const sourceResolution = await this.resolveRefreshSource(listId);
+    if (!sourceResolution.ok) return sourceResolution.failure;
+
+    const delta = await this.ComputeDelta(
+      { kind: 'list', listId },
+      sourceResolution.source,
+      mode,
+    );
+    const result = await this.ApplyDelta(delta, {
+      ConfirmDrops: opts.ConfirmDrops,
+      DeltaToken: delta.DeltaToken,
+    });
+
+    if (result.Success) {
+      await this.stampRefreshMetadata(listId);
+    }
+    return result;
+  }
+
+  /**
+   * Add a view's results to an existing list. Always additive — never
+   * removes existing members. Dedupes silently, so safe to re-run.
+   *
+   * No drop-confirmation needed (this op cannot drop). The implementation
+   * pipes through `ComputeDelta` + `ApplyDelta` so it still gets the
+   * token/staleness/permission machinery for free.
+   */
+  public async AddViewResultsToList(viewId: string, listId: string): Promise<ApplyResult> {
+    const delta = await this.ComputeDelta(
+      { kind: 'list', listId },
+      { kind: 'view', viewId },
+      'Additive',
+    );
+    return this.ApplyDelta(delta, { ConfirmDrops: false, DeltaToken: delta.DeltaToken });
   }
 
   // --- private helpers --------------------------------------------------
@@ -672,8 +788,210 @@ export class ListOperations {
     return errors;
   }
 
+  /**
+   * Pick the source for a refresh based on the list's lineage. Live mode
+   * just points back at the original view ID. Snapshot mode reads the
+   * captured filter blob and constructs an ad-hoc source against the
+   * list's entity using whichever WHERE clause the view had at
+   * materialization time.
+   */
+  private async resolveRefreshSource(
+    listId: string,
+  ): Promise<{ ok: true; source: ListSource } | { ok: false; failure: ApplyResult }> {
+    const md = this.metadata();
+    const list = await md.GetEntityObject<MJListEntity>('MJ: Lists', this.contextUser);
+    const loaded = await list.Load(listId);
+    if (!loaded) {
+      return { ok: false, failure: this.failure('TARGET_NOT_FOUND', `List '${listId}' not found`) };
+    }
+    if (!list.SourceViewID) {
+      return {
+        ok: false,
+        failure: this.failure(
+          'TARGET_NOT_FOUND',
+          `List '${listId}' has no SourceViewID — refresh is only supported for lists materialized with lineage.`,
+        ),
+      };
+    }
+
+    if (!list.UseSnapshot) {
+      return { ok: true, source: { kind: 'view', viewId: list.SourceViewID } };
+    }
+
+    // Snapshot mode — re-evaluate the captured filter against the list's entity.
+    const adhoc = this.buildAdhocSourceFromSnapshot(list);
+    if (!adhoc) {
+      return {
+        ok: false,
+        failure: this.failure(
+          'UNEXPECTED_ERROR',
+          `List '${listId}' has UseSnapshot=1 but no usable SourceFilterSnapshot — re-materialize the list to capture one.`,
+        ),
+      };
+    }
+    return { ok: true, source: adhoc };
+  }
+
+  /**
+   * Parse the captured `SourceFilterSnapshot` and turn it into an ad-hoc
+   * `ListSource`. We prefer `customWhereClause` over `whereClause` because
+   * the custom form is the user-authored override; smart-filter clauses
+   * fall in last because they're AI-derived. Returns null if no usable
+   * clause is present (in which case the caller surfaces a clear error).
+   */
+  private buildAdhocSourceFromSnapshot(list: MJListEntity): ListSource | null {
+    if (!list.SourceFilterSnapshot) return null;
+
+    const md = this.metadata();
+    const entity = md.Entities.find((e) => e.ID === list.EntityID);
+    if (!entity) return null;
+
+    let parsed: {
+      whereClause?: string | null;
+      customWhereClause?: string | null;
+      smartFilterWhereClause?: string | null;
+    };
+    try {
+      parsed = JSON.parse(list.SourceFilterSnapshot) as typeof parsed;
+    } catch (e) {
+      LogError(`RefreshFromSource: snapshot JSON parse failed for list ${list.ID}: ${e}`);
+      return null;
+    }
+
+    const extraFilter =
+      parsed.customWhereClause ?? parsed.whereClause ?? parsed.smartFilterWhereClause ?? null;
+    if (!extraFilter || extraFilter.trim().length === 0) return null;
+
+    return { kind: 'adhoc', entityName: entity.Name, extraFilter };
+  }
+
+  /**
+   * Bump `LastRefreshedAt` + `LastRefreshedByUserID` after a successful
+   * refresh. Best-effort — a failure here doesn't roll back the apply
+   * (the records are already in the right state), but we do log it so
+   * the discrepancy is observable.
+   */
+  private async stampRefreshMetadata(listId: string): Promise<void> {
+    const md = this.metadata();
+    const list = await md.GetEntityObject<MJListEntity>('MJ: Lists', this.contextUser);
+    const loaded = await list.Load(listId);
+    if (!loaded) {
+      LogError(`stampRefreshMetadata: list ${listId} not found after apply`);
+      return;
+    }
+    list.LastRefreshedAt = new Date();
+    list.LastRefreshedByUserID = this.contextUser.ID;
+    const ok = await list.Save();
+    if (!ok) {
+      LogError(
+        `stampRefreshMetadata: save failed — ${list.LatestResult?.CompleteMessage ?? 'unknown error'}`,
+      );
+    }
+  }
+
   private failure(code: ApplyResultCode, message: string): ApplyResult {
     return { Success: false, ResultCode: code, Message: message };
+  }
+
+  /**
+   * Load the User View and serialize its filter state into a JSON blob.
+   * We only capture the fields that actually drive the result set — grid
+   * layout, sort, and smart-filter explanation are layout/explanation
+   * metadata, not part of the filter contract, so they're omitted. The
+   * snapshot is versioned (`v: 1`) so future schema evolutions can
+   * branch on shape without breaking older snapshots.
+   */
+  private async captureViewFilterSnapshot(viewId: string): Promise<string | null> {
+    const md = this.metadata();
+    const view = await md.GetEntityObject<MJUserViewEntity>('MJ: User Views', this.contextUser);
+    const loaded = await view.Load(viewId);
+    if (!loaded) {
+      LogError(`captureViewFilterSnapshot: view ${viewId} not found`);
+      return null;
+    }
+    const snapshot = {
+      v: 1 as const,
+      capturedAt: new Date().toISOString(),
+      sourceViewId: viewId,
+      entityId: view.EntityID,
+      whereClause: view.WhereClause ?? null,
+      customWhereClause: view.CustomWhereClause ?? null,
+      filterState: view.FilterState ?? null,
+      customFilterState: view.CustomFilterState ?? null,
+      smartFilterEnabled: view.SmartFilterEnabled ?? false,
+      smartFilterWhereClause: view.SmartFilterWhereClause ?? null,
+      sortState: view.SortState ?? null,
+    };
+    return JSON.stringify(snapshot);
+  }
+
+  /**
+   * Create + save the parent `MJ: List` record. Lineage fields are only
+   * populated when `RememberLineage = true` on `opts` — otherwise the new
+   * list is a plain one-shot copy with no upstream reference.
+   */
+  private async createListWithLineage(args: {
+    entityId: string;
+    viewId: string | null;
+    filterSnapshot: string | null;
+    opts: MaterializeOptions;
+  }): Promise<{ ok: true; listId: string } | { ok: false; failure: ApplyResult }> {
+    const md = this.metadata();
+    const list = await md.GetEntityObject<MJListEntity>('MJ: Lists', this.contextUser);
+    list.NewRecord();
+    list.Name = args.opts.ListName;
+    list.EntityID = args.entityId;
+    list.UserID = this.contextUser.ID;
+    if (args.opts.Description) list.Description = args.opts.Description;
+    if (args.opts.CategoryId) list.CategoryID = args.opts.CategoryId;
+
+    if (args.viewId) {
+      list.SourceViewID = args.viewId;
+      list.RefreshMode = args.opts.RefreshMode;
+      list.UseSnapshot = args.opts.UseSnapshot;
+      if (args.filterSnapshot) list.SourceFilterSnapshot = args.filterSnapshot;
+    }
+
+    const saved = await list.Save();
+    if (!saved) {
+      const msg = list.LatestResult?.CompleteMessage ?? 'unknown error';
+      LogError(`MaterializeFromView: list save failed — ${msg}`);
+      return { ok: false, failure: this.failure('UNEXPECTED_ERROR', `Failed to create list: ${msg}`) };
+    }
+    return { ok: true, listId: list.ID };
+  }
+
+  /**
+   * Bulk-insert `MJ: List Details` rows for the given record IDs. We
+   * surface a per-record error rather than aborting the whole batch so
+   * the caller can show partial-success counts.
+   */
+  private async insertListMembers(
+    listId: string,
+    recordIds: readonly string[],
+  ): Promise<{ added: number; failed: number; errors: string[] }> {
+    const md = this.metadata();
+    let added = 0;
+    let failed = 0;
+    const errors: string[] = [];
+
+    for (const recordId of recordIds) {
+      const detail = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details', this.contextUser);
+      detail.NewRecord();
+      detail.ListID = listId;
+      detail.RecordID = recordId;
+      detail.Sequence = 0;
+      const ok = await detail.Save();
+      if (ok) {
+        added++;
+      } else {
+        failed++;
+        const msg = detail.LatestResult?.CompleteMessage ?? 'unknown error';
+        errors.push(`Failed to add '${recordId}': ${msg}`);
+        LogError(`insertListMembers list=${listId} record=${recordId}: ${msg}`);
+      }
+    }
+    return { added, failed, errors };
   }
 
   private metadata(): Metadata {

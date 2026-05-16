@@ -9,6 +9,7 @@ export * from './lib/module';
 export * from './lib/components/list-delta-confirm/list-delta-confirm.component';
 export * from './lib/components/list-management-dialog/list-management-dialog.component';
 export * from './lib/components/list-share-dialog/list-share-dialog.component';
+export * from './lib/components/save-view-as-list-dialog/save-view-as-list-dialog.component';
 
 // Services
 export * from './lib/services/list-management.service';

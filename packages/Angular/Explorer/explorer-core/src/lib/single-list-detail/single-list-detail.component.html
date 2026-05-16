@@ -1,7 +1,26 @@
 <div class="list-detail-container">
   <!-- Header with title and Add button -->
   <div class="list-header">
-    <h1>{{ listRecord ? listRecord.Name : "List" }}</h1>
+    <div class="list-header__titleblock">
+      <h1>{{ listRecord ? listRecord.Name : "List" }}</h1>
+      @if (hasLineage) {
+        <div class="lineage-badge" [title]="'Source view: ' + (sourceViewName ?? 'unknown')">
+          <i class="fa-solid fa-link"></i>
+          <span>
+            @if (listRecord?.UseSnapshot) {
+              Snapshot of: <strong>{{ sourceViewName ?? '(unknown view)' }}</strong>
+            } @else {
+              Live view: <strong>{{ sourceViewName ?? '(unknown view)' }}</strong>
+            }
+          </span>
+          @if (listRecord?.LastRefreshedAt) {
+            <span class="lineage-badge__refreshed">
+              · last refreshed {{ listRecord!.LastRefreshedAt | date:'medium' }}
+            </span>
+          }
+        </div>
+      }
+    </div>
     <div class="add-dropdown-wrapper">
       <button mjButton variant="primary" class="add-btn" (click)="toggleAddDropdown()">
         <span class="fa-solid fa-plus"></span>
@@ -40,6 +59,30 @@
             class="toolbar-button remove-btn">
             <span class="fa-solid fa-trash"></span>
             Remove from List
+          </button>
+        }
+        @if (hasLineage) {
+          <select
+            class="mj-input mj-select refresh-mode-select"
+            [ngModel]="refreshMode"
+            (ngModelChange)="onRefreshModeChange($event)"
+            [disabled]="isPreviewingRefresh || isApplyingRefresh"
+            title="Refresh mode">
+            <option value="Additive">Additive</option>
+            <option value="Sync">Sync</option>
+          </select>
+          <button mjButton
+            (click)="onRefreshFromSource()"
+            [disabled]="isPreviewingRefresh || isApplyingRefresh"
+            variant="flat"
+            class="toolbar-button">
+            @if (isPreviewingRefresh) {
+              <span class="fa-solid fa-spinner fa-spin"></span>
+              Previewing...
+            } @else {
+              <span class="fa-solid fa-cloud-arrow-down"></span>
+              Refresh from Source
+            }
           </button>
         }
         <button mjButton
@@ -86,6 +129,16 @@
       </mj-list-detail-grid>
     </div>
   }
+
+  <!-- Refresh-from-source delta-confirm dialog -->
+  <mj-list-delta-confirm
+    [Visible]="refreshConfirmVisible && !!refreshDelta"
+    [Delta]="refreshDelta"
+    [TargetListName]="listRecord?.Name ?? null"
+    [SourceLabel]="sourceViewName"
+    (Confirm)="onRefreshConfirmCommit($event)"
+    (Cancel)="onRefreshConfirmCancel()">
+  </mj-list-delta-confirm>
 </div>
 
 <!-- Remove from List Confirmation Dialog -->
