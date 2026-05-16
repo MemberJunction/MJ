@@ -15,6 +15,7 @@ import { ContainerDirectivesModule } from '@memberjunction/ng-container-directiv
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 
 // Components
+import { ListDeltaConfirmComponent } from './components/list-delta-confirm/list-delta-confirm.component';
 import { ListManagementDialogComponent } from './components/list-management-dialog/list-management-dialog.component';
 import { ListShareDialogComponent } from './components/list-share-dialog/list-share-dialog.component';
 
@@ -27,6 +28,7 @@ import { ListSharingService } from './services/list-sharing.service';
  */
 @NgModule({
   declarations: [
+    ListDeltaConfirmComponent,
     ListManagementDialogComponent,
     ListShareDialogComponent
   ],
@@ -41,6 +43,7 @@ import { ListSharingService } from './services/list-sharing.service';
     SharedGenericModule
   ],
   exports: [
+    ListDeltaConfirmComponent,
     ListManagementDialogComponent,
     ListShareDialogComponent
   ],

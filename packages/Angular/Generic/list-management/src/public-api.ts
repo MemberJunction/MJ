@@ -6,6 +6,7 @@
 export * from './lib/module';
 
 // Components
+export * from './lib/components/list-delta-confirm/list-delta-confirm.component';
 export * from './lib/components/list-management-dialog/list-management-dialog.component';
 export * from './lib/components/list-share-dialog/list-share-dialog.component';
 
