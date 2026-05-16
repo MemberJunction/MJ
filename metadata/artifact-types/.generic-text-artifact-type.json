@@ -11,6 +11,13 @@
       "DefaultDeliveryMode": "ToolsOnly",
       "SystemSupplied": true,
       "Icon": "fa-solid fa-file-lines"
+    },
+    "primaryKey": {
+      "ID": "FC28FC44-8B74-4F85-AFF2-FCA102CC01AC"
+    },
+    "sync": {
+      "lastModified": "2026-05-16T22:41:09.585Z",
+      "checksum": "0033168e54531f7d1912b3d6ee3df62435131ae952059184faffdd6e200cc72b"
     }
   }
 ]

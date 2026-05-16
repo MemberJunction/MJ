@@ -11,6 +11,13 @@
       "DefaultDeliveryMode": "Inline",
       "SystemSupplied": true,
       "Icon": "fa-solid fa-video"
+    },
+    "primaryKey": {
+      "ID": "AE8893ED-05F8-4314-8D6F-F4B758F37A78"
+    },
+    "sync": {
+      "lastModified": "2026-05-16T22:41:09.614Z",
+      "checksum": "02c978956a1d2840c3d0dce698de3f73215d2124371f3a5e1811f51997178a86"
     }
   }
 ]
