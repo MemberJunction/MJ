@@ -5,7 +5,7 @@ import { SharedService } from '@memberjunction/ng-shared';
 import { ListDetailGridComponent, ListGridRowClickedEvent } from '@memberjunction/ng-list-detail-grid';
 import { GridToolbarConfig } from '@memberjunction/ng-entity-viewer';
 import { GraphQLDataProvider, GraphQLListsClient } from '@memberjunction/graphql-dataprovider';
-import type { ListDelta, ListRefreshMode } from '@memberjunction/lists';
+import { capabilitiesForLevel, ListSharing, type ListCapabilities, type ListDelta, type ListRefreshMode, type SharePermissionLevel } from '@memberjunction/lists';
 import { Subject, debounceTime } from 'rxjs';
 import { NewItemOption } from '../../generic/Item.types';
 import { UUIDsEqual, NormalizeUUID } from '@memberjunction/global';
@@ -36,6 +36,13 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
   // List record
   public listRecord: MJListEntity | null = null;
   public showLoader: boolean = false;
+
+  // Permission-level gating (Phase 2.8). Resolved lazily after the list
+  // loads. Capabilities is exposed to the template for `@if` gating; the
+  // server-side enforcement remains the source of truth — these flags
+  // are a UX convenience so users don't see buttons they'll be rejected on.
+  public capabilities: ListCapabilities = capabilitiesForLevel(null);
+  public currentLevel: SharePermissionLevel | null = null;
 
   // Lineage / refresh-from-source state. `sourceViewName` is loaded after
   // listRecord so the lineage badge can show a friendly view name; the
@@ -154,6 +161,7 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
         this.listRecord = null;
       } else {
         await this.loadLineageContext();
+        await this.loadCapabilities();
       }
     } catch (error) {
       LogError("Error loading list", undefined, error);
@@ -185,6 +193,30 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
     } catch (e) {
       LogError(`Failed to load source view name for list ${this.ListID}: ${e}`);
       this.sourceViewName = null;
+    }
+  }
+
+  /**
+   * Resolve the caller's permission level for this list (Owner / Edit /
+   * View / null) and derive UI capability flags. Best-effort — if the
+   * resolve fails we conservatively default to no-mutation (Viewer-like)
+   * so we don't accidentally surface buttons the server will reject.
+   */
+  private async loadCapabilities(): Promise<void> {
+    if (!this.listRecord) {
+      this.capabilities = capabilitiesForLevel(null);
+      this.currentLevel = null;
+      return;
+    }
+    try {
+      const sharing = new ListSharing(this.ProviderToUse.CurrentUser!, this.ProviderToUse);
+      const level = await sharing.ResolveEffectivePermission(this.listRecord.ID);
+      this.currentLevel = level;
+      this.capabilities = capabilitiesForLevel(level);
+    } catch (e) {
+      LogError(`loadCapabilities failed: ${e instanceof Error ? e.message : String(e)}`);
+      this.capabilities = capabilitiesForLevel('View');
+      this.currentLevel = 'View';
     }
   }
 

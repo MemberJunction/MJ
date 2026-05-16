@@ -15,9 +15,12 @@ import { ContainerDirectivesModule } from '@memberjunction/ng-container-directiv
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 
 // Components
+import { ListAuditLogComponent } from './components/list-audit-log/list-audit-log.component';
 import { ListDeltaConfirmComponent } from './components/list-delta-confirm/list-delta-confirm.component';
+import { ListInvitationsComponent } from './components/list-invitations/list-invitations.component';
 import { ListManagementDialogComponent } from './components/list-management-dialog/list-management-dialog.component';
 import { ListShareDialogComponent } from './components/list-share-dialog/list-share-dialog.component';
+import { ListsSharedWithMeComponent } from './components/shared-with-me/shared-with-me.component';
 import { SaveViewAsListDialogComponent } from './components/save-view-as-list-dialog/save-view-as-list-dialog.component';
 
 // Services
@@ -29,9 +32,12 @@ import { ListSharingService } from './services/list-sharing.service';
  */
 @NgModule({
   declarations: [
+    ListAuditLogComponent,
     ListDeltaConfirmComponent,
+    ListInvitationsComponent,
     ListManagementDialogComponent,
     ListShareDialogComponent,
+    ListsSharedWithMeComponent,
     SaveViewAsListDialogComponent
   ],
   imports: [
@@ -45,9 +51,12 @@ import { ListSharingService } from './services/list-sharing.service';
     SharedGenericModule
   ],
   exports: [
+    ListAuditLogComponent,
     ListDeltaConfirmComponent,
+    ListInvitationsComponent,
     ListManagementDialogComponent,
     ListShareDialogComponent,
+    ListsSharedWithMeComponent,
     SaveViewAsListDialogComponent
   ],
   providers: [

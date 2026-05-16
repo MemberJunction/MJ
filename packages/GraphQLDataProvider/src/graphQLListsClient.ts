@@ -1,12 +1,19 @@
 import { LogError } from '@memberjunction/core';
 import type {
+  AcceptInvitationResult,
   ApplyResult,
+  InviteResult,
   ListDelta,
   ListDeltaWarning,
   ListRefreshMode,
+  ListShareSummary,
   ListSource,
   MaterializeOptions,
   SetOpKind,
+  SharePermissionLevel,
+  SharedListSummary,
+  ShareResult,
+  ShareTarget,
 } from '@memberjunction/lists';
 import { gql } from 'graphql-request';
 
@@ -161,6 +168,188 @@ export class GraphQLListsClient {
     });
     return parseListDelta(result?.ComposeLists);
   }
+
+  // -------------------------------------------------------------------------
+  // Sharing (Phase 2)
+  // -------------------------------------------------------------------------
+
+  /** Direct user/role share. Mirrors `ListSharing.Share`. */
+  public async Share(args: {
+    ListID: string;
+    Target: ShareTarget;
+    PermissionLevel: SharePermissionLevel;
+  }): Promise<ShareResult> {
+    const mutation = gql`
+      mutation ShareList($input: ShareListInput!) {
+        ShareList(input: $input) {
+          ...ShareResultFields
+        }
+      }
+      ${SHARE_RESULT_FRAGMENT}
+    `;
+    const result = await this.dataProvider.ExecuteGQL(mutation, {
+      input: {
+        ListID: args.ListID,
+        Target: serializeShareTarget(args.Target),
+        PermissionLevel: args.PermissionLevel,
+      },
+    });
+    return parseShareResult(result?.ShareList);
+  }
+
+  /** Revoke an existing share permission. */
+  public async Unshare(permissionId: string): Promise<ShareResult> {
+    const mutation = gql`
+      mutation UnshareList($permissionId: String!) {
+        UnshareList(permissionId: $permissionId) {
+          ...ShareResultFields
+        }
+      }
+      ${SHARE_RESULT_FRAGMENT}
+    `;
+    const result = await this.dataProvider.ExecuteGQL(mutation, { permissionId });
+    return parseShareResult(result?.UnshareList);
+  }
+
+  /** Send an email invitation. Returns the invitation token — the caller
+   *  is expected to build an accept URL from it.  */
+  public async Invite(args: {
+    ListID: string;
+    Email: string;
+    Role: 'Editor' | 'Viewer';
+    TtlHours?: number;
+  }): Promise<InviteResult> {
+    const mutation = gql`
+      mutation InviteToList($input: InviteToListInput!) {
+        InviteToList(input: $input) {
+          Success
+          ResultCode
+          Message
+          InvitationID
+          Token
+          ExpiresAt
+        }
+      }
+    `;
+    const result = await this.dataProvider.ExecuteGQL(mutation, {
+      input: { ListID: args.ListID, Email: args.Email, Role: args.Role, TtlHours: args.TtlHours },
+    });
+    const raw = result?.InviteToList as
+      | {
+          Success: boolean;
+          ResultCode: InviteResult['ResultCode'];
+          Message: string;
+          InvitationID?: string | null;
+          Token?: string | null;
+          ExpiresAt?: string | null;
+        }
+      | undefined;
+    if (!raw) throw new Error('GraphQLListsClient: empty InviteResult response');
+    return {
+      Success: raw.Success,
+      ResultCode: raw.ResultCode,
+      Message: raw.Message,
+      InvitationID: raw.InvitationID ?? undefined,
+      Token: raw.Token ?? undefined,
+      ExpiresAt: raw.ExpiresAt ? new Date(raw.ExpiresAt) : undefined,
+    };
+  }
+
+  /** Accept a pending invitation by token. The caller is the new recipient. */
+  public async AcceptInvitation(token: string): Promise<AcceptInvitationResult> {
+    const mutation = gql`
+      mutation AcceptListInvitation($token: String!) {
+        AcceptListInvitation(token: $token) {
+          Success
+          ResultCode
+          Message
+          PermissionID
+          ListID
+        }
+      }
+    `;
+    const result = await this.dataProvider.ExecuteGQL(mutation, { token });
+    const raw = result?.AcceptListInvitation as
+      | { Success: boolean; ResultCode: AcceptInvitationResult['ResultCode']; Message: string; PermissionID?: string | null; ListID?: string | null }
+      | undefined;
+    if (!raw) throw new Error('GraphQLListsClient: empty AcceptInvitation response');
+    return {
+      Success: raw.Success,
+      ResultCode: raw.ResultCode,
+      Message: raw.Message,
+      PermissionID: raw.PermissionID ?? undefined,
+      ListID: raw.ListID ?? undefined,
+    };
+  }
+
+  /** Revoke a pending invitation. No-op once accepted (caller should
+   *  `Unshare` the resulting permission instead). */
+  public async RevokeInvitation(invitationId: string): Promise<ShareResult> {
+    const mutation = gql`
+      mutation RevokeListInvitation($invitationId: String!) {
+        RevokeListInvitation(invitationId: $invitationId) {
+          ...ShareResultFields
+        }
+      }
+      ${SHARE_RESULT_FRAGMENT}
+    `;
+    const result = await this.dataProvider.ExecuteGQL(mutation, { invitationId });
+    return parseShareResult(result?.RevokeListInvitation);
+  }
+
+  /** All current (non-revoked) shares for a list. */
+  public async GetSharesForList(listId: string): Promise<ListShareSummary[]> {
+    const query = gql`
+      query ListSharesForList($listId: String!) {
+        ListSharesForList(listId: $listId) {
+          PermissionID
+          ListID
+          Target {
+            Kind
+            UserID
+            RoleID
+          }
+          PermissionLevel
+          Status
+          SharedByUserID
+          CreatedAt
+        }
+      }
+    `;
+    const result = await this.dataProvider.ExecuteGQL(query, { listId });
+    const rows = (result?.ListSharesForList as unknown[]) ?? [];
+    return rows.map(parseShareSummary);
+  }
+
+  /** All lists shared with the current user. Drives the "Shared With Me" tab. */
+  public async ListsSharedWithMe(): Promise<SharedListSummary[]> {
+    const query = gql`
+      query ListsSharedWithMe {
+        ListsSharedWithMe {
+          ListID
+          ListName
+          PermissionLevel
+          SharedByUserID
+          SharedAt
+        }
+      }
+    `;
+    const result = await this.dataProvider.ExecuteGQL(query, {});
+    const rows = (result?.ListsSharedWithMe as Array<{
+      ListID: string;
+      ListName: string;
+      PermissionLevel: SharePermissionLevel;
+      SharedByUserID?: string | null;
+      SharedAt: string;
+    }>) ?? [];
+    return rows.map((r) => ({
+      ListID: r.ListID,
+      ListName: r.ListName,
+      PermissionLevel: r.PermissionLevel,
+      SharedByUserID: r.SharedByUserID ?? null,
+      SharedAt: new Date(r.SharedAt),
+    }));
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -204,6 +393,59 @@ const APPLY_RESULT_FRAGMENT = gql`
     Errors
   }
 `;
+
+const SHARE_RESULT_FRAGMENT = gql`
+  fragment ShareResultFields on ShareResultType {
+    Success
+    ResultCode
+    Message
+    PermissionID
+  }
+`;
+
+function serializeShareTarget(target: ShareTarget): Record<string, unknown> {
+  return target.kind === 'user'
+    ? { Kind: 'user', UserID: target.userId }
+    : { Kind: 'role', RoleID: target.roleId };
+}
+
+function parseShareResult(raw: unknown): ShareResult {
+  if (!raw || typeof raw !== 'object') {
+    throw new Error('GraphQLListsClient: empty/invalid ShareResult response');
+  }
+  const r = raw as { Success: boolean; ResultCode: ShareResult['ResultCode']; Message: string; PermissionID?: string | null };
+  return {
+    Success: r.Success,
+    ResultCode: r.ResultCode,
+    Message: r.Message,
+    PermissionID: r.PermissionID ?? undefined,
+  };
+}
+
+function parseShareSummary(raw: unknown): ListShareSummary {
+  const r = raw as {
+    PermissionID: string;
+    ListID: string;
+    Target: { Kind: 'user' | 'role'; UserID?: string | null; RoleID?: string | null };
+    PermissionLevel: SharePermissionLevel;
+    Status: ListShareSummary['Status'];
+    SharedByUserID?: string | null;
+    CreatedAt: string;
+  };
+  const target: ShareTarget =
+    r.Target.Kind === 'user'
+      ? { kind: 'user', userId: r.Target.UserID! }
+      : { kind: 'role', roleId: r.Target.RoleID! };
+  return {
+    PermissionID: r.PermissionID,
+    ListID: r.ListID,
+    Target: target,
+    PermissionLevel: r.PermissionLevel,
+    Status: r.Status,
+    SharedByUserID: r.SharedByUserID ?? null,
+    CreatedAt: new Date(r.CreatedAt),
+  };
+}
 
 function serializeListSource(src: ListSource): Record<string, unknown> {
   switch (src.kind) {

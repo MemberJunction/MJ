@@ -1,0 +1,107 @@
+[
+  {
+    "fields": {
+      "Name": "List Shared",
+      "Description": "A user granted permission on a List to another user or role (direct share, not invitation). Emitted by ListSharing.Share.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "9C8A0A90-1A4B-4CD2-9E3F-7A13A89C6F01"
+    },
+    "sync": {
+      "lastModified": "2026-05-16T18:22:08.820Z",
+      "checksum": "44ae146b74e5783b8519abd12e0abe79e3be989d14e8d71f7fa039445c003f6c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "List Unshared",
+      "Description": "A user revoked a previously-granted permission on a List. Emitted by ListSharing.Unshare.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "9C8A0A90-1A4B-4CD2-9E3F-7A13A89C6F02"
+    },
+    "sync": {
+      "lastModified": "2026-05-16T18:22:08.831Z",
+      "checksum": "3d08804ee4f4b9e40b8ce75ce6c626d9363758217014f1a22563625bdbf48927"
+    }
+  },
+  {
+    "fields": {
+      "Name": "List Invitation Sent",
+      "Description": "A pending-email invitation to share a List was created. Emitted by ListSharing.Invite.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "9C8A0A90-1A4B-4CD2-9E3F-7A13A89C6F03"
+    },
+    "sync": {
+      "lastModified": "2026-05-16T18:22:08.841Z",
+      "checksum": "b2232541f7e0a9c7232f8e9737aef266c973c206bd306333ceb0120b34c9c39b"
+    }
+  },
+  {
+    "fields": {
+      "Name": "List Invitation Accepted",
+      "Description": "A previously-sent List invitation was accepted; the corresponding ResourcePermission was granted. Emitted by ListSharing.AcceptInvitation.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "9C8A0A90-1A4B-4CD2-9E3F-7A13A89C6F04"
+    },
+    "sync": {
+      "lastModified": "2026-05-16T18:22:08.851Z",
+      "checksum": "6ff806100b9ffbbbf036f2737ee17a8ac35daea70d4be537d1d223e5567f5c4c"
+    }
+  },
+  {
+    "fields": {
+      "Name": "List Invitation Revoked",
+      "Description": "A pending List invitation was revoked before acceptance. Emitted by ListSharing.RevokeInvitation.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "9C8A0A90-1A4B-4CD2-9E3F-7A13A89C6F05"
+    },
+    "sync": {
+      "lastModified": "2026-05-16T18:22:08.862Z",
+      "checksum": "70880260c62f8cf90cd2ad5231e3d9f9c24b3154c6eab11a949f6f1a76b1962a"
+    }
+  },
+  {
+    "fields": {
+      "Name": "List Refreshed",
+      "Description": "A List was refreshed against its source view via ListOperations.RefreshFromSource.",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "9C8A0A90-1A4B-4CD2-9E3F-7A13A89C6F06"
+    },
+    "sync": {
+      "lastModified": "2026-05-16T18:22:08.871Z",
+      "checksum": "d2e2a05df9ee1c4deffccfbf703e57c80ff34a1fa601447d3f1cb91a5a719291"
+    }
+  },
+  {
+    "fields": {
+      "Name": "List Bulk Operation",
+      "Description": "A bulk mutation was applied to a List (set-op compose, refresh, bulk-move, etc).",
+      "ParentID": null,
+      "AuthorizationID": null
+    },
+    "primaryKey": {
+      "ID": "9C8A0A90-1A4B-4CD2-9E3F-7A13A89C6F07"
+    },
+    "sync": {
+      "lastModified": "2026-05-16T18:22:08.880Z",
+      "checksum": "4cd490fa11fcaa2954e27ea4b49c3655ff3f0a2503deb77e8242e2ca69e6c99b"
+    }
+  }
+]

@@ -21,25 +21,34 @@
         </div>
       }
     </div>
-    <div class="add-dropdown-wrapper">
-      <button mjButton variant="primary" class="add-btn" (click)="toggleAddDropdown()">
-        <span class="fa-solid fa-plus"></span>
-        Add to List
-        <span class="fa-solid fa-chevron-down add-dropdown-arrow"></span>
-      </button>
-      @if (showAddDropdown) {
-        <div class="add-dropdown-panel">
-          @for (option of addOptions; track option.Text) {
-            <div class="add-dropdown-item" (click)="onDropdownItemClick(option)">
-              <span class="add-dropdown-item-text">{{ option.Text }}</span>
-              @if (option.Description) {
-                <span class="add-dropdown-item-desc">{{ option.Description }}</span>
-              }
-            </div>
-          }
-        </div>
-      }
-    </div>
+    @if (capabilities.CanEdit) {
+      <div class="add-dropdown-wrapper">
+        <button mjButton variant="primary" class="add-btn" (click)="toggleAddDropdown()">
+          <span class="fa-solid fa-plus"></span>
+          Add to List
+          <span class="fa-solid fa-chevron-down add-dropdown-arrow"></span>
+        </button>
+        @if (showAddDropdown) {
+          <div class="add-dropdown-panel">
+            @for (option of addOptions; track option.Text) {
+              <div class="add-dropdown-item" (click)="onDropdownItemClick(option)">
+                <span class="add-dropdown-item-text">{{ option.Text }}</span>
+                @if (option.Description) {
+                  <span class="add-dropdown-item-desc">{{ option.Description }}</span>
+                }
+              </div>
+            }
+          </div>
+        }
+      </div>
+    } @else if (currentLevel) {
+      <!-- Viewer-perspective badge so users understand why mutation
+           controls are absent. Mirrors mockup 19. -->
+      <span class="permission-badge permission-badge--viewer">
+        <i class="fa-solid fa-eye"></i>
+        Viewer access
+      </span>
+    }
   </div>
 
   <!-- Custom Toolbar -->
@@ -52,7 +61,7 @@
         }
       </div>
       <div class="toolbar-right">
-        @if (selectedKeys.length > 0) {
+        @if (selectedKeys.length > 0 && capabilities.CanEdit) {
           <button mjButton
             (click)="openRemoveDialog()"
             variant="flat"
@@ -61,7 +70,7 @@
             Remove from List
           </button>
         }
-        @if (hasLineage) {
+        @if (hasLineage && capabilities.CanRefresh) {
           <select
             class="mj-input mj-select refresh-mode-select"
             [ngModel]="refreshMode"

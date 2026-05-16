@@ -1,12 +1,17 @@
 import { LogError, UserInfo } from '@memberjunction/core';
 import {
   ListOperations,
+  ListSharing,
   type ApplyResult as CoreApplyResult,
   type ListDelta as CoreListDelta,
   type ListDeltaWarning as CoreListDeltaWarning,
+  type ListShareSummary,
   type ListSource as CoreListSource,
   type MaterializeOptions as CoreMaterializeOptions,
   type SetOpKind,
+  type SharePermissionLevel,
+  type SharedListSummary,
+  type ShareTarget,
 } from '@memberjunction/lists';
 import { Arg, Ctx, Field, InputType, Int, Mutation, ObjectType, Query, Resolver } from 'type-graphql';
 
@@ -130,6 +135,94 @@ export class ApplyDeltaInput {
   @Field(() => Boolean) ConfirmDrops!: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// Sharing inputs / outputs (Phase 2)
+// ---------------------------------------------------------------------------
+
+@InputType('ShareTargetInput')
+export class ShareTargetInput {
+  @Field(() => String, { description: 'Target kind: user | role.' })
+  Kind!: 'user' | 'role';
+
+  @Field(() => String, { nullable: true, description: 'User ID, required when Kind=user.' })
+  UserID?: string;
+
+  @Field(() => String, { nullable: true, description: 'Role ID, required when Kind=role.' })
+  RoleID?: string;
+}
+
+@InputType('ShareListInput')
+export class ShareListInput {
+  @Field(() => String) ListID!: string;
+  @Field(() => ShareTargetInput) Target!: ShareTargetInput;
+  @Field(() => String, { description: 'Permission level: View | Edit | Owner.' })
+  PermissionLevel!: SharePermissionLevel;
+}
+
+@InputType('InviteToListInput')
+export class InviteToListInput {
+  @Field(() => String) ListID!: string;
+  @Field(() => String) Email!: string;
+  @Field(() => String, { description: 'Role: Editor | Viewer.' })
+  Role!: 'Editor' | 'Viewer';
+  @Field(() => Int, { nullable: true, description: 'Optional TTL in hours. Defaults to 7 days.' })
+  TtlHours?: number;
+}
+
+@ObjectType('ShareTargetType')
+export class ShareTargetType {
+  @Field(() => String) Kind!: 'user' | 'role';
+  @Field(() => String, { nullable: true }) UserID?: string;
+  @Field(() => String, { nullable: true }) RoleID?: string;
+}
+
+@ObjectType('ListShareSummaryType')
+export class ListShareSummaryType {
+  @Field(() => String) PermissionID!: string;
+  @Field(() => String) ListID!: string;
+  @Field(() => ShareTargetType) Target!: ShareTargetType;
+  @Field(() => String) PermissionLevel!: SharePermissionLevel;
+  @Field(() => String) Status!: string;
+  @Field(() => String, { nullable: true }) SharedByUserID?: string;
+  @Field(() => Date) CreatedAt!: Date;
+}
+
+@ObjectType('SharedListSummaryType')
+export class SharedListSummaryType {
+  @Field(() => String) ListID!: string;
+  @Field(() => String) ListName!: string;
+  @Field(() => String) PermissionLevel!: SharePermissionLevel;
+  @Field(() => String, { nullable: true }) SharedByUserID?: string;
+  @Field(() => Date) SharedAt!: Date;
+}
+
+@ObjectType('ShareResultType')
+export class ShareResultType {
+  @Field(() => Boolean) Success!: boolean;
+  @Field(() => String) ResultCode!: string;
+  @Field(() => String) Message!: string;
+  @Field(() => String, { nullable: true }) PermissionID?: string;
+}
+
+@ObjectType('InviteResultType')
+export class InviteResultType {
+  @Field(() => Boolean) Success!: boolean;
+  @Field(() => String) ResultCode!: string;
+  @Field(() => String) Message!: string;
+  @Field(() => String, { nullable: true }) InvitationID?: string;
+  @Field(() => String, { nullable: true }) Token?: string;
+  @Field(() => Date, { nullable: true }) ExpiresAt?: Date;
+}
+
+@ObjectType('AcceptInvitationResultType')
+export class AcceptInvitationResultType {
+  @Field(() => Boolean) Success!: boolean;
+  @Field(() => String) ResultCode!: string;
+  @Field(() => String) Message!: string;
+  @Field(() => String, { nullable: true }) PermissionID?: string;
+  @Field(() => String, { nullable: true }) ListID?: string;
+}
+
 @InputType('ComposeListsInput')
 export class ComposeListsInput {
   @Field(() => String, { description: 'Set-op kind: union | intersection | difference.' })
@@ -142,10 +235,12 @@ export class ComposeListsInput {
 }
 
 // ---------------------------------------------------------------------------
-// Boundary converters
+// Boundary converters — exported for unit testing. Kept as standalone
+// functions (not methods) so tests don't have to construct a full
+// AppContext / type-graphql runtime.
 // ---------------------------------------------------------------------------
 
-function toCoreSource(input: ListSourceInput): CoreListSource {
+export function toCoreSource(input: ListSourceInput): CoreListSource {
   switch (input.Kind) {
     case 'list':
       if (!input.ListID) throw new Error("ListSourceInput.ListID is required when Kind='list'");
@@ -163,7 +258,7 @@ function toCoreSource(input: ListSourceInput): CoreListSource {
   }
 }
 
-function fromCoreDelta(delta: CoreListDelta): ListDeltaType {
+export function fromCoreDelta(delta: CoreListDelta): ListDeltaType {
   return {
     TargetListId: delta.TargetListId,
     EntityName: delta.EntityName,
@@ -176,7 +271,7 @@ function fromCoreDelta(delta: CoreListDelta): ListDeltaType {
   };
 }
 
-function fromCoreWarning(w: CoreListDeltaWarning): ListDeltaWarningType {
+export function fromCoreWarning(w: CoreListDeltaWarning): ListDeltaWarningType {
   return {
     Code: w.Code,
     Message: w.Message,
@@ -184,7 +279,7 @@ function fromCoreWarning(w: CoreListDeltaWarning): ListDeltaWarningType {
   };
 }
 
-function fromCoreApplyResult(r: CoreApplyResult): ApplyListResultType {
+export function fromCoreApplyResult(r: CoreApplyResult): ApplyListResultType {
   return {
     Success: r.Success,
     ResultCode: r.ResultCode,
@@ -198,7 +293,44 @@ function fromCoreApplyResult(r: CoreApplyResult): ApplyListResultType {
   };
 }
 
-function rebuildDeltaFromInput(input: ApplyDeltaInput): CoreListDelta {
+/** Convert a `ListShareSummary` from the core into the GraphQL DTO. */
+export function fromCoreShareSummary(s: ListShareSummary): ListShareSummaryType {
+  return {
+    PermissionID: s.PermissionID,
+    ListID: s.ListID,
+    Target:
+      s.Target.kind === 'user'
+        ? { Kind: 'user', UserID: s.Target.userId }
+        : { Kind: 'role', RoleID: s.Target.roleId },
+    PermissionLevel: s.PermissionLevel,
+    Status: s.Status,
+    SharedByUserID: s.SharedByUserID ?? undefined,
+    CreatedAt: s.CreatedAt,
+  };
+}
+
+/** Guard for required-when-Kind-X fields on discriminated inputs. */
+export function requireField<T>(value: T | undefined, name: string): T {
+  if (value == null) throw new Error(`'${name}' is required`);
+  return value;
+}
+
+/** Three failure helpers — one per output type — keep the try/catch
+ *  sites in the resolver methods tiny. */
+export function shareUnexpected(e: unknown, op: string): ShareResultType {
+  const message = e instanceof Error ? e.message : String(e);
+  return { Success: false, ResultCode: 'UNEXPECTED_ERROR', Message: `${op}: ${message}` };
+}
+export function inviteUnexpected(e: unknown, op: string): InviteResultType {
+  const message = e instanceof Error ? e.message : String(e);
+  return { Success: false, ResultCode: 'UNEXPECTED_ERROR', Message: `${op}: ${message}` };
+}
+export function acceptInvitationUnexpected(e: unknown, op: string): AcceptInvitationResultType {
+  const message = e instanceof Error ? e.message : String(e);
+  return { Success: false, ResultCode: 'UNEXPECTED_ERROR', Message: `${op}: ${message}` };
+}
+
+export function rebuildDeltaFromInput(input: ApplyDeltaInput): CoreListDelta {
   return {
     TargetListId: input.TargetListId,
     EntityName: input.EntityName,
@@ -333,7 +465,122 @@ export class ListOperationsResolver extends ResolverBase {
     return fromCoreDelta(delta);
   }
 
+  // -----------------------------------------------------------------------
+  // Sharing (Phase 2). Auth is enforced at two layers — this resolver checks
+  // the user is authenticated; `ListSharing` itself enforces the audit-log /
+  // status-transition contracts. Server-side notification dispatch fires
+  // automatically through the registered share-notification handler.
+  // -----------------------------------------------------------------------
+
+  @Mutation(() => ShareResultType)
+  async ShareList(
+    @Arg('input', () => ShareListInput) input: ShareListInput,
+    @Ctx() ctx: AppContext,
+  ): Promise<ShareResultType> {
+    const sharing = this.buildSharing(ctx);
+    try {
+      const target: ShareTarget =
+        input.Target.Kind === 'user'
+          ? { kind: 'user', userId: requireField(input.Target.UserID, 'Target.UserID') }
+          : { kind: 'role', roleId: requireField(input.Target.RoleID, 'Target.RoleID') };
+      const result = await sharing.Share({
+        ListID: input.ListID,
+        Target: target,
+        PermissionLevel: input.PermissionLevel,
+      });
+      return result;
+    } catch (e) {
+      return shareUnexpected(e, 'ShareList');
+    }
+  }
+
+  @Mutation(() => ShareResultType)
+  async UnshareList(
+    @Arg('permissionId', () => String) permissionId: string,
+    @Ctx() ctx: AppContext,
+  ): Promise<ShareResultType> {
+    const sharing = this.buildSharing(ctx);
+    try {
+      return await sharing.Unshare(permissionId);
+    } catch (e) {
+      return shareUnexpected(e, 'UnshareList');
+    }
+  }
+
+  @Mutation(() => InviteResultType)
+  async InviteToList(
+    @Arg('input', () => InviteToListInput) input: InviteToListInput,
+    @Ctx() ctx: AppContext,
+  ): Promise<InviteResultType> {
+    const sharing = this.buildSharing(ctx);
+    try {
+      return await sharing.Invite({
+        ListID: input.ListID,
+        Email: input.Email,
+        Role: input.Role,
+        TtlMs: input.TtlHours != null ? input.TtlHours * 60 * 60 * 1000 : undefined,
+      });
+    } catch (e) {
+      return inviteUnexpected(e, 'InviteToList');
+    }
+  }
+
+  @Mutation(() => AcceptInvitationResultType)
+  async AcceptListInvitation(
+    @Arg('token', () => String) token: string,
+    @Ctx() ctx: AppContext,
+  ): Promise<AcceptInvitationResultType> {
+    const sharing = this.buildSharing(ctx);
+    try {
+      return await sharing.AcceptInvitation(token);
+    } catch (e) {
+      return acceptInvitationUnexpected(e, 'AcceptListInvitation');
+    }
+  }
+
+  @Mutation(() => ShareResultType)
+  async RevokeListInvitation(
+    @Arg('invitationId', () => String) invitationId: string,
+    @Ctx() ctx: AppContext,
+  ): Promise<ShareResultType> {
+    const sharing = this.buildSharing(ctx);
+    try {
+      return await sharing.RevokeInvitation(invitationId);
+    } catch (e) {
+      return shareUnexpected(e, 'RevokeListInvitation');
+    }
+  }
+
+  @Query(() => [ListShareSummaryType])
+  async ListSharesForList(
+    @Arg('listId', () => String) listId: string,
+    @Ctx() ctx: AppContext,
+  ): Promise<ListShareSummaryType[]> {
+    const sharing = this.buildSharing(ctx);
+    const shares = await sharing.GetSharesForList(listId);
+    return shares.map(fromCoreShareSummary);
+  }
+
+  @Query(() => [SharedListSummaryType])
+  async ListsSharedWithMe(@Ctx() ctx: AppContext): Promise<SharedListSummaryType[]> {
+    const sharing = this.buildSharing(ctx);
+    const summaries = await sharing.GetListsSharedWithUser();
+    return summaries.map((s) => ({
+      ListID: s.ListID,
+      ListName: s.ListName,
+      PermissionLevel: s.PermissionLevel,
+      SharedByUserID: s.SharedByUserID ?? undefined,
+      SharedAt: s.SharedAt,
+    }));
+  }
+
   // --- private helpers ---------------------------------------------------
+
+  private buildSharing(ctx: AppContext): ListSharing {
+    const user = this.requireUser(ctx);
+    const provider = GetReadWriteProvider(ctx.providers, { allowFallbackToReadOnly: false });
+    return new ListSharing(user, provider);
+  }
 
   private buildOps(ctx: AppContext): ListOperations {
     const user = this.requireUser(ctx);

@@ -55,6 +55,24 @@
   font-size: 13px;
 }
 
+/* Viewer-perspective badge (mockup 19) — surfaced in the header when the
+   user has read-only access so the missing mutation controls don't feel
+   broken. */
+.permission-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.permission-badge--viewer {
+  background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+}
+
 /* Custom Toolbar */
 .custom-toolbar {
   display: flex;

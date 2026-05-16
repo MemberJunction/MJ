@@ -1,0 +1,137 @@
+.invitations {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+}
+
+.invitation-send {
+  background: var(--mj-bg-surface-card);
+  border: 1px solid var(--mj-border-default);
+  border-radius: 8px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.invitation-send__heading {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--mj-text-muted);
+}
+
+.invitation-send__form {
+  display: grid;
+  grid-template-columns: 1fr 120px 110px auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.invitation-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  background: var(--mj-status-error-bg);
+  border: 1px solid var(--mj-status-error-border);
+  border-radius: 6px;
+  color: var(--mj-status-error-text);
+  font-size: 12.5px;
+}
+
+.invitation-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--mj-border-default);
+}
+
+.invitation-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 12.5px;
+  color: var(--mj-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.invitation-tab--active {
+  color: var(--mj-brand-primary);
+  border-bottom-color: var(--mj-brand-primary);
+  font-weight: 600;
+}
+
+.invitation-tab__count {
+  background: var(--mj-bg-surface-sunken);
+  color: var(--mj-text-muted);
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 10.5px;
+}
+
+.invitation-tab--active .invitation-tab__count {
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+}
+
+.invitation-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 32px;
+  color: var(--mj-text-secondary);
+  gap: 6px;
+}
+
+.invitation-state i {
+  font-size: 22px;
+  color: var(--mj-text-muted);
+}
+
+.invitation-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.invitation-table th {
+  text-align: left;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--mj-text-muted);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--mj-border-default);
+}
+
+.invitation-table td {
+  padding: 10px;
+  border-bottom: 1px solid var(--mj-border-subtle);
+  color: var(--mj-text-primary);
+}
+
+.invitation-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  white-space: nowrap;
+}
+
+.role-chip {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+  color: var(--mj-brand-primary);
+  font-weight: 600;
+}
+
+.role-chip--editor {
+  background: color-mix(in srgb, var(--mj-status-warning) 15%, var(--mj-bg-surface));
+  color: var(--mj-status-warning-text);
+}

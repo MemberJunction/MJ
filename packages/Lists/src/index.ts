@@ -1,5 +1,6 @@
 export * from './types';
 export * from './ListOperations';
+export * from './ListSharing';
 export {
   ComputeSourceSignature,
   DeltaTokenVerificationError,
