@@ -620,7 +620,7 @@
                                             Content items tagged "{{ SelectedDrillDownTag }}"
                                             ({{ TagDrillDownItems.length }})
                                         </span>
-                                        <button class="at-slide-close" (click)="CloseDrillDownTag()" style="background:none;border:none;cursor:pointer;color:var(--mj-text-muted)">
+                                        <button class="at-slide-close" (click)="CloseDrillDownTag()" style="background:none;border:none;cursor:pointer;color:var(--mj-text-muted)" aria-label="Close">
                                             <i class="fa-solid fa-times"></i>
                                         </button>
                                     </div>
@@ -1081,7 +1081,7 @@
                                 <div class="at-tax-drillin-panel" (click)="$event.stopPropagation()">
                                     <div class="at-tax-drillin-header">
                                         <h3><i class="fa-solid fa-tag"></i> {{ TreemapDrillInNode.Name }}</h3>
-                                        <button class="at-schedule-dialog-close" (click)="CloseTreemapDrillIn()">
+                                        <button class="at-schedule-dialog-close" (click)="CloseTreemapDrillIn()" aria-label="Close">
                                             <i class="fa-solid fa-times"></i>
                                         </button>
                                     </div>
@@ -1803,7 +1803,7 @@
             <div class="at-schedule-dialog" (click)="$event.stopPropagation()">
                 <div class="at-schedule-dialog-header">
                     <h3><i class="fa-regular fa-clock"></i> Schedule Pipeline</h3>
-                    <button class="at-schedule-dialog-close" (click)="CloseScheduleDialog()">
+                    <button class="at-schedule-dialog-close" (click)="CloseScheduleDialog()" aria-label="Close">
                         <i class="fa-solid fa-times"></i>
                     </button>
                 </div>
@@ -1859,7 +1859,7 @@
             <div class="at-schedule-dialog" (click)="$event.stopPropagation()">
                 <div class="at-schedule-dialog-header">
                     <h3><i class="fa-solid fa-triangle-exclamation"></i> {{ ConfirmDialogTitle }}</h3>
-                    <button class="at-schedule-dialog-close" (click)="ConfirmDialogCancel()">
+                    <button class="at-schedule-dialog-close" (click)="ConfirmDialogCancel()" aria-label="Close">
                         <i class="fa-solid fa-times"></i>
                     </button>
                 </div>
@@ -1882,7 +1882,7 @@
             <div class="at-schedule-dialog" (click)="$event.stopPropagation()">
                 <div class="at-schedule-dialog-header">
                     <h3><i class="fa-solid fa-code-branch"></i> Split Tag</h3>
-                    <button class="at-schedule-dialog-close" (click)="CloseSplitDialog()">
+                    <button class="at-schedule-dialog-close" (click)="CloseSplitDialog()" aria-label="Close">
                         <i class="fa-solid fa-times"></i>
                     </button>
                 </div>
@@ -1911,7 +1911,7 @@
             <div class="at-schedule-dialog" (click)="$event.stopPropagation()">
                 <div class="at-schedule-dialog-header">
                     <h3><i class="fa-solid fa-plus"></i> Create Tag</h3>
-                    <button class="at-schedule-dialog-close" (click)="CloseCreateTagDialog()">
+                    <button class="at-schedule-dialog-close" (click)="CloseCreateTagDialog()" aria-label="Close">
                         <i class="fa-solid fa-times"></i>
                     </button>
                 </div>
@@ -1943,7 +1943,7 @@
             <div class="at-schedule-dialog" (click)="$event.stopPropagation()">
                 <div class="at-schedule-dialog-header">
                     <h3><i class="fa-solid fa-arrows-up-down"></i> Move Tag</h3>
-                    <button class="at-schedule-dialog-close" (click)="CloseMoveDialog()">
+                    <button class="at-schedule-dialog-close" (click)="CloseMoveDialog()" aria-label="Close">
                         <i class="fa-solid fa-times"></i>
                     </button>
                 </div>
@@ -1973,7 +1973,7 @@
             <div class="at-schedule-dialog" (click)="$event.stopPropagation()">
                 <div class="at-schedule-dialog-header">
                     <h3><i class="fa-solid fa-compress"></i> Merge "{{ MergeSourceTag?.Name }}" Into...</h3>
-                    <button class="at-schedule-dialog-close" (click)="CloseMergeIntoDialog()">
+                    <button class="at-schedule-dialog-close" (click)="CloseMergeIntoDialog()" aria-label="Close">
                         <i class="fa-solid fa-times"></i>
                     </button>
                 </div>
