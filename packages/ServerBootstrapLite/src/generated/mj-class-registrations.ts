@@ -847,7 +847,7 @@ import {
     ResourcePermissionProvider,
 } from '@memberjunction/core-entities';
 
-// @memberjunction/core-entities-server (17 classes)
+// @memberjunction/core-entities-server (18 classes)
 import {
     MJAIAgentExampleEntityServer,
     MJAIAgentNoteEntityServer,
@@ -857,6 +857,7 @@ import {
     MJApplicationEntityServer,
     MJArtifactVersionEntityServer,
     MJComponentEntityServer,
+    MJConversationDetailAttachmentEntityServer,
     MJConversationDetailEntityServer,
     MJDuplicateRunEntityServer,
     MJQueryEntityServer,
@@ -1625,6 +1626,7 @@ export const CLASS_REGISTRATIONS: any[] = [
     MJApplicationEntityServer,
     MJArtifactVersionEntityServer,
     MJComponentEntityServer,
+    MJConversationDetailAttachmentEntityServer,
     MJConversationDetailEntityServer,
     MJDuplicateRunEntityServer,
     MJQueryEntityServer,
@@ -1679,7 +1681,7 @@ export const CLASS_REGISTRATIONS: any[] = [
 export const CLASS_REGISTRATIONS_MANIFEST_LOADED = true;
 
 /** Total @RegisterClass decorated classes discovered in dependency tree */
-export const CLASS_REGISTRATIONS_COUNT = 716;
+export const CLASS_REGISTRATIONS_COUNT = 717;
 
 /** Packages imported by this manifest */
 export const CLASS_REGISTRATIONS_PACKAGES = [
