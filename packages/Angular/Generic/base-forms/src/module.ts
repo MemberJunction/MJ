@@ -15,6 +15,8 @@ import { RecordChangesModule } from '@memberjunction/ng-record-changes';
 import { ListManagementModule } from '@memberjunction/ng-list-management';
 import { EntityViewerModule } from '@memberjunction/ng-entity-viewer';
 import { RecordTagsModule } from '@memberjunction/ng-record-tags';
+import { MJReactModule } from '@memberjunction/ng-react';
+import { InteractiveFormComponent } from './lib/interactive-form/interactive-form.component';
 
 /**
  * BaseFormsModule - Form components and base classes for rendering and editing MemberJunction entity records.
@@ -45,7 +47,8 @@ import { RecordTagsModule } from '@memberjunction/ng-record-tags';
     SectionLoaderComponent,
     ExplorerEntityDataGridComponent,
     MjIsaRelatedCardComponent,
-    MjIsaRelatedPanelComponent
+    MjIsaRelatedPanelComponent,
+    InteractiveFormComponent
   ],
   imports: [
     CommonModule,
@@ -53,7 +56,8 @@ import { RecordTagsModule } from '@memberjunction/ng-record-tags';
     RecordChangesModule,
     ListManagementModule,
     EntityViewerModule,
-    RecordTagsModule
+    RecordTagsModule,
+    MJReactModule
   ],
   exports: [
     MjFormToolbarComponent,
@@ -64,7 +68,8 @@ import { RecordTagsModule } from '@memberjunction/ng-record-tags';
     SectionLoaderComponent,
     ExplorerEntityDataGridComponent,
     MjIsaRelatedCardComponent,
-    MjIsaRelatedPanelComponent
+    MjIsaRelatedPanelComponent,
+    InteractiveFormComponent
   ]
 })
 export class BaseFormsModule { }

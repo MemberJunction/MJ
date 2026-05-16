@@ -2,10 +2,10 @@ import { AfterViewInit, ChangeDetectorRef, Component, ComponentRef, EventEmitter
 import { ActivatedRoute } from '@angular/router'
 import { Metadata, KeyValuePair, CompositeKey, BaseEntity, BaseEntityEvent, FieldValueCollection, EntityFieldTSType } from '@memberjunction/core';
 import { Subscription } from 'rxjs';
-import { MJGlobal } from '@memberjunction/global';
 import { Container } from '@memberjunction/ng-container-directives';
-import { BaseFormComponent, FormNavigationEvent, FormNotificationEvent } from '@memberjunction/ng-base-forms';
+import { BaseFormComponent, FormNavigationEvent, FormNotificationEvent, InteractiveFormComponent } from '@memberjunction/ng-base-forms';
 import { NavigationService, RecentAccessService, SharedService } from '@memberjunction/ng-shared';
+import { FormResolverService } from '../services/form-resolver.service';
 
 
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
@@ -28,6 +28,7 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnIni
   private navigationService = inject(NavigationService);
   private sharedService = inject(SharedService);
   private cdr = inject(ChangeDetectorRef);
+  private formResolver = inject(FormResolverService);
 
   constructor (private route: ActivatedRoute) {
     super();
@@ -72,8 +73,6 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnIni
       this.PrimaryKey = new CompositeKey();
     }
 
-    const formReg = MJGlobal.Instance.ClassFactory.GetRegistration(BaseFormComponent, entityName);
-
     const md = this.ProviderToUse;
     const entity = md.EntityByName(entityName);
     const permissions = entity?.GetUserPermisions(md.CurrentUser);
@@ -87,10 +86,14 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnIni
         return;
       }
 
-      if (!formReg) {
+      // Resolve which form to render: User/Role/Global EntityFormOverride first,
+      // then ClassFactory-registered Angular form, then nothing.
+      const resolution = await this.formResolver.ResolveFormForEntity(entity, md.CurrentUser, md);
+
+      if (resolution.kind === 'none') {
         this.failWithUserError(
           `No form is registered for "${entityName}".`,
-          `MemberJunction could not find an Angular form component registered against BaseFormComponent for entity "${entityName}". This usually means CodeGen has not generated a form for this entity in the running build (forms live under packages/MJExplorer or your app's entity-form package). Run CodeGen, ensure the generated module is imported, or register a custom form via @RegisterClass(BaseFormComponent, '${entityName}').`,
+          `MemberJunction could not find an EntityFormOverride or a class-based form for entity "${entityName}". This usually means CodeGen has not generated a form for this entity in the running build (forms live under packages/MJExplorer or your app's entity-form package). Run CodeGen, ensure the generated module is imported, register a custom form via @RegisterClass(BaseFormComponent, '${entityName}'), or create an EntityFormOverride row pointing at a runtime Component.`,
           { entityId: entity.ID, recordKey: primaryKey?.ToString?.() ?? '(none)' }
         );
         return;
@@ -130,18 +133,28 @@ export class SingleRecordComponent extends BaseAngularComponent implements OnIni
       const viewContainerRef = this.formContainer.viewContainerRef;
       viewContainerRef.clear();
 
-      const componentRef = viewContainerRef.createComponent<typeof formReg.SubClass>(formReg.SubClass);
+      // Generated forms expose properties (e.g. `userPermissions`) that aren't
+      // on the abstract `BaseFormComponent`. Widen the instance type for the
+      // setter surface we share across class-based and interactive forms.
+      const componentRef: ComponentRef<BaseFormComponent> = resolution.kind === 'interactive'
+        ? viewContainerRef.createComponent(InteractiveFormComponent)
+        : viewContainerRef.createComponent(resolution.subClass);
+
+      if (resolution.kind === 'interactive') {
+        (componentRef as ComponentRef<InteractiveFormComponent>).instance.ComponentID = resolution.override.ComponentID;
+      }
 
       // Track component and record for cleanup
       this._formComponentRef = componentRef;
       this._currentRecord = record;
 
-      componentRef.instance.record = record
-      componentRef.instance.userPermissions = permissions
-      componentRef.instance.EditMode = !primaryKey.HasValue; // for new records go direct into edit mode
+      const instance = componentRef.instance as BaseFormComponent & { userPermissions?: unknown };
+      instance.record = record;
+      instance.userPermissions = permissions;
+      instance.EditMode = !primaryKey.HasValue; // for new records go direct into edit mode
 
       // Subscribe to form @Output events and map them to Explorer services
-      this.subscribeToFormEvents(componentRef.instance);
+      this.subscribeToFormEvents(instance);
 
       this.useGenericForm = false;
       this.errorTitle = null;

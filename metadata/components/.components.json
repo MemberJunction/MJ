@@ -1,6 +1,25 @@
 [
   {
     "fields": {
+      "Name": "InteractiveApplicationForm",
+      "Namespace": "Admin/Applications",
+      "Title": "Interactive Application Form",
+      "Type": "Other",
+      "Version": "1.0.0",
+      "VersionSequence": 1,
+      "Status": "Published",
+      "Specification": "@file:spec/interactive-application-form.spec.json"
+    },
+    "primaryKey": {
+      "ID": "A0D8DC78-9E2D-4866-91F4-7B474B2E7A9F"
+    },
+    "sync": {
+      "lastModified": "2026-05-16T18:58:07.931Z",
+      "checksum": "5daefcf350d8fd057dd3ae58cfdafbe7b98e6f6dbe376689b74e5c499e632fb4"
+    }
+  },
+  {
+    "fields": {
       "Name": "EntityBrowser",
       "Namespace": "Admin/Entities",
       "Title": "Entity Browser",
@@ -2142,8 +2161,8 @@
       "ID": "2AD46B3C-D0B2-49A7-9F0B-8DCE68A0C118"
     },
     "sync": {
-      "lastModified": "2026-04-27T18:51:34.595Z",
-      "checksum": "3a0b8b66e2e91d5a6c154a05e5180a63d1ecd30a1241580973670b131d3be01e"
+      "lastModified": "2026-05-16T18:58:09.295Z",
+      "checksum": "ef6d726a19c6be4562844b5610b781aed9f7bb2bd25bf259b175e39e97967063"
     }
   }
 ]
