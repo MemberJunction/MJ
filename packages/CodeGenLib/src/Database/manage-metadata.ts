@@ -12,6 +12,15 @@ import { logError, logMessage, logStatus, startSpinner, updateSpinner, succeedSp
 import { SQLUtilityBase } from "./sql";
 import { AdvancedGeneration, EntityDescriptionResult, EntityNameResult, SmartFieldIdentificationResult, FormLayoutResult, VirtualEntityDecorationResult } from "../Misc/advanced_generation";
 import { CodeGenReporter } from "../Misc/codegen-reporter";
+import {
+   applySearchableFieldsCap,
+   defaultPredicateFor,
+   entityLevelEnableBlockedReason,
+   isNarrativeFieldName,
+   normalizePredicate,
+   normalizeSmartFieldResultShape,
+   SearchPredicate,
+} from "./search-guardrails";
 import { SQLParser } from "@memberjunction/sql-parser";
 import { createDisplayName, generatePluralName, MJGlobal, RegisterClass, SafeJSONParse, stripTrailingChars, UUIDsEqual } from "@memberjunction/global";
 import { v4 as uuidv4 } from 'uuid';
@@ -4969,6 +4978,11 @@ export class ManageMetadataBase {
       fields: Array<Record<string, unknown>>,
       result: SmartFieldIdentificationResult
    ): Promise<void> {
+      // Run the guardrail pipeline once up front so every downstream applier
+      // sees the same already-normalized result. See search-guardrails.ts for
+      // the rules. Mutates result in place — see normalizeSearchFlagsInPlace.
+      this.normalizeSearchFlagsInPlace(entity, fields, result);
+
       const sqlStatements: string[] = [];
 
       this.applyNameFieldUpdates(sqlStatements, fields, result);
@@ -4989,6 +5003,107 @@ export class ManageMetadataBase {
             logError('Error executing combined smart field SQL: ', ex)
          }
       }
+   }
+
+   /**
+    * Apply the code-level search guardrails to the LLM result, mutating
+    * `result` in place so every downstream applier reads the normalized
+    * version. The pure heuristics live in `search-guardrails.ts`; this
+    * method wires them to the per-field metadata (Type, Length, IsPrimaryKey,
+    * AutoUpdate flags) we have on `fields`.
+    *
+    * Order of operations:
+    *   1. Shape cleanup (empty/contradictory states).
+    *   2. Field-level eligibility — filter through `isFieldEligibleForUserSearch`
+    *      and the narrative-field-name blocklist.
+    *   3. Per-entity cap.
+    *   4. Predicate normalization — rewrite `Contains` to a default when the
+    *      field isn't FTS-backed, fill in defaults for missing entries.
+    *   5. Telemetry — record proposed/accepted counts and any rewrites for
+    *      the end-of-run report.
+    */
+   protected normalizeSearchFlagsInPlace(
+      entity: { Name?: string; FullTextSearchEnabled?: boolean },
+      fields: Array<Record<string, unknown>>,
+      result: SmartFieldIdentificationResult
+   ): void {
+      const proposedSearchableCount = (result.searchableFields ?? []).length;
+      const proposedAllowUserSearch = result.allowUserSearch === true;
+
+      // 1. Shape cleanup (defensive — identifyFields() also runs this).
+      const cleaned = normalizeSmartFieldResultShape(result);
+      result.searchableFields = cleaned.searchableFields ?? [];
+      result.searchPredicates = cleaned.searchPredicates ?? [];
+      result.allowUserSearch = cleaned.allowUserSearch;
+
+      // 2. Eligibility filter (PK / non-text / MAX-without-FTX / narrative).
+      const ftxEnabled = !!entity.FullTextSearchEnabled;
+      const fieldByName = new Map<string, Record<string, unknown>>();
+      for (const f of fields) {
+         fieldByName.set(f.Name as string, f);
+      }
+      const eligible: string[] = [];
+      let droppedNarrativeCount = 0;
+      let droppedIneligibleCount = 0;
+      for (const name of result.searchableFields) {
+         const field = fieldByName.get(name);
+         if (!field) continue; // already logged elsewhere
+         if (!this.isFieldEligibleForUserSearch(field, ftxEnabled)) {
+            droppedIneligibleCount += 1;
+            continue;
+         }
+         if (isNarrativeFieldName(name) && !ftxEnabled) {
+            droppedNarrativeCount += 1;
+            continue;
+         }
+         eligible.push(name);
+      }
+
+      // 3. Per-entity cap.
+      const { accepted, dropped: droppedByCap } = applySearchableFieldsCap(eligible);
+      result.searchableFields = accepted;
+
+      // 4. Predicate normalization. Build a fresh searchPredicates list keyed
+      //    on the accepted fields. The LLM's proposed predicates are the input
+      //    if present; missing entries get defaults.
+      const proposedByName = new Map<string, SearchPredicate>();
+      for (const sp of result.searchPredicates ?? []) {
+         if (sp && typeof sp.field === 'string') {
+            proposedByName.set(sp.field, sp.predicate);
+         }
+      }
+      const ftsFieldSet = new Set(result.fullTextSearchFields ?? []);
+      const normalizedPredicates: Array<{ field: string; predicate: SearchPredicate }> = [];
+      let predicatesRewrittenCount = 0;
+      for (const fieldName of accepted) {
+         const { predicate, rewritten } = normalizePredicate({
+            fieldName,
+            proposed: proposedByName.get(fieldName),
+            isInFullTextSearchFields: ftsFieldSet.has(fieldName),
+            entityFullTextSearchEnabled: ftxEnabled || result.enableFullTextSearch === true,
+         });
+         if (rewritten) predicatesRewrittenCount += 1;
+         normalizedPredicates.push({ field: fieldName, predicate });
+      }
+      result.searchPredicates = normalizedPredicates;
+
+      // If the cap or guardrails left us with no searchable fields, the
+      // entity-level enable can't survive — re-run shape cleanup so
+      // applyEntitySearchConfig sees a coherent result.
+      if (accepted.length === 0 && result.allowUserSearch === true) {
+         result.allowUserSearch = false;
+      }
+
+      // 5. Telemetry.
+      const reporter = CodeGenReporter.Instance;
+      reporter.counter('search.searchableFieldsProposed', proposedSearchableCount);
+      reporter.counter('search.searchableFieldsAccepted', accepted.length);
+      reporter.counter('search.searchableFieldsDroppedIneligible', droppedIneligibleCount);
+      reporter.counter('search.searchableFieldsDroppedNarrative', droppedNarrativeCount);
+      reporter.counter('search.searchableFieldsDroppedByCap', droppedByCap.length);
+      reporter.counter('search.predicatesRewritten', predicatesRewrittenCount);
+      if (proposedAllowUserSearch) reporter.counter('search.allowUserSearchProposed', 1);
+      if (result.allowUserSearch === true) reporter.counter('search.allowUserSearchAcceptedSoFar', 1);
    }
 
    /**
@@ -5170,10 +5285,26 @@ export class ManageMetadataBase {
       }
       const newValue = result.allowUserSearch;
       const currentValue = !!entity.AllowUserSearchAPI;
-      // If the LLM is proposing to ENABLE search on a log/audit/run-history-style
-      // entity, drop the proposal. We never block a proposal to DISABLE search.
-      if (newValue && !currentValue && this.isLikelyLogOrAuditEntity(entity.Name, entity.SchemaName)) {
-         return;
+      // We never block a proposal to DISABLE search.
+      if (newValue && !currentValue) {
+         // Default-off semantics: a 0 → 1 flip requires the LLM to be highly
+         // confident, requires at least one searchable field to have survived
+         // the field-level guardrails, and refuses log/audit and detail/line-
+         // item-shaped entities. Anything blocked here gets a one-line note in
+         // the CodeGen run report so the team can audit proposals.
+         const blocked = entityLevelEnableBlockedReason({
+            entityName: entity.Name,
+            confidence: result.confidence,
+            acceptedSearchableFieldsCount: (result.searchableFields ?? []).length,
+         });
+         const reporter = CodeGenReporter.Instance;
+         if (blocked) {
+            reporter.counter('search.allowUserSearchEnableBlocked', 1);
+            reporter.note(`[search] refused AllowUserSearchAPI 0→1 on '${entity.Name}': ${blocked}`);
+            return;
+         }
+         reporter.counter('search.allowUserSearchEnableAccepted', 1);
+         reporter.note(`[search] enabled AllowUserSearchAPI on '${entity.Name}': ${result.allowUserSearchReason ?? 'no reason given'}`);
       }
       if (newValue !== currentValue) {
          sqlStatements.push(`

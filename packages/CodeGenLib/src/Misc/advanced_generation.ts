@@ -5,6 +5,7 @@ import { AIPromptParams, AIPromptRunResult } from "@memberjunction/ai-core-plus"
 import { MJAIPromptEntityExtended } from "@memberjunction/ai-core-plus";
 import { AIEngine } from "@memberjunction/aiengine";
 import { CodeGenReporter } from "./codegen-reporter";
+import { normalizeSmartFieldResultShape } from "../Database/search-guardrails";
 
 export type EntityNameResult = { entityName: string, tableName: string }
 export type EntityDescriptionResult = { entityDescription: string, tableName: string }
@@ -221,7 +222,14 @@ export class AdvancedGeneration {
             const result = await this.executePrompt<SmartFieldIdentificationResult>(params);
 
             if (result.success && result.result) {
-                return result.result;
+                // Defensive shape cleanup. The LLM occasionally returns
+                // contradictory states (allowUserSearch=false with
+                // searchableFields populated, duplicates in the field list,
+                // etc.). The full code-level guardrail pipeline runs in
+                // ManageMetadataBase.normalizeSearchFlagsInPlace; this is just
+                // the first-pass cleanup so any caller of identifyFields()
+                // gets a coherent result.
+                return normalizeSmartFieldResultShape(result.result);
             } else {
                 LogError(`AdvancedGeneration:Smart field identification failed: ${result.errorMessage}`);
                 return null;
