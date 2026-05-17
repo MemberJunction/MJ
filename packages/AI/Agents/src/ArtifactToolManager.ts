@@ -93,7 +93,7 @@ class CompositeArtifactToolLibrary extends BaseArtifactToolLibrary {
   }
 }
 
-interface StoredToolResult {
+export interface StoredToolResult {
   artifactId: string;
   tool: string;
   input: Record<string, unknown>;
@@ -470,67 +470,94 @@ export class ArtifactToolManager {
 
   // ─── TOOL EXECUTION ───
 
-  /** Execute tool calls from LLM response */
-  async ExecuteToolCalls(calls: ArtifactToolCall[]): Promise<void> {
-    const promises = calls.map(async (call) => {
-      const startedAt = Date.now();
-      // Try exact alpha ID first, then fallback to name match
-      let entry = this.artifacts.get(call.artifactId);
-      if (!entry) {
-        // LLMs sometimes use the artifact name instead of the alpha ID
-        for (const e of this.artifacts.values()) {
-          if (e.name.toLowerCase() === call.artifactId.toLowerCase() || e.name.toLowerCase().replace(/\s+/g, '_') === call.artifactId.toLowerCase()) {
-            entry = e;
-            break;
-          }
+  /**
+   * Execute a single tool call and return its stored result. Also pushes the
+   * result into the manager's internal result store for back-compat consumers
+   * that read `toolResults` after a batch (e.g. `GetPendingResults`).
+   *
+   * Exposed publicly so the agent runtime can wrap each call in its own
+   * AIAgentRunStep (StepType='Tool'). For bulk-dispatch use, see
+   * {@link ExecuteToolCalls}.
+   */
+  async ExecuteSingleToolCall(call: ArtifactToolCall): Promise<StoredToolResult> {
+    const startedAt = Date.now();
+    // Try exact alpha ID first, then fallback to name match
+    let entry = this.artifacts.get(call.artifactId);
+    if (!entry) {
+      // LLMs sometimes use the artifact name instead of the alpha ID
+      for (const e of this.artifacts.values()) {
+        if (e.name.toLowerCase() === call.artifactId.toLowerCase() || e.name.toLowerCase().replace(/\s+/g, '_') === call.artifactId.toLowerCase()) {
+          entry = e;
+          break;
         }
       }
-      if (!entry && this.artifacts.size === 1) {
-        // If there's only one artifact, use it regardless of what ID was passed
-        entry = this.artifacts.values().next().value;
-      }
-      if (!entry) {
-        this.toolResults.push({
-          artifactId: call.artifactId,
-          tool: call.tool,
-          input: call.input,
-          result: {
-            success: false,
-            data: null,
-            errorMessage: `Unknown artifact ID: ${call.artifactId}. Use the alpha ID (A, B, C, etc.) from the manifest.`,
-          },
-          timestamp: new Date(),
-          durationMs: Date.now() - startedAt,
-        });
-        return;
-      }
-
-      // Wrap InvokeTool so any exception inside a handler becomes a structured
-      // error result instead of propagating up to the agent loop. Without this,
-      // a single malformed artifact (e.g. a table missing `rows`) crashes the
-      // entire run via `executePromptStep`'s catch → isConfigurationError.
-      let result: ArtifactToolResult;
-      try {
-        result = await entry.library.InvokeTool(call.tool, call.input, entry.content);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        result = {
-          success: false,
-          data: null,
-          errorMessage: `Tool "${call.tool}" on artifact ${entry.alphaId} threw: ${msg}. The artifact content may be malformed for this tool — try a different tool or a different artifact.`,
-        };
-      }
-      this.toolResults.push({
+    }
+    if (!entry && this.artifacts.size === 1) {
+      // If there's only one artifact, use it regardless of what ID was passed
+      entry = this.artifacts.values().next().value;
+    }
+    if (!entry) {
+      const stored: StoredToolResult = {
         artifactId: call.artifactId,
         tool: call.tool,
         input: call.input,
-        result,
+        result: {
+          success: false,
+          data: null,
+          errorMessage: `Unknown artifact ID: ${call.artifactId}. Use the alpha ID (A, B, C, etc.) from the manifest.`,
+        },
         timestamp: new Date(),
         durationMs: Date.now() - startedAt,
-      });
-    });
+      };
+      this.toolResults.push(stored);
+      return stored;
+    }
 
-    await Promise.all(promises);
+    // Wrap InvokeTool so any exception inside a handler becomes a structured
+    // error result instead of propagating up to the agent loop. Without this,
+    // a single malformed artifact (e.g. a table missing `rows`) crashes the
+    // entire run via `executePromptStep`'s catch → isConfigurationError.
+    let result: ArtifactToolResult;
+    try {
+      result = await entry.library.InvokeTool(call.tool, call.input, entry.content);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      result = {
+        success: false,
+        data: null,
+        errorMessage: `Tool "${call.tool}" on artifact ${entry.alphaId} threw: ${msg}. The artifact content may be malformed for this tool — try a different tool or a different artifact.`,
+      };
+    }
+    const stored: StoredToolResult = {
+      artifactId: call.artifactId,
+      tool: call.tool,
+      input: call.input,
+      result,
+      timestamp: new Date(),
+      durationMs: Date.now() - startedAt,
+    };
+    this.toolResults.push(stored);
+    return stored;
+  }
+
+  /**
+   * Execute a batch of tool calls in parallel. Each call's result is stored
+   * internally and accessible via {@link GetFullToolResults} or the
+   * markdown-rendered {@link GetPendingResults}. Returns void to preserve
+   * the original contract.
+   */
+  async ExecuteToolCalls(calls: ArtifactToolCall[]): Promise<void> {
+    await Promise.all(calls.map((c) => this.ExecuteSingleToolCall(c)));
+  }
+
+  /**
+   * Returns the full stored results from this run's tool invocations —
+   * including the raw `data` payload that {@link GetAccessLog} omits.
+   * Used by the agent runtime to populate per-call AIAgentRunStep OutputData
+   * with full audit fidelity (no LLM-context truncation).
+   */
+  GetFullToolResults(): readonly StoredToolResult[] {
+    return this.toolResults;
   }
 
   // ─── SERIALIZATION ───

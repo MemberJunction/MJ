@@ -158,6 +158,87 @@ describe('ArtifactToolManager', () => {
         });
     });
 
+    describe('ExecuteSingleToolCall', () => {
+        it('returns the stored result for a successful call', async () => {
+            manager.Initialize([
+                makeArtifact('My Text', 'Text', 'line one\nline two\nline three'),
+            ]);
+
+            const stored = await manager.ExecuteSingleToolCall({
+                artifactId: 'A',
+                tool: 'get_lines',
+                input: { start: 0, count: 2 },
+            });
+
+            expect(stored.artifactId).toBe('A');
+            expect(stored.tool).toBe('get_lines');
+            expect(stored.result.success).toBe(true);
+            expect(stored.result.data).toBeDefined();
+            expect(typeof stored.durationMs).toBe('number');
+            expect(stored.timestamp).toBeInstanceOf(Date);
+        });
+
+        it('returns a structured error for an unknown artifact ID', async () => {
+            manager.Initialize([
+                makeArtifact('X', 'JSON', '{}'),
+                makeArtifact('Y', 'JSON', '{}'),
+            ]);
+
+            const stored = await manager.ExecuteSingleToolCall({
+                artifactId: 'Z',
+                tool: 'json_keys',
+                input: {},
+            });
+
+            expect(stored.result.success).toBe(false);
+            expect(stored.result.errorMessage).toContain('Unknown artifact ID');
+            expect(stored.result.data).toBeNull();
+        });
+
+        it('pushes each call into the internal store so bulk callers see all results', async () => {
+            manager.Initialize([
+                makeArtifact('First', 'JSON', '{"a":1}'),
+                makeArtifact('Second', 'JSON', '{"b":2}'),
+            ]);
+
+            await manager.ExecuteSingleToolCall({ artifactId: 'A', tool: 'json_keys', input: {} });
+            await manager.ExecuteSingleToolCall({ artifactId: 'B', tool: 'json_keys', input: {} });
+
+            expect(manager.GetAccessLog()).toHaveLength(2);
+            expect(manager.GetFullToolResults()).toHaveLength(2);
+        });
+    });
+
+    describe('GetFullToolResults', () => {
+        it('returns the full StoredToolResult — including raw data — for every invocation', async () => {
+            manager.Initialize([
+                makeArtifact('Data', 'JSON', '{"keys":[1,2,3]}'),
+            ]);
+
+            await manager.ExecuteToolCalls([
+                { artifactId: 'A', tool: 'json_keys', input: {} },
+            ]);
+
+            const fullResults = manager.GetFullToolResults();
+            expect(fullResults).toHaveLength(1);
+            // Critical: GetFullToolResults must NOT drop the actual result data
+            // (which the older GetAccessLog projection does). This is the
+            // accessor the agent runtime uses to populate Tool step OutputData.
+            expect(fullResults[0].result.data).toBeDefined();
+            expect(fullResults[0].result.success).toBe(true);
+            expect(fullResults[0].artifactId).toBe('A');
+            expect(fullResults[0].tool).toBe('json_keys');
+        });
+
+        it('returns an empty array when no tool calls have executed', () => {
+            manager.Initialize([
+                makeArtifact('Empty', 'JSON', '{}'),
+            ]);
+
+            expect(manager.GetFullToolResults()).toEqual([]);
+        });
+    });
+
     describe('GetPendingResults', () => {
         it('returns empty string when no results', () => {
             expect(manager.GetPendingResults()).toBe('');
