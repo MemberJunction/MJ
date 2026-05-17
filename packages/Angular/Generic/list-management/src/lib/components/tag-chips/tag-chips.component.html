@@ -1,0 +1,39 @@
+<div class="tag-chips" [class.tag-chips--loading]="loading">
+  @for (tag of displayedTags; track tag.TaggedItemID) {
+    <span class="tag-chip" (click)="OnTagClick(tag)">
+      <i class="fa-solid fa-tag"></i>
+      <span class="tag-chip__name">{{ tag.Name }}</span>
+      @if (Editable) {
+        <i
+          class="fa-solid fa-xmark tag-chip__remove"
+          title="Remove tag"
+          (click)="OnRemove(tag, $event)"></i>
+      }
+    </span>
+  }
+
+  @if (extraTagCount > 0) {
+    <span class="tag-chip tag-chip--more">+{{ extraTagCount }} more</span>
+  }
+
+  @if (Editable) {
+    <div class="tag-chip-add">
+      <input
+        type="text"
+        class="tag-chip-add__input"
+        [(ngModel)]="addInput"
+        (ngModelChange)="OnAddInputChange($event)"
+        placeholder="Add tag…" />
+      @if (showSuggestions && suggestions.length > 0) {
+        <div class="tag-chip-add__suggestions">
+          @for (s of suggestions; track s.ID) {
+            <button class="tag-chip-add__suggestion" (click)="OnAddTag(s)" type="button">
+              <i class="fa-solid fa-tag"></i>
+              {{ s.Name }}
+            </button>
+          }
+        </div>
+      }
+    </div>
+  }
+</div>

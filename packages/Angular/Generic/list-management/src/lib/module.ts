@@ -24,6 +24,7 @@ import { ListManagementDialogComponent } from './components/list-management-dial
 import { ListShareDialogComponent } from './components/list-share-dialog/list-share-dialog.component';
 import { ListsSharedWithMeComponent } from './components/shared-with-me/shared-with-me.component';
 import { SaveViewAsListDialogComponent } from './components/save-view-as-list-dialog/save-view-as-list-dialog.component';
+import { TagChipsComponent } from './components/tag-chips/tag-chips.component';
 
 // Services
 import { ListManagementService } from './services/list-management.service';
@@ -42,7 +43,8 @@ import { ListSharingService } from './services/list-sharing.service';
     ListManagementDialogComponent,
     ListShareDialogComponent,
     ListsSharedWithMeComponent,
-    SaveViewAsListDialogComponent
+    SaveViewAsListDialogComponent,
+    TagChipsComponent
   ],
   imports: [
     CommonModule,
@@ -63,7 +65,8 @@ import { ListSharingService } from './services/list-sharing.service';
     ListManagementDialogComponent,
     ListShareDialogComponent,
     ListsSharedWithMeComponent,
-    SaveViewAsListDialogComponent
+    SaveViewAsListDialogComponent,
+    TagChipsComponent
   ],
   providers: [
     ListManagementService,

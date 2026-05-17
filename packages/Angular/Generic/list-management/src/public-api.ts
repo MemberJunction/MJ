@@ -15,6 +15,7 @@ export * from './lib/components/list-management-dialog/list-management-dialog.co
 export * from './lib/components/list-share-dialog/list-share-dialog.component';
 export * from './lib/components/save-view-as-list-dialog/save-view-as-list-dialog.component';
 export * from './lib/components/shared-with-me/shared-with-me.component';
+export * from './lib/components/tag-chips/tag-chips.component';
 
 // Services
 export * from './lib/services/list-management.service';
