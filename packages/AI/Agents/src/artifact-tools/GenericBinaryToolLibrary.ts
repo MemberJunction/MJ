@@ -14,7 +14,7 @@ import { BaseArtifactToolLibrary, type ArtifactToolDefinition, type ArtifactTool
 
 @RegisterClass(BaseArtifactToolLibrary, 'GenericBinaryToolLibrary')
 export class GenericBinaryToolLibrary extends BaseArtifactToolLibrary {
-    protected GetSubclassToolList(): ArtifactToolDefinition[] {
+    protected getSubclassToolList(): ArtifactToolDefinition[] {
         return [
             {
                 name: 'get_metadata',
@@ -24,7 +24,7 @@ export class GenericBinaryToolLibrary extends BaseArtifactToolLibrary {
         ];
     }
 
-    protected async InvokeSubclassTool(
+    protected async invokeSubclassTool(
         toolName: string,
         _input: Record<string, unknown>,
         artifactContent: string | Buffer,

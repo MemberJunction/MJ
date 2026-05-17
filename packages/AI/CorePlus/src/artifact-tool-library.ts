@@ -8,8 +8,8 @@
  *
  * `get_full` is provided as a default tool by this base class — it returns
  * the raw artifact content (utf-8 string passthrough, or base64 for Buffer).
- * Subclasses inherit it for free; they can override `GetFull()` (and optionally
- * `GetFullToolDefinition()`) when "the full content" needs domain-specific
+ * Subclasses inherit it for free; they can override `getFull()` (and optionally
+ * `getFullToolDefinition()`) when "the full content" needs domain-specific
  * transformation (e.g. PDF extracts text instead of returning binary bytes).
  *
  * These types live in ai-core-plus so they can be referenced from
@@ -32,16 +32,16 @@ export abstract class BaseArtifactToolLibrary {
     /**
      * Returns the full tool list for this library — the base `get_full` plus
      * whatever subclass-specific tools the subclass declares. Final: subclasses
-     * should override `GetSubclassToolList()` rather than this method.
+     * should override `getSubclassToolList()` rather than this method.
      */
     public GetToolList(): ArtifactToolDefinition[] {
-        return [this.GetFullToolDefinition(), ...this.GetSubclassToolList()];
+        return [this.getFullToolDefinition(), ...this.getSubclassToolList()];
     }
 
     /**
      * Dispatches a tool invocation. Handles `get_full` directly; delegates
      * everything else to the subclass. Final: subclasses should override
-     * `InvokeSubclassTool()` rather than this method.
+     * `invokeSubclassTool()` rather than this method.
      */
     public async InvokeTool(
         toolName: string,
@@ -49,9 +49,9 @@ export abstract class BaseArtifactToolLibrary {
         artifactContent: string | Buffer
     ): Promise<ArtifactToolResult> {
         if (toolName === 'get_full') {
-            return this.GetFull(artifactContent);
+            return this.getFull(artifactContent);
         }
-        return this.InvokeSubclassTool(toolName, input, artifactContent);
+        return this.invokeSubclassTool(toolName, input, artifactContent);
     }
 
     /**
@@ -63,7 +63,7 @@ export abstract class BaseArtifactToolLibrary {
      * replaces this whole chain. New subclasses should prefer overriding
      * this method so they pick up the base-class `get_full` for free.
      */
-    protected GetSubclassToolList(): ArtifactToolDefinition[] {
+    protected getSubclassToolList(): ArtifactToolDefinition[] {
         return [];
     }
 
@@ -71,10 +71,10 @@ export abstract class BaseArtifactToolLibrary {
      * Subclass tool dispatcher — invoked for every tool except `get_full`.
      *
      * Default returns an "unknown tool" error. Same backwards-compat note as
-     * `GetSubclassToolList()`: external subclasses that override the public
+     * `getSubclassToolList()`: external subclasses that override the public
      * `InvokeTool()` directly continue to work unchanged.
      */
-    protected async InvokeSubclassTool(
+    protected async invokeSubclassTool(
         toolName: string,
         _input: Record<string, unknown>,
         _artifactContent: string | Buffer
@@ -90,7 +90,7 @@ export abstract class BaseArtifactToolLibrary {
      * Returns the `get_full` tool definition. Override only to change the
      * description (e.g. PDF documents that the tool returns extracted text).
      */
-    protected GetFullToolDefinition(): ArtifactToolDefinition {
+    protected getFullToolDefinition(): ArtifactToolDefinition {
         return {
             name: 'get_full',
             description:
@@ -103,7 +103,7 @@ export abstract class BaseArtifactToolLibrary {
      * Default `get_full` implementation. Override to transform raw bytes into a
      * domain-meaningful representation (e.g. extracted text from a PDF).
      */
-    protected async GetFull(artifactContent: string | Buffer): Promise<ArtifactToolResult> {
+    protected async getFull(artifactContent: string | Buffer): Promise<ArtifactToolResult> {
         if (typeof artifactContent === 'string') {
             return {
                 success: true,

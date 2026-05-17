@@ -6,8 +6,8 @@ import {
     MJArtifactVersionEntity,
     MJConversationDetailArtifactEntity,
     MJConversationDetailAttachmentEntity,
-    buildUnregisteredMimeError,
-    decideInlineStorage,
+    BuildUnregisteredMimeError,
+    DecideInlineStorage,
 } from '@memberjunction/core-entities';
 
 /**
@@ -92,7 +92,7 @@ export class MJConversationDetailAttachmentEntityServer extends MJConversationDe
         if (!artifactType) {
             return new ValidationErrorInfo(
                 'MimeType',
-                buildUnregisteredMimeError(this.FileName, mime),
+                BuildUnregisteredMimeError(this.FileName, mime),
                 mime,
                 ValidationErrorType.Failure,
             );
@@ -147,7 +147,7 @@ export class MJConversationDetailAttachmentEntityServer extends MJConversationDe
         } else {
             // Single source of truth for the inline-storage decision — pure
             // helper so both upload-path and tests share the same logic.
-            const stored = decideInlineStorage(mime, this.InlineData);
+            const stored = DecideInlineStorage(mime, this.InlineData);
             version.ContentMode = stored.contentMode;
             version.Content = stored.content;
         }

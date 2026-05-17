@@ -1,36 +1,14 @@
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { ArtifactMetadataEngine } from '@memberjunction/core-entities';
-import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult, NativeFileInput } from '@memberjunction/ai-core-plus';
+import { BaseArtifactToolLibrary, ArtifactToolDefinition, ArtifactToolResult, NativeFileInput, InputArtifact } from '@memberjunction/ai-core-plus';
 import { DataSnapshotToolLibrary } from './artifact-tools/DataSnapshotToolLibrary';
 import { JSONToolLibrary } from './artifact-tools/JSONToolLibrary';
 import { TextToolLibrary } from './artifact-tools/TextToolLibrary';
 
-/**
- * An input artifact provided to an agent run.
- */
-export interface InputArtifact {
-  name: string;
-  typeName: string;
-  content: string | Buffer;
-  /** MIME type of the artifact content (e.g., 'application/pdf').
-   *  Populated for file-backed artifacts from ArtifactVersion.MimeType. */
-  mimeType?: string;
-  /** Optional: class name from ArtifactType.ToolLibraryClass metadata.
-   *  When set, used for plugin-based resolution via ClassFactory. */
-  toolLibraryClass?: string;
-  /** Optional annotation surfaced verbatim on the artifact's manifest entry
-   *  (e.g. "configured for Inline but exceeds inline size cap; delivered via
-   *  tools"). Lets the resolver communicate routing decisions to the LLM. */
-  annotation?: string;
-  /** Resolved DefaultDeliveryMode for this artifact's type. When 'ToolsOnly',
-   *  the agent reaches the content via tool calls and we MUST NOT also offer
-   *  it as a native file input (otherwise we double-deliver: 1 MB JSON would
-   *  go through both the tool manager AND the native-file-input text fallback,
-   *  leaking the full content into the prompt). */
-  deliveryMode?: 'Inline' | 'ToolsOnly';
-  /** Per-instance override that forces ToolsOnly regardless of type default. */
-  forceToolsOnly?: boolean;
-}
+// Re-export so existing consumers that import { InputArtifact } from
+// './ArtifactToolManager' continue to compile. The canonical declaration
+// now lives in @memberjunction/ai-core-plus alongside ExecuteAgentParams.
+export type { InputArtifact };
 
 /**
  * A single artifact tool invocation requested by the LLM.
@@ -107,11 +85,11 @@ class CompositeArtifactToolLibrary extends BaseArtifactToolLibrary {
 
   // Required by the abstract base but never invoked — GetToolList / InvokeTool
   // are fully overridden above.
-  protected GetSubclassToolList(): ArtifactToolDefinition[] {
+  protected getSubclassToolList(): ArtifactToolDefinition[] {
     return [];
   }
-  protected async InvokeSubclassTool(): Promise<ArtifactToolResult> {
-    return { success: false, data: null, errorMessage: 'CompositeArtifactToolLibrary does not dispatch via InvokeSubclassTool.' };
+  protected async invokeSubclassTool(): Promise<ArtifactToolResult> {
+    return { success: false, data: null, errorMessage: 'CompositeArtifactToolLibrary does not dispatch via invokeSubclassTool.' };
   }
 }
 

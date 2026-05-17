@@ -29,10 +29,10 @@ interface PDFDocProxy {
 @RegisterClass(BaseArtifactToolLibrary, 'PDFToolLibrary')
 export class PDFToolLibrary extends BaseArtifactToolLibrary {
   // -----------------------------------------------------------------------
-  // GetSubclassToolList
+  // getSubclassToolList
   // -----------------------------------------------------------------------
 
-  protected GetSubclassToolList(): ArtifactToolDefinition[] {
+  protected getSubclassToolList(): ArtifactToolDefinition[] {
     return [
       {
         name: 'get_page_count',
@@ -72,7 +72,7 @@ export class PDFToolLibrary extends BaseArtifactToolLibrary {
 
   // PDF overrides the default `get_full` description because the override returns
   // extracted plain text rather than the base64-encoded PDF bytes.
-  protected GetFullToolDefinition(): ArtifactToolDefinition {
+  protected getFullToolDefinition(): ArtifactToolDefinition {
     return {
       name: 'get_full',
       description: 'Returns all text from every page concatenated. Use get_text for page-range slices or search_text to locate content first.',
@@ -82,21 +82,21 @@ export class PDFToolLibrary extends BaseArtifactToolLibrary {
 
   // PDF overrides the default `get_full` impl: extracted text is far more useful
   // than the raw binary the base class would return.
-  protected async GetFull(artifactContent: string | Buffer): Promise<ArtifactToolResult> {
+  protected async getFull(artifactContent: string | Buffer): Promise<ArtifactToolResult> {
     const pdfDoc = await this.loadDocument(artifactContent);
     if ('error' in pdfDoc) return pdfDoc.error;
     try {
-      return await this.handleGetFull(pdfDoc.doc);
+      return await this.handlegetFull(pdfDoc.doc);
     } finally {
       pdfDoc.doc.destroy();
     }
   }
 
   // -----------------------------------------------------------------------
-  // InvokeSubclassTool — dispatcher
+  // invokeSubclassTool — dispatcher
   // -----------------------------------------------------------------------
 
-  protected async InvokeSubclassTool(toolName: string, input: Record<string, unknown>, artifactContent: string | Buffer): Promise<ArtifactToolResult> {
+  protected async invokeSubclassTool(toolName: string, input: Record<string, unknown>, artifactContent: string | Buffer): Promise<ArtifactToolResult> {
     const loaded = await this.loadDocument(artifactContent);
     if ('error' in loaded) return loaded.error;
     const pdfDoc = loaded.doc;
@@ -190,7 +190,7 @@ export class PDFToolLibrary extends BaseArtifactToolLibrary {
     });
   }
 
-  private async handleGetFull(pdfDoc: PDFDocProxy): Promise<ArtifactToolResult> {
+  private async handlegetFull(pdfDoc: PDFDocProxy): Promise<ArtifactToolResult> {
     const allText: string[] = [];
     for (let i = 1; i <= pdfDoc.numPages; i++) {
       const page = await pdfDoc.getPage(i);

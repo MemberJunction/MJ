@@ -14,10 +14,9 @@ import { createHash } from 'crypto';
 import { LogError, LogStatusEx, IsVerboseLoggingEnabled, LogStatus, Metadata, RunView, RunQuery, UserInfo, IMetadataProvider, DatabaseProviderBase, ProviderType } from '@memberjunction/core';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
 import { AIEngine } from '@memberjunction/aiengine';
-import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, ActionStepOutputData, ActionStepSummary, ParseFileOutputRef } from '@memberjunction/ai-core-plus';
+import { ExecuteAgentResult, ExecuteAgentParams, MediaOutput, FileOutputRef, InputArtifact } from '@memberjunction/ai-core-plus';
 import { BaseAgent } from './base-agent';
-import { InputArtifact } from './ArtifactToolManager';
-import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJConversationDetailAttachmentEntity, ArtifactMetadataEngine, extractBase64FromDataUrl } from '@memberjunction/core-entities';
+import { MJConversationEntity, MJConversationDetailEntity, MJArtifactEntity, MJArtifactVersionEntity, MJConversationDetailArtifactEntity, MJAIAgentRunMediaEntity, MJConversationDetailAttachmentEntity, ArtifactMetadataEngine, ExtractBase64FromDataUrl } from '@memberjunction/core-entities';
 import { FileStorageEngine } from '@memberjunction/storage';
 
 /**
@@ -402,8 +401,8 @@ export class AgentRunner {
                 data: {
                     ...params.data,
                     conversationId,
-                    ...(inputArtifacts.length > 0 ? { __inputArtifacts: inputArtifacts } : {}),
                 },
+                inputArtifacts: inputArtifacts.length > 0 ? inputArtifacts : undefined,
                 conversationDetailId: agentResponseDetailId,
                 onProgress: wrappedOnProgress
             };
@@ -1271,83 +1270,6 @@ export class AgentRunner {
         );
     }
 
-    /**
-     * Re-processes file artifacts from a historical agent run by querying its persisted
-     * action step OutputData. Use this to recover artifacts for runs that completed before
-     * ProcessFileArtifacts was introduced, or for debugging.
-     *
-     * @param agentRunId - The agent run whose action steps to inspect
-     * @param conversationDetailId - The conversation detail to link artifacts to
-     * @param contextUser - User context for DB operations
-     */
-    public async ReprocessRunFileArtifacts(
-        agentRunId: string,
-        conversationDetailId: string,
-        contextUser: UserInfo,
-        provider?: IMetadataProvider
-    ): Promise<void> {
-        const md = provider || this._provider;
-        const steps = await this.loadActionStepsForRun(agentRunId, contextUser, md);
-        if (steps.length === 0) return;
-
-        const fileOutputs = steps.flatMap(step => this.parseStepFileOutputs(step));
-
-        // Look up the agent's AcceptUnregisteredFiles setting via the agent run.
-        const rv = RunView.FromMetadataProvider(md);
-        const runResult = await rv.RunView<{ AgentID: string }>({
-            EntityName: 'MJ: AI Agent Runs',
-            Fields: ['AgentID'],
-            ExtraFilter: `ID='${agentRunId}'`,
-            ResultType: 'simple',
-        }, contextUser);
-        const agentId = runResult.Success && runResult.Results.length > 0 ? runResult.Results[0].AgentID : undefined;
-        const agent = agentId ? AIEngine.Instance.Agents.find(a => UUIDsEqual(a.ID, agentId)) : undefined;
-        const acceptUnregistered = agent?.AcceptUnregisteredFiles ?? false;
-
-        await this.ProcessFileArtifacts(fileOutputs, conversationDetailId, contextUser, undefined, md, acceptUnregistered);
-    }
-
-    /** Loads all completed action steps for a given agent run (read-only, narrow fields). */
-    private async loadActionStepsForRun(agentRunId: string, contextUser: UserInfo, provider?: IMetadataProvider): Promise<ActionStepSummary[]> {
-        const rv = RunView.FromMetadataProvider(provider || this._provider);
-        const result = await rv.RunView<ActionStepSummary>({
-            EntityName: 'MJ: AI Agent Run Steps',
-            ExtraFilter: `AgentRunID='${agentRunId}' AND StepType='Actions' AND Status='Completed'`,
-            Fields: ['ID', 'OutputData'],
-            ResultType: 'simple'
-        }, contextUser);
-        return result.Success ? (result.Results ?? []) : [];
-    }
-
-    /**
-     * Parses persisted OutputData JSON from an action step and extracts file output metadata.
-     * Detection is shape-based (looks for objects with fileName + mimeType + fileData/fileId),
-     * not name-based — works regardless of what the action named its output parameter.
-     *
-     * Used only by the historical reprocessing path — live runs use BaseAgent's detectFileOutputs.
-     */
-    private parseStepFileOutputs(step: ActionStepSummary): FileOutputRef[] {
-        if (!step.OutputData) return [];
-
-        let outputData: ActionStepOutputData;
-        try {
-            outputData = JSON.parse(step.OutputData) as ActionStepOutputData;
-        } catch {
-            return [];
-        }
-
-        const params = outputData.actionResult?.parameters;
-        if (!params) return [];
-
-        const results: FileOutputRef[] = [];
-        for (const param of params) {
-            if (param.Value == null) continue;
-            const ref = ParseFileOutputRef(param.Value);
-            if (ref) results.push(ref);
-        }
-        return results;
-    }
-
     /** Uploads or resolves a single file output and creates the artifact records.
      *  Falls back to inline base64 artifact if storage is unavailable or upload fails. */
     private async processFileOutput(
@@ -1695,7 +1617,7 @@ export class AgentRunner {
                         // the `data:<mime>;base64,` prefix. Pure helper shared
                         // with the server-hook unit tests.
                         if (typeof content === 'string') {
-                            content = extractBase64FromDataUrl(content);
+                            content = ExtractBase64FromDataUrl(content);
                         }
 
                         if (typeof content === 'string' && content) {

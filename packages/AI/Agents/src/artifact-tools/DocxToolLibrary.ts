@@ -26,7 +26,7 @@ interface Section {
 
 @RegisterClass(BaseArtifactToolLibrary, 'DocxToolLibrary')
 export class DocxToolLibrary extends BaseArtifactToolLibrary {
-  protected GetSubclassToolList(): ArtifactToolDefinition[] {
+  protected getSubclassToolList(): ArtifactToolDefinition[] {
     return [
       {
         name: 'get_text',
@@ -70,7 +70,7 @@ export class DocxToolLibrary extends BaseArtifactToolLibrary {
     ];
   }
 
-  protected async InvokeSubclassTool(toolName: string, input: Record<string, unknown>, artifactContent: string | Buffer): Promise<ArtifactToolResult> {
+  protected async invokeSubclassTool(toolName: string, input: Record<string, unknown>, artifactContent: string | Buffer): Promise<ArtifactToolResult> {
     let extractedText: string;
     try {
       const buffer = this.toBuffer(artifactContent);

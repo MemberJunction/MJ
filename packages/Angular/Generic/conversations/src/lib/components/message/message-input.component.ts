@@ -417,12 +417,12 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
           }
 
           // Plan §6: when attachments are rejected, the message itself must
-          // not go through. Roll back the ConversationDetail and toast the
-          // server's rejection message so the user can see exactly why and
-          // either remove the file or upload a supported one. The text and
-          // pending attachments stay in the input so the user can edit.
+          // not go through. Roll back the ConversationDetail and notify the
+          // user with the server's rejection message so they can see exactly
+          // why and either remove the file or upload a supported one. The
+          // text and pending attachments stay in the input so the user can edit.
           if (attachmentRejection) {
-            this.toastService.error(attachmentRejection);
+            MJNotificationService.Instance?.CreateSimpleNotification(attachmentRejection, 'error', 5000);
             try {
               await messageDetail.Delete();
             } catch (rollbackErr) {
@@ -529,7 +529,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
           // the user sees the rejection clearly instead of the agent answering
           // a question that was supposed to include the file.
           if (attachmentRejection) {
-            this.toastService.error(attachmentRejection);
+            MJNotificationService.Instance?.CreateSimpleNotification(attachmentRejection, 'error', 5000);
             try {
               await detail.Delete();
             } catch (rollbackErr) {

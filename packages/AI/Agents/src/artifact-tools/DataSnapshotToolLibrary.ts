@@ -78,10 +78,10 @@ const VALID_AGGREGATE_OPS: ReadonlySet<string> = new Set<AggregateOperation>([
 export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
 
     // -----------------------------------------------------------------------
-    // GetSubclassToolList
+    // getSubclassToolList
     // -----------------------------------------------------------------------
 
-    protected GetSubclassToolList(): ArtifactToolDefinition[] {
+    protected getSubclassToolList(): ArtifactToolDefinition[] {
         return [
             {
                 name: 'get_tables',
@@ -149,10 +149,10 @@ export class DataSnapshotToolLibrary extends BaseArtifactToolLibrary {
     }
 
     // -----------------------------------------------------------------------
-    // InvokeSubclassTool — dispatcher
+    // invokeSubclassTool — dispatcher
     // -----------------------------------------------------------------------
 
-    protected async InvokeSubclassTool(
+    protected async invokeSubclassTool(
         toolName: string,
         input: Record<string, unknown>,
         artifactContent: string | Buffer

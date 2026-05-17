@@ -21,12 +21,14 @@ const JSON_FALLBACK_ID = 'AE674C7E-EA0D-49EA-89E4-0649F5EB20D4';
 
 export default class ArtifactsReclassify extends Command {
     static description =
-        'Re-evaluate artifact type assignments for rows that came through the deleted JSON-fallback path or that the migration backfill could not handle. Dry-run by default — passes through Record Changes when --apply is set.';
+        'Upgrade-recovery utility for v5.35 artifact unification. Re-evaluates rows whose TypeID is the deleted JSON fallback but whose actual content does not parse as JSON. ' +
+        'Normally a no-op: the v5.35 backfill migration handles this automatically. This command is only relevant when the migration ran BEFORE the artifact-type metadata ' +
+        '(Generic Text / Generic Binary) was pushed via `mj sync push`, in which case the migration prints a notice telling you to run this. ' +
+        'Reports "no candidates" once everything is reconciled. Dry-run by default; --apply writes through Record Changes.';
 
     static examples = [
         `<%= config.bin %> <%= command.id %>`,
         `<%= config.bin %> <%= command.id %> --apply --limit 50`,
-        `<%= config.bin %> <%= command.id %> --conversation-id abc123-... --apply`,
     ];
 
     static flags = {

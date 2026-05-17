@@ -8,30 +8,30 @@ import {
 // Minimal concrete subclass with no extra tools — exercises the base class
 // `get_full` defaults end-to-end.
 class StubToolLibrary extends BaseArtifactToolLibrary {
-    protected GetSubclassToolList(): ArtifactToolDefinition[] {
+    protected getSubclassToolList(): ArtifactToolDefinition[] {
         return [];
     }
-    protected async InvokeSubclassTool(): Promise<ArtifactToolResult> {
+    protected async invokeSubclassTool(): Promise<ArtifactToolResult> {
         return { success: false, data: null, errorMessage: 'no subclass tools' };
     }
 }
 
 // Subclass that overrides GetFull to verify the override hook works.
 class OverrideToolLibrary extends BaseArtifactToolLibrary {
-    protected GetSubclassToolList(): ArtifactToolDefinition[] {
+    protected getSubclassToolList(): ArtifactToolDefinition[] {
         return [];
     }
-    protected async InvokeSubclassTool(): Promise<ArtifactToolResult> {
+    protected async invokeSubclassTool(): Promise<ArtifactToolResult> {
         return { success: false, data: null, errorMessage: 'no subclass tools' };
     }
-    protected GetFullToolDefinition(): ArtifactToolDefinition {
+    protected getFullToolDefinition(): ArtifactToolDefinition {
         return {
             name: 'get_full',
             description: 'Override description',
             inputSchema: { type: 'object', properties: {}, required: [] },
         };
     }
-    protected async GetFull(): Promise<ArtifactToolResult> {
+    protected async getFull(): Promise<ArtifactToolResult> {
         return { success: true, data: { content: 'OVERRIDDEN', encoding: 'utf8' } };
     }
 }
@@ -73,7 +73,7 @@ describe('BaseArtifactToolLibrary', () => {
         expect((result.data as { sizeBytes: number }).sizeBytes).toBe(5);
     });
 
-    it('delegates unknown tools to InvokeSubclassTool', async () => {
+    it('delegates unknown tools to invokeSubclassTool', async () => {
         const lib = new StubToolLibrary();
         const result = await lib.InvokeTool('whatever', {}, '');
         expect(result.success).toBe(false);

@@ -14,7 +14,7 @@ interface ParsedCsv {
 
 @RegisterClass(BaseArtifactToolLibrary, 'CSVToolLibrary')
 export class CSVToolLibrary extends BaseArtifactToolLibrary {
-    protected GetSubclassToolList(): ArtifactToolDefinition[] {
+    protected getSubclassToolList(): ArtifactToolDefinition[] {
         return [
             {
                 name: 'get_columns',
@@ -49,7 +49,7 @@ export class CSVToolLibrary extends BaseArtifactToolLibrary {
         ];
     }
 
-    protected async InvokeSubclassTool(
+    protected async invokeSubclassTool(
         toolName: string,
         input: Record<string, unknown>,
         artifactContent: string | Buffer,

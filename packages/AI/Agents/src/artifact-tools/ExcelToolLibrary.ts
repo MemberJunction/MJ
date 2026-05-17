@@ -69,10 +69,10 @@ const VALID_AGGREGATE_OPS: ReadonlySet<string> = new Set<AggregateOperation>(['s
 @RegisterClass(BaseArtifactToolLibrary, 'ExcelToolLibrary')
 export class ExcelToolLibrary extends BaseArtifactToolLibrary {
   // -----------------------------------------------------------------------
-  // GetSubclassToolList
+  // getSubclassToolList
   // -----------------------------------------------------------------------
 
-  protected GetSubclassToolList(): ArtifactToolDefinition[] {
+  protected getSubclassToolList(): ArtifactToolDefinition[] {
     return [
       {
         name: 'get_sheets',
@@ -132,10 +132,10 @@ export class ExcelToolLibrary extends BaseArtifactToolLibrary {
   }
 
   // -----------------------------------------------------------------------
-  // InvokeSubclassTool — dispatcher
+  // invokeSubclassTool — dispatcher
   // -----------------------------------------------------------------------
 
-  protected async InvokeSubclassTool(toolName: string, input: Record<string, unknown>, artifactContent: string | Buffer): Promise<ArtifactToolResult> {
+  protected async invokeSubclassTool(toolName: string, input: Record<string, unknown>, artifactContent: string | Buffer): Promise<ArtifactToolResult> {
     const buffer = this.toBuffer(artifactContent);
 
     let workbook: ExcelWorkbook;
