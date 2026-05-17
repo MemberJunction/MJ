@@ -444,6 +444,10 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
         3000,
       );
       this.bulkStatus = '';
+      // Defer the grid refresh to the next microtask — see comment in
+      // confirmRemoveFromList for why running it synchronously here
+      // triggers NG0100 and silently breaks the UI refresh.
+      await Promise.resolve();
       this.refreshGrid();
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
@@ -532,9 +536,17 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
         'success',
         2500
       );
+      // Defer cleanup + refresh to the next microtask. Running these
+      // synchronously inside the current change-detection cycle
+      // triggers NG0100 (`@if (showRemoveDialog)` flips false while
+      // children are still being checked), which leaves the grid in a
+      // stale state — the deletion succeeds server-side but the UI
+      // doesn't re-fetch until the user navigates away and back.
+      await Promise.resolve();
       this.closeRemoveDialog();
       this.listDetailGrid?.clearSelection();
       this.refreshGrid();
+      this.cdr.detectChanges();
     } else {
       LogError("Error removing records from list");
       this.sharedService.CreateSimpleNotification("Failed to remove some records", 'error', 2500);
@@ -705,8 +717,12 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
         'success',
         2500
       );
+      // Defer dialog close + grid refresh to the next microtask. See
+      // confirmRemoveFromList for the NG0100 background.
+      await Promise.resolve();
       this.closeAddRecordsDialog();
       this.refreshGrid();
+      this.cdr.detectChanges();
     } else {
       LogError("Error adding records to list");
       this.sharedService.CreateSimpleNotification("Failed to add some records", 'error', 2500);
@@ -848,8 +864,12 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
         'success',
         2500
       );
+      // Defer dialog close + grid refresh to the next microtask. See
+      // confirmRemoveFromList for the NG0100 background.
+      await Promise.resolve();
       this.closeAddFromViewDialog();
       this.refreshGrid();
+      this.cdr.detectChanges();
     } else {
       LogError("Error adding records from view to list");
       this.sharedService.CreateSimpleNotification("Failed to add some records", 'error', 2500);
