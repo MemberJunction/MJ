@@ -2,7 +2,7 @@ import { Component, ViewEncapsulation, ChangeDetectorRef, OnDestroy, ElementRef,
 import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData, MJListCategoryEntity } from '@memberjunction/core-entities';
-import { MJListEntity, MJListDetailEntity } from '@memberjunction/core-entities';
+import { MJListEntity, MJListDetailEntity, MJUserFavoriteEntity } from '@memberjunction/core-entities';
 import { Metadata, RunView } from '@memberjunction/core';
 import { Subject } from 'rxjs';
 import { TabService } from '@memberjunction/ng-base-application';
@@ -84,6 +84,17 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
             </select>
           </div>
     
+          <!-- Favorites-only toggle (Phase 5.3). Lives next to the view
+               toggle group so it reads as "filter scope" alongside view mode. -->
+          <button
+            class="favorite-filter-toggle"
+            [class.favorite-filter-toggle--active]="showOnlyFavorites"
+            (click)="toggleShowOnlyFavorites()"
+            [title]="showOnlyFavorites ? 'Showing favorites only' : 'Show all lists'">
+            <i [class]="showOnlyFavorites ? 'fa-solid fa-star' : 'fa-regular fa-star'"></i>
+            Favorites
+          </button>
+
           <div class="view-toggle-group">
             <button
               class="view-toggle"
@@ -110,13 +121,36 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
         </div>
       </div>
     
+      <!-- Active tag filters (Phase 4.3). Renders only when at least one
+           tag is active — multi-tag = AND. Clicking a chip's × removes it. -->
+      @if (tagFilters.length > 0) {
+        <div class="tag-filter-row">
+          <span class="tag-filter-row__label">
+            <i class="fa-solid fa-tag"></i>
+            Filtering by tag:
+          </span>
+          @for (f of tagFilters; track f.TagID) {
+            <button
+              class="tag-filter-chip"
+              type="button"
+              (click)="removeTagFilter(f.TagID)">
+              {{ f.Name }}
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+          }
+          <button class="tag-filter-row__clear" type="button" (click)="clearTagFilters()">
+            Clear all
+          </button>
+        </div>
+      }
+
       <!-- Loading State -->
       @if (isLoading) {
         <div class="loading-container">
           <mj-loading text="Loading lists..." size="medium"></mj-loading>
         </div>
       }
-    
+
       <!-- Empty State - No Lists -->
       @if (!isLoading && allLists.length === 0) {
         <div class="empty-state">
@@ -274,6 +308,13 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
                     <div class="card-icon" [style.background-color]="getEntityColor(item.entityName)" aria-hidden="true">
                       <i [class]="getEntityIcon(item.entityName)"></i>
                     </div>
+                    <button
+                      class="favorite-btn"
+                      [class.favorite-btn--active]="isFavorite(item.list.ID)"
+                      (click)="toggleFavorite($event, item)"
+                      [title]="isFavorite(item.list.ID) ? 'Remove from favorites' : 'Add to favorites'">
+                      <i [class]="isFavorite(item.list.ID) ? 'fa-solid fa-star' : 'fa-regular fa-star'"></i>
+                    </button>
                     @if (item.isOwner) {
                       <div class="card-menu">
                         <button class="menu-btn" (click)="openListMenu($event, item)">
@@ -296,6 +337,20 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
                         <i class="fa-solid fa-hashtag"></i>
                         {{item.itemCount}} item{{item.itemCount !== 1 ? 's' : ''}}
                       </span>
+                    </div>
+                    <!-- Tag chips (Phase 4). Read-only on cards; click adds the
+                         tag to the filter row above. We stop propagation on
+                         the wrapper so clicks on chips don't also fire the
+                         card's openList handler. -->
+                    <div class="card-tags" (click)="$event.stopPropagation()">
+                      <mj-tag-chips
+                        [Provider]="Provider"
+                        EntityName="MJ: Lists"
+                        [RecordID]="item.list.ID"
+                        [Editable]="false"
+                        [MaxDisplay]="3"
+                        (TagClicked)="onCardTagClicked($event)">
+                      </mj-tag-chips>
                     </div>
                   </div>
                   <div class="card-footer">
@@ -1189,6 +1244,112 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
       color: var(--mj-text-muted);
     }
 
+    /* Tag chips on a card. Stop-propagation is set on the wrapper so
+       clicks on chips don't open the underlying list. */
+    .card-tags {
+      margin-top: 8px;
+    }
+
+    /* Favorite star on cards (Phase 5.3). */
+    .favorite-btn {
+      background: none;
+      border: none;
+      padding: 4px;
+      margin: -4px;
+      cursor: pointer;
+      color: var(--mj-text-muted);
+      font-size: 14px;
+      border-radius: 4px;
+      transition: color 0.12s ease, background 0.12s ease;
+    }
+
+    .favorite-btn:hover {
+      background: var(--mj-bg-surface-card);
+      color: var(--mj-status-warning);
+    }
+
+    .favorite-btn--active {
+      color: var(--mj-status-warning);
+    }
+
+    /* Favorites-only toggle in the toolbar. */
+    .favorite-filter-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      background: none;
+      border: 1px solid var(--mj-border-default);
+      border-radius: 6px;
+      font-size: 12.5px;
+      color: var(--mj-text-secondary);
+      cursor: pointer;
+    }
+
+    .favorite-filter-toggle:hover {
+      border-color: var(--mj-status-warning);
+      color: var(--mj-status-warning);
+    }
+
+    .favorite-filter-toggle--active {
+      background: color-mix(in srgb, var(--mj-status-warning) 12%, var(--mj-bg-surface));
+      border-color: var(--mj-status-warning);
+      color: var(--mj-status-warning);
+      font-weight: 600;
+    }
+
+    /* Active-tag filter row above the grid (Phase 4.3). */
+    .tag-filter-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+      background: var(--mj-bg-surface-sunken);
+      border: 1px dashed var(--mj-border-default);
+      border-radius: 8px;
+      font-size: 12.5px;
+    }
+
+    .tag-filter-row__label {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--mj-text-muted);
+      font-weight: 500;
+    }
+
+    .tag-filter-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 2px 10px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--mj-brand-primary) 12%, var(--mj-bg-surface));
+      color: var(--mj-brand-primary);
+      border: 1px solid var(--mj-brand-primary);
+      font-size: 11.5px;
+      cursor: pointer;
+    }
+
+    .tag-filter-chip:hover {
+      background: color-mix(in srgb, var(--mj-brand-primary) 20%, var(--mj-bg-surface));
+    }
+
+    .tag-filter-row__clear {
+      background: none;
+      border: none;
+      color: var(--mj-text-link);
+      font-size: 11.5px;
+      cursor: pointer;
+      margin-left: auto;
+    }
+
+    .tag-filter-row__clear:hover {
+      text-decoration: underline;
+    }
+
     .card-footer {
       display: flex;
       justify-content: space-between;
@@ -1673,6 +1834,31 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
   selectedOwner = 'mine';
   selectedSort = 'name';
 
+  /**
+   * Active tag filters (Phase 4.3). Multi-tag = AND — a list must have
+   * every active tag to appear. URL state mirrors this via the `tags`
+   * query param (comma-separated tag IDs).
+   */
+  tagFilters: Array<{ TagID: string; Name: string }> = [];
+
+  /**
+   * Set of List IDs that match the current `tagFilters` (intersection).
+   * `null` means "no tag filter active" — pass-through. Populated by
+   * `recomputeTagMembership` whenever `tagFilters` changes; consumed by
+   * `applyFilters` to narrow the visible list.
+   */
+  private tagFilteredListIds: Set<string> | null = null;
+
+  /**
+   * Favorite-list IDs for the current user (Phase 5.3). Backed by the
+   * existing `MJ: User Favorites` entity. `null` while loading; a Set
+   * once populated so card-side toggling is O(1).
+   */
+  favoriteListIds: Set<string> = new Set();
+
+  /** When true, only favorited lists appear in the grid. */
+  showOnlyFavorites = false;
+
   allLists: BrowseListItem[] = [];
   filteredLists: BrowseListItem[] = [];
   categories: MJListCategoryEntity[] = [];
@@ -1879,6 +2065,9 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
       this.applyFilters();
       this.buildCategoryTree();
 
+      // Load favorites in parallel — not critical-path, but cheap.
+      void this.loadFavorites();
+
       // Load sharing info in the background
       this.loadSharingInfo();
     } catch (error) {
@@ -2021,6 +2210,18 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
       result = result.filter(item => item.entityName === this.selectedEntity);
     }
 
+    // Tag filter (Phase 4.3 — intersection of all active tags).
+    if (this.tagFilteredListIds !== null) {
+      const matches = this.tagFilteredListIds;
+      result = result.filter(item => matches.has(item.list.ID));
+    }
+
+    // Favorites-only toggle (Phase 5.3).
+    if (this.showOnlyFavorites) {
+      const favs = this.favoriteListIds;
+      result = result.filter(item => favs.has(item.list.ID));
+    }
+
     // Sort
     switch (this.selectedSort) {
       case 'name':
@@ -2092,6 +2293,159 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
   openList(item: BrowseListItem) {
     const appId = this.Data?.Configuration?.applicationId || '';
     this.tabService.OpenList(item.list.ID, item.list.Name, appId);
+  }
+
+  /**
+   * Handle a tag chip click on a list card — adds the tag to the
+   * filter row (multi-tag = AND). Wired by Phase 4.3; the chip
+   * component emits the (TagID, Name) pair so we can both display
+   * the chip name and filter by ID.
+   */
+  onCardTagClicked(payload: { TagID: string; Name: string }): void {
+    if (this.tagFilters.some((f) => f.TagID === payload.TagID)) return;
+    this.tagFilters = [...this.tagFilters, payload];
+    void this.recomputeTagMembership();
+  }
+
+  /** Remove a tag from the filter row. */
+  removeTagFilter(tagId: string): void {
+    this.tagFilters = this.tagFilters.filter((f) => f.TagID !== tagId);
+    void this.recomputeTagMembership();
+  }
+
+  /** Clear all active tag filters. */
+  clearTagFilters(): void {
+    this.tagFilters = [];
+    this.tagFilteredListIds = null;
+    this.applyFilters();
+  }
+
+  /**
+   * Resolve which lists have ALL active tags. Done server-side so the
+   * filter works regardless of which lists the user has scrolled past.
+   * Result is cached on `tagFilteredListIds`; `applyFilters` consumes it.
+   */
+  private async recomputeTagMembership(): Promise<void> {
+    if (this.tagFilters.length === 0) {
+      this.tagFilteredListIds = null;
+      this.applyFilters();
+      return;
+    }
+    try {
+      const md = this.ProviderToUse;
+      const listsEntity = md.Entities.find((e) => e.Name === 'MJ: Lists');
+      if (!listsEntity) {
+        this.tagFilteredListIds = new Set();
+        this.applyFilters();
+        return;
+      }
+      const tagIds = this.tagFilters.map((f) => `'${f.TagID}'`).join(',');
+      const rv = RunView.FromMetadataProvider(md);
+      const result = await rv.RunView<{ RecordID: string; TagID: string }>({
+        EntityName: 'MJ: Tagged Items',
+        ExtraFilter: `EntityID='${listsEntity.ID}' AND TagID IN (${tagIds})`,
+        Fields: ['RecordID', 'TagID'],
+        ResultType: 'simple',
+      });
+      // Intersection: count tag hits per list, keep only those with
+      // exactly `tagFilters.length` matches (one per required tag).
+      const counts = new Map<string, number>();
+      for (const row of result.Results ?? []) {
+        const id = String(row.RecordID);
+        counts.set(id, (counts.get(id) ?? 0) + 1);
+      }
+      const required = this.tagFilters.length;
+      const matches = new Set<string>();
+      for (const [id, count] of counts) {
+        if (count >= required) matches.add(id);
+      }
+      this.tagFilteredListIds = matches;
+    } catch (e) {
+      // On failure, fall back to "no match" so the user sees an empty
+      // state rather than every list — avoids leaking unfiltered data
+      // when the filter intent failed silently.
+      this.tagFilteredListIds = new Set();
+    }
+    this.applyFilters();
+  }
+
+  /**
+   * Load the current user's favorite lists into `favoriteListIds`.
+   * Cheap — typically <100 rows per user. Driven by the `MJ: User
+   * Favorites` entity scoped by the Lists EntityID. Best-effort: on
+   * failure the star icons just stay dim.
+   */
+  private async loadFavorites(): Promise<void> {
+    try {
+      const md = this.ProviderToUse;
+      const listsEntity = md.Entities.find((e) => e.Name === 'MJ: Lists');
+      if (!listsEntity || !md.CurrentUser) return;
+      const rv = RunView.FromMetadataProvider(md);
+      const result = await rv.RunView<{ RecordID: string }>({
+        EntityName: 'MJ: User Favorites',
+        ExtraFilter: `UserID='${md.CurrentUser.ID}' AND EntityID='${listsEntity.ID}'`,
+        Fields: ['RecordID'],
+        ResultType: 'simple',
+      });
+      this.favoriteListIds = new Set((result.Results ?? []).map((r) => String(r.RecordID)));
+    } catch {
+      // Silent — favorites are a polish feature, not load-bearing.
+      this.favoriteListIds = new Set();
+    }
+  }
+
+  /**
+   * Toggle a list's favorite state. Optimistic: flips the local Set
+   * first, then writes through. Reverts on failure.
+   */
+  async toggleFavorite(event: Event, item: BrowseListItem): Promise<void> {
+    event.stopPropagation();
+    const wasFav = this.favoriteListIds.has(item.list.ID);
+    // Optimistic update.
+    if (wasFav) this.favoriteListIds.delete(item.list.ID);
+    else this.favoriteListIds.add(item.list.ID);
+    // Re-trigger filter recompute since the favorites-only toggle
+    // may be on.
+    this.applyFilters();
+
+    try {
+      const md = this.ProviderToUse;
+      const listsEntity = md.Entities.find((e) => e.Name === 'MJ: Lists');
+      if (!listsEntity || !md.CurrentUser) throw new Error('Cannot resolve user favorites entity');
+
+      if (wasFav) {
+        // Find + delete the existing favorite row.
+        const rv = RunView.FromMetadataProvider(md);
+        const result = await rv.RunView<MJUserFavoriteEntity>({
+          EntityName: 'MJ: User Favorites',
+          ExtraFilter:
+            `UserID='${md.CurrentUser.ID}' AND EntityID='${listsEntity.ID}' AND RecordID='${item.list.ID}'`,
+          ResultType: 'entity_object',
+        });
+        for (const row of result.Results ?? []) await row.Delete();
+      } else {
+        const fav = await md.GetEntityObject<MJUserFavoriteEntity>('MJ: User Favorites', md.CurrentUser);
+        fav.NewRecord();
+        fav.UserID = md.CurrentUser.ID;
+        fav.EntityID = listsEntity.ID;
+        fav.RecordID = item.list.ID;
+        await fav.Save();
+      }
+    } catch {
+      // Revert on failure.
+      if (wasFav) this.favoriteListIds.add(item.list.ID);
+      else this.favoriteListIds.delete(item.list.ID);
+      this.applyFilters();
+    }
+  }
+
+  isFavorite(listId: string): boolean {
+    return this.favoriteListIds.has(listId);
+  }
+
+  toggleShowOnlyFavorites(): void {
+    this.showOnlyFavorites = !this.showOnlyFavorites;
+    this.applyFilters();
   }
 
   openListMenu(event: Event, item: BrowseListItem) {

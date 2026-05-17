@@ -55,6 +55,11 @@
   font-size: 13px;
 }
 
+.bulk-status-select {
+  min-width: 130px;
+  font-size: 13px;
+}
+
 /* Viewer-perspective badge (mockup 19) — surfaced in the header when the
    user has read-only access so the missing mutation controls don't feel
    broken. */
@@ -71,6 +76,35 @@
 .permission-badge--viewer {
   background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
   color: var(--mj-brand-primary);
+}
+
+/* Tags section on the list detail header (Phase 4.2). */
+.list-detail__tags {
+  margin-top: 8px;
+}
+
+/* Grid + side stats two-column layout (Phase 5.4). Stats hides on
+   narrow screens so the grid keeps its breathing room. */
+.grid-with-stats {
+  display: grid;
+  grid-template-columns: 1fr 280px;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+}
+
+.list-detail__stats {
+  min-width: 0;
+  overflow-y: auto;
+}
+
+@media (max-width: 900px) {
+  .grid-with-stats {
+    grid-template-columns: 1fr;
+  }
+  .list-detail__stats {
+    display: none;
+  }
 }
 
 /* Custom Toolbar */

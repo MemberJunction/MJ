@@ -22,6 +22,7 @@ import { ListDeltaConfirmComponent } from './components/list-delta-confirm/list-
 import { ListInvitationsComponent } from './components/list-invitations/list-invitations.component';
 import { ListManagementDialogComponent } from './components/list-management-dialog/list-management-dialog.component';
 import { ListShareDialogComponent } from './components/list-share-dialog/list-share-dialog.component';
+import { ListStatsComponent } from './components/list-stats/list-stats.component';
 import { ListsSharedWithMeComponent } from './components/shared-with-me/shared-with-me.component';
 import { SaveViewAsListDialogComponent } from './components/save-view-as-list-dialog/save-view-as-list-dialog.component';
 import { TagChipsComponent } from './components/tag-chips/tag-chips.component';
@@ -42,6 +43,7 @@ import { ListSharingService } from './services/list-sharing.service';
     ListInvitationsComponent,
     ListManagementDialogComponent,
     ListShareDialogComponent,
+    ListStatsComponent,
     ListsSharedWithMeComponent,
     SaveViewAsListDialogComponent,
     TagChipsComponent
@@ -64,6 +66,7 @@ import { ListSharingService } from './services/list-sharing.service';
     ListInvitationsComponent,
     ListManagementDialogComponent,
     ListShareDialogComponent,
+    ListStatsComponent,
     ListsSharedWithMeComponent,
     SaveViewAsListDialogComponent,
     TagChipsComponent

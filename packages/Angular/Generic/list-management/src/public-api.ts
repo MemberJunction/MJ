@@ -14,6 +14,7 @@ export * from './lib/components/list-invitations/list-invitations.component';
 export * from './lib/components/list-management-dialog/list-management-dialog.component';
 export * from './lib/components/list-share-dialog/list-share-dialog.component';
 export * from './lib/components/save-view-as-list-dialog/save-view-as-list-dialog.component';
+export * from './lib/components/list-stats/list-stats.component';
 export * from './lib/components/shared-with-me/shared-with-me.component';
 export * from './lib/components/tag-chips/tag-chips.component';
 

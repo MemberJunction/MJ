@@ -19,12 +19,14 @@
 
 export * from './add-records-to-list.action';
 export * from './add-view-results-to-list.action';
+export * from './bulk-update-list-item-status.action';
 export * from './compose-lists.action';
 export * from './create-list.action';
 export * from './get-list-records.action';
 export * from './get-record-list-membership.action';
 export * from './invite-to-list.action';
 export * from './materialize-list-from-view.action';
+export * from './move-list-members.action';
 export * from './refresh-list-from-source.action';
 export * from './remove-records-from-list.action';
 export * from './resolve-audience.action';

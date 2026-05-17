@@ -20,6 +20,18 @@
           }
         </div>
       }
+      @if (listRecord) {
+        <!-- Tags section (Phase 4.2). Editable on the detail view. -->
+        <div class="list-detail__tags">
+          <mj-tag-chips
+            [Provider]="Provider"
+            EntityName="MJ: Lists"
+            [RecordID]="listRecord.ID"
+            [Editable]="capabilities.CanEdit"
+            [MaxDisplay]="20">
+          </mj-tag-chips>
+        </div>
+      }
     </div>
     @if (capabilities.CanEdit) {
       <div class="add-dropdown-wrapper">
@@ -62,6 +74,34 @@
       </div>
       <div class="toolbar-right">
         @if (selectedKeys.length > 0 && capabilities.CanEdit) {
+          <!-- Bulk-edit (Phase 5.2): set status across selected rows.
+               Move/Copy uses the existing Add-to-List dialog + the
+               Move List Members server-side action. -->
+          <select
+            class="mj-input mj-select bulk-status-select"
+            [(ngModel)]="bulkStatus"
+            [disabled]="isApplyingBulkStatus"
+            title="Set status on selected items">
+            <option value="">Set status…</option>
+            <option value="Active">Active</option>
+            <option value="Complete">Complete</option>
+            <option value="Pending">Pending</option>
+            <option value="Disabled">Disabled</option>
+            <option value="Rejected">Rejected</option>
+          </select>
+          <button mjButton
+            (click)="applyBulkStatus()"
+            [disabled]="!bulkStatus || isApplyingBulkStatus"
+            variant="flat"
+            class="toolbar-button">
+            @if (isApplyingBulkStatus) {
+              <span class="fa-solid fa-spinner fa-spin"></span>
+              Applying…
+            } @else {
+              <span class="fa-solid fa-pen-to-square"></span>
+              Apply Status
+            }
+          </button>
           <button mjButton
             (click)="openRemoveDialog()"
             variant="flat"
@@ -119,23 +159,28 @@
     </div>
   }
 
-  <!-- Grid -->
+  <!-- Grid + side stats panel (Phase 5.4). -->
   @if (!showLoader && listRecord) {
-    <div class="grid-container">
-      <mj-list-detail-grid
-        #listDetailGrid
-        [listId]="ListID"
-        [listEntity]="listRecord"
-        [autoNavigate]="true"
-        [height]="'auto'"
-        [showToolbar]="false"
-        [toolbarConfig]="gridToolbarConfig"
-        [selectionMode]="'checkbox'"
-        (rowClicked)="onRowClicked($event)"
-        (rowDoubleClicked)="onRowDoubleClicked($event)"
-        (selectionChange)="onSelectionChange($event)"
-        (dataLoaded)="onDataLoaded($event)">
-      </mj-list-detail-grid>
+    <div class="grid-with-stats">
+      <div class="grid-container">
+        <mj-list-detail-grid
+          #listDetailGrid
+          [listId]="ListID"
+          [listEntity]="listRecord"
+          [autoNavigate]="true"
+          [height]="'auto'"
+          [showToolbar]="false"
+          [toolbarConfig]="gridToolbarConfig"
+          [selectionMode]="'checkbox'"
+          (rowClicked)="onRowClicked($event)"
+          (rowDoubleClicked)="onRowDoubleClicked($event)"
+          (selectionChange)="onSelectionChange($event)"
+          (dataLoaded)="onDataLoaded($event)">
+        </mj-list-detail-grid>
+      </div>
+      <aside class="list-detail__stats">
+        <mj-list-stats [Provider]="Provider" [ListID]="listRecord.ID"></mj-list-stats>
+      </aside>
     </div>
   }
 

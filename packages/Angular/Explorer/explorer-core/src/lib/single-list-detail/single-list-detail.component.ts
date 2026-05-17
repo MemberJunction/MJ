@@ -49,6 +49,12 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
   // refresh-mode default falls back to the list's RefreshMode field but
   // can be overridden per-user via localStorage (see `loadLastUsedMode`).
   public sourceViewName: string | null = null;
+
+  // Bulk-edit (Phase 5.2). Status dropdown is the simplest bulk-edit
+  // operation and the most-asked-for. Move/Copy already have UX paths
+  // (Add-to-List dialog) and a server-side action (`Move List Members`).
+  public bulkStatus: 'Active' | 'Complete' | 'Disabled' | 'Pending' | 'Rejected' | '' = '';
+  public isApplyingBulkStatus = false;
   public refreshMode: ListRefreshMode = 'Additive';
   public isPreviewingRefresh = false;
   public isApplyingRefresh = false;
@@ -385,6 +391,63 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
   }
 
   // ==========================================
+  /**
+   * Apply the chosen status to all selected list-detail rows. Re-uses
+   * the existing extract-record-id-from-composite-key logic to map
+   * `selectedKeys` to the actual `MJ: List Detail.RecordID` values.
+   */
+  public async applyBulkStatus(): Promise<void> {
+    if (!this.listRecord || this.selectedKeys.length === 0 || !this.bulkStatus) return;
+    this.isApplyingBulkStatus = true;
+    this.cdr.detectChanges();
+    try {
+      const md = this.ProviderToUse;
+      const rv = RunView.FromMetadataProvider(md);
+      const entityInfo = md.EntityByID(this.listRecord.EntityID);
+      const recordIds = this.selectedKeys.map((key) => {
+        if (entityInfo && entityInfo.PrimaryKeys.length === 1) {
+          const ck = new CompositeKey();
+          ck.LoadFromConcatenatedString(key);
+          return ck.KeyValuePairs[0]?.Value || key;
+        }
+        return key;
+      });
+      const filter = `ListID='${this.listRecord.ID}' AND RecordID IN (${recordIds.map((id) => `'${String(id).replace(/'/g, "''")}'`).join(',')})`;
+      const result = await rv.RunView<MJListDetailEntity>({
+        EntityName: 'MJ: List Details',
+        ExtraFilter: filter,
+        ResultType: 'entity_object',
+      });
+      if (!result.Success) {
+        this.sharedService.CreateSimpleNotification(`Failed to load list details: ${result.ErrorMessage}`, 'error', 4000);
+        return;
+      }
+      let updated = 0;
+      let failed = 0;
+      for (const detail of result.Results ?? []) {
+        detail.Status = this.bulkStatus as never;
+        const ok = await detail.Save();
+        if (ok) updated++;
+        else failed++;
+      }
+      this.sharedService.CreateSimpleNotification(
+        failed === 0
+          ? `Updated ${updated} item(s) to '${this.bulkStatus}'`
+          : `Updated ${updated}, ${failed} failed`,
+        failed === 0 ? 'success' : 'warning',
+        3000,
+      );
+      this.bulkStatus = '';
+      this.refreshGrid();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      this.sharedService.CreateSimpleNotification(`Bulk update failed: ${message}`, 'error', 5000);
+    } finally {
+      this.isApplyingBulkStatus = false;
+      this.cdr.detectChanges();
+    }
+  }
+
   // Remove from List Dialog
   // ==========================================
 

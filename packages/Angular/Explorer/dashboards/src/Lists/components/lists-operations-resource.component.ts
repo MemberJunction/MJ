@@ -7,6 +7,7 @@ import { Subject } from 'rxjs';
 import { ListSetOperationsService, SetOperand, VennData, VennIntersection, SetOperation, SetOperationResult, operandCacheKey } from '../services/list-set-operations.service';
 import { VennRegionClickEvent } from './venn-diagram/venn-diagram.component';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
+import { ExportService } from '@memberjunction/ng-export-service';
 import { GraphQLDataProvider, GraphQLListsClient } from '@memberjunction/graphql-dataprovider';
 import type { ListDelta, ListSource } from '@memberjunction/lists';
 interface ListSelection {
@@ -1772,7 +1773,8 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
   constructor(
     private cdr: ChangeDetectorRef,
     private setOperationsService: ListSetOperationsService,
-    private notificationService: MJNotificationService
+    private notificationService: MJNotificationService,
+    private exportService: ExportService
   ) {
     super();
   }
@@ -2677,9 +2679,77 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
     }
   }
 
-  exportToExcel() {
-    // TODO: Implement Excel export
-    this.notificationService.CreateSimpleNotification('Export to Excel - coming soon', 'info', 2000);
+  /**
+   * Export the currently-selected region (or full last-op result) to
+   * Excel. Bulk-loads the underlying records by ID so the export
+   * contains real data, not just primary keys. Column-picker is a
+   * future polish; we ship with "all fields" for now.
+   */
+  async exportToExcel(): Promise<void> {
+    const recordIds = this.selectedRegion?.recordIds ?? this.lastOperationResult?.resultRecordIds ?? [];
+    if (recordIds.length === 0) {
+      this.notificationService.CreateSimpleNotification('Nothing to export — pick a region first.', 'info', 3000);
+      return;
+    }
+    // Find the entity name from the first available operand. The
+    // entity-invariant guarantees they're all the same entity.
+    const entityName =
+      this.selectedLists[0]?.entityName ?? this.selectedViews[0]?.entityName ?? null;
+    if (!entityName) {
+      this.notificationService.CreateSimpleNotification('Cannot determine entity for export.', 'error', 4000);
+      return;
+    }
+    this.isSaving = true;
+    this.cdr.detectChanges();
+    try {
+      this.notificationService.CreateSimpleNotification(
+        'Working on the export, will notify you when complete…',
+        'info',
+        2000,
+      );
+      const md = this.ProviderToUse;
+      const entityInfo = md.EntityByName(entityName);
+      if (!entityInfo) throw new Error(`Entity '${entityName}' not found`);
+      // Single-PK fast path. Composite-PK entities require a different
+      // filter shape; surface a clear error and stop rather than emit
+      // a broken file.
+      if (entityInfo.PrimaryKeys.length !== 1) {
+        this.notificationService.CreateSimpleNotification(
+          `Composite-PK entities ('${entityName}') aren't yet supported for Operations export.`,
+          'warning',
+          5000,
+        );
+        return;
+      }
+      const pk = entityInfo.PrimaryKeys[0].Name;
+      const escaped = recordIds.map((id) => `'${String(id).replace(/'/g, "''")}'`).join(',');
+
+      const rv = RunView.FromMetadataProvider(md);
+      const result = await rv.RunView<Record<string, unknown>>({
+        EntityName: entityName,
+        ExtraFilter: `${pk} IN (${escaped})`,
+        ResultType: 'simple',
+      });
+      if (!result.Success) {
+        this.notificationService.CreateSimpleNotification(`Export failed: ${result.ErrorMessage}`, 'error', 5000);
+        return;
+      }
+      const rows = result.Results ?? [];
+      const fileName = `lists-operations-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      const exportResult = await this.exportService.toExcel(rows, { fileName, includeHeaders: true });
+      if (exportResult.success) {
+        this.exportService.downloadResult(exportResult);
+        this.notificationService.CreateSimpleNotification(`Exported ${rows.length} record(s)`, 'success', 3000);
+      } else {
+        this.notificationService.CreateSimpleNotification('Export failed', 'error', 5000);
+      }
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      this.notificationService.CreateSimpleNotification(`Export error: ${message}`, 'error', 5000);
+    } finally {
+      this.isSaving = false;
+      this.cdr.detectChanges();
+    }
   }
 
   async GetResourceDisplayName(_data: ResourceData): Promise<string> {
