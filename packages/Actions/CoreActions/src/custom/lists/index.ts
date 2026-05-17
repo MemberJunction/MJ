@@ -27,6 +27,7 @@ export * from './invite-to-list.action';
 export * from './materialize-list-from-view.action';
 export * from './refresh-list-from-source.action';
 export * from './remove-records-from-list.action';
+export * from './resolve-audience.action';
 export * from './revoke-list-invitation.action';
 export * from './share-list.action';
 export * from './unshare-list.action';

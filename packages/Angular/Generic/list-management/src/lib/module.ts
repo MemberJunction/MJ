@@ -15,6 +15,8 @@ import { ContainerDirectivesModule } from '@memberjunction/ng-container-directiv
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 
 // Components
+import { AudienceSourcePickerComponent } from './components/audience-source-picker/audience-source-picker.component';
+import { AudienceSourceSummaryComponent } from './components/audience-source-summary/audience-source-summary.component';
 import { ListAuditLogComponent } from './components/list-audit-log/list-audit-log.component';
 import { ListDeltaConfirmComponent } from './components/list-delta-confirm/list-delta-confirm.component';
 import { ListInvitationsComponent } from './components/list-invitations/list-invitations.component';
@@ -32,6 +34,8 @@ import { ListSharingService } from './services/list-sharing.service';
  */
 @NgModule({
   declarations: [
+    AudienceSourcePickerComponent,
+    AudienceSourceSummaryComponent,
     ListAuditLogComponent,
     ListDeltaConfirmComponent,
     ListInvitationsComponent,
@@ -51,6 +55,8 @@ import { ListSharingService } from './services/list-sharing.service';
     SharedGenericModule
   ],
   exports: [
+    AudienceSourcePickerComponent,
+    AudienceSourceSummaryComponent,
     ListAuditLogComponent,
     ListDeltaConfirmComponent,
     ListInvitationsComponent,

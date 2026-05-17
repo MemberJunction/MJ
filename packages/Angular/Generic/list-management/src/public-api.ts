@@ -6,6 +6,8 @@
 export * from './lib/module';
 
 // Components
+export * from './lib/components/audience-source-picker/audience-source-picker.component';
+export * from './lib/components/audience-source-summary/audience-source-summary.component';
 export * from './lib/components/list-audit-log/list-audit-log.component';
 export * from './lib/components/list-delta-confirm/list-delta-confirm.component';
 export * from './lib/components/list-invitations/list-invitations.component';
