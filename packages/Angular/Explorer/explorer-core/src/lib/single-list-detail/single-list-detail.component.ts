@@ -159,13 +159,19 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
 
     try {
       const md = this.ProviderToUse;
-      this.listRecord = await md.GetEntityObject<MJListEntity>("MJ: Lists");
-      const loadResult = await this.listRecord.Load(this.ListID);
+      // Build + load against a LOCAL handle. Only assign to
+      // this.listRecord after Load() succeeds — otherwise Angular's
+      // change detector sees a transiently-populated half-loaded
+      // entity (Name=null) before Load fills it in, and the title
+      // binding throws ExpressionChangedAfterItHasBeenCheckedError.
+      const list = await md.GetEntityObject<MJListEntity>("MJ: Lists");
+      const loadResult = await list.Load(this.ListID);
 
       if (!loadResult) {
-        LogError("Error loading list with ID " + this.ListID, undefined, this.listRecord.LatestResult);
+        LogError("Error loading list with ID " + this.ListID, undefined, list.LatestResult);
         this.listRecord = null;
       } else {
+        this.listRecord = list;
         await this.loadLineageContext();
         await this.loadCapabilities();
       }
