@@ -29,95 +29,96 @@ describe('deltaToken', () => {
   });
 
   describe('ComputeSourceSignature', () => {
-    it('returns the same hash regardless of input order', () => {
-      const a = ComputeSourceSignature(['c', 'a', 'b']);
-      const b = ComputeSourceSignature(['a', 'b', 'c']);
+    it('returns the same hash regardless of input order', async () => {
+      const a = await ComputeSourceSignature(['c', 'a', 'b']);
+      const b = await ComputeSourceSignature(['a', 'b', 'c']);
       expect(a).toBe(b);
     });
 
-    it('produces a different hash for different inputs', () => {
-      expect(ComputeSourceSignature(['a', 'b'])).not.toBe(ComputeSourceSignature(['a', 'c']));
+    it('produces a different hash for different inputs', async () => {
+      expect(await ComputeSourceSignature(['a', 'b'])).not.toBe(await ComputeSourceSignature(['a', 'c']));
     });
 
-    it('handles the empty set deterministically', () => {
-      const a = ComputeSourceSignature([]);
-      const b = ComputeSourceSignature([]);
+    it('handles the empty set deterministically', async () => {
+      const a = await ComputeSourceSignature([]);
+      const b = await ComputeSourceSignature([]);
       expect(a).toBe(b);
       expect(a).toMatch(/^[0-9a-f]{64}$/);
     });
   });
 
   describe('Sign + Verify roundtrip', () => {
-    it('verifies a token signed with the same secret', () => {
+    it('verifies a token signed with the same secret', async () => {
       const payload = makePayload();
-      const token = SignDeltaToken(payload);
-      const verified = VerifyDeltaToken(token);
+      const token = await SignDeltaToken(payload);
+      const verified = await VerifyDeltaToken(token);
       expect(verified).toMatchObject(payload);
     });
 
-    it('rejects a token whose signature does not match', () => {
-      const token = SignDeltaToken(makePayload());
+    it('rejects a token whose signature does not match', async () => {
+      const token = await SignDeltaToken(makePayload());
       const tampered = token.slice(0, -2) + 'AA';
-      expect(() => VerifyDeltaToken(tampered)).toThrow(DeltaTokenVerificationError);
+      await expect(VerifyDeltaToken(tampered)).rejects.toBeInstanceOf(DeltaTokenVerificationError);
     });
 
-    it('rejects a token whose payload has been swapped', () => {
-      const tokenA = SignDeltaToken(makePayload({ tid: 'list-A' }));
-      const tokenB = SignDeltaToken(makePayload({ tid: 'list-B' }));
+    it('rejects a token whose payload has been swapped', async () => {
+      const tokenA = await SignDeltaToken(makePayload({ tid: 'list-A' }));
+      const tokenB = await SignDeltaToken(makePayload({ tid: 'list-B' }));
       const [payloadA] = tokenA.split('.');
       const [, sigB] = tokenB.split('.');
       const frankenToken = `${payloadA}.${sigB}`;
-      expect(() => VerifyDeltaToken(frankenToken)).toThrow(DeltaTokenVerificationError);
+      await expect(VerifyDeltaToken(frankenToken)).rejects.toBeInstanceOf(DeltaTokenVerificationError);
     });
 
-    it('rejects a malformed token', () => {
-      expect(() => VerifyDeltaToken('not-a-token')).toThrow(DeltaTokenVerificationError);
-      expect(() => VerifyDeltaToken('only-one-part.')).toThrow(DeltaTokenVerificationError);
+    it('rejects a malformed token', async () => {
+      await expect(VerifyDeltaToken('not-a-token')).rejects.toBeInstanceOf(DeltaTokenVerificationError);
+      await expect(VerifyDeltaToken('only-one-part.')).rejects.toBeInstanceOf(DeltaTokenVerificationError);
     });
 
-    it('rejects an expired token', () => {
+    it('rejects an expired token', async () => {
       const payload = makePayload({ iat: Date.now() - TOKEN_TTL_MS - 1000 });
-      const token = SignDeltaToken(payload);
-      expect(() => VerifyDeltaToken(token)).toThrow(DeltaTokenVerificationError);
+      const token = await SignDeltaToken(payload);
       try {
-        VerifyDeltaToken(token);
+        await VerifyDeltaToken(token);
+        throw new Error('expected throw');
       } catch (e) {
+        expect(e).toBeInstanceOf(DeltaTokenVerificationError);
         expect((e as DeltaTokenVerificationError).Code).toBe('EXPIRED_TOKEN');
       }
     });
 
-    it('accepts a token right at the TTL boundary', () => {
+    it('accepts a token right at the TTL boundary', async () => {
       const issuedAt = Date.now();
-      const token = SignDeltaToken(makePayload({ iat: issuedAt }));
+      const token = await SignDeltaToken(makePayload({ iat: issuedAt }));
       // Just under the TTL window from issuance.
-      expect(() => VerifyDeltaToken(token, issuedAt + TOKEN_TTL_MS - 1)).not.toThrow();
+      await expect(VerifyDeltaToken(token, issuedAt + TOKEN_TTL_MS - 1)).resolves.toBeDefined();
     });
 
-    it('rejects a token signed with a different secret', () => {
-      const tokenA = SignDeltaToken(makePayload());
+    it('rejects a token signed with a different secret', async () => {
+      const tokenA = await SignDeltaToken(makePayload());
       SetDeltaTokenSecret('different-secret');
-      expect(() => VerifyDeltaToken(tokenA)).toThrow(DeltaTokenVerificationError);
+      await expect(VerifyDeltaToken(tokenA)).rejects.toBeInstanceOf(DeltaTokenVerificationError);
     });
   });
 
   describe('secret resolution', () => {
-    it('throws when no secret is configured', () => {
+    it('throws when no secret is configured', async () => {
       SetDeltaTokenSecret(undefined);
       const original = process.env.MJ_LIST_DELTA_SECRET;
       delete process.env.MJ_LIST_DELTA_SECRET;
       try {
-        expect(() => SignDeltaToken(makePayload())).toThrow(/MJ_LIST_DELTA_SECRET/);
+        await expect(SignDeltaToken(makePayload())).rejects.toThrow(/MJ_LIST_DELTA_SECRET/);
       } finally {
         if (original !== undefined) process.env.MJ_LIST_DELTA_SECRET = original;
       }
     });
 
-    it('falls back to env var when no injected secret', () => {
+    it('falls back to env var when no injected secret', async () => {
       SetDeltaTokenSecret(undefined);
       process.env.MJ_LIST_DELTA_SECRET = 'env-secret';
       try {
-        const token = SignDeltaToken(makePayload());
-        expect(() => VerifyDeltaToken(token)).not.toThrow();
+        const token = await SignDeltaToken(makePayload());
+        await expect(VerifyDeltaToken(token)).resolves.toBeDefined();
       } finally {
         delete process.env.MJ_LIST_DELTA_SECRET;
       }

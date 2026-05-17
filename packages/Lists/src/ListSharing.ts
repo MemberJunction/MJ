@@ -1,5 +1,3 @@
-import { randomBytes } from 'node:crypto';
-
 import {
   IMetadataProvider,
   LogError,
@@ -602,9 +600,19 @@ export class ListSharing {
    * Generate a 32-byte URL-safe random token for invitations. 256 bits of
    * entropy is overkill for a 7-day TTL but cheap, and keeps the token
    * unguessable even if the database leaks Statuses/Emails separately.
+   *
+   * Uses the Web Crypto API (`globalThis.crypto.getRandomValues`) so the
+   * function works identically in Node 19+ and browser bundles — without
+   * the `node:crypto` import that breaks browser-side bundling.
    */
   private generateInvitationToken(): string {
-    return randomBytes(32).toString('base64').replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
+    const bytes = new Uint8Array(32);
+    globalThis.crypto.getRandomValues(bytes);
+    // Base64-URL: standard base64 then swap `+` `/` and strip `=` padding.
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+    const b64 = (typeof btoa === 'function' ? btoa(binary) : Buffer.from(bytes).toString('base64'));
+    return b64.replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
   }
 
   /**

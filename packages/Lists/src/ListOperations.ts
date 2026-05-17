@@ -107,7 +107,7 @@ export class ListOperations {
     const sourceSet = await this.ResolveSource(source);
 
     if (target === 'new') {
-      return this.buildDelta({
+      return await this.buildDelta({
         targetListId: null,
         entityName: sourceSet.EntityName,
         toAddIds: sourceSet.RecordIds,
@@ -135,7 +135,7 @@ export class ListOperations {
 
     const unchangedIds: string[] = [...targetIds].filter((id) => sourceIds.has(id));
 
-    return this.buildDelta({
+    return await this.buildDelta({
       targetListId: target.kind === 'list' ? target.listId : null,
       entityName: sourceSet.EntityName,
       toAddIds,
@@ -172,7 +172,7 @@ export class ListOperations {
     const resultIds = this.applySetOp(op, resolved);
 
     if (!target || target === 'new') {
-      return this.buildDelta({
+      return await this.buildDelta({
         targetListId: null,
         entityName,
         toAddIds: resultIds,
@@ -199,7 +199,7 @@ export class ListOperations {
     const toRemoveIds = [...targetIds].filter((id) => !resultSet.has(id));
     const unchangedIds = [...targetIds].filter((id) => resultSet.has(id));
 
-    return this.buildDelta({
+    return await this.buildDelta({
       targetListId: target.kind === 'list' ? target.listId : null,
       entityName,
       toAddIds,
@@ -237,7 +237,7 @@ export class ListOperations {
     delta: ListDelta,
     opts: { ConfirmDrops: boolean; DeltaToken: string },
   ): Promise<ApplyResult> {
-    const tokenResult = this.verifyTokenForDelta(delta, opts.DeltaToken);
+    const tokenResult = await this.verifyTokenForDelta(delta, opts.DeltaToken);
     if (!tokenResult.ok) return tokenResult.failure;
 
     if (delta.Counts.Remove > 0 && !opts.ConfirmDrops) {
@@ -507,7 +507,7 @@ export class ListOperations {
     return ck.ToConcatenatedString();
   }
 
-  private buildDelta(args: {
+  private async buildDelta(args: {
     targetListId: string | null;
     entityName: string;
     toAddIds: string[];
@@ -516,7 +516,7 @@ export class ListOperations {
     warnings: ListDeltaWarning[];
     tokenMode: DeltaTokenMode;
     signatureRecordIds: string[];
-  }): ListDelta {
+  }): Promise<ListDelta> {
     const counts: ListDeltaCounts = {
       Add: args.toAddIds.length,
       Remove: args.toRemoveIds.length,
@@ -524,10 +524,14 @@ export class ListOperations {
       SourceTotal: args.toAddIds.length + args.unchangedIds.length,
       TargetTotal: args.unchangedIds.length + args.toRemoveIds.length,
     };
+    // ComputeSourceSignature and SignDeltaToken are async because Web
+    // Crypto's SubtleCrypto is async. Build them in sequence — the
+    // signature feeds the token payload.
+    const ssig = await ComputeSourceSignature(args.signatureRecordIds);
     const payload: DeltaTokenPayload = {
       v: 1,
       tid: args.targetListId,
-      ssig: ComputeSourceSignature(args.signatureRecordIds),
+      ssig,
       m: args.tokenMode,
       iat: Date.now(),
     };
@@ -539,7 +543,7 @@ export class ListOperations {
       Unchanged: args.unchangedIds,
       Counts: counts,
       Warnings: args.warnings,
-      DeltaToken: SignDeltaToken(payload),
+      DeltaToken: await SignDeltaToken(payload),
     };
   }
 
@@ -629,13 +633,13 @@ export class ListOperations {
     void b;
   }
 
-  private verifyTokenForDelta(
+  private async verifyTokenForDelta(
     delta: ListDelta,
     token: string,
-  ): { ok: true; payload: DeltaTokenPayload } | { ok: false; failure: ApplyResult } {
+  ): Promise<{ ok: true; payload: DeltaTokenPayload } | { ok: false; failure: ApplyResult }> {
     let payload: DeltaTokenPayload;
     try {
-      payload = VerifyDeltaToken(token);
+      payload = await VerifyDeltaToken(token);
     } catch (e) {
       const isExpired = e instanceof DeltaTokenVerificationError && e.Code === 'EXPIRED_TOKEN';
       return {
