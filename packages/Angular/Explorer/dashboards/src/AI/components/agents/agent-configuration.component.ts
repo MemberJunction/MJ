@@ -137,6 +137,15 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
   /** Current category selection for the tree dropdown (Category is projected into mj-filter-panel as a custom widget). */
   public SelectedCategoryKey: CompositeKey | null = null;
 
+  /**
+   * Timestamp of last real (non-null) category set. Used to swallow spurious
+   * null re-emits from <mj-tree-dropdown> that arrive milliseconds after a
+   * real selection — without the guard, the spurious null resets categoryId
+   * to 'all' before the user sees the filtered list, making the Category
+   * filter appear broken. See onCategoryChange below.
+   */
+  private _lastCategorySetAt = 0;
+
   /** Handler for the projected mj-tree-dropdown — extracts the entity ID from the CompositeKey. */
   public onCategoryChange(value: CompositeKey | CompositeKey[] | null): void {
     // Duck-typed extraction — works whether tree-dropdown emits a real
@@ -145,11 +154,25 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
     // the first KVP's Value; FieldName varies by entity so positional is
     // safer than name-matching.
     const single = !value || Array.isArray(value) ? null : value;
+
+    // Swallow the spurious null re-emit that <mj-tree-dropdown> fires within
+    // a few milliseconds of a real selection (confirmed empirically — the
+    // null arrives ~2ms after the real CompositeKey). Without this guard, the
+    // null resets categoryId to 'all' and the filter never narrows. A 100ms
+    // window is short enough to never interfere with a deliberate user clear.
+    const now = Date.now();
+    if (single == null && (now - this._lastCategorySetAt) < 100) {
+      return;
+    }
+
     const idValue = single?.KeyValuePairs?.[0]?.Value;
     this.currentFilters = {
       ...this.currentFilters,
       categoryId: (idValue != null && idValue !== '') ? String(idValue) : 'all'
     };
+    if (single != null) {
+      this._lastCategorySetAt = now;
+    }
     this.SelectedCategoryKey = single;
     this.applyFilters();
     this.saveUserPreferencesDebounced();
@@ -487,6 +510,11 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
       exposeAsAction: 'all',
       categoryId: 'all'
     };
+    // Clear the tree-dropdown's bound value too — otherwise the dropdown
+    // visually still shows the previous category after Reset (the value
+    // input drives its internal display state).
+    this.SelectedCategoryKey = null;
+    this._lastCategorySetAt = 0;
     this.applyFilters();
     this.saveUserPreferencesDebounced();
   }
