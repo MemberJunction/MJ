@@ -1,0 +1,4 @@
+{
+  "$schema": "./.schemas/vendor-catalog.schema.json",
+  "vendors": []
+}

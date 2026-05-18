@@ -1,0 +1,106 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://memberjunction.com/schemas/vendor-catalog.schema.json",
+  "title": "Vendor Playbook Catalog",
+  "description": "Per-vendor playbook entries built up as connectors land in Phase B. Each entry captures the patterns, sources, and constraints a future re-extraction of the same (or similar) vendor can leverage for ~60-80% cost reduction. Per architecture §4.16.",
+  "type": "object",
+  "required": ["vendors"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "vendors": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/VendorEntry" }
+    }
+  },
+  "$defs": {
+    "VendorEntry": {
+      "type": "object",
+      "required": ["Vendor", "ConnectorType", "LastVerifiedAt"],
+      "properties": {
+        "Vendor": {
+          "type": "string",
+          "description": "Vendor canonical name (matches MJ: Integrations.Name)."
+        },
+        "ConnectorType": {
+          "type": "string",
+          "enum": ["REST", "GraphQL", "SOAP", "FileFeed", "RelationalDB"]
+        },
+        "AuthPattern": {
+          "type": "string",
+          "description": "Wire-format auth (matches Integration.AuthHeaderPattern + CredentialTypeID combination)."
+        },
+        "PaginationType": {
+          "type": "string",
+          "enum": ["Cursor", "Offset", "PageNumber", "LinkHeader", "None"]
+        },
+        "ResponseEnvelope": {
+          "type": "string",
+          "description": "Top-level data key under which list responses are wrapped (e.g., 'results', 'data', 'records', 'items', or '' for raw-array responses)."
+        },
+        "ApiDocsURL": { "type": "string", "format": "uri" },
+        "SDKReferenceURL": { "type": "string", "format": "uri" },
+        "OpenAPISpecURL": { "type": "string", "format": "uri" },
+        "DocsScrapingStrategy": {
+          "type": "string",
+          "description": "Which strategy library entry was used (e.g., 'openapi-3.x-repo', 'jsforce-typedef-parser', 'stoplight-scrape'). Empty when the vendor uses a unique one-off parser."
+        },
+        "TemplateVarPattern": {
+          "type": "string",
+          "description": "How URL template variables relate to IO PKs (e.g., '/parents/{ParentID}/children → children.ParentID FK'). Captured by IOIOFExtractor."
+        },
+        "RateLimitNotes": {
+          "type": "string",
+          "description": "Free-form rate-limit summary (window, scope, special quotas)."
+        },
+        "PrimaryKeyConvention": {
+          "type": "string",
+          "description": "Vendor's PK naming convention (from MJ: Integrations.PrimaryKeyFieldName + Confidence)."
+        },
+        "VerifiedPatterns": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Names of entries in .verified-patterns/ that this vendor exercises. Empty until phase C."
+        },
+        "LastVerifiedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of the most recent successful build of this vendor's connector."
+        },
+        "LiveTestedAgainst": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Tier identifiers that passed against live API (e.g., ['T0','T1','T2','T3','T4','T9','T10']). Empty when no live test infrastructure available."
+        },
+        "KnownConstraints": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "Constraint": { "type": "string" },
+              "Notes": { "type": "string" }
+            }
+          },
+          "description": "Constraints captured during build (from additionalSchemaInfo.json) that future re-builds should be aware of."
+        },
+        "FailurePatternsResolvedHere": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Names of .failure-patterns/ entries this connector demonstrates resolution of (e.g., 'FP-001' for OAuth refresh-token rotation handled via OAuth2TokenManager)."
+        },
+        "Quirks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["Title", "Description"],
+            "properties": {
+              "Title": { "type": "string" },
+              "Description": { "type": "string" },
+              "ProvenanceURL": { "type": "string", "format": "uri" }
+            }
+          },
+          "description": "Vendor-specific peculiarities surfaced during extraction (per directive §29)."
+        }
+      }
+    }
+  }
+}
