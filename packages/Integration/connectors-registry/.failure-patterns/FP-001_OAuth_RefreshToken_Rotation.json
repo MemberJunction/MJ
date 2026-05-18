@@ -1,0 +1,15 @@
+{
+  "ID": "FP-001",
+  "Symptom": "Connector loses auth after first token refresh; subsequent requests return 401 Unauthorized. Test cycle: TestConnection succeeds first time, then fails after the access_token's natural expiry window (typically 30-60 minutes).",
+  "RootCause": "OAuth2 token refresh response from the vendor omits the refresh_token field when no rotation occurs (vendor reuses the existing refresh_token). Naive token-management implementations overwrite the stored refresh_token with null/undefined from the refresh response — losing the credential. On the next refresh attempt the request has no refresh_token, the vendor returns 401, and the connector enters a permanent unauthenticated state.",
+  "Resolution": "Use OAuth2TokenManager.RefreshToken (from @memberjunction/integration-engine/auth-helpers) which explicitly preserves the existing refresh_token when the response omits it. The helper inspects the response and only updates refresh_token when the vendor returns a new one (token rotation), otherwise carries forward the prior value. See packages/Integration/engine/src/auth-helpers/OAuth2TokenManager.ts.",
+  "AffectedVendors": [],
+  "DetectionScript": null,
+  "AutoFixApplicable": false,
+  "AutoFixScript": null,
+  "References": [
+    "RFC 6749 §6 — vendors MAY rotate refresh tokens; the spec doesn't require it",
+    "Common in vendors that DO NOT rotate: HubSpot, Google, Auth0 (configurable)",
+    "Common in vendors that DO rotate: Okta (default), Salesforce (with rotation setting), Microsoft (variable)"
+  ]
+}
