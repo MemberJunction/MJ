@@ -68,11 +68,26 @@ Your job is to evaluate whether this is one coherent concept, split it if mixed,
 don't fit, and decide if the result is a useful organic key.
 
 CRITERIA for a useful organic key:
-- All members share the same semantic concept (e.g. all are email addresses, all are customer IDs)
-- Values flow across entities in ways users would want to match on
-- NOT useful: shared audit timestamps (e.g. ModifiedDate everywhere — same concept but no one matches records by it)
-- NOT useful: distinct primary keys grouped because the names rhyme (ProductID, ProductCategoryID — semantically related but DIFFERENT identifiers)
+- All members share the same semantic concept AND draw from the same VALUE SPACE — meaning
+  a value present in one column would meaningfully match the same value in another column to
+  identify related records (e.g. an email address; a customer ID shared across systems)
+- The match has business navigation utility — a user viewing one record would actually want
+  to see the matching records from the other columns
+- NOT useful: shared audit timestamps (ModifiedDate everywhere — same concept but no one
+  matches records by it)
+- NOT useful: distinct primary keys grouped because the names rhyme (ProductID,
+  ProductCategoryID — semantically related but DIFFERENT identifier spaces)
 - NOT useful: rowguid / replication GUIDs — system-generated, never user-matchable
+- NOT useful: components of a compound concept where matching a single value alone is
+  meaningless (e.g. FirstName, LastName, MiddleName — matching by FirstName='John' alone
+  doesn't identify related records; would need FirstName+LastName+DOB as a compound key,
+  which is a SEPARATE mechanism, not a cluster)
+- NOT useful: generic descriptive text fields that happen to share the same column name
+  (e.g. Country.Name, Territory.Name, Region.Name — these are independent vocabularies in
+  different domains; the literal string match between "North America" entries across them
+  is coincidental, not a real value-space relationship)
+- NOT useful: free-form text fields like Description, Comments, Notes — even when they
+  share a concept name, free text doesn't carry an organic-key match
 
 Output STRICT JSON matching this schema:
 {
@@ -188,11 +203,15 @@ export class OrganicKeyClusterRefiner {
             };
         }
 
-        // Handle split outcome first
+        // Handle split outcome first — apply min-size + min-table-span constraints
+        // to each sub-cluster (same rules the detector enforces). LLM-proposed
+        // sub-clusters with 1 member or single-table spans are dropped to avoid
+        // surfacing degenerate "clusters" that can't actually match across entities.
         if (parsed.subClusters && parsed.subClusters.length > 0) {
             const subClusters = parsed.subClusters
                 .filter((sc) => sc.isUsefulOrganicKey)
-                .map((sc, idx) => buildSubCluster(cluster, sc, idx));
+                .map((sc, idx) => buildSubCluster(cluster, sc, idx))
+                .filter((sub) => clusterMeetsMinimumShape(sub));
             return {
                 outcome: 'split',
                 tokensUsed,
@@ -213,11 +232,22 @@ export class OrganicKeyClusterRefiner {
             };
         }
 
-        // Keep outcome — apply outlier ejection
+        // Keep outcome — apply outlier ejection, then re-check minimum shape
         const ejectedSet = new Set(parsed.outliers ?? []);
         const survivingMembers = cluster.members.filter(
             (m) => !ejectedSet.has(memberKey(m)),
         );
+        // If outlier ejection drops the cluster below minimum shape, reject instead
+        // of returning a degenerate 1-member or single-table cluster.
+        if (!membersMeetMinimumShape(survivingMembers)) {
+            return {
+                outcome: 'reject',
+                tokensUsed,
+                inputTokens,
+                outputTokens,
+                rejectReason: `After ejecting ${ejectedSet.size} outliers, only ${survivingMembers.length} members remain across ${new Set(survivingMembers.map((m) => `${m.schema}.${m.table}`)).size} table(s). Cluster cannot meaningfully match across entities.`,
+            };
+        }
 
         const refined: OrganicKeyCluster = {
             ...cluster,
@@ -348,6 +378,21 @@ function buildSubCluster(
 
 function memberKey(m: OrganicKeyClusterMember): string {
     return `${m.schema}.${m.table}.${m.column}`;
+}
+
+/**
+ * Minimum shape requirements for a (refined or split) cluster to be useful as
+ * an organic key. Mirrors the detector's defaults (minClusterSize=2, minDistinctTables=2):
+ * a cluster with only one member or all members in one table can't match across entities.
+ */
+function membersMeetMinimumShape(members: OrganicKeyClusterMember[]): boolean {
+    if (members.length < 2) return false;
+    const tables = new Set(members.map((m) => `${m.schema}.${m.table}`));
+    return tables.size >= 2;
+}
+
+function clusterMeetsMinimumShape(cluster: OrganicKeyCluster): boolean {
+    return membersMeetMinimumShape(cluster.members);
 }
 
 function clamp01(x: number): number {

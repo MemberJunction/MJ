@@ -176,6 +176,7 @@ describe('OrganicKeyClusterRefiner', () => {
                     { schema: 'Person', table: 'Person', column: 'StateProvinceID', participatesInFK: false },
                     { schema: 'Sales', table: 'SalesTaxRate', column: 'StateProvinceID', participatesInFK: false },
                     { schema: 'Person', table: 'StateProvince', column: 'CountryRegionCode', participatesInFK: false },
+                    { schema: 'Sales', table: 'SalesTerritory', column: 'CountryRegionCode', participatesInFK: false },
                 ],
             });
             const mockLLM = makeMockLLM(
@@ -198,7 +199,10 @@ describe('OrganicKeyClusterRefiner', () => {
                         },
                         {
                             concept: 'country_region_code',
-                            members: ['Person.StateProvince.CountryRegionCode'],
+                            members: [
+                                'Person.StateProvince.CountryRegionCode',
+                                'Sales.SalesTerritory.CountryRegionCode',
+                            ],
                             normalization: 'Trim',
                             isUsefulOrganicKey: true,
                             reasoning: 'ISO country code.',
@@ -215,6 +219,78 @@ describe('OrganicKeyClusterRefiner', () => {
             expect(result.subClusters![0].concept).toBe('state_province_id');
             expect(result.subClusters![0].members.length).toBe(2);
             expect(result.subClusters![1].concept).toBe('country_region_code');
+        });
+
+        it('filters out sub-clusters that fall below minimum shape (single member or single table)', async () => {
+            // LLM proposes a split where one sub has only 1 member (degenerate)
+            const cluster = makeCluster({
+                members: [
+                    { schema: 'Person', table: 'Person', column: 'StateProvinceID', participatesInFK: false },
+                    { schema: 'Sales', table: 'SalesTaxRate', column: 'StateProvinceID', participatesInFK: false },
+                    { schema: 'Person', table: 'StateProvince', column: 'CountryRegionCode', participatesInFK: false },
+                ],
+            });
+            const mockLLM = makeMockLLM(
+                JSON.stringify({
+                    concept: 'mixed',
+                    isUsefulOrganicKey: false,
+                    normalization: 'ExactMatch',
+                    confidence: 0.9,
+                    reasoning: 'Two distinct concepts mixed.',
+                    subClusters: [
+                        {
+                            concept: 'state_province_id',
+                            members: [
+                                'Person.Person.StateProvinceID',
+                                'Sales.SalesTaxRate.StateProvinceID',
+                            ],
+                            normalization: 'ExactMatch',
+                            isUsefulOrganicKey: true,
+                            reasoning: 'Two-member, two-table cluster — survives.',
+                        },
+                        {
+                            concept: 'country_region_code',
+                            members: ['Person.StateProvince.CountryRegionCode'],
+                            normalization: 'Trim',
+                            isUsefulOrganicKey: true,
+                            reasoning: 'Single member — should be dropped.',
+                        },
+                    ],
+                }),
+            );
+            const refiner = OrganicKeyClusterRefiner.withLLM(makeAIConfig(), mockLLM);
+            const result = await refiner.refine(cluster, descriptions);
+
+            expect(result.outcome).toBe('split');
+            expect(result.subClusters!.length).toBe(1); // single-member sub filtered out
+            expect(result.subClusters![0].concept).toBe('state_province_id');
+        });
+
+        it('rejects when outlier ejection drops the cluster below minimum shape', async () => {
+            const cluster = makeCluster({
+                members: [
+                    { schema: 'Person', table: 'Person', column: 'Email', participatesInFK: false },
+                    { schema: 'Sales', table: 'Customer', column: 'Email', participatesInFK: false },
+                    { schema: 'HR', table: 'Employee', column: 'Email', participatesInFK: false },
+                ],
+            });
+            const mockLLM = makeMockLLM(
+                JSON.stringify({
+                    concept: 'email_address',
+                    isUsefulOrganicKey: true,
+                    normalization: 'LowerCaseTrim',
+                    confidence: 0.85,
+                    reasoning: 'Email addresses, but two of three are outliers.',
+                    outliers: ['Sales.Customer.Email', 'HR.Employee.Email'],
+                    subClusters: [],
+                }),
+            );
+            const refiner = OrganicKeyClusterRefiner.withLLM(makeAIConfig(), mockLLM);
+            const result = await refiner.refine(cluster, descriptions);
+
+            // 3 - 2 outliers = 1 surviving member → below min shape → reject
+            expect(result.outcome).toBe('reject');
+            expect(result.rejectReason).toContain('outlier');
         });
 
         it('drops sub-clusters the LLM marks as not useful', async () => {
