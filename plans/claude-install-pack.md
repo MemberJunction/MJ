@@ -621,9 +621,9 @@ PINNED (a specific MJ release):
 | `/new-branch` | Branch-from-default-with-correct-tracking | `.claude/commands/new-branch.md` | Edit: replace hardcoded `next` with detected default branch |
 | `/clean-branch` | Focused PR branch with cherry-picked files | `.claude/commands/clean-branch.md` | Ship as-is |
 | `/save-plan-new-pr` | Save plan to new worktree + PR | `.claude/commands/save-plan-new-pr.md` | Ship as-is |
-| `/debug-agent-run` | Debug an MJ AI agent run — high-value for users building agents | `.claude/commands/debug-agent-run.md` | Ship as-is |
+| `/debug-agent-run` | Debug an MJ AI agent run — high-value for users building agents | `.claude/commands/debug-agent-run.md` | Edit: replace `../packages/...` monorepo links with `@memberjunction/...` package references so the architecture pointers resolve from a downstream `node_modules/` |
 | `/add-ai-model` | Add an AI model to MJ metadata — high-value for users wiring their own models | `.claude/commands/add-ai-model.md` | Ship as-is, validate paths still resolve in distribution mode |
-| `/generate-integration-actions` | Regenerate integration action metadata | `.claude/commands/generate-integration-actions.md` | Verify it works in distribution mode (where source isn't checked in) |
+| `/generate-integration-actions` | Generate mj-sync action JSON for a user-authored connector | `.claude/commands/generate-integration-actions.md` | Rewrite as a downstream-correct command that drives the new `mj codegen integration-actions` CLI. The original monorepo-only script is preserved internally and now also delegates to the same `ActionGenerationRunner` exported from `@memberjunction/integration-engine`. |
 | `/speckit.specify` | Generic feature-spec authoring | `.claude/commands/speckit.specify.md` | Ship as-is |
 | `/speckit.plan` | Generic technical plan from spec | `.claude/commands/speckit.plan.md` | Ship as-is |
 | `/speckit.clarify` | Generic clarification questions | `.claude/commands/speckit.clarify.md` | Ship as-is |
