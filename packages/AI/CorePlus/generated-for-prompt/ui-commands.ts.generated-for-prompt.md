@@ -1,5 +1,8 @@
 ```ts
-type ActionableCommand = OpenResourceCommand | OpenURLCommand;
+type ActionableCommand =
+    | OpenResourceCommand
+    | OpenURLCommand
+    | CaptureSnapshotCommand;
 
 interface OpenResourceCommand {
     type: 'open:resource';  // Command type identifier
@@ -25,6 +28,14 @@ interface OpenURLCommand {
     icon?: string;  // Optional Font Awesome icon class to display on the button.
     url: string;  // URL to open.
     newTab?: boolean;  // Whether to open in a new tab.
+}
+
+interface CaptureSnapshotCommand {
+    type: 'client:capture-snapshot';  // Command type identifier
+    label: string;  // Button label shown to the user.
+    icon?: string;  // Optional Font Awesome icon class to display on the button.
+    componentArtifactId?: string;  // Optional ID of the component artifact to snapshot. When omitted, the
+    followupMessage?: string;  // Optional follow-up text the host should pass back to the agent after
 }
 
 type AutomaticCommand = RefreshDataCommand | ShowNotificationCommand;
