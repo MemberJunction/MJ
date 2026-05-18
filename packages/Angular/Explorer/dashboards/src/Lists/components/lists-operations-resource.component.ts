@@ -97,7 +97,7 @@ interface EntityOption {
                 (ngModelChange)="onEntityFilterChange()"
                 class="entity-select">
                 <option value="">All Entities</option>
-                @for (entity of entityOptions; track entity) {
+                @for (entity of entityOptions; track entity.id) {
                   <option [value]="entity.id">
                     {{entity.name}} ({{entity.listCount}})
                   </option>
@@ -295,9 +295,9 @@ interface EntityOption {
                   <i class="fa-solid fa-folder-plus"></i>
                   Add to List
                 </button>
-                <button mjButton (click)="exportToExcel()">
+                <button mjButton (click)="openExportDialog()">
                   <i class="fa-solid fa-file-excel"></i>
-                  Export
+                  Export…
                 </button>
               </div>
               @if (previewRecordsDisplay.length > 0) {
@@ -505,6 +505,75 @@ interface EntityOption {
         (Confirm)="onComposeConfirmCommit($event)"
         (Cancel)="onComposeConfirmCancel()">
       </mj-list-delta-confirm>
+
+      <!-- Export Dialog (mockup 26) -->
+      @if (showExportDialog) {
+        <div class="modal-overlay" (click)="closeExportDialog()"></div>
+        <div class="modal-dialog export-dialog">
+          <div class="modal-header">
+            <h3><i class="fa-solid fa-file-excel"></i> Export {{ exportRecordCount }} Record{{ exportRecordCount === 1 ? '' : 's' }}</h3>
+            <button class="modal-close" (click)="closeExportDialog()">
+              <i class="fa-solid fa-times"></i>
+            </button>
+          </div>
+          <div class="modal-body">
+            <div class="export-format-row">
+              <label class="export-format-option"
+                [class.export-format-option--selected]="exportFormat === 'excel'"
+                (click)="exportFormat = 'excel'">
+                <input type="radio" name="exportFormat" value="excel" [(ngModel)]="exportFormat">
+                <i class="fa-solid fa-file-excel" style="color: var(--mj-status-success);"></i>
+                <span>Excel (.xlsx)</span>
+              </label>
+              <label class="export-format-option"
+                [class.export-format-option--selected]="exportFormat === 'csv'"
+                (click)="exportFormat = 'csv'">
+                <input type="radio" name="exportFormat" value="csv" [(ngModel)]="exportFormat">
+                <i class="fa-solid fa-file-csv" style="color: var(--mj-text-secondary);"></i>
+                <span>CSV</span>
+              </label>
+              <label class="export-format-option"
+                [class.export-format-option--selected]="exportFormat === 'json'"
+                (click)="exportFormat = 'json'">
+                <input type="radio" name="exportFormat" value="json" [(ngModel)]="exportFormat">
+                <i class="fa-solid fa-file-code" style="color: var(--mj-brand-primary);"></i>
+                <span>JSON</span>
+              </label>
+            </div>
+
+            <div class="export-section-divider"></div>
+
+            <label class="export-section-label">Columns to include</label>
+            <div class="export-fields-list">
+              @for (f of exportFields; track f.Name) {
+                <label class="export-field-row">
+                  <input type="checkbox" [(ngModel)]="f.Selected">
+                  <span>{{ f.DisplayName }}</span>
+                </label>
+              }
+            </div>
+            <div class="export-field-actions">
+              <a href="#" (click)="selectAllExportFields(); $event.preventDefault()">Select All</a>
+              <a href="#" (click)="selectNoneExportFields(); $event.preventDefault()">Select None</a>
+              <span class="muted">{{ selectedExportFieldCount }} of {{ exportFields.length }} selected</span>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button mjButton variant="primary"
+              [disabled]="selectedExportFieldCount === 0 || isExporting"
+              (click)="executeExport()">
+              @if (isExporting) {
+                <i class="fa-solid fa-spinner fa-spin"></i>
+                Exporting…
+              } @else {
+                <i class="fa-solid fa-download"></i>
+                Export {{ exportRecordCount }} Record{{ exportRecordCount === 1 ? '' : 's' }}
+              }
+            </button>
+            <button mjButton variant="outline" [disabled]="isExporting" (click)="closeExportDialog()">Cancel</button>
+          </div>
+        </div>
+      }
 
       <!-- Create List Dialog -->
       @if (showCreateDialog) {
@@ -1390,6 +1459,70 @@ interface EntityOption {
       overflow-y: auto;
     }
 
+    /* Export dialog (mockup 26) */
+    .export-dialog .modal-body { max-height: 60vh; overflow-y: auto; }
+    .export-format-row { display: flex; gap: 8px; margin-top: 8px; }
+    .export-format-option {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border: 1px solid var(--mj-border-default);
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      background: var(--mj-bg-surface);
+    }
+    .export-format-option--selected {
+      border-color: var(--mj-brand-primary);
+      background: color-mix(in srgb, var(--mj-brand-primary) 6%, transparent);
+    }
+    .export-format-option input[type="radio"] { margin: 0; }
+    .export-section-divider {
+      height: 1px;
+      background: var(--mj-border-default);
+      margin: 16px 0;
+    }
+    .export-section-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--mj-text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      margin-bottom: 8px;
+    }
+    .export-fields-list {
+      max-height: 220px;
+      overflow-y: auto;
+      border: 1px solid var(--mj-border-default);
+      border-radius: 8px;
+    }
+    .export-field-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--mj-border-default);
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .export-field-row:last-child { border-bottom: none; }
+    .export-field-row:hover { background: var(--mj-bg-surface-hover); }
+    .export-field-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 8px;
+      align-items: center;
+      font-size: 11.5px;
+    }
+    .export-field-actions a { color: var(--mj-text-link); }
+    .export-field-actions .muted {
+      margin-left: auto;
+      color: var(--mj-text-muted);
+    }
+
     .list-search {
       display: flex;
       align-items: center;
@@ -1761,6 +1894,15 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
   isComposing = false;
   composeDelta: ListDelta | null = null;
   composeConfirmVisible = false;
+
+  // Export dialog (mockup 26). Opens before any export; lets the user
+  // pick format + which entity fields to include. Fields are resolved
+  // from EntityInfo when the dialog opens — no separate fetch.
+  showExportDialog = false;
+  exportFormat: 'excel' | 'csv' | 'json' = 'excel';
+  exportFields: Array<{ Name: string; DisplayName: string; Selected: boolean }> = [];
+  exportRecordCount = 0;
+  isExporting = false;
 
   private entityIdFromSelectedLists: string | null = null;
   private currentEntityInfo: EntityInfo | null = null;
@@ -2680,66 +2822,121 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
   }
 
   /**
-   * Export the currently-selected region (or full last-op result) to
-   * Excel. Bulk-loads the underlying records by ID so the export
-   * contains real data, not just primary keys. Column-picker is a
-   * future polish; we ship with "all fields" for now.
+   * Open the export-format-and-columns picker (mockup 26). Resolves the
+   * candidate field list from EntityInfo on the loaded metadata — no
+   * extra RunView. Default selection mirrors what the previous
+   * "export all" behavior produced.
    */
-  async exportToExcel(): Promise<void> {
+  public openExportDialog(): void {
     const recordIds = this.selectedRegion?.recordIds ?? this.lastOperationResult?.resultRecordIds ?? [];
     if (recordIds.length === 0) {
       this.notificationService.CreateSimpleNotification('Nothing to export — pick a region first.', 'info', 3000);
       return;
     }
-    // Find the entity name from the first available operand. The
-    // entity-invariant guarantees they're all the same entity.
-    const entityName =
-      this.selectedLists[0]?.entityName ?? this.selectedViews[0]?.entityName ?? null;
+    const entityName = this.selectedLists[0]?.entityName ?? this.selectedViews[0]?.entityName ?? null;
     if (!entityName) {
       this.notificationService.CreateSimpleNotification('Cannot determine entity for export.', 'error', 4000);
       return;
     }
-    this.isSaving = true;
+    const md = this.ProviderToUse;
+    const entityInfo = md.EntityByName(entityName);
+    if (!entityInfo) {
+      this.notificationService.CreateSimpleNotification(`Entity '${entityName}' not found.`, 'error', 4000);
+      return;
+    }
+    if (entityInfo.PrimaryKeys.length !== 1) {
+      this.notificationService.CreateSimpleNotification(
+        `Composite-PK entities ('${entityName}') aren't yet supported for Operations export.`,
+        'warning', 5000,
+      );
+      return;
+    }
+    // Build the candidate field list from the loaded EntityInfo. Hide
+    // virtual / not-queryable fields so users can't pick them and get
+    // a confusing empty column. Default-select everything to match the
+    // previous "export all" behavior.
+    this.exportFields = entityInfo.Fields
+      .filter((f) => f.IsVirtual !== true)
+      .map((f) => ({
+        Name: f.Name,
+        DisplayName: f.DisplayName || f.Name,
+        Selected: true,
+      }));
+    this.exportRecordCount = recordIds.length;
+    this.exportFormat = 'excel';
+    this.showExportDialog = true;
+    this.cdr.detectChanges();
+  }
+
+  public closeExportDialog(): void {
+    this.showExportDialog = false;
+    this.cdr.detectChanges();
+  }
+
+  public selectAllExportFields(): void {
+    for (const f of this.exportFields) f.Selected = true;
+  }
+  public selectNoneExportFields(): void {
+    for (const f of this.exportFields) f.Selected = false;
+  }
+  public get selectedExportFieldCount(): number {
+    return this.exportFields.filter((f) => f.Selected).length;
+  }
+
+  /**
+   * Run the export with the user's selected format + columns. Bulk-load
+   * via RunView restricted to the chosen Fields so we don't shuttle
+   * data we'll then throw away.
+   */
+  public async executeExport(): Promise<void> {
+    const recordIds = this.selectedRegion?.recordIds ?? this.lastOperationResult?.resultRecordIds ?? [];
+    if (recordIds.length === 0) return;
+    const entityName = this.selectedLists[0]?.entityName ?? this.selectedViews[0]?.entityName ?? null;
+    if (!entityName) return;
+    const selectedFields = this.exportFields.filter((f) => f.Selected).map((f) => f.Name);
+    if (selectedFields.length === 0) return;
+
+    this.isExporting = true;
     this.cdr.detectChanges();
     try {
-      this.notificationService.CreateSimpleNotification(
-        'Working on the export, will notify you when complete…',
-        'info',
-        2000,
-      );
       const md = this.ProviderToUse;
-      const entityInfo = md.EntityByName(entityName);
-      if (!entityInfo) throw new Error(`Entity '${entityName}' not found`);
-      // Single-PK fast path. Composite-PK entities require a different
-      // filter shape; surface a clear error and stop rather than emit
-      // a broken file.
-      if (entityInfo.PrimaryKeys.length !== 1) {
-        this.notificationService.CreateSimpleNotification(
-          `Composite-PK entities ('${entityName}') aren't yet supported for Operations export.`,
-          'warning',
-          5000,
-        );
-        return;
-      }
+      const entityInfo = md.EntityByName(entityName)!;
       const pk = entityInfo.PrimaryKeys[0].Name;
+      // Always include the PK in the SELECT — RunView won't filter on
+      // a column it didn't pull, and downstream lookups expect it.
+      const fieldsForQuery = Array.from(new Set([pk, ...selectedFields]));
       const escaped = recordIds.map((id) => `'${String(id).replace(/'/g, "''")}'`).join(',');
-
       const rv = RunView.FromMetadataProvider(md);
       const result = await rv.RunView<Record<string, unknown>>({
         EntityName: entityName,
         ExtraFilter: `${pk} IN (${escaped})`,
+        Fields: fieldsForQuery,
         ResultType: 'simple',
       });
       if (!result.Success) {
         this.notificationService.CreateSimpleNotification(`Export failed: ${result.ErrorMessage}`, 'error', 5000);
         return;
       }
-      const rows = result.Results ?? [];
-      const fileName = `lists-operations-${new Date().toISOString().slice(0, 10)}.xlsx`;
-      const exportResult = await this.exportService.toExcel(rows, { fileName, includeHeaders: true });
+      // Project rows to exactly the user's selected columns + ordering
+      // so the file matches what they checked. Skips the PK if they
+      // didn't pick it.
+      const rows = (result.Results ?? []).map((row) => {
+        const projected: Record<string, unknown> = {};
+        for (const f of selectedFields) projected[f] = row[f];
+        return projected;
+      });
+      const dateStamp = new Date().toISOString().slice(0, 10);
+      const ext = this.exportFormat === 'excel' ? 'xlsx' : this.exportFormat;
+      const fileName = `lists-operations-${dateStamp}.${ext}`;
+      const exportResult = this.exportFormat === 'excel'
+        ? await this.exportService.toExcel(rows, { fileName, includeHeaders: true })
+        : this.exportFormat === 'csv'
+          ? await this.exportService.toCSV(rows, { fileName, includeHeaders: true })
+          : await this.exportService.toJSON(rows, { fileName });
       if (exportResult.success) {
         this.exportService.downloadResult(exportResult);
         this.notificationService.CreateSimpleNotification(`Exported ${rows.length} record(s)`, 'success', 3000);
+        this.showExportDialog = false;
       } else {
         this.notificationService.CreateSimpleNotification('Export failed', 'error', 5000);
       }
@@ -2747,7 +2944,7 @@ export class ListsOperationsResource extends BaseResourceComponent implements On
       const message = e instanceof Error ? e.message : String(e);
       this.notificationService.CreateSimpleNotification(`Export error: ${message}`, 'error', 5000);
     } finally {
-      this.isSaving = false;
+      this.isExporting = false;
       this.cdr.detectChanges();
     }
   }

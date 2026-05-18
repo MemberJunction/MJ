@@ -16,6 +16,9 @@ import '@memberjunction/server-bootstrap/mj-class-registrations';
 // Import supplemental manifest for user-defined classes (generated at prestart with --exclude-packages @memberjunction)
 import './generated/class-registrations-manifest.js';
 
+// Promote AICorePlus extended classes above base entities (see fix-extended-class-priority.ts)
+import './fix-extended-class-priority.js';
+
 // Optional: Import communication providers if needed
 // import '@memberjunction/communication-sendgrid';
 // import '@memberjunction/communication-teams';

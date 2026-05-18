@@ -22,8 +22,10 @@ import type { SharedListSummary, SharePermissionLevel } from '@memberjunction/li
 export class ListsSharedWithMeComponent extends BaseAngularComponent implements OnInit {
   private readonly cdr = inject(ChangeDetectorRef);
 
-  /** Emitted when the user clicks a card. Host wires this to navigation. */
-  @Output() OpenList = new EventEmitter<{ ListID: string }>();
+  /** Emitted when the user clicks a card. Host wires this to navigation.
+   *  Includes ListName so the host can open a properly-titled tab without
+   *  a second fetch. */
+  @Output() OpenList = new EventEmitter<{ ListID: string; ListName: string }>();
 
   /** Permission-level filter (empty = "All Permissions"). */
   public filterLevel: SharePermissionLevel | '' = '';
@@ -53,7 +55,8 @@ export class ListsSharedWithMeComponent extends BaseAngularComponent implements 
   }
 
   public OnCardClick(listId: string): void {
-    this.OpenList.emit({ ListID: listId });
+    const share = this.allShares.find((s) => s.ListID === listId);
+    this.OpenList.emit({ ListID: listId, ListName: share?.ListName ?? '' });
   }
 
   public async Refresh(): Promise<void> {

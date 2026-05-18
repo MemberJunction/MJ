@@ -396,9 +396,21 @@ export class VennDiagramComponent implements AfterViewInit, OnChanges, OnDestroy
     const r1 = radii[0];
     const r2 = radii[1];
 
-    // Calculate overlap to ensure visual intersection
+    // Size the overlap by the **actual** intersection count, not a fixed
+    // fraction. Otherwise the diagram lies: it always draws the circles
+    // overlapping even when the lists share zero records, leading users
+    // to expect a non-zero intersection that the math correctly returns
+    // as 0. Math: as fraction of (r1+r2)/2, scale by share of records
+    // common to both sets vs. the smaller set's size. Clamped so even
+    // big intersections don't make one circle swallow the other.
+    const intersectionSize = this.data?.intersections.find(
+      i => i.setIds.length === 2 && i.setIds.includes(sets[0].listId) && i.setIds.includes(sets[1].listId)
+    )?.size ?? 0;
+    const smallerSize = Math.min(sets[0].size, sets[1].size);
+    const overlapFraction = smallerSize > 0 ? Math.min(0.85, intersectionSize / smallerSize) : 0;
     const avgRadius = (r1 + r2) / 2;
-    const overlap = avgRadius * 0.5;
+    // Visual gap when truly disjoint, so users can see "no overlap = no shared records".
+    const overlap = intersectionSize > 0 ? avgRadius * Math.max(0.1, overlapFraction * 0.7) : -avgRadius * 0.15;
 
     const positions = [
       { cx: width / 2 - r1 + overlap / 2, r: r1, set: sets[0] },

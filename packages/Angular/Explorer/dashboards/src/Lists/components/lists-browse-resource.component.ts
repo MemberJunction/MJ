@@ -8,6 +8,7 @@ import { Subject } from 'rxjs';
 import { TabService } from '@memberjunction/ng-base-application';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ListSharingService, ListSharingSummary, ListShareDialogConfig, ListShareDialogResult } from '@memberjunction/ng-list-management';
+import { capabilitiesForLevel, ListSharing, type ListCapabilities, type SharePermissionLevel } from '@memberjunction/lists';
 interface BrowseListItem {
   list: MJListEntity;
   itemCount: number;
@@ -278,15 +279,13 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
                       </td>
                       <td class="col-updated" role="gridcell">{{formatDate(item.list.__mj_UpdatedAt)}}</td>
                       <td class="col-actions" role="gridcell">
-                        @if (item.isOwner) {
-                          <button mjButton
-                            variant="flat"
-                            size="sm"
-                            (click)="openListMenu($event, item)"
-                            title="More options">
-                            <i class="fa-solid fa-ellipsis-v" aria-hidden="true"></i>
-                          </button>
-                        }
+                        <button mjButton
+                          variant="flat"
+                          size="sm"
+                          (click)="openListMenu($event, item)"
+                          title="More options">
+                          <i class="fa-solid fa-ellipsis-v" aria-hidden="true"></i>
+                        </button>
                       </td>
                     </tr>
                   }
@@ -315,13 +314,11 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
                       [title]="isFavorite(item.list.ID) ? 'Remove from favorites' : 'Add to favorites'">
                       <i [class]="isFavorite(item.list.ID) ? 'fa-solid fa-star' : 'fa-regular fa-star'"></i>
                     </button>
-                    @if (item.isOwner) {
-                      <div class="card-menu">
-                        <button class="menu-btn" (click)="openListMenu($event, item)">
-                          <i class="fa-solid fa-ellipsis-v" aria-hidden="true"></i>
-                        </button>
-                      </div>
-                    }
+                    <div class="card-menu">
+                      <button class="menu-btn" (click)="openListMenu($event, item)">
+                        <i class="fa-solid fa-ellipsis-v" aria-hidden="true"></i>
+                      </button>
+                    </div>
                   </div>
                   <div class="card-body">
                     <h3 class="card-title">{{item.list.Name}}</h3>
@@ -433,13 +430,11 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
                       }
                     </span>
                   </div>
-                  @if (item.isOwner) {
-                    <div class="list-actions">
-                      <button mjButton variant="flat" size="sm" (click)="openListMenu($event, item)">
-                        <i class="fa-solid fa-ellipsis-v" aria-hidden="true"></i>
-                      </button>
-                    </div>
-                  }
+                  <div class="list-actions">
+                    <button mjButton variant="flat" size="sm" (click)="openListMenu($event, item)">
+                      <i class="fa-solid fa-ellipsis-v" aria-hidden="true"></i>
+                    </button>
+                  </div>
                 </div>
               }
             </div>
@@ -454,29 +449,45 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
         </div>
       </ng-template>
     
-      <!-- Context Menu -->
+      <!-- Context Menu (Phase 2.8 viewer-perspective gating).
+           Items shown depend on contextItemCapabilities, resolved lazily
+           on menu open. Viewers (no Edit/Share/Delete) still see
+           Duplicate. Server-side enforcement remains source of truth;
+           hiding is just UX so users don't see buttons that would fail. -->
       @if (showContextMenu) {
         <div class="context-menu-overlay" (click)="closeContextMenu()"></div>
       }
       @if (showContextMenu) {
         <div class="context-menu" [style.top.px]="contextMenuY" [style.left.px]="contextMenuX">
-          <button class="menu-item" (click)="editList()">
-            <i class="fa-solid fa-pen"></i>
-            Edit
-          </button>
-          <button class="menu-item" (click)="openShareDialog()">
-            <i class="fa-solid fa-share-nodes"></i>
-            Share
-          </button>
+          @if (contextItemCapabilities.CanEdit) {
+            <button class="menu-item" (click)="editList()">
+              <i class="fa-solid fa-pen"></i>
+              Edit
+            </button>
+          }
+          @if (contextItemCapabilities.CanShare) {
+            <button class="menu-item" (click)="openShareDialog()">
+              <i class="fa-solid fa-share-nodes"></i>
+              Share
+            </button>
+          }
           <button class="menu-item" (click)="duplicateList()">
             <i class="fa-solid fa-copy"></i>
             Duplicate
           </button>
-          <div class="menu-divider"></div>
-          <button class="menu-item danger" (click)="confirmDeleteList()">
-            <i class="fa-solid fa-trash"></i>
-            Delete
-          </button>
+          @if (contextItemCapabilities.CanDelete) {
+            <div class="menu-divider"></div>
+            <button class="menu-item danger" (click)="confirmDeleteList()">
+              <i class="fa-solid fa-trash"></i>
+              Delete
+            </button>
+          }
+          @if (!contextItemCapabilities.CanEdit && !contextItemCapabilities.CanShare && !contextItemCapabilities.CanDelete) {
+            <div class="menu-viewer-hint">
+              <i class="fa-solid fa-eye"></i>
+              Viewer access — read only
+            </div>
+          }
         </div>
       }
     
@@ -589,8 +600,53 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
           [config]="shareDialogConfig"
           [visible]="showShareDialog"
           (complete)="onShareComplete($event)"
-          (cancel)="onShareCancel()">
+          (cancel)="onShareCancel()"
+          (manageInvitations)="onManageInvitations()"
+          (viewAuditLog)="onViewAuditLog()">
         </mj-list-share-dialog>
+      }
+
+      <!-- Invitations Dialog (mockup 16) -->
+      @if (showInvitationsDialog && activeShareListId) {
+        <mj-dialog
+          [Visible]="true"
+          [Title]="'Invitations — ' + (activeShareListName ?? 'List')"
+          (Close)="closeInvitationsDialog()"
+          [MinWidth]="640"
+          [Width]="900"
+          [Height]="640">
+          <div class="dialog-content">
+            <mj-list-invitations
+              [Provider]="ProviderToUse"
+              [ListID]="activeShareListId"
+              [ListName]="activeShareListName">
+            </mj-list-invitations>
+          </div>
+          <mj-dialog-actions>
+            <button mjButton (click)="closeInvitationsDialog()" variant="outline">Close</button>
+          </mj-dialog-actions>
+        </mj-dialog>
+      }
+
+      <!-- Audit Log Dialog (mockup 18) -->
+      @if (showAuditLogDialog && activeShareListId) {
+        <mj-dialog
+          [Visible]="true"
+          [Title]="'Audit Log — ' + (activeShareListName ?? 'List')"
+          (Close)="closeAuditLogDialog()"
+          [MinWidth]="720"
+          [Width]="980"
+          [Height]="680">
+          <div class="dialog-content">
+            <mj-list-audit-log
+              [Provider]="ProviderToUse"
+              [ListID]="activeShareListId">
+            </mj-list-audit-log>
+          </div>
+          <mj-dialog-actions>
+            <button mjButton (click)="closeAuditLogDialog()" variant="outline">Close</button>
+          </mj-dialog-actions>
+        </mj-dialog>
       }
     
       <!-- Entity Dropdown Portal -->
@@ -1532,6 +1588,17 @@ type ViewMode = 'table' | 'card' | 'hierarchy';
       margin: 4px 0;
     }
 
+    .menu-viewer-hint {
+      padding: 10px 14px;
+      font-size: 12px;
+      color: var(--mj-text-muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-style: italic;
+    }
+    .menu-viewer-hint i { color: var(--mj-text-muted); }
+
     /* Modal Styles */
     .modal-overlay {
       position: fixed;
@@ -1909,6 +1976,24 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
   // Sharing dialog state
   showShareDialog = false;
   shareDialogConfig: ListShareDialogConfig | null = null;
+
+  // Viewer-perspective gating (Phase 2.8). Capabilities are computed
+  // lazily when the user opens the context menu — running per-card
+  // would mean N permission-resolve calls per browse render. The
+  // resolved level is cached on the item so re-opening the same menu
+  // doesn't refetch.
+  public contextItemCapabilities: ListCapabilities = capabilitiesForLevel('Owner');
+  private capabilityCache = new Map<string, SharePermissionLevel | null>();
+
+  // Invitations / audit log dialogs (mockups 16, 18) — opened from
+  // the share dialog. Each dialog binds to a single list at a time,
+  // tracked by `activeShareListId`/`activeShareListName` lifted from
+  // shareDialogConfig at open time so we keep the context after the
+  // share dialog closes.
+  showInvitationsDialog = false;
+  showAuditLogDialog = false;
+  activeShareListId: string | null = null;
+  activeShareListName: string | null = null;
 
   private entityColorMap: Map<string, string> = new Map();
   private entityIconMap: Map<string, string> = new Map();
@@ -2454,7 +2539,43 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     this.selectedContextItem = item;
     this.contextMenuX = mouseEvent.clientX;
     this.contextMenuY = mouseEvent.clientY;
+    // Fast path: owners always have full capabilities. Avoid an extra
+    // permission-resolve round trip for the common case.
+    if (item.isOwner) {
+      this.contextItemCapabilities = capabilitiesForLevel('Owner');
+      this.showContextMenu = true;
+      return;
+    }
+    // Render the menu immediately with a conservative viewer-level cap
+    // set, then refine via async resolve. The flicker is a single tick
+    // — and viewers/editors stay correctly gated even if resolve fails.
+    const cached = this.capabilityCache.get(item.list.ID);
+    if (cached !== undefined) {
+      this.contextItemCapabilities = capabilitiesForLevel(cached);
+    } else {
+      this.contextItemCapabilities = capabilitiesForLevel('View');
+      void this.refineContextCapabilities(item.list.ID);
+    }
     this.showContextMenu = true;
+  }
+
+  /** Resolve the current user's permission level for a list and update
+   *  the open context menu in place. Cached so re-opening the same menu
+   *  doesn't re-hit the resolver. */
+  private async refineContextCapabilities(listId: string): Promise<void> {
+    try {
+      const sharing = new ListSharing(this.ProviderToUse.CurrentUser!, this.ProviderToUse);
+      const level = await sharing.ResolveEffectivePermission(listId);
+      this.capabilityCache.set(listId, level);
+      // Only mutate state if the user is still on this same menu — they
+      // may have closed it before resolve finished.
+      if (this.showContextMenu && this.selectedContextItem?.list.ID === listId) {
+        this.contextItemCapabilities = capabilitiesForLevel(level);
+        this.cdr.detectChanges();
+      }
+    } catch {
+      // Conservative fallback already applied at menu open time.
+    }
   }
 
   closeContextMenu() {
@@ -2471,6 +2592,10 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     this.selectedCategoryId = null;
     this.showEntityDropdown = false;
     this.showCreateDialog = true;
+    // Refresh categories so newly-created ones appear without a page
+    // reload. Cheap RunView; runs in the background while the user is
+    // typing the list name.
+    void this.refreshCategoriesForDialog();
   }
 
   editList() {
@@ -2483,8 +2608,40 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     this.selectedEntityId = list.EntityID;
     this.entitySearchTerm = list.Entity || '';
     this.selectedCategoryId = list.CategoryID || null;
-    this.showCreateDialog = true;
+    // Ensure no stale state from a previous Create attempt — the entity
+    // dropdown portal renders at z-index 10002 and could otherwise sit on
+    // top of the edit dialog and block interaction.
+    this.showEntityDropdown = false;
+    // Close the context menu BEFORE opening the dialog. Doing it after
+    // leaves a one-tick window where both the menu and the modal-overlay
+    // are stacked, and the menu's outer click-overlay can swallow the
+    // first click into the form fields below it.
     this.closeContextMenu();
+    this.showCreateDialog = true;
+    this.cdr.detectChanges();
+    void this.refreshCategoriesForDialog();
+  }
+
+  /** Re-pull MJ: List Categories so the dropdown reflects any
+   *  newly-created categories from the Categories tab. Updates
+   *  `flatCategories` (the dropdown source) plus `categoryMap`. */
+  private async refreshCategoriesForDialog(): Promise<void> {
+    try {
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      const result = await rv.RunView<MJListCategoryEntity>({
+        EntityName: 'MJ: List Categories',
+        OrderBy: 'Name',
+        ResultType: 'simple',
+      });
+      if (!result.Success) return;
+      this.categories = (result.Results ?? []) as MJListCategoryEntity[];
+      this.categoryMap.clear();
+      for (const cat of this.categories) this.categoryMap.set(cat.ID, cat);
+      this.flatCategories = this.buildFlatCategories(this.categories);
+      this.cdr.detectChanges();
+    } catch {
+      // Best-effort — the dialog still works with the previously-loaded list.
+    }
   }
 
   selectEntity(entity: { ID: string; Name: string }) {
@@ -2612,16 +2769,44 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
     this.cdr.detectChanges();
 
     try {
+      // spDeleteList doesn't cascade to MJ: List Details, so the FK
+      // constraint (FK_ListDetail_List) blocks the delete if the list
+      // has any members. Cascade-delete the details first in a
+      // transaction group so the whole thing rolls back if any single
+      // delete fails. The proper long-term fix is a migration that
+      // adds ON DELETE CASCADE (or extends the SP); this keeps the UI
+      // unblocked in the meantime.
+      const cascadeOk = await this.cascadeDeleteListMembers(listToDelete.ID);
+      if (!cascadeOk) {
+        this.notificationService.CreateSimpleNotification(
+          `Failed to delete list members for "${listName}" — list not deleted`,
+          'error', 6000,
+        );
+        return;
+      }
+
       const deleted = await listToDelete.Delete();
       if (deleted) {
         this.notificationService.CreateSimpleNotification(`"${listName}" deleted`, 'success', 3000);
+        // Optimistic removal from local state so the card disappears
+        // immediately. Without this, the user sees the just-deleted list
+        // until loadData() rebuilds — and worse, can click Delete on it
+        // again (which hangs because the in-memory entity still has the
+        // now-deleted record's ID).
+        const deletedId = listToDelete.ID;
+        this.allLists = this.allLists.filter(item => !UUIDsEqual(item.list.ID, deletedId));
+        this.applyFilters();
+        this.buildCategoryTree();
+        this.cdr.detectChanges();
       } else {
         const errorMessage = listToDelete.LatestResult?.Message || 'Unknown error occurred';
         console.error('Failed to delete list:', listToDelete.LatestResult);
         this.notificationService.CreateSimpleNotification(`Failed to delete list: ${errorMessage}`, 'error', 6000);
       }
       this.cancelDelete();
-      await this.loadData();
+      // Background refresh for authoritative state — don't block the UI
+      // on it. If the optimistic update was wrong (rare), this corrects.
+      void this.loadData();
     } catch (error) {
       console.error('Error deleting list:', error);
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -2630,6 +2815,36 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
       this.isDeleting = false;
       this.cdr.detectChanges();
     }
+  }
+
+  /** Delete every MJ: List Details row for a given list in a single
+   *  transaction group. Returns true if everything succeeded (including
+   *  the trivial "no members" case). */
+  private async cascadeDeleteListMembers(listId: string): Promise<boolean> {
+    const md = this.ProviderToUse;
+    const rv = RunView.FromMetadataProvider(md);
+    const lookup = await rv.RunView<MJListDetailEntity>({
+      EntityName: 'MJ: List Details',
+      ExtraFilter: `ListID='${listId}'`,
+      ResultType: 'entity_object',
+    });
+    if (!lookup.Success) {
+      console.error('Failed to load list details for cascade-delete:', lookup.ErrorMessage);
+      return false;
+    }
+    const details = lookup.Results ?? [];
+    if (details.length === 0) return true;
+
+    const tg = await md.CreateTransactionGroup();
+    for (const d of details) {
+      d.TransactionGroup = tg;
+      await d.Delete();
+    }
+    const ok = await tg.Submit();
+    if (!ok) {
+      console.error('Cascade-delete transaction failed for list', listId);
+    }
+    return ok;
   }
 
   closeCreateDialog() {
@@ -2716,6 +2931,38 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
   onShareCancel() {
     this.showShareDialog = false;
     this.shareDialogConfig = null;
+  }
+
+  /** "Manage Invitations" clicked inside the share dialog — opens a
+   *  modal hosting `<mj-list-invitations>` for the same list. The
+   *  share dialog is closed so dialogs don't visually stack. */
+  onManageInvitations() {
+    if (!this.shareDialogConfig) return;
+    this.activeShareListId = this.shareDialogConfig.listId;
+    this.activeShareListName = this.shareDialogConfig.listName;
+    this.showShareDialog = false;
+    this.showInvitationsDialog = true;
+    this.cdr.detectChanges();
+  }
+
+  closeInvitationsDialog() {
+    this.showInvitationsDialog = false;
+    this.cdr.detectChanges();
+  }
+
+  /** "View audit log" link in share dialog. */
+  onViewAuditLog() {
+    if (!this.shareDialogConfig) return;
+    this.activeShareListId = this.shareDialogConfig.listId;
+    this.activeShareListName = this.shareDialogConfig.listName;
+    this.showShareDialog = false;
+    this.showAuditLogDialog = true;
+    this.cdr.detectChanges();
+  }
+
+  closeAuditLogDialog() {
+    this.showAuditLogDialog = false;
+    this.cdr.detectChanges();
   }
 
   private async loadSharingInfo() {

@@ -31,6 +31,15 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
 
   @Input() public ListID: string = "";
 
+  /**
+   * Bumped on every list-membership mutation so the Usage stats sidebar
+   * re-queries member count / growth / last-activity. Without this nudge,
+   * those numbers drift from reality until a full page reload because the
+   * stats component otherwise only loads on init.
+   */
+  public statsRefreshTrigger = 0;
+  private bumpStatsRefresh(): void { this.statsRefreshTrigger++; }
+
   @ViewChild('listDetailGrid') listDetailGrid: ListDetailGridComponent | undefined;
 
   // List record
@@ -50,11 +59,31 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
   // can be overridden per-user via localStorage (see `loadLastUsedMode`).
   public sourceViewName: string | null = null;
 
-  // Bulk-edit (Phase 5.2). Status dropdown is the simplest bulk-edit
-  // operation and the most-asked-for. Move/Copy already have UX paths
-  // (Add-to-List dialog) and a server-side action (`Move List Members`).
+  // Bulk-edit (Phase 5.2). Status, Move, Copy, Remove. Move flows through
+  // the delta-confirm dialog because it produces drops on the source list.
   public bulkStatus: 'Active' | 'Complete' | 'Disabled' | 'Pending' | 'Rejected' | '' = '';
   public isApplyingBulkStatus = false;
+
+  // Move / Copy state (mockups 23, 24). The picker dialog lists candidate
+  // target lists scoped to the same entity. We load it lazily on first
+  // open and cache for the session — opening the picker twice in a row
+  // doesn't re-fetch unless the user explicitly hits "Refresh".
+  public showMoveCopyDialog = false;
+  public moveCopyMode: 'move' | 'copy' = 'move';
+  public moveCopyTargetSearch = '';
+  public moveCopyTargetCandidates: MJListEntity[] = [];
+  public moveCopyTargetCandidatesLoading = false;
+  public moveCopySelectedTarget: MJListEntity | null = null;
+  public isApplyingMoveCopy = false;
+  public moveCopyProgress = 0;
+  public moveCopyTotal = 0;
+
+  // Move delta-confirm. Built locally from the in-hand RecordIDs — no
+  // server round-trip needed since we already know exactly what will be
+  // added to the target and removed from the source. The drop-guard is
+  // enforced at confirm time (mode='move' + ack checkbox).
+  public moveDeltaConfirmVisible = false;
+  public moveDelta: ListDelta | null = null;
   public refreshMode: ListRefreshMode = 'Additive';
   public isPreviewingRefresh = false;
   public isApplyingRefresh = false;
@@ -143,9 +172,14 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
       .subscribe((searchText) => this.searchRecords(searchText));
   }
 
-  public async ngOnInit(): Promise<void> {
+  public ngOnInit(): void {
     if (this.ListID) {
-      await this.loadListRecord();
+      // Defer the load to a macrotask so the initial assignment of
+      // `listRecord` cannot land during Angular's dev-mode verify pass
+      // (NG0100). The first CD cycle renders with listRecord=null
+      // ("List"); the macrotask then loads, assigns, and fires its own
+      // detectChanges in a fresh cycle.
+      setTimeout(() => { void this.loadListRecord(); }, 0);
     }
   }
 
@@ -312,6 +346,7 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
         // Reload list (for LastRefreshedAt) + grid in parallel.
         await this.loadListRecord();
         this.refreshGrid();
+        this.bumpStatsRefresh();
       } else {
         this.sharedService.CreateSimpleNotification(`Refresh failed: ${result.Message}`, 'error', 5000);
       }
@@ -419,29 +454,51 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
         return key;
       });
       const filter = `ListID='${this.listRecord.ID}' AND RecordID IN (${recordIds.map((id) => `'${String(id).replace(/'/g, "''")}'`).join(',')})`;
-      const result = await rv.RunView<MJListDetailEntity>({
+      // Two-step: fetch just the IDs via a 'simple' RunView, then load each
+      // entity through GetEntityObject(..., CurrentUser) so the entity is
+      // born with the user context that Save() requires. RunView with
+      // 'entity_object' returns entities WITHOUT a CurrentUser bound — fine
+      // for read-only use, broken for Save (`ContextCurrentUser cannot be
+      // null`).
+      const idResult = await rv.RunView<{ ID: string }>({
         EntityName: 'MJ: List Details',
         ExtraFilter: filter,
-        ResultType: 'entity_object',
+        Fields: ['ID'],
+        ResultType: 'simple',
       });
-      if (!result.Success) {
-        this.sharedService.CreateSimpleNotification(`Failed to load list details: ${result.ErrorMessage}`, 'error', 4000);
+      if (!idResult.Success) {
+        this.sharedService.CreateSimpleNotification(`Failed to load list details: ${idResult.ErrorMessage}`, 'error', 4000);
         return;
       }
       let updated = 0;
       let failed = 0;
-      for (const detail of result.Results ?? []) {
+      const failureMessages: string[] = [];
+      for (const row of idResult.Results ?? []) {
+        const detail = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details', md.CurrentUser);
+        const loaded = await detail.Load(row.ID);
+        if (!loaded) {
+          failed++;
+          const reason = detail.LatestResult?.CompleteMessage ?? 'load failed';
+          if (failureMessages.length < 3) failureMessages.push(reason);
+          continue;
+        }
         detail.Status = this.bulkStatus as never;
         const ok = await detail.Save();
-        if (ok) updated++;
-        else failed++;
+        if (ok) {
+          updated++;
+        } else {
+          failed++;
+          const reason = detail.LatestResult?.CompleteMessage ?? 'unknown error';
+          if (failureMessages.length < 3) failureMessages.push(reason);
+          LogError(`Bulk status update failed for List Detail ${row.ID}: ${reason}`);
+        }
       }
       this.sharedService.CreateSimpleNotification(
         failed === 0
           ? `Updated ${updated} item(s) to '${this.bulkStatus}'`
-          : `Updated ${updated}, ${failed} failed`,
+          : `Updated ${updated}, ${failed} failed: ${failureMessages.join(' | ')}`,
         failed === 0 ? 'success' : 'warning',
-        3000,
+        failed === 0 ? 3000 : 8000,
       );
       this.bulkStatus = '';
       // Defer the grid refresh to the next microtask — see comment in
@@ -449,6 +506,7 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
       // triggers NG0100 and silently breaks the UI refresh.
       await Promise.resolve();
       this.refreshGrid();
+      this.bumpStatsRefresh();
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
       this.sharedService.CreateSimpleNotification(`Bulk update failed: ${message}`, 'error', 5000);
@@ -458,6 +516,302 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
     }
   }
 
+  // ==========================================
+  // Bulk Move / Copy (mockups 23, 24)
+  //
+  // Move = insert into target + delete from source (drops on source).
+  // Copy = insert into target only (additive — no drops).
+  //
+  // The drop-guard for Move is enforced by routing through the local
+  // delta-confirm dialog: the user must ack the removal before the
+  // mutation runs. We build a synthetic ListDelta locally because we
+  // already know the exact ToAdd / ToRemove sets — no server round-trip
+  // needed for the preview. Apply step uses direct entity Save/Delete
+  // inside a single TransactionGroup (same pattern as Remove).
+  // ==========================================
+
+  public openMoveDialog(): void { this.openMoveCopyDialog('move'); }
+  public openCopyDialog(): void { this.openMoveCopyDialog('copy'); }
+
+  private openMoveCopyDialog(mode: 'move' | 'copy'): void {
+    if (!this.listRecord || this.selectedKeys.length === 0) {
+      this.sharedService.CreateSimpleNotification('Please select records first', 'warning', 2500);
+      return;
+    }
+    this.moveCopyMode = mode;
+    this.moveCopySelectedTarget = null;
+    this.moveCopyTargetSearch = '';
+    this.showMoveCopyDialog = true;
+    // Load candidates once per dialog open. We don't keep them in
+    // permanent component state because the user could create/delete
+    // lists between opens, and the target picker isn't visible often
+    // enough to justify long-lived caching.
+    void this.loadMoveCopyTargets();
+    this.cdr.detectChanges();
+  }
+
+  public closeMoveCopyDialog(): void {
+    this.showMoveCopyDialog = false;
+    this.moveCopyTargetCandidates = [];
+    this.moveCopySelectedTarget = null;
+    this.cdr.detectChanges();
+  }
+
+  public selectMoveCopyTarget(target: MJListEntity): void {
+    this.moveCopySelectedTarget = target;
+  }
+
+  public get filteredMoveCopyTargets(): MJListEntity[] {
+    const term = this.moveCopyTargetSearch.trim().toLowerCase();
+    if (!term) return this.moveCopyTargetCandidates;
+    return this.moveCopyTargetCandidates.filter((l) =>
+      l.Name.toLowerCase().includes(term) ||
+      (l.Description?.toLowerCase().includes(term) ?? false)
+    );
+  }
+
+  public get moveCopyProgressPercent(): number {
+    return this.moveCopyTotal > 0 ? Math.round((this.moveCopyProgress / this.moveCopyTotal) * 100) : 0;
+  }
+
+  /** Load candidate target lists — same Entity, owned by or shared with
+   *  the current user, excluding the list we're standing on. One RunView
+   *  on open; results stay in memory until the dialog closes. */
+  private async loadMoveCopyTargets(): Promise<void> {
+    if (!this.listRecord) return;
+    this.moveCopyTargetCandidatesLoading = true;
+    this.cdr.detectChanges();
+    try {
+      const rv = RunView.FromMetadataProvider(this.ProviderToUse);
+      // Filter to same EntityID + exclude the current list. UserID filter
+      // would over-restrict (Shared-With-Me lists should be valid targets
+      // when the user has Edit there); the server enforces the real
+      // permission on the per-row Save, so listing extra entries is fine.
+      const filter = `EntityID='${this.listRecord.EntityID}' AND ID<>'${this.listRecord.ID}'`;
+      const result = await rv.RunView<MJListEntity>({
+        EntityName: 'MJ: Lists',
+        ExtraFilter: filter,
+        OrderBy: 'Name',
+        ResultType: 'simple',
+        MaxRows: 500,
+      });
+      if (result.Success) {
+        this.moveCopyTargetCandidates = (result.Results ?? []) as MJListEntity[];
+      } else {
+        this.moveCopyTargetCandidates = [];
+        this.sharedService.CreateSimpleNotification(`Failed to load target lists: ${result.ErrorMessage}`, 'error', 4000);
+      }
+    } catch (e) {
+      this.moveCopyTargetCandidates = [];
+      const message = e instanceof Error ? e.message : String(e);
+      this.sharedService.CreateSimpleNotification(`Failed to load target lists: ${message}`, 'error', 4000);
+    } finally {
+      this.moveCopyTargetCandidatesLoading = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  /**
+   * "Continue" / "Copy" click in the target picker. For Copy we apply
+   * immediately. For Move we build a local Delta and show the confirm
+   * dialog — the actual mutation fires from onMoveConfirmCommit().
+   */
+  public async confirmMoveCopy(): Promise<void> {
+    if (!this.listRecord || !this.moveCopySelectedTarget || this.selectedKeys.length === 0) return;
+    if (this.moveCopyMode === 'copy') {
+      await this.applyMoveCopy(false);
+      return;
+    }
+    // Move: show delta-confirm so the user explicitly acks the source-side drop.
+    const recordIds = this.extractSelectedRecordIds();
+    this.moveDelta = this.buildMoveDelta(recordIds);
+    this.showMoveCopyDialog = false;
+    this.moveDeltaConfirmVisible = true;
+    this.cdr.detectChanges();
+  }
+
+  public onMoveConfirmCancel(): void {
+    this.moveDeltaConfirmVisible = false;
+    this.moveDelta = null;
+    // Re-open the target picker so the user can change their mind without
+    // losing their selection.
+    this.showMoveCopyDialog = true;
+    this.cdr.detectChanges();
+  }
+
+  public async onMoveConfirmCommit(_deltaToken: string): Promise<void> {
+    this.moveDeltaConfirmVisible = false;
+    this.cdr.detectChanges();
+    await this.applyMoveCopy(true);
+  }
+
+  /**
+   * Pull RecordIDs out of selectedKeys. selectedKeys arrive from the
+   * grid in concatenated-key format ("ID|<value>"). For single-PK entities
+   * MJ: List Details stores the raw value; for composite-PK entities it
+   * stores the full concatenated string. We normalize based on entity
+   * metadata — same logic as confirmRemoveFromList.
+   */
+  private extractSelectedRecordIds(): string[] {
+    const md = this.ProviderToUse;
+    const entityInfo = this.listRecord ? md.EntityByID(this.listRecord.EntityID) : null;
+    return this.selectedKeys.map((key) => {
+      if (entityInfo && entityInfo.PrimaryKeys.length === 1) {
+        const ck = new CompositeKey();
+        ck.LoadFromConcatenatedString(key);
+        return String(ck.KeyValuePairs[0]?.Value ?? key);
+      }
+      return key;
+    });
+  }
+
+  /**
+   * Build a synthetic ListDelta for the Move-confirm dialog. Token is
+   * a sentinel — we never call server-side ApplyDelta for this flow,
+   * the mutations run client-side inside a transaction group. The
+   * delta-confirm component only reads counts + ToAdd/ToRemove + Warnings;
+   * the token round-trips through the (Confirm) emit but is unused.
+   */
+  private buildMoveDelta(recordIds: string[]): ListDelta {
+    const removeCount = recordIds.length;
+    return {
+      TargetListId: this.listRecord!.ID,
+      EntityName: this.listRecord!.Entity ?? '',
+      ToAdd: [],
+      ToRemove: recordIds,
+      Unchanged: [],
+      Counts: {
+        Add: 0,
+        Remove: removeCount,
+        Unchanged: 0,
+        SourceTotal: 0,
+        TargetTotal: this.rowCount,
+      },
+      Warnings: [{
+        Code: 'WILL_REMOVE_RECORDS',
+        Message: `${removeCount} record(s) will be removed from "${this.listRecord!.Name}" as part of the move`,
+        Details: { Count: removeCount },
+      }],
+      // Sentinel — client-side flow doesn't round-trip this.
+      DeltaToken: 'client-move-delta',
+    };
+  }
+
+  /**
+   * Execute the move/copy. Insert all records into the target, and for
+   * Move also delete the matching MJ: List Details from the source. All
+   * mutations run in a single TransactionGroup so partial failures don't
+   * leave records duplicated in both lists.
+   */
+  private async applyMoveCopy(isMove: boolean): Promise<void> {
+    if (!this.listRecord || !this.moveCopySelectedTarget) return;
+    const source = this.listRecord;
+    const target = this.moveCopySelectedTarget;
+    const recordIds = this.extractSelectedRecordIds();
+    if (recordIds.length === 0) return;
+
+    this.isApplyingMoveCopy = true;
+    this.moveCopyTotal = recordIds.length;
+    this.moveCopyProgress = 0;
+    this.cdr.detectChanges();
+
+    const md = this.ProviderToUse;
+    const rv = RunView.FromMetadataProvider(md);
+
+    try {
+      // Dedupe against the target: skip records already present so a
+      // partially-completed previous run can be re-tried cleanly.
+      const filterIds = recordIds.map((id) => `'${String(id).replace(/'/g, "''")}'`).join(',');
+      const existingTarget = await rv.RunView<{ RecordID: string }>({
+        EntityName: 'MJ: List Details',
+        ExtraFilter: `ListID='${target.ID}' AND RecordID IN (${filterIds})`,
+        Fields: ['RecordID'],
+        ResultType: 'simple',
+      });
+      const alreadyInTarget = new Set(
+        (existingTarget.Results ?? []).map((r) => String((r as { RecordID: string }).RecordID))
+      );
+      const toAdd = recordIds.filter((id) => !alreadyInTarget.has(id));
+
+      // For Move, look up the source-side ListDetail rows to delete.
+      let sourceRows: MJListDetailEntity[] = [];
+      if (isMove) {
+        const lookup = await rv.RunView<MJListDetailEntity>({
+          EntityName: 'MJ: List Details',
+          ExtraFilter: `ListID='${source.ID}' AND RecordID IN (${filterIds})`,
+          ResultType: 'entity_object',
+        });
+        if (!lookup.Success) {
+          throw new Error(`Failed to load source rows: ${lookup.ErrorMessage}`);
+        }
+        sourceRows = lookup.Results ?? [];
+      }
+
+      const tg = await md.CreateTransactionGroup();
+
+      // Queue inserts into target.
+      for (const recordId of toAdd) {
+        const newDetail = await md.GetEntityObject<MJListDetailEntity>('MJ: List Details', md.CurrentUser);
+        newDetail.NewRecord();
+        newDetail.ListID = target.ID;
+        newDetail.RecordID = recordId;
+        newDetail.Sequence = 0;
+        newDetail.TransactionGroup = tg;
+        await newDetail.Save();
+      }
+
+      // Queue source-side deletes for Move only.
+      if (isMove) {
+        for (const row of sourceRows) {
+          row.TransactionGroup = tg;
+          await row.Delete();
+        }
+      }
+
+      const ok = await tg.Submit();
+      this.moveCopyProgress = this.moveCopyTotal;
+
+      if (!ok) {
+        this.sharedService.CreateSimpleNotification(
+          `${isMove ? 'Move' : 'Copy'} partially failed — some changes may not have applied`,
+          'error',
+          5000,
+        );
+        return;
+      }
+
+      const skippedNote = alreadyInTarget.size > 0
+        ? ` (${alreadyInTarget.size} already in target — skipped)`
+        : '';
+      this.sharedService.CreateSimpleNotification(
+        `${isMove ? 'Moved' : 'Copied'} ${toAdd.length} record(s) to "${target.Name}"${skippedNote}`,
+        'success',
+        3000,
+      );
+
+      // Same NG0100 pattern as confirmRemoveFromList — defer cleanup +
+      // refresh by a microtask so the dialog/visibility flips happen in
+      // a fresh change-detection cycle.
+      await Promise.resolve();
+      this.closeMoveCopyDialog();
+      this.moveDelta = null;
+      if (isMove) {
+        this.listDetailGrid?.clearSelection();
+        this.refreshGrid();
+        this.bumpStatsRefresh();
+      }
+      this.cdr.detectChanges();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      LogError(`Move/Copy failed: ${message}`);
+      this.sharedService.CreateSimpleNotification(`${isMove ? 'Move' : 'Copy'} failed: ${message}`, 'error', 5000);
+    } finally {
+      this.isApplyingMoveCopy = false;
+      this.cdr.detectChanges();
+    }
+  }
+
+  // ==========================================
   // Remove from List Dialog
   // ==========================================
 
@@ -546,6 +900,7 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
       this.closeRemoveDialog();
       this.listDetailGrid?.clearSelection();
       this.refreshGrid();
+      this.bumpStatsRefresh();
       this.cdr.detectChanges();
     } else {
       LogError("Error removing records from list");
@@ -722,6 +1077,7 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
       await Promise.resolve();
       this.closeAddRecordsDialog();
       this.refreshGrid();
+      this.bumpStatsRefresh();
       this.cdr.detectChanges();
     } else {
       LogError("Error adding records to list");
@@ -869,6 +1225,7 @@ export class SingleListDetailComponent extends BaseAngularComponent implements O
       await Promise.resolve();
       this.closeAddFromViewDialog();
       this.refreshGrid();
+      this.bumpStatsRefresh();
       this.cdr.detectChanges();
     } else {
       LogError("Error adding records from view to list");

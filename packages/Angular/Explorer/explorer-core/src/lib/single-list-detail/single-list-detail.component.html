@@ -2,7 +2,11 @@
   <!-- Header with title and Add button -->
   <div class="list-header">
     <div class="list-header__titleblock">
-      <h1>{{ listRecord ? listRecord.Name : "List" }}</h1>
+      @if (listRecord) {
+        <h1>{{ listRecord.Name }}</h1>
+      } @else {
+        <h1>List</h1>
+      }
       @if (hasLineage) {
         <div class="lineage-badge" [title]="'Source view: ' + (sourceViewName ?? 'unknown')">
           <i class="fa-solid fa-link"></i>
@@ -74,9 +78,26 @@
       </div>
       <div class="toolbar-right">
         @if (selectedKeys.length > 0 && capabilities.CanEdit) {
-          <!-- Bulk-edit (Phase 5.2): set status across selected rows.
-               Move/Copy uses the existing Add-to-List dialog + the
-               Move List Members server-side action. -->
+          <!-- Bulk-edit toolbar (Phase 5.2, mockups 23/24).
+               Move/Copy open the target-list picker. Move then routes
+               through the delta-confirm dialog because the source side
+               drops; Copy is additive and applies directly. -->
+          <button mjButton
+            (click)="openMoveDialog()"
+            variant="flat"
+            class="toolbar-button"
+            title="Move selected records to another list">
+            <span class="fa-solid fa-arrow-right-arrow-left"></span>
+            Move…
+          </button>
+          <button mjButton
+            (click)="openCopyDialog()"
+            variant="flat"
+            class="toolbar-button"
+            title="Copy selected records to another list (keeps them here too)">
+            <span class="fa-solid fa-copy"></span>
+            Copy…
+          </button>
           <select
             class="mj-input mj-select bulk-status-select"
             [(ngModel)]="bulkStatus"
@@ -179,7 +200,7 @@
         </mj-list-detail-grid>
       </div>
       <aside class="list-detail__stats">
-        <mj-list-stats [Provider]="Provider" [ListID]="listRecord.ID"></mj-list-stats>
+        <mj-list-stats [Provider]="Provider" [ListID]="listRecord.ID" [RefreshTrigger]="statsRefreshTrigger"></mj-list-stats>
       </aside>
     </div>
   }
@@ -193,7 +214,112 @@
     (Confirm)="onRefreshConfirmCommit($event)"
     (Cancel)="onRefreshConfirmCancel()">
   </mj-list-delta-confirm>
+
+  <!-- Move delta-confirm dialog (mockup 24). Shown only for Move,
+       never for Copy. Drops on the source side require the user to
+       acknowledge before Confirm enables. -->
+  <mj-list-delta-confirm
+    [Visible]="moveDeltaConfirmVisible && !!moveDelta"
+    [Delta]="moveDelta"
+    [TargetListName]="listRecord?.Name ?? null"
+    [SourceLabel]="'Move to ' + (moveCopySelectedTarget?.Name ?? 'target list')"
+    (Confirm)="onMoveConfirmCommit($event)"
+    (Cancel)="onMoveConfirmCancel()">
+  </mj-list-delta-confirm>
 </div>
+
+<!-- Move/Copy target picker (mockup 23). Lists every list owned by /
+     shared with the current user that targets the same entity. -->
+@if (showMoveCopyDialog) {
+  <mj-dialog
+    [Visible]="true"
+    [Title]="(moveCopyMode === 'move' ? 'Move ' : 'Copy ') + selectedKeys.length + ' record' + (selectedKeys.length === 1 ? '' : 's') + ' to…'"
+    (Close)="closeMoveCopyDialog()"
+    [MinWidth]="480"
+    [Width]="640"
+    [Height]="560">
+    <div class="dialog-content move-copy-dialog">
+      @if (isApplyingMoveCopy) {
+        <div class="dialog-loading">
+          <mj-loading [text]="(moveCopyMode === 'move' ? 'Moving' : 'Copying') + ' records...'" size="small"></mj-loading>
+          @if (moveCopyTotal > 0) {
+            <mj-progress-bar
+              [Value]="moveCopyProgressPercent"
+              class="progress-bar">
+            </mj-progress-bar>
+          }
+        </div>
+      } @else {
+        <p class="dialog-instruction">
+          Choose the target list. Both lists must hold the same entity ({{ listRecord?.Entity ?? 'records' }}).
+        </p>
+        <div class="search-section">
+          <div class="search-input-wrapper">
+            <span class="fa-solid fa-search search-icon"></span>
+            <input
+              class="mj-input search-input"
+              type="text"
+              placeholder="Filter lists by name…"
+              [(ngModel)]="moveCopyTargetSearch" />
+          </div>
+        </div>
+        @if (moveCopyTargetCandidatesLoading) {
+          <div class="list-loading">
+            <mj-loading text="Loading lists..." size="small"></mj-loading>
+          </div>
+        } @else if (filteredMoveCopyTargets.length === 0) {
+          <div class="empty-results">
+            <span class="fa-solid fa-list empty-icon"></span>
+            <p>No other lists found for this entity.</p>
+            <p class="dialog-note">Create a new list first if you need a new target.</p>
+          </div>
+        } @else {
+          <div class="records-scroll move-copy-targets">
+            @for (target of filteredMoveCopyTargets; track target.ID) {
+              <div class="record-item"
+                [class.selected]="moveCopySelectedTarget?.ID === target.ID"
+                (click)="selectMoveCopyTarget(target)">
+                <div class="record-checkbox">
+                  <input type="radio"
+                    name="moveCopyTarget"
+                    [checked]="moveCopySelectedTarget?.ID === target.ID"
+                    (click)="$event.stopPropagation()"
+                    (change)="selectMoveCopyTarget(target)">
+                </div>
+                <div class="record-name">
+                  <strong>{{ target.Name }}</strong>
+                  @if (target.Description) {
+                    <span class="target-desc"> — {{ target.Description }}</span>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        }
+      }
+    </div>
+    <mj-dialog-actions>
+      <button mjButton
+        (click)="confirmMoveCopy()"
+        [disabled]="!moveCopySelectedTarget || isApplyingMoveCopy"
+        variant="primary">
+        @if (moveCopyMode === 'move') {
+          <span class="fa-solid fa-arrow-right-arrow-left"></span>
+          Continue
+        } @else {
+          <span class="fa-solid fa-copy"></span>
+          Copy {{ selectedKeys.length }}
+        }
+      </button>
+      <button mjButton
+        (click)="closeMoveCopyDialog()"
+        [disabled]="isApplyingMoveCopy"
+        variant="outline">
+        Cancel
+      </button>
+    </mj-dialog-actions>
+  </mj-dialog>
+}
 
 <!-- Remove from List Confirmation Dialog -->
 @if (showRemoveDialog) {

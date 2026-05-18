@@ -124,6 +124,10 @@ export {
 export {
   CommunicationTemplatesResourceComponent
 } from './Communication/communication-templates-resource.component';
+export {
+  CommunicationsNewMessageResource,
+  LoadCommunicationsNewMessageResource
+} from './Communication/communication-new-message-resource.component';
 
 // Export Testing components as resources (BaseResourceComponent-based)
 export {

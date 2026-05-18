@@ -26,6 +26,11 @@ interface RecentActivity {
   When: Date;
 }
 
+function newestOf(...dates: (Date | null)[]): Date | null {
+  const ms = dates.filter((d): d is Date => d != null).map((d) => d.getTime());
+  return ms.length === 0 ? null : new Date(Math.max(...ms));
+}
+
 @Component({
   standalone: false,
   selector: 'mj-list-stats',
@@ -48,6 +53,23 @@ export class ListStatsComponent extends BaseAngularComponent implements OnInit {
   }
   private _listId: string | null = null;
 
+  /**
+   * Bump this number from the parent after any mutation (add / remove /
+   * status update / share / unshare) to force the stats panel to re-query.
+   * Without this, the Members count drifts from reality until full reload.
+   */
+  @Input()
+  set RefreshTrigger(value: number) {
+    if (value !== this._refreshTrigger) {
+      this._refreshTrigger = value;
+      if (this.initialized && this._listId) void this.load();
+    }
+  }
+  get RefreshTrigger(): number {
+    return this._refreshTrigger;
+  }
+  private _refreshTrigger = 0;
+
   public memberCount = 0;
   public activeShareCount = 0;
   public growthThisMonth = 0;
@@ -63,7 +85,7 @@ export class ListStatsComponent extends BaseAngularComponent implements OnInit {
   }
 
   public formatRelative(d: Date | null): string {
-    if (!d) return 'never';
+    if (!d || isNaN(d.getTime())) return 'never';
     const diff = Date.now() - d.getTime();
     if (diff < 60_000) return 'just now';
     const minutes = Math.floor(diff / 60_000);
@@ -90,23 +112,33 @@ export class ListStatsComponent extends BaseAngularComponent implements OnInit {
       const escapedId = this._listId.replace(/'/g, "''");
 
       const rv = RunView.FromMetadataProvider(md);
-      const [members, growth, shares, audits] = await Promise.all([
+      // Cache-buster: every RunView gets an always-true predicate that
+      // varies on each load() call. The server keys its RunView cache off
+      // the literal filter string, so we force a miss on every refresh.
+      // Without this, Members / Growth / Active shares / Last activity
+      // would all read stale until a full server restart, even after the
+      // RefreshTrigger input bumps. SQL comments (`/* */`) are rejected by
+      // the ExtraFilter injection validator, so we use a numeric equality
+      // instead.
+      const cb = Date.now();
+      const cbPredicate = ` AND ${cb} = ${cb}`;
+      const [members, growth, shares, audits, latestMember] = await Promise.all([
         rv.RunView<{ ID: string }>({
           EntityName: 'MJ: List Details',
-          ExtraFilter: `ListID='${escapedId}'`,
+          ExtraFilter: `ListID='${escapedId}'${cbPredicate}`,
           Fields: ['ID'],
           ResultType: 'simple',
         }),
         rv.RunView<{ ID: string }>({
           EntityName: 'MJ: List Details',
-          ExtraFilter: `ListID='${escapedId}' AND __mj_CreatedAt >= '${startOfMonth}'`,
+          ExtraFilter: `ListID='${escapedId}' AND __mj_CreatedAt >= '${startOfMonth}'${cbPredicate}`,
           Fields: ['ID'],
           ResultType: 'simple',
         }),
         rv.RunView<{ ID: string }>({
           EntityName: 'MJ: Resource Permissions',
           ExtraFilter:
-            `ResourceTypeID='E64D433E-F36B-1410-8560-0041FA62858A' AND ResourceRecordID='${escapedId}' AND Status<>'Revoked'`,
+            `ResourceTypeID='E64D433E-F36B-1410-8560-0041FA62858A' AND ResourceRecordID='${escapedId}' AND Status<>'Revoked'${cbPredicate}`,
           Fields: ['ID'],
           ResultType: 'simple',
         }),
@@ -118,10 +150,21 @@ export class ListStatsComponent extends BaseAngularComponent implements OnInit {
           __mj_CreatedAt: Date;
         }>({
           EntityName: 'MJ: Audit Logs',
-          ExtraFilter: `EntityID='${listsEntity.ID}' AND RecordID='${escapedId}'`,
+          ExtraFilter: `EntityID='${listsEntity.ID}' AND RecordID='${escapedId}'${cbPredicate}`,
           OrderBy: '__mj_CreatedAt DESC',
           MaxRows: 5,
           Fields: ['ID', 'UserID', 'AuditLogTypeID', 'Description', '__mj_CreatedAt'],
+          ResultType: 'simple',
+        }),
+        // Newest list-detail timestamp. Audit Logs only fire for sharing
+        // events, so without this the "Last activity" widget reads "never"
+        // even after the user has been adding/editing members all day.
+        rv.RunView<{ __mj_UpdatedAt: Date }>({
+          EntityName: 'MJ: List Details',
+          ExtraFilter: `ListID='${escapedId}'${cbPredicate}`,
+          OrderBy: '__mj_UpdatedAt DESC',
+          MaxRows: 1,
+          Fields: ['__mj_UpdatedAt'],
           ResultType: 'simple',
         }),
       ]);
@@ -131,7 +174,13 @@ export class ListStatsComponent extends BaseAngularComponent implements OnInit {
       this.activeShareCount = shares.Results?.length ?? 0;
 
       const auditRows = audits.Results ?? [];
-      this.lastActivityAt = auditRows.length > 0 ? new Date(auditRows[0].__mj_CreatedAt) : null;
+      const latestAuditAt =
+        auditRows.length > 0 ? new Date(auditRows[0].__mj_CreatedAt) : null;
+      const rawLatestMember = latestMember.Results?.[0]?.__mj_UpdatedAt;
+      const parsedLatestMember = rawLatestMember ? new Date(rawLatestMember as Date | string) : null;
+      const latestMemberAt =
+        parsedLatestMember && !isNaN(parsedLatestMember.getTime()) ? parsedLatestMember : null;
+      this.lastActivityAt = newestOf(latestAuditAt, latestMemberAt);
 
       if (auditRows.length === 0) {
         this.recent = [];

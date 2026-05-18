@@ -26,6 +26,13 @@
         "isDefault": false
       },
       {
+        "Label": "Shared With Me",
+        "Icon": "fa-solid fa-share-nodes",
+        "ResourceType": "Custom",
+        "DriverClass": "ListsSharedWithMeResource",
+        "isDefault": false
+      },
+      {
         "Label": "Categories",
         "Icon": "fa-solid fa-tags",
         "ResourceType": "Custom",
@@ -41,7 +48,7 @@
     "ID": "140166B9-4064-4C3F-ACF1-3EB7DB2C9BD0"
   },
   "sync": {
-    "lastModified": "2026-02-24T19:34:10.274Z",
-    "checksum": "21b12ddee72400fafd3aefda7b32458ccb2da49b79fd47c34069d0ebd7e50e2d"
+    "lastModified": "2026-05-17T23:18:46.590Z",
+    "checksum": "dade0218024ab4bef188d878b9a4ba0c08cd6a8e4a3383d51f2c1f8b3211f0d2"
   }
 }

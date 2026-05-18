@@ -1,7 +1,25 @@
 import { Injectable } from '@angular/core';
 import { RunView, Metadata, IMetadataProvider, CompositeKey, EntityInfo } from '@memberjunction/core';
 import { MJListEntity, MJListDetailEntity, MJUserViewEntity } from '@memberjunction/core-entities';
+import { NormalizeUUID } from '@memberjunction/global';
 import { BehaviorSubject, Observable } from 'rxjs';
+
+/**
+ * Normalize an `MJ: List Details.RecordID`-style string so set operations
+ * compare correctly regardless of where the value originated.
+ *
+ * The wrinkle: SQL Server returns UUIDs uppercased, PostgreSQL returns
+ * them lowercased — and the same DB can host List Details written by
+ * different code paths with different casing. Composite-PK keys are
+ * concatenated strings (`Field1|Value1||Field2|Value2`); normalizing
+ * the whole string is safe — `NormalizeUUID` lowercases anything that
+ * pattern-matches a UUID and is a no-op on other content. The pipe
+ * separators in composite keys are unaffected.
+ */
+function normalizeRecordId(raw: string | null | undefined): string {
+  if (raw == null) return '';
+  return NormalizeUUID(String(raw));
+}
 
 /**
  * Describes one operand for the Venn / set-op pipeline. The component
@@ -472,8 +490,12 @@ export class ListSetOperationsService {
     }
     if (result.Success && result.Results) {
       for (const detail of result.Results) {
-        const set = this.listDetailsCache.get(operandCacheKey('list', detail.ListID));
-        if (set) set.add(detail.RecordID);
+        // Normalize on the ListID we look up by AND on the RecordID we
+        // store — mixed casing on either side would otherwise produce
+        // empty intersections between lists that actually share records.
+        const set = this.listDetailsCache.get(operandCacheKey('list', NormalizeUUID(detail.ListID)))
+          ?? this.listDetailsCache.get(operandCacheKey('list', detail.ListID));
+        if (set) set.add(normalizeRecordId(detail.RecordID));
       }
     }
   }
@@ -522,14 +544,14 @@ export class ListSetOperationsService {
    */
   private serializeRecordId(entityInfo: EntityInfo, row: Record<string, unknown>): string {
     if (entityInfo.PrimaryKeys.length === 1) {
-      return String(row[entityInfo.PrimaryKeys[0].Name]);
+      return normalizeRecordId(String(row[entityInfo.PrimaryKeys[0].Name]));
     }
     const ck = new CompositeKey();
     ck.KeyValuePairs = entityInfo.PrimaryKeys.map((pk) => ({
       FieldName: pk.Name,
       Value: row[pk.Name] as string | number | Date | null | undefined,
     }));
-    return ck.ToConcatenatedString();
+    return normalizeRecordId(ck.ToConcatenatedString());
   }
 
   /**
