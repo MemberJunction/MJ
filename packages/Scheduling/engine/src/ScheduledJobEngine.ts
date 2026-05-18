@@ -61,6 +61,12 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
     private isPolling: boolean = false;
     private hasInitialized: boolean = false;
 
+    /** Job IDs we have already warned about for sub-threshold run frequency. */
+    private highFrequencyWarnedJobIds: Set<string> = new Set();
+
+    /** Threshold (ms) below which a job's run frequency triggers a console warning. */
+    private static readonly HIGH_FREQUENCY_WARNING_THRESHOLD_MS = 5 * 60 * 1000;
+
     // ========================================================================
     // DELEGATED METADATA PROPERTIES AND METHODS
     // ========================================================================
@@ -162,6 +168,8 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
                     this.StopPolling();
                     return;
                 }
+
+                this.warnAboutHighFrequencyJobs();
             }
             try {
                 const runs = await this.ExecuteScheduledJobs(contextUser);
@@ -235,11 +243,114 @@ export class SchedulingEngine extends BaseSingleton<SchedulingEngine> {
         // Recalculate polling interval
         this.UpdatePollingInterval();
 
+        // Re-evaluate frequency warnings against the freshly loaded jobs.
+        // Drop entries for jobs that no longer exist so deleted/disabled jobs
+        // can re-warn if they come back, and so a slowed-down job re-warns
+        // if its cron is later tightened again.
+        const liveIds = new Set(this.ScheduledJobs.map(j => j.ID));
+        for (const id of this.highFrequencyWarnedJobIds) {
+            if (!liveIds.has(id)) {
+                this.highFrequencyWarnedJobIds.delete(id);
+            }
+        }
+        this.warnAboutHighFrequencyJobs();
+
         // If polling is stopped and we now have jobs, restart it
         if (!this.isPolling && this.ScheduledJobs.length > 0) {
             console.log(`📅 Scheduled Jobs: Jobs detected, starting polling`);
             this.StartPolling(contextUser);
         }
+    }
+
+    /**
+     * Inspect every active job's cron expression and emit a hard-to-miss
+     * banner warning for any whose minimum run interval is below the
+     * configured threshold (5 minutes). Each offending job is warned about
+     * once per process lifetime; the warned-set is cleared on `OnJobChanged`
+     * for jobs whose cron has effectively changed (covered by the caller).
+     * @private
+     */
+    private warnAboutHighFrequencyJobs(): void {
+        const threshold = SchedulingEngine.HIGH_FREQUENCY_WARNING_THRESHOLD_MS;
+        const offenders: Array<{ job: MJScheduledJobEntity; intervalMs: number }> = [];
+
+        for (const job of this.ScheduledJobs) {
+            if (this.highFrequencyWarnedJobIds.has(job.ID) || !job.CronExpression) {
+                continue;
+            }
+            const intervalMs = CronExpressionHelper.GetMinIntervalMs(
+                job.CronExpression,
+                job.Timezone || 'UTC'
+            );
+            if (intervalMs < threshold) {
+                offenders.push({ job, intervalMs });
+                this.highFrequencyWarnedJobIds.add(job.ID);
+            }
+        }
+
+        if (offenders.length === 0) {
+            return;
+        }
+
+        const bar = '═'.repeat(79);
+        const lines: string[] = [
+            '',
+            bar,
+            '⚠️   HIGH-FREQUENCY SCHEDULED JOB WARNING',
+            bar,
+            '',
+            `  ${offenders.length === 1 ? 'A scheduled job is' : `${offenders.length} scheduled jobs are`} configured to run more often than every 5 minutes.`,
+            '  Please reconsider — this is rarely the right tool for that frequency:',
+            ''
+        ];
+        for (const { job, intervalMs } of offenders) {
+            lines.push(`    • ${job.Name}`);
+            lines.push(`        cron:     ${job.CronExpression}  (${job.Timezone || 'UTC'})`);
+            lines.push(`        interval: ~${this.formatInterval(intervalMs)} between runs`);
+        }
+        lines.push('');
+        lines.push('  Why this is a concern:');
+        lines.push('    - Each run writes a run record, takes a DB lock, and pays polling overhead');
+        lines.push('    - Short intervals create lock contention and large run-history tables');
+        lines.push('    - Tight cron schedules usually point to a different mechanism being a');
+        lines.push('      better fit than the Scheduled Jobs system');
+        lines.push('');
+        lines.push('  Better-fitting alternatives to consider:');
+        lines.push('    - Event-driven: have the producer notify you (queue, webhook, entity event)');
+        lines.push('    - Long-running worker: a single process that loops with backoff');
+        lines.push('    - Coalesced batch: run every 5+ minutes and process all pending work in one pass');
+        lines.push('');
+        lines.push('  The job will still run as configured — this is a recommendation, not a block.');
+        lines.push('');
+        lines.push(bar);
+        lines.push('');
+
+        for (const line of lines) {
+            console.warn(line);
+        }
+    }
+
+    /**
+     * Format a millisecond duration into a short, human-readable string
+     * (e.g. "30 seconds", "2 minutes", "1 minute 30 seconds").
+     * @private
+     */
+    private formatInterval(ms: number): string {
+        if (ms < 1000) {
+            return `${ms} ms`;
+        }
+        const totalSeconds = Math.round(ms / 1000);
+        if (totalSeconds < 60) {
+            return totalSeconds === 1 ? '1 second' : `${totalSeconds} seconds`;
+        }
+        const minutes = Math.floor(totalSeconds / 60);
+        const seconds = totalSeconds % 60;
+        const minPart = minutes === 1 ? '1 minute' : `${minutes} minutes`;
+        if (seconds === 0) {
+            return minPart;
+        }
+        const secPart = seconds === 1 ? '1 second' : `${seconds} seconds`;
+        return `${minPart} ${secPart}`;
     }
 
     /**

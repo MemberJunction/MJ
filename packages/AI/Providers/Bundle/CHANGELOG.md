@@ -1,5 +1,70 @@
 # @memberjunction/ai-provider-bundle
 
+## 5.34.1
+
+### Patch Changes
+
+- @memberjunction/ai-recommendations-rex@5.34.1
+- @memberjunction/ai-vectors-pinecone@5.34.1
+- @memberjunction/ai-anthropic@5.34.1
+- @memberjunction/ai-azure@5.34.1
+- @memberjunction/ai-bedrock@5.34.1
+- @memberjunction/ai-betty-bot@5.34.1
+- @memberjunction/ai-blackforestlabs@5.34.1
+- @memberjunction/ai-cerebras@5.34.1
+- @memberjunction/ai-cohere@5.34.1
+- @memberjunction/ai-elevenlabs@5.34.1
+- @memberjunction/ai-fireworks@5.34.1
+- @memberjunction/ai-gemini@5.34.1
+- @memberjunction/ai-groq@5.34.1
+- @memberjunction/ai-heygen@5.34.1
+- @memberjunction/ai-inception@5.34.1
+- @memberjunction/ai-lmstudio@5.34.1
+- @memberjunction/ai-llamacpp@5.34.1
+- @memberjunction/ai-local-embeddings@5.34.1
+- @memberjunction/ai-minimax@5.34.1
+- @memberjunction/ai-mistral@5.34.1
+- @memberjunction/ai-ollama@5.34.1
+- @memberjunction/ai-openai@5.34.1
+- @memberjunction/ai-openrouter@5.34.1
+- @memberjunction/ai-vertex@5.34.1
+- @memberjunction/ai-zhipu@5.34.1
+- @memberjunction/ai-xai@5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [ae5cfbd]
+  - @memberjunction/ai-azure@5.34.0
+  - @memberjunction/ai-bedrock@5.34.0
+  - @memberjunction/ai-betty-bot@5.34.0
+  - @memberjunction/ai-blackforestlabs@5.34.0
+  - @memberjunction/ai-cerebras@5.34.0
+  - @memberjunction/ai-cohere@5.34.0
+  - @memberjunction/ai-elevenlabs@5.34.0
+  - @memberjunction/ai-fireworks@5.34.0
+  - @memberjunction/ai-groq@5.34.0
+  - @memberjunction/ai-heygen@5.34.0
+  - @memberjunction/ai-inception@5.34.0
+  - @memberjunction/ai-lmstudio@5.34.0
+  - @memberjunction/ai-llamacpp@5.34.0
+  - @memberjunction/ai-local-embeddings@5.34.0
+  - @memberjunction/ai-minimax@5.34.0
+  - @memberjunction/ai-ollama@5.34.0
+  - @memberjunction/ai-openrouter@5.34.0
+  - @memberjunction/ai-recommendations-rex@5.34.0
+  - @memberjunction/ai-vertex@5.34.0
+  - @memberjunction/ai-zhipu@5.34.0
+  - @memberjunction/ai-xai@5.34.0
+  - @memberjunction/ai-vectors-pinecone@5.34.0
+  - @memberjunction/ai-anthropic@5.34.0
+  - @memberjunction/ai-gemini@5.34.0
+  - @memberjunction/ai-mistral@5.34.0
+  - @memberjunction/ai-openai@5.34.0
+
 ## 5.33.0
 
 ### Patch Changes

@@ -1,4 +1,10 @@
 export { GenericDatabaseProvider, ExecuteSQLBatchOptions } from './GenericDatabaseProvider.js';
+export type {
+    SaveCoercedValue,
+    SaveCallBinding,
+    SaveSQLFragment,
+    RecordChangePayload,
+} from './saveTypes.js';
 export {
     CRUDSprocType,
     shouldIncludeFieldInParams,

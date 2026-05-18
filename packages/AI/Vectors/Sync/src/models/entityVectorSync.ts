@@ -3,7 +3,7 @@ import { BaseEmbeddings, EmbedTextsResult, GetAIAPIKey } from '@memberjunction/a
 import { CredentialEngine } from '@memberjunction/credentials';
 import { BaseResponse, VectorDBBase, VectorRecord } from '@memberjunction/ai-vectordb';
 import { PageRecordsParams, VectorBase } from '@memberjunction/ai-vectors';
-import { BaseEntity, EntityField, EntityFieldInfo, EntityInfo, IMetadataProvider, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
+import { BaseEntity, CompositeKey, EntityField, EntityFieldInfo, EntityInfo, IMetadataProvider, LogError, LogStatus, Metadata, RunView, RunViewResult, UserInfo } from '@memberjunction/core';
 import { MJAIModelEntity, MJEntityDocumentEntity, MJEntityDocumentTypeEntity, MJEntityRecordDocumentEntity, MJTemplateContentEntity,
   MJTemplateContentTypeEntity, MJTemplateEntity, MJTemplateEntityExtended, MJTemplateParamEntity, MJVectorDatabaseEntity, MJVectorIndexEntity } from '@memberjunction/core-entities';
 import { MJGlobal, UUIDsEqual } from '@memberjunction/global';
@@ -465,20 +465,38 @@ export class EntityVectorSyncer extends VectorBase {
     pageSize: number
   ): void {
     const getData = async (): Promise<void> => {
+      // Prefer keyset (seek) pagination for entities with a single-column orderable PK.
+      // Keyset stays O(log N) per page regardless of depth, which matters for the
+      // millions-of-records entities that vectorization sometimes ingests.
+      // Falls back to OFFSET-based PageNumber when the entity has a composite PK
+      // (correct but progressively slower on deep pages).
+      const canUseKeyset = this.CanUseKeysetPagination(params.entityID);
+      const pkField = entity.FirstPrimaryKey;
       let pageNumber = 0;
+      let lastSeenKey: CompositeKey | undefined;
 
       if (params.StartingOffset) {
-        pageNumber = params.StartingOffset * pageSize;
-        LogStatus(`Starting at offset ${params.StartingOffset} (skipping first ${pageNumber} records)`);
+        if (canUseKeyset) {
+          // Keyset can't "skip ahead" without knowing the PK at that offset. If callers
+          // pass StartingOffset (rare), we fall back to OFFSET mode for this run.
+          LogStatus(`StartingOffset=${params.StartingOffset} is set — using OFFSET-based pagination for this run (keyset unavailable when skipping ahead).`);
+        } else {
+          pageNumber = params.StartingOffset * pageSize;
+          LogStatus(`Starting at offset ${params.StartingOffset} (skipping first ${pageNumber} records)`);
+        }
       }
+
+      const useKeysetForThisRun = canUseKeyset && !params.StartingOffset;
+      let pageIndex = 0;
 
       let hasMore = true;
       while (hasMore) {
         const pageRecordRequest: PageRecordsParams = {
           EntityID: params.entityID,
-          PageNumber: pageNumber,
+          PageNumber: useKeysetForThisRun ? 0 : pageNumber,
           PageSize: pageSize,
           ResultType: 'simple',
+          AfterKey: useKeysetForThisRun ? lastSeenKey : undefined,
         };
 
         if (params.listID) {
@@ -490,7 +508,7 @@ export class EntityVectorSyncer extends VectorBase {
         const relatedData: TemplateParamData[] = await this.GetRelatedTemplateDataForBatch(entity, recordsPage, template);
         const items: Record<string, unknown>[] = [];
 
-        LogStatus(`Fetched page ${pageNumber + 1} with ${recordsPage.length} records to process`);
+        LogStatus(`Fetched page ${pageIndex + 1} with ${recordsPage.length} records to process`);
 
         for (const record of recordsPage) {
           const typedRecord = record as Record<string, unknown>;
@@ -509,7 +527,20 @@ export class EntityVectorSyncer extends VectorBase {
           break;
         }
 
-        pageNumber++;
+        if (useKeysetForThisRun && pkField) {
+          // Advance the keyset cursor to the last record's PK value
+          const lastRecord = recordsPage[recordsPage.length - 1] as Record<string, unknown>;
+          const lastValue = lastRecord[pkField.Name];
+          if (lastValue == null) {
+            // Defensive: PK should never be null. If it is, we can't keyset-advance, so stop.
+            LogError(`Keyset pagination: last record on page ${pageIndex + 1} has null PK; halting iteration.`);
+            break;
+          }
+          lastSeenKey = CompositeKey.FromKeyValuePair(pkField.Name, lastValue);
+        } else {
+          pageNumber++;
+        }
+        pageIndex++;
       }
 
       dataStream.endStream();

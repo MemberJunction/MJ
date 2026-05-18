@@ -356,7 +356,10 @@ export class ResolverBase {
           userPayload,
           viewInput.MaxRows,
           viewInput.StartRow,
-          viewInput.Aggregates
+          viewInput.Aggregates,
+          viewInput.AfterKey
+            ? CompositeKey.FromKeyValuePairs((viewInput.AfterKey as { KeyValuePairs: { FieldName: string; Value: string }[] }).KeyValuePairs)
+            : undefined
         );
       }
       else {
@@ -505,6 +508,9 @@ export class ResolverBase {
           ignoreMaxRows: viewInput.IgnoreMaxRows,
           maxRows: viewInput.MaxRows,
           startRow: viewInput.StartRow,
+          afterKey: viewInput.AfterKey
+            ? CompositeKey.FromKeyValuePairs((viewInput.AfterKey as { KeyValuePairs: { FieldName: string; Value: string }[] }).KeyValuePairs)
+            : undefined,
           excludeDataFromAllPriorViewRuns: viewInput.EntityName ? false : viewInput.ExcludeDataFromAllPriorViewRuns,
           forceAuditLog: viewInput.ForceAuditLog,
           auditLogDescription: viewInput.AuditLogDescription,
@@ -686,7 +692,8 @@ export class ResolverBase {
     userPayload: UserPayload | null,
     maxRows: number | undefined,
     startRow: number | undefined,
-    aggregates?: AggregateExpression[]
+    aggregates?: AggregateExpression[],
+    afterKey?: CompositeKey
   ) {
     try {
       if (!viewInfo || !userPayload) return null;
@@ -745,6 +752,7 @@ export class ResolverBase {
           IgnoreMaxRows: ignoreMaxRows,
           MaxRows: maxRows,
           StartRow: startRow,
+          AfterKey: afterKey,
           ForceAuditLog: forceAuditLog,
           AuditLogDescription: auditLogDescription,
           ResultType: rt,
@@ -857,6 +865,7 @@ export class ResolverBase {
           IgnoreMaxRows: param.ignoreMaxRows,
           MaxRows: param.maxRows,
           StartRow: param.startRow,
+          AfterKey: param.afterKey,
           ForceAuditLog: param.forceAuditLog,
           AuditLogDescription: param.auditLogDescription,
           ResultType: rt,

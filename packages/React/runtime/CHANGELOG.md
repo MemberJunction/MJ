@@ -1,5 +1,39 @@
 # @memberjunction/react-runtime
 
+## 5.34.1
+
+### Patch Changes
+
+- 8695f65: Add server-side query name collision resolution and extract resolveDependencies helper in React ComponentManager
+- Updated dependencies [3a35358]
+- Updated dependencies [8695f65]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/graphql-dataprovider@5.34.1
+  - @memberjunction/interactive-component-types@5.34.1
+  - @memberjunction/core-entities@5.34.1
+  - @memberjunction/global@5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- 72cb92e: Optimize component loading pipeline: remove 163 MB MJ: Components bulk load from ComponentMetadataEngine, add ComponentMetadataEngineServer for server-only use, add generic cache API to LocalCacheManager with server-side registry caching (page refresh component load reduced from 12-20s to ~70ms), add hash-based 304 support for registry fetches, remove proprietary spec caching to client database, and optimize Component Studio to load lightweight summaries on demand.
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [003317f]
+- Updated dependencies [0caffca]
+- Updated dependencies [cfffb6d]
+- Updated dependencies [e999e0d]
+- Updated dependencies [389d356]
+- Updated dependencies [ae5cfbd]
+- Updated dependencies [6d8ee1a]
+- Updated dependencies [72cb92e]
+  - @memberjunction/interactive-component-types@5.34.0
+  - @memberjunction/core@5.34.0
+  - @memberjunction/core-entities@5.34.0
+  - @memberjunction/graphql-dataprovider@5.34.0
+  - @memberjunction/global@5.34.0
+
 ## 5.33.0
 
 ### Patch Changes

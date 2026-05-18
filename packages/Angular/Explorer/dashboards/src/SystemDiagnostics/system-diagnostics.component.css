@@ -2991,6 +2991,29 @@
     word-break: break-all;
 }
 
+/* Health status indicators for config items */
+.config-health-icon {
+    font-size: 12px;
+    flex-shrink: 0;
+}
+.config-health-icon.health-success {
+    color: var(--mj-status-success);
+}
+.config-health-icon.health-failure {
+    color: var(--mj-status-error);
+}
+.config-detail-row--error {
+    background: color-mix(in srgb, var(--mj-status-error) 6%, transparent);
+    border-radius: 4px;
+    padding: 4px 8px;
+}
+.detail-value--error {
+    color: var(--mj-status-error-text) !important;
+    background: none !important;
+    font-family: inherit !important;
+    word-break: break-word;
+}
+
 /* Sample Data Section */
 .sample-data-section {
     margin-top: 16px;

@@ -20786,19 +20786,21 @@ export const MJRecordGeoCodeSchema = z.object({
         * * Display Name: Geocoded At
         * * SQL Data Type: datetimeoffset
         * * Description: Timestamp of when geocoding was last attempted (success or failure).`),
-    GeocodingSource: z.union([z.literal('google'), z.literal('ip_geolocation'), z.literal('manual'), z.literal('native'), z.literal('reference_data'), z.literal('reverse')]).nullable().describe(`
+    GeocodingSource: z.union([z.literal('geocodio'), z.literal('google'), z.literal('here'), z.literal('ip_geolocation'), z.literal('manual'), z.literal('native'), z.literal('reference_data'), z.literal('reverse')]).nullable().describe(`
         * * Field Name: GeocodingSource
         * * Display Name: Geocoding Source
         * * SQL Data Type: nvarchar(30)
     * * Value List Type: List
     * * Possible Values 
+    *   * geocodio
     *   * google
+    *   * here
     *   * ip_geolocation
     *   * manual
     *   * native
     *   * reference_data
     *   * reverse
-        * * Description: How this geocode was produced: google (Google Geocoding API), reference_data (resolved via Country/StateProvince tables), manual (user-entered), ip_geolocation (IP lookup), native (copied from entity lat/lng fields), reverse (reverse geocode from coordinates).`),
+        * * Description: Source that produced this geocode. One of: google, geocodio, here, reference_data, manual, ip_geolocation, native, reverse.`),
     __mj_CreatedAt: z.date().describe(`
         * * Field Name: __mj_CreatedAt
         * * Display Name: Created At
@@ -28490,7 +28492,7 @@ export class MJActionEntity extends BaseEntity<MJActionEntityType> {
     * @memberof MJActionEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
-    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
             const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
@@ -33701,7 +33703,7 @@ export class MJAIAgentRunStepEntity extends BaseEntity<MJAIAgentRunStepEntityTyp
     * @memberof MJAIAgentRunStepEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
-    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
             const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
@@ -34159,7 +34161,7 @@ export class MJAIAgentRunEntity extends BaseEntity<MJAIAgentRunEntityType> {
     * @memberof MJAIAgentRunEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
-    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
             const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
@@ -35488,7 +35490,7 @@ export class MJAIAgentStepEntity extends BaseEntity<MJAIAgentStepEntityType> {
     * @memberof MJAIAgentStepEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
-    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
             const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
@@ -36191,7 +36193,7 @@ export class MJAIAgentEntity extends BaseEntity<MJAIAgentEntityType> {
     * @memberof MJAIAgentEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
-    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
             const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
@@ -37878,7 +37880,7 @@ export class MJAIConfigurationEntity extends BaseEntity<MJAIConfigurationEntityT
     * @memberof MJAIConfigurationEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
-    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
             const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
@@ -41445,7 +41447,7 @@ export class MJAIPromptRunEntity extends BaseEntity<MJAIPromptRunEntityType> {
     * @memberof MJAIPromptRunEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
-    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
             const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
@@ -42924,7 +42926,7 @@ export class MJAIPromptEntity extends BaseEntity<MJAIPromptEntityType> {
     * @memberof MJAIPromptEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
-    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
             const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
@@ -56715,7 +56717,7 @@ export class MJConversationArtifactVersionEntity extends BaseEntity<MJConversati
     * @memberof MJConversationArtifactVersionEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
-    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
             const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
@@ -56918,7 +56920,7 @@ export class MJConversationArtifactEntity extends BaseEntity<MJConversationArtif
     * @memberof MJConversationArtifactEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
-    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
             const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
@@ -57712,7 +57714,7 @@ export class MJConversationDetailEntity extends BaseEntity<MJConversationDetailE
     * @memberof MJConversationDetailEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
-    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
             const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
@@ -58247,7 +58249,7 @@ export class MJConversationEntity extends BaseEntity<MJConversationEntityType> {
     * @memberof MJConversationEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
-    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
             const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
@@ -60441,7 +60443,7 @@ export class MJDashboardEntity extends BaseEntity<MJDashboardEntityType> {
     * @memberof MJDashboardEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
-    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
             const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
@@ -77677,7 +77679,7 @@ export class MJQueryEntity extends BaseEntity<MJQueryEntityType> {
     * @memberof MJQueryEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
-    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
             const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider
@@ -81138,18 +81140,20 @@ export class MJRecordGeoCodeEntity extends BaseEntity<MJRecordGeoCodeEntityType>
     * * SQL Data Type: nvarchar(30)
     * * Value List Type: List
     * * Possible Values 
+    *   * geocodio
     *   * google
+    *   * here
     *   * ip_geolocation
     *   * manual
     *   * native
     *   * reference_data
     *   * reverse
-    * * Description: How this geocode was produced: google (Google Geocoding API), reference_data (resolved via Country/StateProvince tables), manual (user-entered), ip_geolocation (IP lookup), native (copied from entity lat/lng fields), reverse (reverse geocode from coordinates).
+    * * Description: Source that produced this geocode. One of: google, geocodio, here, reference_data, manual, ip_geolocation, native, reverse.
     */
-    get GeocodingSource(): 'google' | 'ip_geolocation' | 'manual' | 'native' | 'reference_data' | 'reverse' | null {
+    get GeocodingSource(): 'geocodio' | 'google' | 'here' | 'ip_geolocation' | 'manual' | 'native' | 'reference_data' | 'reverse' | null {
         return this.Get('GeocodingSource');
     }
-    set GeocodingSource(value: 'google' | 'ip_geolocation' | 'manual' | 'native' | 'reference_data' | 'reverse' | null) {
+    set GeocodingSource(value: 'geocodio' | 'google' | 'here' | 'ip_geolocation' | 'manual' | 'native' | 'reference_data' | 'reverse' | null) {
         this.Set('GeocodingSource', value);
     }
 
@@ -82346,7 +82350,7 @@ export class MJReportEntity extends BaseEntity<MJReportEntityType> {
     * @memberof MJReportEntity
     * @returns {Promise<boolean>} - true if successful, false otherwise
     */
-    public async Delete(options?: EntityDeleteOptions): Promise<boolean> {
+    public override async Delete(options?: EntityDeleteOptions): Promise<boolean> {
         if (Metadata.Provider.ProviderType === ProviderType.Database) { // global-provider-ok: codegen runs offline against a single provider
             // For database providers, use the transaction methods directly
             const provider = Metadata.Provider as DatabaseProviderBase; // global-provider-ok: codegen runs offline against a single provider

@@ -176,6 +176,28 @@ async function getMultipleDatasets() {
   return results;
 }
 
+// Iterate through a large entity using keyset (seek) pagination
+// O(log N) per page, regardless of depth — ideal for background jobs and bulk processing
+async function iterateAllTaxReturns() {
+  let lastSeenKey: CompositeKey | undefined; // undefined => first page
+  while (true) {
+    const result = await dataProvider.RunView({
+      EntityName: 'Tax Returns',
+      ExtraFilter: 'AddressLine1 IS NOT NULL',
+      AfterKey: lastSeenKey,
+      MaxRows: 500,
+      ResultType: 'entity_object',
+    });
+    if (!result.Success || result.Results.length === 0) break;
+    for (const r of result.Results) { /* process */ }
+    if (result.Results.length < 500) break;
+    lastSeenKey = CompositeKey.FromID(result.Results[result.Results.length - 1].ID);
+  }
+}
+// AfterKey is forwarded through the GraphQL wire via CompositeKeyInputType.
+// See guides/KEYSET_PAGINATION_GUIDE.md for the full pattern, constraints,
+// and reference implementations.
+
 // Execute a report
 async function getSalesReport(reportId: string) {
   const params = {

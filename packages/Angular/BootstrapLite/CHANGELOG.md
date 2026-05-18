@@ -1,5 +1,62 @@
 # @memberjunction/ng-bootstrap-lite
 
+## 5.34.1
+
+### Patch Changes
+
+- Updated dependencies [3a35358]
+- Updated dependencies [8695f65]
+- Updated dependencies [5abf790]
+  - @memberjunction/core@5.34.1
+  - @memberjunction/graphql-dataprovider@5.34.1
+  - @memberjunction/ai-core-plus@5.34.1
+  - @memberjunction/ai-engine-base@5.34.1
+  - @memberjunction/ai-vectors-memory@5.34.1
+  - @memberjunction/actions-base@5.34.1
+  - @memberjunction/ng-auth-services@5.34.1
+  - @memberjunction/ng-core-entity-forms@5.34.1
+  - @memberjunction/ng-explorer-core@5.34.1
+  - @memberjunction/ng-shared@5.34.1
+  - @memberjunction/ng-artifacts@5.34.1
+  - @memberjunction/ng-dashboard-viewer@5.34.1
+  - @memberjunction/ng-file-storage@5.34.1
+  - @memberjunction/communication-types@5.34.1
+  - @memberjunction/entity-communications-base@5.34.1
+  - @memberjunction/core-entities@5.34.1
+
+## 5.34.0
+
+### Patch Changes
+
+- 7d8a0f9: Bound memory leaks: ResultHistory cap, QueueBase Stop/ IShutdownable, A2AServer, TaskStore, sweep, MJLruCache for provider / issuer caches, BaseLLM streaming reset, ShutdownRegister + SIGTERM contract.
+- Updated dependencies [b03bfb4]
+- Updated dependencies [7d8a0f9]
+- Updated dependencies [003317f]
+- Updated dependencies [11ae7e6]
+- Updated dependencies [0caffca]
+- Updated dependencies [cfffb6d]
+- Updated dependencies [e999e0d]
+- Updated dependencies [ae5cfbd]
+- Updated dependencies [6d8ee1a]
+- Updated dependencies [ad61267]
+- Updated dependencies [72cb92e]
+  - @memberjunction/ng-core-entity-forms@5.34.0
+  - @memberjunction/ng-explorer-core@5.34.0
+  - @memberjunction/ng-artifacts@5.34.0
+  - @memberjunction/ai-engine-base@5.34.0
+  - @memberjunction/ai-core-plus@5.34.0
+  - @memberjunction/ai-vectors-memory@5.34.0
+  - @memberjunction/actions-base@5.34.0
+  - @memberjunction/ng-auth-services@5.34.0
+  - @memberjunction/ng-shared@5.34.0
+  - @memberjunction/ng-dashboard-viewer@5.34.0
+  - @memberjunction/ng-file-storage@5.34.0
+  - @memberjunction/communication-types@5.34.0
+  - @memberjunction/entity-communications-base@5.34.0
+  - @memberjunction/core@5.34.0
+  - @memberjunction/core-entities@5.34.0
+  - @memberjunction/graphql-dataprovider@5.34.0
+
 ## 5.33.0
 
 ### Patch Changes
