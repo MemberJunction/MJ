@@ -2261,8 +2261,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * user can still ask questions about the artifact that's already attached
    * to the prior conversation turn.
    */
-  async OnAnalyzeArtifact(event: { artifactId: string; snapshot: DataSnapshot }): Promise<void> {
-    if (!this.conversationId || !this.currentUser) return;
+  async OnAnalyzeArtifact(event: { artifactId: string; snapshot: DataSnapshot }): Promise<PendingAttachment | null> {
+    if (!this.conversationId || !this.currentUser) return null;
 
     const messageInput = this.getActiveMessageInputComponent();
     const snapshotTitle = event.snapshot.title || 'Untitled Snapshot';
@@ -2280,7 +2280,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
           0,
         );
         const serialized = JSON.stringify(event.snapshot);
-        messageInput.inputBox?.mentionEditor?.AddArtifactAttachment({
+        const created = messageInput.inputBox?.mentionEditor?.AddArtifactAttachment({
           fileID: '',
           fileName: rowCount > 0
             ? `📸 ${result.title} · ${rowCount.toLocaleString()} rows`
@@ -2291,6 +2291,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         });
         messageInput.messageText = `Analyze "${result.title}" — `;
         messageInput.inputBox?.focus();
+        return created ?? null;
       }
     } catch (error) {
       LogStatusEx({
@@ -2302,6 +2303,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         messageInput.inputBox?.focus();
       }
     }
+    return null;
   }
 
   /**
@@ -2377,8 +2379,12 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       return;
     }
 
-    // Persist + attach via the existing Analyze flow.
-    await this.OnAnalyzeArtifact({ artifactId, snapshot });
+    // Persist + attach via the existing Analyze flow. Capture the created
+    // PendingAttachment so we can pass it directly into sendMessageWithText
+    // below — the mention-editor → message-input-box → message-input event
+    // chain that normally syncs `pendingAttachments` is async (next-tick) and
+    // hasn't propagated by the time we auto-send.
+    const capturedAttachment = await this.OnAnalyzeArtifact({ artifactId, snapshot });
 
     // Auto-send the followup so the agent re-runs immediately with the
     // captured snapshot now attached. Resolution order:
@@ -2403,7 +2409,10 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
       }
       messageInput.messageText = '';
       try {
-        await messageInput.sendMessageWithText(followup);
+        await messageInput.sendMessageWithText(
+          followup,
+          capturedAttachment ? [capturedAttachment] : undefined,
+        );
       } catch (error) {
         console.error('[client:capture-snapshot] Auto-send failed:', error);
       }
