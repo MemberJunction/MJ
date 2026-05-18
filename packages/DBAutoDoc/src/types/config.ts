@@ -169,6 +169,28 @@ export interface OrganicKeyDetectionConfig {
   /** Enable organic key detection pass (default: false). */
   enabled: boolean;
 
+  /**
+   * Table-name patterns to EXCLUDE from clustering even when those tables exist
+   * in the state.json (i.e. were documented by DBAutoDoc's prior pass).
+   *
+   * Use this when DBAutoDoc was configured permissively (e.g. it indexed
+   * `tw_temp_*`, `DataConversion*`, `_BAK_*` style scaffolding tables) but those
+   * tables shouldn't participate in organic-key proposals — they're analyst
+   * temp data, migration scratch, or backup snapshots, not production
+   * navigation endpoints.
+   *
+   * Matching: case-insensitive, supports `*` and `%` as wildcards. Each pattern
+   * is checked against the unqualified table name (not schema-qualified).
+   *
+   * Example: `["tw_temp_*", "tmp_*", "DataConversion*", "*_BAK_*", "*_bk_*", "*__bk"]`
+   *
+   * When omitted (default), every table in the state.json is eligible.
+   * Distinct from DBAutoDoc's own `tables.exclude` config — that filter runs
+   * at introspection time; this filter runs at organic-key-detection time so
+   * you can reuse an existing state.json without re-querying the database.
+   */
+  excludeTablePatterns?: string[];
+
   /** Weights for the hybrid distance metric. Setting any weight to 0 disables that signal. */
   weights?: {
     /** Weight for name-token Jaccard similarity (deps-free, default: 1.0). */

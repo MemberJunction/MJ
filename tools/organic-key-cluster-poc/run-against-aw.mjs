@@ -51,6 +51,28 @@ const state = JSON.parse(await readFile(inputPath, 'utf-8'));
 
 const config = {
     enabled: true,
+    // Excludes for migration / temp / backup / one-off custom scaffolding tables.
+    // These tables exist in the state.json because DBAutoDoc documented them, but
+    // they shouldn't participate in organic-key proposals — they're analyst temp
+    // data or migration scratch, not production navigation endpoints.
+    excludeTablePatterns: [
+        // NSTA analyst scratch + all tw_ prefixed scratch (subsumes tw_temp_*)
+        'tw_*',
+        // Generic temp / migration prefixes
+        'tmp_*',
+        '*_Temp_*',
+        'DataConversion*',
+        // Backups — leading, middle, trailing variants + word "backup" anywhere
+        'BAK_*',
+        '*_BAK_*',
+        '*_bk_*',
+        '*_bk',
+        '*__bk',
+        '*backup*',
+        // System
+        'sysdiagrams',
+        '__MigrationHistory',
+    ],
     embedding: {
         enabled: true,
         model: 'gemini-embedding-001',

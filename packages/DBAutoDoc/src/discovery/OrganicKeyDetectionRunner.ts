@@ -290,9 +290,11 @@ export class OrganicKeyDetectionRunner {
     private buildInputColumns(state: DatabaseDocumentation): DetectorInputColumn[] {
         const fkColumns = this.buildFKLookup(state);
         const out: DetectorInputColumn[] = [];
+        const excludeMatchers = compileTableExcludePatterns(this.config.excludeTablePatterns);
 
         for (const schema of state.schemas) {
             for (const table of schema.tables) {
+                if (tableMatchesAnyPattern(table.name, excludeMatchers)) continue;
                 for (const col of table.columns) {
                     const key = `${schema.name}.${table.name}.${col.name}`;
                     const fk = fkColumns.get(key);
@@ -498,4 +500,33 @@ export class OrganicKeyDetectionRunner {
     private writePhase(state: DatabaseDocumentation, phase: OrganicKeyDetectionPhase): void {
         state.phases.organicKeyDetection = phase;
     }
+}
+
+// ─── Table-exclude pattern helpers ───────────────────────────────────────────
+
+/**
+ * Compile a list of glob-like patterns into RegExp matchers. Supports `*` and `%`
+ * as wildcards. Matching is case-insensitive. Patterns without wildcards match
+ * the full table name. Patterns with wildcards become anchored regex patterns.
+ */
+export function compileTableExcludePatterns(patterns: readonly string[] | undefined): RegExp[] {
+    if (!patterns || patterns.length === 0) return [];
+    return patterns.map((raw) => {
+        const pattern = String(raw).trim();
+        if (!pattern) return /(?!)/; // Never-matching pattern for empty entries
+        // Escape regex special chars EXCEPT our wildcards, then translate wildcards to .*
+        const escaped = pattern
+            .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+            .replace(/[*%]/g, '.*');
+        return new RegExp(`^${escaped}$`, 'i');
+    });
+}
+
+/** Test whether a table name matches any of the compiled exclude patterns. */
+export function tableMatchesAnyPattern(tableName: string, matchers: RegExp[]): boolean {
+    if (matchers.length === 0) return false;
+    for (const m of matchers) {
+        if (m.test(tableName)) return true;
+    }
+    return false;
 }
