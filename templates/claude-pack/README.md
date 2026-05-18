@@ -87,12 +87,52 @@ content fingerprint; bump it (`versions/v{N}/PACK_VERSION`) when content changes
 - Kept separate from `core/` so a v6 launch doesn't require rewriting every
   cross-version doc.
 
+## Authoring guidelines for `commands/*.md`
+
+- Each command is a self-contained markdown file that Claude Code surfaces as
+  a slash command (filename → `/command-name`).
+- **Frontmatter** must include `mj-pack-version: <semver>` so
+  `mj update:claude --refresh-commands` can detect drift on future bumps.
+- **No monorepo-relative paths** like `../packages/AI/Agents/src/...` — those
+  won't resolve in a downstream user's project. Reference packages by their
+  npm name instead (`@memberjunction/ai-agents`).
+- **No assumptions about the user's branching model** — don't hardcode
+  `next`/`main`/`master`. Detect default branch via `git rev-parse
+  --abbrev-ref origin/HEAD`, falling back to `git remote show origin`.
+- **Keep instructions self-contained.** A user installing the pack should
+  be able to run any slash command and have it work without first reading
+  this README or the source repo.
+- **Ship-or-skip discipline.** Don't add commands that only make sense for
+  MJ contributors (e.g. release tooling, internal cleanup scripts). The
+  pack's audience is MJ integrators, not contributors. See plan §9.2's
+  do-not-ship list.
+
+## Authoring guidelines for `skills/<name>/SKILL.md`
+
+- Skills are autonomous prompt bundles that Claude Code loads as needed.
+  Use them for capabilities (browser automation, file generation) rather
+  than commands the user invokes directly.
+- Same `mj-pack-version` frontmatter rule applies.
+- Skills are seed-once on install — users can customize them in place
+  without `mj update:claude` overwriting their edits. To force a resync,
+  users pass `--force` (which saves their version as `.bak`).
+
+## Doctor verification
+
+End users can verify a pack install with `mj doctor`. The diagnostic emits
+six checks (managed block, VERSION file, MANIFEST.json, file integrity,
+SessionStart helper, hook wired). "No pack installed" surfaces as info
+rather than warn — the pack is optional and we don't nag opt-outs.
+
 ## Don't touch from outside this folder
 
 The only files outside `templates/claude-pack/` that consume the pack are:
 
 - `CreateMJDistribution.js` — copies `dist/v{MAJOR}/` into the bootstrap ZIP at release time.
 - `packages/MJCLI/src/commands/install/claude.ts` — fetches and merges the pack into a user's repo.
+- `packages/MJCLI/src/commands/update/claude.ts` — same but for refresh-time.
+- `packages/MJInstaller/src/diagnostics/ClaudePackDoctor.ts` — runs `mj doctor`'s six pack-integrity checks. Knows the MANIFEST shape and the managed-block regex; check it if you change either.
+- `packages/MJInstaller/src/phases/ScaffoldPhase.ts` — emits an info/warn log when the bootstrap ZIP carries a pack into a fresh install.
 - `.github/workflows/claude-pack.yml` — CI gate that fails if `dist/` is stale.
 
-If you change pack semantics, check those three call sites.
+If you change pack semantics, check all of these call sites.
