@@ -1,16 +1,16 @@
-<div class="diff-container">
+<mj-page-layout>
+  <mj-page-header
+    Title="Diff Viewer"
+    Icon="fa-solid fa-code-compare"
+    Subtitle="Compare states between version labels or against current data">
+  </mj-page-header>
+
+  <mj-page-body>
   @if (IsLoading) {
     <mj-loading text="Loading diff viewer..."></mj-loading>
   }
 
   @if (!IsLoading) {
-    <!-- Header -->
-    <div class="page-header">
-      <div class="header-left">
-        <h2 class="page-title">Diff Viewer</h2>
-        <p class="page-subtitle">Compare states between version labels or against current data</p>
-      </div>
-    </div>
     <!-- Diff Configuration Panel -->
     <div class="config-panel">
       <!-- Mode Selector -->
@@ -266,4 +266,5 @@
       </div>
     }
   }
-</div>
+  </mj-page-body>
+</mj-page-layout>

@@ -15,8 +15,19 @@ import { BaseResourceComponent } from '@memberjunction/ng-shared';
 @Component({
     standalone: false,
     selector: 'app-archive-runs-resource',
-    template: `<mj-archive-run-viewer></mj-archive-run-viewer>`,
-    styles: [`:host { display: block; height: 100%; width: 100%; overflow: auto; }`],
+    template: `
+        <mj-page-layout>
+            <mj-page-header
+                Title="Archive Run History"
+                Icon="fa-solid fa-clock-rotate-left"
+                Subtitle="Execution history and results for archive jobs">
+            </mj-page-header>
+            <mj-page-body [Flex]="true" [Padding]="false">
+                <mj-archive-run-viewer></mj-archive-run-viewer>
+            </mj-page-body>
+        </mj-page-layout>
+    `,
+    styles: [`:host { display: block; height: 100%; width: 100%; }`],
 })
 export class ArchiveRunsResourceComponent extends BaseResourceComponent implements AfterViewInit {
     ngAfterViewInit(): void {

@@ -3,7 +3,13 @@ import { NgModule } from '@angular/core';
 
 import { FormsModule } from '@angular/forms';
 import { AgGridModule } from 'ag-grid-angular';
-import { MJButtonDirective, MJDialogComponent, MJDialogActionsComponent } from '@memberjunction/ng-ui-components';
+import {
+  MJButtonDirective,
+  MJDialogComponent,
+  MJDialogActionsComponent,
+  MJPageHeaderComponent,
+  MJPageLayoutComponent
+} from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
 import { CategoryTreeComponent } from './category-tree/category-tree';
@@ -37,6 +43,8 @@ import { FileGridComponent } from './file-browser/file-grid.component';
     MJButtonDirective,
     MJDialogComponent,
     MJDialogActionsComponent,
+    MJPageHeaderComponent,
+    MJPageLayoutComponent,
   ],
   exports: [
     CategoryTreeComponent,
