@@ -452,10 +452,30 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
    * Send a message with custom text WITHOUT modifying the visible messageText input
    * Used for suggested responses and initial messages from empty state.
    * Also saves any pending attachments.
+   *
+   * `extraAttachments` is an escape hatch for callers that programmatically
+   * attached something via `AddArtifactAttachment` and want to send in the same
+   * tick — the `attachmentsChanged` event chain hasn't propagated yet, so
+   * `this.pendingAttachments` may not contain the attachment. Pass it in
+   * explicitly and we merge + dedupe (by `id`) before saving.
    */
-  public async sendMessageWithText(text: string): Promise<void> {
+  public async sendMessageWithText(text: string, extraAttachments?: PendingAttachment[]): Promise<void> {
+    const merged: PendingAttachment[] = (() => {
+      if (!extraAttachments || extraAttachments.length === 0) {
+        return [...this.pendingAttachments];
+      }
+      const seen = new Set<string>();
+      const out: PendingAttachment[] = [];
+      for (const a of [...this.pendingAttachments, ...extraAttachments]) {
+        if (seen.has(a.id)) continue;
+        seen.add(a.id);
+        out.push(a);
+      }
+      return out;
+    })();
+
     const hasText = text && text.trim().length > 0;
-    const hasAttachments = this.pendingAttachments.length > 0;
+    const hasAttachments = merged.length > 0;
 
     if (!hasText && !hasAttachments) {
       return;
@@ -466,7 +486,7 @@ export class MessageInputComponent extends BaseAngularComponent implements OnIni
     }
 
     this.isSending = true;
-    const attachmentsToSave = [...this.pendingAttachments];
+    const attachmentsToSave = merged;
 
     try {
       const detail = await this.dataCache.createConversationDetail(this.currentUser);

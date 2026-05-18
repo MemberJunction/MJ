@@ -24,7 +24,8 @@ import {
     SkipAPIArtifactType
 } from '@memberjunction/skip-types';
 import { DataContext } from '@memberjunction/data-context';
-import { IMetadataProvider, UserInfo, LogStatus, LogError, Metadata, RunQuery, EntityInfo, EntityFieldInfo, EntityFieldValueInfo, DatabaseProviderBase } from '@memberjunction/core';
+import { IMetadataProvider, UserInfo, LogStatus, LogError, Metadata, RunQuery, RunView, EntityInfo, EntityFieldInfo, EntityFieldValueInfo, DatabaseProviderBase } from '@memberjunction/core';
+import { MJConversationDetailEntity } from '@memberjunction/core-entities';
 import { request as httpRequest } from 'http';
 import { request as httpsRequest } from 'https';
 import { gzip as gzipCompress, createGunzip } from 'zlib';
@@ -682,9 +683,155 @@ export class SkipSDK {
                 versions: entry.versions
             }));
 
+            // Also include INPUT artifacts (e.g., user-captured Data Snapshots
+            // attached to messages via the Analyze button or
+            // client:capture-snapshot actionable command). The query above only
+            // returns Direction='Output' artifacts produced BY Skip — but Skip
+            // also needs to see artifacts the user gave it as input.
+            const inputArtifacts = await this.buildInputArtifacts(contextUser, conversationId, artifactMap);
+            if (inputArtifacts.length > 0) {
+                artifacts.push(...inputArtifacts);
+            }
+
             return artifacts;
         } catch (error) {
             LogError(`Failed to build artifacts for conversation ${conversationId}: ${error}`);
+            return [];
+        }
+    }
+
+    /**
+     * Fetch INPUT artifacts attached to user messages in this conversation
+     * (Direction='Input' on ConversationDetailArtifact). Skip should see these
+     * so it can use captured Data Snapshots, user-uploaded files, etc., in
+     * its analysis.
+     *
+     * Deduplicates against `alreadyLoaded` (the Output artifacts) so the same
+     * artifact ID doesn't appear twice if it was both produced and re-attached.
+     */
+    private async buildInputArtifacts(
+        contextUser: UserInfo,
+        conversationId: string,
+        alreadyLoaded: Map<string, { artifact: any; artifactType: SkipAPIArtifactType; versions: SkipAPIArtifactVersion[] }>
+    ): Promise<SkipAPIArtifact[]> {
+        try {
+            const rv = new RunView();
+            // Pull conversation detail IDs in this conversation
+            const detailsResult = await rv.RunView<MJConversationDetailEntity>({
+                EntityName: 'MJ: Conversation Details',
+                ExtraFilter: `ConversationID='${conversationId}'`,
+                Fields: ['ID'],
+                ResultType: 'simple',
+            }, contextUser);
+            const detailIds = detailsResult.Success && detailsResult.Results
+                ? (detailsResult.Results as { ID: string }[]).map(r => r.ID)
+                : [];
+            if (detailIds.length === 0) return [];
+
+            // Junction rows where Direction='Input' for those details
+            const junctionResult = await rv.RunView({
+                EntityName: 'MJ: Conversation Detail Artifacts',
+                ExtraFilter: `ConversationDetailID IN ('${detailIds.join("','")}') AND Direction='Input'`,
+                Fields: ['ArtifactVersionID', 'ConversationDetailID'],
+                ResultType: 'simple',
+            }, contextUser);
+            const junctions = junctionResult.Success && junctionResult.Results
+                ? (junctionResult.Results as { ArtifactVersionID: string; ConversationDetailID: string }[])
+                : [];
+            if (junctions.length === 0) return [];
+
+            // Load each ArtifactVersion + its parent Artifact + ArtifactType
+            const versionIds = [...new Set(junctions.map(j => j.ArtifactVersionID))];
+            const versionsResult = await rv.RunView({
+                EntityName: 'MJ: Artifact Versions',
+                ExtraFilter: `ID IN ('${versionIds.join("','")}')`,
+                ResultType: 'simple',
+            }, contextUser);
+            const versions = versionsResult.Success && versionsResult.Results
+                ? (versionsResult.Results as Record<string, any>[])
+                : [];
+            if (versions.length === 0) return [];
+
+            const artifactIds = [...new Set(versions.map(v => v.ArtifactID as string))];
+            const artifactsResult = await rv.RunView({
+                EntityName: 'MJ: Artifacts',
+                ExtraFilter: `ID IN ('${artifactIds.join("','")}')`,
+                ResultType: 'simple',
+            }, contextUser);
+            const artifactRows = artifactsResult.Success && artifactsResult.Results
+                ? (artifactsResult.Results as Record<string, any>[])
+                : [];
+
+            const typeIds = [...new Set(artifactRows.map(a => a.TypeID as string))];
+            const typesResult = await rv.RunView({
+                EntityName: 'MJ: Artifact Types',
+                ExtraFilter: `ID IN ('${typeIds.join("','")}')`,
+                ResultType: 'simple',
+            }, contextUser);
+            const typeRows = typesResult.Success && typesResult.Results
+                ? (typesResult.Results as Record<string, any>[])
+                : [];
+            const typeMap = new Map<string, Record<string, any>>(typeRows.map(t => [t.ID as string, t]));
+
+            // Build a junction lookup: artifactVersionId -> conversationDetailId
+            const versionToDetail = new Map(junctions.map(j => [j.ArtifactVersionID, j.ConversationDetailID]));
+
+            // Build SkipAPIArtifact entries
+            const inputArtifactMap = new Map<string, { artifact: any; artifactType: SkipAPIArtifactType; versions: SkipAPIArtifactVersion[] }>();
+            for (const v of versions) {
+                const aRow = artifactRows.find(a => a.ID === v.ArtifactID);
+                if (!aRow) continue;
+                if (alreadyLoaded.has(aRow.ID as string)) continue; // dedup
+
+                const typeRow = typeMap.get(aRow.TypeID as string);
+                if (!typeRow) continue;
+
+                let entry = inputArtifactMap.get(aRow.ID as string);
+                if (!entry) {
+                    entry = {
+                        artifact: {
+                            id: aRow.ID,
+                            conversationId,
+                            name: aRow.Name,
+                            description: aRow.Description || '',
+                            sharingScope: 'None',
+                            comments: aRow.Comments || '',
+                            createdAt: new Date(aRow.__mj_CreatedAt),
+                            updatedAt: new Date(aRow.__mj_UpdatedAt),
+                        },
+                        artifactType: {
+                            id: typeRow.ID,
+                            name: typeRow.Name,
+                            description: typeRow.Description,
+                            contentType: typeRow.ContentType,
+                            enabled: true,
+                            createdAt: new Date(typeRow.__mj_CreatedAt),
+                            updatedAt: new Date(typeRow.__mj_UpdatedAt),
+                        },
+                        versions: [],
+                    };
+                    inputArtifactMap.set(aRow.ID as string, entry);
+                }
+                entry.versions.push({
+                    id: v.ID,
+                    artifactId: v.ArtifactID,
+                    conversationDetailID: versionToDetail.get(v.ID) ?? '',
+                    version: v.VersionNumber,
+                    configuration: v.Configuration || '',
+                    content: v.Content || '',
+                    comments: v.Comments || '',
+                    createdAt: new Date(v.__mj_CreatedAt),
+                    updatedAt: new Date(v.__mj_UpdatedAt),
+                });
+            }
+
+            return Array.from(inputArtifactMap.values()).map(entry => ({
+                ...entry.artifact,
+                artifactType: entry.artifactType,
+                versions: entry.versions,
+            }));
+        } catch (error) {
+            LogError(`Failed to load input artifacts for conversation ${conversationId}: ${error}`);
             return [];
         }
     }

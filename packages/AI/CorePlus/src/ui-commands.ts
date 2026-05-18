@@ -36,7 +36,8 @@
  */
 export type ActionableCommand =
     | OpenResourceCommand
-    | OpenURLCommand;
+    | OpenURLCommand
+    | CaptureSnapshotCommand;
 
 /**
  * Command to open a resource in the MemberJunction UI.
@@ -173,6 +174,74 @@ export interface OpenURLCommand {
      * Default: true
      */
     newTab?: boolean;
+}
+
+/**
+ * Command requesting the host UI capture the current visible state of a rendered
+ * component and submit it as a `Data Snapshot` input artifact on the current
+ * conversation, then resume the conversation so the agent can analyze it.
+ *
+ * This is the right command for an analysis-class agent that needs the user's
+ * actual on-screen view (filters, drill state, selected rows) to answer a
+ * question but has no `Data Snapshot` artifact attached to the request. The
+ * agent emits this command alongside `nextStep: 'Chat'` and a brief `message`
+ * explaining why; the chat UI renders a button; on click the host:
+ *
+ *   1. Locates the rendered `ComponentObject` (by `componentArtifactId` if
+ *      provided, otherwise the most recent component in the conversation).
+ *   2. Calls `componentObject.getCurrentDataState()` to obtain a `DataSnapshot`.
+ *   3. Creates an `Artifact` of type "Data Snapshot" with the JSON content via
+ *      `AnalyzeArtifactService.CreateSnapshotArtifact`.
+ *   4. Links the new `ArtifactVersion` to the conversation as
+ *      `Direction='Input'` and resumes the conversation (re-fires the agent)
+ *      with the snapshot now visible.
+ *
+ * Host integration is app-specific because finding the rendered component
+ * instance depends on the chat UI's component-tree layout. The service routes
+ * this command via the same `actionableCommandRequested` emitter as
+ * `open:resource`.
+ *
+ * @example
+ * ```json
+ * {
+ *   "type": "client:capture-snapshot",
+ *   "label": "Capture & Submit Snapshot",
+ *   "icon": "fa-camera",
+ *   "componentArtifactId": "abc-123",
+ *   "followupMessage": "Now answer the original question with the snapshot data."
+ * }
+ * ```
+ */
+export interface CaptureSnapshotCommand {
+    /** Command type identifier */
+    type: 'client:capture-snapshot';
+
+    /**
+     * Button label shown to the user.
+     * Should be clear about the action (e.g., "Capture & Submit Snapshot",
+     * "Share my current view").
+     */
+    label: string;
+
+    /**
+     * Optional Font Awesome icon class to display on the button.
+     * Commonly: "fa-camera" or "fa-image".
+     */
+    icon?: string;
+
+    /**
+     * Optional ID of the component artifact to snapshot. When omitted, the
+     * host should default to the most recently rendered component in the
+     * conversation (typical for single-component conversations).
+     */
+    componentArtifactId?: string;
+
+    /**
+     * Optional follow-up text the host should pass back to the agent after
+     * the snapshot is attached, so the agent knows what question to answer.
+     * If omitted, the host may resume with the most recent user message.
+     */
+    followupMessage?: string;
 }
 
 /**

@@ -2,7 +2,8 @@ import { Component, Input, Output, EventEmitter, OnInit, OnDestroy, ChangeDetect
 import { BaseAngularComponent } from '@memberjunction/ng-base-types';
 import { UserInfo, RunView, RunQuery, Metadata, CompositeKey, LogStatusEx, TransformSimpleObjectToEntityObject, DataSnapshot } from '@memberjunction/core';
 import { MJConversationEntity, MJConversationDetailEntity, MJAIAgentRunEntity, MJArtifactEntity, MJTaskEntity, ArtifactMetadataEngine, ConversationEngine, ConversationDetailComplete, RatingJSON } from '@memberjunction/core-entities';
-import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended } from "@memberjunction/ai-core-plus";
+import { MJAIAgentEntityExtended, MJAIAgentRunEntityExtended, CaptureSnapshotCommand } from "@memberjunction/ai-core-plus";
+import { UICommandHandlerService } from '../../services/ui-command-handler.service';
 import { AIEngineBase } from '@memberjunction/ai-engine-base';
 import { AgentStateService } from '../../services/agent-state.service';
 import { ConversationAgentService } from '../../services/conversation-agent.service';
@@ -306,7 +307,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     private streamingService: ConversationStreamingService,
     private confirmDialog: ConversationsDialogService,
     private bridge: ConversationBridgeService,
-    private analyzeArtifactService: AnalyzeArtifactService
+    private analyzeArtifactService: AnalyzeArtifactService,
+    private uiCommandHandler: UICommandHandlerService
   ) {
   super();}
 
@@ -320,6 +322,21 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
     this.artifactPermissionService.Provider = p;
     this.attachmentService.Provider = p;
     this.analyzeArtifactService.Provider = p;
+
+    // Subscribe to actionable commands from UICommandHandlerService so we can
+    // intercept and locally handle commands that depend on the conversation
+    // surface (e.g. `client:capture-snapshot`, which needs access to the
+    // artifact viewer panel and the message input — both live in this chat-area).
+    // The workspace's existing subscription still fires and bubbles every command
+    // up to the host application; this is purely additive — host apps can still
+    // override or augment behavior by handling the bubbled event.
+    this.uiCommandHandler.actionableCommandRequested
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((command) => {
+        if (command.type === 'client:capture-snapshot') {
+          void this.handleCaptureSnapshotCommand(command);
+        }
+      });
 
     // The workspace component initializes AI Engine and mention service before
     // any child components render, so we can safely skip duplicate initialization.
@@ -2244,8 +2261,8 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
    * user can still ask questions about the artifact that's already attached
    * to the prior conversation turn.
    */
-  async OnAnalyzeArtifact(event: { artifactId: string; snapshot: DataSnapshot }): Promise<void> {
-    if (!this.conversationId || !this.currentUser) return;
+  async OnAnalyzeArtifact(event: { artifactId: string; snapshot: DataSnapshot }): Promise<PendingAttachment | null> {
+    if (!this.conversationId || !this.currentUser) return null;
 
     const messageInput = this.getActiveMessageInputComponent();
     const snapshotTitle = event.snapshot.title || 'Untitled Snapshot';
@@ -2263,7 +2280,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
           0,
         );
         const serialized = JSON.stringify(event.snapshot);
-        messageInput.inputBox?.mentionEditor?.AddArtifactAttachment({
+        const created = messageInput.inputBox?.mentionEditor?.AddArtifactAttachment({
           fileID: '',
           fileName: rowCount > 0
             ? `📸 ${result.title} · ${rowCount.toLocaleString()} rows`
@@ -2274,6 +2291,7 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         });
         messageInput.messageText = `Analyze "${result.title}" — `;
         messageInput.inputBox?.focus();
+        return created ?? null;
       }
     } catch (error) {
       LogStatusEx({
@@ -2284,6 +2302,289 @@ export class ConversationChatAreaComponent extends BaseAngularComponent implemen
         messageInput.messageText = `Analyze "${snapshotTitle}" — `;
         messageInput.inputBox?.focus();
       }
+    }
+    return null;
+  }
+
+  /**
+   * Handle a `client:capture-snapshot` actionable command emitted by an
+   * analysis-class agent that needs the user's current view to answer
+   * accurately but has no Data Snapshot artifact attached.
+   *
+   * Flow:
+   *  1. Resolve the target component artifact — `command.componentArtifactId`
+   *     if provided, otherwise the most-recent component artifact on the
+   *     conversation.
+   *  2. Open the artifact viewer panel for it (mounts the React component if
+   *     not already mounted).
+   *  3. Poll until the viewer can produce a snapshot via
+   *     `GetCurrentStateSnapshot()`, with a short timeout.
+   *  4. Reuse the existing `OnAnalyzeArtifact` flow to persist the snapshot
+   *     as a Data Snapshot artifact + attach it as a chip on the message input.
+   *  5. If `command.followupMessage` is provided, replace the prefill and
+   *     auto-send so the agent immediately re-runs with the snapshot attached.
+   *     Otherwise, leave the chip + prefill in place for the user to send manually.
+   *
+   * Soft-fails — logs a warning and stops on any unrecoverable error rather
+   * than throwing. The user's conversation state isn't disrupted.
+   */
+  private async handleCaptureSnapshotCommand(command: CaptureSnapshotCommand): Promise<void> {
+    console.log('[client:capture-snapshot] Handler invoked', { command, conversationId: this.conversationId });
+    if (!this.conversationId || !this.currentUser) {
+      console.warn('[client:capture-snapshot] No active conversation/user; ignoring');
+      return;
+    }
+
+    let artifactId = command.componentArtifactId;
+    if (!artifactId) {
+      artifactId = (await this.findMostRecentComponentArtifactId()) ?? undefined;
+      console.log('[client:capture-snapshot] Resolved artifactId via lookup:', artifactId);
+    } else {
+      console.log('[client:capture-snapshot] Using artifactId from command:', artifactId);
+    }
+    if (!artifactId) {
+      console.warn('[client:capture-snapshot] No component artifact found on this conversation; cannot capture');
+      return;
+    }
+
+    const panelAlreadyOpen = this.selectedArtifactId === artifactId && this.showArtifactPanel;
+    console.log(
+      '[client:capture-snapshot] Panel state — currentSelectedId=' +
+        this.selectedArtifactId +
+        ' showPanel=' +
+        this.showArtifactPanel +
+        ' panelAlreadyOpen=' +
+        panelAlreadyOpen,
+    );
+
+    // Open the artifact panel so the component mounts (if it isn't already).
+    if (!panelAlreadyOpen) {
+      this.selectedArtifactId = artifactId;
+      this.selectedVersionNumber = undefined;
+      this.showArtifactPanel = true;
+      try {
+        await this.loadArtifactPermissions(artifactId);
+      } catch {
+        // Non-fatal — permissions are for UI affordances, not capture
+      }
+      this.cdr.detectChanges();
+      console.log('[client:capture-snapshot] Opened artifact panel; waiting for React mount + data load');
+    }
+
+    // Poll for the snapshot — the React component needs a few render cycles
+    // before `getCurrentDataState()` registers via callbacks.RegisterMethod.
+    const snapshot = await this.waitForViewerSnapshot(10000);
+    if (!snapshot) {
+      console.warn('[client:capture-snapshot] Artifact viewer did not produce a snapshot within timeout');
+      return;
+    }
+
+    // Persist + attach via the existing Analyze flow. Capture the created
+    // PendingAttachment so we can pass it directly into sendMessageWithText
+    // below — the mention-editor → message-input-box → message-input event
+    // chain that normally syncs `pendingAttachments` is async (next-tick) and
+    // hasn't propagated by the time we auto-send.
+    const capturedAttachment = await this.OnAnalyzeArtifact({ artifactId, snapshot });
+
+    // Auto-send the followup so the agent re-runs immediately with the
+    // captured snapshot now attached. Resolution order:
+    //   1. command.followupMessage   — if the agent provided one
+    //   2. most-recent User message  — re-sends the question that triggered
+    //      this capture exchange (typical: "Looking at this dashboard, …")
+    //      so the agent sees the same question with the artifact attached
+    //   3. a generic re-prompt        — last resort if no user message found
+    // OnAnalyzeArtifact prefilled messageText with 'Analyze "..." — '; we
+    // overwrite that with the resolved followup before sending.
+    const messageInput = this.getActiveMessageInputComponent();
+    if (messageInput) {
+      let followup = command.followupMessage?.trim();
+      if (!followup) {
+        const lastUserMsg = [...this.messages]
+          .reverse()
+          .find((m) => m.Role === 'User' && m.Message && m.Message.trim().length > 0);
+        followup = lastUserMsg?.Message?.trim();
+      }
+      if (!followup) {
+        followup = 'Please answer my previous question using the captured snapshot.';
+      }
+      messageInput.messageText = '';
+      try {
+        await messageInput.sendMessageWithText(
+          followup,
+          capturedAttachment ? [capturedAttachment] : undefined,
+        );
+      } catch (error) {
+        console.error('[client:capture-snapshot] Auto-send failed:', error);
+      }
+    }
+  }
+
+  /**
+   * Poll `artifactViewerComponent.GetCurrentStateSnapshot()` for the LIVE
+   * data snapshot. The React component inside the viewer plugin needs several
+   * render cycles after `selectedArtifactId` changes before its inner data
+   * fetches run and its `getCurrentDataState()` becomes callable via
+   * `callbacks.RegisterMethod('getCurrentDataState', ...)`.
+   *
+   * `GetCurrentStateSnapshot()` returns two distinct shapes:
+   *   - **Live**: a populated DataSnapshot with `tables[]` containing rows.
+   *   - **Fallback**: an empty placeholder with only `title` + `interpretation`
+   *     ("No live data was captured — the component either has no data-fetching
+   *     hooks or has not yet run its queries"). This fires when the React
+   *     component hasn't yet registered `getCurrentDataState()`.
+   *
+   * We must NOT accept the fallback while waiting — capturing the placeholder
+   * defeats the entire point of the snapshot pipeline. Keep polling until we
+   * either see a real snapshot (has `tables`) or the timeout elapses. Only
+   * after timeout do we return the last available fallback (any data is
+   * better than no data, but the user will see the placeholder text in the
+   * resulting artifact).
+   */
+  private async waitForViewerSnapshot(timeoutMs: number): Promise<DataSnapshot | null> {
+    const intervalMs = 200;
+    const deadline = Date.now() + timeoutMs;
+    let lastFallback: DataSnapshot | null = null;
+    let tick = 0;
+    const startTime = Date.now();
+    console.log('[client:capture-snapshot] Polling for live snapshot, timeout=' + timeoutMs + 'ms');
+    while (Date.now() < deadline) {
+      tick++;
+      const viewer = this.artifactViewerComponent;
+      const snap = viewer?.GetCurrentStateSnapshot?.();
+      if (snap) {
+        const hasLiveData = Array.isArray(snap.tables) && snap.tables.length > 0;
+        const tableShape = Array.isArray(snap.tables)
+          ? snap.tables.map((t) => `${t.name}:${(t.rows ?? []).length}rows`).join(', ')
+          : 'no-tables';
+        const elapsed = Date.now() - startTime;
+        // Log every 5th tick to avoid spamming
+        if (tick % 5 === 1 || hasLiveData) {
+          console.log(
+            `[client:capture-snapshot] tick=${tick} elapsed=${elapsed}ms viewer=${!!viewer} ` +
+              `snap=${!!snap} hasLiveData=${hasLiveData} shape=[${tableShape}] ` +
+              `keys=[${Object.keys(snap).join(',')}]`,
+          );
+        }
+        if (hasLiveData) {
+          return snap; // real snapshot — done
+        }
+        lastFallback = snap; // remember for timeout case
+      } else if (tick % 5 === 1) {
+        console.log(
+          `[client:capture-snapshot] tick=${tick} viewer=${!!viewer} snap=null (viewer hasn't returned a snapshot yet)`,
+        );
+      }
+      await new Promise((r) => setTimeout(r, intervalMs));
+    }
+    if (lastFallback) {
+      console.warn(
+        '[client:capture-snapshot] Timed out waiting for live data after ' +
+          timeoutMs +
+          'ms; falling back to placeholder snapshot. The component may not have registered ' +
+          'getCurrentDataState() via callbacks.RegisterMethod, OR its data has not finished loading.',
+      );
+    } else {
+      console.warn(
+        '[client:capture-snapshot] Timed out after ' +
+          timeoutMs +
+          'ms — viewer never returned even a fallback snapshot. Artifact viewer may not have mounted.',
+      );
+    }
+    return lastFallback;
+  }
+
+  /**
+   * Find the most-recent Component artifact attached as `Output` to this
+   * conversation. Used when a `client:capture-snapshot` command arrives
+   * without an explicit `componentArtifactId` — typical for single-component
+   * conversations where the user is obviously discussing "the component".
+   */
+  private async findMostRecentComponentArtifactId(): Promise<string | null> {
+    if (!this.conversationId || !this.currentUser) return null;
+    try {
+      const rv = new RunView();
+      // Get all conversation detail IDs for this conversation, newest first.
+      const detailsResult = await rv.RunView<MJConversationDetailEntity>(
+        {
+          EntityName: 'MJ: Conversation Details',
+          ExtraFilter: `ConversationID='${this.conversationId}'`,
+          Fields: ['ID'],
+          OrderBy: '__mj_CreatedAt DESC',
+          ResultType: 'simple',
+        },
+        this.currentUser,
+      );
+      if (!detailsResult.Success || !detailsResult.Results?.length) return null;
+      const detailIds = detailsResult.Results.map((d) => `'${d.ID}'`).join(',');
+
+      // Find the most recent Output artifact junction across those details.
+      const junctionResult = await rv.RunView(
+        {
+          EntityName: 'MJ: Conversation Detail Artifacts',
+          ExtraFilter: `ConversationDetailID IN (${detailIds}) AND Direction='Output'`,
+          OrderBy: '__mj_CreatedAt DESC',
+          ResultType: 'simple',
+        },
+        this.currentUser,
+      );
+      if (!junctionResult.Success || !junctionResult.Results?.length) return null;
+
+      // Look up artifact IDs for each version and filter to Component type.
+      const versionIds = Array.from(
+        new Set((junctionResult.Results as Array<{ ArtifactVersionID: string }>).map((j) => j.ArtifactVersionID)),
+      );
+      if (versionIds.length === 0) return null;
+      const versionFilter = versionIds.map((id) => `'${id}'`).join(',');
+      const versionsResult = await rv.RunView(
+        {
+          EntityName: 'MJ: Artifact Versions',
+          ExtraFilter: `ID IN (${versionFilter})`,
+          Fields: ['ID', 'ArtifactID'],
+          ResultType: 'simple',
+        },
+        this.currentUser,
+      );
+      if (!versionsResult.Success || !versionsResult.Results?.length) return null;
+
+      const versionToArtifact = new Map<string, string>();
+      for (const v of versionsResult.Results as Array<{ ID: string; ArtifactID: string }>) {
+        versionToArtifact.set(v.ID, v.ArtifactID);
+      }
+
+      const artifactIds = Array.from(new Set([...versionToArtifact.values()]));
+      const artifactFilter = artifactIds.map((id) => `'${id}'`).join(',');
+      const artifactsResult = await rv.RunView<MJArtifactEntity>(
+        {
+          EntityName: 'MJ: Artifacts',
+          ExtraFilter: `ID IN (${artifactFilter})`,
+          ResultType: 'simple',
+        },
+        this.currentUser,
+      );
+      if (!artifactsResult.Success || !artifactsResult.Results?.length) return null;
+
+      // Resolve the Component type ID from the metadata engine to filter to it.
+      const componentType = ArtifactMetadataEngine.Instance.FindArtifactType('Component');
+      if (!componentType) return null;
+
+      const componentArtifactIds = new Set(
+        (artifactsResult.Results as Array<{ ID: string; TypeID: string | null }>)
+          .filter((a) => a.TypeID === componentType.ID)
+          .map((a) => a.ID),
+      );
+      if (componentArtifactIds.size === 0) return null;
+
+      // Walk junctions in newest-first order; return the first whose artifact is Component.
+      for (const junction of junctionResult.Results as Array<{ ArtifactVersionID: string }>) {
+        const artifactId = versionToArtifact.get(junction.ArtifactVersionID);
+        if (artifactId && componentArtifactIds.has(artifactId)) {
+          return artifactId;
+        }
+      }
+      return null;
+    } catch (error) {
+      console.error('[client:capture-snapshot] findMostRecentComponentArtifactId failed:', error);
+      return null;
     }
   }
 

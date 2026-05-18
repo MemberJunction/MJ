@@ -434,6 +434,29 @@ After completing work, use `actionableCommands` for navigation buttons and `auto
   ]
 }
 ```
+
+### `client:capture-snapshot` — request a snapshot of the user's current view
+
+For analysis-class agents that need the user's actual on-screen state (filters, drill, sort, selection) to answer accurately but have no `Data Snapshot` artifact attached. The user clicks the button; the host captures `componentObject.getCurrentDataState()`, persists it as a `Data Snapshot` input artifact on the conversation, and resumes the agent so it can answer with the snapshot now visible.
+
+Pair this with `nextStep: 'Chat'` and a short `message` explaining why the snapshot is needed. Do NOT also terminate with `taskComplete: true` — the agent is pausing for the user, not finishing.
+
+```json
+{
+  "taskComplete": false,
+  "nextStep": { "type": "Chat" },
+  "message": "I need your current view of the dashboard to answer this accurately. Click below to capture and re-submit your filters / sort / drill state.",
+  "actionableCommands": [
+    {
+      "type": "client:capture-snapshot",
+      "label": "Capture & Submit Snapshot",
+      "icon": "fa-camera",
+      "componentArtifactId": "<id of the component being discussed, if known>",
+      "followupMessage": "Now answer the original question using the captured snapshot."
+    }
+  ]
+}
+```
 {% endif %}
 
 # **CRITICAL**
