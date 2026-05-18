@@ -139,18 +139,18 @@ export class AgentConfigurationComponent extends BaseResourceComponent implement
 
   /** Handler for the projected mj-tree-dropdown — extracts the entity ID from the CompositeKey. */
   public onCategoryChange(value: CompositeKey | CompositeKey[] | null): void {
-    if (value instanceof CompositeKey && value.HasValue) {
-      // Positional access — the tree-dropdown emits a single-key CompositeKey
-      // for the selected entity. FieldName is not guaranteed to be literally
-      // "ID" (varies by entity primary-key naming), so we take the first
-      // KVP's Value rather than filtering by FieldName. Matches the working
-      // pattern in QueryBrowser's OnDrawerCategoryChange.
-      const idValue = value.KeyValuePairs[0]?.Value;
-      this.currentFilters = { ...this.currentFilters, categoryId: idValue ?? 'all' };
-    } else {
-      this.currentFilters = { ...this.currentFilters, categoryId: 'all' };
-    }
-    this.SelectedCategoryKey = Array.isArray(value) ? null : value;
+    // Duck-typed extraction — works whether tree-dropdown emits a real
+    // CompositeKey instance or a plain object (it's currently the latter
+    // when projected inside <mj-filter-panel>). Single-PK entities: take
+    // the first KVP's Value; FieldName varies by entity so positional is
+    // safer than name-matching.
+    const single = !value || Array.isArray(value) ? null : value;
+    const idValue = single?.KeyValuePairs?.[0]?.Value;
+    this.currentFilters = {
+      ...this.currentFilters,
+      categoryId: (idValue != null && idValue !== '') ? String(idValue) : 'all'
+    };
+    this.SelectedCategoryKey = single;
     this.applyFilters();
     this.saveUserPreferencesDebounced();
   }
