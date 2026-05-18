@@ -23,6 +23,8 @@ import { BaseAutoDocDriver } from '../drivers/BaseAutoDocDriver.js';
 import { DetectorInputColumn, OrganicKeyClusterDetector } from './OrganicKeyClusterDetector.js';
 import { OrganicKeyClusterRefiner } from './OrganicKeyClusterRefiner.js';
 import { createEmbeddingProvider } from './EmbeddingProvider.js';
+import { EmbeddingCache } from './EmbeddingCache.js';
+import { ConceptMergePass } from './ConceptMergePass.js';
 import { BusinessConceptProjector } from './BusinessConceptProjector.js';
 import { ValueOverlapSampler } from './ValueOverlapSampler.js';
 import { MinHashSignature } from './MinHashSketch.js';
@@ -30,6 +32,13 @@ import { MinHashSignature } from './MinHashSketch.js';
 export interface RunnerOptions {
     /** Optional progress callback for long-running operations. */
     onProgress?: (message: string) => void;
+    /**
+     * Path to the embedding cache file. When provided, embeddings are persisted
+     * across runs and only newly-encountered descriptors get fetched from the
+     * provider. Typically passed as `<outputDir>/embedding-cache.json` so it
+     * sits alongside state.json.
+     */
+    embeddingCachePath?: string;
 }
 
 export class OrganicKeyDetectionRunner {
@@ -38,6 +47,9 @@ export class OrganicKeyDetectionRunner {
         private readonly aiConfig?: AIConfig,
         private readonly driver?: BaseAutoDocDriver,
     ) {}
+
+    /** Embedding cache instance, lazily created when embeddingCachePath is set. */
+    private embeddingCache: EmbeddingCache | null = null;
 
     /**
      * Run organic key detection against the populated state.
@@ -98,9 +110,15 @@ export class OrganicKeyDetectionRunner {
             !!this.config.embedding?.enabled && !!this.aiConfig?.apiKey;
         const minHashActive = !!this.config.minHash?.enabled && !!this.driver;
 
+        // Lazily instantiate the embedding cache if a path was provided.
+        if (embeddingActive && opts.embeddingCachePath) {
+            this.embeddingCache = new EmbeddingCache(opts.embeddingCachePath);
+            await this.embeddingCache.load();
+        }
+
         if (embeddingActive) {
             progress(`Organic keys — computing embeddings for ${columns.length} columns`);
-            await this.attachEmbeddings(columns);
+            await this.attachEmbeddings(columns, progress);
         }
         if (minHashActive) {
             progress(`Organic keys — sampling values for MinHash signatures`);
@@ -114,7 +132,57 @@ export class OrganicKeyDetectionRunner {
         // ─── Step 4: Run clustering ─────────────────────────────────────────
         progress(`Organic keys — clustering ${columns.length} columns`);
         const detector = new OrganicKeyClusterDetector({ weights, thresholds });
-        const candidates = detector.detect(columns);
+        let candidates = detector.detect(columns);
+
+        // ─── Step 4b: Business-concept gate (drop audit/system clusters pre-refinement) ───
+        let gatedAway = 0;
+        if (
+            this.config.businessGate?.enabled &&
+            embeddingActive &&
+            this.aiConfig &&
+            candidates.length > 0
+        ) {
+            try {
+                const gateThreshold = this.config.businessGate.threshold ?? 0.05;
+                const provider = createEmbeddingProvider({
+                    provider: this.aiConfig.provider,
+                    apiKey: this.aiConfig.apiKey,
+                    model: this.config.embedding?.model ?? 'gemini-embedding-001',
+                    dimensions: this.config.embedding?.dimensions,
+                    batchSize: this.config.embedding?.batchSize,
+                });
+                const projector = await BusinessConceptProjector.build(provider, {
+                    anchors: this.config.embedding?.customBusinessAnchors,
+                    additionalAnchors: this.config.embedding?.additionalBusinessAnchors,
+                });
+                const indexByKey = new Map(
+                    columns.map((c, i) => [`${c.schema}.${c.table}.${c.column}`, i]),
+                );
+                const before = candidates.length;
+                candidates = candidates.filter((cluster) => {
+                    const memberEmbeddings: Float32Array[] = [];
+                    for (const m of cluster.members) {
+                        const idx = indexByKey.get(`${m.schema}.${m.table}.${m.column}`);
+                        if (idx === undefined) continue;
+                        const emb = columns[idx].embedding;
+                        if (emb) memberEmbeddings.push(emb instanceof Float32Array ? emb : Float32Array.from(emb));
+                    }
+                    if (memberEmbeddings.length === 0) return true; // keep — can't score
+                    const score = projector.scoreCluster(memberEmbeddings);
+                    return score.antiScore - score.businessScore <= gateThreshold;
+                });
+                gatedAway = before - candidates.length;
+                if (gatedAway > 0) {
+                    progress(
+                        `Organic keys — business gate dropped ${gatedAway} clusters (threshold ${gateThreshold})`,
+                    );
+                }
+            } catch (err) {
+                progress(
+                    `Organic keys — business gate skipped due to error: ${(err as Error).message}`,
+                );
+            }
+        }
 
         let refinementEnabled =
             (this.config.refinement?.enabled ?? !!this.aiConfig) && !!this.aiConfig;
@@ -150,21 +218,59 @@ export class OrganicKeyDetectionRunner {
             }
         }
 
+        // ─── Step 5b: Concept-merge pass (consolidate same-concept KEEPs) ───
+        let mergedAway = 0;
+        if (
+            this.config.conceptMerge?.enabled !== false &&
+            refinementEnabled &&
+            this.aiConfig &&
+            confirmed.length > 1
+        ) {
+            progress(`Organic keys — concept-merge pass over ${confirmed.length} KEEPs`);
+            try {
+                const mergePass = new ConceptMergePass(this.aiConfig);
+                const mergeResult = await mergePass.mergeAll(confirmed);
+                if (mergeResult.mergedAwayCount > 0) {
+                    progress(
+                        `Organic keys — concept-merge: ${confirmed.length} → ${mergeResult.clusters.length} (${mergeResult.mergedAwayCount} merged away)`,
+                    );
+                }
+                confirmed = mergeResult.clusters;
+                mergedAway = mergeResult.mergedAwayCount;
+                tokensUsed += mergeResult.tokensUsed;
+                inputTokens += mergeResult.inputTokens;
+                outputTokens += mergeResult.outputTokens;
+            } catch (err) {
+                progress(`Organic keys — concept-merge skipped due to error: ${(err as Error).message}`);
+            }
+        }
+
         // ─── Step 6: Estimate cost ──────────────────────────────────────────
         const estimatedCost = this.estimateCost(inputTokens, outputTokens);
 
         // ─── Step 7: Persist results ────────────────────────────────────────
         state.organicKeyClusters = confirmed;
+        const cacheStats = this.embeddingCache?.stats();
         this.writePhase(state, {
             triggered: true,
             triggerReason: this.config.enabled ? 'config.organicKeyDetection.enabled' : undefined,
             startedAt,
             completedAt: new Date().toISOString(),
             status: 'completed',
-            candidateClusterCount: candidates.length,
+            candidateClusterCount: candidates.length + gatedAway,
             confirmedClusterCount: confirmed.length,
             rejectedClusterCount: rejected,
             splitClusterCount: split,
+            gatedClusterCount: gatedAway,
+            mergedClusterCount: mergedAway,
+            embeddingCache: cacheStats
+                ? {
+                      hits: cacheStats.hits,
+                      misses: cacheStats.misses,
+                      entries: cacheStats.entries,
+                      cachePath: cacheStats.cachePath,
+                  }
+                : undefined,
             tokensUsed,
             inputTokens,
             outputTokens,
@@ -276,21 +382,40 @@ export class OrganicKeyDetectionRunner {
      * Raw embeddings can be requested via `embedding.useBusinessProjection: false` for
      * debugging or comparison runs.
      */
-    private async attachEmbeddings(columns: DetectorInputColumn[]): Promise<void> {
+    private async attachEmbeddings(
+        columns: DetectorInputColumn[],
+        progress: (msg: string) => void,
+    ): Promise<void> {
         if (!this.aiConfig || !this.config.embedding?.enabled) return;
         try {
+            const model = this.config.embedding.model ?? 'gemini-embedding-001';
+            const dimensions = this.config.embedding.dimensions ?? 1536;
             const provider = createEmbeddingProvider({
                 provider: this.aiConfig.provider,
                 apiKey: this.aiConfig.apiKey,
-                model: this.config.embedding.model ?? 'gemini-embedding-001',
-                dimensions: this.config.embedding.dimensions,
+                model,
+                dimensions,
                 batchSize: this.config.embedding.batchSize,
             });
             const texts = columns.map(
                 (c) =>
                     `Column ${c.schema}.${c.table}.${c.column}. ${c.description ?? ''}`.trim(),
             );
-            const rawVectors = await provider.embed(texts);
+
+            // Use the embedding cache when available — only missing descriptors hit the provider.
+            let rawVectors: Float32Array[];
+            if (this.embeddingCache) {
+                const keys = texts.map((text) => ({ model, dimensions, text }));
+                rawVectors = await this.embeddingCache.getOrFill(keys, (missing) =>
+                    provider.embed(missing.map((k) => k.text)),
+                );
+                const stats = this.embeddingCache.stats();
+                progress(
+                    `Organic keys — embedding cache: ${stats.hits} hits, ${stats.misses} misses (${stats.entries} entries)`,
+                );
+            } else {
+                rawVectors = await provider.embed(texts);
+            }
 
             // Empirically, projection into a small business-concept space over-merges
             // distinct business concepts (e.g. BusinessEntityID and ProductID both project

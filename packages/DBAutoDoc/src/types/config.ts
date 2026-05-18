@@ -238,6 +238,38 @@ export interface OrganicKeyDetectionConfig {
     concurrency?: number;
   };
 
+  /**
+   * Concept-merge pass — after LLM refinement, group KEEP clusters by normalized
+   * concept name and call the LLM once per multi-cluster group to confirm/merge.
+   * Addresses the case where complete-linkage prevented merging at clustering time
+   * but the LLM assigned the same concept name to multiple survivors (e.g. three
+   * separate `product_id` clusters in the AdventureWorks POC).
+   */
+  conceptMerge?: {
+    /** Default: true when LLM refinement is enabled. Set false to disable. */
+    enabled: boolean;
+  };
+
+  /**
+   * Business-concept gate — uses BusinessConceptProjector to score each candidate
+   * cluster's centroid against business vs system/audit anchor axes. Clusters
+   * dominated by negative anchors (audit timestamps, replication GUIDs) get
+   * dropped BEFORE LLM refinement, saving tokens.
+   *
+   * Operates as a filter, not a clustering space. Uses raw embeddings for the
+   * clustering itself; only the centroid is projected for gating.
+   */
+  businessGate?: {
+    /** Whether to apply the gate (default: false). Requires embeddings to be enabled. */
+    enabled: boolean;
+    /**
+     * Threshold on (antiScore - businessScore) above which a cluster is dropped.
+     * Default 0.05 — modest preference for business clusters. Raise to be stricter,
+     * lower (or negative) to be more permissive.
+     */
+    threshold?: number;
+  };
+
   /** MinHash signatures for value-overlap verification. */
   minHash?: {
     /** Whether to compute MinHash sketches during column sampling (default: false). */

@@ -53,6 +53,17 @@ export interface OrganicKeyCluster {
   maxIntraDistance: number;
   /** Hybrid distance weights used to produce this cluster. */
   distanceWeights?: HybridDistanceWeights;
+  /**
+   * Cluster IDs that were merged to produce this cluster (concept-merge pass output).
+   * Empty/undefined for clusters that came straight from the detector + refiner.
+   * Each value is the original `id` of an upstream cluster.
+   */
+  mergedFromClusterIds?: string[];
+  /**
+   * Reasoning from the concept-merge LLM call explaining why these clusters were
+   * merged. Only present when `mergedFromClusterIds` is populated.
+   */
+  mergeReasoning?: string;
 }
 
 export type OrganicKeyClusterTag =
@@ -77,7 +88,25 @@ export interface OrganicKeyDetectionPhase {
   rejectedClusterCount: number;
   /** Clusters partitioned by LLM into multiple sub-clusters. */
   splitClusterCount: number;
-  /** Aggregate LLM tokens consumed by refinement. */
+  /**
+   * Candidate clusters dropped by the BusinessConceptProjector gate before
+   * LLM refinement (cost savings from filtering audit/system clusters early).
+   * Zero when the gate is disabled.
+   */
+  gatedClusterCount?: number;
+  /**
+   * Clusters merged away by the concept-merge pass (the consolidation step
+   * after refinement that merges KEEPs with the same concept name).
+   */
+  mergedClusterCount?: number;
+  /** Embedding cache stats — present when an embedding cache file was provided. */
+  embeddingCache?: {
+    hits: number;
+    misses: number;
+    entries: number;
+    cachePath: string;
+  };
+  /** Aggregate LLM tokens consumed by refinement + concept-merge. */
   tokensUsed: number;
   inputTokens: number;
   outputTokens: number;

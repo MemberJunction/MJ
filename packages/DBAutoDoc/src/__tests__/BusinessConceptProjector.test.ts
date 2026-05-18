@@ -2,6 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import {
     BusinessConceptProjector,
     DEFAULT_BUSINESS_ANCHORS,
+    DEFAULT_POSITIVE_ANCHORS,
+    DEFAULT_NEGATIVE_ANCHORS,
 } from '../discovery/BusinessConceptProjector.js';
 import type { EmbeddingProvider } from '../discovery/EmbeddingProvider.js';
 
@@ -160,6 +162,156 @@ describe('BusinessConceptProjector', () => {
             expect(() =>
                 BusinessConceptProjector.withAnchorVectors(['a', 'b'], [unit([1, 0])]),
             ).toThrow(/mismatch/);
+        });
+    });
+
+    describe('positive/negative anchor split', () => {
+        it('DEFAULT_BUSINESS_ANCHORS is the concat of positive then negative', () => {
+            expect(DEFAULT_BUSINESS_ANCHORS.length).toBe(
+                DEFAULT_POSITIVE_ANCHORS.length + DEFAULT_NEGATIVE_ANCHORS.length,
+            );
+            for (let i = 0; i < DEFAULT_POSITIVE_ANCHORS.length; i++) {
+                expect(DEFAULT_BUSINESS_ANCHORS[i]).toBe(DEFAULT_POSITIVE_ANCHORS[i]);
+            }
+            for (let i = 0; i < DEFAULT_NEGATIVE_ANCHORS.length; i++) {
+                expect(
+                    DEFAULT_BUSINESS_ANCHORS[DEFAULT_POSITIVE_ANCHORS.length + i],
+                ).toBe(DEFAULT_NEGATIVE_ANCHORS[i]);
+            }
+        });
+
+        it('reports correct positive/negative counts when built from defaults', async () => {
+            const embedFn = vi.fn(async (texts: string[]) => texts.map((_, i) => f32(i, 0)));
+            const provider: EmbeddingProvider = {
+                embed: embedFn,
+                provider: 'mock',
+                model: 'mock',
+            };
+            const projector = await BusinessConceptProjector.build(provider);
+            expect(projector.positiveAnchorCount).toBe(DEFAULT_POSITIVE_ANCHORS.length);
+            expect(projector.negativeAnchorCount).toBe(DEFAULT_NEGATIVE_ANCHORS.length);
+        });
+
+        it('respects explicit negativeAnchorCount option', async () => {
+            const provider: EmbeddingProvider = {
+                embed: vi.fn(async (texts: string[]) => texts.map(() => f32(1, 0))),
+                provider: 'mock',
+                model: 'mock',
+            };
+            const projector = await BusinessConceptProjector.build(provider, {
+                anchors: ['a', 'b', 'c', 'd'],
+                negativeAnchorCount: 2,
+            });
+            expect(projector.positiveAnchorCount).toBe(2);
+            expect(projector.negativeAnchorCount).toBe(2);
+        });
+
+        it('defaults to 0 negative when custom anchors supplied without negativeAnchorCount', async () => {
+            const provider: EmbeddingProvider = {
+                embed: vi.fn(async (texts: string[]) => texts.map(() => f32(1, 0))),
+                provider: 'mock',
+                model: 'mock',
+            };
+            const projector = await BusinessConceptProjector.build(provider, {
+                anchors: ['my-custom'],
+            });
+            expect(projector.positiveAnchorCount).toBe(1);
+            expect(projector.negativeAnchorCount).toBe(0);
+        });
+    });
+
+    describe('scoreColumn — gate scoring on a single embedding', () => {
+        it('separates business-aligned from anti-aligned inputs', () => {
+            // 2 positive + 1 negative anchor along orthogonal axes
+            const projector = BusinessConceptProjector.withAnchorVectors(
+                ['pos1', 'pos2', 'neg1'],
+                [unit([1, 0, 0]), unit([0, 1, 0]), unit([0, 0, 1])],
+                /*negativeAnchorCount*/ 1,
+            );
+
+            const business = projector.scoreColumn(unit([1, 0, 0])); // pure pos1
+            expect(business.businessScore).toBeGreaterThan(0.99);
+            expect(business.antiScore).toBeLessThan(0.01);
+            expect(business.netBusinessScore).toBeGreaterThan(0.99);
+            expect(business.dominantAnchorIndex).toBe(0);
+            expect(business.dominantAnchorKind).toBe('positive');
+
+            const audit = projector.scoreColumn(unit([0, 0, 1])); // pure neg1
+            expect(audit.businessScore).toBeLessThan(0.01);
+            expect(audit.antiScore).toBeGreaterThan(0.99);
+            expect(audit.netBusinessScore).toBeLessThan(-0.99);
+            expect(audit.dominantAnchorIndex).toBe(2);
+            expect(audit.dominantAnchorKind).toBe('negative');
+        });
+
+        it('reports per-axis breakdown of length numAnchors', () => {
+            const projector = BusinessConceptProjector.withAnchorVectors(
+                ['a', 'b', 'c'],
+                [unit([1, 0, 0]), unit([0, 1, 0]), unit([0, 0, 1])],
+                1,
+            );
+            const score = projector.scoreColumn(unit([1, 1, 0]));
+            expect(score.axisScores.length).toBe(3);
+            expect(score.axisScores[0]).toBeCloseTo(Math.SQRT1_2, 4);
+            expect(score.axisScores[1]).toBeCloseTo(Math.SQRT1_2, 4);
+            expect(score.axisScores[2]).toBeCloseTo(0, 4);
+        });
+    });
+
+    describe('scoreCluster — gate scoring on member centroid', () => {
+        it('averages members to compute centroid, then scores via anchors', () => {
+            const projector = BusinessConceptProjector.withAnchorVectors(
+                ['business', 'audit'],
+                [unit([1, 0]), unit([0, 1])],
+                1,
+            );
+            // Members both lean strongly toward business axis
+            const score = projector.scoreCluster([unit([1, 0]), unit([1, 0]), unit([1, 0])]);
+            expect(score.businessScore).toBeGreaterThan(0.99);
+            expect(score.antiScore).toBeLessThan(0.01);
+            expect(score.dominantAnchorKind).toBe('positive');
+        });
+
+        it('correctly classifies audit-aligned clusters as anti-dominant', () => {
+            const projector = BusinessConceptProjector.withAnchorVectors(
+                ['business', 'audit'],
+                [unit([1, 0]), unit([0, 1])],
+                1,
+            );
+            const score = projector.scoreCluster([unit([0, 1]), unit([0, 1]), unit([0, 1])]);
+            expect(score.dominantAnchorKind).toBe('negative');
+            expect(score.netBusinessScore).toBeLessThan(-0.99);
+        });
+
+        it('mixed-direction members average to a center weakly aligned with both', () => {
+            const projector = BusinessConceptProjector.withAnchorVectors(
+                ['business', 'audit'],
+                [unit([1, 0]), unit([0, 1])],
+                1,
+            );
+            const score = projector.scoreCluster([unit([1, 0]), unit([0, 1])]);
+            // Centroid = (0.5, 0.5) unit-normalized → scores equal on both axes
+            expect(score.businessScore).toBeCloseTo(score.antiScore, 3);
+            expect(Math.abs(score.netBusinessScore)).toBeLessThan(0.05);
+        });
+
+        it('throws when given an empty member list', () => {
+            const projector = BusinessConceptProjector.withAnchorVectors(
+                ['a'],
+                [unit([1, 0])],
+                0,
+            );
+            expect(() => projector.scoreCluster([])).toThrow(/at least one/);
+        });
+
+        it('handles single-member cluster (degenerate centroid = the member itself)', () => {
+            const projector = BusinessConceptProjector.withAnchorVectors(
+                ['business', 'audit'],
+                [unit([1, 0]), unit([0, 1])],
+                1,
+            );
+            const score = projector.scoreCluster([unit([1, 0])]);
+            expect(score.businessScore).toBeGreaterThan(0.99);
         });
     });
 });

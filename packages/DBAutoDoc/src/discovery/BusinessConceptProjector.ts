@@ -38,8 +38,8 @@ import { EmbeddingProvider } from './EmbeddingProvider.js';
  * included so non-business columns project strongly onto those axes and away from the
  * business axes — making them easy to distinguish from real organic key candidates.
  */
-export const DEFAULT_BUSINESS_ANCHORS: readonly string[] = [
-    // ─── Positive business anchors ──────────────────────────────────────────
+/** Positive (business-concept) anchors — value-matchable business identifiers / attributes. */
+export const DEFAULT_POSITIVE_ANCHORS: readonly string[] = [
     'Email address used to identify or contact a person, customer, subscriber, or business across systems',
     'Phone number used to reach a person, contact, customer, or business',
     'Tax identifier, social security number, national ID, or government-issued personal identifier',
@@ -50,12 +50,23 @@ export const DEFAULT_BUSINESS_ANCHORS: readonly string[] = [
     'Geographic, jurisdictional, or currency code such as country, state, region, postal, or ISO code',
     'Employee, vendor, supplier, partner, store, or organization identifier',
     'Account, subscription, license, or contract identifier shared across systems',
+];
 
-    // ─── Negative anchors (non-business; tag these as distinct so the detector can see them apart) ───
+/** Negative (non-business) anchors — system-level fields that should NOT be organic keys. */
+export const DEFAULT_NEGATIVE_ANCHORS: readonly string[] = [
     'System-generated audit timestamp such as created date, modified date, last updated, or insert time',
     'Internal sequence, replication GUID, row version, system-generated unique identifier, or technical row marker',
     'Generic descriptive text content such as a name, title, label, description, or notes field with no specific business meaning',
     'Numeric quantity, measurement, amount, count, percentage, or aggregate metric',
+];
+
+/**
+ * Default anchor list (positive then negative). Concept-axis projection scores
+ * each column's similarity to every anchor in this order.
+ */
+export const DEFAULT_BUSINESS_ANCHORS: readonly string[] = [
+    ...DEFAULT_POSITIVE_ANCHORS,
+    ...DEFAULT_NEGATIVE_ANCHORS,
 ];
 
 export interface BusinessConceptProjectorOptions {
@@ -63,6 +74,29 @@ export interface BusinessConceptProjectorOptions {
     anchors?: readonly string[];
     /** Optional additional anchors appended to the defaults (use for domain-specific concepts). */
     additionalAnchors?: readonly string[];
+    /**
+     * Number of anchors at the END of the array that are NEGATIVE (audit/system).
+     * Default is the number of DEFAULT_NEGATIVE_ANCHORS when using the default list,
+     * or 0 when fully custom anchors are supplied (caller must pass this explicitly
+     * if their custom anchors include negative ones).
+     */
+    negativeAnchorCount?: number;
+}
+
+/** Per-cluster business-vs-anti score from the projector gate. */
+export interface ClusterBusinessScore {
+    /** Sum of cosine similarities with positive (business) anchors. */
+    businessScore: number;
+    /** Sum of cosine similarities with negative (audit/system) anchors. */
+    antiScore: number;
+    /** businessScore - antiScore. Higher = more business-like. */
+    netBusinessScore: number;
+    /** Per-anchor breakdown (length = numAnchors). */
+    axisScores: Float32Array;
+    /** Index of the highest-scoring anchor. */
+    dominantAnchorIndex: number;
+    /** Kind of the dominant anchor. */
+    dominantAnchorKind: 'positive' | 'negative';
 }
 
 /**
@@ -71,10 +105,17 @@ export interface BusinessConceptProjectorOptions {
 export class BusinessConceptProjector {
     private readonly anchorVectors: Float32Array[];
     private readonly anchors: readonly string[];
+    /** Count of NEGATIVE anchors at the tail end of the anchor array. */
+    private readonly negativeCount: number;
 
-    private constructor(anchors: readonly string[], anchorVectors: Float32Array[]) {
+    private constructor(
+        anchors: readonly string[],
+        anchorVectors: Float32Array[],
+        negativeCount: number,
+    ) {
         this.anchors = anchors;
         this.anchorVectors = anchorVectors;
+        this.negativeCount = negativeCount;
     }
 
     /**
@@ -94,20 +135,26 @@ export class BusinessConceptProjector {
         }
         const vectors = await embedder.embed([...anchors]);
         const normalized = vectors.map(unitNormalize);
-        return new BusinessConceptProjector(anchors, normalized);
+        const negativeCount = resolveNegativeCount(opts, baseAnchors, anchors.length);
+        return new BusinessConceptProjector(anchors, normalized, negativeCount);
     }
 
     /** Test-friendly factory that accepts pre-built anchor vectors. */
     public static withAnchorVectors(
         anchors: readonly string[],
         anchorVectors: Float32Array[],
+        negativeAnchorCount = 0,
     ): BusinessConceptProjector {
         if (anchors.length !== anchorVectors.length) {
             throw new Error(
                 `Anchor count mismatch: ${anchors.length} texts vs ${anchorVectors.length} vectors`,
             );
         }
-        return new BusinessConceptProjector(anchors, anchorVectors.map(unitNormalize));
+        return new BusinessConceptProjector(
+            anchors,
+            anchorVectors.map(unitNormalize),
+            negativeAnchorCount,
+        );
     }
 
     /**
@@ -140,9 +187,100 @@ export class BusinessConceptProjector {
     public get anchorTexts(): readonly string[] {
         return this.anchors;
     }
+
+    /** Number of positive (business) anchors. */
+    public get positiveAnchorCount(): number {
+        return this.anchorVectors.length - this.negativeCount;
+    }
+
+    /** Number of negative (audit / system) anchors. */
+    public get negativeAnchorCount(): number {
+        return this.negativeCount;
+    }
+
+    /**
+     * Score a single raw embedding against the positive vs negative anchors.
+     * Used by the cluster-level gate to decide whether a cluster's centroid
+     * represents a business concept or a system/audit field.
+     */
+    public scoreColumn(rawEmbedding: Float32Array | number[]): ClusterBusinessScore {
+        const axisScores = this.project(rawEmbedding);
+        return this.scoreFromAxis(axisScores);
+    }
+
+    /**
+     * Score a cluster by averaging its member embeddings (centroid) and projecting
+     * the result through the anchor axes. Returns separate business and anti
+     * scores so the runner can apply a gate threshold.
+     *
+     * Centroid averaging operates on raw embeddings — the caller must pass the
+     * RAW per-column embeddings here, not pre-projected vectors.
+     */
+    public scoreCluster(memberEmbeddings: (Float32Array | number[])[]): ClusterBusinessScore {
+        if (memberEmbeddings.length === 0) {
+            throw new Error('scoreCluster requires at least one member embedding');
+        }
+        // Compute the centroid (mean of unit-normalized member vectors)
+        const dim = memberEmbeddings[0].length;
+        const centroid = new Float32Array(dim);
+        for (const member of memberEmbeddings) {
+            const normalized = unitNormalize(member);
+            for (let i = 0; i < dim; i++) centroid[i] += normalized[i];
+        }
+        for (let i = 0; i < dim; i++) centroid[i] /= memberEmbeddings.length;
+        return this.scoreColumn(centroid);
+    }
+
+    /** Helper: given the per-axis scores, produce a ClusterBusinessScore breakdown. */
+    private scoreFromAxis(axisScores: Float32Array): ClusterBusinessScore {
+        const positiveEnd = this.anchorVectors.length - this.negativeCount;
+        let businessScore = 0;
+        let antiScore = 0;
+        let dominantAnchorIndex = 0;
+        let dominantValue = -Infinity;
+        for (let i = 0; i < axisScores.length; i++) {
+            const v = axisScores[i];
+            if (i < positiveEnd) businessScore += v;
+            else antiScore += v;
+            if (v > dominantValue) {
+                dominantValue = v;
+                dominantAnchorIndex = i;
+            }
+        }
+        const dominantAnchorKind: 'positive' | 'negative' =
+            dominantAnchorIndex < positiveEnd ? 'positive' : 'negative';
+        return {
+            businessScore,
+            antiScore,
+            netBusinessScore: businessScore - antiScore,
+            axisScores,
+            dominantAnchorIndex,
+            dominantAnchorKind,
+        };
+    }
 }
 
 // ─── Internal helpers ───────────────────────────────────────────────────────
+
+/**
+ * Resolve how many anchors at the tail of the array are negative.
+ * Defaults to DEFAULT_NEGATIVE_ANCHORS.length when the user is using the default
+ * anchor list; otherwise zero unless explicitly specified by the caller.
+ */
+function resolveNegativeCount(
+    opts: BusinessConceptProjectorOptions,
+    baseAnchors: readonly string[],
+    finalLength: number,
+): number {
+    if (typeof opts.negativeAnchorCount === 'number') {
+        return Math.min(Math.max(0, opts.negativeAnchorCount), finalLength);
+    }
+    // If the caller used the default anchor list, we know which are negative
+    if (baseAnchors === DEFAULT_BUSINESS_ANCHORS) {
+        return DEFAULT_NEGATIVE_ANCHORS.length;
+    }
+    return 0;
+}
 
 function unitNormalize(vec: Float32Array | number[]): Float32Array {
     const out = new Float32Array(vec.length);
