@@ -1,5 +1,4 @@
 ---
-"@memberjunction/core": minor
 "@memberjunction/ng-dashboards": patch
 "@memberjunction/ng-file-storage": patch
 "@memberjunction/ng-ui-components": patch
