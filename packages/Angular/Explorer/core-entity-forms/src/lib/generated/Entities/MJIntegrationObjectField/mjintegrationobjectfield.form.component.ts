@@ -18,6 +18,7 @@ export class MJIntegrationObjectFieldFormComponent extends BaseFormComponent {
             { sectionKey: 'objectMapping', sectionName: 'Object Mapping', isExpanded: true },
             { sectionKey: 'fieldIdentity', sectionName: 'Field Identity', isExpanded: true },
             { sectionKey: 'dataConstraints', sectionName: 'Data Constraints', isExpanded: false },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false }
         ]);
     }

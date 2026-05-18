@@ -20,9 +20,11 @@ export class MJIntegrationObjectFormComponent extends BaseFormComponent {
             { sectionKey: 'objectDefinition', sectionName: 'Object Definition', isExpanded: true },
             { sectionKey: 'aPIEndpointDetails', sectionName: 'API Endpoint Details', isExpanded: false },
             { sectionKey: 'syncAndPagination', sectionName: 'Sync and Pagination', isExpanded: false },
+            { sectionKey: 'details', sectionName: 'Details', isExpanded: false },
             { sectionKey: 'systemMetadata', sectionName: 'System Metadata', isExpanded: false },
             { sectionKey: 'mJIntegrationObjectFieldsIntegrationObjectID', sectionName: 'Integration Object Fields (Integration Object)', isExpanded: false },
-            { sectionKey: 'mJIntegrationObjectFieldsRelatedIntegrationObjectID', sectionName: 'Integration Object Fields (Related Integration Object)', isExpanded: false }
+            { sectionKey: 'mJIntegrationObjectFieldsRelatedIntegrationObjectID', sectionName: 'Integration Object Fields (Related Integration Object)', isExpanded: false },
+            { sectionKey: 'mJIntegrationConstraintDiscoveryStates', sectionName: 'Integration Constraint Discovery States', isExpanded: false }
         ]);
     }
 }

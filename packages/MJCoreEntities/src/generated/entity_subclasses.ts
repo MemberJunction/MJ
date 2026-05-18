@@ -16850,6 +16850,95 @@ export const MJInstanceConfigurationSchema = z.object({
 export type MJInstanceConfigurationEntityType = z.infer<typeof MJInstanceConfigurationSchema>;
 
 /**
+ * zod schema definition for the entity MJ: Integration Constraint Discovery States
+ */
+export const MJIntegrationConstraintDiscoveryStateSchema = z.object({
+    ID: z.string().describe(`
+        * * Field Name: ID
+        * * Display Name: ID
+        * * SQL Data Type: uniqueidentifier
+        * * Default Value: newsequentialid()`),
+    IntegrationObjectID: z.string().describe(`
+        * * Field Name: IntegrationObjectID
+        * * Display Name: Integration Object ID
+        * * SQL Data Type: uniqueidentifier
+        * * Related Entity/Foreign Key: MJ: Integration Objects (vwIntegrationObjects.ID)
+        * * Description: Foreign key to the IntegrationObject this state row tracks. One state row per IO (UNIQUE constraint).`),
+    LastAnalyzedAt: z.date().describe(`
+        * * Field Name: LastAnalyzedAt
+        * * Display Name: Last Analyzed At
+        * * SQL Data Type: datetimeoffset
+        * * Description: Last time this object was analyzed.`),
+    RowCountAtAnalysis: z.number().describe(`
+        * * Field Name: RowCountAtAnalysis
+        * * Display Name: Row Count At Analysis
+        * * SQL Data Type: bigint
+        * * Description: Synced row count at last analysis. Drives the growth-threshold skip on subsequent runs.`),
+    SchemaHash: z.string().describe(`
+        * * Field Name: SchemaHash
+        * * Display Name: Schema Hash
+        * * SQL Data Type: nvarchar(64)
+        * * Description: Hash of IOF rows for the IntegrationObject at last analysis. Drives the schema-change skip on subsequent runs.`),
+    LastSampleSize: z.number().nullable().describe(`
+        * * Field Name: LastSampleSize
+        * * Display Name: Last Sample Size
+        * * SQL Data Type: int
+        * * Description: Sample size used in the most recent uniqueness/overlap check. Drives adaptive tier escalation.`),
+    PKCandidatesJSON: z.string().nullable().describe(`
+        * * Field Name: PKCandidatesJSON
+        * * Display Name: PK Candidates JSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Accumulated PK candidates as JSON. Schema: [{ColumnNames, Confidence, DiscoveryMethod, EvidenceJSON, EmittedAs}].`),
+    FKCandidatesJSON: z.string().nullable().describe(`
+        * * Field Name: FKCandidatesJSON
+        * * Display Name: FK Candidates JSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Accumulated FK candidates as JSON. Schema: [{SourceColumn, TargetIOID, TargetColumn, Confidence, DiscoveryMethod, EvidenceJSON, EmittedAs}].`),
+    DescriptionCandidatesJSON: z.string().nullable().describe(`
+        * * Field Name: DescriptionCandidatesJSON
+        * * Display Name: Description Candidates JSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Accumulated description candidates as JSON.`),
+    EvidenceLogJSON: z.string().nullable().describe(`
+        * * Field Name: EvidenceLogJSON
+        * * Display Name: Evidence Log JSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Per-run audit trail for downgrade detection.`),
+    Status: z.union([z.literal('Complete'), z.literal('Failed'), z.literal('InProgress')]).describe(`
+        * * Field Name: Status
+        * * Display Name: Status
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Complete
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Complete
+    *   * Failed
+    *   * InProgress
+        * * Description: Run status: Complete, InProgress, or Failed.`),
+    ErrorMessage: z.string().nullable().describe(`
+        * * Field Name: ErrorMessage
+        * * Display Name: Error Message
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Error message when Status=Failed. NULL otherwise.`),
+    __mj_CreatedAt: z.date().describe(`
+        * * Field Name: __mj_CreatedAt
+        * * Display Name: Created At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    __mj_UpdatedAt: z.date().describe(`
+        * * Field Name: __mj_UpdatedAt
+        * * Display Name: Updated At
+        * * SQL Data Type: datetimeoffset
+        * * Default Value: getutcdate()`),
+    IntegrationObject: z.string().describe(`
+        * * Field Name: IntegrationObject
+        * * Display Name: Integration Object
+        * * SQL Data Type: nvarchar(255)`),
+});
+
+export type MJIntegrationConstraintDiscoveryStateEntityType = z.infer<typeof MJIntegrationConstraintDiscoveryStateSchema>;
+
+/**
  * zod schema definition for the entity MJ: Integration Object Fields
  */
 export const MJIntegrationObjectFieldSchema = z.object({
@@ -16988,7 +17077,73 @@ export const MJIntegrationObjectFieldSchema = z.object({
         * * Display Name: Is Custom
         * * SQL Data Type: bit
         * * Default Value: 0
-        * * Description: When true, this field was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.`),
+        * * Description: DEPRECATED — use Source enum (Declared / Discovered / Custom) instead. Kept for back-compat; will be removed in next major version.`),
+    Source: z.union([z.literal('Custom'), z.literal('Declared'), z.literal('Discovered')]).describe(`
+        * * Field Name: Source
+        * * Display Name: Source
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Declared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Custom
+    *   * Declared
+    *   * Discovered
+        * * Description: Provenance of this IntegrationObjectField record. Mirrors the Source semantics on IntegrationObject.`),
+    IsAPIWritable: z.boolean().describe(`
+        * * Field Name: IsAPIWritable
+        * * Display Name: Is API Writable
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether the vendor's API accepts writes to this field. Distinct from IsReadOnly — IsReadOnly is a per-record runtime check, IsAPIWritable is the design-time API contract. A field can be IsReadOnly=false but IsAPIWritable=false (computed/write-only fields).`),
+    IsComputed: z.boolean().describe(`
+        * * Field Name: IsComputed
+        * * Display Name: Is Computed
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether the vendor calculates this field (formula fields, derived values, aggregations). Computed fields are excluded from write bodies regardless of IsAPIWritable.`),
+    IsImmutableAfterCreate: z.boolean().describe(`
+        * * Field Name: IsImmutableAfterCreate
+        * * Display Name: Is Immutable After Create
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether this field is writable on Create but rejected on Update (e.g., legal-entity name, primary key alternative keys). CodeBuilder filters this out of Update bodies.`),
+    IsCustomField: z.boolean().describe(`
+        * * Field Name: IsCustomField
+        * * Display Name: Is Custom Field
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether this field matches the vendor's custom-field marker pattern (per CustomFieldMarkerPattern at the integration root). Tenant-specific custom fields surface here.`),
+    IsIncrementalCursorCandidate: z.boolean().describe(`
+        * * Field Name: IsIncrementalCursorCandidate
+        * * Display Name: Is Incremental Cursor Candidate
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether this field could serve as a watermark for incremental sync (timestamp/version/sequence type). The IO's IncrementalCursorFieldName must reference an IOF where this flag is true.`),
+    IsForeignKey: z.boolean().describe(`
+        * * Field Name: IsForeignKey
+        * * Display Name: Is Foreign Key
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether this field is a foreign key (references another IO's PK). Set by extractor's universal FK gates (DF1-DF7); complements existing RelatedIntegrationObjectID which holds the target reference itself.`),
+    FKDetectionMethod: z.union([z.literal('name-pattern-suffix'), z.literal('openapi-ref'), z.literal('sdk-relationship-annotation'), z.literal('unknown'), z.literal('url-path-parent'), z.literal('vendor-specific')]).nullable().describe(`
+        * * Field Name: FKDetectionMethod
+        * * Display Name: FK Detection Method
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * name-pattern-suffix
+    *   * openapi-ref
+    *   * sdk-relationship-annotation
+    *   * unknown
+    *   * url-path-parent
+    *   * vendor-specific
+        * * Description: Self-reported gate that established the FK claim. openapi-ref = OpenAPI $ref to another schema; sdk-relationship-annotation = SDK type-level annotation; name-pattern-suffix = *Id naming match; url-path-parent = path templating implies parent; vendor-specific = vendor-managed; unknown = inferred but unverified.`),
+    IsDeprecated: z.boolean().describe(`
+        * * Field Name: IsDeprecated
+        * * Display Name: Is Deprecated
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether the vendor has marked this field as deprecated. Connector code may emit warnings on use; new metadata extractions should not consider this field for cursor/PK candidacy.`),
     IntegrationObject: z.string().describe(`
         * * Field Name: IntegrationObject
         * * Display Name: Integration Object Name
@@ -17124,25 +17279,158 @@ export const MJIntegrationObjectSchema = z.object({
         * * Field Name: WriteAPIPath
         * * Display Name: Write API Path
         * * SQL Data Type: nvarchar(500)
-        * * Description: API path for create/update operations when different from the read APIPath. If NULL, the read APIPath is used for writes as well.`),
+        * * Description: DEPRECATED — use CreateAPIPath / UpdateAPIPath / DeleteAPIPath instead. Kept for back-compat; will be removed in next major version.`),
     WriteMethod: z.string().nullable().describe(`
         * * Field Name: WriteMethod
         * * Display Name: Write Method
         * * SQL Data Type: nvarchar(10)
         * * Default Value: POST
-        * * Description: HTTP method for create operations. Defaults to POST.`),
+        * * Description: DEPRECATED — use CreateMethod / UpdateMethod instead. Kept for back-compat; will be removed in next major version.`),
     DeleteMethod: z.string().nullable().describe(`
         * * Field Name: DeleteMethod
         * * Display Name: Delete Method
         * * SQL Data Type: nvarchar(10)
         * * Default Value: DELETE
-        * * Description: HTTP method for delete operations. Defaults to DELETE.`),
+        * * Description: HTTP method for delete operations. Default DELETE. NULL means use connector default. Some vendors use POST with a delete-action body — set this column to override.`),
     IsCustom: z.boolean().describe(`
         * * Field Name: IsCustom
         * * Display Name: Is Custom
         * * SQL Data Type: bit
         * * Default Value: 0
-        * * Description: When true, this object was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.`),
+        * * Description: DEPRECATED — use Source enum (Declared / Discovered / Custom) instead. IsCustom remains as the existing bit-field for back-compat; Source is the new authoritative provenance indicator. Will be removed in next major version.`),
+    CreateAPIPath: z.string().nullable().describe(`
+        * * Field Name: CreateAPIPath
+        * * Display Name: Create API Path
+        * * SQL Data Type: nvarchar(500)
+        * * Description: API path for create operations when distinct from APIPath. If NULL, the connector falls back to WriteAPIPath then APIPath.`),
+    CreateMethod: z.string().nullable().describe(`
+        * * Field Name: CreateMethod
+        * * Display Name: Create Method
+        * * SQL Data Type: nvarchar(10)
+        * * Description: HTTP method for create operations. Default POST. If NULL, falls back to WriteMethod then POST.`),
+    UpdateAPIPath: z.string().nullable().describe(`
+        * * Field Name: UpdateAPIPath
+        * * Display Name: Update API Path
+        * * SQL Data Type: nvarchar(500)
+        * * Description: API path for update operations. If NULL, falls back to WriteAPIPath then APIPath + /{id}.`),
+    UpdateMethod: z.string().nullable().describe(`
+        * * Field Name: UpdateMethod
+        * * Display Name: Update Method
+        * * SQL Data Type: nvarchar(10)
+        * * Description: HTTP method for update operations. Typical values: PATCH, PUT. NULL means use connector default.`),
+    DeleteAPIPath: z.string().nullable().describe(`
+        * * Field Name: DeleteAPIPath
+        * * Display Name: Delete API Path
+        * * SQL Data Type: nvarchar(500)
+        * * Description: API path for delete operations. If NULL, falls back to APIPath + /{id}.`),
+    GetAPIPath: z.string().nullable().describe(`
+        * * Field Name: GetAPIPath
+        * * Display Name: Get API Path
+        * * SQL Data Type: nvarchar(500)
+        * * Description: API path for single-record retrieval by primary key. If NULL, falls back to APIPath + /{id}.`),
+    GetMethod: z.string().nullable().describe(`
+        * * Field Name: GetMethod
+        * * Display Name: Get Method
+        * * SQL Data Type: nvarchar(10)
+        * * Description: HTTP method for single-record retrieval. Default GET. NULL means use connector default. Some vendors require POST with an ID body — set this column to override.`),
+    SearchAPIPath: z.string().nullable().describe(`
+        * * Field Name: SearchAPIPath
+        * * Display Name: Search API Path
+        * * SQL Data Type: nvarchar(500)
+        * * Description: API path for search/query operations. Distinct from ListAPIPath because some vendors expose a separate query endpoint (e.g. Salesforce /query, HubSpot /search) that accepts a body/filter payload. If NULL, falls back to APIPath.`),
+    SearchMethod: z.string().nullable().describe(`
+        * * Field Name: SearchMethod
+        * * Display Name: Search Method
+        * * SQL Data Type: nvarchar(10)
+        * * Description: HTTP method for search operations. Often POST (filter body), sometimes GET (query string). NULL means use connector default.`),
+    ListAPIPath: z.string().nullable().describe(`
+        * * Field Name: ListAPIPath
+        * * Display Name: List API Path
+        * * SQL Data Type: nvarchar(500)
+        * * Description: API path for paginated list operations. Distinct from SearchAPIPath because some vendors expose a separate plain-list endpoint without filter semantics. If NULL, falls back to APIPath.`),
+    ListMethod: z.string().nullable().describe(`
+        * * Field Name: ListMethod
+        * * Display Name: List Method
+        * * SQL Data Type: nvarchar(10)
+        * * Description: HTTP method for paginated list operations. Default GET. NULL means use connector default.`),
+    Source: z.union([z.literal('Custom'), z.literal('Declared'), z.literal('Discovered')]).describe(`
+        * * Field Name: Source
+        * * Display Name: Source
+        * * SQL Data Type: nvarchar(20)
+        * * Default Value: Declared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Custom
+    *   * Declared
+    *   * Discovered
+        * * Description: Provenance of this IntegrationObject record. Declared = from connector static catalog (Phase 2). Discovered = found at runtime via DiscoverAndPersistAuthenticatedSchema. Custom = vendor explicitly flagged as customer extension (e.g. Salesforce __c). Replaces the prior binary IsCustom flag.`),
+    IncludeInActionGeneration: z.boolean().describe(`
+        * * Field Name: IncludeInActionGeneration
+        * * Display Name: Include In Action Generation
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: When true, this object is included by ActionMetadataGenerator. Set false to expose for property lookups without generating CRUD action records.`),
+    IsBidirectional: z.boolean().describe(`
+        * * Field Name: IsBidirectional
+        * * Display Name: Is Bidirectional
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether the vendor's API supports write (Create/Update/Delete) for this object. Distinct from the Supports* verb flags — this is the higher-level "is the object writable at all" capability used to filter Action generation.`),
+    ParentObjectName: z.string().nullable().describe(`
+        * * Field Name: ParentObjectName
+        * * Display Name: Parent Object Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: When this IO's API path is nested under another IO (e.g., /orgs/{OrgID}/users), the name of the parent IO. Null for root-level objects.`),
+    ParentObjectIDFieldName: z.string().nullable().describe(`
+        * * Field Name: ParentObjectIDFieldName
+        * * Display Name: Parent Object ID Field Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the IOF on this IO that holds the parent's primary key value. Used to resolve path template variables when fetching nested resources.`),
+    IncrementalCursorFieldName: z.string().nullable().describe(`
+        * * Field Name: IncrementalCursorFieldName
+        * * Display Name: Incremental Cursor Field Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Name of the IOF whose value is tracked as the incremental-sync watermark for this object. Must match WatermarkService.ValidateWatermark expectations for the chosen IncrementalWatermarkType.`),
+    IncrementalWatermarkType: z.union([z.literal('ChangeToken'), z.literal('Cursor'), z.literal('Timestamp'), z.literal('Version')]).nullable().describe(`
+        * * Field Name: IncrementalWatermarkType
+        * * Display Name: Incremental Watermark Type
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * ChangeToken
+    *   * Cursor
+    *   * Timestamp
+    *   * Version
+        * * Description: Semantic type of the watermark value. Timestamp = date/datetime (comparable); Version = monotonic integer/string; Cursor = opaque vendor cursor; ChangeToken = opaque vendor change marker.`),
+    IsStandardObject: z.boolean().describe(`
+        * * Field Name: IsStandardObject
+        * * Display Name: Is Standard Object
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Whether this object is part of the vendor's standard catalog (true) vs a custom object defined per-tenant (false). Set by extraction from documented sources.`),
+    IsCustomObject: z.boolean().describe(`
+        * * Field Name: IsCustomObject
+        * * Display Name: Is Custom Object
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether this object matches the vendor's custom-object marker pattern (e.g., __c suffix for Salesforce). Used to route Action generation + runtime handling for tenant-customized schema.`),
+    BulkAPIPath: z.string().nullable().describe(`
+        * * Field Name: BulkAPIPath
+        * * Display Name: Bulk API Path
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Vendor's bulk-operation endpoint path for this object (when BulkOperationsAvailable=true at integration level). E.g., /services/data/v60.0/jobs/ingest for Salesforce Bulk API.`),
+    BulkAPIMethod: z.union([z.literal('DELETE'), z.literal('GET'), z.literal('PATCH'), z.literal('POST'), z.literal('PUT')]).nullable().describe(`
+        * * Field Name: BulkAPIMethod
+        * * Display Name: Bulk API Method
+        * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * DELETE
+    *   * GET
+    *   * PATCH
+    *   * POST
+    *   * PUT
+        * * Description: HTTP method used against BulkAPIPath. Typically POST for bulk-job creation; some vendors use PUT or PATCH.`),
     Integration: z.string().describe(`
         * * Field Name: Integration
         * * Display Name: Integration
@@ -17322,6 +17610,287 @@ export const MJIntegrationSchema = z.object({
         * * Display Name: Icon
         * * SQL Data Type: nvarchar(MAX)
         * * Description: Icon for the integration. Supports Font Awesome CSS classes, image URLs, or base64 data URIs.`),
+    ActionIconClass: z.string().nullable().describe(`
+        * * Field Name: ActionIconClass
+        * * Display Name: Action Icon Class
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Font Awesome icon class used by ActionMetadataGenerator for generated Action records. Default fa-solid fa-plug.`),
+    ActionCategoryName: z.string().nullable().describe(`
+        * * Field Name: ActionCategoryName
+        * * Display Name: Action Category Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Action category name. Used in @lookup:MJ: Action Categories.Name=... references on generated Action records. Defaults to Integration.Name.`),
+    ActionCategoryDescription: z.string().nullable().describe(`
+        * * Field Name: ActionCategoryDescription
+        * * Display Name: Action Category Description
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: Optional description for the generated action category.`),
+    ActionParentCategoryName: z.string().nullable().describe(`
+        * * Field Name: ActionParentCategoryName
+        * * Display Name: Action Parent Category Name
+        * * SQL Data Type: nvarchar(255)
+        * * Description: Parent category name for the auto-generated action category (e.g. CRM, Communication, AMS, Accounting). NULL means top-level category.`),
+    IncludeSearchActions: z.boolean().describe(`
+        * * Field Name: IncludeSearchActions
+        * * Display Name: Include Search Actions
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Controls whether Search actions are emitted by ActionMetadataGenerator.`),
+    IncludeListActions: z.boolean().describe(`
+        * * Field Name: IncludeListActions
+        * * Display Name: Include List Actions
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Controls whether List actions are emitted by ActionMetadataGenerator.`),
+    CreateActionCategory: z.boolean().describe(`
+        * * Field Name: CreateActionCategory
+        * * Display Name: Create Action Category
+        * * SQL Data Type: bit
+        * * Default Value: 1
+        * * Description: Controls whether the generator emits a category record for this integration.`),
+    PrimaryKeyFieldName: z.string().nullable().describe(`
+        * * Field Name: PrimaryKeyFieldName
+        * * Display Name: Primary Key Field Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Vendor-wide primary-key field name when the vendor documents a universal naming convention (e.g. HubSpot uses "id" or "hs_object_id" as PK for nearly all objects; Salesforce uses "Id"). When set + PrimaryKeyFieldConfidence=Provable, the LightweightConstraintDiscovery algorithm uses this name as a provable PK for IntegrationObjects not in the static catalog (Discovered + Custom rows). NULL = no universal convention; PK detection falls through to statistical inference.`),
+    PrimaryKeyFieldConfidence: z.union([z.literal('Likely'), z.literal('Provable'), z.literal('Unknown')]).nullable().describe(`
+        * * Field Name: PrimaryKeyFieldConfidence
+        * * Display Name: Primary Key Field Confidence
+        * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Likely
+    *   * Provable
+    *   * Unknown
+        * * Description: Confidence level for the vendor-wide PrimaryKeyFieldName convention. Provable = documented as universal in authoritative vendor source. Likely = mostly consistent but with documented exceptions. Unknown = no convention or unverified. Only Provable convention triggers entity-row PK emission; Likely emits to additionalSchemaInfo.json only.`),
+    APIBaseURL: z.string().nullable().describe(`
+        * * Field Name: APIBaseURL
+        * * Display Name: API Base URL
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Base URL the connector calls (e.g., https://api.hubapi.com). When APIBaseURLMode=dynamic-from-auth-response, this is the OAuth bootstrap host only; per-tenant URL comes from auth response.`),
+    APIBaseURLMode: z.union([z.literal('dynamic-from-auth-response'), z.literal('dynamic-from-credential-field'), z.literal('static')]).nullable().describe(`
+        * * Field Name: APIBaseURLMode
+        * * Display Name: API Base URL Mode
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * dynamic-from-auth-response
+    *   * dynamic-from-credential-field
+    *   * static
+        * * Description: How the per-tenant API base URL is resolved. static = fixed; dynamic-from-auth-response = read from token response (e.g. Salesforce instance_url); dynamic-from-credential-field = read from CompanyIntegration.Configuration JSON.`),
+    DynamicAPIBaseURLSourceField: z.string().nullable().describe(`
+        * * Field Name: DynamicAPIBaseURLSourceField
+        * * Display Name: Dynamic API Base URL Source Field
+        * * SQL Data Type: nvarchar(100)
+        * * Description: When APIBaseURLMode is dynamic, names the field in auth response or credential JSON that holds the resolved base URL (e.g., instance_url).`),
+    TokenRefreshStrategy: z.union([z.literal('jwt-resign-periodically'), z.literal('none'), z.literal('oauth2-refresh'), z.literal('static-token')]).nullable().describe(`
+        * * Field Name: TokenRefreshStrategy
+        * * Display Name: Token Refresh Strategy
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * jwt-resign-periodically
+    *   * none
+    *   * oauth2-refresh
+    *   * static-token
+        * * Description: Token lifecycle pattern. oauth2-refresh = standard OAuth2 refresh-token grant; jwt-resign-periodically = sign a fresh JWT each token TTL; static-token = long-lived API key; none = no token refresh path.`),
+    TokenTTLSeconds: z.number().nullable().describe(`
+        * * Field Name: TokenTTLSeconds
+        * * Display Name: Token TTL Seconds
+        * * SQL Data Type: int
+        * * Description: Access token time-to-live in seconds when documented by the vendor. Used by OAuth2TokenManager to schedule refresh before expiry.`),
+    AuthHeaderPattern: z.union([z.literal('authorization-bearer'), z.literal('custom-header'), z.literal('none-uses-query'), z.literal('x-api-key')]).nullable().describe(`
+        * * Field Name: AuthHeaderPattern
+        * * Display Name: Auth Header Pattern
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * authorization-bearer
+    *   * custom-header
+    *   * none-uses-query
+    *   * x-api-key
+        * * Description: Wire-format auth header pattern. authorization-bearer = Authorization: Bearer <token>; x-api-key = X-API-Key: <token>; custom-header = vendor-specific (see CustomAuthHeaderName); none-uses-query = auth via query param, not header.`),
+    CustomAuthHeaderName: z.string().nullable().describe(`
+        * * Field Name: CustomAuthHeaderName
+        * * Display Name: Custom Auth Header Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: When AuthHeaderPattern=custom-header, the vendor-specific header name carrying the credential.`),
+    CredentialFieldSchemaJSON: z.string().nullable().describe(`
+        * * Field Name: CredentialFieldSchemaJSON
+        * * Display Name: Credential Field Schema JSON
+        * * SQL Data Type: nvarchar(MAX)
+        * * Description: JSON describing which credential fields CompanyIntegration.Configuration must carry for this integration (field names, types, required flag, secret flag). Drives credential-input UI generation.`),
+    PaginationCursorParamName: z.string().nullable().describe(`
+        * * Field Name: PaginationCursorParamName
+        * * Display Name: Pagination Cursor Param Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Vendor parameter name carrying the pagination cursor (e.g., after for HubSpot, starting_after for Stripe). Null when PaginationType is not cursor-based.`),
+    PaginationCursorResponsePath: z.string().nullable().describe(`
+        * * Field Name: PaginationCursorResponsePath
+        * * Display Name: Pagination Cursor Response Path
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Dotted path inside the response body where the next-page cursor appears (e.g., paging.next.after for HubSpot, next_page for Stripe).`),
+    PaginationLimitParamName: z.string().nullable().describe(`
+        * * Field Name: PaginationLimitParamName
+        * * Display Name: Pagination Limit Param Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Vendor parameter name controlling page size (e.g., limit, per_page, page_size).`),
+    PaginationPageParamName: z.string().nullable().describe(`
+        * * Field Name: PaginationPageParamName
+        * * Display Name: Pagination Page Param Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Vendor parameter name for page-number pagination (e.g., page). Null when not PageNumber pagination.`),
+    PaginationOffsetParamName: z.string().nullable().describe(`
+        * * Field Name: PaginationOffsetParamName
+        * * Display Name: Pagination Offset Param Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Vendor parameter name for offset-based pagination (e.g., offset, skip). Null when not Offset pagination.`),
+    PaginationHasMoreResponsePath: z.string().nullable().describe(`
+        * * Field Name: PaginationHasMoreResponsePath
+        * * Display Name: Pagination Has More Response Path
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Dotted response path holding the has-more boolean (e.g., has_more for Stripe, paging.next for HubSpot).`),
+    PaginationTotalCountResponsePath: z.string().nullable().describe(`
+        * * Field Name: PaginationTotalCountResponsePath
+        * * Display Name: Pagination Total Count Response Path
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Dotted response path holding the total-count integer (e.g., total, totalSize). Null when vendor does not return it.`),
+    PaginationMaxPageSize: z.number().nullable().describe(`
+        * * Field Name: PaginationMaxPageSize
+        * * Display Name: Pagination Max Page Size
+        * * SQL Data Type: int
+        * * Description: Maximum page size the vendor accepts (clamp for client-tunable pagination). Null when vendor enforces a fixed page size.`),
+    ErrorResponseShape: z.union([z.literal('custom'), z.literal('envelope-with-error-field'), z.literal('http-status-only'), z.literal('json-errors-array')]).nullable().describe(`
+        * * Field Name: ErrorResponseShape
+        * * Display Name: Error Response Shape
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * custom
+    *   * envelope-with-error-field
+    *   * http-status-only
+    *   * json-errors-array
+        * * Description: Shape of the vendor's error response body. json-errors-array = {errors:[{...}]} (Salesforce); envelope-with-error-field = {error:{message,code}} (Stripe); http-status-only = no body; custom = vendor-specific (TransformError override required).`),
+    ErrorMessageFieldPath: z.string().nullable().describe(`
+        * * Field Name: ErrorMessageFieldPath
+        * * Display Name: Error Message Field Path
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Dotted path inside the error body where the human-readable error message lives (e.g., error.message, errors[0].message).`),
+    ErrorCodeFieldPath: z.string().nullable().describe(`
+        * * Field Name: ErrorCodeFieldPath
+        * * Display Name: Error Code Field Path
+        * * SQL Data Type: nvarchar(200)
+        * * Description: Dotted path inside the error body where the vendor-specific error code lives (e.g., error.code, errors[0].errorCode).`),
+    IncrementalSyncCapability: z.union([z.literal('global-query-param'), z.literal('none'), z.literal('per-resource-query-param'), z.literal('polling-only'), z.literal('webhook-only')]).nullable().describe(`
+        * * Field Name: IncrementalSyncCapability
+        * * Display Name: Incremental Sync Capability
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * global-query-param
+    *   * none
+    *   * per-resource-query-param
+    *   * polling-only
+    *   * webhook-only
+        * * Description: How the vendor exposes incremental sync. global-query-param = same param works on every endpoint; per-resource-query-param = different param per IO; webhook-only = events not pull; polling-only = client compares timestamps; none = full re-sync only.`),
+    IncrementalQueryParamName: z.string().nullable().describe(`
+        * * Field Name: IncrementalQueryParamName
+        * * Display Name: Incremental Query Param Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: When IncrementalSyncCapability=global-query-param, the vendor parameter name (e.g., modifiedSince, updated[gte], since).`),
+    IncrementalQueryParamFormat: z.union([z.literal('ISO8601'), z.literal('epoch-seconds'), z.literal('opaque-cursor')]).nullable().describe(`
+        * * Field Name: IncrementalQueryParamFormat
+        * * Display Name: Incremental Query Param Format
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * ISO8601
+    *   * epoch-seconds
+    *   * opaque-cursor
+        * * Description: Wire format for incremental watermark values. ISO8601 = 2026-01-01T00:00:00Z; epoch-seconds = unix integer; opaque-cursor = vendor-managed string.`),
+    WebhooksAvailable: z.boolean().describe(`
+        * * Field Name: WebhooksAvailable
+        * * Display Name: Webhooks Available
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether the vendor supports webhook subscriptions for real-time event delivery. When true, populate WebhookSubscriptionAPIPath + signature fields.`),
+    WebhookSubscriptionAPIPath: z.string().nullable().describe(`
+        * * Field Name: WebhookSubscriptionAPIPath
+        * * Display Name: Webhook Subscription API Path
+        * * SQL Data Type: nvarchar(500)
+        * * Description: Vendor endpoint path for managing webhook subscriptions (create/delete/list). E.g., /webhooks for Stripe, /api/3/webhook/subscriptions for HubSpot.`),
+    WebhookSignatureHeaderName: z.string().nullable().describe(`
+        * * Field Name: WebhookSignatureHeaderName
+        * * Display Name: Webhook Signature Header Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: HTTP header name carrying the webhook signature for verification (e.g., Stripe-Signature, X-HubSpot-Signature-V3).`),
+    WebhookSignatureAlgorithm: z.union([z.literal('hmac-sha256'), z.literal('hmac-sha512'), z.literal('none'), z.literal('rsa')]).nullable().describe(`
+        * * Field Name: WebhookSignatureAlgorithm
+        * * Display Name: Webhook Signature Algorithm
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * hmac-sha256
+    *   * hmac-sha512
+    *   * none
+    *   * rsa
+        * * Description: Algorithm used to sign webhook payloads. hmac-sha256 (most common); hmac-sha512; rsa (for vendors using asymmetric signing); none (unsigned).`),
+    BulkOperationsAvailable: z.boolean().describe(`
+        * * Field Name: BulkOperationsAvailable
+        * * Display Name: Bulk Operations Available
+        * * SQL Data Type: bit
+        * * Default Value: 0
+        * * Description: Whether the vendor offers per-object bulk endpoints (batch create/update/delete or async bulk jobs). When true, per-IO BulkAPIPath populated where applicable.`),
+    APIVersioningStrategy: z.union([z.literal('header'), z.literal('none'), z.literal('path'), z.literal('query')]).nullable().describe(`
+        * * Field Name: APIVersioningStrategy
+        * * Display Name: API Versioning Strategy
+        * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * header
+    *   * none
+    *   * path
+    *   * query
+        * * Description: How the vendor identifies API version. path = /v1/ or /v2/ segment; header = Accept or X-API-Version; query = ?api-version=; none = unversioned.`),
+    APIVersion: z.string().nullable().describe(`
+        * * Field Name: APIVersion
+        * * Display Name: API Version
+        * * SQL Data Type: nvarchar(50)
+        * * Description: Currently targeted API version (e.g., v3, 2023-10-16, 60.0). Used by connector to construct paths when APIVersioningStrategy=path, headers when =header, query when =query.`),
+    IdempotencyHeaderName: z.string().nullable().describe(`
+        * * Field Name: IdempotencyHeaderName
+        * * Display Name: Idempotency Header Name
+        * * SQL Data Type: nvarchar(100)
+        * * Description: HTTP header name the vendor uses for idempotency keys (e.g., Idempotency-Key, Stripe-Idempotency-Key). Null when vendor does not support idempotency.`),
+    CustomObjectMarkerPattern: z.union([z.literal('attribute-flagged'), z.literal('hubspot-customProperties-namespace'), z.literal('none'), z.literal('prefix-based'), z.literal('salesforce-double-underscore-c')]).nullable().describe(`
+        * * Field Name: CustomObjectMarkerPattern
+        * * Display Name: Custom Object Marker Pattern
+        * * SQL Data Type: nvarchar(100)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * attribute-flagged
+    *   * hubspot-customProperties-namespace
+    *   * none
+    *   * prefix-based
+    *   * salesforce-double-underscore-c
+        * * Description: Pattern the vendor uses to mark a sObject as custom vs standard. salesforce-double-underscore-c = Account__c; hubspot-customProperties-namespace = lives under customProperties; prefix-based = vendor prefix on the name; attribute-flagged = explicit isCustom in describe; none = no custom-object concept.`),
+    CustomFieldMarkerPattern: z.string().nullable().describe(`
+        * * Field Name: CustomFieldMarkerPattern
+        * * Display Name: Custom Field Marker Pattern
+        * * SQL Data Type: nvarchar(100)
+        * * Description: Pattern the vendor uses to mark a field as custom vs standard (same enum vocabulary as CustomObjectMarkerPattern but applied at the IOF level).`),
+    FKNamingConvention: z.union([z.literal('camelCase-Id-suffix'), z.literal('none'), z.literal('object-named'), z.literal('snake-case-id-suffix'), z.literal('vendor-specific')]).nullable().describe(`
+        * * Field Name: FKNamingConvention
+        * * Display Name: FK Naming Convention
+        * * SQL Data Type: nvarchar(100)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * camelCase-Id-suffix
+    *   * none
+    *   * object-named
+    *   * snake-case-id-suffix
+    *   * vendor-specific
+        * * Description: How the vendor names foreign-key columns. snake-case-id-suffix = customer_id; camelCase-Id-suffix = customerId; object-named = customer (no suffix); vendor-specific = irregular pattern (requires per-vendor detection); none = no convention observed.`),
     CredentialType: z.string().nullable().describe(`
         * * Field Name: CredentialType
         * * Display Name: Credential Type Name
@@ -70962,6 +71531,230 @@ export class MJInstanceConfigurationEntity extends BaseEntity<MJInstanceConfigur
 
 
 /**
+ * MJ: Integration Constraint Discovery States - strongly typed entity sub-class
+ * * Schema: __mj
+ * * Base Table: IntegrationConstraintDiscoveryState
+ * * Base View: vwIntegrationConstraintDiscoveryStates
+ * * @description Per-IntegrationObject state for the LightweightConstraintDiscovery algorithm. Enables incremental re-runs that skip unchanged tables.
+ * * Primary Key: ID
+ * @extends {BaseEntity}
+ * @class
+ * @public
+ */
+@RegisterClass(BaseEntity, 'MJ: Integration Constraint Discovery States')
+export class MJIntegrationConstraintDiscoveryStateEntity extends BaseEntity<MJIntegrationConstraintDiscoveryStateEntityType> {
+    /**
+    * Loads the MJ: Integration Constraint Discovery States record from the database
+    * @param ID: string - primary key value to load the MJ: Integration Constraint Discovery States record.
+    * @param EntityRelationshipsToLoad - (optional) the relationships to load
+    * @returns {Promise<boolean>} - true if successful, false otherwise
+    * @public
+    * @async
+    * @memberof MJIntegrationConstraintDiscoveryStateEntity
+    * @method
+    * @override
+    */
+    public async Load(ID: string, EntityRelationshipsToLoad?: string[]) : Promise<boolean> {
+        const compositeKey: CompositeKey = new CompositeKey();
+        compositeKey.KeyValuePairs.push({ FieldName: 'ID', Value: ID });
+        return await super.InnerLoad(compositeKey, EntityRelationshipsToLoad);
+    }
+
+    /**
+    * * Field Name: ID
+    * * Display Name: ID
+    * * SQL Data Type: uniqueidentifier
+    * * Default Value: newsequentialid()
+    */
+    get ID(): string {
+        return this.Get('ID');
+    }
+    set ID(value: string) {
+        this.Set('ID', value);
+    }
+
+    /**
+    * * Field Name: IntegrationObjectID
+    * * Display Name: Integration Object ID
+    * * SQL Data Type: uniqueidentifier
+    * * Related Entity/Foreign Key: MJ: Integration Objects (vwIntegrationObjects.ID)
+    * * Description: Foreign key to the IntegrationObject this state row tracks. One state row per IO (UNIQUE constraint).
+    */
+    get IntegrationObjectID(): string {
+        return this.Get('IntegrationObjectID');
+    }
+    set IntegrationObjectID(value: string) {
+        this.Set('IntegrationObjectID', value);
+    }
+
+    /**
+    * * Field Name: LastAnalyzedAt
+    * * Display Name: Last Analyzed At
+    * * SQL Data Type: datetimeoffset
+    * * Description: Last time this object was analyzed.
+    */
+    get LastAnalyzedAt(): Date {
+        return this.Get('LastAnalyzedAt');
+    }
+    set LastAnalyzedAt(value: Date) {
+        this.Set('LastAnalyzedAt', value);
+    }
+
+    /**
+    * * Field Name: RowCountAtAnalysis
+    * * Display Name: Row Count At Analysis
+    * * SQL Data Type: bigint
+    * * Description: Synced row count at last analysis. Drives the growth-threshold skip on subsequent runs.
+    */
+    get RowCountAtAnalysis(): number {
+        return this.Get('RowCountAtAnalysis');
+    }
+    set RowCountAtAnalysis(value: number) {
+        this.Set('RowCountAtAnalysis', value);
+    }
+
+    /**
+    * * Field Name: SchemaHash
+    * * Display Name: Schema Hash
+    * * SQL Data Type: nvarchar(64)
+    * * Description: Hash of IOF rows for the IntegrationObject at last analysis. Drives the schema-change skip on subsequent runs.
+    */
+    get SchemaHash(): string {
+        return this.Get('SchemaHash');
+    }
+    set SchemaHash(value: string) {
+        this.Set('SchemaHash', value);
+    }
+
+    /**
+    * * Field Name: LastSampleSize
+    * * Display Name: Last Sample Size
+    * * SQL Data Type: int
+    * * Description: Sample size used in the most recent uniqueness/overlap check. Drives adaptive tier escalation.
+    */
+    get LastSampleSize(): number | null {
+        return this.Get('LastSampleSize');
+    }
+    set LastSampleSize(value: number | null) {
+        this.Set('LastSampleSize', value);
+    }
+
+    /**
+    * * Field Name: PKCandidatesJSON
+    * * Display Name: PK Candidates JSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Accumulated PK candidates as JSON. Schema: [{ColumnNames, Confidence, DiscoveryMethod, EvidenceJSON, EmittedAs}].
+    */
+    get PKCandidatesJSON(): string | null {
+        return this.Get('PKCandidatesJSON');
+    }
+    set PKCandidatesJSON(value: string | null) {
+        this.Set('PKCandidatesJSON', value);
+    }
+
+    /**
+    * * Field Name: FKCandidatesJSON
+    * * Display Name: FK Candidates JSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Accumulated FK candidates as JSON. Schema: [{SourceColumn, TargetIOID, TargetColumn, Confidence, DiscoveryMethod, EvidenceJSON, EmittedAs}].
+    */
+    get FKCandidatesJSON(): string | null {
+        return this.Get('FKCandidatesJSON');
+    }
+    set FKCandidatesJSON(value: string | null) {
+        this.Set('FKCandidatesJSON', value);
+    }
+
+    /**
+    * * Field Name: DescriptionCandidatesJSON
+    * * Display Name: Description Candidates JSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Accumulated description candidates as JSON.
+    */
+    get DescriptionCandidatesJSON(): string | null {
+        return this.Get('DescriptionCandidatesJSON');
+    }
+    set DescriptionCandidatesJSON(value: string | null) {
+        this.Set('DescriptionCandidatesJSON', value);
+    }
+
+    /**
+    * * Field Name: EvidenceLogJSON
+    * * Display Name: Evidence Log JSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Per-run audit trail for downgrade detection.
+    */
+    get EvidenceLogJSON(): string | null {
+        return this.Get('EvidenceLogJSON');
+    }
+    set EvidenceLogJSON(value: string | null) {
+        this.Set('EvidenceLogJSON', value);
+    }
+
+    /**
+    * * Field Name: Status
+    * * Display Name: Status
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Complete
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Complete
+    *   * Failed
+    *   * InProgress
+    * * Description: Run status: Complete, InProgress, or Failed.
+    */
+    get Status(): 'Complete' | 'Failed' | 'InProgress' {
+        return this.Get('Status');
+    }
+    set Status(value: 'Complete' | 'Failed' | 'InProgress') {
+        this.Set('Status', value);
+    }
+
+    /**
+    * * Field Name: ErrorMessage
+    * * Display Name: Error Message
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Error message when Status=Failed. NULL otherwise.
+    */
+    get ErrorMessage(): string | null {
+        return this.Get('ErrorMessage');
+    }
+    set ErrorMessage(value: string | null) {
+        this.Set('ErrorMessage', value);
+    }
+
+    /**
+    * * Field Name: __mj_CreatedAt
+    * * Display Name: Created At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_CreatedAt(): Date {
+        return this.Get('__mj_CreatedAt');
+    }
+
+    /**
+    * * Field Name: __mj_UpdatedAt
+    * * Display Name: Updated At
+    * * SQL Data Type: datetimeoffset
+    * * Default Value: getutcdate()
+    */
+    get __mj_UpdatedAt(): Date {
+        return this.Get('__mj_UpdatedAt');
+    }
+
+    /**
+    * * Field Name: IntegrationObject
+    * * Display Name: Integration Object
+    * * SQL Data Type: nvarchar(255)
+    */
+    get IntegrationObject(): string {
+        return this.Get('IntegrationObject');
+    }
+}
+
+
+/**
  * MJ: Integration Object Fields - strongly typed entity sub-class
  * * Schema: __mj
  * * Base Table: IntegrationObjectField
@@ -71304,13 +72097,151 @@ export class MJIntegrationObjectFieldEntity extends BaseEntity<MJIntegrationObje
     * * Display Name: Is Custom
     * * SQL Data Type: bit
     * * Default Value: 0
-    * * Description: When true, this field was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.
+    * * Description: DEPRECATED — use Source enum (Declared / Discovered / Custom) instead. Kept for back-compat; will be removed in next major version.
     */
     get IsCustom(): boolean {
         return this.Get('IsCustom');
     }
     set IsCustom(value: boolean) {
         this.Set('IsCustom', value);
+    }
+
+    /**
+    * * Field Name: Source
+    * * Display Name: Source
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Declared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Custom
+    *   * Declared
+    *   * Discovered
+    * * Description: Provenance of this IntegrationObjectField record. Mirrors the Source semantics on IntegrationObject.
+    */
+    get Source(): 'Custom' | 'Declared' | 'Discovered' {
+        return this.Get('Source');
+    }
+    set Source(value: 'Custom' | 'Declared' | 'Discovered') {
+        this.Set('Source', value);
+    }
+
+    /**
+    * * Field Name: IsAPIWritable
+    * * Display Name: Is API Writable
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether the vendor's API accepts writes to this field. Distinct from IsReadOnly — IsReadOnly is a per-record runtime check, IsAPIWritable is the design-time API contract. A field can be IsReadOnly=false but IsAPIWritable=false (computed/write-only fields).
+    */
+    get IsAPIWritable(): boolean {
+        return this.Get('IsAPIWritable');
+    }
+    set IsAPIWritable(value: boolean) {
+        this.Set('IsAPIWritable', value);
+    }
+
+    /**
+    * * Field Name: IsComputed
+    * * Display Name: Is Computed
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether the vendor calculates this field (formula fields, derived values, aggregations). Computed fields are excluded from write bodies regardless of IsAPIWritable.
+    */
+    get IsComputed(): boolean {
+        return this.Get('IsComputed');
+    }
+    set IsComputed(value: boolean) {
+        this.Set('IsComputed', value);
+    }
+
+    /**
+    * * Field Name: IsImmutableAfterCreate
+    * * Display Name: Is Immutable After Create
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether this field is writable on Create but rejected on Update (e.g., legal-entity name, primary key alternative keys). CodeBuilder filters this out of Update bodies.
+    */
+    get IsImmutableAfterCreate(): boolean {
+        return this.Get('IsImmutableAfterCreate');
+    }
+    set IsImmutableAfterCreate(value: boolean) {
+        this.Set('IsImmutableAfterCreate', value);
+    }
+
+    /**
+    * * Field Name: IsCustomField
+    * * Display Name: Is Custom Field
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether this field matches the vendor's custom-field marker pattern (per CustomFieldMarkerPattern at the integration root). Tenant-specific custom fields surface here.
+    */
+    get IsCustomField(): boolean {
+        return this.Get('IsCustomField');
+    }
+    set IsCustomField(value: boolean) {
+        this.Set('IsCustomField', value);
+    }
+
+    /**
+    * * Field Name: IsIncrementalCursorCandidate
+    * * Display Name: Is Incremental Cursor Candidate
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether this field could serve as a watermark for incremental sync (timestamp/version/sequence type). The IO's IncrementalCursorFieldName must reference an IOF where this flag is true.
+    */
+    get IsIncrementalCursorCandidate(): boolean {
+        return this.Get('IsIncrementalCursorCandidate');
+    }
+    set IsIncrementalCursorCandidate(value: boolean) {
+        this.Set('IsIncrementalCursorCandidate', value);
+    }
+
+    /**
+    * * Field Name: IsForeignKey
+    * * Display Name: Is Foreign Key
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether this field is a foreign key (references another IO's PK). Set by extractor's universal FK gates (DF1-DF7); complements existing RelatedIntegrationObjectID which holds the target reference itself.
+    */
+    get IsForeignKey(): boolean {
+        return this.Get('IsForeignKey');
+    }
+    set IsForeignKey(value: boolean) {
+        this.Set('IsForeignKey', value);
+    }
+
+    /**
+    * * Field Name: FKDetectionMethod
+    * * Display Name: FK Detection Method
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * name-pattern-suffix
+    *   * openapi-ref
+    *   * sdk-relationship-annotation
+    *   * unknown
+    *   * url-path-parent
+    *   * vendor-specific
+    * * Description: Self-reported gate that established the FK claim. openapi-ref = OpenAPI $ref to another schema; sdk-relationship-annotation = SDK type-level annotation; name-pattern-suffix = *Id naming match; url-path-parent = path templating implies parent; vendor-specific = vendor-managed; unknown = inferred but unverified.
+    */
+    get FKDetectionMethod(): 'name-pattern-suffix' | 'openapi-ref' | 'sdk-relationship-annotation' | 'unknown' | 'url-path-parent' | 'vendor-specific' | null {
+        return this.Get('FKDetectionMethod');
+    }
+    set FKDetectionMethod(value: 'name-pattern-suffix' | 'openapi-ref' | 'sdk-relationship-annotation' | 'unknown' | 'url-path-parent' | 'vendor-specific' | null) {
+        this.Set('FKDetectionMethod', value);
+    }
+
+    /**
+    * * Field Name: IsDeprecated
+    * * Display Name: Is Deprecated
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether the vendor has marked this field as deprecated. Connector code may emit warnings on use; new metadata extractions should not consider this field for cursor/PK candidacy.
+    */
+    get IsDeprecated(): boolean {
+        return this.Get('IsDeprecated');
+    }
+    set IsDeprecated(value: boolean) {
+        this.Set('IsDeprecated', value);
     }
 
     /**
@@ -71628,7 +72559,7 @@ export class MJIntegrationObjectEntity extends BaseEntity<MJIntegrationObjectEnt
     * * Field Name: WriteAPIPath
     * * Display Name: Write API Path
     * * SQL Data Type: nvarchar(500)
-    * * Description: API path for create/update operations when different from the read APIPath. If NULL, the read APIPath is used for writes as well.
+    * * Description: DEPRECATED — use CreateAPIPath / UpdateAPIPath / DeleteAPIPath instead. Kept for back-compat; will be removed in next major version.
     */
     get WriteAPIPath(): string | null {
         return this.Get('WriteAPIPath');
@@ -71642,7 +72573,7 @@ export class MJIntegrationObjectEntity extends BaseEntity<MJIntegrationObjectEnt
     * * Display Name: Write Method
     * * SQL Data Type: nvarchar(10)
     * * Default Value: POST
-    * * Description: HTTP method for create operations. Defaults to POST.
+    * * Description: DEPRECATED — use CreateMethod / UpdateMethod instead. Kept for back-compat; will be removed in next major version.
     */
     get WriteMethod(): string | null {
         return this.Get('WriteMethod');
@@ -71656,7 +72587,7 @@ export class MJIntegrationObjectEntity extends BaseEntity<MJIntegrationObjectEnt
     * * Display Name: Delete Method
     * * SQL Data Type: nvarchar(10)
     * * Default Value: DELETE
-    * * Description: HTTP method for delete operations. Defaults to DELETE.
+    * * Description: HTTP method for delete operations. Default DELETE. NULL means use connector default. Some vendors use POST with a delete-action body — set this column to override.
     */
     get DeleteMethod(): string | null {
         return this.Get('DeleteMethod');
@@ -71670,13 +72601,322 @@ export class MJIntegrationObjectEntity extends BaseEntity<MJIntegrationObjectEnt
     * * Display Name: Is Custom
     * * SQL Data Type: bit
     * * Default Value: 0
-    * * Description: When true, this object was dynamically discovered by IntrospectSchema and is not defined in static connector metadata.
+    * * Description: DEPRECATED — use Source enum (Declared / Discovered / Custom) instead. IsCustom remains as the existing bit-field for back-compat; Source is the new authoritative provenance indicator. Will be removed in next major version.
     */
     get IsCustom(): boolean {
         return this.Get('IsCustom');
     }
     set IsCustom(value: boolean) {
         this.Set('IsCustom', value);
+    }
+
+    /**
+    * * Field Name: CreateAPIPath
+    * * Display Name: Create API Path
+    * * SQL Data Type: nvarchar(500)
+    * * Description: API path for create operations when distinct from APIPath. If NULL, the connector falls back to WriteAPIPath then APIPath.
+    */
+    get CreateAPIPath(): string | null {
+        return this.Get('CreateAPIPath');
+    }
+    set CreateAPIPath(value: string | null) {
+        this.Set('CreateAPIPath', value);
+    }
+
+    /**
+    * * Field Name: CreateMethod
+    * * Display Name: Create Method
+    * * SQL Data Type: nvarchar(10)
+    * * Description: HTTP method for create operations. Default POST. If NULL, falls back to WriteMethod then POST.
+    */
+    get CreateMethod(): string | null {
+        return this.Get('CreateMethod');
+    }
+    set CreateMethod(value: string | null) {
+        this.Set('CreateMethod', value);
+    }
+
+    /**
+    * * Field Name: UpdateAPIPath
+    * * Display Name: Update API Path
+    * * SQL Data Type: nvarchar(500)
+    * * Description: API path for update operations. If NULL, falls back to WriteAPIPath then APIPath + /{id}.
+    */
+    get UpdateAPIPath(): string | null {
+        return this.Get('UpdateAPIPath');
+    }
+    set UpdateAPIPath(value: string | null) {
+        this.Set('UpdateAPIPath', value);
+    }
+
+    /**
+    * * Field Name: UpdateMethod
+    * * Display Name: Update Method
+    * * SQL Data Type: nvarchar(10)
+    * * Description: HTTP method for update operations. Typical values: PATCH, PUT. NULL means use connector default.
+    */
+    get UpdateMethod(): string | null {
+        return this.Get('UpdateMethod');
+    }
+    set UpdateMethod(value: string | null) {
+        this.Set('UpdateMethod', value);
+    }
+
+    /**
+    * * Field Name: DeleteAPIPath
+    * * Display Name: Delete API Path
+    * * SQL Data Type: nvarchar(500)
+    * * Description: API path for delete operations. If NULL, falls back to APIPath + /{id}.
+    */
+    get DeleteAPIPath(): string | null {
+        return this.Get('DeleteAPIPath');
+    }
+    set DeleteAPIPath(value: string | null) {
+        this.Set('DeleteAPIPath', value);
+    }
+
+    /**
+    * * Field Name: GetAPIPath
+    * * Display Name: Get API Path
+    * * SQL Data Type: nvarchar(500)
+    * * Description: API path for single-record retrieval by primary key. If NULL, falls back to APIPath + /{id}.
+    */
+    get GetAPIPath(): string | null {
+        return this.Get('GetAPIPath');
+    }
+    set GetAPIPath(value: string | null) {
+        this.Set('GetAPIPath', value);
+    }
+
+    /**
+    * * Field Name: GetMethod
+    * * Display Name: Get Method
+    * * SQL Data Type: nvarchar(10)
+    * * Description: HTTP method for single-record retrieval. Default GET. NULL means use connector default. Some vendors require POST with an ID body — set this column to override.
+    */
+    get GetMethod(): string | null {
+        return this.Get('GetMethod');
+    }
+    set GetMethod(value: string | null) {
+        this.Set('GetMethod', value);
+    }
+
+    /**
+    * * Field Name: SearchAPIPath
+    * * Display Name: Search API Path
+    * * SQL Data Type: nvarchar(500)
+    * * Description: API path for search/query operations. Distinct from ListAPIPath because some vendors expose a separate query endpoint (e.g. Salesforce /query, HubSpot /search) that accepts a body/filter payload. If NULL, falls back to APIPath.
+    */
+    get SearchAPIPath(): string | null {
+        return this.Get('SearchAPIPath');
+    }
+    set SearchAPIPath(value: string | null) {
+        this.Set('SearchAPIPath', value);
+    }
+
+    /**
+    * * Field Name: SearchMethod
+    * * Display Name: Search Method
+    * * SQL Data Type: nvarchar(10)
+    * * Description: HTTP method for search operations. Often POST (filter body), sometimes GET (query string). NULL means use connector default.
+    */
+    get SearchMethod(): string | null {
+        return this.Get('SearchMethod');
+    }
+    set SearchMethod(value: string | null) {
+        this.Set('SearchMethod', value);
+    }
+
+    /**
+    * * Field Name: ListAPIPath
+    * * Display Name: List API Path
+    * * SQL Data Type: nvarchar(500)
+    * * Description: API path for paginated list operations. Distinct from SearchAPIPath because some vendors expose a separate plain-list endpoint without filter semantics. If NULL, falls back to APIPath.
+    */
+    get ListAPIPath(): string | null {
+        return this.Get('ListAPIPath');
+    }
+    set ListAPIPath(value: string | null) {
+        this.Set('ListAPIPath', value);
+    }
+
+    /**
+    * * Field Name: ListMethod
+    * * Display Name: List Method
+    * * SQL Data Type: nvarchar(10)
+    * * Description: HTTP method for paginated list operations. Default GET. NULL means use connector default.
+    */
+    get ListMethod(): string | null {
+        return this.Get('ListMethod');
+    }
+    set ListMethod(value: string | null) {
+        this.Set('ListMethod', value);
+    }
+
+    /**
+    * * Field Name: Source
+    * * Display Name: Source
+    * * SQL Data Type: nvarchar(20)
+    * * Default Value: Declared
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Custom
+    *   * Declared
+    *   * Discovered
+    * * Description: Provenance of this IntegrationObject record. Declared = from connector static catalog (Phase 2). Discovered = found at runtime via DiscoverAndPersistAuthenticatedSchema. Custom = vendor explicitly flagged as customer extension (e.g. Salesforce __c). Replaces the prior binary IsCustom flag.
+    */
+    get Source(): 'Custom' | 'Declared' | 'Discovered' {
+        return this.Get('Source');
+    }
+    set Source(value: 'Custom' | 'Declared' | 'Discovered') {
+        this.Set('Source', value);
+    }
+
+    /**
+    * * Field Name: IncludeInActionGeneration
+    * * Display Name: Include In Action Generation
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: When true, this object is included by ActionMetadataGenerator. Set false to expose for property lookups without generating CRUD action records.
+    */
+    get IncludeInActionGeneration(): boolean {
+        return this.Get('IncludeInActionGeneration');
+    }
+    set IncludeInActionGeneration(value: boolean) {
+        this.Set('IncludeInActionGeneration', value);
+    }
+
+    /**
+    * * Field Name: IsBidirectional
+    * * Display Name: Is Bidirectional
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether the vendor's API supports write (Create/Update/Delete) for this object. Distinct from the Supports* verb flags — this is the higher-level "is the object writable at all" capability used to filter Action generation.
+    */
+    get IsBidirectional(): boolean {
+        return this.Get('IsBidirectional');
+    }
+    set IsBidirectional(value: boolean) {
+        this.Set('IsBidirectional', value);
+    }
+
+    /**
+    * * Field Name: ParentObjectName
+    * * Display Name: Parent Object Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: When this IO's API path is nested under another IO (e.g., /orgs/{OrgID}/users), the name of the parent IO. Null for root-level objects.
+    */
+    get ParentObjectName(): string | null {
+        return this.Get('ParentObjectName');
+    }
+    set ParentObjectName(value: string | null) {
+        this.Set('ParentObjectName', value);
+    }
+
+    /**
+    * * Field Name: ParentObjectIDFieldName
+    * * Display Name: Parent Object ID Field Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Name of the IOF on this IO that holds the parent's primary key value. Used to resolve path template variables when fetching nested resources.
+    */
+    get ParentObjectIDFieldName(): string | null {
+        return this.Get('ParentObjectIDFieldName');
+    }
+    set ParentObjectIDFieldName(value: string | null) {
+        this.Set('ParentObjectIDFieldName', value);
+    }
+
+    /**
+    * * Field Name: IncrementalCursorFieldName
+    * * Display Name: Incremental Cursor Field Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Name of the IOF whose value is tracked as the incremental-sync watermark for this object. Must match WatermarkService.ValidateWatermark expectations for the chosen IncrementalWatermarkType.
+    */
+    get IncrementalCursorFieldName(): string | null {
+        return this.Get('IncrementalCursorFieldName');
+    }
+    set IncrementalCursorFieldName(value: string | null) {
+        this.Set('IncrementalCursorFieldName', value);
+    }
+
+    /**
+    * * Field Name: IncrementalWatermarkType
+    * * Display Name: Incremental Watermark Type
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * ChangeToken
+    *   * Cursor
+    *   * Timestamp
+    *   * Version
+    * * Description: Semantic type of the watermark value. Timestamp = date/datetime (comparable); Version = monotonic integer/string; Cursor = opaque vendor cursor; ChangeToken = opaque vendor change marker.
+    */
+    get IncrementalWatermarkType(): 'ChangeToken' | 'Cursor' | 'Timestamp' | 'Version' | null {
+        return this.Get('IncrementalWatermarkType');
+    }
+    set IncrementalWatermarkType(value: 'ChangeToken' | 'Cursor' | 'Timestamp' | 'Version' | null) {
+        this.Set('IncrementalWatermarkType', value);
+    }
+
+    /**
+    * * Field Name: IsStandardObject
+    * * Display Name: Is Standard Object
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Whether this object is part of the vendor's standard catalog (true) vs a custom object defined per-tenant (false). Set by extraction from documented sources.
+    */
+    get IsStandardObject(): boolean {
+        return this.Get('IsStandardObject');
+    }
+    set IsStandardObject(value: boolean) {
+        this.Set('IsStandardObject', value);
+    }
+
+    /**
+    * * Field Name: IsCustomObject
+    * * Display Name: Is Custom Object
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether this object matches the vendor's custom-object marker pattern (e.g., __c suffix for Salesforce). Used to route Action generation + runtime handling for tenant-customized schema.
+    */
+    get IsCustomObject(): boolean {
+        return this.Get('IsCustomObject');
+    }
+    set IsCustomObject(value: boolean) {
+        this.Set('IsCustomObject', value);
+    }
+
+    /**
+    * * Field Name: BulkAPIPath
+    * * Display Name: Bulk API Path
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Vendor's bulk-operation endpoint path for this object (when BulkOperationsAvailable=true at integration level). E.g., /services/data/v60.0/jobs/ingest for Salesforce Bulk API.
+    */
+    get BulkAPIPath(): string | null {
+        return this.Get('BulkAPIPath');
+    }
+    set BulkAPIPath(value: string | null) {
+        this.Set('BulkAPIPath', value);
+    }
+
+    /**
+    * * Field Name: BulkAPIMethod
+    * * Display Name: Bulk API Method
+    * * SQL Data Type: nvarchar(10)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * DELETE
+    *   * GET
+    *   * PATCH
+    *   * POST
+    *   * PUT
+    * * Description: HTTP method used against BulkAPIPath. Typically POST for bulk-job creation; some vendors use PUT or PATCH.
+    */
+    get BulkAPIMethod(): 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT' | null {
+        return this.Get('BulkAPIMethod');
+    }
+    set BulkAPIMethod(value: 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT' | null) {
+        this.Set('BulkAPIMethod', value);
     }
 
     /**
@@ -72146,6 +73386,623 @@ export class MJIntegrationEntity extends BaseEntity<MJIntegrationEntityType> {
     }
     set Icon(value: string | null) {
         this.Set('Icon', value);
+    }
+
+    /**
+    * * Field Name: ActionIconClass
+    * * Display Name: Action Icon Class
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Font Awesome icon class used by ActionMetadataGenerator for generated Action records. Default fa-solid fa-plug.
+    */
+    get ActionIconClass(): string | null {
+        return this.Get('ActionIconClass');
+    }
+    set ActionIconClass(value: string | null) {
+        this.Set('ActionIconClass', value);
+    }
+
+    /**
+    * * Field Name: ActionCategoryName
+    * * Display Name: Action Category Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Action category name. Used in @lookup:MJ: Action Categories.Name=... references on generated Action records. Defaults to Integration.Name.
+    */
+    get ActionCategoryName(): string | null {
+        return this.Get('ActionCategoryName');
+    }
+    set ActionCategoryName(value: string | null) {
+        this.Set('ActionCategoryName', value);
+    }
+
+    /**
+    * * Field Name: ActionCategoryDescription
+    * * Display Name: Action Category Description
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: Optional description for the generated action category.
+    */
+    get ActionCategoryDescription(): string | null {
+        return this.Get('ActionCategoryDescription');
+    }
+    set ActionCategoryDescription(value: string | null) {
+        this.Set('ActionCategoryDescription', value);
+    }
+
+    /**
+    * * Field Name: ActionParentCategoryName
+    * * Display Name: Action Parent Category Name
+    * * SQL Data Type: nvarchar(255)
+    * * Description: Parent category name for the auto-generated action category (e.g. CRM, Communication, AMS, Accounting). NULL means top-level category.
+    */
+    get ActionParentCategoryName(): string | null {
+        return this.Get('ActionParentCategoryName');
+    }
+    set ActionParentCategoryName(value: string | null) {
+        this.Set('ActionParentCategoryName', value);
+    }
+
+    /**
+    * * Field Name: IncludeSearchActions
+    * * Display Name: Include Search Actions
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Controls whether Search actions are emitted by ActionMetadataGenerator.
+    */
+    get IncludeSearchActions(): boolean {
+        return this.Get('IncludeSearchActions');
+    }
+    set IncludeSearchActions(value: boolean) {
+        this.Set('IncludeSearchActions', value);
+    }
+
+    /**
+    * * Field Name: IncludeListActions
+    * * Display Name: Include List Actions
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Controls whether List actions are emitted by ActionMetadataGenerator.
+    */
+    get IncludeListActions(): boolean {
+        return this.Get('IncludeListActions');
+    }
+    set IncludeListActions(value: boolean) {
+        this.Set('IncludeListActions', value);
+    }
+
+    /**
+    * * Field Name: CreateActionCategory
+    * * Display Name: Create Action Category
+    * * SQL Data Type: bit
+    * * Default Value: 1
+    * * Description: Controls whether the generator emits a category record for this integration.
+    */
+    get CreateActionCategory(): boolean {
+        return this.Get('CreateActionCategory');
+    }
+    set CreateActionCategory(value: boolean) {
+        this.Set('CreateActionCategory', value);
+    }
+
+    /**
+    * * Field Name: PrimaryKeyFieldName
+    * * Display Name: Primary Key Field Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Vendor-wide primary-key field name when the vendor documents a universal naming convention (e.g. HubSpot uses "id" or "hs_object_id" as PK for nearly all objects; Salesforce uses "Id"). When set + PrimaryKeyFieldConfidence=Provable, the LightweightConstraintDiscovery algorithm uses this name as a provable PK for IntegrationObjects not in the static catalog (Discovered + Custom rows). NULL = no universal convention; PK detection falls through to statistical inference.
+    */
+    get PrimaryKeyFieldName(): string | null {
+        return this.Get('PrimaryKeyFieldName');
+    }
+    set PrimaryKeyFieldName(value: string | null) {
+        this.Set('PrimaryKeyFieldName', value);
+    }
+
+    /**
+    * * Field Name: PrimaryKeyFieldConfidence
+    * * Display Name: Primary Key Field Confidence
+    * * SQL Data Type: nvarchar(20)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * Likely
+    *   * Provable
+    *   * Unknown
+    * * Description: Confidence level for the vendor-wide PrimaryKeyFieldName convention. Provable = documented as universal in authoritative vendor source. Likely = mostly consistent but with documented exceptions. Unknown = no convention or unverified. Only Provable convention triggers entity-row PK emission; Likely emits to additionalSchemaInfo.json only.
+    */
+    get PrimaryKeyFieldConfidence(): 'Likely' | 'Provable' | 'Unknown' | null {
+        return this.Get('PrimaryKeyFieldConfidence');
+    }
+    set PrimaryKeyFieldConfidence(value: 'Likely' | 'Provable' | 'Unknown' | null) {
+        this.Set('PrimaryKeyFieldConfidence', value);
+    }
+
+    /**
+    * * Field Name: APIBaseURL
+    * * Display Name: API Base URL
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Base URL the connector calls (e.g., https://api.hubapi.com). When APIBaseURLMode=dynamic-from-auth-response, this is the OAuth bootstrap host only; per-tenant URL comes from auth response.
+    */
+    get APIBaseURL(): string | null {
+        return this.Get('APIBaseURL');
+    }
+    set APIBaseURL(value: string | null) {
+        this.Set('APIBaseURL', value);
+    }
+
+    /**
+    * * Field Name: APIBaseURLMode
+    * * Display Name: API Base URL Mode
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * dynamic-from-auth-response
+    *   * dynamic-from-credential-field
+    *   * static
+    * * Description: How the per-tenant API base URL is resolved. static = fixed; dynamic-from-auth-response = read from token response (e.g. Salesforce instance_url); dynamic-from-credential-field = read from CompanyIntegration.Configuration JSON.
+    */
+    get APIBaseURLMode(): 'dynamic-from-auth-response' | 'dynamic-from-credential-field' | 'static' | null {
+        return this.Get('APIBaseURLMode');
+    }
+    set APIBaseURLMode(value: 'dynamic-from-auth-response' | 'dynamic-from-credential-field' | 'static' | null) {
+        this.Set('APIBaseURLMode', value);
+    }
+
+    /**
+    * * Field Name: DynamicAPIBaseURLSourceField
+    * * Display Name: Dynamic API Base URL Source Field
+    * * SQL Data Type: nvarchar(100)
+    * * Description: When APIBaseURLMode is dynamic, names the field in auth response or credential JSON that holds the resolved base URL (e.g., instance_url).
+    */
+    get DynamicAPIBaseURLSourceField(): string | null {
+        return this.Get('DynamicAPIBaseURLSourceField');
+    }
+    set DynamicAPIBaseURLSourceField(value: string | null) {
+        this.Set('DynamicAPIBaseURLSourceField', value);
+    }
+
+    /**
+    * * Field Name: TokenRefreshStrategy
+    * * Display Name: Token Refresh Strategy
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * jwt-resign-periodically
+    *   * none
+    *   * oauth2-refresh
+    *   * static-token
+    * * Description: Token lifecycle pattern. oauth2-refresh = standard OAuth2 refresh-token grant; jwt-resign-periodically = sign a fresh JWT each token TTL; static-token = long-lived API key; none = no token refresh path.
+    */
+    get TokenRefreshStrategy(): 'jwt-resign-periodically' | 'none' | 'oauth2-refresh' | 'static-token' | null {
+        return this.Get('TokenRefreshStrategy');
+    }
+    set TokenRefreshStrategy(value: 'jwt-resign-periodically' | 'none' | 'oauth2-refresh' | 'static-token' | null) {
+        this.Set('TokenRefreshStrategy', value);
+    }
+
+    /**
+    * * Field Name: TokenTTLSeconds
+    * * Display Name: Token TTL Seconds
+    * * SQL Data Type: int
+    * * Description: Access token time-to-live in seconds when documented by the vendor. Used by OAuth2TokenManager to schedule refresh before expiry.
+    */
+    get TokenTTLSeconds(): number | null {
+        return this.Get('TokenTTLSeconds');
+    }
+    set TokenTTLSeconds(value: number | null) {
+        this.Set('TokenTTLSeconds', value);
+    }
+
+    /**
+    * * Field Name: AuthHeaderPattern
+    * * Display Name: Auth Header Pattern
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * authorization-bearer
+    *   * custom-header
+    *   * none-uses-query
+    *   * x-api-key
+    * * Description: Wire-format auth header pattern. authorization-bearer = Authorization: Bearer <token>; x-api-key = X-API-Key: <token>; custom-header = vendor-specific (see CustomAuthHeaderName); none-uses-query = auth via query param, not header.
+    */
+    get AuthHeaderPattern(): 'authorization-bearer' | 'custom-header' | 'none-uses-query' | 'x-api-key' | null {
+        return this.Get('AuthHeaderPattern');
+    }
+    set AuthHeaderPattern(value: 'authorization-bearer' | 'custom-header' | 'none-uses-query' | 'x-api-key' | null) {
+        this.Set('AuthHeaderPattern', value);
+    }
+
+    /**
+    * * Field Name: CustomAuthHeaderName
+    * * Display Name: Custom Auth Header Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: When AuthHeaderPattern=custom-header, the vendor-specific header name carrying the credential.
+    */
+    get CustomAuthHeaderName(): string | null {
+        return this.Get('CustomAuthHeaderName');
+    }
+    set CustomAuthHeaderName(value: string | null) {
+        this.Set('CustomAuthHeaderName', value);
+    }
+
+    /**
+    * * Field Name: CredentialFieldSchemaJSON
+    * * Display Name: Credential Field Schema JSON
+    * * SQL Data Type: nvarchar(MAX)
+    * * Description: JSON describing which credential fields CompanyIntegration.Configuration must carry for this integration (field names, types, required flag, secret flag). Drives credential-input UI generation.
+    */
+    get CredentialFieldSchemaJSON(): string | null {
+        return this.Get('CredentialFieldSchemaJSON');
+    }
+    set CredentialFieldSchemaJSON(value: string | null) {
+        this.Set('CredentialFieldSchemaJSON', value);
+    }
+
+    /**
+    * * Field Name: PaginationCursorParamName
+    * * Display Name: Pagination Cursor Param Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Vendor parameter name carrying the pagination cursor (e.g., after for HubSpot, starting_after for Stripe). Null when PaginationType is not cursor-based.
+    */
+    get PaginationCursorParamName(): string | null {
+        return this.Get('PaginationCursorParamName');
+    }
+    set PaginationCursorParamName(value: string | null) {
+        this.Set('PaginationCursorParamName', value);
+    }
+
+    /**
+    * * Field Name: PaginationCursorResponsePath
+    * * Display Name: Pagination Cursor Response Path
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Dotted path inside the response body where the next-page cursor appears (e.g., paging.next.after for HubSpot, next_page for Stripe).
+    */
+    get PaginationCursorResponsePath(): string | null {
+        return this.Get('PaginationCursorResponsePath');
+    }
+    set PaginationCursorResponsePath(value: string | null) {
+        this.Set('PaginationCursorResponsePath', value);
+    }
+
+    /**
+    * * Field Name: PaginationLimitParamName
+    * * Display Name: Pagination Limit Param Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Vendor parameter name controlling page size (e.g., limit, per_page, page_size).
+    */
+    get PaginationLimitParamName(): string | null {
+        return this.Get('PaginationLimitParamName');
+    }
+    set PaginationLimitParamName(value: string | null) {
+        this.Set('PaginationLimitParamName', value);
+    }
+
+    /**
+    * * Field Name: PaginationPageParamName
+    * * Display Name: Pagination Page Param Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Vendor parameter name for page-number pagination (e.g., page). Null when not PageNumber pagination.
+    */
+    get PaginationPageParamName(): string | null {
+        return this.Get('PaginationPageParamName');
+    }
+    set PaginationPageParamName(value: string | null) {
+        this.Set('PaginationPageParamName', value);
+    }
+
+    /**
+    * * Field Name: PaginationOffsetParamName
+    * * Display Name: Pagination Offset Param Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Vendor parameter name for offset-based pagination (e.g., offset, skip). Null when not Offset pagination.
+    */
+    get PaginationOffsetParamName(): string | null {
+        return this.Get('PaginationOffsetParamName');
+    }
+    set PaginationOffsetParamName(value: string | null) {
+        this.Set('PaginationOffsetParamName', value);
+    }
+
+    /**
+    * * Field Name: PaginationHasMoreResponsePath
+    * * Display Name: Pagination Has More Response Path
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Dotted response path holding the has-more boolean (e.g., has_more for Stripe, paging.next for HubSpot).
+    */
+    get PaginationHasMoreResponsePath(): string | null {
+        return this.Get('PaginationHasMoreResponsePath');
+    }
+    set PaginationHasMoreResponsePath(value: string | null) {
+        this.Set('PaginationHasMoreResponsePath', value);
+    }
+
+    /**
+    * * Field Name: PaginationTotalCountResponsePath
+    * * Display Name: Pagination Total Count Response Path
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Dotted response path holding the total-count integer (e.g., total, totalSize). Null when vendor does not return it.
+    */
+    get PaginationTotalCountResponsePath(): string | null {
+        return this.Get('PaginationTotalCountResponsePath');
+    }
+    set PaginationTotalCountResponsePath(value: string | null) {
+        this.Set('PaginationTotalCountResponsePath', value);
+    }
+
+    /**
+    * * Field Name: PaginationMaxPageSize
+    * * Display Name: Pagination Max Page Size
+    * * SQL Data Type: int
+    * * Description: Maximum page size the vendor accepts (clamp for client-tunable pagination). Null when vendor enforces a fixed page size.
+    */
+    get PaginationMaxPageSize(): number | null {
+        return this.Get('PaginationMaxPageSize');
+    }
+    set PaginationMaxPageSize(value: number | null) {
+        this.Set('PaginationMaxPageSize', value);
+    }
+
+    /**
+    * * Field Name: ErrorResponseShape
+    * * Display Name: Error Response Shape
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * custom
+    *   * envelope-with-error-field
+    *   * http-status-only
+    *   * json-errors-array
+    * * Description: Shape of the vendor's error response body. json-errors-array = {errors:[{...}]} (Salesforce); envelope-with-error-field = {error:{message,code}} (Stripe); http-status-only = no body; custom = vendor-specific (TransformError override required).
+    */
+    get ErrorResponseShape(): 'custom' | 'envelope-with-error-field' | 'http-status-only' | 'json-errors-array' | null {
+        return this.Get('ErrorResponseShape');
+    }
+    set ErrorResponseShape(value: 'custom' | 'envelope-with-error-field' | 'http-status-only' | 'json-errors-array' | null) {
+        this.Set('ErrorResponseShape', value);
+    }
+
+    /**
+    * * Field Name: ErrorMessageFieldPath
+    * * Display Name: Error Message Field Path
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Dotted path inside the error body where the human-readable error message lives (e.g., error.message, errors[0].message).
+    */
+    get ErrorMessageFieldPath(): string | null {
+        return this.Get('ErrorMessageFieldPath');
+    }
+    set ErrorMessageFieldPath(value: string | null) {
+        this.Set('ErrorMessageFieldPath', value);
+    }
+
+    /**
+    * * Field Name: ErrorCodeFieldPath
+    * * Display Name: Error Code Field Path
+    * * SQL Data Type: nvarchar(200)
+    * * Description: Dotted path inside the error body where the vendor-specific error code lives (e.g., error.code, errors[0].errorCode).
+    */
+    get ErrorCodeFieldPath(): string | null {
+        return this.Get('ErrorCodeFieldPath');
+    }
+    set ErrorCodeFieldPath(value: string | null) {
+        this.Set('ErrorCodeFieldPath', value);
+    }
+
+    /**
+    * * Field Name: IncrementalSyncCapability
+    * * Display Name: Incremental Sync Capability
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * global-query-param
+    *   * none
+    *   * per-resource-query-param
+    *   * polling-only
+    *   * webhook-only
+    * * Description: How the vendor exposes incremental sync. global-query-param = same param works on every endpoint; per-resource-query-param = different param per IO; webhook-only = events not pull; polling-only = client compares timestamps; none = full re-sync only.
+    */
+    get IncrementalSyncCapability(): 'global-query-param' | 'none' | 'per-resource-query-param' | 'polling-only' | 'webhook-only' | null {
+        return this.Get('IncrementalSyncCapability');
+    }
+    set IncrementalSyncCapability(value: 'global-query-param' | 'none' | 'per-resource-query-param' | 'polling-only' | 'webhook-only' | null) {
+        this.Set('IncrementalSyncCapability', value);
+    }
+
+    /**
+    * * Field Name: IncrementalQueryParamName
+    * * Display Name: Incremental Query Param Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: When IncrementalSyncCapability=global-query-param, the vendor parameter name (e.g., modifiedSince, updated[gte], since).
+    */
+    get IncrementalQueryParamName(): string | null {
+        return this.Get('IncrementalQueryParamName');
+    }
+    set IncrementalQueryParamName(value: string | null) {
+        this.Set('IncrementalQueryParamName', value);
+    }
+
+    /**
+    * * Field Name: IncrementalQueryParamFormat
+    * * Display Name: Incremental Query Param Format
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * ISO8601
+    *   * epoch-seconds
+    *   * opaque-cursor
+    * * Description: Wire format for incremental watermark values. ISO8601 = 2026-01-01T00:00:00Z; epoch-seconds = unix integer; opaque-cursor = vendor-managed string.
+    */
+    get IncrementalQueryParamFormat(): 'ISO8601' | 'epoch-seconds' | 'opaque-cursor' | null {
+        return this.Get('IncrementalQueryParamFormat');
+    }
+    set IncrementalQueryParamFormat(value: 'ISO8601' | 'epoch-seconds' | 'opaque-cursor' | null) {
+        this.Set('IncrementalQueryParamFormat', value);
+    }
+
+    /**
+    * * Field Name: WebhooksAvailable
+    * * Display Name: Webhooks Available
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether the vendor supports webhook subscriptions for real-time event delivery. When true, populate WebhookSubscriptionAPIPath + signature fields.
+    */
+    get WebhooksAvailable(): boolean {
+        return this.Get('WebhooksAvailable');
+    }
+    set WebhooksAvailable(value: boolean) {
+        this.Set('WebhooksAvailable', value);
+    }
+
+    /**
+    * * Field Name: WebhookSubscriptionAPIPath
+    * * Display Name: Webhook Subscription API Path
+    * * SQL Data Type: nvarchar(500)
+    * * Description: Vendor endpoint path for managing webhook subscriptions (create/delete/list). E.g., /webhooks for Stripe, /api/3/webhook/subscriptions for HubSpot.
+    */
+    get WebhookSubscriptionAPIPath(): string | null {
+        return this.Get('WebhookSubscriptionAPIPath');
+    }
+    set WebhookSubscriptionAPIPath(value: string | null) {
+        this.Set('WebhookSubscriptionAPIPath', value);
+    }
+
+    /**
+    * * Field Name: WebhookSignatureHeaderName
+    * * Display Name: Webhook Signature Header Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: HTTP header name carrying the webhook signature for verification (e.g., Stripe-Signature, X-HubSpot-Signature-V3).
+    */
+    get WebhookSignatureHeaderName(): string | null {
+        return this.Get('WebhookSignatureHeaderName');
+    }
+    set WebhookSignatureHeaderName(value: string | null) {
+        this.Set('WebhookSignatureHeaderName', value);
+    }
+
+    /**
+    * * Field Name: WebhookSignatureAlgorithm
+    * * Display Name: Webhook Signature Algorithm
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * hmac-sha256
+    *   * hmac-sha512
+    *   * none
+    *   * rsa
+    * * Description: Algorithm used to sign webhook payloads. hmac-sha256 (most common); hmac-sha512; rsa (for vendors using asymmetric signing); none (unsigned).
+    */
+    get WebhookSignatureAlgorithm(): 'hmac-sha256' | 'hmac-sha512' | 'none' | 'rsa' | null {
+        return this.Get('WebhookSignatureAlgorithm');
+    }
+    set WebhookSignatureAlgorithm(value: 'hmac-sha256' | 'hmac-sha512' | 'none' | 'rsa' | null) {
+        this.Set('WebhookSignatureAlgorithm', value);
+    }
+
+    /**
+    * * Field Name: BulkOperationsAvailable
+    * * Display Name: Bulk Operations Available
+    * * SQL Data Type: bit
+    * * Default Value: 0
+    * * Description: Whether the vendor offers per-object bulk endpoints (batch create/update/delete or async bulk jobs). When true, per-IO BulkAPIPath populated where applicable.
+    */
+    get BulkOperationsAvailable(): boolean {
+        return this.Get('BulkOperationsAvailable');
+    }
+    set BulkOperationsAvailable(value: boolean) {
+        this.Set('BulkOperationsAvailable', value);
+    }
+
+    /**
+    * * Field Name: APIVersioningStrategy
+    * * Display Name: API Versioning Strategy
+    * * SQL Data Type: nvarchar(50)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * header
+    *   * none
+    *   * path
+    *   * query
+    * * Description: How the vendor identifies API version. path = /v1/ or /v2/ segment; header = Accept or X-API-Version; query = ?api-version=; none = unversioned.
+    */
+    get APIVersioningStrategy(): 'header' | 'none' | 'path' | 'query' | null {
+        return this.Get('APIVersioningStrategy');
+    }
+    set APIVersioningStrategy(value: 'header' | 'none' | 'path' | 'query' | null) {
+        this.Set('APIVersioningStrategy', value);
+    }
+
+    /**
+    * * Field Name: APIVersion
+    * * Display Name: API Version
+    * * SQL Data Type: nvarchar(50)
+    * * Description: Currently targeted API version (e.g., v3, 2023-10-16, 60.0). Used by connector to construct paths when APIVersioningStrategy=path, headers when =header, query when =query.
+    */
+    get APIVersion(): string | null {
+        return this.Get('APIVersion');
+    }
+    set APIVersion(value: string | null) {
+        this.Set('APIVersion', value);
+    }
+
+    /**
+    * * Field Name: IdempotencyHeaderName
+    * * Display Name: Idempotency Header Name
+    * * SQL Data Type: nvarchar(100)
+    * * Description: HTTP header name the vendor uses for idempotency keys (e.g., Idempotency-Key, Stripe-Idempotency-Key). Null when vendor does not support idempotency.
+    */
+    get IdempotencyHeaderName(): string | null {
+        return this.Get('IdempotencyHeaderName');
+    }
+    set IdempotencyHeaderName(value: string | null) {
+        this.Set('IdempotencyHeaderName', value);
+    }
+
+    /**
+    * * Field Name: CustomObjectMarkerPattern
+    * * Display Name: Custom Object Marker Pattern
+    * * SQL Data Type: nvarchar(100)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * attribute-flagged
+    *   * hubspot-customProperties-namespace
+    *   * none
+    *   * prefix-based
+    *   * salesforce-double-underscore-c
+    * * Description: Pattern the vendor uses to mark a sObject as custom vs standard. salesforce-double-underscore-c = Account__c; hubspot-customProperties-namespace = lives under customProperties; prefix-based = vendor prefix on the name; attribute-flagged = explicit isCustom in describe; none = no custom-object concept.
+    */
+    get CustomObjectMarkerPattern(): 'attribute-flagged' | 'hubspot-customProperties-namespace' | 'none' | 'prefix-based' | 'salesforce-double-underscore-c' | null {
+        return this.Get('CustomObjectMarkerPattern');
+    }
+    set CustomObjectMarkerPattern(value: 'attribute-flagged' | 'hubspot-customProperties-namespace' | 'none' | 'prefix-based' | 'salesforce-double-underscore-c' | null) {
+        this.Set('CustomObjectMarkerPattern', value);
+    }
+
+    /**
+    * * Field Name: CustomFieldMarkerPattern
+    * * Display Name: Custom Field Marker Pattern
+    * * SQL Data Type: nvarchar(100)
+    * * Description: Pattern the vendor uses to mark a field as custom vs standard (same enum vocabulary as CustomObjectMarkerPattern but applied at the IOF level).
+    */
+    get CustomFieldMarkerPattern(): string | null {
+        return this.Get('CustomFieldMarkerPattern');
+    }
+    set CustomFieldMarkerPattern(value: string | null) {
+        this.Set('CustomFieldMarkerPattern', value);
+    }
+
+    /**
+    * * Field Name: FKNamingConvention
+    * * Display Name: FK Naming Convention
+    * * SQL Data Type: nvarchar(100)
+    * * Value List Type: List
+    * * Possible Values 
+    *   * camelCase-Id-suffix
+    *   * none
+    *   * object-named
+    *   * snake-case-id-suffix
+    *   * vendor-specific
+    * * Description: How the vendor names foreign-key columns. snake-case-id-suffix = customer_id; camelCase-Id-suffix = customerId; object-named = customer (no suffix); vendor-specific = irregular pattern (requires per-vendor detection); none = no convention observed.
+    */
+    get FKNamingConvention(): 'camelCase-Id-suffix' | 'none' | 'object-named' | 'snake-case-id-suffix' | 'vendor-specific' | null {
+        return this.Get('FKNamingConvention');
+    }
+    set FKNamingConvention(value: 'camelCase-Id-suffix' | 'none' | 'object-named' | 'snake-case-id-suffix' | 'vendor-specific' | null) {
+        this.Set('FKNamingConvention', value);
     }
 
     /**
