@@ -43,12 +43,12 @@ import { Component, Input } from '@angular/core';
       font-weight: 600;
       text-transform: uppercase;
       letter-spacing: 0.04em;
-      color: var(--mj-text-secondary);
+      color: var(--mj-brand-primary);
     }
 
     .mj-filter-field-label i {
       font-size: 11px;
-      color: var(--mj-text-muted);
+      color: var(--mj-brand-primary);
     }
   `]
 })
