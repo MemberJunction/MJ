@@ -25,6 +25,7 @@ import { OrganicKeyClusterRefiner } from './OrganicKeyClusterRefiner.js';
 import { createEmbeddingProvider } from './EmbeddingProvider.js';
 import { EmbeddingCache } from './EmbeddingCache.js';
 import { ConceptMergePass } from './ConceptMergePass.js';
+import { CanonicalConceptDetector } from './CanonicalConceptDetector.js';
 import { BusinessConceptProjector } from './BusinessConceptProjector.js';
 import { ValueOverlapSampler } from './ValueOverlapSampler.js';
 import { MinHashSignature } from './MinHashSketch.js';
@@ -82,8 +83,29 @@ export class OrganicKeyDetectionRunner {
 
         // ─── Step 1: Build input column set ─────────────────────────────────
         progress('Organic keys — gathering columns');
-        const columns = this.buildInputColumns(state);
-        if (columns.length === 0) {
+        const allColumns = this.buildInputColumns(state);
+
+        // ─── Step 1b: Canonical-concept pre-pass ────────────────────────────
+        // Match columns against the catalog of canonical organic-key concepts
+        // (email, phone, URL, postal code, ISO country/currency, tax id, etc.)
+        // BEFORE clustering. Matched columns get assigned to canonical clusters
+        // directly — skipping the clusterer, LLM refinement, and concept-merge
+        // entirely. Higher precision than clustering and zero LLM cost.
+        let canonicalClusters: OrganicKeyCluster[] = [];
+        let columns = allColumns;
+        if (this.config.canonicalPrePass?.enabled !== false) {
+            const canon = new CanonicalConceptDetector();
+            const result = canon.detect(allColumns);
+            canonicalClusters = result.canonicalClusters;
+            columns = result.residual;
+            if (canonicalClusters.length > 0) {
+                progress(
+                    `Organic keys — canonical pre-pass: ${canonicalClusters.length} clusters from ${result.matchedColumnCount} matched columns (${columns.length} cols passed to clustering)`,
+                );
+            }
+        }
+
+        if (columns.length === 0 && canonicalClusters.length === 0) {
             this.writePhase(state, {
                 triggered: true,
                 startedAt,
@@ -102,6 +124,29 @@ export class OrganicKeyDetectionRunner {
                 skipReason: 'No columns available for clustering',
             });
             state.organicKeyClusters = [];
+            return;
+        }
+
+        // If canonical pre-pass consumed every column, we can emit immediately.
+        if (columns.length === 0) {
+            state.organicKeyClusters = canonicalClusters;
+            this.writePhase(state, {
+                triggered: true,
+                startedAt,
+                completedAt: new Date().toISOString(),
+                status: 'completed',
+                candidateClusterCount: canonicalClusters.length,
+                confirmedClusterCount: canonicalClusters.length,
+                rejectedClusterCount: 0,
+                splitClusterCount: 0,
+                tokensUsed: 0,
+                inputTokens: 0,
+                outputTokens: 0,
+                estimatedCost: 0,
+                weights: { ...DEFAULT_HYBRID_WEIGHTS },
+                thresholds: { ...DEFAULT_THRESHOLDS },
+                triggerReason: 'canonical pre-pass consumed all columns',
+            });
             return;
         }
 
@@ -249,7 +294,13 @@ export class OrganicKeyDetectionRunner {
         const estimatedCost = this.estimateCost(inputTokens, outputTokens);
 
         // ─── Step 7: Persist results ────────────────────────────────────────
-        state.organicKeyClusters = confirmed;
+        // Prepend canonical-pre-pass clusters so they appear first in the output
+        // (they are highest-precision and deterministic).
+        const finalClusters: OrganicKeyCluster[] =
+            canonicalClusters.length > 0
+                ? [...canonicalClusters, ...confirmed]
+                : confirmed;
+        state.organicKeyClusters = finalClusters;
         const cacheStats = this.embeddingCache?.stats();
         this.writePhase(state, {
             triggered: true,

@@ -273,6 +273,22 @@ export interface OrganicKeyDetectionConfig {
   };
 
   /**
+   * Canonical-concept pre-pass — deterministic regex/data-type matching against a
+   * curated catalog of canonical organic-key concepts (email, phone, URL/domain,
+   * postal code, ISO country/currency, tax_id, etc.) BEFORE clustering. Matched
+   * columns are pulled out and assigned to canonical clusters directly, skipping
+   * embedding clustering, LLM refinement, and concept-merge. Higher precision
+   * than the LLM path and zero LLM cost on these patterns.
+   *
+   * Default: true. Set false only when you want every cluster to come from the
+   * clustering+LLM pipeline (e.g. for ablation testing).
+   */
+  canonicalPrePass?: {
+    /** Whether to run the canonical pre-pass (default: true). */
+    enabled: boolean;
+  };
+
+  /**
    * Business-concept gate — uses BusinessConceptProjector to score each candidate
    * cluster's centroid against business vs system/audit anchor axes. Clusters
    * dominated by negative anchors (audit timestamps, replication GUIDs) get
