@@ -77,15 +77,62 @@ You also update `CODE_EVIDENCE.json` if your build process surfaces a fact that 
    - `GetBaseURL(companyIntegration, auth)` — return `APIBaseURL` if static; read from auth-response (e.g., Salesforce `instance_url`) if `APIBaseURLMode='dynamic-from-auth-response'`; read from credential field if `'dynamic-from-credential-field'`.
    - `MakeHTTPRequest`, `BuildHeaders`, `NormalizeResponse`, `ExtractPaginationInfo`, `TransformRecord` — vendor-specific implementations as the protocol base requires.
 
-5. **Implement CRUD using metadata routing** (real bodies, no stubs):
+5. **Implement CRUD using metadata routing** (real bodies, no stubs).
+
+   ### Concrete-class emission rule (Invariant 7)
+
+   Every required CRUD method MUST be **declared directly on the concrete connector class**. Inheritance from `BaseRESTIntegrationConnector` (or any base class) is **NOT sufficient** — Invariant 7 inspects the concrete `.ts` file via ts-morph; methods only present on a base class are invisible to it. If a base class provides a default body, you still emit a concrete override (either delegating with `await super.METHOD(ctx)` plus vendor-specific behavior, or writing the body from scratch). Each emitted body must independently satisfy Invariant 7 (≥5 statements, contains a real-work pattern such as `this.MakeHTTPRequest(...)`, no stub markers like `'not implemented'` / `501`).
+
+   Emission trigger matrix — emit the method on the concrete class when ANY IO in the metadata satisfies the LEFT-column condition:
+
+   | Method | Emit when (per-IO metadata condition) |
+   |---|---|
+   | `CreateRecord` | `CreateAPIPath` populated AND `SupportsCreate=true` somewhere |
+   | `UpdateRecord` | `UpdateAPIPath` populated AND `SupportsUpdate=true` somewhere |
+   | `DeleteRecord` | `DeleteAPIPath` populated AND `SupportsDelete=true` somewhere |
+   | `GetRecord` | `GetAPIPath` populated on ANY IO (universal — read is always supported) |
+   | `SearchRecords` | `SearchAPIPath` populated AND `SupportsSearch=true` somewhere |
+   | `ListRecords` | `ListAPIPath` populated on ANY IO (universal — listing is always supported) |
+   | `FetchChanges` | `SupportsIncrementalSync=true` on ANY IO |
+
+   ### Per-method body shapes (canonical patterns)
 
    - `CreateRecord(ctx)` — resolve IO; verify `IsBidirectional` + `SupportsCreate`; construct URL from `CreateAPIPath`; shape body per vendor's `CreateRequestBodyShape` (flat / `{properties}` / custom); call `MakeHTTPRequest`; parse via `ParseCRUDResponse`.
    - `UpdateRecord(ctx)` — same shape using `UpdateAPIPath` + `UpdateMethod`; filter out `IsImmutableAfterCreate` IOFs; honor `ConcurrencyControlStrategy` (etag-if-match / version-field / none).
    - `DeleteRecord(ctx)` — `DeleteAPIPath`; honor soft-delete pattern if vendor uses one (§15.2 of directive).
-   - `GetRecord(ctx)` — `GetAPIPath` + single-record response parsing.
+   - `GetRecord(ctx)` — body shape:
+     ```
+     ResolveIO(ctx.ObjectName)
+       → if (!io || !io.GetAPIPath) return null
+       → Authenticate
+       → url = baseURL + ResolvePathTemplate(io.GetAPIPath, ctx.ExternalID, {})
+       → response = MakeHTTPRequest(auth, url, 'GET', headers)
+       → if 404 return null
+       → if non-2xx throw with parsed vendor message
+       → flat = TransformRecord(response.Body)
+       → return { ExternalID, ObjectType: ctx.ObjectName, Fields: flat }
+     ```
    - `SearchRecords(ctx)` — `SearchAPIPath` + vendor's filter syntax (SOQL for Salesforce; `filterGroups` for HubSpot; etc.).
    - `ListRecords(ctx)` — `ListAPIPath` + pagination metadata; surface `NextCursor` from `PaginationCursorResponsePath`.
-   - `FetchChanges(ctx)` — incremental sync per directive §13. Load watermark via `WatermarkService.Load`. Apply `IncrementalQueryParamName` formatted per `IncrementalQueryParamFormat`. Iterate paged batches; track max-watermark-seen via `CompareWatermarks` (Timestamp/Version/Cursor/ChangeToken-aware). Persist new max only on full success — partial failure leaves watermark at last good value.
+   - `FetchChanges(ctx)` — incremental sync per directive §13. Body shape:
+     ```
+     ResolveIO(ctx.ObjectName)
+       → if (!io || !io.ListAPIPath) return { Records: [], HasMore: false }
+       → Authenticate
+       → params = URLSearchParams({ limit: ctx.BatchSize, after: ctx.CurrentCursor })
+       → if io.SupportsIncrementalSync && io.IncrementalCursorFieldName && ctx.WatermarkValue:
+           ws = new WatermarkService()
+           if ws.ValidateWatermark(ctx.WatermarkValue, io.IncrementalWatermarkType):
+             params.set(<root.IncrementalQueryParamName>, ctx.WatermarkValue)
+           // else: malformed → fall through to full pull (engine logs mismatch)
+       → response = MakeHTTPRequest(auth, listURL, io.ListMethod ?? 'GET', headers)
+       → if non-2xx throw
+       → parsed = ParseListLikeResponse(response, io.ResponseDataKey)
+       → nextCursor = body.paging?.next?.after  (extract per vendor's pagination convention)
+       → newWatermark = max(ctx.WatermarkValue, max(record[IncrementalCursorFieldName] for record in parsed.Records))
+       → return { Records: parsed.Records, HasMore: !!nextCursor, NextCursor: nextCursor, NewWatermarkValue: newWatermark }
+     ```
+     The engine persists via `WatermarkService.Update` only when the full outer-loop iteration succeeds — partial failure leaves prior watermark intact (§13.4 scenarios 4 + 5). Tracking max-seen (not the most-recent response) is required so out-of-order batches don't silently rewind the watermark.
 
 6. **Implement hierarchy traversal** — when fetching a child IO (one with `ParentObjectName` set), walk `HierarchyPath` to resolve parent IDs first. Use the IO's `ParentObjectIDFieldName` to know which IOF on the child holds the parent's PK value. Respect the top-level `TraversalOrder` array for fetch sequencing across IOs.
 
@@ -144,6 +191,7 @@ Failure-routing rule:
 
 ## Hard rules
 
+- **Inheritance is not sufficient.** Methods only present on a base class (e.g. `BaseRESTIntegrationConnector.FetchChanges`) are invisible to Invariant 7's ts-morph walk. Every method satisfying the step-5 trigger matrix must be **declared on the concrete connector class** with a body that independently passes Invariant 7. Delegating to `super.METHOD(ctx)` inside an override is fine as long as the override body itself has ≥5 statements and a real-work pattern.
 - **No stubs.** Methods that return `{Success: false}`, throw `'not implemented'`, or return `[]` when records should exist ARE stubs. Invariant 7 catches them. Escalate metadata gaps; never paper over with a stub.
 - **No fabrication.** Every behavioral decision in code traces back to metadata fields populated with provenance.
 - **No inline crypto.** Use auth-helpers; extend auth-helpers if needed (still in `auth-helpers`, not connector code).
