@@ -33,7 +33,7 @@ interface ExecutionTrend {
   templateUrl: './execution-monitoring.component.html',
   styleUrls: ['./execution-monitoring.component.css']
 })
-export class ExecutionMonitoringComponent extends BaseResourceComponent implements OnInit, OnDestroy {
+export class ActionExecutionMonitoringComponent extends BaseResourceComponent implements OnInit, OnDestroy {
   public isLoading = true;
   public executions: MJActionExecutionLogEntity[] = [];
   public filteredExecutions: MJActionExecutionLogEntity[] = [];
