@@ -119,20 +119,57 @@ You also update `CODE_EVIDENCE.json` if your build process surfaces a fact that 
      ResolveIO(ctx.ObjectName)
        → if (!io || !io.ListAPIPath) return { Records: [], HasMore: false }
        → Authenticate
+
+       // Validate the incoming watermark ONCE and compute the effective value.
+       // A malformed watermark must NOT be used downstream — neither as a query
+       // param NOR as a comparison baseline for max-watermark tracking.
+       → ws = new WatermarkService()
+       → effectiveIncoming =
+           (io.SupportsIncrementalSync
+              && io.IncrementalCursorFieldName
+              && ctx.WatermarkValue
+              && ws.ValidateWatermark(ctx.WatermarkValue, io.IncrementalWatermarkType))
+           ? ctx.WatermarkValue
+           : null
+
        → params = URLSearchParams({ limit: ctx.BatchSize, after: ctx.CurrentCursor })
-       → if io.SupportsIncrementalSync && io.IncrementalCursorFieldName && ctx.WatermarkValue:
-           ws = new WatermarkService()
-           if ws.ValidateWatermark(ctx.WatermarkValue, io.IncrementalWatermarkType):
-             params.set(<root.IncrementalQueryParamName>, ctx.WatermarkValue)
-           // else: malformed → fall through to full pull (engine logs mismatch)
+       → if effectiveIncoming != null:
+           params.set(<root.IncrementalQueryParamName>, effectiveIncoming)
+
        → response = MakeHTTPRequest(auth, listURL, io.ListMethod ?? 'GET', headers)
        → if non-2xx throw
        → parsed = ParseListLikeResponse(response, io.ResponseDataKey)
-       → nextCursor = body.paging?.next?.after  (extract per vendor's pagination convention)
-       → newWatermark = max(ctx.WatermarkValue, max(record[IncrementalCursorFieldName] for record in parsed.Records))
-       → return { Records: parsed.Records, HasMore: !!nextCursor, NextCursor: nextCursor, NewWatermarkValue: newWatermark }
+       → nextCursor = body.paging?.next?.after  (vendor's pagination convention)
+
+       // Max-watermark tracking. Two rules that are easy to break:
+       //   (A) When the IO does NOT support incremental sync, return
+       //       NewWatermarkValue=undefined — never surface the incoming watermark
+       //       for a non-incremental IO.
+       //   (B) When the IO does support incremental sync, seed the comparison
+       //       baseline from `effectiveIncoming` (validated value), NOT raw
+       //       `ctx.WatermarkValue`. Otherwise a malformed incoming watermark
+       //       can lexicographically dominate valid record values and prevent
+       //       any record from "winning" the max comparison.
+       → if io.SupportsIncrementalSync && io.IncrementalCursorFieldName:
+           newWatermark = effectiveIncoming  // null when incoming was missing/malformed
+           for rec in parsed.Records:
+             v = rec.Fields[io.IncrementalCursorFieldName]
+             if typeof v === 'string' && v.length > 0:
+               if newWatermark == null || v > newWatermark: newWatermark = v
+         else:
+           newWatermark = undefined
+
+       → return { Records: parsed.Records, HasMore: !!nextCursor, NextCursor: nextCursor, NewWatermarkValue: newWatermark ?? undefined }
      ```
      The engine persists via `WatermarkService.Update` only when the full outer-loop iteration succeeds — partial failure leaves prior watermark intact (§13.4 scenarios 4 + 5). Tracking max-seen (not the most-recent response) is required so out-of-order batches don't silently rewind the watermark.
+
+     Behavior summary, mapped to §13.4 scenarios:
+     1. **First sync** (no watermark) → no query param; `NewWatermarkValue` = max of cursor values in batch.
+     2. **Subsequent sync** (valid watermark) → query param added; `NewWatermarkValue` = max(incoming, max-of-batch).
+     3. **Out-of-order batch** → tracks max-seen, NOT most-recent (last-in-batch) — defends against vendors that paginate by ID instead of by cursor-field.
+     4. **Partial failure** (HTTP non-2xx) → throw; engine catches, does not persist watermark.
+     5. **Format-mismatch** (malformed incoming watermark) → query param omitted (full pull); baseline reset to null; `NewWatermarkValue` derives from batch alone so the next sync uses a valid value forward.
+     Plus: **IO without `SupportsIncrementalSync`** → `NewWatermarkValue` is `undefined` (don't surface a watermark for a non-incremental IO).
 
 6. **Implement hierarchy traversal** — when fetching a child IO (one with `ParentObjectName` set), walk `HierarchyPath` to resolve parent IDs first. Use the IO's `ParentObjectIDFieldName` to know which IOF on the child holds the parent's PK value. Respect the top-level `TraversalOrder` array for fetch sequencing across IOs.
 
