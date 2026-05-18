@@ -1,6 +1,0 @@
-# Local extraction cache — re-fetched on demand from the source-of-truth GitHub repo
-cache/
-
-# ADR-001 dead artifacts — connector-generator was killed; spec.json is no longer authoritative.
-# Kept around locally during transition runs but not part of the committed tree.
-spec.json
