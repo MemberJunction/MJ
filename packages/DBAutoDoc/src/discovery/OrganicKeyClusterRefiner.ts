@@ -15,8 +15,8 @@
  */
 
 import { BaseLLM, ChatParams, ChatResult } from '@memberjunction/ai';
-import { MJGlobal } from '@memberjunction/global';
 import { AIConfig } from '../types/config.js';
+import { createLLMInstance } from '../utils/llm-factory.js';
 import {
     OrganicKeyCluster,
     OrganicKeyClusterMember,
@@ -112,17 +112,11 @@ export class OrganicKeyClusterRefiner {
             this.llm = llm;
             return;
         }
-        const built = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
-            BaseLLM,
-            aiConfig.provider,
-            aiConfig.apiKey,
-        );
-        if (!built) {
-            throw new Error(
-                `Failed to create LLM instance for provider: ${aiConfig.provider}. Check that the provider name matches a registered BaseLLM subclass.`,
-            );
-        }
-        this.llm = built;
+        // Use createLLMInstance which correctly maps the provider name
+        // (e.g. 'gemini') to the registered driver class name (e.g. 'GeminiLLM').
+        // Passing the provider name directly to ClassFactory.CreateInstance returns
+        // the abstract BaseLLM, whose ChatCompletion throws at call time.
+        this.llm = createLLMInstance(aiConfig.provider, aiConfig.apiKey);
     }
 
     /** Test-friendly factory that injects a pre-built BaseLLM. */

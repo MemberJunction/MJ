@@ -17,8 +17,8 @@
  */
 
 import { BaseLLM, ChatParams, ChatResult } from '@memberjunction/ai';
-import { MJGlobal } from '@memberjunction/global';
 import { AIConfig } from '../types/config.js';
+import { createLLMInstance } from '../utils/llm-factory.js';
 import {
     OrganicKeyCluster,
     OrganicKeyClusterMember,
@@ -105,17 +105,9 @@ export class ConceptMergePass {
     private llm: BaseLLM;
 
     constructor(private readonly aiConfig: AIConfig) {
-        const llm = MJGlobal.Instance.ClassFactory.CreateInstance<BaseLLM>(
-            BaseLLM,
-            aiConfig.provider,
-            aiConfig.apiKey,
-        );
-        if (!llm) {
-            throw new Error(
-                `Failed to create LLM instance for provider: ${aiConfig.provider}. Check that the provider name matches a registered BaseLLM subclass.`,
-            );
-        }
-        this.llm = llm;
+        // Use createLLMInstance which maps provider name → registered driver class name.
+        // ClassFactory.CreateInstance(BaseLLM, 'gemini') returns the abstract base, not GeminiLLM.
+        this.llm = createLLMInstance(aiConfig.provider, aiConfig.apiKey);
     }
 
     /**
