@@ -3942,7 +3942,7 @@ The context is now within limits. Please retry your request with the recovered c
                 const toolStep = await this.createStepEntity({
                     stepType: 'Tool',
                     stepName: `Artifact Tool: ${call.tool}`,
-                    contextUser: params.contextUser!,
+                    contextUser: params.contextUser,
                     parentId: parentStep.ID,
                     inputData: {
                         artifactId: call.artifactId,

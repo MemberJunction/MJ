@@ -110,20 +110,6 @@ export interface ArtifactToolSnapshot {
 }
 
 /**
- * A single tool invocation, projected from the internal result store.
- * Used for audit / training-data / debugging.
- */
-export interface ArtifactAccessLogEntry {
-  artifactId: string;
-  tool: string;
-  input: Record<string, unknown>;
-  success: boolean;
-  errorMessage?: string;
-  timestamp: Date;
-  durationMs: number;
-}
-
-/**
  * Manages artifact tools for a single agent run.
  *
  * Follows the ScratchpadManager pattern:
@@ -392,73 +378,6 @@ export class ArtifactToolManager {
    * Prevents context overflow when tool results contain large datasets.
    * Results are truncated from oldest first, with a summary of what was dropped.
    */
-  private static readonly MAX_RESULTS_CHARS = 50_000;
-
-  /**
-   * Max characters for a single tool result's data section.
-   * Individual results that exceed this are truncated with a note,
-   * preventing one huge result from consuming the entire budget.
-   */
-  private static readonly MAX_SINGLE_RESULT_CHARS = 15_000;
-
-  /** Markdown results from previous turns */
-  GetPendingResults(): string {
-    if (this.toolResults.length === 0) return '';
-
-    const header = [
-      '## Artifact Tool Results',
-      '',
-      'These are results from your previous artifact tool calls. **Use these results to answer the user — do NOT re-call the same tools.**',
-      '',
-    ].join('\n');
-
-    // Render each result, capping individual results that are disproportionately large
-    const rendered: Array<{ text: string; index: number }> = [];
-    for (let i = 0; i < this.toolResults.length; i++) {
-      const stored = this.toolResults[i];
-      const lines: string[] = [];
-      lines.push(`### Result ${i + 1}: ${stored.artifactId}.${stored.tool}(${JSON.stringify(stored.input)})`);
-      if (stored.result.success) {
-        let data = typeof stored.result.data === 'string' ? stored.result.data : JSON.stringify(stored.result.data, null, 2);
-        if (data.length > ArtifactToolManager.MAX_SINGLE_RESULT_CHARS) {
-          data =
-            data.slice(0, ArtifactToolManager.MAX_SINGLE_RESULT_CHARS) +
-            `\n... (truncated — ${data.length} chars total. Use more specific tool calls to narrow results.)`;
-        }
-        lines.push('```json');
-        lines.push(data);
-        lines.push('```');
-      } else {
-        lines.push(`**Error:** ${stored.result.errorMessage}`);
-      }
-      lines.push('');
-      rendered.push({ text: lines.join('\n'), index: i });
-    }
-
-    // Check total size and truncate oldest results if over limit
-    let totalChars = header.length;
-    const included: string[] = [];
-    let droppedCount = 0;
-
-    // Include results from newest to oldest so most recent are preserved
-    for (let i = rendered.length - 1; i >= 0; i--) {
-      if (totalChars + rendered[i].text.length > ArtifactToolManager.MAX_RESULTS_CHARS && included.length > 0) {
-        droppedCount = i + 1;
-        break;
-      }
-      totalChars += rendered[i].text.length;
-      included.unshift(rendered[i].text);
-    }
-
-    const parts = [header];
-    if (droppedCount > 0) {
-      parts.push(`> **Note:** ${droppedCount} earlier result(s) truncated to fit context window. Use artifact tools to re-query if needed.\n`);
-    }
-    parts.push(...included);
-
-    return parts.join('\n');
-  }
-
   /** One-line summary for compact contexts */
   GetSummary(): string {
     if (this.artifacts.size === 0) return '';
@@ -471,9 +390,9 @@ export class ArtifactToolManager {
   // ─── TOOL EXECUTION ───
 
   /**
-   * Execute a single tool call and return its stored result. Also pushes the
-   * result into the manager's internal result store for back-compat consumers
-   * that read `toolResults` after a batch (e.g. `GetPendingResults`).
+   * Execute a single tool call and return its stored result. The result is
+   * also retained in the manager's internal store, so {@link ToJSON} reflects
+   * the resultCount and bulk callers can be sure every dispatch is recorded.
    *
    * Exposed publicly so the agent runtime can wrap each call in its own
    * AIAgentRunStep (StepType='Tool'). For bulk-dispatch use, see
@@ -541,23 +460,13 @@ export class ArtifactToolManager {
   }
 
   /**
-   * Execute a batch of tool calls in parallel. Each call's result is stored
-   * internally and accessible via {@link GetFullToolResults} or the
-   * markdown-rendered {@link GetPendingResults}. Returns void to preserve
-   * the original contract.
+   * Execute a batch of tool calls in parallel. Each call's StoredToolResult is
+   * also returned by {@link ExecuteSingleToolCall} for callers that wrap each
+   * invocation in its own AIAgentRunStep. Returns void to preserve the
+   * original contract.
    */
   async ExecuteToolCalls(calls: ArtifactToolCall[]): Promise<void> {
     await Promise.all(calls.map((c) => this.ExecuteSingleToolCall(c)));
-  }
-
-  /**
-   * Returns the full stored results from this run's tool invocations —
-   * including the raw `data` payload that {@link GetAccessLog} omits.
-   * Used by the agent runtime to populate per-call AIAgentRunStep OutputData
-   * with full audit fidelity (no LLM-context truncation).
-   */
-  GetFullToolResults(): readonly StoredToolResult[] {
-    return this.toolResults;
   }
 
   // ─── SERIALIZATION ───
@@ -572,25 +481,6 @@ export class ArtifactToolManager {
       })),
       resultCount: this.toolResults.length,
     };
-  }
-
-  // ─── AUDIT ───
-
-  /**
-   * Access log for this run — one entry per tool invocation, in call order.
-   * Useful for audit trails, training data capture, and debugging.
-   * Projected from the internal result store (no parallel state).
-   */
-  GetAccessLog(): ArtifactAccessLogEntry[] {
-    return this.toolResults.map((r) => ({
-      artifactId: r.artifactId,
-      tool: r.tool,
-      input: r.input,
-      success: r.result.success,
-      errorMessage: r.result.errorMessage,
-      timestamp: r.timestamp,
-      durationMs: r.durationMs,
-    }));
   }
 
   // ─── STATIC HELPERS ───
