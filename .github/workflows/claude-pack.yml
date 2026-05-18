@@ -14,11 +14,15 @@ on:
     branches: [next]
     paths:
       - 'templates/claude-pack/**'
+      - 'CreateMJDistribution.js'
+      - 'scripts/verify-pack-in-zip.mjs'
       - '.github/workflows/claude-pack.yml'
   push:
     branches: [next]
     paths:
       - 'templates/claude-pack/**'
+      - 'CreateMJDistribution.js'
+      - 'scripts/verify-pack-in-zip.mjs'
       - '.github/workflows/claude-pack.yml'
 
 jobs:
@@ -57,3 +61,51 @@ jobs:
             git diff --stat templates/claude-pack/dist/ >> "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
+
+  # ───────────────────────────────────────────────────────────────────────
+  # End-to-end test of the pack-in-ZIP path (plan §11.3).
+  #
+  # The dist-freshness gate above only checks that the source → dist build
+  # is deterministic. This job catches a different class of bug: corruption
+  # during the bootstrap ZIP packaging that ships the pack to end users.
+  #
+  # The chain is:
+  #   templates/claude-pack/dist/v{N}/  →  archive.glob('**/*')
+  #     in CreateMJDistribution.js      →  zip stream → ZIP file → user unzips
+  #
+  # Any byte-level corruption between archiver and unzip would surface as
+  # a sha256 mismatch on the user's first `mj doctor` run. Catching it here
+  # prevents shipping a broken pack.
+  # ───────────────────────────────────────────────────────────────────────
+  e2e-bootstrap-zip:
+    name: E2E bootstrap ZIP round-trip
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # CreateMJDistribution.js needs `archiver`; verify-pack-in-zip needs
+      # `unzipper`. Both live in root deps.
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build pack
+        run: npm run claude-pack:build
+
+      - name: Build bootstrap ZIP
+        env:
+          MJ_DISTRIBUTION_FILENAME: Distributions/MemberJunction_Code_Bootstrap_CI.zip
+          # CreateMJDistribution reads $VERSION; supply a placeholder so it
+          # doesn't bail. Pack-in-zip verification is independent of MJ version.
+          VERSION: ci-test
+        run: node CreateMJDistribution.js
+
+      - name: Verify pack contents inside ZIP
+        run: node scripts/verify-pack-in-zip.mjs Distributions/MemberJunction_Code_Bootstrap_CI.zip
