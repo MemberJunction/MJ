@@ -200,7 +200,10 @@ The `/guides/` folder contains comprehensive best practices guides for specific 
   - State management with getter/setters
   - Engine class patterns (no Angular services for data)
   - User preferences and local caching
+  - **Page Chrome** — the shared `<mj-page-layout>` + `<mj-page-header>` + `<mj-page-body>` trio that every Explorer dashboard uses, with slot rules (`[meta]`/`[actions]`/`[toolbar]`) and documented exceptions
   - Layout patterns, permission checking, and more
+
+- **[Explorer Chrome Conventions](plans/explorer-chrome-conventions.md)**: The full rulebook for MJ Explorer's shared chrome — slot rules (`[meta]` is state, `[actions]` is verbs, `[toolbar]` is secondary controls), filter UI decision tree, the Section 9b rule (do NOT add chrome to dynamically-loaded sub-pages of a left-nav shell — use a local `.sticky-header` action row instead), and the canonical exception list. Read before doing chrome work or deciding to deviate.
 
 - **[Lazy Loading Guide](guides/LAZY_LOADING_GUIDE.md)**: How MJExplorer's code-split lazy loading works:
   - Adding new dashboard components (zero config — just `@RegisterClass` + feature module)

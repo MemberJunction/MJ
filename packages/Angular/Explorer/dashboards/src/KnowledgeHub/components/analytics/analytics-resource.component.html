@@ -1,3 +1,17 @@
+<mj-page-layout>
+  <mj-page-header
+    Title="Knowledge Hub Analytics"
+    Icon="fa-solid fa-chart-line"
+    Subtitle="Pipeline health, trending tags, and content insights">
+    <div meta>
+      <mj-stat-badge
+        [Label]="PipelineStatusText"
+        [Variant]="PipelineStatusOk ? 'success' : 'error'">
+      </mj-stat-badge>
+    </div>
+  </mj-page-header>
+
+  <mj-page-body [Flex]="true" [Padding]="false">
 @if (IsLoading) {
     <div class="analytics-loading">
         <mj-loading text="Loading analytics data..." size="medium"></mj-loading>
@@ -6,10 +20,6 @@
     <div class="analytics-layout">
         <!-- =============== LEFT SIDEBAR =============== -->
         <aside class="analytics-sidebar">
-            <div class="sidebar-header">
-                <h2><i class="fa-solid fa-chart-line"></i> Analytics</h2>
-            </div>
-
             <nav class="sidebar-nav">
                 @for (nav of NavItems; track nav.ID) {
                     <button
@@ -37,11 +47,6 @@
                 </div>
             </div>
 
-            <!-- Pipeline Status -->
-            <div class="pipeline-status">
-                <span class="status-dot" [class.status-dot-error]="!PipelineStatusOk"></span>
-                {{ PipelineStatusText }}
-            </div>
         </aside>
 
         <!-- =============== MAIN CONTENT =============== -->
@@ -1185,3 +1190,5 @@
         </div><!-- /main-content -->
     </div><!-- /analytics-layout -->
 }
+  </mj-page-body>
+</mj-page-layout>

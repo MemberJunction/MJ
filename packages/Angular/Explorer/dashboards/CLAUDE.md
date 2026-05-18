@@ -1,5 +1,39 @@
 # Dashboards Package Development Guide
 
+## 🚨 Page Chrome — Always Use the Shared Trio 🚨
+
+Every new dashboard in this package must use **`<mj-page-layout>`** + **`<mj-page-header>`** + **`<mj-page-body>`** from `@memberjunction/ng-ui-components`. Do not roll bespoke headers, gradients, or sidebars — those were consolidated in the chrome migration and the per-section CSS has been deleted.
+
+```html
+<mj-page-layout>
+  <mj-page-header Title="..." Icon="fa-solid fa-..." Subtitle="...">
+    <div meta>     <!-- state: stat-badges, status pills (NO buttons) -->
+      <mj-stat-badge [Count]="items.length" Label="items" />
+    </div>
+    <div actions>  <!-- verbs: refresh, filter-popover, + New button (rightmost) -->
+      <mj-refresh-button [Loading]="isLoading" (Clicked)="loadData()" />
+      <button mjButton variant="primary" size="sm" (click)="create()">+ New</button>
+    </div>
+    <div toolbar>  <!-- secondary row: search, filter chips -->
+      <mj-page-search [Value]="searchTerm" (ValueChange)="onSearch($event)" />
+    </div>
+  </mj-page-header>
+  <mj-page-body>
+    <!-- card grid / table / panels -->
+  </mj-page-body>
+</mj-page-layout>
+```
+
+**Full reference:**
+- [/guides/DASHBOARD_BEST_PRACTICES.md#page-chrome](/guides/DASHBOARD_BEST_PRACTICES.md#page-chrome) — overview + shared component list
+- [/plans/explorer-chrome-conventions.md](/plans/explorer-chrome-conventions.md) — the canonical rulebook with slot rules, filter UI decision tree, exception list
+
+### Exception: dynamically-loaded sub-pages of a left-nav shell
+
+If your component is loaded **into** another resource's left-nav shell (e.g. Admin's `admin-container` loading the explorer-settings sub-pages, or `ApplicationRolesResource` / `SystemDiagnosticsResource` inside Admin shells), do NOT wrap it in the chrome trio — the parent owns the chrome. Use a local `.sticky-header` action row pattern instead. See Section 9b of the conventions doc for the rule and the current exception list.
+
+---
+
 ## 🚨 CRITICAL: NotifyLoadComplete() is MANDATORY 🚨
 
 Every resource component in this package extends `BaseResourceComponent`. You **MUST** call `this.NotifyLoadComplete()` when initialization is complete. Without it, the app loading screen hangs forever on direct URL navigation (e.g., `/app/knowledge-hub/Search`).

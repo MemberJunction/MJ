@@ -3,6 +3,7 @@
    All colors use MJ design tokens from _tokens.scss
    ================================================================ */
 
+
 /* --- Loading state --- */
 .vector-loading {
     display: flex;

@@ -1,17 +1,11 @@
-<div class="permissions-container">
-  <div class="header">
-    <div class="header-left">
-      <i class="fa-solid fa-clock-rotate-left header-icon"></i>
-      <h2 class="header-title">Audit Log</h2>
-    </div>
-  </div>
+<mj-page-layout>
+  <mj-page-header
+    Title="Audit Log"
+    Icon="fa-solid fa-clock-rotate-left"
+    Subtitle="Chronological log of Create / Update / Delete events across every permission domain">
+  </mj-page-header>
 
-  <p class="description">
-    Chronological log of Create, Update, and Delete events against any permission
-    record across every registered domain. Filter by domain, user, or date range.
-    Data comes from <code>MJ: Record Changes</code>; domains whose entities don't
-    track changes won't appear here.
-  </p>
+  <mj-page-body>
 
   @if (ErrorMessage) {
     <div class="message error-message">
@@ -140,4 +134,5 @@
       </table>
     </div>
   }
-</div>
+  </mj-page-body>
+</mj-page-layout>

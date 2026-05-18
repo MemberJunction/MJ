@@ -11,8 +11,8 @@
 
 .analytics-layout {
     display: flex;
-    height: 100%;
-    min-height: 600px;
+    flex: 1;
+    min-height: 0;
 }
 
 /* ===== LEFT SIDEBAR ===== */
