@@ -117,6 +117,21 @@ export type {
     GeneratedActionMetadata,
 } from './ActionMetadataGenerator.js';
 
+// Action Generation Runner (file-IO + merge layer on top of ActionMetadataGenerator)
+export {
+    ActionGenerationRunner,
+    deriveFileName,
+    mergeActionRecords,
+    mergeChildRecords,
+    mergeCategories,
+} from './ActionGenerationRunner.js';
+export type {
+    MjSyncRecord,
+    ConnectorRunInput,
+    ActionGenerationRunnerOptions,
+    ActionGenerationRunnerResult,
+} from './ActionGenerationRunner.js';
+
 // Integration Engine (server-side, wraps IntegrationEngineBase via composition)
 // NOTE: For IntegrationEngineBase (client-safe metadata), import from @memberjunction/integration-engine-base
 export { IntegrationEngine } from './IntegrationEngine.js';
