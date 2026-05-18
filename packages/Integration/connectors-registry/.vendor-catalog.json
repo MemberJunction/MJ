@@ -1,4 +1,93 @@
 {
   "$schema": "./.schemas/vendor-catalog.schema.json",
-  "vendors": []
+  "vendors": [
+    {
+      "Vendor": "HubSpot",
+      "ConnectorType": "REST",
+      "AuthPattern": "OAuth2-AuthCode + Bearer header (or Private App static access token using same Bearer pattern); CredentialTypeID='OAuth2AuthCode' for Public Apps, 'APIKey' for Private Apps",
+      "PaginationType": "Cursor",
+      "ResponseEnvelope": "results",
+      "ApiDocsURL": "https://developers.hubspot.com/docs",
+      "SDKReferenceURL": "https://github.com/HubSpot/hubspot-api-nodejs",
+      "OpenAPISpecURL": "https://github.com/HubSpot/HubSpot-public-api-spec-collection",
+      "DocsScrapingStrategy": "openapi-3.x-repo",
+      "TemplateVarPattern": "{resourceId} at path tail; HubSpot uses flat resource paths (e.g. /crm/v3/objects/contacts/{contactId}) — minimal parent-child nesting in the static spec. Associations are modeled as resources (/crm/v3/objects/{from}/{id}/associations/...) not as parent-child paths, so URL-path FK gate DF3 fires rarely; DF4 (name-pattern-suffix) drives most FK detection.",
+      "RateLimitNotes": "100 req / 10s per-app (OAuth + Private). Non-batch counts as one call per request; batch endpoints count as one call regardless of batch size (strong preference for /batch/... siblings on large IOs). 429 honors Retry-After header. Daily quotas exist per HubSpot tier (Free/Starter/Pro/Enterprise) but not surfaced as a rate-limit window.",
+      "PrimaryKeyConvention": "Two candidates: `id` (universal v3 surface, DP4 likely confidence) and `hs_object_id` (HubSpot internal canonical, vendor-specific-pk provable confidence). Both declared in PkNameCandidates; the IOF marked PK varies by IO depending on which appears in the schema.",
+      "VerifiedPatterns": [],
+      "LastVerifiedAt": "2026-05-18T22:54:19Z",
+      "LiveTestedAgainst": [],
+      "KnownConstraints": [
+        {
+          "Constraint": "Custom objects + custom fields are runtime-only",
+          "Notes": "HubSpot's static OpenAPI spec contains zero custom-object markers — all custom objects and custom properties (`customProperties.*` namespace) are surfaced only via the Properties API at runtime. Static metadata declares IsStandardObject=true and IsCustomField=false uniformly; IsVendorCustomObject() handles runtime detection by namespace match."
+        },
+        {
+          "Constraint": "OpenAPI spec collection labeled 'internal use only'",
+          "Notes": "HubSpot/HubSpot-public-api-spec-collection README states the specs are 'intended solely for HubSpot's internal use, specifically for our Postman integration'. Format may shift without deprecation notices. Drift detection requires periodic re-runs of the extractor script; SourceAuditor's Authority score was docked from 5 → 4 for this reason."
+        },
+        {
+          "Constraint": "api-catalog-public/v1/apis endpoint 404s intermittently",
+          "Notes": "HubSpot's changelog advertises a runtime catalog endpoint that is not reliably available. The extractor does NOT depend on it; static spec collection is the only stable discovery surface."
+        },
+        {
+          "Constraint": "10 FK targets lack detectable PK in OpenAPI",
+          "Notes": "Account.AuditLogs.security.objectId, Automation.AutomationV4.email-campaigns.flowId, CMS.CmsContentAudit.v3.objectId, CRM.Timeline.events.objectId, CommunicationPreferences.Subscriptions.generate.subscriptionId, Events.{Events.events,SendEventCompletions.send}.objectId, Marketing.MarketingEvents.{v3,marketing-events,events}.objectId — RelatedIntegrationObjectID populated, RelatedIntegrationObjectFieldName null. Source-level gap in HubSpot's OpenAPI; surfaces as Invariant 3 warnings (not errors)."
+        },
+        {
+          "Constraint": "No per-field deprecation markers",
+          "Notes": "HubSpot does not surface field-level `deprecated: true` flags in their OpenAPI consistently. IsDeprecated=false is emitted uniformly across all 1763 IOFs."
+        },
+        {
+          "Constraint": "Two HubSpot incremental-cursor candidate fields per IO",
+          "Notes": "CRM v3 objects expose both `hs_lastmodifieddate` (canonical, Provable confidence) and `updatedAt` (v3 surface, Likely). Extractor prefers hs_lastmodifieddate when present; FetchChanges reads whichever cursor field the IO's metadata declares. Both ISO 8601 strings — lexicographic max-comparison correctly tracks chronological max."
+        }
+      ],
+      "FailurePatternsResolvedHere": [
+        "FP-001"
+      ],
+      "Quirks": [
+        {
+          "Title": "CRM responses wrap field values in a `properties` envelope",
+          "Description": "List/search/get on CRM endpoints returns `{ id, createdAt, updatedAt, archived, properties: { <field>: <value>, ... } }`. The connector's TransformRecord flattens `properties` to top level so downstream consumers see one flat shape. Writes are wrapped back via WrapWriteBody as `{ properties: { ... } }`. Non-CRM endpoints (Settings, Webhooks Journal, Conversations, Marketing) return bare bodies but the wrapping is still applied uniformly because the populated metadata is overwhelmingly CRM-shaped; per-endpoint exception would require a per-IO CreateRequestBodyShape knob which is not currently set.",
+          "ProvenanceURL": "https://developers.hubspot.com/docs/api/crm/contacts"
+        },
+        {
+          "Title": "`paging.next.after` cursor (not next_url) pagination",
+          "Description": "Unlike most cursor schemes that return a full next-URL, HubSpot returns an opaque token under `paging.next.after`. The connector reads it verbatim and re-sends as `?after=<cursor>`. Absence of `paging.next` (or its `.after` property) signals end-of-results. The HasMore signal comes from existence of `paging.next.after`, not from a count comparison.",
+          "ProvenanceURL": "https://developers.hubspot.com/docs/api/usage-details#pagination"
+        },
+        {
+          "Title": "Per-resource `modifiedSince` incremental query param",
+          "Description": "HubSpot does NOT have a global change-tracking endpoint; incremental sync is per-resource via `?modifiedSince=<ISO8601>` on individual list endpoints. The connector's metadata declares IncrementalSyncCapability='per-resource-query-param' + IncrementalQueryParamName='modifiedSince' + IncrementalQueryParamFormat='ISO8601'. FetchChanges validates the watermark via WatermarkService.ValidateWatermark and falls through to a full pull on format-mismatch (engine logs the mismatch).",
+          "ProvenanceURL": "https://developers.hubspot.com/docs/api/crm/contacts"
+        },
+        {
+          "Title": "Batch endpoints count as one rate-limited call",
+          "Description": "HubSpot's 100 req / 10s rate limit treats /batch/<verb> endpoints as a single call regardless of how many records the batch payload contains. This makes /batch/read significantly more efficient than N parallel /get calls for large fetches. 49 of 327 IOs expose /batch/... siblings; BulkAPIPath populated where present.",
+          "ProvenanceURL": "https://developers.hubspot.com/docs/getting-started/overview"
+        },
+        {
+          "Title": "Spec rollouts versioned by date AND by v3/v4",
+          "Description": "Same object often has multiple rollouts: e.g. PublicApiSpecs/CRM/Contacts/Rollouts/<id>/v3/contacts.json AND PublicApiSpecs/CRM/Contacts/Rollouts/<id>/2026-09-beta/contacts.json. The extractor's rankRolloutVersion prefers v3/v4 over dated betas because beta rollouts use generic-path templates (/crm/objects/{objectType}) that produce poorer IO/IOF emissions than the concrete typed paths.",
+          "ProvenanceURL": "https://github.com/HubSpot/HubSpot-public-api-spec-collection"
+        },
+        {
+          "Title": "Two competing PKs: `id` vs `hs_object_id`",
+          "Description": "Most CRM v3 objects expose both: `id` (universal v3 surface, DP4 naming-convention-likely) and `hs_object_id` (HubSpot's internal canonical, DP6 vendor-specific-pk provable). The connector's VendorAdapter declares both as candidates; the IOF marked PK depends on which appears in the object's schema. Code should never assume a single PK field name globally; always read from metadata's IsPrimaryKey IOFs.",
+          "ProvenanceURL": "https://developers.hubspot.com/docs/api/crm/understanding-the-crm"
+        },
+        {
+          "Title": "Custom properties surface via Properties API, not OpenAPI",
+          "Description": "Any field under `customProperties.*` is a tenant-defined custom field that does NOT appear in the static OpenAPI catalog. The connector's IsVendorCustomObject() returns true for IOs whose Name starts with `customProperties.`; runtime discovery via the Properties API is required to enumerate them.",
+          "ProvenanceURL": "https://developers.hubspot.com/docs/api/crm/properties"
+        },
+        {
+          "Title": "OAuth refresh-token rotation: HubSpot does NOT rotate",
+          "Description": "HubSpot's token endpoint returns a new access_token on refresh but reuses the existing refresh_token. Naive token-management code that overwrites the stored refresh_token with the (omitted) response value loses the credential after the first refresh. Resolved via OAuth2TokenManager.RefreshToken which preserves the existing refresh_token when the response omits it. See FP-001.",
+          "ProvenanceURL": "https://developers.hubspot.com/docs/api/working-with-oauth"
+        }
+      ]
+    }
+  ]
 }

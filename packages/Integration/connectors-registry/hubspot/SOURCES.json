@@ -1,0 +1,108 @@
+{
+  "Vendor": "HubSpot",
+  "Sources": [
+    {
+      "URL": "https://developers.hubspot.com/docs",
+      "Tier": 1,
+      "Category": "OfficialDocs",
+      "Documents": ["object-catalog", "field-schemas", "auth", "rate-limits", "pagination", "incremental-sync", "webhooks", "bulk-endpoints", "error-codes", "custom-objects"],
+      "DocumentsScore": { "object-catalog": 5, "field-schemas": 4, "auth": 4, "rate-limits": 4, "pagination": 5, "incremental-sync": 4, "webhooks": 4, "bulk-endpoints": 4, "error-codes": 3, "custom-objects": 5 },
+      "AuditScores": { "Freshness": 5, "Coverage": 5, "Authority": 5, "FormatQuality": 3 },
+      "OverallScore": 4.5,
+      "Notes": "Official HubSpot developer documentation hub. Covers CRM, Conversations, Automation/Workflow, Calling Extensions, CMS, Marketing. Versioned URLs (/api-reference/latest/ and dated betas like /api-reference/2026-09-beta/) indicate active maintenance. HTML — parseable but not as machine-friendly as OpenAPI."
+    },
+    {
+      "URL": "https://developers.hubspot.com/docs/getting-started/overview",
+      "Tier": 1,
+      "Category": "OfficialDocs",
+      "Documents": ["auth", "rate-limits", "pagination"],
+      "DocumentsScore": { "object-catalog": 1, "field-schemas": 0, "auth": 5, "rate-limits": 5, "pagination": 4, "incremental-sync": 2, "webhooks": 1, "bulk-endpoints": 1, "error-codes": 3, "custom-objects": 1 },
+      "AuditScores": { "Freshness": 5, "Coverage": 4, "Authority": 5, "FormatQuality": 3 },
+      "OverallScore": 4.25,
+      "Notes": "Entry-point overview for HubSpot's public APIs. Best source for auth model (private apps, OAuth, scopes) and rate-limit conventions. Pair with /docs for object-level surface."
+    },
+    {
+      "URL": "https://developers.hubspot.com/docs/llms.txt",
+      "Tier": 1,
+      "Category": "OfficialDocs",
+      "Documents": ["object-catalog", "field-schemas", "auth", "rate-limits", "pagination", "incremental-sync", "webhooks", "bulk-endpoints", "error-codes", "custom-objects"],
+      "DocumentsScore": { "object-catalog": 5, "field-schemas": 4, "auth": 4, "rate-limits": 4, "pagination": 5, "incremental-sync": 4, "webhooks": 4, "bulk-endpoints": 4, "error-codes": 3, "custom-objects": 4 },
+      "AuditScores": { "Freshness": 5, "Coverage": 5, "Authority": 5, "FormatQuality": 5 },
+      "OverallScore": 5.0,
+      "Notes": "Officially advertised on /docs as the canonical documentation index for LLM/agent consumption. Best entry point for programmatic crawling — use this to enumerate every reference page before scraping."
+    },
+    {
+      "URL": "https://github.com/HubSpot/HubSpot-public-api-spec-collection",
+      "Tier": 2,
+      "Category": "OpenAPISpec",
+      "Documents": ["object-catalog", "field-schemas", "pagination", "error-codes"],
+      "DocumentsScore": { "object-catalog": 5, "field-schemas": 5, "auth": 2, "rate-limits": 0, "pagination": 5, "incremental-sync": 1, "webhooks": 2, "bulk-endpoints": 5, "error-codes": 4, "custom-objects": 1 },
+      "AuditScores": { "Freshness": 4, "Coverage": 5, "Authority": 4, "FormatQuality": 5 },
+      "OverallScore": 4.5,
+      "Notes": "HubSpot-owned repo containing OpenAPI 3.0 schemas for the public APIs (PublicApiSpecs/ folder). README states the specs are 'intended solely for HubSpot's internal use, specifically for our Postman integration' — so format may shift without notice, but they ARE the source the Postman workspace consumes. Best machine-readable surface for code generation. Authority docked to 4 because of the internal-use disclaimer."
+    },
+    {
+      "URL": "https://github.com/HubSpot/hubspot-api-nodejs",
+      "Tier": 1,
+      "Category": "OfficialSDK",
+      "Documents": ["object-catalog", "field-schemas", "auth", "pagination", "error-codes"],
+      "DocumentsScore": { "object-catalog": 5, "field-schemas": 5, "auth": 5, "rate-limits": 2, "pagination": 5, "incremental-sync": 3, "webhooks": 3, "bulk-endpoints": 4, "error-codes": 4, "custom-objects": 2 },
+      "AuditScores": { "Freshness": 5, "Coverage": 5, "Authority": 5, "FormatQuality": 5 },
+      "OverallScore": 5.0,
+      "Notes": "Official HubSpot Node.js SDK (V3 APIs). 100% TypeScript, generated from HubSpot's internal OpenAPI specs via the OpenAPI code generator. Latest release v13.5.0 (March 2026). npm: @hubspot/api-client. Excellent reference for object shapes, auth, pagination, retry conventions — and a candidate transport layer."
+    },
+    {
+      "URL": "https://developers.hubspot.com/docs/api/client-libraries",
+      "Tier": 1,
+      "Category": "OfficialDocs",
+      "Documents": ["auth"],
+      "DocumentsScore": { "object-catalog": 0, "field-schemas": 0, "auth": 3, "rate-limits": 0, "pagination": 0, "incremental-sync": 0, "webhooks": 0, "bulk-endpoints": 0, "error-codes": 0, "custom-objects": 0 },
+      "AuditScores": { "Freshness": 4, "Coverage": 3, "Authority": 5, "FormatQuality": 3 },
+      "OverallScore": 3.75,
+      "Notes": "Catalog of HubSpot's official client SDKs (Node.js, Python, PHP, Ruby). Confirms which language SDKs are first-party. Use to cross-check SDK behavior parity."
+    },
+    {
+      "URL": "https://www.postman.com/hubspot/hubspot-public-api-workspace/overview",
+      "Tier": 2,
+      "Category": "PostmanCollection",
+      "Documents": ["object-catalog", "field-schemas", "auth", "pagination"],
+      "DocumentsScore": { "object-catalog": 5, "field-schemas": 5, "auth": 4, "rate-limits": 1, "pagination": 4, "incremental-sync": 3, "webhooks": 3, "bulk-endpoints": 4, "error-codes": 3, "custom-objects": 2 },
+      "AuditScores": { "Freshness": 4, "Coverage": 5, "Authority": 5, "FormatQuality": 4 },
+      "OverallScore": 4.5,
+      "Notes": "Official HubSpot Postman workspace, linked from developers.hubspot.com/postman. Collections cover CRM, CMS, Marketing, etc., kept in sync with the spec collection repo. Good cross-check for endpoint shapes and example payloads. WebFetch returned minimal content (likely JS-rendered) — verified via the official /postman landing page."
+    },
+    {
+      "URL": "https://developers.hubspot.com/postman",
+      "Tier": 1,
+      "Category": "OfficialDocs",
+      "Documents": ["object-catalog"],
+      "DocumentsScore": { "object-catalog": 3, "field-schemas": 0, "auth": 0, "rate-limits": 0, "pagination": 0, "incremental-sync": 0, "webhooks": 0, "bulk-endpoints": 0, "error-codes": 0, "custom-objects": 0 },
+      "AuditScores": { "Freshness": 4, "Coverage": 3, "Authority": 5, "FormatQuality": 3 },
+      "OverallScore": 3.75,
+      "Notes": "Official HubSpot landing page that authoritatively links to the Postman workspace plus the specialized Flows workspace (https://www.postman.com/hubspot/workspace/hubspot-flows-workspace). Use to establish authority of the Postman collections."
+    },
+    {
+      "URL": "https://developers.hubspot.com/changelog/get-all-publicly-available-open-api-specifications",
+      "Tier": 1,
+      "Category": "OfficialDocs",
+      "Documents": [],
+      "DocumentsScore": { "object-catalog": 0, "field-schemas": 0, "auth": 0, "rate-limits": 0, "pagination": 0, "incremental-sync": 0, "webhooks": 0, "bulk-endpoints": 0, "error-codes": 0, "custom-objects": 0 },
+      "AuditScores": { "Freshness": 3, "Coverage": 2, "Authority": 5, "FormatQuality": 3 },
+      "OverallScore": 3.25,
+      "Notes": "Changelog post announcing the api-catalog-public endpoint. NOTE: the advertised endpoint (https://api.hubspot.com/api-catalog-public/v1/apis) currently 404s — community threads confirm intermittent availability. Documented here only as evidence that an official catalog endpoint is intended to exist; do NOT rely on it as a live source."
+    }
+  ],
+  "GapsIdentified": [
+    "Official OpenAPI specs are published in a repo HubSpot labels 'internal use only' — format/structure may shift without deprecation notices.",
+    "The api-catalog-public/v1/apis endpoint advertised in HubSpot's changelog currently returns 404; cannot be used as a runtime spec discovery source.",
+    "HubSpot does not announce changes to OpenAPI specs in the changelog — drift detection must be done by diffing the spec-collection repo on a schedule.",
+    "Authentication flows (private apps, OAuth 2.0 install, scopes) are documented in HTML but not present in the OpenAPI specs (specs cover endpoints, not the auth dance) — requires scraping /docs/getting-started/.",
+    "Rate-limit and quota behavior is documented separately from endpoint specs; will need a dedicated extraction pass.",
+    "Custom-objects (user-defined schemas) require runtime discovery — not present in the static OpenAPI surface."
+  ],
+  "AuthClassification": "OAuth 2.0 Authorization Code grant with refresh tokens; alternative private-app static access tokens supported. Wire-form: Authorization: Bearer <access_token>. Maps to MJ CredentialTypeID='APIKey' for private apps OR 'OAuth2AuthCode' for OAuth install.",
+  "PaginationClassification": "Cursor (paging.next.after response path; ?after=<cursor> request parameter; ?limit=<n> page size).",
+  "ObservedSchemaFormats": ["OpenAPI 3.0 (HubSpot/HubSpot-public-api-spec-collection)", "TypeScript SDK type definitions (hubspot-api-nodejs)", "Postman v2.1 (public workspace)"],
+  "RecommendedAction": "ProceedToExtraction",
+  "EscalationReason": null
+}

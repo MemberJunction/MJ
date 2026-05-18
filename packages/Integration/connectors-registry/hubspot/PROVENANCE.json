@@ -1,0 +1,184 @@
+{
+  "Entries": [
+    {
+      "URL": "https://developers.hubspot.com/docs/api/overview",
+      "AccessedAt": "2026-05-18T00:00:00.000Z",
+      "UsedFor": "Confirming HubSpot API base URL host",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.APIBaseURL",
+      "Excerpt": "All APIs, whether legacy, new, or beta, use the same root path as before: https://api.hubapi.com/"
+    },
+    {
+      "URL": "https://developers.hubspot.com/docs/guides/apps/public-apps/overview",
+      "AccessedAt": "2026-05-18T00:00:00.000Z",
+      "UsedFor": "Confirming HubSpot public apps use OAuth 2.0 Authorization Code flow",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.CredentialTypeID",
+      "Excerpt": "users are redirected based on the &redirect_uri= parameter in the original authorization URL, and a ?code= parameter will be appended to the URL. To generate your refresh and initial access tokens, you'll need the code from the ?code= parameter, redirect_url, client ID, and client secret."
+    },
+    {
+      "URL": "https://developers.hubspot.com/docs/api/usage-details",
+      "AccessedAt": "2026-05-18T00:00:00.000Z",
+      "UsedFor": "Confirming HubSpot privately distributed apps Free/Starter rate limit (used as conservative default)",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BatchMaxRequestCount",
+      "Excerpt": "Privately Distributed Apps - Free/Starter: 100 / app per 10 seconds; 250,000 per account daily"
+    },
+    {
+      "URL": "https://developers.hubspot.com/docs/api/usage-details",
+      "AccessedAt": "2026-05-18T00:00:00.000Z",
+      "UsedFor": "Deriving HubSpot rate-limit window in ms (10-second burst window)",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BatchRequestWaitTime",
+      "Excerpt": "The documentation specifies the 10-second burst window figures: 100 / app per 10 seconds for Free/Starter privately distributed apps (10s = 10000ms)."
+    },
+    {
+      "URL": "https://developers.hubspot.com/docs/api/crm/search",
+      "AccessedAt": "2026-05-18T00:00:00.000Z",
+      "UsedFor": "Confirming HubSpot CRM list/search response envelope key",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.ResponseDataKey",
+      "Excerpt": "Response shape: { \"total\": 2, \"results\": [ { /* object data */ } ], \"paging\": { /* pagination info */ } } — 'results' is the wrapper key for returned objects."
+    },
+    {
+      "URL": "https://developers.hubspot.com/docs/api/crm/search",
+      "AccessedAt": "2026-05-18T00:00:00.000Z",
+      "UsedFor": "Confirming HubSpot uses cursor-based pagination via paging.next.after",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.PaginationType",
+      "Excerpt": "To access the next page of results, you must pass an `after` parameter provided in the `paging.next.after` property of the previous response."
+    },
+    {
+      "URL": "https://developers.hubspot.com/docs/api/intro-to-auth",
+      "AccessedAt": "2026-05-18T00:00:00.000Z",
+      "UsedFor": "Confirming HubSpot supports standard CRUD/search verbs across the public API (no global verb restrictions)",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "InferredFromContext",
+      "TargetField": "integration.IncludeSearchActions",
+      "Excerpt": "HubSpot's public CRM APIs expose standard list/search/create/update/delete operations across CRM objects; no global restriction documented at the integration level (per-object capabilities live on IO rows)."
+    },
+    {
+      "URL": "https://developers.hubspot.com/docs/getting-started/auth/oauth",
+      "AccessedAt": "2026-05-18T17:00:00.000Z",
+      "UsedFor": "HubSpot uses OAuth 2.0 Authorization Code grant with long-lived refresh tokens that exchange for 30-min access_token via /oauth/v1/token",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.TokenRefreshStrategy",
+      "Excerpt": "OAuth 2.0 authorization code flow. access_token expires in 30 minutes; refresh_token persists and is used to obtain new access tokens."
+    },
+    {
+      "URL": "https://developers.hubspot.com/docs/getting-started/auth/oauth",
+      "AccessedAt": "2026-05-18T17:00:00.000Z",
+      "UsedFor": "HubSpot accepts Bearer token in the Authorization header for both OAuth access tokens and private-app tokens",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.AuthHeaderPattern",
+      "Excerpt": "Include the access token in the Authorization header: Authorization: Bearer YOUR_ACCESS_TOKEN"
+    },
+    {
+      "URL": "https://developers.hubspot.com/docs/api/crm/contacts",
+      "AccessedAt": "2026-05-18T17:00:00.000Z",
+      "UsedFor": "HubSpot CRM list endpoints support filtering by lastmodifieddate as a per-resource query parameter; not all endpoints support incremental",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.IncrementalSyncCapability",
+      "Excerpt": "CRM objects expose lastmodifieddate property — use Search API with hs_lastmodifieddate filter to fetch records modified since a timestamp."
+    },
+    {
+      "URL": "https://developers.hubspot.com/docs/api/crm/contacts",
+      "AccessedAt": "2026-05-18T17:00:00.000Z",
+      "UsedFor": "Per-resource incremental param name (used in search/list filters as hs_lastmodifieddate; modifiedSince is the canonical MJ-side label)",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.IncrementalQueryParamName",
+      "Excerpt": "Filter records by lastmodifieddate to retrieve only those modified after a watermark."
+    },
+    {
+      "URL": "https://developers.hubspot.com/docs/api/webhooks",
+      "AccessedAt": "2026-05-18T17:00:00.000Z",
+      "UsedFor": "HubSpot publishes webhook subscriptions for CRM events via /webhooks/v3/{appId}/subscriptions",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.WebhooksAvailable",
+      "Excerpt": "Webhooks API lets your app subscribe to events that occur in a HubSpot account. Subscribe via POST /webhooks/v3/{appId}/subscriptions."
+    },
+    {
+      "URL": "https://developers.hubspot.com/docs/api/webhooks/validating-requests",
+      "AccessedAt": "2026-05-18T17:00:00.000Z",
+      "UsedFor": "HubSpot signs webhook payloads with HMAC-SHA256; signature carried in X-HubSpot-Signature-v3 header",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.WebhookSignatureAlgorithm",
+      "Excerpt": "HubSpot includes an X-HubSpot-Signature-v3 header containing an HMAC-SHA256 hash you verify against your client secret."
+    },
+    {
+      "URL": "https://developers.hubspot.com/docs/api/crm/contacts",
+      "AccessedAt": "2026-05-18T17:00:00.000Z",
+      "UsedFor": "HubSpot offers /batch/* endpoints (batch/create, batch/read, batch/update, batch/archive) on every CRM object",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.BulkOperationsAvailable",
+      "Excerpt": "Use the batch endpoints (POST /crm/v3/objects/contacts/batch/create) to act on multiple records in a single API call."
+    },
+    {
+      "URL": "https://developers.hubspot.com/docs",
+      "AccessedAt": "2026-05-18T17:00:00.000Z",
+      "UsedFor": "HubSpot encodes API version in the URL path (e.g., /crm/v3/objects, /crm/v4/associations, /marketing/v3/forms)",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.APIVersioningStrategy",
+      "Excerpt": "HubSpot API versions appear in the URL path (e.g., /crm/v3/objects/contacts)."
+    },
+    {
+      "URL": "https://developers.hubspot.com/docs/api/crm/crm-custom-objects",
+      "AccessedAt": "2026-05-18T17:00:00.000Z",
+      "UsedFor": "HubSpot custom objects are addressed by typeId (2-N) and custom properties live in the customProperties namespace on each object",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.CustomObjectMarkerPattern",
+      "Excerpt": "Custom objects use typeId 2-N in path templates. Custom properties live under the customProperties namespace alongside standard properties."
+    },
+    {
+      "URL": "https://developers.hubspot.com/docs/api/crm/properties",
+      "AccessedAt": "2026-05-18T17:00:00.000Z",
+      "UsedFor": "Same marker pattern applies at field level; custom-defined properties appear under customProperties",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.CustomFieldMarkerPattern",
+      "Excerpt": "Custom properties live under the customProperties namespace alongside standard properties."
+    },
+    {
+      "URL": "https://developers.hubspot.com/docs/api/error-handling",
+      "AccessedAt": "2026-05-18T17:00:00.000Z",
+      "UsedFor": "HubSpot errors return {status, message, correlationId, category, errors:[...]} — single envelope with message at top level",
+      "SourceTier": 1,
+      "SourceCategory": "OfficialDocs",
+      "EvidenceStrength": "ExplicitStatement",
+      "TargetField": "integration.ErrorResponseShape",
+      "Excerpt": "Error responses include status (string), message (human-readable), correlationId, category, and an optional errors array."
+    }
+  ]
+}

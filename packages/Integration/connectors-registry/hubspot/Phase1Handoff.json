@@ -1,0 +1,19 @@
+{
+  "Status": "Complete",
+  "Identity": {
+    "Name": "HubSpot",
+    "ClassName": "HubSpotConnector",
+    "IntegrationName": "HubSpot",
+    "Description": "HubSpot is an AI-powered customer platform that unites marketing, sales, and customer service teams with a Smart CRM as the single source of truth to attract leads, close deals, and grow revenue.",
+    "NavigationBaseURL": "https://app.hubspot.com/",
+    "Icon": "fa-solid fa-h",
+    "ActionIconClass": "fa-solid fa-h",
+    "ActionCategoryName": "HubSpot",
+    "ActionParentCategoryName": null
+  },
+  "ExistsInDB": { "Found": false },
+  "Provenance": [
+    { "URL": "https://www.hubspot.com/", "UsedFor": "Brand verification + canonical name + NavigationBaseURL" },
+    { "URL": "https://www.hubspot.com/products", "UsedFor": "Product description" }
+  ]
+}
