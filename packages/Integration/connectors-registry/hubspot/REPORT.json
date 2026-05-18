@@ -61,7 +61,25 @@
     "T2_CrossProgrammaticConsistency": { "Status": "Skipped", "Reason": "MCP-stubbed-in-Phase-0", "FrameworkGap": true },
     "T3_DocStructureSelfCheck": { "Status": "Skipped", "Reason": "MCP-stubbed-in-Phase-0", "FrameworkGap": true },
     "T4_MockedFixture": { "Status": "Pass", "DurationMs": 6116, "TestsRun": 36, "TestsPassed": 35, "TestsSkipped": 1, "SkippedNote": "HubSpotConnector.live.test.ts — describe.skipIf(!HUBSPOT_LIVE_TESTING)" },
-    "T9_Performance": { "Status": "Pass", "RunVia": "local-vitest-scaffold", "MCPVocabularyGap": true, "ThresholdRecordsPerSec": 100, "ActualSubMillisecond": true, "ConcurrentFetchIsolation": "verified" },
+    "T9_Performance": {
+      "Status": "Pass",
+      "RunVia": "local-vitest-scaffold",
+      "MCPVocabularyGap": true,
+      "Measurements": {
+        "ThroughputRecordsPerSec": 1000000,
+        "ThroughputThreshold": 100,
+        "ThroughputAssertion": "Pass",
+        "HeapDeltaMB": 0.6,
+        "HeapDeltaThresholdMB": 500,
+        "HeapDeltaAssertion": "Pass",
+        "PeakHeapAbsoluteMB": 580.8,
+        "PeakHeapAbsoluteNote": "Informational only — dominated by vitest base + loaded modules + 1.7MB hubspot.json; the connector's own cost is the 0.6MB delta. Absolute is not asserted against the 500MB ceiling because it would measure the test harness, not the connector.",
+        "ConcurrentFetchIsolation": "Verified — 3-IO Promise.all returns correctly-isolated per-IO responses"
+      },
+      "RecordsProcessed": 1000,
+      "ElapsedMs": 1,
+      "TestLocation": "packages/Integration/connectors-registry/hubspot/src/__tests__/HubSpotConnector.test.ts (T9 perf scaffold describe block)"
+    },
     "T10_LiveAPI": { "Status": "Skipped-no-creds", "ScaffoldFile": "src/__tests__/HubSpotConnector.live.test.ts", "MCPVocabularyGap": true, "InvocationPath": "/run-tier-tests hubspot --tiers T8 --credentials <path>" }
   },
   "CoverageMatrix_Tally": {
@@ -69,7 +87,16 @@
     "Fail": 0,
     "NotApplicable": 1,
     "Skipped": 1,
-    "TotalRows": 36
+    "TotalRows": 36,
+    "NA_Row": "Row 16 (hierarchy detection) — HubSpot's static OpenAPI uses flat resource paths; no parent-child URL templates exist in the source. 0 IOs with ParentObjectName populated, accurate to source.",
+    "Skipped_Row": "Row 36 (T10 live API) — scaffold exists at HubSpotConnector.live.test.ts; describe.skipIf(!HUBSPOT_LIVE_TESTING) gate skips cleanly without credentials. Per credential-guard rule, agent never reads credential bytes; MCP subprocess is the authorized path. MCP runner does not yet have a T10 tier vocabulary."
+  },
+  "Incremental_5_Scenarios_§13_4": {
+    "1_FirstSync": "Pass — no watermark, no modifiedSince param, NewWatermarkValue = max(updatedAt) across batch",
+    "2_SubsequentSync": "Pass — ctx.WatermarkValue present, modifiedSince URL-encoded into query, NewWatermarkValue ≥ incoming",
+    "3_OutOfOrderBatch": "Pass — records [t3, t1, t2] yield NewWatermarkValue = t3 (max-seen, NOT most-recent-in-batch)",
+    "4_PartialFailure": "Pass — HTTP 500 throws, engine catches, watermark untouched",
+    "5_FormatMismatch": "Pass — malformed 'this-is-not-a-timestamp' → no modifiedSince added, baseline reset, NewWatermarkValue derives from batch alone"
   },
   "FrameworkFollowUps": [
     "MCP runner: implement or remove T2/T3 stubs",
@@ -97,7 +124,7 @@
       "packages/Integration/connectors-registry/.vendor-catalog.json"
     ],
     "Deferred": [
-      "metadata/actions/integrations-auto-generated/.hubspot-actions.json — requires mj-sync push of expanded HubSpot metadata to DB before regeneration; held pending explicit user authorization (critical rule #1)"
+      "metadata/actions/integrations-auto-generated/.hubspot-actions.json — generator is DB-read-driven (requires mj-cli auth context with bound CurrentUser; bare tsx invocation fails with TypeError). Even with auth, current DB state is pre-Phase-B-expansion so generator output would match the existing 39-action file. Two unblocks: (a) refactor generator to add metadata-file-driven mode; (b) defer to a post-B.4 batch event with one mj-sync push of all 4 vendors' metadata + a single regenerator pass. Per user (this run): path (b)."
     ]
   },
   "DecisionPointsForB2_Salesforce": [

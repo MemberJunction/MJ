@@ -528,7 +528,7 @@ describe('HubSpotConnector', () => {
         // caught at the unit level.
 
         describe('T9 perf scaffold', () => {
-            it('processes 1000 records in a single FetchChanges call at ≥100 rec/sec', async () => {
+            it('processes 1000 records in a single FetchChanges call at ≥100 rec/sec + peak heap delta ≤500MB', async () => {
                 class PerfMockedConnector extends HubSpotConnector {
                     protected override LoadMetadata() {
                         return {
@@ -555,6 +555,12 @@ describe('HubSpotConnector', () => {
                     }
                 }
                 const c = new PerfMockedConnector();
+
+                // Heap baseline. Force a GC if --expose-gc was passed so the
+                // baseline is post-collection; otherwise just snapshot.
+                if (typeof global.gc === 'function') global.gc();
+                const heapBefore = process.memoryUsage().heapUsed;
+
                 const start = Date.now();
                 const result = await c.FetchChanges({
                     CompanyIntegration: { Configuration: '{}', IntegrationID: 'fake' },
@@ -564,9 +570,30 @@ describe('HubSpotConnector', () => {
                     WatermarkValue: null,
                 } as never);
                 const elapsedMs = Date.now() - start;
-                const throughput = (result.Records.length / elapsedMs) * 1000;
+
+                // Heap snapshot WHILE the result is still live-referenced —
+                // measures peak during the pull, not after GC. Records[] is
+                // still rooted by `result` at this point.
+                const heapAfter = process.memoryUsage().heapUsed;
+                const heapDeltaMB = (heapAfter - heapBefore) / (1024 * 1024);
+                const peakHeapMB = heapAfter / (1024 * 1024);
+
+                const throughput = (result.Records.length / Math.max(elapsedMs, 1)) * 1000;
+
+                // Report both numbers so reviewers see what the threshold actually
+                // catches vs what it doesn't:
+                //   heapDelta = memory cost induced by the FetchChanges call itself
+                //   peakHeap  = absolute process heap (includes vitest + loaded modules)
+                // The directive's 500MB threshold is about catching runaway data
+                // structures in the connector, not vitest base overhead, so the
+                // assertion runs against heapDelta. Absolute is informational.
+                console.log(`[T9 perf] elapsed=${elapsedMs}ms throughput=${Math.round(throughput).toLocaleString()} rec/sec heapDelta=${heapDeltaMB.toFixed(1)}MB peakHeapAbsolute=${peakHeapMB.toFixed(1)}MB records=${result.Records.length}`);
+
                 expect(result.Records.length).toBe(1000);
-                expect(throughput).toBeGreaterThanOrEqual(100); // ≥100 rec/sec per directive item C
+                // Directive item C — three pillars (this test covers two; the
+                // concurrent-3-IO pillar is the next test in this describe block):
+                expect(throughput).toBeGreaterThanOrEqual(100);       // ≥100 rec/sec
+                expect(heapDeltaMB).toBeLessThanOrEqual(500);         // ≤500MB cost induced by the operation
             });
 
             it('concurrent 3-IO fetch via Promise.all does not cross-contaminate state', async () => {
