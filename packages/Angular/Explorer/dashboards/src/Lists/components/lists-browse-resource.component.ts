@@ -1,10 +1,11 @@
 import { Component, ViewEncapsulation, ChangeDetectorRef, OnDestroy, ElementRef, HostListener } from '@angular/core';
-import { RegisterClass , UUIDsEqual } from '@memberjunction/global';
+import { RegisterClass , UUIDsEqual, MJGlobal } from '@memberjunction/global';
 import { BaseResourceComponent } from '@memberjunction/ng-shared';
 import { ResourceData, MJListCategoryEntity } from '@memberjunction/core-entities';
 import { MJListEntity, MJListDetailEntity, MJUserFavoriteEntity } from '@memberjunction/core-entities';
-import { Metadata, RunView } from '@memberjunction/core';
+import { BaseEntity, BaseEntityEvent, Metadata, RunView } from '@memberjunction/core';
 import { Subject } from 'rxjs';
+import { takeUntil } from 'rxjs/operators';
 import { TabService } from '@memberjunction/ng-base-application';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
 import { ListSharingService, ListSharingSummary, ListShareDialogConfig, ListShareDialogResult } from '@memberjunction/ng-list-management';
@@ -1985,6 +1986,14 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
   public contextItemCapabilities: ListCapabilities = capabilitiesForLevel('Owner');
   private capabilityCache = new Map<string, SharePermissionLevel | null>();
 
+  // Tracks whether the in-memory categories list is known-stale
+  // relative to the DB. Flipped to true by the BaseEntity event
+  // subscription whenever any `MJ: List Categories` row is saved or
+  // deleted (most often from the Categories tab next door). Reset to
+  // false after `refreshCategoriesForDialog` reloads. Initial true so
+  // the first dialog open always populates from a fresh fetch.
+  private categoriesDirty = true;
+
   // Invitations / audit log dialogs (mockups 16, 18) — opened from
   // the share dialog. Each dialog binds to a single list at a time,
   // tracked by `activeShareListId`/`activeShareListName` lifted from
@@ -2038,8 +2047,35 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
 
   async ngOnInit() {
     super.ngOnInit();
+    this.subscribeToCategoryChanges();
     await this.loadData();
     this.NotifyLoadComplete();
+  }
+
+  /**
+   * Mark the in-memory categories list dirty whenever any BaseEntity
+   * raises a save / delete event for `MJ: List Categories`. The
+   * Create/Edit dialog uses this flag to skip the per-open RunView
+   * unless something has actually changed since last load — keeps the
+   * dialog snappy without showing stale categories.
+   *
+   * Subscribes to MJGlobal's event bus rather than wiring each
+   * category entity's per-instance listener, because the Categories
+   * tab creates fresh BaseEntity instances we can't see from here.
+   */
+  private subscribeToCategoryChanges(): void {
+    MJGlobal.Instance.GetEventListener()
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((mjEvt) => {
+        if (mjEvt.eventCode !== BaseEntity.BaseEventCode) return;
+        const beEvt = mjEvt.args as BaseEntityEvent | undefined;
+        if (!beEvt) return;
+        const entityName = beEvt.baseEntity?.EntityInfo.Name ?? beEvt.entityName;
+        if (entityName !== 'MJ: List Categories') return;
+        if (beEvt.type === 'save' || beEvt.type === 'delete') {
+          this.categoriesDirty = true;
+        }
+      });
   }
 
   ngOnDestroy() {
@@ -2098,6 +2134,9 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
 
       // Build flat categories for dropdown
       this.flatCategories = this.buildFlatCategories(this.categories);
+      // loadData() already pulled fresh categories — clear the dirty
+      // flag so the first dialog open doesn't redundantly refetch.
+      this.categoriesDirty = false;
 
       // Build user map
       const userMap = new Map<string, string>();
@@ -2623,9 +2662,14 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
   }
 
   /** Re-pull MJ: List Categories so the dropdown reflects any
-   *  newly-created categories from the Categories tab. Updates
-   *  `flatCategories` (the dropdown source) plus `categoryMap`. */
+   *  newly-created categories. Skips the round trip when nothing has
+   *  changed since the last load — `categoriesDirty` is flipped on
+   *  by the BaseEntity event subscription whenever a category row
+   *  is saved/deleted, so the only times this actually fetches are
+   *  (a) the first dialog open, and (b) after the user touched a
+   *  category somewhere else. */
   private async refreshCategoriesForDialog(): Promise<void> {
+    if (!this.categoriesDirty) return;
     try {
       const rv = RunView.FromMetadataProvider(this.ProviderToUse);
       const result = await rv.RunView<MJListCategoryEntity>({
@@ -2638,6 +2682,7 @@ export class ListsBrowseResource extends BaseResourceComponent implements OnDest
       this.categoryMap.clear();
       for (const cat of this.categories) this.categoryMap.set(cat.ID, cat);
       this.flatCategories = this.buildFlatCategories(this.categories);
+      this.categoriesDirty = false;
       this.cdr.detectChanges();
     } catch {
       // Best-effort — the dialog still works with the previously-loaded list.

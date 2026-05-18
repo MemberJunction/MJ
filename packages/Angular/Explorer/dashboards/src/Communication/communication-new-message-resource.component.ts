@@ -7,6 +7,7 @@ import {
   MJCommunicationProviderMessageTypeEntity,
 } from '@memberjunction/core-entities';
 import { RunView } from '@memberjunction/core';
+import { ActionEngineBase } from '@memberjunction/actions-base';
 import type { AudienceSource } from '@memberjunction/lists';
 import type { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
 import { MJNotificationService } from '@memberjunction/ng-notifications';
@@ -522,22 +523,15 @@ export class CommunicationsNewMessageResource extends BaseResourceComponent impl
 
   private async getSendToAudienceActionID(): Promise<string | null> {
     if (this.sendToAudienceActionID) return this.sendToAudienceActionID;
-    const id = await this.lookupActionIDByName('Send To Audience');
-    this.sendToAudienceActionID = id;
-    return id;
-  }
-
-  private async lookupActionIDByName(name: string): Promise<string | null> {
-    const rv = RunView.FromMetadataProvider(this.ProviderToUse);
-    const result = await rv.RunView<{ ID: string }>({
-      EntityName: 'MJ: Actions',
-      ExtraFilter: `Name='${name.replace(/'/g, "''")}'`,
-      Fields: ['ID'],
-      ResultType: 'simple',
-      MaxRows: 1,
-    });
-    if (!result.Success || !result.Results || result.Results.length === 0) return null;
-    return String(result.Results[0].ID);
+    // Read from the cached ActionEngineBase singleton rather than a
+    // fresh RunView. Config() is idempotent — short-circuits if the
+    // engine has already loaded — so calling it on every Preview/Send
+    // is effectively free after the first invocation.
+    const engine = ActionEngineBase.Instance;
+    await engine.Config(false, this.ProviderToUse.CurrentUser, this.ProviderToUse);
+    const match = engine.Actions?.find((a) => a.Name === 'Send To Audience');
+    this.sendToAudienceActionID = match?.ID ?? null;
+    return this.sendToAudienceActionID;
   }
 
   /**
