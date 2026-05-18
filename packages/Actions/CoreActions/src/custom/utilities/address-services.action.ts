@@ -2,6 +2,7 @@ import { ActionResultSimple, RunActionParams } from "@memberjunction/actions-bas
 import { BaseAction } from "@memberjunction/actions";
 import { RegisterClass } from "@memberjunction/global";
 import axios from "axios";
+import { GeocodingProviderRegistry, IGeocodingProvider, ProviderGeocodeResult } from "@memberjunction/geo-core";
 import { getApiIntegrationsConfig } from "../../config";
 
 // ---------------------------------------------------------------------------
@@ -19,25 +20,6 @@ interface AddressComponent {
     Latitude?: number;
     Longitude?: number;
     FormattedAddress?: string;
-}
-
-interface GoogleGeocodingResult {
-    results: Array<{
-        address_components: Array<{
-            long_name: string;
-            short_name: string;
-            types: string[];
-        }>;
-        formatted_address: string;
-        geometry: {
-            location: {
-                lat: number;
-                lng: number;
-            };
-        };
-    }>;
-    status: string;
-    error_message?: string;
 }
 
 interface GoogleAddressValidationResponse {
@@ -78,43 +60,8 @@ interface GoogleAddressValidationResponse {
 }
 
 // ---------------------------------------------------------------------------
-// Helper: extract structured address from Google Geocoding result
-// ---------------------------------------------------------------------------
-
-function extractAddress(result: GoogleGeocodingResult['results'][0]): AddressComponent {
-    const address: AddressComponent = {
-        FormattedAddress: result.formatted_address,
-        Latitude: result.geometry.location.lat,
-        Longitude: result.geometry.location.lng,
-    };
-
-    for (const component of result.address_components) {
-        const types = component.types;
-        if (types.includes('street_number')) {
-            address.Line1 = component.long_name;
-        } else if (types.includes('route')) {
-            address.Line1 = address.Line1
-                ? `${address.Line1} ${component.long_name}`
-                : component.long_name;
-        } else if (types.includes('subpremise')) {
-            address.Line2 = component.long_name;
-        } else if (types.includes('locality')) {
-            address.City = component.long_name;
-        } else if (types.includes('administrative_area_level_1')) {
-            address.State = component.short_name;
-        } else if (types.includes('postal_code')) {
-            address.PostalCode = component.long_name;
-        } else if (types.includes('country')) {
-            address.Country = component.long_name;
-            address.CountryCode = component.short_name;
-        }
-    }
-
-    return address;
-}
-
-// ---------------------------------------------------------------------------
-// Helper: get Google API key from config
+// Helper: get Google API key from config (used by ValidateAddressAction only;
+// the geocoding actions below now resolve their provider via the registry)
 // ---------------------------------------------------------------------------
 
 function getGoogleApiKey(): string | undefined {
@@ -122,6 +69,62 @@ function getGoogleApiKey(): string | undefined {
     return config.google?.geocoding?.apiKey
         || process.env.GOOGLE_GEOCODING_API_KEY
         || process.env.GOOGLE_MAPS_API_KEY;
+}
+
+// ---------------------------------------------------------------------------
+// Helper: resolve geocoding provider for an action
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolve which geocoding provider should service this action invocation.
+ * Honors an optional `Provider` input parameter, falling back to the configured
+ * default. Returns a structured result so callers can short-circuit with a
+ * meaningful action error when no provider is available.
+ */
+function resolveProvider(params: RunActionParams): { provider: IGeocodingProvider } | ActionResultSimple {
+    const requested = params.Params.find(p => p.Name.toLowerCase() === 'provider')?.Value;
+    const requestedName = requested != null && String(requested).trim().length > 0
+        ? String(requested).trim()
+        : null;
+    const provider = GeocodingProviderRegistry.Instance.Resolve(requestedName);
+    if (!provider) {
+        return {
+            Success: false,
+            ResultCode: 'MISSING_API_KEY',
+            Message: requestedName
+                ? `Geocoding provider "${requestedName}" is not configured. Set its API key via env or apiIntegrations config.`
+                : `No geocoding provider configured. Set google.geocoding.apiKey, geocodio.apiKey, or here.apiKey in mj.config.cjs.`
+        };
+    }
+    return { provider };
+}
+
+/**
+ * Map a provider-agnostic geocode result into the output parameter set used
+ * by the Geocode Address / Reverse Geocode / Postal Code Lookup actions.
+ * Centralized so all three actions emit the same field shape regardless of
+ * which provider produced the result.
+ */
+function pushAddressOutputs(params: RunActionParams, r: ProviderGeocodeResult, includeLatLng: boolean): void {
+    const outputs: Array<{ Name: string; Value: unknown }> = [
+        { Name: 'Line1', Value: r.Line1 ?? '' },
+        { Name: 'Line2', Value: r.Line2 ?? '' },
+        { Name: 'City', Value: r.City ?? '' },
+        { Name: 'State', Value: r.StateProvinceCode ?? r.StateProvinceName ?? '' },
+        { Name: 'PostalCode', Value: r.PostalCode ?? '' },
+        { Name: 'Country', Value: r.CountryCode ?? '' },
+        { Name: 'CountryCode', Value: r.CountryCode ?? '' },
+        { Name: 'FormattedAddress', Value: r.FormattedAddress ?? '' },
+        { Name: 'Provider', Value: '' },           // populated by caller
+        { Name: 'Confidence', Value: r.Confidence ?? null },
+    ];
+    if (includeLatLng) {
+        outputs.push({ Name: 'Latitude', Value: r.Latitude });
+        outputs.push({ Name: 'Longitude', Value: r.Longitude });
+    }
+    for (const o of outputs) {
+        params.Params.push({ ...o, Type: 'Output' });
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -150,60 +153,43 @@ export class PostalCodeLookupAction extends BaseAction {
         if (!postalCode) {
             return { Success: false, ResultCode: 'MISSING_POSTAL_CODE', Message: 'PostalCode parameter is required' };
         }
-
-        const apiKey = getGoogleApiKey();
-        if (!apiKey) {
-            return { Success: false, ResultCode: 'MISSING_API_KEY', Message: 'Google Geocoding API key not found. Set google.geocoding.apiKey in mj.config.cjs or GOOGLE_GEOCODING_API_KEY environment variable.' };
-        }
-
-        const country = params.Params.find(p => p.Name.toLowerCase() === 'country')?.Value || '';
+        const resolved = resolveProvider(params);
+        if ('Success' in resolved) return resolved;
+        const country = String(params.Params.find(p => p.Name.toLowerCase() === 'country')?.Value ?? '');
 
         try {
-            // Use the components parameter to restrict results to the specified country
-            const queryParams: Record<string, string> = { address: postalCode, key: apiKey };
-            if (country) {
-                queryParams.components = `country:${country}`;
-            }
-
-            const response = await axios.get<GoogleGeocodingResult>(
-                'https://maps.googleapis.com/maps/api/geocode/json',
-                { params: queryParams, timeout: 10000 }
-            );
-
-            if (response.data.status !== 'OK' || !response.data.results.length) {
+            const result = await resolved.provider.Geocode({
+                AddressString: country ? `${postalCode}, ${country}` : String(postalCode),
+                PostalCode: String(postalCode),
+                Country: country || undefined,
+                CountryCode: country.length === 2 ? country.toUpperCase() : undefined
+            });
+            if (!result) {
                 return {
                     Success: false,
                     ResultCode: 'NOT_FOUND',
-                    Message: `No results found for postal code "${postalCode}". Google status: ${response.data.status}`
+                    Message: `No results found for postal code "${postalCode}" via provider "${resolved.provider.Name}".`
                 };
             }
-
-            const address = extractAddress(response.data.results[0]);
-
-            // Update the Country param in-place (it's type Both)
+            // Backfill the in/out Country param so callers see the resolved name.
             const countryParam = params.Params.find(p => p.Name.toLowerCase() === 'country');
-            if (countryParam) {
-                countryParam.Value = address.Country || '';
-            }
+            if (countryParam) countryParam.Value = result.CountryCode ?? country;
 
             params.Params.push(
-                { Name: 'City', Value: address.City || '', Type: 'Output' },
-                { Name: 'State', Value: address.State || '', Type: 'Output' },
-                { Name: 'CountryCode', Value: address.CountryCode || '', Type: 'Output' },
-                { Name: 'Latitude', Value: address.Latitude, Type: 'Output' },
-                { Name: 'Longitude', Value: address.Longitude, Type: 'Output' },
+                { Name: 'City', Value: result.City ?? '', Type: 'Output' },
+                { Name: 'State', Value: result.StateProvinceCode ?? '', Type: 'Output' },
+                { Name: 'CountryCode', Value: result.CountryCode ?? '', Type: 'Output' },
+                { Name: 'Latitude', Value: result.Latitude, Type: 'Output' },
+                { Name: 'Longitude', Value: result.Longitude, Type: 'Output' },
+                { Name: 'Provider', Value: resolved.provider.Name, Type: 'Output' },
+                { Name: 'Confidence', Value: result.Confidence, Type: 'Output' },
             );
-
-            return {
-                Success: true,
-                ResultCode: 'SUCCESS',
-                Message: JSON.stringify(address, null, 2)
-            };
+            return { Success: true, ResultCode: 'SUCCESS', Message: JSON.stringify(result, null, 2) };
         } catch (error) {
             return {
                 Success: false,
                 ResultCode: 'API_ERROR',
-                Message: `Google Geocoding API error: ${error instanceof Error ? error.message : String(error)}`
+                Message: `${resolved.provider.Name} geocoding API error: ${error instanceof Error ? error.message : String(error)}`
             };
         }
     }
@@ -234,51 +220,27 @@ export class GeocodeAddressAction extends BaseAction {
         if (!address) {
             return { Success: false, ResultCode: 'MISSING_ADDRESS', Message: 'Address parameter is required' };
         }
-
-        const apiKey = getGoogleApiKey();
-        if (!apiKey) {
-            return { Success: false, ResultCode: 'MISSING_API_KEY', Message: 'Google Geocoding API key not found. Set google.geocoding.apiKey in mj.config.cjs or GOOGLE_GEOCODING_API_KEY environment variable.' };
-        }
+        const resolved = resolveProvider(params);
+        if ('Success' in resolved) return resolved;
 
         try {
-            const response = await axios.get<GoogleGeocodingResult>(
-                'https://maps.googleapis.com/maps/api/geocode/json',
-                { params: { address, key: apiKey }, timeout: 10000 }
-            );
-
-            if (response.data.status !== 'OK' || !response.data.results.length) {
+            const result = await resolved.provider.Geocode({ AddressString: String(address) });
+            if (!result) {
                 return {
                     Success: false,
                     ResultCode: 'NOT_FOUND',
-                    Message: `No results found for address "${address}". Google status: ${response.data.status}`
+                    Message: `No results found for address "${address}" via provider "${resolved.provider.Name}".`
                 };
             }
-
-            const result = extractAddress(response.data.results[0]);
-
-            params.Params.push(
-                { Name: 'Line1', Value: result.Line1 || '', Type: 'Output' },
-                { Name: 'Line2', Value: result.Line2 || '', Type: 'Output' },
-                { Name: 'City', Value: result.City || '', Type: 'Output' },
-                { Name: 'State', Value: result.State || '', Type: 'Output' },
-                { Name: 'PostalCode', Value: result.PostalCode || '', Type: 'Output' },
-                { Name: 'Country', Value: result.Country || '', Type: 'Output' },
-                { Name: 'CountryCode', Value: result.CountryCode || '', Type: 'Output' },
-                { Name: 'Latitude', Value: result.Latitude, Type: 'Output' },
-                { Name: 'Longitude', Value: result.Longitude, Type: 'Output' },
-                { Name: 'FormattedAddress', Value: result.FormattedAddress || '', Type: 'Output' },
-            );
-
-            return {
-                Success: true,
-                ResultCode: 'SUCCESS',
-                Message: JSON.stringify(result, null, 2)
-            };
+            pushAddressOutputs(params, result, true);
+            const providerOut = params.Params.find(p => p.Name === 'Provider' && p.Type === 'Output');
+            if (providerOut) providerOut.Value = resolved.provider.Name;
+            return { Success: true, ResultCode: 'SUCCESS', Message: JSON.stringify(result, null, 2) };
         } catch (error) {
             return {
                 Success: false,
                 ResultCode: 'API_ERROR',
-                Message: `Google Geocoding API error: ${error instanceof Error ? error.message : String(error)}`
+                Message: `${resolved.provider.Name} geocoding API error: ${error instanceof Error ? error.message : String(error)}`
             };
         }
     }
@@ -308,59 +270,35 @@ export class ReverseGeocodeAction extends BaseAction {
     protected async InternalRunAction(params: RunActionParams): Promise<ActionResultSimple> {
         const lat = params.Params.find(p => p.Name.toLowerCase() === 'latitude')?.Value;
         const lng = params.Params.find(p => p.Name.toLowerCase() === 'longitude')?.Value;
-
         if (lat === undefined || lat === null || lng === undefined || lng === null) {
             return { Success: false, ResultCode: 'MISSING_COORDINATES', Message: 'Both Latitude and Longitude parameters are required' };
         }
-
         const latitude = Number(lat);
         const longitude = Number(lng);
         if (isNaN(latitude) || isNaN(longitude)) {
             return { Success: false, ResultCode: 'INVALID_COORDINATES', Message: 'Latitude and Longitude must be valid numbers' };
         }
-
-        const apiKey = getGoogleApiKey();
-        if (!apiKey) {
-            return { Success: false, ResultCode: 'MISSING_API_KEY', Message: 'Google Geocoding API key not found. Set google.geocoding.apiKey in mj.config.cjs or GOOGLE_GEOCODING_API_KEY environment variable.' };
-        }
+        const resolved = resolveProvider(params);
+        if ('Success' in resolved) return resolved;
 
         try {
-            const response = await axios.get<GoogleGeocodingResult>(
-                'https://maps.googleapis.com/maps/api/geocode/json',
-                { params: { latlng: `${latitude},${longitude}`, key: apiKey }, timeout: 10000 }
-            );
-
-            if (response.data.status !== 'OK' || !response.data.results.length) {
+            const result = await resolved.provider.ReverseGeocode({ Latitude: latitude, Longitude: longitude });
+            if (!result) {
                 return {
                     Success: false,
                     ResultCode: 'NOT_FOUND',
-                    Message: `No address found for coordinates (${latitude}, ${longitude}). Google status: ${response.data.status}`
+                    Message: `No address found for coordinates (${latitude}, ${longitude}) via provider "${resolved.provider.Name}".`
                 };
             }
-
-            const result = extractAddress(response.data.results[0]);
-
-            params.Params.push(
-                { Name: 'Line1', Value: result.Line1 || '', Type: 'Output' },
-                { Name: 'Line2', Value: result.Line2 || '', Type: 'Output' },
-                { Name: 'City', Value: result.City || '', Type: 'Output' },
-                { Name: 'State', Value: result.State || '', Type: 'Output' },
-                { Name: 'PostalCode', Value: result.PostalCode || '', Type: 'Output' },
-                { Name: 'Country', Value: result.Country || '', Type: 'Output' },
-                { Name: 'CountryCode', Value: result.CountryCode || '', Type: 'Output' },
-                { Name: 'FormattedAddress', Value: result.FormattedAddress || '', Type: 'Output' },
-            );
-
-            return {
-                Success: true,
-                ResultCode: 'SUCCESS',
-                Message: JSON.stringify(result, null, 2)
-            };
+            pushAddressOutputs(params, result, false);
+            const providerOut = params.Params.find(p => p.Name === 'Provider' && p.Type === 'Output');
+            if (providerOut) providerOut.Value = resolved.provider.Name;
+            return { Success: true, ResultCode: 'SUCCESS', Message: JSON.stringify(result, null, 2) };
         } catch (error) {
             return {
                 Success: false,
                 ResultCode: 'API_ERROR',
-                Message: `Google Geocoding API error: ${error instanceof Error ? error.message : String(error)}`
+                Message: `${resolved.provider.Name} reverse geocoding API error: ${error instanceof Error ? error.message : String(error)}`
             };
         }
     }

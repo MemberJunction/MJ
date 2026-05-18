@@ -249,6 +249,31 @@
         }
     </mj-collapsible-panel>
 
+    <!-- O Auth Authorization States Section -->
+    <mj-collapsible-panel
+        SectionKey="mJOAuthAuthorizationStates"
+        SectionName="O Auth Authorization States"
+        Icon="fa fa-table"
+        Variant="related-entity"
+        [Form]="this"
+        [FormContext]="formContext"
+        [BadgeCount]="GetSectionRowCount('mJOAuthAuthorizationStates')"
+        [DefaultExpanded]="false">
+        @if (record.IsSaved) {
+        <div>
+            <mj-explorer-entity-data-grid
+                [Params]="BuildRelationshipViewParamsByEntityName('MJ: O Auth Authorization States','MCPServerConnectionID')"
+                [NewRecordValues]="NewRecordValues('MJ: O Auth Authorization States')"
+                [AllowLoad]="IsSectionExpanded('mJOAuthAuthorizationStates')"
+                [ShowToolbar]="false"
+                (Navigate)="OnFormNavigate($event)"
+                (AfterDataLoad)="SetSectionRowCount('mJOAuthAuthorizationStates', $event.totalRowCount)"
+                >
+            </mj-explorer-entity-data-grid>
+        </div>
+        }
+    </mj-collapsible-panel>
+
     <!-- O Auth Client Registrations Section -->
     <mj-collapsible-panel
         SectionKey="mJOAuthClientRegistrations"
@@ -293,31 +318,6 @@
                 [ShowToolbar]="false"
                 (Navigate)="OnFormNavigate($event)"
                 (AfterDataLoad)="SetSectionRowCount('mJOAuthTokens', $event.totalRowCount)"
-                >
-            </mj-explorer-entity-data-grid>
-        </div>
-        }
-    </mj-collapsible-panel>
-
-    <!-- O Auth Authorization States Section -->
-    <mj-collapsible-panel
-        SectionKey="mJOAuthAuthorizationStates"
-        SectionName="O Auth Authorization States"
-        Icon="fa fa-table"
-        Variant="related-entity"
-        [Form]="this"
-        [FormContext]="formContext"
-        [BadgeCount]="GetSectionRowCount('mJOAuthAuthorizationStates')"
-        [DefaultExpanded]="false">
-        @if (record.IsSaved) {
-        <div>
-            <mj-explorer-entity-data-grid
-                [Params]="BuildRelationshipViewParamsByEntityName('MJ: O Auth Authorization States','MCPServerConnectionID')"
-                [NewRecordValues]="NewRecordValues('MJ: O Auth Authorization States')"
-                [AllowLoad]="IsSectionExpanded('mJOAuthAuthorizationStates')"
-                [ShowToolbar]="false"
-                (Navigate)="OnFormNavigate($event)"
-                (AfterDataLoad)="SetSectionRowCount('mJOAuthAuthorizationStates', $event.totalRowCount)"
                 >
             </mj-explorer-entity-data-grid>
         </div>

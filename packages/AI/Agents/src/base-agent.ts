@@ -980,16 +980,28 @@ export class BaseAgent {
                     params
                 );
 
-                // Merge with existing data/context/payload (caller values take precedence)
+                // Merge with existing data/context/payload (caller values take precedence).
+                // IMPORTANT: Do NOT spread params.context — it may be a class instance
+                // whose getters/methods would be destroyed by spreading into a plain object.
+                // Instead, copy preloaded properties onto the existing context object.
                 params.data = {
                     ...preloadedResult.data,
                     ...params.data
                 };
 
-                params.context = {
-                    ...preloadedResult.context,
-                    ...params.context
-                };
+                if (preloadedResult.context && typeof preloadedResult.context === 'object') {
+                    if (!params.context || typeof params.context !== 'object') {
+                        params.context = preloadedResult.context;
+                    } else {
+                        // Copy preloaded properties onto the existing context without
+                        // replacing it, so class identity (prototype, getters) is preserved.
+                        for (const key of Object.keys(preloadedResult.context)) {
+                            if (!(key in params.context)) {
+                                (params.context as Record<string, unknown>)[key] = (preloadedResult.context as Record<string, unknown>)[key];
+                            }
+                        }
+                    }
+                }
 
                 params.payload = {
                     ...preloadedResult.payload,
@@ -1629,8 +1641,7 @@ export class BaseAgent {
         const injector = new AgentContextInjector();
 
         // Parse reranker configuration if present
-        // Access dynamically since field may not exist until CodeGen runs after migration
-        const rerankerConfigJson = agent.Get('RerankerConfiguration') as string | null;
+        const rerankerConfigJson = agent.RerankerConfiguration;
         const rerankerConfig = RerankerService.Instance.parseConfiguration(rerankerConfigJson);
 
         // Get notes if injection enabled
@@ -4240,16 +4251,16 @@ The context is now within limits. Please retry your request with the recovered c
                 Type: 'Input' as const
             }));
 
-            // Build action context: preserve the agent's context, stamp the
-            // calling agent's identity so scope-aware actions (Scoped Search,
-            // future agent-aware tools) can attribute the call without the LLM
-            // needing to pass it explicitly, and inject resolved storage account ID.
-            const baseContext = typeof params.context === 'object' && params.context ? params.context : {};
-            const actionContext = {
-                ...baseContext,
-                AgentID: params.agent.ID,
-                ...(this._resolvedStorageAccountId ? { __resolvedStorageAccountId: this._resolvedStorageAccountId } : {}),
-            };
+            // Build action context: preserve the agent's context by reference
+            // (do NOT spread — spreading destroys class instances, losing
+            // getters/methods on typed contexts like SkipAgentContext).
+            // Stamp the calling agent's identity and resolved storage account ID
+            // directly onto the original context object.
+            const actionContext = typeof params.context === 'object' && params.context ? params.context : {};
+            (actionContext as Record<string, unknown>).AgentID = params.agent.ID;
+            if (this._resolvedStorageAccountId) {
+                (actionContext as Record<string, unknown>).__resolvedStorageAccountId = this._resolvedStorageAccountId;
+            }
 
             // Execute the action and return the full ActionResult
             const result = await actionEngine.RunAction({

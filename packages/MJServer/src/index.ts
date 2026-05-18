@@ -424,7 +424,7 @@ export const serve = async (resolverPaths: Array<string>, app: Application = cre
       url: process.env.REDIS_URL,
       keyPrefix: process.env.REDIS_KEY_PREFIX || 'mj',
       enablePubSub: true,
-      enableLogging: true,
+      enableLogging: configInfo.cacheSettings?.verboseLogging ?? false,
     });
     (Metadata.Provider as GenericDatabaseProvider).SetLocalStorageProvider(redisProvider); // global-provider-ok: bootstrap (Redis cache wiring)
     await redisProvider.StartListening();

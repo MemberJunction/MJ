@@ -44,6 +44,15 @@ export class QueryPermissionInputType {
 }
 
 @InputType()
+export class QueryParameterHintInput {
+    @Field(() => String)
+    Name!: string;
+
+    @Field(() => String)
+    Value!: string;
+}
+
+@InputType()
 export class CreateQuerySystemUserInput {
     @Field(() => String)
     Name!: string;
@@ -98,6 +107,12 @@ export class CreateQuerySystemUserInput {
 
     @Field(() => [QueryPermissionInputType], { nullable: true })
     Permissions?: QueryPermissionInputType[];
+
+    @Field(() => [QueryParameterHintInput], { nullable: true })
+    ParameterHints?: QueryParameterHintInput[];
+
+    @Field(() => Boolean, { nullable: true, defaultValue: false })
+    AutoResolveCollision?: boolean;
 }
 
 @InputType()
@@ -158,6 +173,9 @@ export class UpdateQuerySystemUserInput {
 
     @Field(() => [QueryPermissionInputType], { nullable: true })
     Permissions?: QueryPermissionInputType[];
+
+    @Field(() => [QueryParameterHintInput], { nullable: true })
+    ParameterHints?: QueryParameterHintInput[];
 }
 
 /**
@@ -235,18 +253,24 @@ export class MJQueryResolverExtended extends MJQueryResolver {
             const existingQuery = await this.findExistingQuery(provider, input.Name, finalCategoryID, context.userPayload.userRecord);
 
             if (existingQuery) {
-                const categoryInfo = input.CategoryPath ? `category path '${input.CategoryPath}'` : `category ID '${finalCategoryID}'`;
-                return {
-                    Success: false,
-                    ErrorMessage: `Query with name '${input.Name}' already exists in ${categoryInfo}`
-                };
+                if (input.AutoResolveCollision) {
+                    // Server-side collision resolution: find a unique name using sequential numeric suffixes
+                    input.Name = await this.findUniqueName(provider, input.Name, finalCategoryID, context.userPayload.userRecord);
+                    LogStatus(`[CreateQuery] Auto-resolved name collision: "${existingQuery.Name}" -> "${input.Name}"`);
+                } else {
+                    const categoryInfo = input.CategoryPath ? `category path '${input.CategoryPath}'` : `category ID '${finalCategoryID}'`;
+                    return {
+                        Success: false,
+                        ErrorMessage: `Query with name '${input.Name}' already exists in ${categoryInfo}`
+                    };
+                }
             }
 
             // Use MJQueryEntityServer which handles AI processing
             const record = await provider.GetEntityObject<MJQueryEntityServer>("MJ: Queries", context.userPayload.userRecord);
             
             // Destructure out non-database fields, keep only fields to persist
-            const { Permissions: _permissions, CategoryPath: _categoryPath, ...fieldsToSet } = {
+            const { Permissions: _permissions, CategoryPath: _categoryPath, ParameterHints: _parameterHints, AutoResolveCollision: _autoResolve, ...fieldsToSet } = {
                 ...input,
                 CategoryID: finalCategoryID || input.CategoryID,
                 Status: input.Status || 'Approved',
@@ -259,6 +283,12 @@ export class MJQueryResolverExtended extends MJQueryResolver {
             };
 
             record.SetMany(fieldsToSet, true);
+
+            // Pass caller-provided parameter sample values to override LLM guesses
+            if (input.ParameterHints && input.ParameterHints.length > 0) {
+                record.ParameterHints = new Map(input.ParameterHints.map(h => [h.Name, h.Value]));
+            }
+
             this.ListenForEntityMessages(record, pubSub, context.userPayload.userRecord);
 
             // Attempt to save the query
@@ -479,6 +509,11 @@ export class MJQueryResolverExtended extends MJQueryResolver {
 
             // Use SetMany to update all fields at once
             queryEntity.SetMany(updateFields);
+
+            // Pass caller-provided parameter sample values to override LLM guesses
+            if (input.ParameterHints && input.ParameterHints.length > 0) {
+                queryEntity.ParameterHints = new Map(input.ParameterHints.map(h => [h.Name, h.Value]));
+            }
 
             // Save the updated query
             const saveResult = await queryEntity.Save();
@@ -706,6 +741,33 @@ export class MJQueryResolverExtended extends MJQueryResolver {
             // If query fails, return null (query doesn't exist)
             return null;
         }
+    }
+
+    /**
+     * Finds a unique query name by appending sequential numeric suffixes.
+     * Format: "Name (1)", "Name (2)", etc.
+     * Uses direct DB queries (not cache) for authoritative uniqueness checks.
+     * @param provider - Database provider for direct DB queries
+     * @param baseName - The original desired name that is already taken
+     * @param categoryID - Category ID to check uniqueness within
+     * @param contextUser - User context for database operations
+     * @returns A unique name in the format "baseName (N)"
+     */
+    private async findUniqueName(
+        provider: DatabaseProviderBase,
+        baseName: string,
+        categoryID: string | null,
+        contextUser: UserInfo
+    ): Promise<string> {
+        const MAX_ATTEMPTS = 50;
+        for (let i = 1; i <= MAX_ATTEMPTS; i++) {
+            const candidateName = `${baseName} (${i})`;
+            const existing = await this.findExistingQuery(provider, candidateName, categoryID, contextUser);
+            if (!existing) {
+                return candidateName;
+            }
+        }
+        throw new Error(`Unable to find unique name for "${baseName}" after ${MAX_ATTEMPTS} attempts`);
     }
 
     /**

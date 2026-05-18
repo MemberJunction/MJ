@@ -3,7 +3,9 @@ import {
   BaseEngine,
   BaseEnginePropertyConfig,
   IMetadataProvider,
+  LogStatus,
   RegisterForStartup,
+  RunView,
   UserInfo,
 } from '@memberjunction/core';
 import { NormalizeUUID, UUIDsEqual } from '@memberjunction/global';
@@ -1011,6 +1013,34 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
   }
 
   /**
+   * Checks the database directly for this user's UserApplication records.
+   * If the DB has records but our in-memory cache is empty (load failure),
+   * repairs the cache and emits a property change so subscribers update.
+   * @returns The DB records if repair occurred, empty array otherwise
+   */
+  private async repairUserApplicationsFromDatabase(userId: string, contextUser?: UserInfo): Promise<MJUserApplicationEntity[]> {
+    try {
+      const rv = new RunView(this.RunViewProviderToUse);
+      const dbResult = await rv.RunView<MJUserApplicationEntity>({
+        EntityName: 'MJ: User Applications',
+        ExtraFilter: `UserID='${userId}'`,
+        ResultType: 'entity_object',
+        BypassCache: true
+      }, contextUser ?? this.ContextUser);
+
+      if (dbResult.Success && dbResult.Results.length > 0) {
+        LogStatus(`UserInfoEngine: Repaired _UserApplications from database (${dbResult.Results.length} records) — in-memory cache was empty`);
+        this._UserApplications = dbResult.Results;
+        this.emitPropertyChange('_UserApplications');
+        return dbResult.Results;
+      }
+    } catch (error) {
+      console.error('UserInfoEngine.repairUserApplicationsFromDatabase: DB verification failed:', error instanceof Error ? error.message : String(error));
+    }
+    return [];
+  }
+
+  /**
    * Internal implementation of CreateDefaultApplications.
    * Separated to allow the public method to manage the promise state.
    */
@@ -1021,6 +1051,17 @@ export class UserInfoEngine extends BaseEngine<UserInfoEngine> {
     if (!userId) {
       console.error('UserInfoEngine.CreateDefaultApplications: No user context available');
       return [];
+    }
+
+    // Verify against the database before creating — if the in-memory cache is empty
+    // due to a load failure (e.g., cache timestamp bug), we'd otherwise attempt to
+    // create records that already exist, hitting unique constraint violations.
+    const userAppsForUser = this._UserApplications.filter((ua) => UUIDsEqual(ua.UserID, userId));
+    if (userAppsForUser.length === 0) {
+      const repaired = await this.repairUserApplicationsFromDatabase(userId, contextUser);
+      if (repaired.length > 0) {
+        return repaired;
+      }
     }
 
     // Get existing UserApplication records for this user to prevent duplicates
