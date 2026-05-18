@@ -17,7 +17,6 @@ export * from './lib/combobox/combobox.component';
 export * from './lib/page-header/page-header.component';
 export * from './lib/page-layout/page-layout.component';
 export * from './lib/page-body/page-body.component';
-export * from './lib/page-frame/page-frame.component';
 export * from './lib/stat-badge/stat-badge.component';
 export * from './lib/refresh-button/refresh-button.component';
 export * from './lib/filter-popover/filter-popover.component';

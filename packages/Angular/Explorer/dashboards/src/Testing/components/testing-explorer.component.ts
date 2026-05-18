@@ -98,55 +98,60 @@ interface TestRunStatRow {
   selector: 'app-testing-explorer',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <mj-page-frame
-      Title="Test Explorer"
-      Icon="fa-solid fa-compass"
-      Subtitle="Browse tests and test suites"
-      [HideToolbar]="HideToolbar"
-      [Flex]="true">
-      <div meta>
-        <mj-stat-badge [Count]="FilteredResultCount" Label="results"></mj-stat-badge>
-      </div>
-      <div actions>
-        <mj-view-toggle
-          [Options]="HeaderViewOptions"
-          [ActiveKey]="ViewMode"
-          (KeyChange)="SetViewMode($any($event))">
-        </mj-view-toggle>
-        <button mjButton variant="secondary" size="sm" (click)="ToggleSortDirection()"
-          [title]="'Sort by ' + SortFieldLabel + ' (' + (SortDirection === 'asc' ? 'ascending' : 'descending') + ')'">
-          <i class="fa-solid fa-arrow-down-short-wide"></i>
-          <i class="fa-solid" [class.fa-arrow-up]="SortDirection === 'asc'" [class.fa-arrow-down]="SortDirection === 'desc'"></i>
-        </button>
-        <button mjButton variant="secondary" size="sm" (click)="OnNewSuite()">
-          <i class="fa-solid fa-folder-plus"></i> New Suite
-        </button>
-        <button mjButton variant="primary" size="sm" (click)="OnNewTest()">
-          <i class="fa-solid fa-plus"></i> New Test
-        </button>
-      </div>
-      <div toolbar>
-        <mj-page-search
-          Placeholder="Search tests and suites..."
-          [Value]="SearchTerm"
-          (ValueChange)="OnSearchInputValue($event)">
-        </mj-page-search>
-        @for (status of StatusOptions; track status) {
-          <mj-filter-chip
-            [Label]="status"
-            [Active]="IsStatusActive(status)"
-            (Clicked)="ToggleStatus(status)">
-          </mj-filter-chip>
-        }
-        <mj-view-toggle
-          [Options]="DisplayModeOptions"
-          [ActiveKey]="DisplayMode"
-          (KeyChange)="SetDisplayMode($any($event))">
-        </mj-view-toggle>
-      </div>
-
+    @if (HideToolbar) {
       <ng-container *ngTemplateOutlet="content"></ng-container>
-    </mj-page-frame>
+    } @else {
+      <mj-page-layout>
+        <mj-page-header
+          Title="Test Explorer"
+          Icon="fa-solid fa-compass"
+          Subtitle="Browse tests and test suites">
+          <div meta>
+            <mj-stat-badge [Count]="FilteredResultCount" Label="results"></mj-stat-badge>
+          </div>
+          <div actions>
+            <mj-view-toggle
+              [Options]="HeaderViewOptions"
+              [ActiveKey]="ViewMode"
+              (KeyChange)="SetViewMode($any($event))">
+            </mj-view-toggle>
+            <button mjButton variant="secondary" size="sm" (click)="ToggleSortDirection()"
+              [title]="'Sort by ' + SortFieldLabel + ' (' + (SortDirection === 'asc' ? 'ascending' : 'descending') + ')'">
+              <i class="fa-solid fa-arrow-down-short-wide"></i>
+              <i class="fa-solid" [class.fa-arrow-up]="SortDirection === 'asc'" [class.fa-arrow-down]="SortDirection === 'desc'"></i>
+            </button>
+            <button mjButton variant="secondary" size="sm" (click)="OnNewSuite()">
+              <i class="fa-solid fa-folder-plus"></i> New Suite
+            </button>
+            <button mjButton variant="primary" size="sm" (click)="OnNewTest()">
+              <i class="fa-solid fa-plus"></i> New Test
+            </button>
+          </div>
+          <div toolbar>
+            <mj-page-search
+              Placeholder="Search tests and suites..."
+              [Value]="SearchTerm"
+              (ValueChange)="OnSearchInputValue($event)">
+            </mj-page-search>
+            @for (status of StatusOptions; track status) {
+              <mj-filter-chip
+                [Label]="status"
+                [Active]="IsStatusActive(status)"
+                (Clicked)="ToggleStatus(status)">
+              </mj-filter-chip>
+            }
+            <mj-view-toggle
+              [Options]="DisplayModeOptions"
+              [ActiveKey]="DisplayMode"
+              (KeyChange)="SetDisplayMode($any($event))">
+            </mj-view-toggle>
+          </div>
+        </mj-page-header>
+        <mj-page-body [Flex]="true">
+          <ng-container *ngTemplateOutlet="content"></ng-container>
+        </mj-page-body>
+      </mj-page-layout>
+    }
 
     <ng-template #content>
     @if (IsLoading) {

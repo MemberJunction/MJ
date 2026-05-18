@@ -1,38 +1,48 @@
-<mj-page-frame
-  Title="Scheduling Activity"
-  Icon="fa-solid fa-clock-rotate-left"
-  Subtitle="Execution history, trends, and job type statistics"
-  [HideToolbar]="HideToolbar">
-  <div actions>
-    <mj-filter-popover
-      [ActiveCount]="ActiveFilterCount"
-      [ShowClearAll]="ActiveFilterCount > 0"
-      (ClearAllRequested)="ResetFilters()">
-      <mj-filter-panel
-        [Fields]="ActivityFilterFields"
-        [Values]="ActivityFilterValues"
-        (ValuesChange)="OnFilterValuesChange($event)"
-        (Reset)="ResetFilters()">
-      </mj-filter-panel>
-    </mj-filter-popover>
-    <mj-refresh-button (Clicked)="Refresh()"></mj-refresh-button>
-  </div>
-  <div toolbar>
-    <mj-page-search
-      Placeholder="Search executions..."
-      [Value]="SearchTerm"
-      (ValueChange)="OnSearchChange($event)">
-    </mj-page-search>
-    @for (range of TimeRanges; track range.value) {
-      <mj-filter-chip
-        [Label]="range.label"
-        [Active]="SelectedTimeRange === range.value"
-        (Clicked)="OnTimeRangeChange(range.value)">
-      </mj-filter-chip>
-    }
-  </div>
+@if (HideToolbar) {
+  <ng-container *ngTemplateOutlet="content"></ng-container>
+} @else {
+  <mj-page-layout>
+    <mj-page-header
+      Title="Scheduling Activity"
+      Icon="fa-solid fa-clock-rotate-left"
+      Subtitle="Execution history, trends, and job type statistics">
+      <div actions>
+        <mj-filter-popover
+          [ActiveCount]="ActiveFilterCount"
+          [ShowClearAll]="ActiveFilterCount > 0"
+          (ClearAllRequested)="ResetFilters()">
+          <mj-filter-panel
+            [Fields]="ActivityFilterFields"
+            [Values]="ActivityFilterValues"
+            (ValuesChange)="OnFilterValuesChange($event)"
+            (Reset)="ResetFilters()">
+          </mj-filter-panel>
+        </mj-filter-popover>
+        <mj-refresh-button (Clicked)="Refresh()"></mj-refresh-button>
+      </div>
+      <div toolbar>
+        <mj-page-search
+          Placeholder="Search executions..."
+          [Value]="SearchTerm"
+          (ValueChange)="OnSearchChange($event)">
+        </mj-page-search>
+        @for (range of TimeRanges; track range.value) {
+          <mj-filter-chip
+            [Label]="range.label"
+            [Active]="SelectedTimeRange === range.value"
+            (Clicked)="OnTimeRangeChange(range.value)">
+          </mj-filter-chip>
+        }
+      </div>
+    </mj-page-header>
+    <mj-page-body>
+      <ng-container *ngTemplateOutlet="content"></ng-container>
+    </mj-page-body>
+  </mj-page-layout>
+}
 
-  <div class="activity-container">
+<ng-template #content>
+<div class="activity-container">
 
   <!-- Loading -->
   @if (IsLoading) {
@@ -211,5 +221,5 @@
       </div>
     </div>
   }
-  </div>
-</mj-page-frame>
+</div>
+</ng-template>

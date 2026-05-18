@@ -221,40 +221,32 @@ recipe in a per-page CSS file. Use `<mj-page-body>`.
 
 ### Inner component `HideToolbar` gate
 
-Use **`<mj-page-frame>`** — the canonical composite that bundles
-`<mj-page-layout>` + `<mj-page-header>` + `<mj-page-body>` with built-in
-`HideToolbar` gating. The chrome renders when `HideToolbar=false`; only
-the default-slot (body) content renders when `HideToolbar=true`.
+Inner components of tab-parent shells expose `@Input() HideToolbar = false`. When
+the parent embeds them (passing `[HideToolbar]="true"`), the inner renders only
+its body content — the parent owns the chrome. When accessed standalone (default
+`HideToolbar=false`), the inner renders its full chrome.
+
+The standard pattern:
 
 ```html
-<mj-page-frame
-  Title="Scheduled Jobs"
-  Icon="fa-solid fa-calendar-check"
-  Subtitle="Configure and manage scheduled jobs"
-  [HideToolbar]="HideToolbar">
+@if (HideToolbar) {
+  <ng-container *ngTemplateOutlet="content"></ng-container>
+} @else {
+  <mj-page-layout>
+    <mj-page-header …>…</mj-page-header>
+    <mj-page-body>
+      <ng-container *ngTemplateOutlet="content"></ng-container>
+    </mj-page-body>
+  </mj-page-layout>
+}
 
-  <div meta>
-    <mj-stat-badge [Count]="FilteredJobs.length" [Total]="Jobs.length" Label="jobs" />
-  </div>
-  <div actions>
-    <mj-refresh-button (Clicked)="Refresh()" />
-    <button mjButton variant="primary" size="sm" (click)="OpenCreateSlideout()">
-      <i class="fa-solid fa-plus"></i> New Job
-    </button>
-  </div>
-  <div toolbar>
-    <mj-page-search [Value]="SearchTerm" (ValueChange)="OnSearchChange($event)" />
-  </div>
-
-  <!-- Body content (everything not in a named slot) -->
-  <div class="jobs-container">…</div>
-</mj-page-frame>
+<ng-template #content>
+  <!-- actual page content (unchanged regardless of HideToolbar) -->
+</ng-template>
 ```
 
-This replaces the previous `@if (HideToolbar) { ngTemplateOutlet } @else { mj-page-layout > … }`
-boilerplate. The lower-level trio (`<mj-page-layout>` + `<mj-page-header>` +
-`<mj-page-body>`) is still available for cases that need to gate chrome
-parts independently or for Section 9a/9b exception pages.
+The `<ng-template #content>` + `*ngTemplateOutlet` avoids duplicating the body
+markup. Verbose, but direct — no abstraction layer hiding the chrome elements.
 
 ### Filter helpers (where filters exist on a page)
 
@@ -291,10 +283,9 @@ For any page using the chrome:
 ```typescript
 import {
   MJButtonDirective,
-  MJPageFrameComponent,          // composite — preferred for inner tab-parent components (handles HideToolbar)
-  MJPageHeaderComponent,         // direct use — when not using mj-page-frame
-  MJPageLayoutComponent,         // direct use — when not using mj-page-frame
-  MJPageBodyComponent,           // direct use — when not using mj-page-frame
+  MJPageHeaderComponent,
+  MJPageLayoutComponent,
+  MJPageBodyComponent,
   MJPageSearchComponent,        // if [toolbar] has search
   MJStatBadgeComponent,          // for [meta] counts/badges — supports Count, Total, Label, Icon, Variant (absorbed mj-result-count)
   MJRefreshButtonComponent,      // if [actions] has a Refresh button
