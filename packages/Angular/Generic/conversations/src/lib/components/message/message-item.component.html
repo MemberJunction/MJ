@@ -195,6 +195,7 @@
             <mj-conversation-message-rating
               [conversationDetailId]="message.ID"
               [currentUser]="currentUser"
+              [ratingEntityName]="message.EntityInfo?.Name || 'MJ: Conversation Details'"
               [ratingsData]="ratings">
             </mj-conversation-message-rating>
             <button
