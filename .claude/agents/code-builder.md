@@ -173,11 +173,41 @@ You also update `CODE_EVIDENCE.json` if your build process surfaces a fact that 
 
 6. **Implement hierarchy traversal** — when fetching a child IO (one with `ParentObjectName` set), walk `HierarchyPath` to resolve parent IDs first. Use the IO's `ParentObjectIDFieldName` to know which IOF on the child holds the parent's PK value. Respect the top-level `TraversalOrder` array for fetch sequencing across IOs.
 
-7. **Implement custom-object handling** — override `IsVendorCustomObject(extObj)` per metadata's `CustomObjectMarkerPattern`:
+7. **Implement custom-object handling** — two parts: design-time marker detection + runtime per-tenant schema discovery.
+
+   ### 7a. Design-time marker (`IsVendorCustomObject`)
+
+   Override `IsVendorCustomObject(extObj)` per metadata's `CustomObjectMarkerPattern`:
    - `salesforce-double-underscore-c` → `extObj.Name.endsWith('__c')`
    - `hubspot-customProperties-namespace` → `extObj.Name.startsWith('customProperties.')`
    - `prefix-based` / `attribute-flagged` → read marker detail from metadata
    - `none` → return false always
+
+   ### 7b. Runtime per-tenant schema discovery — canonical pattern (Gap 6 decision, 2026-05-18)
+
+   For vendors whose custom objects + custom properties live ONLY at runtime (not in the static OpenAPI catalog) — HubSpot, Salesforce, Stripe, most modern SaaS — the connector class must extend `DiscoverObjects(companyIntegration, contextUser)` to ALSO probe the vendor's runtime schema endpoint and return the merged catalog.
+
+   ```typescript
+   public override async DiscoverObjects(
+       companyIntegration: MJCompanyIntegrationEntity,
+       contextUser: UserInfo,
+   ): Promise<ExternalObjectDTO[]> {
+       const staticObjects = await super.DiscoverObjects(companyIntegration, contextUser);
+       // Best-effort runtime probe — tolerate auth/scope failures gracefully.
+       const runtimeObjects = await this.discoverRuntimeSchemas(companyIntegration, contextUser).catch(() => []);
+       return [...staticObjects, ...runtimeObjects];
+   }
+   ```
+
+   **Why `DiscoverObjects` and NOT a dedicated `DiscoverAndPersistAuthenticatedSchema` method**:
+
+   `BaseIntegrationConnector` already provides `DiscoverAndPersistAuthenticatedSchema` as the engine-level persistence hook. Its default implementation calls `DiscoverObjects + DiscoverFields` and writes the results via `IntegrationSchemaSync`. Overriding `DiscoverObjects` plugs into that existing pathway: persistence stays engine-side (in one place), and the connector only owns the enumeration logic for its specific runtime probe.
+
+   Adding a separate `DiscoverAndPersistAuthenticatedSchema` override would (a) duplicate persistence logic into the connector, (b) bypass the engine-level batching/error-handling of `IntegrationSchemaSync`, and (c) push every vendor to re-invent the same shape. Don't do it. The `DiscoverObjects` override is the canonical pattern.
+
+   **When to revisit**: if/when 3+ vendors exercise runtime schema discovery AND the override pattern shows recurring duplication (rate-limit handling, partial-failure recovery, cursor pagination for schemas, …), promote a first-class `DiscoverRuntimeOnlyObjects(companyIntegration, contextUser)` hook on `BaseIntegrationConnector` and call it from the engine-level discovery. Per the no-premature-abstraction rule, do NOT promote with only 1 vendor (HubSpot today).
+
+   **Cross-reference**: `INTEGRATION-AGENT-ARCHITECTURE.md` (when revised, document the override pattern alongside CodeBuilder responsibilities). For now, this role file is the canonical source.
 
 8. **Implement cross-cutting concerns** (directive §15, §19, §21, §26, §27, §28, §30):
    - Error handling: `ErrorResponseShape`-aware parsing; `RetryRunner` integration; Retry-After honored.
