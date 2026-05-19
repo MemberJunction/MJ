@@ -1,6 +1,9 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import { useMemo } from 'react';
 import {
+    ActivityIndicator,
     Pressable,
+    RefreshControl,
     ScrollView,
     StyleSheet,
     Text,
@@ -11,33 +14,64 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AgentAvatarStack } from '@/components/AgentAvatarStack';
 import { Icons } from '@/components/Icon';
 import { InlineArtifactCard } from '@/components/InlineArtifactCard';
+import { MJStatusBanner } from '@/components/MJStatusBanner';
 import {
-    getConversation,
+    getConversation as getMockConversation,
     RECENT_CONVOS,
     type RecentConvoChip,
-    type ThreadMessage,
-    type Conversation,
+    type ThreadMessage as MockThreadMessage,
+    type Conversation as MockConversation,
+    type InlineArtifact as MockInlineArtifact,
 } from '@/data/mock-thread';
-import { Colors, Radius, Shadow, Spacing, Type } from '@/theme/tokens';
+import { adaptConversation, type AdaptedAgentRef, type AdaptedMessage } from '@/data/adapt';
+import { useConversation } from '@/hooks/useConversations';
+import { useMJ } from '@/providers/mj-provider';
+import { Colors, Radius, Shadow, Type } from '@/theme/tokens';
 
 /**
- * Chat thread (hero) — multi-agent conversation with step indicators, inline
- * artifact cards, action chips, collapsed artifact-dock handle, and composer.
+ * Chat thread — multi-agent conversation with inline artifacts, action chips,
+ * dock handle, and composer.
  *
  * Spec: plans/mobile-app-react-native/html/chat-thread.html
+ *
+ * Wave A: loads real conversation + messages via RunView when MJ is connected.
+ * Falls back to the mock thread for visual preview when MJ is unavailable or
+ * the conversation ID doesn't exist on the server.
+ * Wave B (next) wires the send + stream pipeline.
  */
 export default function ChatThreadScreen() {
     const { id } = useLocalSearchParams<{ id: string }>();
-    const conv = getConversation(id);
+    const { status } = useMJ();
+    const { data, loading, error, refresh } = useConversation(id);
 
-    if (!conv) {
+    // Prefer real data when MJ is ready and a conversation was loaded.
+    const view = useMemo(() => {
+        if (data) return { kind: 'real' as const, ...adaptConversation(data) };
+        const mock = getMockConversation(id);
+        if (mock) return { kind: 'mock' as const, ...mock };
+        return null;
+    }, [data, id]);
+
+    if (!view) {
+        const stillLoading = loading || status === 'loading';
         return (
             <SafeAreaView style={styles.safe} edges={['top']}>
+                <MJStatusBanner />
                 <View style={styles.notFound}>
-                    <Text style={styles.notFoundTitle}>Conversation not found</Text>
-                    <Pressable onPress={() => router.replace('/conversations')}>
-                        <Text style={styles.notFoundLink}>Back to conversations</Text>
-                    </Pressable>
+                    {stillLoading ? (
+                        <>
+                            <ActivityIndicator color={Colors.brand} />
+                            <Text style={styles.notFoundTitle}>Loading conversation…</Text>
+                        </>
+                    ) : (
+                        <>
+                            <Text style={styles.notFoundTitle}>Conversation not found</Text>
+                            {error ? <Text style={styles.notFoundError}>{error.message}</Text> : null}
+                            <Pressable onPress={() => router.replace('/conversations')}>
+                                <Text style={styles.notFoundLink}>Back to conversations</Text>
+                            </Pressable>
+                        </>
+                    )}
                 </View>
             </SafeAreaView>
         );
@@ -45,41 +79,57 @@ export default function ChatThreadScreen() {
 
     return (
         <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-            <ChatHeader conv={conv} />
-            <RecentsStrip activeId={conv.id} />
+            <MJStatusBanner />
+            <ChatHeader title={view.title} participants={view.participants} messageCount={view.messageCount} live={view.live} />
+            <RecentsStrip activeId={view.id} />
 
             <ScrollView
                 style={styles.thread}
                 contentContainerStyle={styles.threadContent}
                 showsVerticalScrollIndicator={false}
+                refreshControl={
+                    view.kind === 'real'
+                        ? <RefreshControl refreshing={loading} onRefresh={() => void refresh()} tintColor={Colors.brand} />
+                        : undefined
+                }
             >
-                <Text style={styles.dayDivider}>Today · 9:41 AM</Text>
-                {conv.messages.map((msg) => (
-                    <MessageRenderer key={msg.id} message={msg} />
-                ))}
+                <Text style={styles.dayDivider}>Today</Text>
+                {view.kind === 'real'
+                    ? view.messages.map((msg) => <RealMessageRenderer key={msg.id} message={msg} />)
+                    : view.messages.map((msg) => <MockMessageRenderer key={msg.id} message={msg} />)
+                }
                 <View style={{ height: 8 }} />
             </ScrollView>
 
-            <ArtifactDockHandle conv={conv} />
+            <ArtifactDockHandle conversationId={view.id} count={view.artifacts.length} artifacts={view.kind === 'real' ? view.artifacts as unknown as MockInlineArtifact[] : view.artifacts} />
             <Composer />
         </SafeAreaView>
     );
 }
 
-function ChatHeader({ conv }: { conv: Conversation }) {
+function ChatHeader({ title, participants, messageCount, live }: {
+    title: string;
+    participants: { id: string; name: string; color: string; initial: string }[];
+    messageCount: number;
+    live: boolean;
+}) {
     return (
         <View style={styles.header}>
             <Pressable hitSlop={8} style={styles.iconBtn} onPress={() => router.push('/conversations')}>
                 <Icons.Menu size={22} color={Colors.ink} />
             </Pressable>
             <View style={styles.headerCenter}>
-                <Text style={styles.headerTitle} numberOfLines={1}>{conv.title}</Text>
+                <Text style={styles.headerTitle} numberOfLines={1}>{title}</Text>
                 <View style={styles.headerSubrow}>
-                    <AgentAvatarStack agents={conv.participants} size={16} borderColor={Colors.bg} />
+                    {participants.length > 0
+                        ? <AgentAvatarStack agents={participants} size={16} borderColor={Colors.bg} />
+                        : null}
                     <Text style={styles.headerSub}>
-                        {conv.participants.length} agent{conv.participants.length > 1 ? 's' : ''} · {conv.messageCount} messages
+                        {participants.length > 0
+                            ? `${participants.length} agent${participants.length > 1 ? 's' : ''}`
+                            : 'No agent yet'} · {messageCount} message{messageCount === 1 ? '' : 's'}
                     </Text>
-                    {conv.live ? <View style={styles.liveDot} /> : null}
+                    {live ? <View style={styles.liveDot} /> : null}
                 </View>
             </View>
             <Pressable hitSlop={8} style={styles.iconBtn} onPress={() => router.push('/new-conversation')}>
@@ -97,7 +147,7 @@ function RecentsStrip({ activeId }: { activeId: string }) {
             style={styles.recents}
             contentContainerStyle={styles.recentsContent}
         >
-            {RECENT_CONVOS.map((chip) => {
+            {RECENT_CONVOS.map((chip: RecentConvoChip) => {
                 const active = chip.id === activeId;
                 return (
                     <Pressable
@@ -121,7 +171,7 @@ function RecentsStrip({ activeId }: { activeId: string }) {
     );
 }
 
-function MessageRenderer({ message }: { message: ThreadMessage }) {
+function MockMessageRenderer({ message }: { message: MockThreadMessage }) {
     if (message.kind === 'user') {
         return (
             <View style={styles.userMsgWrap}>
@@ -129,7 +179,6 @@ function MessageRenderer({ message }: { message: ThreadMessage }) {
             </View>
         );
     }
-
     return (
         <View style={styles.agentMsg}>
             <View style={styles.agentLine}>
@@ -141,7 +190,6 @@ function MessageRenderer({ message }: { message: ThreadMessage }) {
                     · {message.durationMs ? `${(message.durationMs / 1000).toFixed(1)}s` : 'just now'}
                 </Text>
             </View>
-
             {message.steps?.map((step, idx) => (
                 <View key={idx} style={styles.stepRow}>
                     <View style={styles.stepTick}>
@@ -150,11 +198,8 @@ function MessageRenderer({ message }: { message: ThreadMessage }) {
                     <Text style={styles.stepText}>{step.label}</Text>
                 </View>
             ))}
-
             <Text style={styles.msgBody}>{renderMarkdownInline(message.body)}</Text>
-
             {message.artifact ? <InlineArtifactCard artifact={message.artifact} /> : null}
-
             {message.actions && message.actions.length > 0 ? (
                 <View style={styles.chips}>
                     {message.actions.map((action) => (
@@ -168,25 +213,55 @@ function MessageRenderer({ message }: { message: ThreadMessage }) {
     );
 }
 
-/**
- * Minimal inline markdown for **bold**. Phase 1 placeholder until
- * markdown-core lands — see plan §4.3.
- */
+function RealMessageRenderer({ message }: { message: AdaptedMessage }) {
+    if (message.kind === 'user') {
+        return (
+            <View style={styles.userMsgWrap}>
+                <Text style={styles.userMsg}>{parseUserMessage(message.text)}</Text>
+            </View>
+        );
+    }
+    return (
+        <View style={styles.agentMsg}>
+            <View style={styles.agentLine}>
+                <View style={[styles.agentAv, { backgroundColor: message.agent.color }]}>
+                    <Text style={styles.agentAvText}>{message.agent.initial}</Text>
+                </View>
+                <Text style={styles.agentName}>{message.agent.name}</Text>
+                <Text style={styles.agentMeta}>
+                    · {message.completionMs ? `${(message.completionMs / 1000).toFixed(1)}s` : message.status}
+                </Text>
+            </View>
+            <Text style={styles.msgBody}>{renderMarkdownInline(message.body)}</Text>
+            {message.status === 'In-Progress' ? (
+                <View style={styles.stepRow}>
+                    <ActivityIndicator size="small" color={Colors.brand} />
+                    <Text style={styles.stepText}>Working…</Text>
+                </View>
+            ) : null}
+            {message.suggestedResponses.length > 0 ? (
+                <View style={styles.chips}>
+                    {message.suggestedResponses.map((action) => (
+                        <Pressable key={action} style={styles.actionChip}>
+                            <Text style={styles.actionChipText}>{action}</Text>
+                        </Pressable>
+                    ))}
+                </View>
+            ) : null}
+        </View>
+    );
+}
+
 function renderMarkdownInline(text: string): React.ReactNode {
     const parts = text.split(/(\*\*[^*]+\*\*)/g);
     return parts.map((part, idx) => {
         if (part.startsWith('**') && part.endsWith('**')) {
-            return (
-                <Text key={idx} style={styles.bold}>{part.slice(2, -2)}</Text>
-            );
+            return (<Text key={idx} style={styles.bold}>{part.slice(2, -2)}</Text>);
         }
         return part;
     });
 }
 
-/**
- * Bold any @mention tokens (e.g. "@research") inside user messages.
- */
 function parseUserMessage(text: string): React.ReactNode {
     const parts = text.split(/(@\w+)/g);
     return parts.map((part, idx) => {
@@ -197,27 +272,31 @@ function parseUserMessage(text: string): React.ReactNode {
     });
 }
 
-function ArtifactDockHandle({ conv }: { conv: Conversation }) {
-    const count = conv.artifacts.length;
+function ArtifactDockHandle({ conversationId, count, artifacts }: {
+    conversationId: string;
+    count: number;
+    artifacts: Array<{ producedBy?: AdaptedAgentRef; UserID?: string } | { producedBy: { color: string } }>;
+}) {
     if (count === 0) return null;
+    const dotColors: string[] = artifacts.slice(0, 3).map((a) => {
+        const maybe = (a as { producedBy?: { color: string } }).producedBy?.color;
+        return maybe ?? Colors.brand;
+    });
 
     return (
         <Pressable
             style={styles.dockHandle}
-            onPress={() => router.push({ pathname: '/artifacts/[id]', params: { id: conv.id } })}
+            onPress={() => router.push({ pathname: '/artifacts/[id]', params: { id: conversationId } })}
         >
             <View style={styles.dockIcon}>
                 <Icons.Database size={13} color={Colors.brand} strokeWidth={2.2} />
             </View>
             <Text style={styles.dockText}>
-                <Text style={styles.dockTextBold}>{count} artifacts</Text> in this conversation
+                <Text style={styles.dockTextBold}>{count} artifact{count === 1 ? '' : 's'}</Text> in this conversation
             </Text>
             <View style={styles.dockDots}>
-                {conv.artifacts.slice(0, 3).map((a, idx) => (
-                    <View
-                        key={a.id}
-                        style={[styles.dockDot, idx > 0 && { marginLeft: -4 }, { backgroundColor: a.producedBy.color }]}
-                    />
+                {dotColors.map((color, idx) => (
+                    <View key={idx} style={[styles.dockDot, idx > 0 && { marginLeft: -4 }, { backgroundColor: color }]} />
                 ))}
             </View>
             <Icons.ChevronUp size={13} color={Colors.ink3} strokeWidth={2.5} />
@@ -247,16 +326,12 @@ const styles = StyleSheet.create({
     safe: { flex: 1, backgroundColor: Colors.bg },
     notFound: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 },
     notFoundTitle: { fontSize: 18, fontWeight: Type.semibold, color: Colors.ink },
+    notFoundError: { fontSize: 13, color: Colors.danger, textAlign: 'center' },
     notFoundLink: { fontSize: 14, color: Colors.brand, fontWeight: Type.semibold },
 
     header: {
-        height: 60,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        paddingHorizontal: 14,
-        borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: Colors.line2,
+        height: 60, flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14,
+        borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.line2,
         backgroundColor: 'rgba(250,250,247,0.92)',
     },
     iconBtn: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center', borderRadius: Radius.md },
@@ -268,26 +343,12 @@ const styles = StyleSheet.create({
 
     recents: { maxHeight: 48 },
     recentsContent: {
-        paddingHorizontal: 14,
-        paddingTop: 8,
-        paddingBottom: 10,
-        gap: 6,
-        flexDirection: 'row',
-        borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: Colors.line2,
+        paddingHorizontal: 14, paddingTop: 8, paddingBottom: 10, gap: 6, flexDirection: 'row',
+        borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.line2,
     },
-    chip: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 6,
-        paddingHorizontal: 11,
-        paddingVertical: 6,
-        backgroundColor: Colors.surface,
-        borderWidth: StyleSheet.hairlineWidth,
-        borderColor: Colors.line2,
-        borderRadius: 999,
-        maxWidth: 180,
-    },
+    chip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 11, paddingVertical: 6,
+        backgroundColor: Colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.line2,
+        borderRadius: 999, maxWidth: 180 },
     chipActive: { backgroundColor: Colors.ink, borderColor: Colors.ink },
     chipPulse: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#2ec4a3' },
     chipText: { fontSize: 12.5, fontWeight: Type.medium, color: Colors.ink2 },
@@ -295,28 +356,10 @@ const styles = StyleSheet.create({
 
     thread: { flex: 1 },
     threadContent: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 8 },
-    dayDivider: {
-        textAlign: 'center',
-        fontSize: 11,
-        fontWeight: Type.semibold,
-        letterSpacing: 1,
-        color: Colors.ink3,
-        marginVertical: 8,
-        textTransform: 'uppercase',
-    },
+    dayDivider: { textAlign: 'center', fontSize: 11, fontWeight: Type.semibold, letterSpacing: 1, color: Colors.ink3, marginVertical: 8, textTransform: 'uppercase' },
 
     userMsgWrap: { alignItems: 'flex-end', marginBottom: 16 },
-    userMsg: {
-        maxWidth: '86%',
-        backgroundColor: Colors.userBg,
-        paddingHorizontal: 15,
-        paddingVertical: 11,
-        borderRadius: 18,
-        borderBottomRightRadius: 4,
-        fontSize: 15.5,
-        lineHeight: 22,
-        color: Colors.ink,
-    },
+    userMsg: { maxWidth: '86%', backgroundColor: Colors.userBg, paddingHorizontal: 15, paddingVertical: 11, borderRadius: 18, borderBottomRightRadius: 4, fontSize: 15.5, lineHeight: 22, color: Colors.ink },
     mention: { fontWeight: Type.semibold, color: Colors.ink },
 
     agentMsg: { marginBottom: 18 },
@@ -326,7 +369,7 @@ const styles = StyleSheet.create({
     agentName: { fontSize: 13, fontWeight: Type.semibold, color: Colors.ink },
     agentMeta: { fontSize: 11, fontWeight: Type.medium, color: Colors.ink3 },
 
-    stepRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+    stepRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4, marginTop: 4 },
     stepTick: { width: 14, height: 14, borderRadius: 7, backgroundColor: Colors.positiveSoft, alignItems: 'center', justifyContent: 'center' },
     stepText: { fontSize: 12, fontWeight: Type.medium, color: Colors.ink3 },
 
@@ -334,56 +377,18 @@ const styles = StyleSheet.create({
     bold: { fontWeight: Type.semibold },
 
     chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 12 },
-    actionChip: {
-        paddingHorizontal: 12, paddingVertical: 7,
-        borderRadius: 999,
-        backgroundColor: Colors.surface,
-        borderWidth: StyleSheet.hairlineWidth,
-        borderColor: Colors.line2,
-    },
+    actionChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, backgroundColor: Colors.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.line2 },
     actionChipText: { fontSize: 12.5, fontWeight: Type.medium, color: Colors.ink },
 
-    dockHandle: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-        paddingHorizontal: 16,
-        paddingVertical: 9,
-        backgroundColor: 'rgba(250,250,247,0.92)',
-        borderTopWidth: StyleSheet.hairlineWidth,
-        borderTopColor: Colors.line2,
-        borderBottomWidth: StyleSheet.hairlineWidth,
-        borderBottomColor: Colors.line2,
-    },
-    dockIcon: {
-        width: 22, height: 22, borderRadius: 6,
-        backgroundColor: Colors.brandSoft,
-        alignItems: 'center', justifyContent: 'center',
-    },
+    dockHandle: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 16, paddingVertical: 9, backgroundColor: 'rgba(250,250,247,0.92)', borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.line2, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.line2 },
+    dockIcon: { width: 22, height: 22, borderRadius: 6, backgroundColor: Colors.brandSoft, alignItems: 'center', justifyContent: 'center' },
     dockText: { flex: 1, fontSize: 12.5, color: Colors.ink2, fontWeight: Type.medium },
     dockTextBold: { color: Colors.ink, fontWeight: Type.semibold },
     dockDots: { flexDirection: 'row' },
     dockDot: { width: 13, height: 13, borderRadius: 7, borderWidth: 1.5, borderColor: Colors.bg },
 
     composerWrap: { paddingHorizontal: 14, paddingVertical: 8, backgroundColor: Colors.bg, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.line2 },
-    composer: {
-        backgroundColor: Colors.surface,
-        borderRadius: 24,
-        paddingLeft: 16,
-        paddingRight: 6,
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 4,
-        borderWidth: StyleSheet.hairlineWidth,
-        borderColor: Colors.line2,
-        minHeight: 48,
-        ...Shadow.card,
-    },
+    composer: { backgroundColor: Colors.surface, borderRadius: 24, paddingLeft: 16, paddingRight: 6, flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: StyleSheet.hairlineWidth, borderColor: Colors.line2, minHeight: 48, ...Shadow.card },
     composerInput: { flex: 1, fontSize: 15.5, color: Colors.ink, paddingVertical: 9, maxHeight: 120 },
-    micBtn: {
-        width: 38, height: 38, borderRadius: 19,
-        backgroundColor: Colors.brand,
-        alignItems: 'center', justifyContent: 'center',
-        marginVertical: 4,
-    },
+    micBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: Colors.brand, alignItems: 'center', justifyContent: 'center', marginVertical: 4 },
 });
