@@ -16,9 +16,16 @@ import { Component, Input } from '@angular/core';
  * ## Layout
  *
  * ```
- * [ toolbar content ……… ]  [—— spacer ——]  [meta]  [actions]
+ * [Title  ]  [ toolbar content ……… ]  [—— spacer ——]  [meta]  [actions]
+ *  subtitle
  * ```
  *
+ * - **`[Title]`** (input, optional) — short page name. Usually redundant with
+ *   the parent shell's left-rail label, so most sub-pages omit it.
+ * - **`[Subtitle]`** (input, optional) — short prose explaining what the page
+ *   does. Recommended for pages that aren't self-explanatory from the rail
+ *   label alone (e.g. Dev Tools inspectors). When provided without a Title,
+ *   the subtitle anchors the left side of the card by itself.
  * - **`[toolbar]`** — left side: search, visible filter chips, view toggles
  * - **`[meta]`** — right side, before actions: status badges, result counts
  * - **`[actions]`** — right edge: filter popover, refresh, secondary buttons, primary CTA
@@ -26,7 +33,7 @@ import { Component, Input } from '@angular/core';
  * ## Example
  *
  * ```html
- * <mj-page-header-interior>
+ * <mj-page-header-interior Subtitle="Read-only snapshot of Explorer runtime state">
  *   <div toolbar>
  *     <mj-page-search [Value]="searchTerm" (ValueChange)="onSearch($event)" />
  *     <mj-filter-chip Label="Active" [Active]="status === 'active'"
@@ -50,6 +57,16 @@ import { Component, Input } from '@angular/core';
     <div class="mj-page-header-interior"
          [attr.role]="Role"
          [attr.aria-label]="AriaLabel">
+      @if (Title || Subtitle) {
+        <div class="mj-page-header-interior__identity">
+          @if (Title) {
+            <div class="mj-page-header-interior__title">{{ Title }}</div>
+          }
+          @if (Subtitle) {
+            <div class="mj-page-header-interior__subtitle">{{ Subtitle }}</div>
+          }
+        </div>
+      }
       <div class="mj-page-header-interior__toolbar">
         <ng-content select="[toolbar]"></ng-content>
       </div>
@@ -78,6 +95,28 @@ import { Component, Input } from '@angular/core';
       border: 1px solid var(--mj-border-default);
       border-radius: var(--mj-radius-lg);
       box-shadow: var(--mj-shadow-sm);
+    }
+
+    .mj-page-header-interior__identity {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 2px;
+      flex-shrink: 0;
+      min-width: 0;
+      margin-right: var(--mj-space-1);
+    }
+    .mj-page-header-interior__title {
+      font-size: var(--mj-text-lg);
+      font-weight: var(--mj-font-semibold);
+      color: var(--mj-text-primary);
+      line-height: 1.2;
+      letter-spacing: -0.2px;
+    }
+    .mj-page-header-interior__subtitle {
+      font-size: var(--mj-text-xs);
+      color: var(--mj-text-muted);
+      line-height: 1.3;
     }
 
     .mj-page-header-interior__toolbar,
@@ -131,4 +170,19 @@ export class MJPageHeaderInteriorComponent {
    * chrome that represents a meaningful region (e.g. "Filter users").
    */
   @Input() AriaLabel: string | null = null;
+
+  /**
+   * Optional short page name rendered as the identity block on the left of the
+   * card. Usually redundant with the parent shell's left-rail label, so most
+   * sub-pages omit this and rely on Subtitle alone.
+   */
+  @Input() Title: string | null = null;
+
+  /**
+   * Optional one-line description rendered under Title (or alone, if Title is
+   * not set). Recommended for pages whose purpose isn't obvious from the rail
+   * label — e.g. Dev Tools inspectors. Keep it short — one line at typical
+   * widths.
+   */
+  @Input() Subtitle: string | null = null;
 }

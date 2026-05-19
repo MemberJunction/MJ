@@ -1,5 +1,14 @@
 :host { display: block; height: 100%; }
 
+/*
+  Inspector shell — each Dev Tools sub-page wraps its body in .mj-inspector. The
+  chrome (title icon, title, subtitle, action buttons) was previously rendered
+  via .mj-inspector__header*, but that's been replaced by <mj-page-header-interior>
+  in every inspector template. Action buttons now use the mjButton directive
+  (variant="secondary" / "success") so they inherit global button styling.
+  L3 inner-sidebar nav (.mj-inspector__body / __sidebar / __nav-item) is kept
+  as-is pending the L3 chrome convention decision.
+*/
 .mj-inspector {
     display: flex;
     flex-direction: column;
@@ -8,66 +17,6 @@
     background: var(--mj-bg-page);
     color: var(--mj-text-primary);
     font-family: inherit;
-}
-
-/* Header */
-.mj-inspector__header {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    padding: 14px 20px;
-    border-bottom: 1px solid var(--mj-border-default);
-    background: var(--mj-bg-surface);
-    flex-shrink: 0;
-}
-.mj-inspector__header-icon {
-    width: 36px; height: 36px;
-    border-radius: 9px;
-    background: linear-gradient(135deg, #264FAF 0%, #0076b6 100%);
-    color: white;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 15px;
-    flex-shrink: 0;
-}
-.mj-inspector__header-title {
-    margin: 0;
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--mj-text-primary);
-    letter-spacing: -0.2px;
-}
-.mj-inspector__header-sub {
-    font-size: 11.5px;
-    color: var(--mj-text-muted);
-    margin-top: 2px;
-}
-.mj-inspector__header-spacer { flex: 1; }
-.mj-inspector__header-actions {
-    display: flex; gap: 6px;
-}
-.mj-inspector__btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 7px 12px;
-    border-radius: 7px;
-    border: 1px solid var(--mj-border-default);
-    background: var(--mj-bg-surface);
-    color: var(--mj-text-secondary);
-    font-size: 12px;
-    font-weight: 500;
-    cursor: pointer;
-    font-family: inherit;
-    transition: all 0.15s;
-}
-.mj-inspector__btn:hover {
-    background: var(--mj-bg-surface-hover);
-    border-color: var(--mj-brand-primary);
-    color: var(--mj-brand-primary);
-}
-.mj-inspector__btn--success {
-    color: var(--mj-status-success);
-    border-color: color-mix(in srgb, var(--mj-status-success) 30%, var(--mj-border-default));
 }
 
 /* Layout: sidebar + content */
@@ -198,5 +147,4 @@
     }
     .mj-inspector__nav-item { flex: 1 1 calc(50% - 8px); margin-bottom: 0; }
     .mj-inspector__nav-desc { display: none; }
-    .mj-inspector__header { padding: 12px 14px; gap: 10px; }
 }

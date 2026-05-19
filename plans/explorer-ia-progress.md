@@ -142,15 +142,25 @@ All 5 migrated sub-pages also dropped their bespoke `.{name}-container` and `.co
 
 ### Inline-tab shells (Pattern Y — parent owns chrome)
 
-These shells render sub-sections inline via `@switch` instead of dynamic component loading. The parent's `<mj-page-header>` already owns the chrome and shared filter bar is fine where it is — no `<mj-page-header-interior>` needed.
+These shells render sub-sections inline via `@switch` (or `@if`) instead of dynamic component loading. The parent's `<mj-page-header>` already owns the page chrome and the shared filter bar is fine where it is — no `<mj-page-header-interior>` needed.
 
-| Shell | Current state |
+What's **NOT** standardized in this group is the **internal left rail**. Each of these shells has its own bespoke `<nav>` / `<aside>` with `.nav-item` styling, when `<mj-left-nav>` + `<mj-left-nav-content>` would fit cleanly. Future migration candidates:
+
+| Shell | Page chrome | Internal rail | Migration shape |
+|---|---|---|---|
+| AI Analytics | ✅ shell-owns-filter-bar via `FilterBarConfig` | ⏸️ bespoke `<nav class="analytics-nav">` with NavItems + one divider | `<mj-left-nav>` — NavItems map cleanly to `MJLeftNavItem`; divider expressible as a new `MJLeftNavSection`. Two sections naturally. |
+| Knowledge Hub Analytics | ✅ parent header owns chrome (Title="Knowledge Hub Analytics" + pipeline status badge) | ⏸️ bespoke `<nav class="sidebar-nav">` with NavItems + trending-tags widget below | `<mj-left-nav>` for the nav; trending-tags widget projects into `[footer]` slot |
+| Knowledge Hub Configuration | ✅ parent header owns chrome | ⏸️ bespoke `<nav class="config-nav">` with NavItems + header | `<mj-left-nav>` — sections are inline `@if` blocks below, no change needed |
+| Knowledge Hub Tags | ✅ parent header owns chrome | ⏸️ bespoke `.at-left-nav-items` + nested `.at-tag-lib-sidebar` (right rail) | `<mj-left-nav>` for the primary left rail; right rail (tag cloud) stays bespoke (it's contextual content for the active section, not navigation) |
+| Knowledge Hub Classify | ✅ parent header owns chrome | ⏸️ bespoke `.at-left-nav-items` + nested `.at-tax-tab-strip` (horizontal sub-tabs within Taxonomy section) | `<mj-left-nav>` for the primary left rail; sub-tab strip stays bespoke (sub-view, not section nav) |
+| Communication | ✅ parent header owns chrome | ⏸️ bespoke `.sidebar` with section labels ("Dashboard" / "Configuration" / "Operations") grouping nav items | `<mj-left-nav>` with `MJLeftNavSection[]` (section.label maps to the uppercase headers) |
+| Credentials | ✅ parent header owns chrome | ⏸️ bespoke `.sidebar` with section labels (same pattern as Communication) | `<mj-left-nav>` with `MJLeftNavSection[]` |
+
+**Intentional exception** — not a migration candidate:
+
+| Shell | Why excluded |
 |---|---|
-| AI Analytics | ✅ Already uses shell-owns-filter-bar pattern (`FilterBarConfig` switches per section). |
-| Knowledge Hub Config | ✅ Single component with `@if`-switched sections; parent header owns chrome. |
-| Knowledge Hub Analytics | ✅ Parent header owns chrome. |
-| Communication | ⏸️ Sidebar with sub-sections; could adopt `<mj-left-nav>` + `<mj-left-nav-content>` to share more primitives. Lower priority — chrome already works. |
-| Credentials | ⏸️ Same as Communication. |
+| Knowledge Hub Clusters | The `.sidebar` is a saved-clusters list (selection-of-context, not section navigation). User picks a cluster; the right pane shows that cluster's visualization. That's a list-detail pattern, not a section-nav shell — `<mj-left-nav>` would be the wrong fit. Stays bespoke. |
 
 ## Pages NOT yet migrated (page-level chrome)
 
@@ -269,8 +279,26 @@ The Section 10 pattern is proven on 5 pages and the migration recipe is mechanic
 **Different architecture** (nested IA, ~separate design pass):
 7. **APIKeys** — has internal Keys / Applications / Scopes / Usage tabs. Pattern Y nested in Pattern X. Needs a design pass to decide whether to use `<mj-left-nav>` + `<mj-left-nav-content>` for the inner nav or keep the existing tab pattern.
 
-### B. Roll the inline-tab shells onto shared primitives (optional)
-Communication and Credentials use sidebar+content layouts with bespoke nav CSS. They work, but could adopt `<mj-left-nav>` + `<mj-left-nav-content>` to share more primitives and delete more bespoke CSS. Lower priority.
+### B. Roll the inline-tab shells onto shared `<mj-left-nav>` (optional)
+
+7 inline-tab shells have bespoke internal left rails that could adopt `<mj-left-nav>` + `<mj-left-nav-content>`. Page-level chrome is already correct on all of them — this is purely about deleting bespoke nav CSS and consolidating onto the shared primitives. See the "Inline-tab shells" table above for the per-shell migration shape.
+
+Tiered by closeness to the shared component's default contract:
+
+**Tier 1 — direct mapping** (single section, no headers):
+1. AI Analytics — NavItems + divider (two implicit sections)
+2. Knowledge Hub Analytics — NavItems + trending-tags widget in `[footer]` slot
+3. Knowledge Hub Configuration — NavItems for settings sections
+
+**Tier 2 — primary rail clean, secondary content stays bespoke**:
+4. Knowledge Hub Tags — primary rail standard; nested right rail (tag cloud) stays bespoke
+5. Knowledge Hub Classify — primary rail standard; nested sub-tab strip stays bespoke
+
+**Tier 3 — section labels (uppercase group headers)**:
+6. Communication — uses `MJLeftNavSection.label` for "Dashboard" / "Configuration" / "Operations" groupings
+7. Credentials — same shape as Communication
+
+Lower priority than (A) — these chromes work today, they just have ~150 lines of bespoke nav CSS per page that could go away.
 
 ### C. Resolve Section 9a exceptions
 - **AI Overview**: hero-section → page-header is a redesign, not a swap. Needs user confirmation.

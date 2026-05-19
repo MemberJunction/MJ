@@ -2,7 +2,11 @@
   Interior chrome — see Section 10 of explorer-chrome-conventions. Role="toolbar"
   because this is an action band, not a search/filter region.
 -->
-<mj-page-header-interior Role="toolbar" AriaLabel="Application roles actions">
+<mj-page-header-interior
+  Role="toolbar"
+  AriaLabel="Application roles actions"
+  Title="Application Roles"
+  Subtitle="Assign roles per application">
   @if (HasUnsavedChanges) {
     <div meta>
       <mj-stat-badge

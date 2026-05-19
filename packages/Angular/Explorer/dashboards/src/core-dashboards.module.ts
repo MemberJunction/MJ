@@ -20,7 +20,8 @@ import {
   MJStatBadgeComponent,
   MJRefreshButtonComponent,
   MJLeftNavComponent,
-  MJLeftNavContentComponent
+  MJLeftNavContentComponent,
+  MJTabNavComponent
 } from '@memberjunction/ng-ui-components';
 import { ContainerDirectivesModule } from '@memberjunction/ng-container-directives';
 import { SharedGenericModule } from '@memberjunction/ng-shared-generic';
@@ -149,6 +150,7 @@ import { VersionHistoryGraphResourceComponent } from './VersionHistory/component
     MJRefreshButtonComponent,
     MJLeftNavComponent,
     MJLeftNavContentComponent,
+    MJTabNavComponent,
     ContainerDirectivesModule,
     SharedGenericModule,
     CodeEditorModule,

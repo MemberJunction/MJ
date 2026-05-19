@@ -1,5 +1,9 @@
-/* Container — flex-column workspace inside Admin's left-nav shell. */
-.sd-container {
+/*
+  SystemDiagnostics renders inside Admin's "Monitoring" left-nav shell.
+  Host is a flex column so <mj-page-header-interior> sits pinned at the top
+  and .scrollable-content fills the rest. See plans/explorer-chrome-conventions.md Section 10.
+*/
+:host {
     display: flex;
     flex-direction: column;
     height: 100%;
@@ -7,32 +11,8 @@
     background: var(--mj-bg-page);
 }
 
-/* Sticky Header — action row only (no title; Admin shell provides it). */
-.sd-container > .sticky-header {
-    flex-shrink: 0;
-    background: var(--mj-bg-surface);
-    border-bottom: 1px solid var(--mj-border-default);
-    box-shadow: var(--mj-shadow-sm);
-    z-index: 10;
-}
-
-.sd-container > .sticky-header > .action-buttons {
-    display: flex;
-    align-items: center;
-    gap: var(--mj-space-3);
-    justify-content: flex-end;
-    padding: var(--mj-space-3) var(--mj-space-6);
-}
-
-@media (max-width: 639px) {
-    .sd-container > .sticky-header > .action-buttons {
-        justify-content: center;
-        flex-wrap: wrap;
-    }
-}
-
-/* Scrollable Content */
-.sd-container > .scrollable-content {
+/* Scrollable Content — everything below the interior chrome scrolls together. */
+.scrollable-content {
     flex: 1;
     overflow-y: auto;
     padding: var(--mj-space-6);
@@ -237,96 +217,11 @@
 }
 
 /* Main Content */
-.main-content {
-    display: flex;
-    flex: 1;
-    min-height: 0;
-}
-
-/* Left Navigation */
-.left-nav {
-    width: 240px;
-    background: var(--mj-bg-page);
-    border-right: 1px solid var(--mj-border-default);
-    padding: 16px 0;
-    flex-shrink: 0;
-}
-
-.nav-section {
-    padding: 0 12px;
-}
-
-.nav-section-title {
-    font-size: 11px;
-    font-weight: 600;
-    color: var(--mj-text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    padding: 8px 12px;
-    margin-bottom: 4px;
-}
-
-.nav-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
-    border-radius: var(--mj-radius-md);
-    cursor: pointer;
-    color: var(--mj-text-secondary);
-    font-size: 14px;
-    transition: all 0.2s ease;
-    margin-bottom: 4px;
-}
-
-.nav-item:hover {
-    background: var(--mj-bg-surface);
-    color: var(--mj-text-primary);
-}
-
-.nav-item.active {
-    background: color-mix(in srgb, var(--mj-brand-primary) 10%, var(--mj-bg-surface));
-    color: var(--mj-brand-primary);
-    font-weight: 500;
-}
-
-.nav-item i {
-    width: 18px;
-    text-align: center;
-    font-size: 15px;
-}
-
-.nav-item span:first-of-type {
-    flex: 1;
-}
-
-.nav-badge {
-    background: var(--mj-border-default);
-    color: var(--mj-text-secondary);
-    font-size: 11px;
-    font-weight: 600;
-    padding: 2px 8px;
-    border-radius: var(--mj-radius-lg);
-    min-width: 24px;
-    text-align: center;
-}
-
-.nav-item.active .nav-badge {
-    background: color-mix(in srgb, var(--mj-brand-primary) 15%, transparent);
-    color: var(--mj-brand-primary);
-}
-
-.nav-badge--warning {
-    background: var(--mj-color-warning-500) !important;
-    color: white !important;
-}
-
-.nav-badge--success {
-    background: var(--mj-status-success) !important;
-    color: white !important;
-}
-
-/* Content Area */
+/*
+  Content Area — L2 nav was previously a bespoke left rail (.left-nav). It now
+  lives in the interior chrome above as <mj-tab-nav>. Section panels render
+  directly inside .content-area, which fills the remaining body width.
+*/
 .content-area {
     flex: 1;
     padding: 24px;

@@ -8,6 +8,7 @@ import { CompositeKey, TelemetryManager, TelemetryEvent, TelemetryPattern, Telem
 import { ResourceData, MJUserSettingEntity, UserInfoEngine } from '@memberjunction/core-entities';
 import { BaseEngineRegistry, EngineMemoryStats, LocalCacheManager, CacheEntryInfo, CacheStats, CacheEntryType, Metadata } from '@memberjunction/core';
 import { GraphQLDataProvider } from '@memberjunction/graphql-dataprovider';
+import { TabConfig } from '@memberjunction/ng-ui-components';
 import * as d3 from 'd3';
 
 /**
@@ -173,28 +174,36 @@ export interface SystemDiagnosticsUserPreferences {
     changeDetection: ChangeDetectionStrategy.OnPush,
     template: `
         <!--
-          SystemDiagnostics renders inside Admin's "Monitoring" left-nav shell,
-          which owns its own <mj-page-header>. We deliberately do NOT render a
-          <mj-page-header> here to avoid the doubled-header pattern Section 9b
-          defers. Action chrome (auto-refresh toggle + refresh button) lives
-          inline in the .sticky-header below, matching UserManagement /
-          ApplicationRoles. See plans/explorer-chrome-conventions.md Section 10.
+          SystemDiagnostics renders inside Admin's "Monitoring" left-nav shell.
+          L1 (outer Admin rail) is owned by the parent shell; here we use
+          <mj-page-header-interior> with [toolbar]=<mj-tab-nav> to render the
+          L2 section nav (Engine Registry / Redundant / Performance / Cache),
+          and [actions]=auto-refresh + refresh button. The Performance section
+          carries its own L3 perf-tabs strip inside its panel.
+          See plans/explorer-chrome-conventions.md Section 10.
         -->
-        <div class="sd-container">
-          <div class="sticky-header">
-            <div class="action-buttons" role="toolbar" aria-label="System diagnostics actions">
-              @if (autoRefresh) {
-                <mj-stat-badge Icon="fa-solid fa-sync-alt fa-spin" Label="Auto-refresh · every 5s" Variant="info"></mj-stat-badge>
-              }
-              <label class="auto-refresh-toggle">
-                <input type="checkbox" [(ngModel)]="autoRefresh" (change)="toggleAutoRefresh()">
-                Auto-refresh
-              </label>
-              <mj-refresh-button [Loading]="isLoading" Label="Refresh Now" [ShowLabel]="true" (Clicked)="refreshData()"></mj-refresh-button>
-            </div>
+        <mj-page-header-interior
+          Role="region"
+          AriaLabel="System diagnostics"
+          Title="System Diagnostics"
+          Subtitle="Engine registry, cache, and performance telemetry">
+          <div toolbar>
+            <mj-tab-nav
+              [Tabs]="diagnosticsTabs"
+              [ActiveKey]="activeSection"
+              (TabChange)="onSectionTabChange($event)">
+            </mj-tab-nav>
           </div>
+          <div actions>
+            <label class="auto-refresh-toggle">
+              <input type="checkbox" [(ngModel)]="autoRefresh" (change)="toggleAutoRefresh()">
+              Auto-refresh
+            </label>
+            <mj-refresh-button [Loading]="isLoading" Label="Refresh Now" [ShowLabel]="true" (Clicked)="refreshData()"></mj-refresh-button>
+          </div>
+        </mj-page-header-interior>
 
-          <div class="scrollable-content">
+        <div class="scrollable-content">
         <div class="system-diagnostics">
 
           <!-- Overview Cards (Collapsible) -->
@@ -269,57 +278,8 @@ export interface SystemDiagnosticsUserPreferences {
             }
           </div>
         
-          <!-- Main Content with Left Nav -->
-          <div class="main-content">
-            <!-- Left Navigation -->
-            <div class="left-nav">
-              <div class="nav-section">
-                <div class="nav-section-title">Diagnostics</div>
-                <div
-                  class="nav-item"
-                  [class.active]="activeSection === 'engines'"
-                  (click)="setActiveSection('engines')"
-                  >
-                  <i class="fa-solid fa-cogs"></i>
-                  <span>Engine Registry</span>
-                  <span class="nav-badge">{{ engineStats?.totalEngines || 0 }}</span>
-                </div>
-                <div
-                  class="nav-item"
-                  [class.active]="activeSection === 'redundant'"
-                  (click)="setActiveSection('redundant')"
-                  >
-                  <i class="fa-solid fa-copy"></i>
-                  <span>Redundant Loading</span>
-                  @if (redundantLoads.length > 0) {
-                    <span class="nav-badge nav-badge--warning">{{ redundantLoads.length }}</span>
-                  } @else {
-                    <span class="nav-badge nav-badge--success">0</span>
-                  }
-                </div>
-                <div
-                  class="nav-item"
-                  [class.active]="activeSection === 'performance'"
-                  (click)="setActiveSection('performance')"
-                  >
-                  <i class="fa-solid fa-chart-line"></i>
-                  <span>Performance</span>
-                  <span class="nav-badge">{{ telemetrySummary?.totalEvents || 0 }}</span>
-                </div>
-                <div
-                  class="nav-item"
-                  [class.active]="activeSection === 'cache'"
-                  (click)="setActiveSection('cache')"
-                  >
-                  <i class="fa-solid fa-database"></i>
-                  <span>Local Cache</span>
-                  <span class="nav-badge">{{ cacheStats?.totalEntries || 0 }}</span>
-                </div>
-              </div>
-            </div>
-        
-            <!-- Content Area -->
-            <div class="content-area">
+          <!-- Section Content (L2 nav is rendered as horizontal tabs in the interior chrome above) -->
+          <div class="content-area">
               <!-- Engine Registry Section -->
               @if (activeSection === 'engines') {
                 <div class="section-panel">
@@ -1180,8 +1140,7 @@ export interface SystemDiagnosticsUserPreferences {
                 </div>
               }
             </div>
-          </div>
-        
+
           <!-- Last Updated -->
           <div class="footer">
             <span class="last-updated">
@@ -1487,7 +1446,6 @@ export interface SystemDiagnosticsUserPreferences {
           </div>
         }
           </div>
-        </div>
         `,
     styleUrls: ['./system-diagnostics.component.css']
 })
@@ -1655,6 +1613,52 @@ export class SystemDiagnosticsComponent extends BaseResourceComponent implements
         }
         this.cdr.markForCheck();
         this.saveUserPreferencesDebounced();
+    }
+
+    /**
+     * Adapter for `<mj-tab-nav>`'s string-typed `(TabChange)` output.
+     * Narrows the emitted key to the typed `activeSection` union before
+     * delegating to `setActiveSection`.
+     */
+    onSectionTabChange(key: string): void {
+        if (key === 'engines' || key === 'redundant' || key === 'performance' || key === 'cache') {
+            this.setActiveSection(key);
+        }
+    }
+
+    /**
+     * L2 section tabs for `<mj-tab-nav>` in the interior chrome's [toolbar] slot.
+     * Badges are dynamic (engine count, redundant-load count w/ warning variant,
+     * telemetry event count, cache entry count).
+     */
+    get diagnosticsTabs(): TabConfig[] {
+        return [
+            {
+                key: 'engines',
+                icon: 'fa-solid fa-cogs',
+                label: 'Engine Registry',
+                badge: this.engineStats?.totalEngines ?? 0
+            },
+            {
+                key: 'redundant',
+                icon: 'fa-solid fa-copy',
+                label: 'Redundant Loading',
+                badge: this.redundantLoads.length,
+                badgeVariant: this.redundantLoads.length > 0 ? 'warning' : 'success'
+            },
+            {
+                key: 'performance',
+                icon: 'fa-solid fa-chart-line',
+                label: 'Performance',
+                badge: this.telemetrySummary?.totalEvents ?? 0
+            },
+            {
+                key: 'cache',
+                icon: 'fa-solid fa-database',
+                label: 'Local Cache',
+                badge: this.cacheStats?.totalEntries ?? 0
+            }
+        ];
     }
 
     toggleAutoRefresh(): void {
