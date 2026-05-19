@@ -30,6 +30,7 @@ Append provenance citations as you go via the `mj-metadata` MCP's `append_proven
 - **Page bodies don't enter your context.** Per ADR-002, write a small script (TypeScript via tsx) that fetches the doc page + extracts the specific fact you need. Run the script via Bash. Read its structured stdout output. This keeps your reasoning context clean.
 - **No priors from other connectors.** Each vendor is its own API. HubSpot's choices don't predict Salesforce's.
 - **Set-completeness rule.** For every set you enumerate — flags, types, paths, fields, modules, endpoints, emitted values, anything iterable — verify completeness against an authoritative source before declaring done. Don't stop at "reasonable." Audit your output: "am I done because the set is exhausted, or because I have enough?" If "enough," keep going. Authoritative sources include: vendor's documented index/reference, vendor's API catalog/sitemap, the spec file's full operation list, the schema's full property list, the metadata schema's full hard-constraint field list, the IO/IOF row's full emission list.
+- **Produce a structured report alongside your emission.** Write `METADATA_REPORT.md` (or include an extensive structured-stdout block) covering: which sources you consulted, the research approach, what you found, the decisions you made and the reasoning behind each, and any uncertainty or known gaps. The coordinator reads this report to assess your work. Be thorough enough that a senior reviewer can judge from the report without redoing.
 
 ## Handoff contract
 
@@ -40,11 +41,20 @@ When you finish:
 
 ## Verification
 
-Before declaring done:
+Mechanical checks (floor, not ceiling):
 - Every non-default field traces to a PROVENANCE entry — or to a CODE_EVIDENCE entry if the value came from running a script against a vendor source.
 - The metadata file pushes cleanly via `mj sync push --dry-run` (no schema errors, no missing FKs).
 - The `Configuration` JSON parses as valid JSON.
-- Gaps you couldn't resolve are listed in your handoff summary with one sentence each on why (no source / contradictory sources / behind paywall / etc.).
+
+Proof-of-work — your structured report (or extensive structured handoff) MUST contain these three concrete sections with substance. Empty or vague sections fail this gate; the coordinator will reject and re-dispatch you:
+
+1. **Sources walked, with counts.** Not "I read the docs" — but "I fetched `<URL>`, extracted N facts, of which K became root fields and (N−K) went to Configuration because [specific reasoning]." If you can't state how many facts you extracted per source, you didn't actually research that source.
+
+2. **Negative space.** Vendor facts you searched for and could not find with authoritative evidence: rate-limit numbers not published, OAuth scope list missing, error response shape not formally documented. Empty negative-space list means you stopped at the first surface — real research surfaces gaps.
+
+3. **Cuts made.** Facts you considered emitting but decided to leave as Configuration JSON or defer entirely, with the reasoning. Considered `WebhooksAvailable=true` but couldn't find webhook signature spec? Document the decision and what would change it. If your cuts list is empty, you didn't consider alternatives.
+
+These three sections are how the coordinator and senior reviewers judge thoroughness. The coordinator reads for substance, not for the presence of section headers.
 
 ## Escalation
 

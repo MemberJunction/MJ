@@ -30,92 +30,34 @@ Examples:
 7. Spawn `testing-agent` (Phase 3) → runs T0-T4. If `--credentials` was provided, also T10. Produces `Phase3Report.json`.
 8. Print the `Phase3Report.json` to the user. Do NOT commit, do NOT open a PR (per MJ Rule #1).
 
-## Coordinator audit (after each phase output)
+## Coordinator review (after each phase output)
 
-After each major phase produces output, the coordinator runs three vendor-agnostic audit checks. If any check surfaces a gap, the coordinator re-dispatches the phase agent with structured feedback. Audit loop is capped at 3 cycles per phase — after the cap, remaining gaps are documented but not auto-resolved.
+Each producer agent (Phase 2b metadata-writer, Phase 2c ioiof-extractor, Phase 2d code-builder) emits its artifacts AND a structured report describing the work — which sources consulted, what was found, decisions made + reasoning, negative space, cuts. Mechanical validators run first; coordinator review runs on top.
 
-### Source-accessibility cross-check (runs before the three audit checks)
+### Mechanical validators (structural gates — must pass first)
 
-`WebFetch` (the source-auditor's only web tool) and `Bash + curl` (the coordinator + downstream extractor + metadata-writer's web access) do NOT see the same internet. Some vendors block WebFetch via CDN bot-rules while leaving curl-from-local-machine fully accessible. Empirically observed on YourMembership's `ws.yourmembership.com/metadata` endpoint: WebFetch → HTTP 403; curl → HTTP 200, 123KB of operation index HTML.
+These are deterministic output checks, not interpretive reviews. They reject mechanically; they never use LLM judgment.
 
-Before accepting any source-auditor URL marked `AccessStatus: 'WebFetchBlocked'` as truly inaccessible, the coordinator MUST:
+- **`mj-validate-invariants <vendor>`** — runs Invariant 1 (provable-only), 1b (script inspection), 2 (three-way name match), 3 (FK metadata correctness), 4 (capability ↔ method existence), and `Check_UnresolvedEmissions` (no `{var}` / `<var>` / `/:var` / `{{var}}` placeholder syntax in emitted strings).
+- **`tsc --noEmit`** — connector + tests typecheck clean.
+- **`vitest run`** — fixture-based tests pass.
 
-1. For each blocked URL, run `curl -sS -o /tmp/<hash>.html -w "%{http_code}" <URL>` to independently fetch.
-2. If curl returns 2xx, the URL IS accessible to script-based extractors. Reclassify as `AccessStatus: 'AccessibleViaScripts'`.
-3. Update `SOURCES.json` with the corrected accessibility status BEFORE Phase 2b/2c spawn.
-4. When dispatching Phase 2b (metadata-writer) and Phase 2c (ioiof-extractor), pass the corrected list — downstream agents use Bash + script-based fetch (Node fetch / curl) and will succeed where WebFetch failed.
+If any mechanical gate fails: relay the validator's failure messages verbatim to the producer and re-dispatch. The mechanical layer says WHAT is wrong; the producer observes the source format and figures out HOW to fix. The coordinator does not interpret mechanical-gate failures.
 
-This perseverance principle is non-negotiable: the framework does NOT give up on a URL based on a single tool surface's blocked-status. Every "ungettable" verdict is cross-checked across the full coordinator tool surface (WebFetch + Bash + curl + Node fetch via script) before being accepted. The coordinator makes the final accessibility decision; phase agents report structured evidence.
+### Interpretive review (above the mechanical layer)
 
-### Three vendor-agnostic audit checks
+Once mechanical gates pass, the coordinator reads the producer's structured report AND the emitted artifacts. The coordinator's job is to be the senior reviewer the producer doesn't have access to.
 
-**1. CONTROL COMPARISON**
+There is NO prescribed checklist. The coordinator uses judgment: is the research thorough? Are the conclusions defensible from the evidence cited? Are there gaps the producer didn't acknowledge that you can see?
 
-Check if a manually-built reference exists for this vendor at `packages/Integration/connectors/src/<Name>Connector.ts` AND/OR `metadata/integrations/.<vendor>.json`. If yes: extract IO Names + APIPath patterns from the control and diff against the agent's emitted metadata.
+- If satisfied → proceed to next phase.
+- If not → write specific feedback to the producer about what you want investigated further. Use your own reading of the report + artifacts to decide what's missing. Re-dispatch.
 
-Thresholds:
-- IO Name overlap < 80% OR APIPath overlap < 60% → mismatch.
+Cap: 3 review cycles per phase. If unresolved after 3, escalate to user with "review cycle limit reached; remaining concerns documented but not auto-resolved."
 
-Re-dispatch feedback template:
-> "Your output has X% overlap with the reference at [path]. Reference has these IOs/APIPaths you don't: [list]. Investigate whether your extraction missed them, or whether your sources differ from the reference's. Re-extract with broader source coverage if needed. Do NOT bias toward latest/newest spec versions if the control uses stable older versions — investigate why."
+### Why coordinator review runs ABOVE the mechanical layer
 
-**2. PRODUCT-OVERVIEW CROSS-REFERENCE**
-
-Fetch the vendor's product overview / docs root URL (from Phase 1's `NavigationBaseURL` or the top-tier `SOURCES.json` URL). Extract entity / module / service names mentioned in headings, navigation, feature lists. Cross-reference against the agent's IO Name list.
-
-For each named entity in the product overview NOT in the agent's IOs, surface as a gap.
-
-Re-dispatch feedback template:
-> "Vendor's product overview at [URL] names these entities you don't have IOs for: [list]. Investigate."
-
-**3. TAUTOLOGY CHECK**
-
-Inspect the agent's extractor script (`scripts/extract-io-iof.ts`). Determine its data source. If the source is a file already in the MJ repo (e.g., reading from `packages/Integration/connectors/src/<X>Connector.ts`), the extraction is tautological — agent extracted from prior art, not from independent sources.
-
-Audit-log only (do NOT re-dispatch):
-> "Extraction is from in-tree prior art at [path]. Not independent verification. True cross-paradigm verification requires accessing vendor's independent source (Swagger UI / docs site / runtime endpoint) which needs credentials."
-
-### Audit loop
-
-1. Run all applicable checks after the phase output.
-2. If any check fires re-dispatch → re-spawn the phase agent with structured feedback → wait → audit again.
-3. Cap at 3 audit cycles per phase. After the cap, escalate to user: "audit cycle limit reached; remaining gaps documented but not auto-resolved."
-
-### Phase-specific rubrics
-
-In addition to the three general vendor-agnostic checks above, each phase has its own rubric the coordinator runs against the phase output.
-
-#### Phase 2b (metadata-writer) rubric
-
-- **Coverage threshold**: every entity named in the vendor's product overview that maps to a root-level concept (auth model, pagination shape, rate limits, error envelope, webhook signature, etc.) has a corresponding root field or `Configuration` JSON entry. Mismatch → flag.
-- **Structural completeness**: every hard-constraint root field (the set named in `.claude/rules/metadata-file-conventions.md`) has a `PROVENANCE.json` entry whose `TargetField` matches exactly (single-target, not pipe-delimited compound).
-- **Cross-source corroboration**: when multiple Tier-1 sources in `SOURCES.json` describe the same root fact, the emitted value aligns with all of them. Surfacing contradiction → flag (don't pick silently).
-
-#### Phase 2c (ioiof-extractor) rubric
-
-- **Coverage threshold**: IO count ~ 100% of entities identifiable from the vendor's product overview / catalog index. Less than that → flag (per Control Comparison + Product Overview Cross-Reference checks).
-- **Structural completeness**: every IO has ≥ 1 IOF; every IOF emitted with `IsPrimaryKey=true` / `IsRequired=true` / `IsReadOnly=true` (non-default) / `SupportsWrite=true` / `SupportsIncrementalSync=true` has a corresponding `CODE_EVIDENCE.json` entry at per-(IO|IOF, field, signal) granularity.
-- **Cross-source corroboration**: when multiple sources describe the same entity (e.g., OpenAPI + SDK + docs page), the emitted IO/IOF rows align across all. Divergence → flag.
-- **Bidirectional set-completeness**: no orphans from prior runs (extractor's bidirectional-merge deletes IOs/IOFs in existing metadata that aren't in this run's emissions).
-
-#### Phase 2d (code-builder) rubric
-
-- **Metadata-driven routing**: every method body uses metadata routing fields (`APIPath` from IO, `CreateAPIPath` / `UpdateAPIPath` / etc. if present in vendor config). No hardcoded URLs in method bodies.
-- **No inline crypto**: imports come from `@memberjunction/integration-engine/auth-helpers` (`OAuth2TokenManager`, `JWTSigner`, `HMACSigner`, `APIKeyHeaderBuilder`). If a primitive is missing, extend `auth-helpers` — don't inline a crypto path in the connector.
-- **DiscoverObjects override**: present if the metadata declares runtime catalog discovery (vendor exposes `/schemas`, `/describe`, `/preferences`, or equivalent enumeration endpoint).
-- **WatermarkService integration**: if any IO has `SupportsIncrementalSync=true`, `FetchChanges` reads + advances watermark via `WatermarkService.Load` / `.Update`. Watermark advances only on full-batch success.
-- **MatchEngine integration**: Update / Delete paths flow through `MatchEngine` for Create-vs-Update decision via `IsKeyField` lookup.
-- **NO hardcoded catalog mirror**: connector class's `DiscoverObjects` reads from `IntegrationEngineBase.Instance` cache (per `MJ-INTEGRATIONS-ARCHITECTURE.md` §4.6), NOT from a hardcoded TypeScript constant. Tests assert against the cache, not against a hardcoded count.
-- **Capability ↔ method coherence**: every `SupportsX=true` flag has: (1) a method declared on the concrete class, (2) a real non-stub body (not `throw "not implemented"`), (3) at least one fixture-based unit test asserting URL / method / body shape.
-- **Control connector cross-reference**: if `packages/Integration/connectors/src/<Name>Connector.ts` exists as a control, diff method signatures + capability flag set + base class choice. Mismatches → flag.
-
-Each rubric check failure → re-dispatch the phase with structured feedback citing the specific check + the specific mismatch. Audit loop cap (3 cycles) applies per phase.
-
-### Why audit is part of the coordinator and not the phase agent
-
-Each phase agent runs in fresh context — it can't see how its output diverges from a reference because it doesn't have the reference. The coordinator has full workspace visibility + can pull external references (control files, vendor docs). The audit step is the cognitive layer the phase agent cannot reach on its own.
-
-This is the operational lift of the set-completeness meta-principle: the agent says "I think I'm done"; the coordinator verifies against the authoritative source the agent didn't reach.
+Mechanical validators catch structural defects (missing evidence, unresolved placeholders, broken FK refs). They cannot catch shallow research, premature drops, or unsupported interpretive decisions — those require reading the producer's reasoning and judging whether it holds up. The coordinator is the cognitive layer that operates on the report content itself, not on the artifacts the report describes.
 
 ## What this skill does NOT do
 

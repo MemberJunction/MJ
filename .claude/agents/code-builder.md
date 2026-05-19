@@ -38,6 +38,7 @@ Write `connectors-registry/<vendor>/src/<Name>Connector.ts` such that:
 - **Configuration JSON is the vendor-specifics landing zone.** Read `companyIntegration.Configuration` (typed property, not `.Get()`); type the parsed shape with Zod; use it for vendor quirks the canonical schema doesn't have a column for.
 - **Match the established patterns in `packages/Integration/connectors/src/`.** SalesforceConnector + HubSpotConnector are the canonical references for REST + paginated incremental sync. Don't reinvent.
 - **IntegrationName getter is verbatim Phase 1.** The connector class's `IntegrationName` getter MUST return the exact string from `Phase1Handoff.Identity.IntegrationName`. No abbreviation, no variation, no shortening (e.g., if Phase 1 resolved `"QuickBooks Online"`, do NOT return `"QuickBooks"`). The three-way name match invariant depends on this verbatim equivalence: `connector.IntegrationName === metadata.fields.Name === @RegisterClass driver string === Phase1Handoff.Identity.IntegrationName`.
+- **Produce a structured report alongside your emission.** Write `CODE_REPORT.md` covering: which metadata IOs you implemented + how (URL construction, body shape, response parsing decisions), which base-class hooks you overrode + why, which auth pattern you picked + the cited evidence from metadata's Configuration, what test fixtures you wrote + what they exercise, and any uncertainty about correctness against the live vendor API. The coordinator reads this report to assess your work.
 
 ## Handoff contract
 
@@ -50,13 +51,22 @@ When you finish:
 
 ## Verification
 
-Before declaring Complete:
+Mechanical checks (floor):
 - Build is clean (no TypeScript errors, no unused-import warnings).
-- All 8 invariants pass.
+- All validator checks pass (Invariants 1, 1b, 2, 3, 4 + Check_UnresolvedEmissions).
 - T0-T4 tiers pass.
-- Spot-check the implementation against the metadata: pick 3 IOs at random, verify `CreateRecord` against IO1 actually constructs the URL + method + body that IO1's routing fields prescribe.
 - The connector imports from `@memberjunction/integration-engine/auth-helpers` (or has a justification why not).
 - No fabricated fixtures — every JSON in `__tests__/fixtures/` traces to a real vendor response via PROVENANCE.
+
+Proof-of-work — your CODE_REPORT.md MUST contain these three concrete sections with substance. Empty or vague sections fail this gate:
+
+1. **Implementations + routing decisions.** Not "I implemented CRUD" — but per-IO (or per-IO-family) summary: what APIPath template was used, what request body shape was chosen, what response key was parsed, why. If you implemented CRUD for 50 IOs identically via metadata-driven dispatch, describe the dispatch + which metadata fields drive each verb.
+
+2. **Negative space.** Methods you considered overriding and decided not to. Auth patterns you considered and didn't pick + why. IOs where you couldn't determine a correct implementation from metadata alone (mark them with `RequiresLiveVerification` and flag for T10).
+
+3. **Cuts made.** Capability flags you set to false because metadata didn't justify true. Test scenarios you considered and excluded. Helper code paths you considered extracting to auth-helpers but didn't.
+
+These three sections are how the coordinator judges whether the connector is genuinely complete vs surface-only. Mechanical green doesn't prove correctness against the live vendor API — only T10 does. Your job is to make the gap between "T0-T4 green" and "T10 green" as small as possible by being honest about what the report says.
 
 ## Escalation
 
