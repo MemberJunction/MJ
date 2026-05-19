@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MJ Mobile · Entity Records</title>
+<meta name="viewport" content="width=393, initial-scale=1">
+<style>
+  :root {
+    --bg: #fafaf7;
+    --surface: #ffffff;
+    --ink: #0d0d10;
+    --ink-2: #4a4a52;
+    --ink-3: #8a8a93;
+    --line: rgba(13,13,16,0.06);
+    --brand: #264FAF;
+    --brand-soft: rgba(38,79,175,0.08);
+    --positive: #1a8a5f;
+    --warn: #b87a1f;
+    --shadow-lg: 0 24px 60px rgba(13,13,16,0.10);
+    --shadow-card: 0 1px 2px rgba(13,13,16,0.04), 0 8px 20px rgba(13,13,16,0.06);
+  }
+  * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+  html, body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; background: #e8e6df; color: var(--ink); min-height: 100vh; }
+  .device-wrap { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 32px 16px; }
+  .device { width: 393px; height: 852px; background: var(--bg); border-radius: 54px; box-shadow: var(--shadow-lg), 0 0 0 12px #1a1a1f, 0 0 0 13px #2a2a30; position: relative; overflow: hidden; }
+  .dynamic-island { position: absolute; top: 11px; left: 50%; transform: translateX(-50%); width: 124px; height: 36px; background: #000; border-radius: 20px; z-index: 10; }
+  .home-indicator { position: absolute; bottom: 9px; left: 50%; transform: translateX(-50%); width: 134px; height: 5px; background: #0d0d10; border-radius: 3px; opacity: 0.85; }
+  .statusbar { height: 54px; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 28px 8px; font-size: 17px; font-weight: 600; letter-spacing: -0.02em; }
+
+  .nav-top { height: 56px; display: flex; align-items: center; gap: 6px; padding: 0 14px; border-bottom: 1px solid var(--line); }
+  .icon-btn { width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center; border-radius: 11px; color: var(--ink); }
+  .title-stack { flex: 1; text-align: center; }
+  .title-stack .t { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+  .title-stack .s { font-size: 11px; color: var(--ink-3); margin-top: 1px; }
+
+  .search {
+    margin: 12px 16px 8px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    height: 42px;
+    border-radius: 12px;
+    display: flex; align-items: center; gap: 10px;
+    padding: 0 12px;
+    color: var(--ink-3);
+    font-size: 14px;
+  }
+
+  .filter-bar {
+    display: flex; gap: 6px;
+    padding: 4px 14px 10px;
+    overflow-x: auto;
+  }
+  .filter-bar::-webkit-scrollbar { display: none; }
+  .fchip {
+    flex: 0 0 auto;
+    padding: 6px 11px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    font-size: 12.5px; font-weight: 500;
+    color: var(--ink-2);
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .fchip.active { background: var(--ink); color: white; border-color: var(--ink); }
+
+  .summary-bar {
+    padding: 4px 18px 12px;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 12.5px;
+  }
+  .summary-bar .count { color: var(--ink-2); font-weight: 500; }
+  .summary-bar .sort { color: var(--brand); font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+
+  .records { padding: 0 12px 80px; overflow-y: auto; max-height: calc(852px - 54px - 56px - 60px - 50px - 38px - 80px); }
+  .rec-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 13px 14px;
+    margin-bottom: 6px;
+    box-shadow: var(--shadow-card);
+  }
+  .rc-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .rc-name { font-size: 14.5px; font-weight: 600; letter-spacing: -0.01em; }
+  .rc-amount { font-size: 14.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .rc-meta { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 11.5px; color: var(--ink-3); }
+  .stage-pill { padding: 2px 7px; border-radius: 5px; font-weight: 700; font-size: 10px; letter-spacing: 0.04em; }
+  .stage-pill.neg { background: rgba(184,122,31,0.12); color: var(--warn); }
+  .stage-pill.prop { background: rgba(38,79,175,0.10); color: var(--brand); }
+  .stage-pill.disc { background: rgba(26,138,95,0.12); color: var(--positive); }
+  .stage-pill.won { background: rgba(46,196,163,0.15); color: #1a8a5f; }
+  .rc-account { font-weight: 500; color: var(--ink-2); }
+
+  .fab-ask {
+    position: absolute; bottom: 32px; right: 20px;
+    background: var(--ink); color: white;
+    padding: 12px 16px 12px 14px;
+    border-radius: 999px;
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 13.5px; font-weight: 600;
+    box-shadow: 0 12px 28px rgba(13,13,16,0.30);
+  }
+  .fab-ask .av { width: 22px; height: 22px; border-radius: 50%; background: linear-gradient(135deg, var(--brand), #4a72d6); color: white; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="device-wrap">
+  <div class="device">
+    <div class="dynamic-island"></div>
+    <div class="statusbar">
+      <div>9:41</div>
+      <div style="display:inline-flex; gap:6px; align-items:center;">
+        <svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="6" width="3" height="6" rx="1"/><rect x="5" y="3" width="3" height="9" rx="1"/><rect x="10" y="0" width="3" height="12" rx="1"/></svg>
+        <svg width="26" height="12" viewBox="0 0 26 12" fill="currentColor"><rect x="0" y="1" width="22" height="10" rx="2.5" fill="none" stroke="currentColor"/><rect x="2" y="3" width="18" height="6" rx="1"/><rect x="23" y="4" width="2" height="4" rx="0.5"/></svg>
+      </div>
+    </div>
+
+    <div class="nav-top">
+      <button class="icon-btn">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M15 6l-6 6 6 6"/></svg>
+      </button>
+      <div class="title-stack">
+        <div class="t">Opportunities</div>
+        <div class="s">247 records · 3 views</div>
+      </div>
+      <button class="icon-btn">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+      </button>
+    </div>
+
+    <div class="search">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+      Search opportunities
+    </div>
+
+    <div class="filter-bar">
+      <div class="fchip active">All open</div>
+      <div class="fchip">Closing this month</div>
+      <div class="fchip">My team</div>
+      <div class="fchip">&gt;$50K</div>
+      <div class="fchip">At risk</div>
+    </div>
+
+    <div class="summary-bar">
+      <div class="count">87 of 247 · all open</div>
+      <div class="sort">Amount ↓
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+    </div>
+
+    <div class="records">
+      <div class="rec-card">
+        <div class="rc-top">
+          <div class="rc-name">Q2 platform expansion</div>
+          <div class="rc-amount">$145K</div>
+        </div>
+        <div class="rc-meta">
+          <span class="rc-account">Acme Corp</span>
+          <span class="stage-pill neg">NEGOTIATION</span>
+          <span>Close 6/15</span>
+        </div>
+      </div>
+      <div class="rec-card">
+        <div class="rc-top">
+          <div class="rc-name">Annual contract — Globex</div>
+          <div class="rc-amount">$120K</div>
+        </div>
+        <div class="rc-meta">
+          <span class="rc-account">Globex Inc</span>
+          <span class="stage-pill prop">PROPOSAL</span>
+          <span>Close 7/2</span>
+        </div>
+      </div>
+      <div class="rec-card">
+        <div class="rc-top">
+          <div class="rc-name">Initech expansion</div>
+          <div class="rc-amount">$96K</div>
+        </div>
+        <div class="rc-meta">
+          <span class="rc-account">Initech</span>
+          <span class="stage-pill neg">NEGOTIATION</span>
+          <span>Close 6/22</span>
+        </div>
+      </div>
+      <div class="rec-card">
+        <div class="rc-top">
+          <div class="rc-name">Renewal — Enterprise tier</div>
+          <div class="rc-amount">$84K</div>
+        </div>
+        <div class="rc-meta">
+          <span class="rc-account">Acme Corp</span>
+          <span class="stage-pill prop">PROPOSAL</span>
+          <span>Close 6/30</span>
+        </div>
+      </div>
+      <div class="rec-card">
+        <div class="rc-top">
+          <div class="rc-name">SSO &amp; SCIM add-on</div>
+          <div class="rc-amount">$56K</div>
+        </div>
+        <div class="rc-meta">
+          <span class="rc-account">Acme Corp</span>
+          <span class="stage-pill disc">DISCOVERY</span>
+          <span>Close 7/12</span>
+        </div>
+      </div>
+      <div class="rec-card">
+        <div class="rc-top">
+          <div class="rc-name">Pilot — Soylent</div>
+          <div class="rc-amount">$42K</div>
+        </div>
+        <div class="rc-meta">
+          <span class="rc-account">Soylent Corp</span>
+          <span class="stage-pill disc">DISCOVERY</span>
+          <span>Close 8/1</span>
+        </div>
+      </div>
+    </div>
+
+    <button class="fab-ask">
+      <span class="av">S</span>
+      Ask Skip about these
+    </button>
+
+    <div class="home-indicator"></div>
+  </div>
+</div>
+</body>
+</html>

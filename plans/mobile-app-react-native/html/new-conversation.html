@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MJ Mobile · New Conversation</title>
+<meta name="viewport" content="width=393, initial-scale=1">
+<style>
+  :root {
+    --bg: #fafaf7;
+    --surface: #ffffff;
+    --surface-2: #f6f5ef;
+    --ink: #0d0d10;
+    --ink-2: #4a4a52;
+    --ink-3: #8a8a93;
+    --line: rgba(13,13,16,0.06);
+    --brand: #264FAF;
+    --skip: #264FAF;
+    --research: #7c5cd6;
+    --analyst: #d97757;
+    --forecaster: #1a8a5f;
+    --shadow-lg: 0 24px 60px rgba(13,13,16,0.10);
+    --shadow-card: 0 1px 2px rgba(13,13,16,0.04), 0 8px 20px rgba(13,13,16,0.06);
+  }
+  * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+  html, body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; background: #e8e6df; color: var(--ink); min-height: 100vh; }
+  .device-wrap { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 32px 16px; }
+  .device { width: 393px; height: 852px; background: var(--bg); border-radius: 54px; box-shadow: var(--shadow-lg), 0 0 0 12px #1a1a1f, 0 0 0 13px #2a2a30; position: relative; overflow: hidden; }
+  .dynamic-island { position: absolute; top: 11px; left: 50%; transform: translateX(-50%); width: 124px; height: 36px; background: #000; border-radius: 20px; z-index: 10; }
+  .home-indicator { position: absolute; bottom: 9px; left: 50%; transform: translateX(-50%); width: 134px; height: 5px; background: #0d0d10; border-radius: 3px; opacity: 0.85; }
+  .statusbar { height: 54px; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 28px 8px; font-size: 17px; font-weight: 600; letter-spacing: -0.02em; }
+
+  .nav-top {
+    height: 56px;
+    display: flex; align-items: center; gap: 6px;
+    padding: 0 14px;
+    border-bottom: 1px solid var(--line);
+  }
+  .icon-btn { width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center; border-radius: 11px; color: var(--ink); }
+  .title { flex: 1; text-align: center; font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+
+  .hero {
+    padding: 32px 24px 8px;
+    text-align: center;
+  }
+  .hero h1 {
+    margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.022em;
+    line-height: 1.2;
+  }
+  .hero p { margin: 8px 0 0; font-size: 14.5px; color: var(--ink-2); line-height: 1.45; }
+
+  .composer-block {
+    padding: 22px 18px 8px;
+  }
+  .composer-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 18px;
+    box-shadow: var(--shadow-card);
+    padding: 14px 14px 10px;
+  }
+  .composer-card textarea {
+    width: 100%;
+    border: none; outline: none; background: transparent;
+    resize: none;
+    font-family: inherit; font-size: 15.5px;
+    line-height: 1.45; color: var(--ink-3);
+    min-height: 56px;
+  }
+  .composer-foot {
+    display: flex; align-items: center; gap: 6px;
+    margin-top: 4px;
+  }
+  .attach-icon {
+    width: 36px; height: 36px; border-radius: 10px;
+    color: var(--ink-2);
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+  .send-btn {
+    margin-left: auto;
+    background: var(--brand);
+    color: white;
+    padding: 8px 12px 8px 14px;
+    border-radius: 999px;
+    font-size: 13.5px; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 6px;
+    box-shadow: 0 4px 14px rgba(38,79,175,0.30);
+  }
+  .send-btn.muted {
+    background: var(--surface-2);
+    color: var(--ink-3);
+    box-shadow: none;
+  }
+  .mic-btn {
+    background: var(--brand);
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    color: white;
+    display: inline-flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 14px rgba(38,79,175,0.30);
+  }
+
+  .section-label {
+    padding: 22px 22px 8px;
+    font-size: 11px; font-weight: 700;
+    color: var(--ink-3);
+    letter-spacing: 0.12em; text-transform: uppercase;
+  }
+  .suggestions {
+    padding: 0 14px;
+    display: grid; gap: 8px;
+  }
+  .sug {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 13px 14px;
+    display: flex; align-items: center; gap: 12px;
+    box-shadow: var(--shadow-card);
+  }
+  .sug-icon {
+    width: 36px; height: 36px; border-radius: 10px;
+    flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: white; font-weight: 700; font-size: 12px;
+  }
+  .sug-body { flex: 1; }
+  .sug-title { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+  .sug-sub { font-size: 12px; color: var(--ink-3); margin-top: 2px; }
+  .sug-arrow { color: var(--ink-3); }
+
+  .agents-rail {
+    padding: 18px 14px 24px;
+    display: flex; gap: 8px;
+    overflow-x: auto;
+  }
+  .agents-rail::-webkit-scrollbar { display: none; }
+  .agent-pill {
+    flex: 0 0 auto;
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 8px 13px 8px 8px;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    font-size: 13px; font-weight: 600;
+  }
+  .agent-pill .av {
+    width: 22px; height: 22px; border-radius: 50%;
+    color: white; font-weight: 700; font-size: 10px;
+    display: inline-flex; align-items: center; justify-content: center;
+  }
+</style>
+</head>
+<body>
+<div class="device-wrap">
+  <div class="device">
+    <div class="dynamic-island"></div>
+    <div class="statusbar">
+      <div>9:41</div>
+      <div style="display:inline-flex; gap:6px; align-items:center;">
+        <svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="6" width="3" height="6" rx="1"/><rect x="5" y="3" width="3" height="9" rx="1"/><rect x="10" y="0" width="3" height="12" rx="1"/></svg>
+        <svg width="26" height="12" viewBox="0 0 26 12" fill="currentColor"><rect x="0" y="1" width="22" height="10" rx="2.5" fill="none" stroke="currentColor"/><rect x="2" y="3" width="18" height="6" rx="1"/><rect x="23" y="4" width="2" height="4" rx="0.5"/></svg>
+      </div>
+    </div>
+
+    <div class="nav-top">
+      <button class="icon-btn">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6l-12 12"/></svg>
+      </button>
+      <div class="title">New conversation</div>
+      <span style="width:38px"></span>
+    </div>
+
+    <div class="hero">
+      <h1>What can we help with today?</h1>
+      <p>Start typing, or pick a prompt below. You can address a specific agent with <strong>@</strong>.</p>
+    </div>
+
+    <div class="composer-block">
+      <div class="composer-card">
+        <textarea placeholder="Ask anything — Skip will route to the right agent…"></textarea>
+        <div class="composer-foot">
+          <button class="attach-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+          </button>
+          <button class="attach-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+          </button>
+          <button class="mic-btn">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8"/></svg>
+          </button>
+          <button class="send-btn muted">
+            Send
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="section-label">Start a conversation about…</div>
+    <div class="suggestions">
+      <div class="sug">
+        <div class="sug-icon" style="background:#264FAF">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>
+        </div>
+        <div class="sug-body">
+          <div class="sug-title">Today's pipeline</div>
+          <div class="sug-sub">Open deals, owners, what changed</div>
+        </div>
+        <span class="sug-arrow">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg>
+        </span>
+      </div>
+      <div class="sug">
+        <div class="sug-icon" style="background:#1a8a5f">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        </div>
+        <div class="sug-body">
+          <div class="sug-title">What's on my plate?</div>
+          <div class="sug-sub">Open tasks, approvals, and follow-ups</div>
+        </div>
+        <span class="sug-arrow">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg>
+        </span>
+      </div>
+      <div class="sug">
+        <div class="sug-icon" style="background:#d97757">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+        </div>
+        <div class="sug-body">
+          <div class="sug-title">Look up a contact</div>
+          <div class="sug-sub">Find someone, see recent activity</div>
+        </div>
+        <span class="sug-arrow">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg>
+        </span>
+      </div>
+      <div class="sug">
+        <div class="sug-icon" style="background:#7c5cd6">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/></svg>
+        </div>
+        <div class="sug-body">
+          <div class="sug-title">Research an account</div>
+          <div class="sug-sub">Recent news, signals, and risks</div>
+        </div>
+        <span class="sug-arrow">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg>
+        </span>
+      </div>
+    </div>
+
+    <div class="section-label">Or talk to an agent</div>
+    <div class="agents-rail">
+      <div class="agent-pill"><span class="av" style="background:#264FAF">S</span> Skip</div>
+      <div class="agent-pill"><span class="av" style="background:#d97757">A</span> Account Analyst</div>
+      <div class="agent-pill"><span class="av" style="background:#7c5cd6">R</span> Research</div>
+      <div class="agent-pill"><span class="av" style="background:#1a8a5f">F</span> Forecaster</div>
+      <div class="agent-pill"><span class="av" style="background:#b87a1f">E</span> Email Drafter</div>
+    </div>
+
+    <div class="home-indicator"></div>
+  </div>
+</div>
+</body>
+</html>
