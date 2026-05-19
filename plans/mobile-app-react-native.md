@@ -1,8 +1,11 @@
 # MemberJunction Mobile App — React Native Architecture & Phase 1 Plan
 
-**Status:** Proposal
-**Date:** 2026-05-18
-**Supersedes:** The earlier PWA-based proposal that lived at `packages/Mobile/ARCHITECTURE.md` (deleted in this branch)
+**Status:** Approved — Phase 1 implementation in progress
+**Date:** 2026-05-18 (proposal) · 2026-05-19 (implementation kickoff)
+**Branch:** `an-mobile-app-dev`
+**Supersedes:** The earlier PWA-based proposal that lived at `packages/Mobile/ARCHITECTURE.md` (removed via PR #1734)
+
+> **Implementation kickoff note (2026-05-19):** This plan has been approved. Work is starting on the `an-mobile-app-dev` branch. The Phase 1 scope (Chat with agents + Data Explorer subset — Entities, Queries, Dashboards) is the target. First concrete tasks: audit shared TS packages for DOM/browser-globals, then refactor `@memberjunction/graphql-dataprovider`'s cache layer behind an `IClientCacheStorage` interface, then bootstrap the Expo project under `packages/MobileApp/`. Open questions in Part 10 will be resolved as we go and recorded back into this document.
 
 ---
 
