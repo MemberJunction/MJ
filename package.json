@@ -94,6 +94,8 @@
   },
   "dependencies": {
     "archiver": "~7.0.0",
+    "expo": "~54.0.0",
+    "expo-router": "~6.0.0",
     "extract-files": "~13.0.0",
     "simple-git": "^3.30.0"
   },
@@ -137,6 +139,8 @@
     "unzipper": "^0.12.3",
     "@memberjunction/credentials": {
       "ajv": "$ajv"
-    }
+    },
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
   }
 }

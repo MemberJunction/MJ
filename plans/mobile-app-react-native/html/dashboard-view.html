@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MJ Mobile · Dashboard View</title>
+<meta name="viewport" content="width=393, initial-scale=1">
+<style>
+  :root {
+    --bg: #fafaf7;
+    --surface: #ffffff;
+    --surface-2: #f6f5ef;
+    --ink: #0d0d10;
+    --ink-2: #4a4a52;
+    --ink-3: #8a8a93;
+    --line: rgba(13,13,16,0.06);
+    --brand: #264FAF;
+    --positive: #1a8a5f;
+    --warn: #b87a1f;
+    --danger: #c84a39;
+    --shadow-lg: 0 24px 60px rgba(13,13,16,0.10);
+    --shadow-card: 0 1px 2px rgba(13,13,16,0.04), 0 8px 20px rgba(13,13,16,0.06);
+  }
+  * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+  html, body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; background: #e8e6df; color: var(--ink); min-height: 100vh; }
+  .device-wrap { display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 32px 16px; }
+  .device { width: 393px; height: 852px; background: var(--bg); border-radius: 54px; box-shadow: var(--shadow-lg), 0 0 0 12px #1a1a1f, 0 0 0 13px #2a2a30; position: relative; overflow: hidden; }
+  .dynamic-island { position: absolute; top: 11px; left: 50%; transform: translateX(-50%); width: 124px; height: 36px; background: #000; border-radius: 20px; z-index: 10; }
+  .home-indicator { position: absolute; bottom: 9px; left: 50%; transform: translateX(-50%); width: 134px; height: 5px; background: #0d0d10; border-radius: 3px; opacity: 0.85; }
+  .statusbar { height: 54px; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 28px 8px; font-size: 17px; font-weight: 600; letter-spacing: -0.02em; }
+  .nav-top { height: 56px; display: flex; align-items: center; gap: 6px; padding: 0 14px; border-bottom: 1px solid var(--line); }
+  .icon-btn { width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center; border-radius: 11px; color: var(--ink); }
+  .title-stack { flex: 1; text-align: center; }
+  .title-stack .t { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; }
+  .title-stack .s { font-size: 11px; color: var(--ink-3); margin-top: 1px; }
+
+  .mobile-notice {
+    margin: 12px 16px;
+    background: rgba(184,122,31,0.10);
+    border: 1px solid rgba(184,122,31,0.25);
+    border-radius: 12px;
+    padding: 10px 12px;
+    display: flex; gap: 10px; align-items: flex-start;
+    font-size: 12.5px; color: #8e5c14;
+    line-height: 1.4;
+  }
+  .mobile-notice .ic { flex-shrink: 0; color: var(--warn); margin-top: 1px; }
+
+  .panels { padding: 0 14px 100px; overflow-y: auto; max-height: calc(852px - 54px - 56px - 64px - 80px); }
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 14px;
+    margin-bottom: 10px;
+    box-shadow: var(--shadow-card);
+  }
+  .pn-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .pn-title { font-size: 13px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ink-3); }
+  .pn-expand { color: var(--ink-3); }
+
+  .kpi-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .kpi { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; }
+  .kpi .l { font-size: 10.5px; color: var(--ink-3); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+  .kpi .v { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; margin-top: 4px; font-variant-numeric: tabular-nums; }
+  .kpi .d { font-size: 11px; margin-top: 2px; font-weight: 600; display: inline-flex; align-items: center; gap: 3px; }
+  .kpi .d.up { color: var(--positive); }
+  .kpi .d.down { color: var(--danger); }
+
+  /* Mini chart */
+  .chart {
+    height: 120px;
+    background: var(--surface-2);
+    border-radius: 10px;
+    padding: 12px;
+    position: relative;
+  }
+  .chart svg { width: 100%; height: 100%; }
+
+  /* List panel */
+  .list-panel .row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 0;
+    border-top: 1px solid var(--line);
+    font-size: 13.5px;
+  }
+  .list-panel .row:first-child { border-top: none; padding-top: 0; }
+  .list-panel .row .name { font-weight: 500; }
+  .list-panel .row .meta { font-size: 11.5px; color: var(--ink-3); }
+  .list-panel .row .badge {
+    font-size: 11px; font-weight: 700;
+    padding: 2px 7px; border-radius: 5px;
+    letter-spacing: 0.04em;
+  }
+  .list-panel .row .badge.warn { background: rgba(184,122,31,0.12); color: var(--warn); }
+
+  .desktop-stub {
+    background: var(--surface-2);
+    border: 1px dashed var(--line);
+    border-radius: 12px;
+    padding: 36px 16px;
+    text-align: center;
+  }
+  .desktop-stub .label { font-size: 11px; color: var(--ink-3); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; }
+  .desktop-stub .name { font-size: 14.5px; font-weight: 600; margin-top: 8px; }
+  .desktop-stub .hint { font-size: 12px; color: var(--ink-3); margin-top: 4px; line-height: 1.45; }
+  .desktop-stub .btn { display: inline-flex; align-items: center; gap: 5px; margin-top: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 7px 12px; font-size: 12.5px; font-weight: 600; color: var(--brand); }
+
+  .ask-bar { position: absolute; bottom: 0; left: 0; right: 0; padding: 12px 16px 28px; background: linear-gradient(180deg, rgba(250,250,247,0) 0%, var(--bg) 40%); }
+  .ask-btn { width: 100%; height: 50px; border-radius: 14px; background: var(--ink); color: white; display: inline-flex; align-items: center; justify-content: center; font-size: 14.5px; font-weight: 600; gap: 8px; box-shadow: 0 6px 18px rgba(13,13,16,0.18); }
+  .ask-btn .av { width: 22px; height: 22px; border-radius: 50%; background: linear-gradient(135deg, var(--brand), #4a72d6); color: white; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="device-wrap">
+  <div class="device">
+    <div class="dynamic-island"></div>
+    <div class="statusbar">
+      <div>9:44</div>
+      <div style="display:inline-flex; gap:6px; align-items:center;">
+        <svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="6" width="3" height="6" rx="1"/><rect x="5" y="3" width="3" height="9" rx="1"/><rect x="10" y="0" width="3" height="12" rx="1"/></svg>
+        <svg width="26" height="12" viewBox="0 0 26 12" fill="currentColor"><rect x="0" y="1" width="22" height="10" rx="2.5" fill="none" stroke="currentColor"/><rect x="2" y="3" width="18" height="6" rx="1"/><rect x="23" y="4" width="2" height="4" rx="0.5"/></svg>
+      </div>
+    </div>
+    <div class="nav-top">
+      <button class="icon-btn">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M15 6l-6 6 6 6"/></svg>
+      </button>
+      <div class="title-stack">
+        <div class="t">Sales pulse</div>
+        <div class="s">6 parts · last refreshed 9:30 AM</div>
+      </div>
+      <button class="icon-btn">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
+      </button>
+    </div>
+
+    <div class="mobile-notice">
+      <span class="ic">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+      </span>
+      <div>Some dashboard parts are built for larger screens. Tap any panel for the desktop view in your browser.</div>
+    </div>
+
+    <div class="panels">
+      <div class="panel">
+        <div class="pn-head">
+          <div class="pn-title">Topline KPIs</div>
+          <span class="pn-expand"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></span>
+        </div>
+        <div class="kpi-grid">
+          <div class="kpi"><div class="l">Pipeline</div><div class="v">$2.5M</div><div class="d up">▲ 12%</div></div>
+          <div class="kpi"><div class="l">Open deals</div><div class="v">47</div><div class="d up">▲ 5</div></div>
+          <div class="kpi"><div class="l">Won this mo.</div><div class="v">$450K</div><div class="d up">▲ 22%</div></div>
+          <div class="kpi"><div class="l">At risk</div><div class="v">$612K</div><div class="d down">▲ 3 accts</div></div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="pn-head">
+          <div class="pn-title">Pipeline · last 90 days</div>
+          <span class="pn-expand"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></span>
+        </div>
+        <div class="chart">
+          <svg viewBox="0 0 320 100" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#264FAF" stop-opacity="0.35"/>
+                <stop offset="100%" stop-color="#264FAF" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <path d="M0,72 L24,68 L48,75 L72,64 L96,60 L120,55 L144,58 L168,46 L192,48 L216,38 L240,40 L264,28 L288,32 L312,22 L320,18 L320,100 L0,100 Z" fill="url(#g)"/>
+            <path d="M0,72 L24,68 L48,75 L72,64 L96,60 L120,55 L144,58 L168,46 L192,48 L216,38 L240,40 L264,28 L288,32 L312,22 L320,18" fill="none" stroke="#264FAF" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+      </div>
+
+      <div class="panel list-panel">
+        <div class="pn-head">
+          <div class="pn-title">Top open opportunities</div>
+          <span class="pn-expand"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg></span>
+        </div>
+        <div class="row">
+          <div><div class="name">Acme · Q2 platform expansion</div><div class="meta">Sarah Park · close 6/15</div></div>
+          <div style="font-weight:700; font-variant-numeric: tabular-nums;">$145K</div>
+        </div>
+        <div class="row">
+          <div><div class="name">Globex · Annual contract</div><div class="meta">Daniel Lin · close 7/2</div></div>
+          <div style="font-weight:700; font-variant-numeric: tabular-nums;">$120K</div>
+        </div>
+        <div class="row">
+          <div><div class="name">Initech · expansion</div><div class="meta">Maya Rao · close 6/22</div></div>
+          <div style="font-weight:700; font-variant-numeric: tabular-nums;">$96K</div>
+        </div>
+      </div>
+
+      <div class="panel list-panel">
+        <div class="pn-head">
+          <div class="pn-title">Renewals at risk</div>
+          <span class="pn-expand"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg></span>
+        </div>
+        <div class="row"><div><div class="name">Northwind</div><div class="meta">Renews Jun 28 · health 52</div></div><span class="badge warn">HIGH</span></div>
+        <div class="row"><div><div class="name">Soylent Corp</div><div class="meta">Renews Jul 4 · health 58</div></div><span class="badge warn">HIGH</span></div>
+      </div>
+
+      <div class="panel">
+        <div class="pn-head">
+          <div class="pn-title">Sales funnel</div>
+          <span class="pn-expand"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg></span>
+        </div>
+        <div class="desktop-stub">
+          <div class="label">Optimized for desktop</div>
+          <div class="name">Funnel chart with cohort drilldown</div>
+          <div class="hint">This panel renders best on a larger screen.</div>
+          <button class="btn">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 3h6v6M10 14L21 3M21 14v7H3V3h7"/></svg>
+            Open on desktop
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="ask-bar">
+      <button class="ask-btn">
+        <span class="av">S</span>
+        Ask Skip about this dashboard
+      </button>
+    </div>
+
+    <div class="home-indicator"></div>
+  </div>
+</div>
+</body>
+</html>
