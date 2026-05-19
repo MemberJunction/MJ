@@ -56,6 +56,12 @@
  * SupportsIncrementalSync=true), a dedicated CODE_EVIDENCE entry is appended
  * citing the specific XSD signal that justified that flag. Per
  * .claude/rules/connector-provenance-conventions.md.
+ *
+ * Bidirectional set-completeness (per ioiof-extractor role file Discipline §):
+ * the metadata file's contents AFTER this run reflect THIS run's emissions
+ * only — not accumulated history. Any IO/IOF in the existing metadata file
+ * not re-emitted by this run is an orphan from a prior run with stale logic
+ * and is deleted. Idempotent.
  */
 
 import { XMLParser } from 'fast-xml-parser';
@@ -1058,34 +1064,109 @@ function ioToMetadataRow(io: IORow, iofs: IOFRow[]): MetadataIO {
     };
 }
 
-async function mergeMetadata(result: ExtractionResult): Promise<void> {
+/**
+ * Bidirectional set-completeness merge result.
+ *
+ * Per the ioiof-extractor role file (Discipline §): the metadata file's
+ * contents AFTER this run reflect THIS run's emissions only — not accumulated
+ * history. Any IO or IOF in the existing metadata file that this run did NOT
+ * re-emit is an orphan from a prior run with stale logic and is deleted.
+ */
+interface MergeResult {
+    IOsEmitted: number;
+    IOsOrphanedAndDeleted: string[];
+    IOFsOrphanedAndDeleted: Array<{ IO: string; IOF: string }>;
+    MetadataIOCount: number;
+    MetadataIOFCount: number;
+}
+
+async function mergeMetadata(result: ExtractionResult): Promise<MergeResult> {
     const doc = await readMetadataFile();
     if (!doc.relatedEntities) doc.relatedEntities = {};
 
-    // Upsert by Name — re-runs replace per-IO without duplicating.
+    // Snapshot of existing metadata: IO-name → existing row.
     const existingArr = Array.isArray(doc.relatedEntities['MJ: Integration Objects'])
         ? (doc.relatedEntities['MJ: Integration Objects'] as MetadataIO[])
         : [];
-    const byName = new Map<string, MetadataIO>();
+    const existingByName = new Map<string, MetadataIO>();
     for (const row of existingArr) {
         const name = row.fields?.Name;
-        if (typeof name === 'string') byName.set(name, row);
+        if (typeof name === 'string') existingByName.set(name, row);
     }
 
+    // Set of IO names this run emitted (the canonical source of truth).
+    const emittedIONames = new Set<string>(result.IOs.map(io => io.Name));
+
+    // ── Orphan detection (IO-level): bidirectional set-completeness ───────
+    // Any IO present in existing metadata but NOT in this run's emissions is
+    // an orphan from a prior run with stale logic. Mark for deletion.
+    const iosOrphanedAndDeleted: string[] = [];
+    for (const existingName of existingByName.keys()) {
+        if (!emittedIONames.has(existingName)) {
+            iosOrphanedAndDeleted.push(existingName);
+        }
+    }
+    iosOrphanedAndDeleted.sort();
+
+    // ── Orphan detection (IOF-level): same principle, per surviving IO ────
+    // For each IO present in BOTH existing metadata and this run's emissions,
+    // any IOF in the existing IOF list that's not in this run's IOF list for
+    // the same IO is also an orphan. (For brand-new IOs there's nothing to
+    // compare against; for orphan IOs we count their entire field set under
+    // the IO deletion, not separately here.)
+    const iofsOrphanedAndDeleted: Array<{ IO: string; IOF: string }> = [];
+    for (const io of result.IOs) {
+        const existingRow = existingByName.get(io.Name);
+        if (!existingRow) continue; // brand-new IO this run — no per-IOF orphans possible.
+        const existingIOFs =
+            existingRow.relatedEntities?.['MJ: Integration Object Fields'] ?? [];
+        const emittedIOFNames = new Set<string>(
+            (result.IOFsByIO.get(io.Name) ?? []).map(f => f.Name),
+        );
+        for (const existingIOF of existingIOFs) {
+            const fieldName = existingIOF.fields?.Name;
+            if (typeof fieldName !== 'string') continue;
+            if (!emittedIOFNames.has(fieldName)) {
+                iofsOrphanedAndDeleted.push({ IO: io.Name, IOF: fieldName });
+            }
+        }
+    }
+    iofsOrphanedAndDeleted.sort((a, b) =>
+        a.IO === b.IO ? a.IOF.localeCompare(b.IOF) : a.IO.localeCompare(b.IO),
+    );
+
+    // ── Build the final IO list: this run's emissions ONLY ────────────────
+    // Orphan IOs are silently dropped — they don't survive into the new file.
+    // Each emitted IO's IOF list is constructed entirely from this run's
+    // emissions, so IOF orphans likewise don't survive.
+    const finalRows: MetadataIO[] = [];
     for (const io of result.IOs) {
         const iofs = result.IOFsByIO.get(io.Name) ?? [];
-        byName.set(io.Name, ioToMetadataRow(io, iofs));
+        finalRows.push(ioToMetadataRow(io, iofs));
     }
 
-    // Stable ordering: by Sequence
-    const merged = Array.from(byName.values()).sort((a, b) => {
+    // Stable ordering: by Sequence (matches emission order).
+    finalRows.sort((a, b) => {
         const sa = typeof a.fields?.Sequence === 'number' ? a.fields.Sequence : 0;
         const sb = typeof b.fields?.Sequence === 'number' ? b.fields.Sequence : 0;
         return sa - sb;
     });
 
-    doc.relatedEntities['MJ: Integration Objects'] = merged;
+    doc.relatedEntities['MJ: Integration Objects'] = finalRows;
     await writeMetadataFile(doc);
+
+    const totalIOFCount = finalRows.reduce(
+        (sum, r) => sum + (r.relatedEntities?.['MJ: Integration Object Fields']?.length ?? 0),
+        0,
+    );
+
+    return {
+        IOsEmitted: result.IOs.length,
+        IOsOrphanedAndDeleted: iosOrphanedAndDeleted,
+        IOFsOrphanedAndDeleted: iofsOrphanedAndDeleted,
+        MetadataIOCount: finalRows.length,
+        MetadataIOFCount: totalIOFCount,
+    };
 }
 
 // =============================================================================
@@ -1292,8 +1373,18 @@ async function main(): Promise<void> {
         }
     }
 
+    // Run the merge: this is where bidirectional set-completeness is enforced.
+    // Orphans (IOs/IOFs in existing metadata not re-emitted this run) are
+    // dropped from the file and surfaced in MergeResult for stdout reporting.
+    let merge: MergeResult = {
+        IOsEmitted: result.IOs.length,
+        IOsOrphanedAndDeleted: [],
+        IOFsOrphanedAndDeleted: [],
+        MetadataIOCount: 0,
+        MetadataIOFCount: 0,
+    };
     try {
-        await mergeMetadata(result);
+        merge = await mergeMetadata(result);
     } catch (err) {
         errors.push(`Metadata merge failed: ${err instanceof Error ? err.message : String(err)}`);
     }
@@ -1407,6 +1498,12 @@ async function main(): Promise<void> {
         IntuitObjectDeclarationsCount: result.IntuitObjectDeclarations.length,
         UnmatchedDeclarationsAfterExclusions: unmatchedDeclarations,
         PerEntityCanonicalCheck: perEntityCanonicalCheck,
+        // Bidirectional set-completeness reporting (per ioiof-extractor role file).
+        IOsEmitted: merge.IOsEmitted,
+        IOsOrphanedAndDeleted: merge.IOsOrphanedAndDeleted,
+        IOFsOrphanedAndDeleted: merge.IOFsOrphanedAndDeleted,
+        MetadataIOCount: merge.MetadataIOCount,
+        MetadataIOFCount: merge.MetadataIOFCount,
         GapsForDownstream: gapsForDownstream,
         Status: errors.length === 0 ? 'Complete' : 'PartialWithErrors',
         ScriptPath: 'connectors-registry/quickbooks/scripts/extract-io-iof.ts',

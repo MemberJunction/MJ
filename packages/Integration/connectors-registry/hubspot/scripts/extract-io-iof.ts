@@ -1005,33 +1005,119 @@ function buildIORowForMetadata(io: IORow): Record<string, unknown> {
     };
 }
 
-function mergeIntoMetadata(ios: IORow[]): { newCount: number; updatedCount: number; totalIOFs: number } {
+// Shape of an existing IOF entry as stored in the metadata file. Mirrors
+// buildIORowForMetadata's per-IOF shape so we can diff existing-vs-emitted
+// IOFs by Name.
+interface MetadataIOFRow {
+    fields?: { Name?: string };
+}
+// Shape of an existing IO row in the metadata file's
+// relatedEntities['MJ: Integration Objects'] array. We only care about Name
+// for set-membership and the nested IOF Names for IOF-orphan counting.
+interface MetadataIORow {
+    fields?: { Name?: string };
+    relatedEntities?: { 'MJ: Integration Object Fields'?: MetadataIOFRow[] };
+}
+
+interface MergeResult {
+    newCount: number;
+    updatedCount: number;
+    totalIOFs: number;
+    iosOrphanedAndDeleted: number;
+    iofsOrphanedAndDeleted: number;
+    orphanedIONames: string[];
+}
+
+// Merge emitted IOs into metadata with bidirectional set-completeness.
+//
+// Per the ioiof-extractor role file Discipline section:
+//   "Set-completeness applies bidirectionally. At the end of an extraction
+//    run, any IO/IOF in the current metadata file that was NOT emitted in
+//    this run is an orphan from a prior run with stale logic. Delete it.
+//    The metadata file's contents after the run reflect this run's
+//    emissions only, not accumulated history."
+//
+// Concretely:
+//   - The final IO array is built fresh from this run's emissions (in the
+//     emission order produced by main()). Anything previously in metadata
+//     that's not in the emission set is dropped.
+//   - For IOFs we count orphans by diffing the previous run's IOFs (for an
+//     IO that IS re-emitted) against the current run's IOFs by Name. The
+//     wholesale row-replace would zero them implicitly, but we surface the
+//     count so the discipline is observable in stats.
+//   - Re-running with identical logic produces identical metadata; no
+//     oscillation.
+function mergeIntoMetadata(ios: IORow[]): MergeResult {
     const raw = readFileSync(METADATA_PATH, 'utf8');
     const meta = JSON.parse(raw) as MetadataFile;
     meta.relatedEntities = meta.relatedEntities ?? {};
     const ioKey = 'MJ: Integration Objects';
-    const existing = (meta.relatedEntities[ioKey] as Array<{ fields?: { Name?: string } }> | undefined) ?? [];
-    const byName = new Map<string, number>();
-    existing.forEach((r, idx) => { if (r.fields?.Name) byName.set(r.fields.Name, idx); });
+    const iofKey = 'MJ: Integration Object Fields';
+    const previousIOs = (meta.relatedEntities[ioKey] as MetadataIORow[] | undefined) ?? [];
+
+    // Build lookup of previous IOs by Name for membership + IOF-orphan accounting.
+    const previousByName = new Map<string, MetadataIORow>();
+    for (const r of previousIOs) {
+        const name = r.fields?.Name;
+        if (typeof name === 'string') previousByName.set(name, r);
+    }
+
+    // Build the current emission set keyed by Name.
+    const emittedNames = new Set<string>();
+    for (const io of ios) emittedNames.add(io.Name);
+
     let newCount = 0;
     let updatedCount = 0;
     let totalIOFs = 0;
+    let iofsOrphanedAndDeleted = 0;
+
+    // Compose the final IO list from this run's emissions only (no carry-over).
+    const finalIOs: Array<Record<string, unknown>> = [];
     for (const io of ios) {
         const built = buildIORowForMetadata(io);
         totalIOFs += io.IOFs.length;
-        const existingIdx = byName.get(io.Name);
-        if (existingIdx !== undefined) {
-            existing[existingIdx] = built;
+        const prior = previousByName.get(io.Name);
+        if (prior) {
+            // IO existed before — count IOF orphans (IOF Names that were in
+            // the previous run for this IO but are not in the current run).
+            const previousIOFs = prior.relatedEntities?.[iofKey] ?? [];
+            const emittedIOFNames = new Set(io.IOFs.map(f => f.Name));
+            for (const piof of previousIOFs) {
+                const pname = piof.fields?.Name;
+                if (typeof pname === 'string' && !emittedIOFNames.has(pname)) {
+                    iofsOrphanedAndDeleted++;
+                }
+            }
             updatedCount++;
         } else {
-            existing.push(built);
-            byName.set(io.Name, existing.length - 1);
             newCount++;
         }
+        finalIOs.push(built);
     }
-    meta.relatedEntities[ioKey] = existing;
+
+    // Count IO orphans (in previous metadata but not emitted this run).
+    const orphanedIONames: string[] = [];
+    for (const prevName of previousByName.keys()) {
+        if (!emittedNames.has(prevName)) {
+            orphanedIONames.push(prevName);
+            // Also count this IO's IOFs as orphaned-and-deleted (the whole
+            // row is dropped, so every IOF under it goes with it).
+            const prior = previousByName.get(prevName);
+            const previousIOFs = prior?.relatedEntities?.[iofKey] ?? [];
+            iofsOrphanedAndDeleted += previousIOFs.length;
+        }
+    }
+
+    meta.relatedEntities[ioKey] = finalIOs as unknown[];
     writeFileSync(METADATA_PATH, JSON.stringify(meta, null, 2) + '\n', 'utf8');
-    return { newCount, updatedCount, totalIOFs };
+    return {
+        newCount,
+        updatedCount,
+        totalIOFs,
+        iosOrphanedAndDeleted: orphanedIONames.length,
+        iofsOrphanedAndDeleted,
+        orphanedIONames
+    };
 }
 
 // ---------- CODE_EVIDENCE emission -------------------------------------------
@@ -1353,7 +1439,7 @@ async function main(): Promise<void> {
         gaps.push('Breeze AI: no Tier-1/2 developer documentation available; HubSpot has not published a developer-facing Breeze AI API as of source-audit timestamp. Excluded from extraction.');
     }
 
-    const { newCount, updatedCount, totalIOFs } = mergeIntoMetadata(allIOs);
+    const { newCount, updatedCount, totalIOFs, iosOrphanedAndDeleted, iofsOrphanedAndDeleted, orphanedIONames } = mergeIntoMetadata(allIOs);
 
     // Build and persist per-flag CODE_EVIDENCE entries.
     const evidenceBefore = readExistingEvidence().Entries.length;
@@ -1373,6 +1459,10 @@ async function main(): Promise<void> {
             IOCreated: newCount,
             IOFCreated: totalIOFs,
             IOUpdated: updatedCount,
+            IOsEmitted: allIOs.length,
+            IOsOrphanedAndDeleted: iosOrphanedAndDeleted,
+            IOFsOrphanedAndDeleted: iofsOrphanedAndDeleted,
+            OrphanedIONames: orphanedIONames,
             IOCount: allIOs.length,
             IOFCount: totalIOFs,
             PKsDetected: pkDetected,
