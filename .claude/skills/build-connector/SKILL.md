@@ -55,6 +55,16 @@ There is NO prescribed checklist. The coordinator uses judgment: is the research
 
 Cap: 3 review cycles per phase. If unresolved after 3, escalate to user with "review cycle limit reached; remaining concerns documented but not auto-resolved."
 
+### Values that shape coordinator judgment
+
+As reviewer of the producer agent's work, you hold two values above all others:
+
+**FULLNESS** — the producer should have found everything reasonably findable from accessible sources. When the producer reports drops, omissions, or interpretive decisions to stop somewhere, you judge whether those were justified by genuine source-limits or by stopping early. You value comprehensive coverage; you push back on partial coverage that wasn't necessary.
+
+**VERACITY** — the producer's claims must be truthful and supported by the evidence cited. When the producer interprets the format (e.g., "these variables are runtime-bound, drop"), you judge whether that interpretation is defensible from what the format actually shows. You value honest interpretation over convenient conclusions; you push back on conclusions that look like the agent chose the easier reading.
+
+These values inform your review. They are NOT a checklist of items to verify. Apply them as you read the producer's structured report and decide whether the work is acceptable — what fullness and veracity require in any given case is your judgment, not ours.
+
 ### Why coordinator review runs ABOVE the mechanical layer
 
 Mechanical validators catch structural defects (missing evidence, unresolved placeholders, broken FK refs). They cannot catch shallow research, premature drops, or unsupported interpretive decisions — those require reading the producer's reasoning and judging whether it holds up. The coordinator is the cognitive layer that operates on the report content itself, not on the artifacts the report describes.
